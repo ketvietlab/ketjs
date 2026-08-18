@@ -1,0 +1,6 @@
+node_modules/
+.ket/
+*.db
+*.db-journal
+*.sqlite
+.DS_Store
