@@ -1,6 +1,7 @@
 import { asc, defineFn, deleteFrom, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
+import { roleFunctions } from './roles.ts'
 
 /**
  * Not one of these declares `password` in its output, which is what keeps the hash
@@ -8,9 +9,11 @@ import { hashPassword, needsRehash, verifyPassword } from './password.ts'
  * returned the whole row would still hand back only what is named here.
  */
 export const functions: Record<string, FnSpec> = {
+  ...roleFunctions,
+
   listUsers: defineFn({
     input: { includeArchived: 'bool?' },
-    output: { id: 'id', login: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool' },
+    output: { id: 'id', login: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool', superuser: 'bool' },
     effects: ['read:user.User'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -22,7 +25,7 @@ export const functions: Record<string, FnSpec> = {
 
   getUser: defineFn({
     input: { id: 'id' },
-    output: { id: 'id', login: 'text', name: 'text', email: 'text?', lang: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool', memberships: 'json?' },
+    output: { id: 'id', login: 'text', name: 'text', email: 'text?', lang: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool', superuser: 'bool', memberships: 'json?' },
     effects: ['read:user.User', 'read:user.Membership'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -32,7 +35,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   createUser: defineFn({
-    input: { id: 'id', login: 'text', password: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?' },
+    input: { id: 'id', login: 'text', password: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', superuser: 'bool?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:user.User', 'write:user.User'],
     idempotent: true,
@@ -50,6 +53,7 @@ export const functions: Record<string, FnSpec> = {
         .cast(['id', 'login', 'password', 'name', 'email', 'partnerId', 'defaultCompanyId'])
         .required(['login', 'password', 'name'])
         .put('active', true)
+        .put('superuser', a.superuser === true)
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs)
       return { ok: true, id: a.id }

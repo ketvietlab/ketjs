@@ -28,7 +28,57 @@ export const models: Record<string, ModelDef> = {
       lang: 'text?',
       /** The company a new row is stamped with when this user acts (D32). */
       defaultCompanyId: 'ref:company.Company?',
+      /**
+       * Exempt from the permission check entirely.
+       *
+       * Something has to be, or a deployment that turns roles on can never grant
+       * the first one — the functions that manage roles are themselves behind the
+       * check. Odoo solves it with a magic user id and a group; a declared column
+       * is the same escape hatch with its name written on it, and it shows up in
+       * a query rather than in institutional memory.
+       */
+      superuser: 'bool',
       active: 'bool',
+    },
+  },
+
+  /**
+   * A named set of functions.
+   *
+   * Not a set of models with CRUD flags, which is what Odoo's ir.model.access is
+   * and what makes its permissions unanswerable: granting read on a table grants
+   * it in the form, the list, the export, XML-RPC and every search() any module
+   * makes. Here the unit is the action, so a role is exactly the list of actions,
+   * and `ket permissions` can print what any list reaches because there is nothing
+   * to traverse — a function cannot touch a model it did not declare.
+   */
+  Role: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      name: 'text',
+      description: 'text?',
+    },
+  },
+
+  /** One row per granted function. Additive, like Salesforce permission sets. */
+  Grant: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      roleId: 'ref:user.Role',
+      /** A function key, e.g. "partner.listPartners". */
+      fnKey: 'text',
+    },
+  },
+
+  /** One row per (user, role). A user's permissions are the union of their roles. */
+  Assignment: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      roleId: 'ref:user.Role',
     },
   },
 

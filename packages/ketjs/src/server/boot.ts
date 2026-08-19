@@ -98,6 +98,12 @@ export type ServeSpec = {
    * comes from a signed cookie; absent means the shim stays and the banner says so.
    */
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
+  /**
+   * Which functions a signed-in user may call. Absent means no restriction, which
+   * is what an app without roles is. Returning a list restricts every call the
+   * request makes, including the ones a route makes on its behalf.
+   */
+  permissions?: (ctx: ServeContext, userId: string) => Promise<readonly string[] | null>
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -216,7 +222,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const ctx: ServeContext = {
     manifest, live, adapter, apps, config, scopeOf, localeOf, translate, styles, sessions,
     call: async (name, input, url, req) =>
-      (await callFn(name, input, { adapter, manifest: await live(), scope: await scopeOf(url, req) })).value,
+      (await callFn(name, input, {
+        adapter, manifest: await live(), scope: await scopeOf(url, req), allow: await allowFor(req),
+      })).value,
     document,
   }
 
@@ -260,6 +268,27 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     },
   }
 
+  /**
+   * Which functions a request may call.
+   *
+   * The framework enforces the list and the app decides what is in it — the same
+   * split as the datastore driver, and for the same reason: roles are the app's
+   * model, and a framework that knew their shape would be a framework every app
+   * had to agree with.
+   *
+   * A request with no session is unrestricted rather than empty. That reads
+   * backwards until you see what the alternative means: the header shim, internal
+   * calls, migrations and the public storefront all carry no identity, and
+   * narrowing them by one would break every path that has no user at all. The
+   * restriction begins where identity does.
+   */
+  const allowFor = async (req: IncomingMessage): Promise<readonly string[] | null> => {
+    if (!sessions || !serve.permissions) return null
+    const record = await sessions.of(req)
+    if (!record) return null
+    return serve.permissions(ctx, record.userId)
+  }
+
   const pages = serve.pages
   if (pages && !manifest.functions[pages.resolve]) {
     throw new KetError({
@@ -274,6 +303,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     manifest, adapter,
     resolveLocale: localeOf,
     resolveScope: scopeOf,
+    resolveAllow: (_url, req) => allowFor(req),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme ? {} : {
       theme: createTheme(await live(), modules, { translate: translate(config.defaultLocale) }),

@@ -184,3 +184,41 @@ export function formatInventory(manifest: Manifest): string {
   out.push(`\n${total} function(s); ${unprojected} return an undeclared shape`)
   return out.join('\n')
 }
+
+/**
+ * The function keys a role grants, read from the database.
+ *
+ * The only part of this file that touches one. A role is data — what it grants is
+ * a fact about a deployment, not about the code — so answering "what can the
+ * warehouse role do here" has to look at the same rows the server enforces from.
+ *
+ * The table name is a convention rather than an import: the framework does not
+ * ship a role model, because roles are the app's to shape. If an app names them
+ * differently this command has nothing to read, and says so.
+ */
+export async function grantsOfRole(adapter: import('../types.ts').Adapter, role: string): Promise<string[]> {
+  const pg = adapter.name === 'postgres'
+  const p = (n: number) => (pg ? `$${n}` : '?')
+  const q = (s: string) => adapter.quoteIdent(s)
+  try {
+    const roles = await adapter.all(`SELECT id FROM user_role WHERE ${q('name')} = ${p(1)} OR id = ${p(2)}`, [role, role])
+    if (!roles.length) {
+      throw new KetError({
+        code: 'E_UNKNOWN_ROLE',
+        message: `no role named "${role}" in this database`,
+        hint: 'roles are rows, so this reads what is actually there — check the name, or the datastore',
+      })
+    }
+    const ids = roles.map(r => String(r.id))
+    const rows = await adapter.all(
+      `SELECT ${q('fnKey')} FROM user_grant WHERE ${q('roleId')} IN (${ids.map((_, i) => p(i + 1)).join(', ')})`, ids)
+    return [...new Set(rows.map(r => String(r.fnKey)))].sort()
+  } catch (e) {
+    if (e instanceof KetError) throw e
+    throw new KetError({
+      code: 'E_NO_ROLE_TABLE',
+      message: `this database has no role tables to read`,
+      hint: 'roles are an app model, not a framework one — this command expects user_role and user_grant',
+    })
+  }
+}
