@@ -21,7 +21,8 @@
     "start": "node packages/ketjs/src/cli.ts serve",
     "start:pg": "DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/src/cli.ts serve",
     "ket": "node packages/ketjs/src/cli.ts",
-    "dev": "node packages/ketjs/src/cli.ts dev"
+    "dev": "node packages/ketjs/src/cli.ts dev",
+    "test:one": "node --test"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

@@ -155,7 +155,7 @@ test('session: an ephemeral secret is reported, because it is a deployment bug w
 test('login: the whole flow, and the header shim is gone rather than kept as a fallback', async () => {
   const b = await bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
-  const o = { adapter: b.adapter, manifest: b.manifest, scope: { company: 'acme' } }
+  const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
   await callFn('user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin', defaultCompanyId: 'acme' }, o)

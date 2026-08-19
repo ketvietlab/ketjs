@@ -26,15 +26,15 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
     body: ctx.document({
       lang,
       title: 'KetSuite',
-      head: await ctx.styles(),
+      head: await ctx.styles(req),
       body: await build(ctx.translate(lang), { url, raw: req }),
     }),
   })
 }
 
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
-  '/admin': (ctx) => screen(ctx, async (_) => appsScreen(_, await ctx.apps.list())),
-  '/admin/apps': (ctx) => screen(ctx, async (_) => appsScreen(_, await ctx.apps.list())),
+  '/admin': (ctx) => screen(ctx, async (_, { raw }) => appsScreen(_, await ctx.appsOf(raw))),
+  '/admin/apps': (ctx) => screen(ctx, async (_, { raw }) => appsScreen(_, await ctx.appsOf(raw))),
   '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw }) => {
     // The same call path as the API: this request's live manifest and company.
     const rows = await ctx.call('website.listPages', { includeDrafts: true }, url, raw) as

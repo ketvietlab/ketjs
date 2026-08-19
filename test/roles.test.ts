@@ -77,7 +77,7 @@ test('allow: an empty list is a real restriction, not a missing one', async () =
 
 const setup = async () => {
   const b = await bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
-  const o = { adapter: b.adapter, manifest: b.manifest, scope: { company: 'acme' } }
+  const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   const run = (fn: string, args: Record<string, unknown> = {}) => callFn(fn, args, o).then(r => r.value as Record<string, unknown>)
   await run('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
   await run('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' })

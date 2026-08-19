@@ -19,7 +19,7 @@ import type { ThemeRuntime } from '../theme/render.ts'
 export type ServeOpts = {
   manifest: Manifest
   /** A single database. Use `pool` + `resolveDatastore` for one database per tenant. */
-  adapter?: Adapter
+  adapter?: Adapter | null
   /** One database per tenant, resolved per request and leased from a bounded pool. */
   pool?: AdapterPool
   /**
@@ -28,7 +28,7 @@ export type ServeOpts = {
    * reading the wrong tenant by forgetting to pass something along.
    */
   resolveDatastore?: (url: URL, req: IncomingMessage) => string | null
-  theme?: ThemeRuntime
+  theme?: ThemeRuntime | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime | null>)
   port?: number
   /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
@@ -61,7 +61,7 @@ export type ServeOpts = {
 export type AssetMount = {
   prefix: string
   dir?: string
-  resolve?: (rest: string) => Promise<string | null>
+  resolve?: (rest: string, url: URL, req: IncomingMessage) => Promise<string | null>
 }
 
 const ASSET_MIME: Record<string, string> = {
@@ -121,7 +121,7 @@ export async function createKetServer(o: ServeOpts) {
         const rel = normalize(url.pathname.slice(mount.prefix.length)).replace(/^(\.\.[/\\])+/, '')
         const file = mount.dir !== undefined
           ? (rel && !rel.startsWith('..') ? join(mount.dir, rel) : null)
-          : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel)
+          : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
         if (file === null) break
         try {
           const body = await readFile(file)
@@ -187,8 +187,13 @@ export async function createKetServer(o: ServeOpts) {
       }
 
       if (o.theme) {
+        const theme = typeof o.theme === 'function' ? await o.theme(url, req) : o.theme
+        if (!theme) {
+          res.writeHead(404, { 'content-type': 'text/plain' })
+          return res.end('not found')
+        }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
-        const html = o.theme.renderRegion('layout', scope)
+        const html = theme.renderRegion('layout', scope)
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
         return res.end(html)
       }

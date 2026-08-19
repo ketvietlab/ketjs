@@ -108,6 +108,72 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D37 — One deployment, many databases, and one door into each
+**Chosen:** Odoo's model — the code ships with the deployment, the decision about
+what is switched on lives in each database. `ket_app` per database is
+`ir_module_module` per database, and D7 makes it cheaper here: every schema exists
+everywhere, so enabling a module for a tenant is one UPDATE rather than a
+migration. Measured earlier: 400 empty tables cost 17 MB, and adding a column
+across all of them 43 ms.
+
+**What this closes is not a missing feature but a wrong answer.** `bootApp` opened
+one adapter and built one AppRegistry, so the restricted manifest was computed
+once. Serving two tenants through that would not have crashed — it would have
+shown tenant B the module set of tenant A. The registry is per datastore now and
+the manifest is resolved per request.
+
+**One datastore is the degenerate case of the same interface, not a second path.**
+Two code paths through the thing that decides whose data a request sees is exactly
+how one of them rots; every existing test exercises `singleTenant`, and the pooled
+implementation differs only in where the adapter comes from.
+
+**The bug that proves the point.** The HTTP layer was handed the raw pool, which
+looked equivalent and was not: `/_ket/fn` leased a datastore that had never been
+migrated, because migration happens the first time the *tenant runtime* touches
+one. The first API call to a new tenant failed with "no such table" while a page
+request to the same tenant worked. It now leases through the tenant runtime, so
+there is one place preparation can be forgotten rather than two.
+
+**Leases are scoped, never handed out.** The pool is bounded — Postgres has a hard
+connection ceiling, which is where the Odoo model hurts most in practice — so
+`ServeContext` exposes `live(req)` and `appsOf(req)` rather than an adapter or a
+registry. An adapter that escapes its lease is a connection nobody gives back.
+
+**The theme is per tenant too, keyed by the installed set.** It compiles every
+template, so it is cached — but cached against *what is installed*, so switching an
+app on rebuilds it rather than serving a stale one until restart.
+
+**A host this deployment does not serve is refused, not defaulted.** A default
+tenant is how one customer's request quietly reads another's data.
+
+**Sessions follow the tenant, and which way depends on how the tenant is named.**
+With subdomains the Host says which tenant before any cookie is read, so each keeps
+its own sessions in its own database — and that *is* the isolation: a session id
+from one tenant is not a row in another's table, even though the signature is
+valid, because it is the same secret. An app serving every tenant from one domain
+cannot resolve a tenant that way at all — reading the session needs the database,
+knowing the database needs the session — so it passes one shared store and records
+the tenant on the session. Both are expressible; neither is assumed.
+
+**The cookie carries no `Domain`,** which is what makes the subdomain case safe:
+`Domain=.example.com` would hand `acme.example.com` the cookie set for
+`globex.example.com`. It was already absent; it is now deliberate and tested.
+
+**Also still single:** the stream store falls back to memory when there is no
+single adapter, so resumable streams are not yet per tenant. Named here rather than
+discovered later.
+
+**What a deployment that never wants tenants pays.** Nothing to declare — `tenants`
+is absent by default, `ket new` does not mention it, and KetSuite itself has no
+such line. The runtime cost is the `singleTenant` wrapper, which is a Map lookup;
+measured end to end, a request is 0.368 ms. The restricted manifest was already
+rebuilt on every call before this change, and is now cached against the installed
+set — 0.0153 ms to 0.0003 ms — so a single-database app comes out of this slightly
+faster than it went in. The API cost is real but small: `ctx.live()` became
+`ctx.live(req)` and `ctx.apps` became `ctx.appsOf(req)`, four call sites in the
+whole repository. That is the price of there being one shape rather than two, and
+it is the shape that cannot answer for the wrong tenant.
+
 ## D36 — A role is a list of functions, enforced where every call already passes
 **Chosen:** the framework enforces an allow-list, the app decides what is on it —
 the same split as the datastore driver, and for the same reason. Roles are the
