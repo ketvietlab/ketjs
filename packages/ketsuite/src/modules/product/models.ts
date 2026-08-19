@@ -29,6 +29,9 @@ export const models: Record<string, ModelDef> = {
       // the column, because the type vocabulary is deliberately small.
       type: 'text',
       categoryId: 'ref:product.Category?',
+      // The unit this template is counted in. Optional so a service needs none,
+      // and so existing rows survive the module arriving.
+      uomId: 'ref:uom.Unit?',
       description: 'text?',
       active: 'bool',
     },

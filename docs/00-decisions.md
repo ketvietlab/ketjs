@@ -108,6 +108,38 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D26 — Units of measure: Odoo's model, and the rounding it depends on
+**Chosen:** Odoo's shape, deliberately. A category groups units that convert between
+one another; exactly one is the reference; every other records `factor` — how many
+of itself make one reference unit — and `rounding`, the precision it is meaningful
+to. Conversion runs through the reference, both ways.
+
+**Crossing a category is refused, not approximated.** There is no number of
+kilograms in a litre, and a framework that guessed one would be worse than one that
+stopped.
+
+**Quantities are floats, as in Odoo, and that has teeth.** 0.1 + 0.2 is not 0.3, and
+a figure that drifts by 1e-16 per movement eventually compares unequal to zero. The
+defence is that every value crossing a boundary is rounded to its unit's precision,
+and that comparisons go through `compareQty` and `isZero` — never `===`.
+
+**Writing the tests found two bugs in the rounding, both of the quiet kind:**
+
+1. `Math.round` sends .5 toward positive infinity, so `-0.5` becomes `-0`. A
+   quantity half a unit *below* a threshold compared **equal** to it while half a
+   unit above compared greater — an asymmetry in one direction only, which is
+   exactly the sort that hides for months in a stock ledger. Now spelt out as
+   half-away-from-zero.
+2. Multiplying back by the precision reintroduced the error: three times 0.1 is
+   0.30000000000000004, so `roundTo` returned a value it would not itself consider
+   rounded. A test now asserts every result is stable under a second rounding.
+
+**Product depends on uom**, as in Odoo: a template counts in a unit, optional so a
+service needs none and so existing rows survive the module arriving.
+
+**Cut:** purchase units, and the reference-changing migration Odoo needs when a
+category's reference moves. Both wait for a real case.
+
 ## D25 — Product: template and variant, with the stock concern left to stock
 **Naming follows Odoo** — `product.Template` and `product.Product`, where Product is
 the variant — so the migration map stays one to one. The name reads oddly and a
