@@ -36,7 +36,9 @@ export default defineModule({
   messages,
 })
 
-export { shell, appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
+export { shell, framed, listChrome, appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
+export type { Frame, ListChrome, Crumb, Facet, Pager, ViewKind } from './screens.ts'
+export { PAGE_SIZE, pageOf, pager, searchOf, withParam } from './paging.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export type { Viewer } from './screens.ts'
 export { joints } from './joints.ts'
