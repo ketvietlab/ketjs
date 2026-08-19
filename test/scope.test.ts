@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  callFn, compose, defineModule, defineFn, from, eq, migrateOne, registerFunctions,
+  callFn, compose, defineModule, defineFn, from, deleteFrom, eq, migrateOne, registerFunctions,
   sqliteAdapter, diffManifests, agentTools,
 } from 'ketjs'
 import type { Adapter, Ctx, KetError, Manifest, Row } from 'ketjs'
@@ -274,5 +274,37 @@ test('effects: a preload of a relation nobody declared is named, not silently em
   registerFunctions([m])
   await assert.rejects(() => callFn('norel.go', {}, { adapter, manifest, scope: { company: 'c1', branches: null } }),
     (e: unknown) => { assert.equal((e as { code: string }).code, 'E_UNKNOWN_RELATION'); return true })
+  await adapter.close()
+})
+
+test('del: a select handed to db.del is refused, because it would delete nothing', async () => {
+  // website_menu.removeMenuItem was written this way and had therefore never once
+  // worked: the query renders as a SELECT, and the effect check sees 'read', so a
+  // function that correctly declared 'write' is refused for an effect it never
+  // asked for. No test had ever called it.
+  const m = defineModule({
+    name: 'del',
+    models: { Thing: { scope: 'shared', fields: { id: 'id' } } },
+    functions: {
+      wrong: { effects: ['write:del.Thing'], handler: (ctx: Ctx) => ctx.db.del(from(ctx.table('del.Thing'))) },
+      right: { effects: ['write:del.Thing'], handler: (ctx: Ctx) => ctx.db.del(deleteFrom(ctx.table('del.Thing'))) },
+    },
+  })
+  const manifest = compose([m])
+  const adapter = sqliteAdapter(); await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions([m])
+  await adapter.run('INSERT INTO del_thing (id) VALUES (?)', ['t1'])
+  const scope = { company: 'c1' }
+
+  await assert.rejects(() => callFn('del.wrong', {}, { adapter, manifest, scope }), (e: unknown) => {
+    assert.equal((e as { code: string }).code, 'E_NOT_A_DELETE')
+    assert.match((e as { hint: string }).hint, /deleteFrom\(table\)/)
+    return true
+  })
+  assert.equal((await adapter.all('SELECT * FROM del_thing', [])).length, 1, 'and nothing was touched')
+
+  await callFn('del.right', {}, { adapter, manifest, scope })
+  assert.equal((await adapter.all('SELECT * FROM del_thing', [])).length, 0)
   await adapter.close()
 })

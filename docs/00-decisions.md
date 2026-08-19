@@ -108,6 +108,68 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D34 — Parties, legal entities and users, with the three things Odoo folds together kept apart
+**Parties are shared, and addresses are their own model.** `res.partner` is one
+table for customer, supplier, contact, delivery address, invoice address and legal
+entity, and the cost is visible in the model itself: `is_company` to ask whether
+this is a legal entity, `type` to ask whether it is an address, and a computed
+`commercial_partner_id` to answer the only question invoicing cares about — who do
+we bill.
+
+That third field is the tell. It exists *because* addresses are parties: when a
+delivery address is itself a partner, the system has lost the ability to say who
+the counterparty is, so it walks up the parent chain to recover it. SAP, Tryton and
+ERPNext all keep addresses separate. Doing the same removes `commercial_partner_id`
+and `type` outright — the party on a document is the party.
+
+**Roles are rows, as in SAP's BUT100.** A supplier who is also a customer is one
+party with two rows. Odoo uses `customer_rank` / `supplier_rank` counters, so a new
+role is a new column on a table that already has about 120.
+
+**`ir.property` becomes an ordinary company-scoped model.** The party is shared, its
+payment terms are not: the same customer may be on 30 days with one company and
+prepayment with another. Odoo keeps that in a side table keyed by
+(field, company, record) — EAV, invisible to SQL, untyped, and the reason "it is
+blank in company B" is a recurring ticket. `partner.CompanyTerms` is SAP's KNB1: a
+real table with real columns, scoped by machinery that already existed.
+
+**The scope guard caught the first draft of it.** A `Partner.terms` hasMany was
+refused at compose with `E_RELATION_WIDENS_SCOPE` — preloading it from a shared row
+would hand back every company's terms at once. SAP reads KNB1 by (customer, company
+code) for the same reason: the segment is reached from the scoped side, never from
+the shared one. The relation is one-directional now because the framework insisted.
+
+**A user *has* a party rather than *being* one.** Odoo is alone in making the user a
+delegated subclass (`_inherits`), which puts every user in the address book and
+leaks through archiving, deletion and sudo. Salesforce keeps `User` separate and
+links a Contact only for external users; SAP keeps SU01 separate from the business
+partner. The link is optional here for the same reason — an operator account is not
+someone you invoice.
+
+**Memberships are rows too**, so granting a company is an insert and revoking it a
+delete: traceable, and not a read-modify-write two requests can race on. What
+`authenticate` returns is exactly the shape D32 defined — a set to read and one to
+write — so the session that replaces the headers has nothing new to invent.
+
+**Passwords need no dependency.** node:crypto ships scrypt, which is memory-hard;
+the encoded value carries its own parameters, because a hash that cannot say how it
+was made cannot be moved on without reading every row. `needsRehash` reports when a
+stored one is behind. Node's default 32MB cap rejects N=2^15, so the limit is passed
+rather than assumed — a detail that costs an afternoon if it is met at deploy time.
+
+**Nothing hands back the hash, and that is structural rather than careful.** Every
+function here declares its output, so the projection from D33 picks the named
+fields — a handler that returned the whole row would still hand back only what was
+declared. `createUser` and `authenticate` are deliberately not agent tools: an agent
+that can mint logins can mint itself one.
+
+**Found while building: `db.del` had never worked.** `website_menu.removeMenuItem`
+built its query with `from()` rather than `deleteFrom()`, so it rendered as a SELECT
+— and the effect check saw `read`, refusing a function that had correctly declared
+`write`. It threw on every call, and no test had ever called it. `db.del` now
+refuses anything that is not a delete, naming the fix, so the trap is closed rather
+than the instance repaired.
+
 ## D33 — `output` becomes a projection, enforced when declared
 **Chosen:** enforce where it is declared; leave an undeclared output meaning "hands
 everything back", and let `ket permissions` count what is still open. Making it
