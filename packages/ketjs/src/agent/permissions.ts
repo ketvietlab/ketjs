@@ -1,0 +1,180 @@
+// What a role can actually reach.
+//
+// This exists because the question "can this user see products?" has no answer in
+// most systems until you read every module. Here it does have one, and it is
+// arithmetic rather than investigation: a function cannot touch a model it did not
+// declare — not through a relation, not by calling another function, because there
+// is no way to call one — so the reach of a set of functions is the union of their
+// declared effects. Nothing to traverse.
+//
+// It is a report before it is a mechanism on purpose. Deciding how roles should be
+// shaped is easier while looking at what the current functions already imply.
+
+import { KetError } from '../kernel/errors.ts'
+import type { Manifest } from '../types.ts'
+
+export type GrantedFn = {
+  key: string
+  by: string
+  effects: string[]
+  reads: string[]
+  writes: string[]
+  crossCompany: boolean
+  mutates: boolean
+  /**
+   * Whether the function declares the shape it returns. Undeclared means the reach
+   * is known at model level but not at field level: the rows come back whole, so a
+   * role that may see an order's product name may also see its cost.
+   */
+  projected: boolean
+}
+
+export type ModelReach = {
+  model: string
+  read: boolean
+  write: boolean
+  /** The functions that grant it, so a surprise can be traced to its cause. */
+  via: string[]
+  /** Fields a theme may read of this model, if any module declared a view. */
+  viewFields: string[] | null
+}
+
+export type Reach = {
+  functions: GrantedFn[]
+  models: ModelReach[]
+  /** Reads that cross legal entities. Rare and worth seeing on its own. */
+  crossCompany: string[]
+  /** Functions whose field-level reach cannot be stated, because output is undeclared. */
+  unprojected: string[]
+  unknown: string[]
+}
+
+const splitEffect = (e: string): [string, string] => {
+  const at = e.indexOf(':')
+  return at === -1 ? ['', e] : [e.slice(0, at), e.slice(at + 1)]
+}
+
+/** Every field any module exposes to a theme for this model, if any does. */
+const viewFieldsOf = (manifest: Manifest, model: string): string[] | null => {
+  const fields = new Set<string>()
+  let any = false
+  for (const v of Object.values(manifest.views)) {
+    if (v.of !== model) continue
+    any = true
+    for (const f of v.fields) fields.add(f)
+  }
+  return any ? [...fields].sort() : null
+}
+
+export function reachOf(manifest: Manifest, functions: string[]): Reach {
+  const granted: GrantedFn[] = []
+  const unknown: string[] = []
+  const models = new Map<string, ModelReach>()
+
+  for (const key of functions) {
+    const fn = manifest.functions[key]
+    if (!fn) { unknown.push(key); continue }
+    const reads: string[] = []
+    const writes: string[] = []
+    for (const e of fn.effects) {
+      const [verb, model] = splitEffect(e)
+      const slot = models.get(model) ?? { model, read: false, write: false, via: [], viewFields: viewFieldsOf(manifest, model) }
+      if (verb === 'read') { slot.read = true; reads.push(model) }
+      else { slot.write = true; writes.push(model) }
+      if (!slot.via.includes(key)) slot.via.push(key)
+      models.set(model, slot)
+    }
+    granted.push({
+      key, by: fn.by, effects: [...fn.effects],
+      reads: [...new Set(reads)].sort(), writes: [...new Set(writes)].sort(),
+      crossCompany: fn.crossCompany,
+      mutates: writes.length > 0,
+      projected: Object.keys(fn.output).length > 0,
+    })
+  }
+
+  return {
+    functions: granted.sort((a, b) => a.key.localeCompare(b.key)),
+    models: [...models.values()].sort((a, b) => a.model.localeCompare(b.model)),
+    crossCompany: granted.filter(f => f.crossCompany).map(f => f.key),
+    unprojected: granted.filter(f => !f.projected).map(f => f.key),
+    unknown,
+  }
+}
+
+/** Every function a module owns — what granting the whole module would mean. */
+export function functionsOf(manifest: Manifest, module: string): string[] {
+  const keys = Object.entries(manifest.functions).filter(([, f]) => f.by === module).map(([k]) => k)
+  if (!keys.length && !manifest.modules[module]) {
+    throw new KetError({
+      code: 'E_UNKNOWN_MODULE',
+      message: `no module "${module}"`,
+      hint: `installed: ${Object.keys(manifest.modules).sort().join(', ')}`,
+    })
+  }
+  return keys.sort()
+}
+
+const pad = (s: string, n: number) => s.padEnd(n)
+
+export function formatReach(r: Reach): string {
+  const out: string[] = []
+  if (r.unknown.length) out.push(`unknown functions: ${r.unknown.join(', ')}\n`)
+
+  const w = Math.max(20, ...r.functions.map(f => f.key.length))
+  out.push('functions granted:')
+  for (const f of r.functions) {
+    const marks = [f.mutates ? 'writes' : 'reads', ...(f.crossCompany ? ['cross-company'] : []), ...(f.projected ? [] : ['unprojected'])]
+    out.push(`  ${pad(f.key, w)}  ${marks.join(' · ')}`)
+  }
+
+  out.push('\nmodels reachable:')
+  const mw = Math.max(20, ...r.models.map(m => m.model.length))
+  for (const m of r.models) {
+    const access = [m.read ? 'read' : null, m.write ? 'write' : null].filter(Boolean).join('+')
+    out.push(`  ${pad(m.model, mw)}  ${pad(access, 10)}  via ${m.via.join(', ')}`)
+  }
+  if (!r.models.length) out.push('  (none)')
+
+  if (r.crossCompany.length) {
+    out.push('\nreads across legal entities:')
+    for (const k of r.crossCompany) out.push(`  ${k}`)
+  }
+
+  if (r.unprojected.length) {
+    out.push('\nfield-level reach not stated — these return whole rows:')
+    for (const k of r.unprojected) out.push(`  ${k}`)
+    out.push('  (declare `output` to say what a caller actually receives)')
+  }
+  return out.join('\n')
+}
+
+/** The whole surface, grouped by module: what exists to be granted at all. */
+export function formatInventory(manifest: Manifest): string {
+  const byModule = new Map<string, string[]>()
+  for (const [key, fn] of Object.entries(manifest.functions)) {
+    const list = byModule.get(fn.by) ?? []
+    list.push(key)
+    byModule.set(fn.by, list)
+  }
+  const out: string[] = []
+  let total = 0
+  let unprojected = 0
+  for (const [module, keys] of [...byModule].sort()) {
+    out.push(`${module}:`)
+    const w = Math.max(...keys.map(k => k.length))
+    for (const key of keys.sort()) {
+      const fn = manifest.functions[key]!
+      total++
+      if (!Object.keys(fn.output).length) unprojected++
+      const marks = [
+        fn.effects.length ? fn.effects.join(' ') : 'no effects',
+        ...(fn.crossCompany ? ['cross-company'] : []),
+        ...(Object.keys(fn.output).length ? [] : ['unprojected']),
+      ]
+      out.push(`  ${pad(key, w)}  ${marks.join(' · ')}`)
+    }
+  }
+  out.push(`\n${total} function(s); ${unprojected} return an undeclared shape`)
+  return out.join('\n')
+}
