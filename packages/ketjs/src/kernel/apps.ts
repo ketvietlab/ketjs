@@ -17,7 +17,7 @@
 // is the whole point of D7.
 
 import { KetError } from './errors.ts'
-import type { Adapter, Manifest } from '../types.ts'
+import type { Adapter, InstallPolicy, Manifest } from '../types.ts'
 
 // The row records a DECISION, not a fact: 'removed' is how an explicit uninstall
 // survives the next auto-install sweep. Deleting the row instead would let an
@@ -43,7 +43,7 @@ export type AppInfo = {
   depends: string[]
   /** Installed modules that would break if this one went away. */
   dependents: string[]
-  autoInstall: boolean
+  install: InstallPolicy
 }
 
 export type AppRegistry = {
@@ -63,9 +63,13 @@ const dependentsOf = (manifest: Manifest, name: string): string[] =>
 export async function createAppRegistry(
   manifest: Manifest,
   adapter: Adapter,
-  o: { now?: () => string } = {},
+  o: { now?: () => string; autoInstall?: boolean } = {},
 ): Promise<AppRegistry> {
   const now = o.now ?? (() => new Date().toISOString())
+  // A module declares that it *may* arrive on its own; the deployment decides
+  // whether it does. Off is what a developer wants when they are watching one
+  // module at a time and an app that installs itself is a surprise, not a service.
+  const autoInstallEnabled = o.autoInstall !== false
   const pg = adapter.name === 'postgres'
   const p = (n: number) => (pg ? `$${n}` : '?')
   await adapter.exec(pg ? APP_DDL_PG : APP_DDL)
@@ -100,6 +104,7 @@ export async function createAppRegistry(
 
   // Anything whose dependencies are all installed and which asked to come along.
   const settle = async (): Promise<string[]> => {
+    if (!autoInstallEnabled) return []
     const added: string[] = []
     for (;;) {
       const on = await enabled()
@@ -107,7 +112,7 @@ export async function createAppRegistry(
       const next = Object.entries(manifest.modules)
         // `!seen.has(n)` is the fix: an app the user removed is not a candidate
         // again, however many times its dependencies are reinstalled.
-        .filter(([n, m]) => m.autoInstall && !seen.has(n) && m.depends.every(d => on.has(d)))
+        .filter(([n, m]) => m.install === 'auto' && !seen.has(n) && m.depends.every(d => on.has(d)))
         .map(([n]) => n)
       if (!next.length) return added
       await setState(next, 'installed')
@@ -136,13 +141,23 @@ export async function createAppRegistry(
           state: (on.has(name) ? 'installed' : 'available') as AppState,
           depends: [...m.depends],
           dependents: dependentsOf(manifest, name).filter(d => on.has(d)),
-          autoInstall: m.autoInstall === true,
+          install: m.install,
         }))
         .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
     },
 
     async install(name) {
-      known(name)
+      const target = known(name)
+      // 'never' is a boundary the module drew, not a preference: it is machinery,
+      // and the only honest way in is for something that needs it to ask.
+      if (target.install === 'never') {
+        throw new KetError({
+          code: 'E_APP_NOT_INSTALLABLE',
+          module: name,
+          message: `"${name}" declares install: 'never', so it cannot be installed on its own`,
+          hint: `install a module that depends on "${name}" — it will come along as a dependency`,
+        })
+      }
       const on = await enabled()
       // Dependencies come along; an app whose dependency is off would be broken.
       const wanted: string[] = []

@@ -108,6 +108,56 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D28 — The framework boots the app, and a module says whether it may arrive
+**Chosen:** `ket serve` and `ket dev`, with the boot sequence as a function
+(`bootApp`) rather than a script. What moved into the framework is everything that
+was app-agnostic and would have been copied by the second app: opening a datastore,
+migrating, registering functions, installing a bootstrap set, deciding who the
+request is, mounting the theme, mounting `/_ket/health` and `/_ket/agent`, printing
+a banner, shutting down on a signal. KetSuite's entry went from 162 lines to 4.
+
+**What stayed with the app is what only the app knows**, and it arrives as data on
+`defineApp`: which modules ship, which function turns a path into a page, which
+extra routes it serves, where its assets are. The page resolver is a *name*
+(`website.getPageByPath`), not a closure — so the framework never learns which
+module provides pages, and a missing resolver is caught at boot rather than at the
+first request that happens to hit it.
+
+**The framework cannot open Postgres, and that is the fence working.** ketjs ships
+SQLite, which it owns; the Postgres adapter is a separate package that depends on
+ketjs, so a framework that reached for it would be a cycle. An app that wants it
+hands `serve.openStore` in. The dependency audit is what keeps this true rather
+than a comment — it failed this change twice and was right both times, once for
+importing the driver and once for scaffold templates whose *string literals*
+contained `from 'ketjs'`. The templates are files now, which makes "this is data,
+not code" a shape instead of an exception.
+
+**`install` replaced `autoInstall`, and gained the case that was missing.**
+A boolean could say "come along by yourself" but not "never arrive by yourself":
+
+- `'manual'` (default) — installed only when someone asks for it by name
+- `'auto'` — installs itself once everything it depends on is installed
+- `'never'` — refuses direct install entirely; it arrives only by being depended
+  on, which is how machinery stays out of reach without also being hidden
+
+That is the boundary the *module author* draws. Whether `'auto'` actually fires is
+a separate decision belonging to the *deployment*: `KET_AUTO_INSTALL=0`, or
+`ket dev --no-auto-install`, holds it back — which is what a developer wants when
+they are changing one module and an app that installs itself is a surprise rather
+than a service. Held back is not forbidden: installing by name still works. The
+banner says when the switch is off, because a module that declared `'auto'` and did
+not arrive should explain itself rather than look broken.
+
+`autoInstall: true` still parses and still means `'auto'`; `defineModule`
+normalises it away, so the manifest has one spelling.
+
+**`ket new` writes an app that runs unedited** — verified by booting the output and
+calling its route, not by reading it. It refuses to overwrite: a scaffold that can
+eat work is not a scaffold.
+
+**Cut:** hot module replacement. `ket dev` re-execs under `node --watch`, because a
+file watcher of our own that disagreed with the runtime's would be worse than none.
+
 ## D27 — One command that starts the thing
 There was a design entry point and a CLI that could check and migrate, but nothing
 that *ran* KetSuite. `npm start` now opens a database, migrates to the manifest,

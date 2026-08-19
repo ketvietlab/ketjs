@@ -3,6 +3,7 @@
 // so there is no second source of truth about what an app contains.
 
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 import type { AppSpec } from './kernel/workspace.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
@@ -10,6 +11,8 @@ import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
+import { serveApp } from './server/boot.ts'
+import { scaffold } from './scaffold/index.ts'
 import { KetError } from './kernel/errors.ts'
 import type { Manifest } from './types.ts'
 
@@ -17,10 +20,35 @@ const [, , cmd = 'help', ...rest] = process.argv
 const flag = (name: string) => rest.includes(`--${name}`)
 const opt = (name: string) => { const i = rest.indexOf(`--${name}`); return i >= 0 ? rest[i + 1] : undefined }
 
+const CANDIDATES = ['ket.workspace.ts', 'workspace.ts', 'examples/workspace.ts']
+
+/** Where the apps are declared. Named explicitly, or the first conventional path. */
+const workspacePath = () => {
+  const given = opt('workspace')
+  if (given) return given
+  const found = CANDIDATES.find(p => existsSync(p))
+  if (!found) throw new Error(`no workspace file found (looked for ${CANDIDATES.join(', ')}); pass --workspace FILE`)
+  return found
+}
+
 const loadWorkspace = async () => {
-  const entry = opt('workspace') ?? 'examples/workspace.ts'
-  const mod = await import(`${process.cwd()}/${entry}`) as { apps: AppSpec[] }
+  const mod = await import(`${process.cwd()}/${workspacePath()}`) as { apps: AppSpec[] }
+  if (!Array.isArray(mod.apps)) throw new Error(`${workspacePath()} must export \`apps\`, an array of defineApp(...)`)
   return { ws: composeWorkspace(mod.apps), apps: mod.apps }
+}
+
+/** The AppSpec, not the composed manifest — serving needs what the app declared. */
+const pickSpec = (specs: AppSpec[]): AppSpec => {
+  const name = opt('app')
+  if (!name) {
+    const servable = specs.filter(s => s.serve)
+    const one = servable[0] ?? specs[0]
+    if (!one) throw new Error('the workspace declares no apps')
+    return one
+  }
+  const found = specs.find(s => s.name === name)
+  if (!found) throw new Error(`unknown app "${name}" (have: ${specs.map(s => s.name).join(', ')})`)
+  return found
 }
 
 const pickApp = (ws: { apps: Record<string, Manifest> }): [string, Manifest] => {
@@ -41,16 +69,45 @@ const HELP = `ket — zero-dependency fullstack framework
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
 
-Options: --workspace FILE (default examples/workspace.ts), --app NAME
+  ket serve [--app X]       boot the app and serve it
+  ket dev [--app X]         serve, and restart when a file changes
+                            (--no-auto-install holds back modules that install themselves)
+  ket new NAME [--dir D]    scaffold an app that runs
+
+Options: --workspace FILE (default: ket.workspace.ts, workspace.ts, examples/workspace.ts)
+         --app NAME, --port N
 `
 
 try {
   if (cmd === 'help' || cmd === '--help') { console.log(HELP); process.exit(0) }
 
-  const { ws } = await loadWorkspace()
+  if (cmd === 'new') {
+    const name = rest.find(a => !a.startsWith('--'))
+    if (!name) throw new Error('usage: ket new NAME [--dir DIR]')
+    for (const line of scaffold(name, opt('dir') ?? name)) console.log(line)
+    process.exit(0)
+  }
+
+  if (cmd === 'dev') {
+    // Node watches and restarts; the framework does not need its own file watcher,
+    // and one that disagreed with the runtime's would be worse than none.
+    const argv = ['--watch', new URL(import.meta.url).pathname, 'serve', ...rest]
+    const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...process.env, KET_DEV: '1' } })
+    child.on('exit', code => process.exit(code ?? 0))
+    for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => child.kill(sig))
+    await new Promise(() => {})
+  }
+
+  const { ws, apps: specs } = await loadWorkspace()
   mkdirSync('.ket', { recursive: true })
 
-  if (cmd === 'check') {
+  if (cmd === 'serve') {
+    const spec = pickSpec(specs)
+    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block, so there is nothing to run`)
+    const port = opt('port')
+    const env = flag('no-auto-install') ? { ...process.env, KET_AUTO_INSTALL: '0' } : process.env
+    await serveApp(spec, { env, ...(port ? { port: Number(port) } : {}) })
+  } else if (cmd === 'check') {
     console.log(explainWorkspace(ws))
     console.log('\nall contracts hold')
   } else if (cmd === 'workspace') {

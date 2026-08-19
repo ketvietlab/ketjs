@@ -1,0 +1,27 @@
+import { defineModule, from } from 'ketjs'
+
+// A module is the unit of contribution: models, functions, sections and messages
+// declared together, composable with anyone else's. `install` is the boundary it
+// draws — 'manual' means nothing installs it but a person asking for it by name.
+export default defineModule({
+  name: '__NAME__',
+  app: true,
+  title: '__NAME__',
+  install: 'manual',
+  models: {
+    Note: {
+      scope: 'company',
+      fields: { id: 'id', title: 'text', body: 'text?' },
+    },
+  },
+  functions: {
+    list: {
+      agent: true,
+      effects: ['read:__NAME__.Note'],
+      handler: (ctx) => ctx.db.all(from(ctx.table('__NAME__.Note'))),
+    },
+  },
+  messages: {
+    en: { 'app.title': '__NAME__', 'page.notFound': 'Page not found' },
+  },
+})
