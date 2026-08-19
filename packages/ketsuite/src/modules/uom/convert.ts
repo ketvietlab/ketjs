@@ -9,7 +9,7 @@
  * precision, and that comparisons go through helpers that respect it — never `===`.
  */
 
-export type Unit = { id: string; parentPath: string; factor: number; rounding: number }
+export type Unit = { id: string; parentPath: string; absoluteFactor: number; rounding: number }
 
 export class UomError extends Error {
   code: string
@@ -73,9 +73,9 @@ export function convertQty(qty: number, from: Unit, to: Unit): number {
       hint: 'units convert only when they share a reference root',
     })
   }
-  if (!(from.factor > 0) || !(to.factor > 0)) {
+  if (!(from.absoluteFactor > 0) || !(to.absoluteFactor > 0)) {
     throw new UomError({ code: 'E_UOM_BAD_FACTOR', message: 'a unit factor must be greater than zero' })
   }
   // Odoo 19 stores an absolute factor from each node to its root.
-  return roundTo((qty * from.factor) / to.factor, to.rounding)
+  return roundTo((qty * from.absoluteFactor) / to.absoluteFactor, to.rounding)
 }

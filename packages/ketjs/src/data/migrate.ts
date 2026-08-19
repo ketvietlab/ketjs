@@ -92,20 +92,26 @@ export function planMigration(
           destructive: true,
         })
     }
-    for (const [c, bc] of Object.entries(before.columns)) {
-      if (!def.columns[c]) ops.push({ op: 'DROP_COLUMN', table: t, column: c, by: bc.by, destructive: true })
-    }
+    // Indexes are dropped before the columns and created after them. Postgres
+    // drops any index covering a dropped column as part of ALTER TABLE, so a
+    // DROP_INDEX emitted afterwards would fail on an index that is already gone
+    // and abort the migration halfway through.
+    const creates: MigrationOp[] = []
     for (const [name, index] of Object.entries(def.indexes ?? {})) {
       const old = before.indexes?.[name]
-      if (!old) ops.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
+      if (!old) creates.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
       else if (old.unique !== index.unique || old.fields.join('\0') !== index.fields.join('\0')) {
         ops.push({ op: 'DROP_INDEX', table: t, name, destructive: true })
-        ops.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
+        creates.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
       }
     }
     for (const name of Object.keys(before.indexes ?? {})) {
       if (!def.indexes?.[name]) ops.push({ op: 'DROP_INDEX', table: t, name, destructive: true })
     }
+    for (const [c, bc] of Object.entries(before.columns)) {
+      if (!def.columns[c]) ops.push({ op: 'DROP_COLUMN', table: t, column: c, by: bc.by, destructive: true })
+    }
+    ops.push(...creates)
   }
   for (const t of Object.keys(prevTables)) {
     if (!next.tables[t]) ops.push({ op: 'DROP_TABLE', table: t, destructive: true })

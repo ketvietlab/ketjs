@@ -9,7 +9,7 @@ import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { type Changeset, changeset } from '../data/changeset.ts'
+import { type Changeset, changeset, decimalText } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
@@ -117,7 +117,9 @@ export function createContext(o: {
     const cols = decimalsOf(model)
     if (!cols.length) return row
     const out: Row = { ...row }
-    for (const c of cols) if (out[c] != null) out[c] = String(out[c])
+    // decimalText, not String: a raw db.update never passes through a changeset, so
+    // this is the only place that can keep "1e-7" out of a decimal column.
+    for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
     return out
   }
 

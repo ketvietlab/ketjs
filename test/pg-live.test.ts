@@ -391,7 +391,7 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
 
       const cols = (await a.introspect())['uom_unit']!
       assert.equal(cols['relativeFactor'], 'numeric')
-      assert.equal(cols['factor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
+      assert.equal(cols['absoluteFactor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
       assert.equal(cols['rounding'], 'numeric')
 
       registerFunctions([uom])
@@ -417,17 +417,19 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
           { rootId: 'root' },
           { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
         )
-      ).value as Array<{ id: string; factor: number }>
+      ).value as Array<{ id: string; absoluteFactor: number }>
       for (const [i, factor] of awkward.entries()) {
-        assert.equal(rows.find((r) => r.id === `u${i}`)!.factor, Number(factor))
+        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, Number(factor))
       }
 
       // And the driver hands NUMERIC over as a string, which is what keeps it exact
       // before the framework turns it into a number.
-      const raw = (await a.all('SELECT "relativeFactor", factor FROM uom_unit WHERE id = $1', ['u0']))[0]!
+      const raw = (
+        await a.all('SELECT "relativeFactor", "absoluteFactor" FROM uom_unit WHERE id = $1', ['u0'])
+      )[0]!
       assert.equal(typeof raw.relativeFactor, 'string')
       assert.equal(raw.relativeFactor, '0.1')
-      assert.equal(raw.factor, '0.1')
+      assert.equal(raw.absoluteFactor, '0.1')
     })
   } finally {
     await pool.close()

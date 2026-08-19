@@ -28,12 +28,12 @@ async function save(
 }
 
 test('uom 19: conversion follows the absolute factor and shared root', () => {
-  const kg = { id: 'kg', parentPath: 'kg/', factor: 1, rounding: 0.01 }
-  const g = { id: 'g', parentPath: 'kg/g/', factor: 0.001, rounding: 0.01 }
+  const kg = { id: 'kg', parentPath: 'kg/', absoluteFactor: 1, rounding: 0.01 }
+  const g = { id: 'g', parentPath: 'kg/g/', absoluteFactor: 0.001, rounding: 0.01 }
   assert.equal(convertQty(2.5, kg, g), 2500)
   assert.equal(convertQty(2500, g, kg), 2.5)
   assert.throws(
-    () => convertQty(1, kg, { id: 'l', parentPath: 'l/', factor: 1, rounding: 0.01 }),
+    () => convertQty(1, kg, { id: 'l', parentPath: 'l/', absoluteFactor: 1, rounding: 0.01 }),
     (error: unknown) => (error as { code: string }).code === 'E_UOM_ROOT_MISMATCH',
   )
 })
@@ -47,7 +47,7 @@ test('uom 19: roots have factor one, descendants derive factor and parent path',
     const rows = (await callFn('uom.listUnits', { rootId: 'kg' }, { adapter, manifest })).value as Row[]
     assert.equal(rows.length, 3)
     const mg = rows.find((row) => row.id === 'mg')!
-    assert.equal(mg.factor, 0.000001)
+    assert.equal(mg.absoluteFactor, 0.000001)
     assert.equal(mg.parentPath, 'kg/g/mg/')
     assert.equal(mg.rounding, 0.01)
   } finally {
@@ -78,8 +78,8 @@ test('uom 19: changing an ancestor recomputes all descendant factors', async () 
     await save(adapter, 'box', '10', 'kg')
     await save(adapter, 'pallet', '5', 'box')
     await save(adapter, 'box', '12', 'kg')
-    const pallet = (await adapter.all('SELECT factor FROM uom_unit WHERE id = ?', ['pallet']))[0]!
-    assert.equal(pallet.factor, '60')
+    const pallet = (await adapter.all('SELECT "absoluteFactor" FROM uom_unit WHERE id = ?', ['pallet']))[0]!
+    assert.equal(pallet.absoluteFactor, '60')
   } finally {
     await adapter.close()
   }

@@ -69,7 +69,21 @@ async function mutateQuant(
         reservedQuantity: String(args.reserved),
         version: 0,
       })
-      if ('inserted' in inserted && inserted.inserted) return (await ctx.db.select('stock.Quant', { id }))[0]!
+      // A dry run writes nothing, so there is no row to re-read and nothing for the
+      // retry loop to converge on. Report the quant that would have been created
+      // rather than spinning eight times and blaming concurrency.
+      if ('dryRun' in inserted)
+        return {
+          id,
+          productId: args.productId,
+          locationId: args.locationId,
+          lotId: args.lotId ?? null,
+          lotKey: lotKey(args.lotId),
+          quantity: args.quantity,
+          reservedQuantity: args.reserved,
+          version: 0,
+        }
+      if (inserted.inserted) return (await ctx.db.select('stock.Quant', { id }))[0]!
       continue
     }
     const quantity = Number(current.quantity) + args.quantity
@@ -86,19 +100,38 @@ async function mutateQuant(
         version: Number(current.version) + 1,
       },
     )
-    if ('matched' in changed && changed.matched)
+    if ('dryRun' in changed || changed.matched)
       return { ...current, quantity, reservedQuantity, version: Number(current.version) + 1 }
   }
   throw new Error(`concurrent quant update did not settle for ${id}`)
 }
 
+/** How much of a quant is already spoken for; 0 when the quant does not exist. */
+async function reservedOn(
+  ctx: Ctx,
+  productId: unknown,
+  locationId: unknown,
+  lotId: unknown,
+): Promise<number> {
+  const id = quantId(ctx, productId, locationId, lotId)
+  const quant = (await ctx.db.select('stock.Quant', { id }))[0]
+  return quant ? Number(quant.reservedQuantity) : 0
+}
+
 async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
+  const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]
+  // draft belongs to confirmPicking and cancel is terminal. Deriving a state from the
+  // moves and writing it unconditionally let a reservation confirm a draft transfer
+  // and resurrect a cancelled one.
+  if (!picking || picking.state === 'draft' || picking.state === 'cancel') return
   const moves = await ctx.db.select('stock.Move', { pickingId })
+  const live = moves.filter((move) => move.state !== 'cancel')
   let state = 'confirmed'
-  if (moves.length && moves.every((move) => move.state === 'done')) state = 'done'
-  else if (moves.some((move) => move.state === 'assigned' || move.state === 'partially_available'))
+  if (moves.length && !live.length) state = 'cancel'
+  else if (live.length && live.every((move) => move.state === 'done')) state = 'done'
+  else if (live.some((move) => move.state === 'assigned' || move.state === 'partially_available'))
     state = 'assigned'
-  else if (moves.some((move) => move.state === 'waiting')) state = 'waiting'
+  else if (live.some((move) => move.state === 'waiting')) state = 'waiting'
   await ctx.db.update('stock.Picking', { id: pickingId }, { state })
 }
 
@@ -415,10 +448,12 @@ export const functions: Record<string, FnSpec> = {
       if (!(await isStorable(ctx, move.productId)))
         return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
       if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
+      if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
       const demand = Number(move.productUomQty)
       let reserved = (await ctx.db.select('stock.MoveLine', { moveId: move.id }))
         .filter((line) => !line.picked)
         .reduce((sum, line) => sum + Number(line.quantity), 0)
+      let state = 'confirmed'
       const tracking = await trackingOf(ctx, move.productId)
       const quants = (
         await ctx.db.select('stock.Quant', { productId: move.productId, locationId: move.locationId })
@@ -464,7 +499,7 @@ export const functions: Record<string, FnSpec> = {
             })
           reserved += take
         }
-        const state =
+        state =
           compareQty(reserved, demand, 0.000001) >= 0
             ? 'assigned'
             : reserved > 0
@@ -473,7 +508,9 @@ export const functions: Record<string, FnSpec> = {
         await tx.db.update('stock.Move', { id: move.id }, { state, quantity: String(reserved) })
         if (move.pickingId) await updatePickingState(tx, move.pickingId)
       })
-      const state = reserved >= demand ? 'assigned' : reserved > 0 ? 'partially_available' : 'confirmed'
+      // The state that was written, not a second derivation of it: the tolerant
+      // compareQty above and a bare `reserved >= demand` disagree inside 1e-6, and
+      // the caller was being told the opposite of what landed in the row.
       return { ok: true, reserved: String(reserved), state }
     },
   }),
@@ -583,14 +620,20 @@ export const functions: Record<string, FnSpec> = {
               throw new Error(`${tracking} tracked product requires a lot/serial`)
             if (tracking === 'serial' && compareQty(quantity, 1, 0.000001) > 0)
               throw new Error('serial move line quantity cannot exceed 1')
-            if (source.usage === 'internal' || source.usage === 'transit')
+            if (source.usage === 'internal' || source.usage === 'transit') {
+              // Release only what this line actually holds. A line written by
+              // saveMoveLine never incremented the quant's reservedQuantity, so
+              // releasing its full quantity drove the mirror negative and threw —
+              // leaving the transfer impossible to complete by any later call.
+              const held = await reservedOn(tx, move.productId, move.locationId, line.lotId)
               await mutateQuant(tx, {
                 productId: move.productId,
                 locationId: move.locationId,
                 lotId: line.lotId,
                 quantity: -quantity,
-                reserved: -reserved,
+                reserved: -Math.min(reserved, held),
               })
+            }
             if (destination.usage === 'internal' || destination.usage === 'transit')
               await mutateQuant(tx, {
                 productId: move.productId,
@@ -761,7 +804,7 @@ export const functions: Record<string, FnSpec> = {
       outgoing: 'decimal',
       forecast: 'decimal',
     },
-    effects: ['read:stock.Quant', 'read:stock.Move'],
+    effects: ['read:stock.Quant', 'read:stock.Move', 'read:stock.Location'],
     agent: true,
     handler: async (ctx, args) => {
       const quants = await ctx.db.select('stock.Quant', {
@@ -772,12 +815,23 @@ export const functions: Record<string, FnSpec> = {
       const moves = (await ctx.db.select('stock.Move', { productId: args.productId })).filter(
         (move) => !['done', 'cancel', 'draft'].includes(String(move.state)),
       )
+      // Without a location the question is company-wide, and the answer is which
+      // side of the move holds stock — not "every side", which counted each move as
+      // both incoming and outgoing and collapsed the forecast onto on-hand.
+      const holds = args.locationId
+        ? null
+        : new Set(
+            (await ctx.db.select('stock.Location'))
+              .filter((location) => location.usage === 'internal' || location.usage === 'transit')
+              .map((location) => String(location.id)),
+          )
+      const into = (id: unknown) => (holds ? holds.has(String(id)) : id === args.locationId)
       let incoming = 0,
         outgoing = 0
       for (const move of moves) {
         const remaining = Math.max(0, Number(move.productUomQty) - Number(move.quantity))
-        if (!args.locationId || move.locationDestId === args.locationId) incoming += remaining
-        if (!args.locationId || move.locationId === args.locationId) outgoing += remaining
+        if (into(move.locationDestId)) incoming += remaining
+        if (into(move.locationId)) outgoing += remaining
       }
       return {
         productId: args.productId,

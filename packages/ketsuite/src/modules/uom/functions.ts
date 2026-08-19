@@ -7,7 +7,7 @@ const PRECISION_ID = 'product_unit'
 const asUnit = (row: Row): Unit => ({
   id: String(row.id),
   parentPath: String(row.parentPath),
-  factor: Number(row.factor),
+  absoluteFactor: Number(row.absoluteFactor),
   rounding: Number(row.rounding),
 })
 
@@ -17,7 +17,7 @@ type UnitRow = {
   sequence: number
   relativeFactor: number
   relativeUomId: string | null
-  factor: number
+  absoluteFactor: number
   rounding: number
   parentPath: string
   active: boolean
@@ -32,14 +32,14 @@ function deriveTree(rows: UnitRow[]): { ok: true; rows: UnitRow[] } | { ok: fals
     state.set(row.id, 1)
     if (!row.relativeUomId) {
       if (row.relativeFactor !== 1) return `${row.id}: reference root must have relativeFactor 1`
-      row.factor = 1
+      row.absoluteFactor = 1
       row.parentPath = `${row.id}/`
     } else {
       const parent = byId.get(row.relativeUomId)
       if (!parent) return `${row.id}: unknown relativeUomId ${row.relativeUomId}`
       const error = visit(parent)
       if (error) return error
-      row.factor = row.relativeFactor * parent.factor
+      row.absoluteFactor = row.relativeFactor * parent.absoluteFactor
       row.parentPath = `${parent.parentPath}${row.id}/`
     }
     state.set(row.id, 2)
@@ -131,7 +131,7 @@ export const functions: Record<string, FnSpec> = {
             : Number(args.sequence),
         relativeFactor: Number(args.relativeFactor),
         relativeUomId: args.relativeUomId == null ? null : String(args.relativeUomId),
-        factor: 1,
+        absoluteFactor: 1,
         rounding,
         parentPath: '',
         active: current ? Boolean(current.active) : true,
@@ -144,7 +144,7 @@ export const functions: Record<string, FnSpec> = {
           sequence: Number(row.sequence),
           relativeFactor: Number(row.relativeFactor),
           relativeUomId: row.relativeUomId == null ? null : String(row.relativeUomId),
-          factor: Number(row.factor),
+          absoluteFactor: Number(row.absoluteFactor),
           rounding,
           parentPath: String(row.parentPath),
           active: Boolean(row.active),
@@ -161,7 +161,7 @@ export const functions: Record<string, FnSpec> = {
             sequence: row.sequence,
             relativeFactor: String(row.relativeFactor),
             relativeUomId: row.relativeUomId,
-            factor: String(row.factor),
+            absoluteFactor: String(row.absoluteFactor),
             rounding: String(row.rounding),
             parentPath: row.parentPath,
             active: row.active,

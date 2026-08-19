@@ -19,6 +19,20 @@ async function categoryAncestors(ctx: Ctx, id: unknown): Promise<Set<string>> {
   return result
 }
 
+/**
+ * A datetime as an instant, whichever adapter handed it over.
+ *
+ * SQLite gives back the ISO text that was written; Postgres stores TIMESTAMPTZ and
+ * postgres.js parses it into a Date, whose `toString` is "Wed Aug 20 2026 …". A
+ * string comparison between those two formats is not a date comparison at all — it
+ * ranked every dated rule out of the running on Postgres and nowhere else.
+ */
+const at = (value: unknown): number | null => {
+  if (value == null || value === '') return null
+  const ms = value instanceof Date ? value.getTime() : Date.parse(String(value))
+  return Number.isNaN(ms) ? null : ms
+}
+
 const applies = (
   item: Row,
   product: Row,
@@ -27,9 +41,12 @@ const applies = (
   qty: number,
   date: string,
 ) => {
+  const when = at(date) ?? 0
+  const start = at(item.dateStart)
+  const end = at(item.dateEnd)
   if (Number(item.minQuantity) > qty) return false
-  if (item.dateStart && String(item.dateStart) > date) return false
-  if (item.dateEnd && String(item.dateEnd) < date) return false
+  if (start !== null && start > when) return false
+  if (end !== null && end < when) return false
   if (item.appliedOn === '0_product_variant') return item.productId === product.id
   if (item.appliedOn === '1_product') return item.templateId === template.id
   if (item.appliedOn === '2_product_category') return categories.has(String(item.categoryId))
@@ -151,8 +168,9 @@ export const functions: Record<string, FnSpec> = {
       if (!PRICE_BASES.includes(base as never)) return invalid('base', `phải là: ${PRICE_BASES.join(', ')}`)
       if (!(await ctx.db.select('pricing.Pricelist', { id: args.pricelistId }))[0])
         return invalid('pricelistId', 'bảng giá không tồn tại')
-      if (args.dateStart && args.dateEnd && String(args.dateStart) >= String(args.dateEnd))
-        return invalid('dateEnd', 'phải sau dateStart')
+      const start = at(args.dateStart)
+      const end = at(args.dateEnd)
+      if (start !== null && end !== null && start >= end) return invalid('dateEnd', 'phải sau dateStart')
       if (base === 'pricelist' && !args.basePricelistId)
         return invalid('basePricelistId', 'bắt buộc khi base là pricelist')
       if (args.basePricelistId === args.pricelistId)

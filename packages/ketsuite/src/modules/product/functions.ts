@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from, like } from 'ketjs'
+import { asc, defineFn, eq, from, inArray, like } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { PRODUCT_TYPES } from './types.ts'
 
@@ -10,8 +10,26 @@ const templateQuery = (ctx: Ctx, args: { type?: string | null; search?: string |
   return query
 }
 
+/**
+ * Attach each template's primary unit.
+ *
+ * Restricted to the rows in hand: reading every primary link in the tenant to label
+ * one page of PAGE_SIZE made the query grow with the catalogue while the page did
+ * not, so a large catalogue paid for the whole table on every list request.
+ */
 const withPrimaryUom = async (ctx: Ctx, rows: Row[]): Promise<Row[]> => {
-  const links = await ctx.db.select('product.TemplateUom', { primary: true })
+  if (!rows.length) return rows
+  const L = ctx.table('product.TemplateUom')
+  const links = await ctx.db.all(
+    from(L)
+      .where(eq(L.primary, true))
+      .where(
+        inArray(
+          L.templateId,
+          rows.map((row) => String(row.id)),
+        ),
+      ),
+  )
   const byTemplate = new Map(links.map((link) => [link.templateId, link.uomId]))
   return rows.map((row) => ({ ...row, uomId: byTemplate.get(row.id) ?? null }))
 }
@@ -180,9 +198,15 @@ export const functions: Record<string, FnSpec> = {
         defaultCode: args.defaultCode ?? args.sku ?? null,
         combinationKey: args.combinationKey ?? `manual:${args.id}`,
       }
+      // combinationKey is the variant's identity, so it is only ever set on the way
+      // in — never rewritten by an edit that did not name it. Casting it every time
+      // meant setting a barcode on a generated variant replaced its attribute
+      // combination with "manual:<id>" and silently unhooked it from its values.
+      const fields = ['id', 'templateId', 'defaultCode', 'barcode', 'weight', 'volume']
+      if (!existing || args.combinationKey != null) fields.push('combinationKey')
       let changes = ctx
         .change('product.Product', values, existing ?? null)
-        .cast(['id', 'templateId', 'defaultCode', 'barcode', 'weight', 'volume', 'combinationKey'])
+        .cast(fields)
         .required(['templateId'])
       if (!existing)
         changes = changes
@@ -297,7 +321,13 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       if (!(await ctx.db.select('product.Template', { id: args.templateId }))[0])
         return { ok: false, errors: [{ field: 'templateId', message: 'template không tồn tại' }] }
-      const lines = await ctx.db.select('product.TemplateAttributeLine', { templateId: args.templateId })
+      // Sorted, because select emits no ORDER BY: the values inside a group were
+      // already ordered but the groups were not, so row order decided the combination
+      // key and the product id derived from it. On an adapter free to reorder rows
+      // that let one combination generate a second variant.
+      const lines = (
+        await ctx.db.select('product.TemplateAttributeLine', { templateId: args.templateId })
+      ).sort((a, b) => String(a.id).localeCompare(String(b.id)))
       const groups: string[][] = []
       for (const line of lines) {
         const values = await ctx.db.select('product.TemplateAttributeValue', { lineId: line.id })

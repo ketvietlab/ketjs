@@ -9,20 +9,57 @@ const invalid = (field: string, message: string): { ok: false; errors: object[] 
   errors: [{ field, message }],
 })
 
+/**
+ * The company a composed row id has to carry.
+ *
+ * These link models are company-scoped, so an id built from the two business ids
+ * alone is the same string in every tenant. insertIfAbsent then turns the second
+ * company's write into a no-op and reports it as a success.
+ */
+const company = (ctx: Ctx): string => {
+  if (!ctx.scope.company) throw new Error('stock routing requires a company in scope')
+  return ctx.scope.company
+}
+
+/**
+ * The winning route among the links at one level of precedence.
+ *
+ * `select` emits no ORDER BY, so taking `[0]` let the database decide which route a
+ * product replenishes through. stock.Route carries a `sequence` for exactly this;
+ * ties break on id so the answer is the same on both adapters.
+ */
+async function pickRoute(ctx: Ctx, links: Row[]): Promise<string | null> {
+  const ids = links.map((link) => String(link.routeId))
+  if (ids.length < 2) return ids[0] ?? null
+  const routes = await ctx.db.select('stock.Route')
+  const sequenceOf = (id: string) => {
+    const route = routes.find((candidate) => String(candidate.id) === id)
+    return route ? Number(route.sequence) : Number.MAX_SAFE_INTEGER
+  }
+  return [...ids].sort((a, b) => sequenceOf(a) - sequenceOf(b) || a.localeCompare(b))[0] ?? null
+}
+
 async function routeFor(ctx: Ctx, product: Row, location: Row, explicit?: unknown): Promise<string | null> {
   if (explicit) return String(explicit)
-  const productRoute = (await ctx.db.select('stock.ProductRoute', { productId: product.id }))[0]
-  if (productRoute) return String(productRoute.routeId)
+  const productRoute = await pickRoute(
+    ctx,
+    await ctx.db.select('stock.ProductRoute', { productId: product.id }),
+  )
+  if (productRoute) return productRoute
   const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]
   if (template?.categoryId) {
-    const categoryRoute = (await ctx.db.select('stock.CategoryRoute', { categoryId: template.categoryId }))[0]
-    if (categoryRoute) return String(categoryRoute.routeId)
+    const categoryRoute = await pickRoute(
+      ctx,
+      await ctx.db.select('stock.CategoryRoute', { categoryId: template.categoryId }),
+    )
+    if (categoryRoute) return categoryRoute
   }
   if (location.warehouseId) {
-    const warehouseRoute = (
-      await ctx.db.select('stock.WarehouseRoute', { warehouseId: location.warehouseId })
-    )[0]
-    if (warehouseRoute) return String(warehouseRoute.routeId)
+    const warehouseRoute = await pickRoute(
+      ctx,
+      await ctx.db.select('stock.WarehouseRoute', { warehouseId: location.warehouseId }),
+    )
+    if (warehouseRoute) return warehouseRoute
   }
   return null
 }
@@ -50,9 +87,12 @@ async function procure(
   if (!destination) return invalid('locationId', 'location đích không tồn tại')
   const routeId = await routeFor(ctx, product, destination, args.routeId)
   if (!routeId) return invalid('routeId', 'không tìm thấy route cho sản phẩm và location')
+  // Procurement pulls, so a push rule is not a candidate however low its sequence.
   const rules = (
     await ctx.db.select('stock.Rule', { routeId, locationDestId: args.locationId, active: true })
-  ).sort((a, b) => Number(a.sequence) - Number(b.sequence))
+  )
+    .filter((candidate) => candidate.action !== 'push')
+    .sort((a, b) => Number(a.sequence) - Number(b.sequence))
   const rule = rules[0]
   if (!rule?.locationSrcId) return invalid('routeId', 'route không có pull/push rule phù hợp')
   let method = String(rule.procureMethod)
@@ -85,6 +125,7 @@ async function procure(
       await ctx.db.select('stock.Rule', { routeId, locationDestId: rule.locationSrcId, active: true })
     )
       .filter((candidate) => candidate.id !== rule.id && candidate.locationSrcId)
+      .filter((candidate) => candidate.action !== 'push')
       .sort((a, b) => Number(a.sequence) - Number(b.sequence))[0]
     if (upstream) {
       const upstreamId = `${args.moveId}:upstream`
@@ -199,7 +240,7 @@ export const routingFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const id = `${String(args.productId)}:${String(args.routeId)}`
+      const id = `${company(ctx)}:${String(args.productId)}:${String(args.routeId)}`
       await ctx.db.insertIfAbsent('stock.ProductRoute', {
         id,
         productId: args.productId,
@@ -215,7 +256,7 @@ export const routingFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const id = `${String(args.categoryId)}:${String(args.routeId)}`
+      const id = `${company(ctx)}:${String(args.categoryId)}:${String(args.routeId)}`
       await ctx.db.insertIfAbsent('stock.CategoryRoute', {
         id,
         categoryId: args.categoryId,
@@ -231,7 +272,7 @@ export const routingFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const id = `${String(args.warehouseId)}:${String(args.routeId)}`
+      const id = `${company(ctx)}:${String(args.warehouseId)}:${String(args.routeId)}`
       await ctx.db.insertIfAbsent('stock.WarehouseRoute', {
         id,
         warehouseId: args.warehouseId,
@@ -256,6 +297,7 @@ export const routingFunctions: Record<string, FnSpec> = {
       'read:product.Template',
       'read:stock.Location',
       'read:stock.Quant',
+      'read:stock.Route',
       'read:stock.ProductRoute',
       'read:stock.CategoryRoute',
       'read:stock.WarehouseRoute',
@@ -325,6 +367,7 @@ export const routingFunctions: Record<string, FnSpec> = {
       'read:stock.Location',
       'read:product.Product',
       'read:product.Template',
+      'read:stock.Route',
       'read:stock.ProductRoute',
       'read:stock.CategoryRoute',
       'read:stock.WarehouseRoute',
