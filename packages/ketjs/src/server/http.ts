@@ -2,6 +2,8 @@
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
 import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { join, normalize, extname } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
 import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
@@ -29,6 +31,10 @@ export type ServeOpts = {
   port?: number
   /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
+  /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
+  assets?: { prefix: string; dir: string }
+  /** Extra routes, matched before the theme takes the request. */
+  routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<{ status?: number; type?: string; body: string }>>
   pageScope?: (url: URL) => Record<string, unknown>
 }
 
@@ -72,6 +78,27 @@ export async function createKetServer(o: ServeOpts) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     try {
+      if (o.assets && url.pathname.startsWith(o.assets.prefix)) {
+        // Path traversal is the one thing a static handler must not get wrong.
+        const rel = normalize(url.pathname.slice(o.assets.prefix.length)).replace(/^(\.\.[/\\])+/, '')
+        try {
+          const body = await readFile(join(o.assets.dir, rel))
+          const type = ({ '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' })[extname(rel)] ?? 'application/octet-stream'
+          res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-cache' })
+          return res.end(body)
+        } catch {
+          res.writeHead(404, { 'content-type': 'text/plain' })
+          return res.end('not found')
+        }
+      }
+
+      const route = o.routes?.[url.pathname]
+      if (route) {
+        const r = await route(url, req)
+        res.writeHead(r.status ?? 200, { 'content-type': `${r.type ?? 'text/html'}; charset=utf-8` })
+        return res.end(r.body)
+      }
+
       if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
       if (url.pathname === '/_ket/agent') return json(res, 200, agentDescriptor(o.manifest))
 

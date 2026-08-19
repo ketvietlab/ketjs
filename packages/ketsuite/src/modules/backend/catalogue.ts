@@ -1,0 +1,91 @@
+import { html, each } from 'ketjs-view'
+import type { TemplateResult } from 'ketjs-view'
+import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
+import type { AppRow, PageRow } from './screens.ts'
+
+/**
+ * Every screen in every state, on one page.
+ *
+ * A design that only covers the happy path is a design that will be finished twice.
+ * These are the states the real screens actually produce — empty, full, long, error,
+ * and the awkward ones like an app that cannot be removed because something depends
+ * on it. If a state is missing here, say so and it will be added rather than
+ * discovered later.
+ */
+
+const app = (over: Partial<AppRow> = {}): AppRow => ({
+  name: 'website', title: 'Website', summary: 'Trang, section và điều hướng.',
+  category: 'Website', state: 'available', depends: [], dependents: [], ...over,
+})
+
+const page = (over: Partial<PageRow> = {}): PageRow =>
+  ({ id: 'p1', path: '/', title: 'Trang chủ', published: true, ...over })
+
+export const CASES: Array<{ id: string; label: string; note: string; render: () => TemplateResult }> = [
+  {
+    id: 'apps-typical', label: 'Ứng dụng — thường gặp', note: 'Hai nhóm, có cái đã cài có cái chưa.',
+    render: () => appsScreen([
+      app({ name: 'website', state: 'installed' }),
+      app({ name: 'website_menu', title: 'Menu điều hướng', summary: 'Thanh menu cho website.', depends: ['website'] }),
+      app({ name: 'website_seo', title: 'SEO', summary: 'Thẻ mô tả và canonical.', state: 'installed', depends: ['website'] }),
+      app({ name: 'theme_paper', title: 'Theme Paper', summary: 'Giao diện mặc định.', category: 'Giao diện', state: 'installed' }),
+    ]),
+  },
+  {
+    id: 'apps-blocked', label: 'Ứng dụng — không gỡ được', note: 'Nút Gỡ bị vô hiệu vì app khác đang phụ thuộc. Cần cho người dùng hiểu vì sao.',
+    render: () => appsScreen([app({ state: 'installed', dependents: ['website_menu', 'website_seo'] })]),
+  },
+  {
+    id: 'apps-long', label: 'Ứng dụng — danh sách dài', note: 'Kiểm tra lưới khi có nhiều thẻ và tên dài.',
+    render: () => appsScreen(Array.from({ length: 14 }, (_, i) => app({
+      name: `app_${i}`, title: i % 4 === 0 ? `Ứng dụng có tên rất dài số ${i}` : `Ứng dụng ${i}`,
+      summary: i % 3 === 0 ? 'Mô tả dài hơn bình thường để xem thẻ có bị vỡ hay không khi chữ tràn sang dòng thứ hai.' : 'Mô tả ngắn.',
+      category: i % 2 ? 'Website' : 'Thương mại', state: i % 3 === 0 ? 'installed' : 'available',
+    }))),
+  },
+  { id: 'apps-empty', label: 'Ứng dụng — trống', note: 'Bản triển khai chưa build app nào vào.', render: () => appsScreen([]) },
+  {
+    id: 'pages-typical', label: 'Trang — thường gặp', note: 'Có bản nháp lẫn bản đã đăng.',
+    render: () => pagesScreen([
+      page(), page({ id: 'p2', path: '/gioi-thieu', title: 'Giới thiệu', published: false }),
+      page({ id: 'p3', path: '/lien-he', title: 'Liên hệ' }),
+    ]),
+  },
+  {
+    id: 'pages-long', label: 'Trang — danh sách dài', note: 'Đường dẫn dài, tiêu đề dài, 40 dòng.',
+    render: () => pagesScreen(Array.from({ length: 40 }, (_, i) => page({
+      id: `p${i}`, path: i % 5 === 0 ? `/danh-muc/con-rat-sau/duong-dan-dai-${i}` : `/trang-${i}`,
+      title: i % 4 === 0 ? `Tiêu đề dài bất thường dùng để kiểm tra tràn dòng số ${i}` : `Trang ${i}`,
+      published: i % 3 !== 0,
+    }))),
+  },
+  { id: 'pages-empty', label: 'Trang — trống', note: 'Chưa có trang nào.', render: () => pagesScreen([]) },
+  {
+    id: 'settings', label: 'Cài đặt — token', note: 'Danh sách token đang áp dụng.',
+    render: () => settingsScreen({ 'color-accent': 'oklch(0.55 0.18 268)', 'radius': '0.75rem', 'page-max-width': '68rem', 'section-gap': '4rem' }),
+  },
+  {
+    id: 'state-empty', label: 'Trạng thái rỗng', note: 'Dùng ở mọi màn hình.',
+    render: () => emptyState('Chưa có gì ở đây.', 'Tạo mục đầu tiên để bắt đầu.'),
+  },
+  {
+    id: 'state-error', label: 'Trạng thái lỗi', note: 'Mọi lỗi của framework đều có mã, câu mô tả, và gợi ý sửa. Cả ba đều cần chỗ hiển thị.',
+    render: () => errorState('E_APP_IN_USE', '"website" không gỡ được khi website_menu đang cài.',
+      'Gỡ website_menu trước, hoặc để website ở nguyên.'),
+  },
+]
+
+export const cataloguePage = (): TemplateResult => {
+  const body = html`<div data-ui="catalogue">
+    <nav data-ui="catalogue-nav">${each(CASES, c => c.id, c => html`<a href="#${c.id}">${c.label}</a>`)}</nav>
+    ${each(CASES, c => c.id, c => html`
+      <section data-ui="catalogue-case" id=${c.id}>
+        <header data-ui="catalogue-head">
+          <h2>${c.label}</h2>
+          <p>${c.note}</p>
+        </header>
+        <div data-ui="catalogue-frame">${c.render()}</div>
+      </section>`)}
+  </div>`
+  return body
+}

@@ -1,0 +1,68 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   OWNED BY THE DESIGN TEAM.
+
+   Write against the [data-ui] attributes — they are the stable interface and will
+   not change without a note in HANDOFF.md. There are no class names on purpose: a
+   class is a decision about how something looks, and that decision is yours.
+
+   Every selector the screens expose is listed below, grouped by screen, with the
+   states each one can be in. Nothing here is styled yet — that is the work.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@layer ket.app {
+
+/* ── shell ──────────────────────────────────────────────────────────────────
+   [data-ui="shell"]      the whole frame
+   [data-ui="sidebar"]    left column
+   [data-ui="brand"]      product name
+   [data-ui="nav"]        navigation container
+   [data-ui="nav-item"]   one link · [data-active="true"|"false"] — both present, never absent
+   [data-ui="main"]       right column
+   [data-ui="topbar"]     header strip
+   [data-ui="title"]      screen title
+   [data-ui="content"]    where each screen renders
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── apps screen ────────────────────────────────────────────────────────────
+   [data-ui="app-groups"]     all categories
+   [data-ui="app-group"]      one category · [data-category="…"]
+   [data-ui="group-title"]    category heading
+   [data-ui="app-grid"]       cards in a category
+   [data-ui="app-card"]       one app · [data-state="installed"|"available"] [data-app="…"]
+   [data-ui="app-title"]      app name
+   [data-ui="app-summary"]    one line about it
+   [data-ui="app-meta"]       dependency list
+   [data-ui="app-depends"]    what it needs
+   [data-ui="app-dependents"] what needs it — only present when non-empty
+   [data-ui="app-actions"]    button row
+   [data-ui="app-action"]     button · [data-action="install"|"uninstall"] · can be [disabled]
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── pages screen ───────────────────────────────────────────────────────────
+   [data-ui="table"]      the list
+   [data-ui="row"]        one page · [data-page="…"]
+   [data-ui="cell-path"]  path, holds a <code>
+   [data-ui="cell-title"] title
+   [data-ui="cell-state"] state cell
+   [data-ui="badge"]      published marker · [data-published="true"|"false"] — both present
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── settings screen ────────────────────────────────────────────────────────
+   [data-ui="tokens"]        section
+   [data-ui="token-list"]    the list
+   [data-ui="token"]         one row
+   [data-ui="token-name"]    --ket-… name
+   [data-ui="token-value"]   its value
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── states that appear on every screen ─────────────────────────────────────
+   [data-ui="empty"]          nothing to show
+   [data-ui="empty-message"]  the headline
+   [data-ui="empty-hint"]     what to do about it
+   [data-ui="error"]          something failed · role="alert"
+   [data-ui="error-code"]     machine code, e.g. E_APP_IN_USE
+   [data-ui="error-message"]  the sentence
+   [data-ui="error-hint"]     the suggested fix — may be absent
+   ──────────────────────────────────────────────────────────────────────────── */
+
+}

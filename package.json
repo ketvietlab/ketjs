@@ -16,7 +16,8 @@
     "bench": "node bench/view.bench.ts",
     "type-proof": "node tools/type-proof.ts",
     "audit:zero-dep": "node tools/zero-dep-audit.ts",
-    "verify": "npm run audit:zero-dep && npm run check && npm test && npm run type-proof"
+    "verify": "npm run audit:zero-dep && npm run check && npm test && npm run type-proof",
+    "design": "node apps/admin/serve.ts"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
