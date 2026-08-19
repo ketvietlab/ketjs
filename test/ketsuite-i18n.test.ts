@@ -14,6 +14,8 @@ import {
   productMedia,
   purchase,
   purchaseBackend,
+  sale,
+  saleBackend,
   stock,
   stockBackend,
   storage,
@@ -34,12 +36,14 @@ const modules = [
   stock,
   account,
   purchase,
+  sale,
   backend,
   productBackend,
   pricingBackend,
   stockBackend,
   accountBackend,
   purchaseBackend,
+  saleBackend,
 ]
 const manifest = compose(modules, { headless: true })
 
@@ -56,12 +60,14 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
     stock,
     account,
     purchase,
+    sale,
     storage,
     productBackend,
     pricingBackend,
     stockBackend,
     accountBackend,
     purchaseBackend,
+    saleBackend,
   ].map((module) => ({
     name: module.name,
     title: module.title ?? module.name,
