@@ -11,6 +11,7 @@ export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
+export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
 export { bootApp, serveApp } from './server/boot.ts'
 export type { ServeSpec, ServeContext, PagesSpec, BootedApp, Route } from './server/boot.ts'

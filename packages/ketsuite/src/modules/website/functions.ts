@@ -4,6 +4,7 @@ import type { Ctx, FnSpec, Row } from 'ketjs'
 export const functions: Record<string, FnSpec> = {
   getPageByPath: defineFn({
     input: { path: 'text' },
+    output: { id: 'id', path: 'text', title: 'text', layout: 'json', published: 'bool' },
     effects: ['read:website.Page'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -14,6 +15,7 @@ export const functions: Record<string, FnSpec> = {
 
   listPages: defineFn({
     input: { includeDrafts: 'bool?' },
+    output: { id: 'id', path: 'text', title: 'text', published: 'bool' },
     effects: ['read:website.Page'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -31,6 +33,7 @@ export const functions: Record<string, FnSpec> = {
    */
   savePage: defineFn({
     input: { id: 'id', path: 'text', title: 'text', layout: 'json' },
+    output: { ok: 'bool', id: 'id?', sections: 'int?', errors: 'json?' },
     effects: ['read:website.Page', 'write:website.Page'],
     idempotent: true,
     agent: true,
@@ -55,6 +58,7 @@ export const functions: Record<string, FnSpec> = {
 
   publishPage: defineFn({
     input: { id: 'id', published: 'bool' },
+    output: { id: 'id', published: 'bool' },
     effects: ['write:website.Page'],
     idempotent: true,
     agent: true,

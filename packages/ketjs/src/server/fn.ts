@@ -5,6 +5,7 @@
 import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
 import { KetError } from '../kernel/errors.ts'
+import { project } from './project.ts'
 import { parseType } from '../kernel/types.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
@@ -109,7 +110,7 @@ export async function callFn(
 
   let result: CallResult
   try {
-    const value = await def.handler(ctx, args ?? {})
+    const value = project(fnKey, meta.output, await def.handler(ctx, args ?? {}))
     result = { ok: true, value, writes: ctx.writes, dryRun }
   } catch (e) {
     // A claim whose call then failed must not wedge the key forever.
