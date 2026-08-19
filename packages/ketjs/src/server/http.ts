@@ -10,7 +10,7 @@ import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
-import type { Adapter, Manifest } from '../types.ts'
+import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
@@ -36,11 +36,17 @@ export type ServeOpts = {
    * so a handler cannot answer in the wrong one by forgetting to pass it along.
    */
   resolveLocale?: (url: URL, req: IncomingMessage) => string
+  /**
+   * Which company and branches this request acts as. Resolved here for the same
+   * reason the datastore is: a handler that had to remember to pass it along would
+   * eventually forget, and forgetting means answering with another company's rows.
+   */
+  resolveScope?: (url: URL, req: IncomingMessage) => Scope
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
   assets?: { prefix: string; dir: string }
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<{ status?: number; type?: string; body: string }>>
-  pageScope?: (url: URL) => Record<string, unknown>
+  pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
 }
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
@@ -135,6 +141,7 @@ export async function createKetServer(o: ServeOpts) {
         const result = await withDb(url, req, adapter => callFn(fnKey, args, {
           adapter,
           manifest: o.manifest,
+          scope: o.resolveScope?.(url, req),
           dryRun: url.searchParams.get('dryRun') === '1',
           idempotencyKey: req.headers['idempotency-key'] as string | undefined ?? null,
         }))
@@ -142,7 +149,7 @@ export async function createKetServer(o: ServeOpts) {
       }
 
       if (o.theme) {
-        const scope = o.pageScope ? o.pageScope(url) : {}
+        const scope = o.pageScope ? await o.pageScope(url, req) : {}
         const html = o.theme.renderRegion('layout', scope)
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
         return res.end(html)

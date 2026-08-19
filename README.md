@@ -13,10 +13,18 @@ A zero-dependency fullstack framework for Node, built on five pillars:
 Plus an **umbrella layout**: one codebase, many deployable apps, shared modules.
 
 ```bash
-node --version   # >= 24, developed on 26.7.0
-node src/cli.ts check
-node --test test/
+npm start                                   # KetSuite on SQLite, at :3000
+DATABASE_URL=postgres://… npm start         # …or on Postgres
+npm run design                              # the backend UI catalogue, for designers
+npm run verify                              # audit + typecheck + tests + type proof
 ```
+
+A first run migrates, installs a starter set of apps, and serves. Configuration is
+in `apps/ketsuite/config.ts` — every knob has a default that works.
+
+**No authentication yet.** The company a request acts as comes from the
+`X-Ket-Company` header. Fine for development, not for production; the resolver is
+deliberately one function so replacing it with a session is a single change.
 
 ## The one artifact
 

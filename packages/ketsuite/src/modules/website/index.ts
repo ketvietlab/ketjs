@@ -18,8 +18,8 @@ export default defineModule({
   summary: 'Trang, section và điều hướng — nội dung soạn bằng dữ liệu, không phải code.',
   category: 'Website',
   messages: {
-    vi: { 'app.title': "Website", 'app.summary': "Trang, section và điều hướng — nội dung soạn bằng dữ liệu, không phải code.", 'app.category': "Website" },
-    en: { 'app.title': "Website", 'app.summary': "Pages, sections and navigation — composed as data, not code.", 'app.category': "Website" },
+    vi: { 'app.title': "Website", 'app.summary': "Trang, section và điều hướng — nội dung soạn bằng dữ liệu, không phải code.", 'app.category': "Website", 'page.notFound': 'Không tìm thấy trang' },
+    en: { 'app.title': "Website", 'app.summary': "Pages, sections and navigation — composed as data, not code.", 'app.category': "Website", 'page.notFound': 'Page not found' },
   },
   requires: ['layout', 'website.page'],
   models, joints, sections, views, functions, tokens,

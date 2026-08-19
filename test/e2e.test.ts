@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { _resetIdempotency, compose, createKetServer, createTheme, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter } from 'ketjs'
+import { _resetIdempotency, compose, createKetServer, createTheme, migrateOne, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
@@ -111,4 +111,68 @@ test('e2e: a page renders through the theme, joint fills included', async () => 
   assert.match(html, /Giao sau 3 ngày/)
   assert.match(html, /Chạy trên Ket/)
   await app.close(); await adapter.close()
+})
+
+test('e2e: the server resolves the company, so two of them see different rows on one path', async () => {
+  const db = sqliteAdapter()
+  await db.open()
+  await migrateOne(db, compose(mods))
+  const manifest2 = compose(mods)
+  registerFunctions(mods)
+
+  const app = await createKetServer({
+    manifest: manifest2, adapter: db,
+    // The one place a request's identity is decided — a header here, a session later.
+    resolveScope: (_url, req) => ({
+      company: (req.headers['x-ket-company'] as string | undefined) ?? null,
+      branches: null,
+    }),
+  })
+  const port = await app.listen(0)
+  const base = `http://127.0.0.1:${port}`
+  const post = (company: string, fn: string, body: unknown) =>
+    fetch(`${base}/_ket/fn/${fn}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-ket-company': company },
+      body: JSON.stringify(body),
+    }).then(r => r.json()) as Promise<{ ok: boolean; value: unknown }>
+
+  await post('acme', 'catalog.createProduct', { id: 'p1', title: 'Áo', priceCents: 1000, slug: 'ao' })
+  await post('acme', 'checkout.placeOrder', { id: 'o-acme', productId: 'p1', qty: 1 })
+  await post('globex', 'checkout.placeOrder', { id: 'o-globex', productId: 'p1', qty: 2 })
+
+  const rows = await db.all('SELECT id, "companyId" FROM checkout_order ORDER BY id', [])
+  assert.deepEqual(rows.map(r => `${String(r.id)}/${String(r.companyId)}`), ['o-acme/acme', 'o-globex/globex'],
+    'each write was stamped with the company the request named, in the same table')
+
+  await app.close()
+  await db.close()
+})
+
+test('e2e: a request that names no company is refused rather than answered', async () => {
+  const db = sqliteAdapter()
+  await db.open()
+  const manifest2 = compose(mods)
+  await migrateOne(db, manifest2)
+  registerFunctions(mods)
+
+  const app = await createKetServer({
+    manifest: manifest2, adapter: db,
+    resolveScope: () => ({ company: null, branches: null }),
+  })
+  const port = await app.listen(0)
+  // The product is shared master data and needs no company, so creating it first
+  // means the order fails on the scope check rather than on a missing product.
+  await fetch(`http://127.0.0.1:${port}/_ket/fn/catalog.createProduct`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 'p', title: 'Áo', priceCents: 1000, slug: 'ao' }),
+  })
+  const res = await fetch(`http://127.0.0.1:${port}/_ket/fn/checkout.placeOrder`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 'x', productId: 'p', qty: 1 }),
+  })
+  assert.equal(res.status, 400)
+  assert.equal(((await res.json()) as { code: string }).code, 'E_NO_COMPANY_IN_SCOPE')
+  await app.close()
+  await db.close()
 })
