@@ -1,68 +1,868 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   OWNED BY THE DESIGN TEAM.
+   KetSuite backend — enterprise-dense application styling.
 
-   Write against the [data-ui] attributes — they are the stable interface and will
-   not change without a note in HANDOFF.md. There are no class names on purpose: a
-   class is a decision about how something looks, and that decision is yours.
-
-   Every selector the screens expose is listed below, grouped by screen, with the
-   states each one can be in. Nothing here is styled yet — that is the work.
+   The [data-ui] attributes are the stable interface. Rules stay intentionally
+   shallow so ket.user can override them without specificity fights.
    ───────────────────────────────────────────────────────────────────────────── */
 
+/* Stable screen contract, locked by test/backend-ui.test.ts:
+
+   Shell
+   [data-ui="shell"] [data-ui="sidebar"] [data-ui="brand"] [data-ui="nav"]
+   [data-ui="nav-item"][data-active="true|false"] [data-ui="main"]
+   [data-ui="topbar"] [data-ui="title"] [data-ui="content"]
+
+   Apps
+   [data-ui="app-groups"] [data-ui="app-group"][data-category]
+   [data-ui="group-title"] [data-ui="app-grid"]
+   [data-ui="app-card"][data-state="installed|available"][data-app]
+   [data-ui="app-title"] [data-ui="app-summary"] [data-ui="app-meta"]
+   [data-ui="app-depends"] [data-ui="app-dependents"] [data-ui="app-actions"]
+   [data-ui="app-action"][data-action="install|uninstall"] (may be disabled)
+
+   Pages / List View
+   [data-ui="table"] [data-ui="row"][data-page] [data-ui="cell-path"]
+   [data-ui="cell-title"] [data-ui="cell-state"]
+   [data-ui="badge"][data-published="true|false"]
+
+   Settings
+   [data-ui="tokens"] [data-ui="token-list"] [data-ui="token"]
+   [data-ui="token-name"] [data-ui="token-value"]
+
+   Shared states
+   [data-ui="empty"] [data-ui="empty-message"] [data-ui="empty-hint"]
+   [data-ui="error"] [data-ui="error-code"] [data-ui="error-message"]
+   [data-ui="error-hint"]
+*/
+
 @layer ket.app {
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
 
-/* ── shell ──────────────────────────────────────────────────────────────────
-   [data-ui="shell"]      the whole frame
-   [data-ui="sidebar"]    left column
-   [data-ui="brand"]      product name
-   [data-ui="nav"]        navigation container
-   [data-ui="nav-item"]   one link · [data-active="true"|"false"] — both present, never absent
-   [data-ui="main"]       right column
-   [data-ui="topbar"]     header strip
-   [data-ui="title"]      screen title
-   [data-ui="content"]    where each screen renders
-   ──────────────────────────────────────────────────────────────────────────── */
+  :where(html) {
+    min-block-size: 100%;
+    background: var(--admin-bg);
+    font-family: var(--admin-font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-/* ── apps screen ────────────────────────────────────────────────────────────
-   [data-ui="app-groups"]     all categories
-   [data-ui="app-group"]      one category · [data-category="…"]
-   [data-ui="group-title"]    category heading
-   [data-ui="app-grid"]       cards in a category
-   [data-ui="app-card"]       one app · [data-state="installed"|"available"] [data-app="…"]
-   [data-ui="app-title"]      app name
-   [data-ui="app-summary"]    one line about it
-   [data-ui="app-meta"]       dependency list
-   [data-ui="app-depends"]    what it needs
-   [data-ui="app-dependents"] what needs it — only present when non-empty
-   [data-ui="app-actions"]    button row
-   [data-ui="app-action"]     button · [data-action="install"|"uninstall"] · can be [disabled]
-   ──────────────────────────────────────────────────────────────────────────── */
+  :where(body) {
+    min-block-size: 100%;
+    margin: 0;
+    background: var(--admin-bg);
+    color: var(--admin-ink);
+    font-family: inherit;
+    font-size: var(--admin-size-base);
+    line-height: 1.45;
+  }
 
-/* ── pages screen ───────────────────────────────────────────────────────────
-   [data-ui="table"]      the list
-   [data-ui="row"]        one page · [data-page="…"]
-   [data-ui="cell-path"]  path, holds a <code>
-   [data-ui="cell-title"] title
-   [data-ui="cell-state"] state cell
-   [data-ui="badge"]      published marker · [data-published="true"|"false"] — both present
-   ──────────────────────────────────────────────────────────────────────────── */
+  :where(button, input, select, textarea) {
+    color: inherit;
+    font: inherit;
+  }
 
-/* ── settings screen ────────────────────────────────────────────────────────
-   [data-ui="tokens"]        section
-   [data-ui="token-list"]    the list
-   [data-ui="token"]         one row
-   [data-ui="token-name"]    --ket-… name
-   [data-ui="token-value"]   its value
-   ──────────────────────────────────────────────────────────────────────────── */
+  :where(button, a) {
+    -webkit-tap-highlight-color: transparent;
+  }
 
-/* ── states that appear on every screen ─────────────────────────────────────
-   [data-ui="empty"]          nothing to show
-   [data-ui="empty-message"]  the headline
-   [data-ui="empty-hint"]     what to do about it
-   [data-ui="error"]          something failed · role="alert"
-   [data-ui="error-code"]     machine code, e.g. E_APP_IN_USE
-   [data-ui="error-message"]  the sentence
-   [data-ui="error-hint"]     the suggested fix — may be absent
-   ──────────────────────────────────────────────────────────────────────────── */
+  :where(a) {
+    color: inherit;
+  }
 
+  :where(button, [href]):focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--admin-accent-line);
+    color: var(--admin-ink);
+  }
+
+  * {
+    scrollbar-color: var(--admin-line-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  /* ── Application shell ─────────────────────────────────────────────────── */
+
+  [data-ui="shell"] {
+    display: grid;
+    grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+    min-inline-size: 0;
+    background: var(--admin-bg);
+  }
+
+  body > [data-ui="shell"] {
+    min-block-size: 100dvh;
+  }
+
+  [data-ui="sidebar"] {
+    z-index: 20;
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap) var(--admin-gap-sm);
+    background: var(--admin-bg);
+    border-inline-end: 1px solid var(--admin-line);
+  }
+
+  body > [data-ui="shell"] > [data-ui="sidebar"] {
+    position: sticky;
+    inset-block-start: 0;
+    block-size: 100dvh;
+  }
+
+  [data-ui="brand"] {
+    display: flex;
+    min-inline-size: 0;
+    block-size: 2.25rem;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    padding-inline: var(--admin-gap-sm);
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  [data-ui="brand"]::before {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-ink);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-ink);
+    color: var(--admin-surface);
+    content: "K";
+    font-size: var(--admin-size-sm);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  [data-ui="nav"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    padding-block-start: var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="nav-item"] {
+    position: relative;
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: var(--admin-control-height);
+    align-items: center;
+    padding: 0 0.625rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    text-decoration: none;
+    transition: background-color var(--admin-motion-fast), color var(--admin-motion-fast);
+  }
+
+  [data-ui="nav-item"][data-active="true"] {
+    background: var(--admin-accent-soft);
+    box-shadow: inset 2px 0 0 var(--admin-accent);
+    color: var(--admin-accent-text);
+    font-weight: 600;
+  }
+
+  [data-ui="main"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="topbar"] {
+    z-index: 10;
+    display: flex;
+    min-block-size: var(--admin-topbar-height);
+    align-items: center;
+    padding-inline: var(--admin-gap-lg);
+    background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
+    border-block-end: 1px solid var(--admin-line);
+    backdrop-filter: blur(10px);
+  }
+
+  body > [data-ui="shell"] [data-ui="topbar"] {
+    position: sticky;
+    inset-block-start: 0;
+  }
+
+  [data-ui="title"] {
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-lg);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  [data-ui="content"] {
+    inline-size: min(100%, var(--admin-page-max));
+    min-inline-size: 0;
+    margin-inline: auto;
+    padding: 1.125rem var(--admin-gap-lg) var(--admin-gap-xl);
+    overflow-x: auto;
+  }
+
+  /* ── App registry ──────────────────────────────────────────────────────── */
+
+  [data-ui="app-groups"] {
+    display: grid;
+    gap: 1.375rem;
+  }
+
+  [data-ui="app-group"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="group-title"] {
+    margin: 0;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.075em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  [data-ui="app-grid"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+    gap: var(--admin-gap);
+  }
+
+  [data-ui="app-card"] {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+    min-block-size: 10rem;
+    grid-template-rows: auto auto 1fr auto;
+    padding: var(--admin-gap-md);
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-block-start: 2px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="app-card"][data-state="installed"] {
+    border-block-start-color: var(--admin-accent);
+  }
+
+  [data-ui="app-title"] {
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="app-summary"] {
+    min-inline-size: 0;
+    margin: 0.25rem 0 0;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="app-meta"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-content: start;
+    gap: 0.1875rem var(--admin-gap-sm);
+    margin: var(--admin-gap) 0 0;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+    line-height: 1.35;
+  }
+
+  [data-ui="app-meta"] dt {
+    color: var(--admin-ink-secondary);
+    font-weight: 600;
+  }
+
+  [data-ui="app-meta"] dd {
+    min-inline-size: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="app-dependents"] {
+    color: var(--admin-warning);
+    font-weight: 600;
+  }
+
+  [data-ui="app-actions"] {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-block-start: var(--admin-gap);
+    padding-block-start: var(--admin-gap);
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="app-action"] {
+    min-block-size: var(--admin-control-height);
+    padding-inline: 0.75rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    transition: background-color var(--admin-motion-fast), border-color var(--admin-motion-fast), color var(--admin-motion-fast), transform var(--admin-motion-fast);
+  }
+
+  [data-ui="app-action"][data-action="install"] {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+  }
+
+  [data-ui="app-action"]:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  [data-ui="app-action"]:disabled {
+    border-color: var(--admin-line);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-disabled);
+    cursor: not-allowed;
+    opacity: 0.8;
+    transform: none;
+  }
+
+  /* ── Data list ────────────────────────────────────────────────────────── */
+
+  [data-ui="table"] {
+    inline-size: 100%;
+    min-inline-size: 38rem;
+    border: 1px solid var(--admin-line);
+    border-spacing: 0;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+    table-layout: fixed;
+  }
+
+  [data-ui="table"] th {
+    block-size: 2.375rem;
+    padding: 0 var(--admin-gap);
+    background: var(--admin-surface-subtle);
+    border-block-end: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    line-height: 1.2;
+    text-align: start;
+    text-transform: uppercase;
+  }
+
+  [data-ui="table"] th:first-child,
+  [data-ui="cell-path"] {
+    inline-size: 36%;
+  }
+
+  [data-ui="table"] th:last-child,
+  [data-ui="cell-state"] {
+    inline-size: 8.5rem;
+  }
+
+  [data-ui="row"] {
+    block-size: var(--admin-row-height);
+  }
+
+  [data-ui="row"]:last-child td {
+    border-block-end: 0;
+  }
+
+  [data-ui="row"] td {
+    padding: 0.5rem var(--admin-gap);
+    border-block-end: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    text-align: start;
+    vertical-align: middle;
+    transition: background-color var(--admin-motion-fast);
+  }
+
+  [data-ui="cell-path"] code {
+    color: var(--admin-ink);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="row"] [data-ui="cell-title"] {
+    color: var(--admin-ink);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="badge"] {
+    display: inline-flex;
+    min-block-size: 1.375rem;
+    align-items: center;
+    gap: 0.3125rem;
+    padding-inline: 0.4375rem;
+    border-radius: var(--admin-radius-sm);
+    font-size: var(--admin-size-xs);
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  [data-ui="badge"]::before {
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+  }
+
+  [data-ui="badge"][data-published="true"] {
+    background: var(--admin-success-soft);
+    color: var(--admin-success);
+  }
+
+  [data-ui="badge"][data-published="false"] {
+    background: var(--admin-neutral-soft);
+    color: var(--admin-neutral);
+  }
+
+  /* ── Settings token list ──────────────────────────────────────────────── */
+
+  [data-ui="tokens"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="token-list"] {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="token"] {
+    display: grid;
+    min-block-size: 2.5rem;
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="token"]:last-child {
+    border-block-end: 0;
+  }
+
+  [data-ui="token-name"],
+  [data-ui="token-value"] {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0.625rem var(--admin-gap);
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="token-name"] {
+    color: var(--admin-ink);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+
+  [data-ui="token-value"] {
+    border-inline-start: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Feedback states ──────────────────────────────────────────────────── */
+
+  [data-ui="empty"] {
+    display: grid;
+    max-inline-size: 38rem;
+    justify-items: start;
+    gap: var(--admin-gap-xs);
+    margin: 2rem auto;
+    padding: 1.5rem;
+    border: 1px dashed var(--admin-line-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+  }
+
+  [data-ui="empty-message"],
+  [data-ui="empty-hint"],
+  [data-ui="error-code"],
+  [data-ui="error-message"],
+  [data-ui="error-hint"] {
+    margin: 0;
+  }
+
+  [data-ui="empty-message"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    font-weight: 700;
+  }
+
+  [data-ui="empty-hint"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="error"] {
+    display: grid;
+    max-inline-size: 48rem;
+    gap: var(--admin-gap-xs);
+    margin: var(--admin-gap-md) auto;
+    padding: var(--admin-gap-md);
+    border: 1px solid var(--admin-danger-line);
+    border-inline-start: 3px solid var(--admin-danger);
+    border-radius: var(--admin-radius);
+    background: var(--admin-danger-soft);
+    color: var(--admin-status-fixed-ink);
+  }
+
+  [data-ui="error-code"] {
+    color: var(--admin-danger);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.035em;
+  }
+
+  [data-ui="error-message"] {
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  [data-ui="error-hint"] {
+    margin-block-start: var(--admin-gap-xs);
+    padding-block-start: var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-danger-line);
+    color: var(--admin-status-fixed-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  /* ── Design catalogue ─────────────────────────────────────────────────── */
+
+  [data-ui="catalogue"] {
+    inline-size: min(100%, 108rem);
+    margin-inline: auto;
+    padding: var(--admin-gap-lg);
+  }
+
+  [data-ui="catalogue-nav"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-xs);
+    margin: calc(var(--admin-gap-lg) * -1) calc(var(--admin-gap-lg) * -1) var(--admin-gap-xl);
+    padding: var(--admin-gap) var(--admin-gap-lg);
+    background: color-mix(in srgb, var(--admin-bg) 94%, transparent);
+    border-block-end: 1px solid var(--admin-line);
+    backdrop-filter: blur(12px);
+  }
+
+  [data-ui="catalogue-nav"] a {
+    min-block-size: var(--admin-control-height);
+    padding: 0.4375rem 0.625rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+    line-height: 1.25;
+    text-decoration: none;
+  }
+
+  [data-ui="catalogue-case"] {
+    display: grid;
+    gap: var(--admin-gap);
+    margin-block-end: 3rem;
+    scroll-margin-block-start: 5rem;
+  }
+
+  [data-ui="catalogue-head"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="catalogue-head"] h2,
+  [data-ui="catalogue-head"] p {
+    margin: 0;
+  }
+
+  [data-ui="catalogue-head"] h2 {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-md);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  [data-ui="catalogue-head"] p {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="catalogue-frame"] {
+    min-inline-size: 0;
+    max-block-size: 46rem;
+    overflow: auto;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-bg);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="catalogue-frame"] > [data-ui="shell"] {
+    min-inline-size: 50rem;
+    min-block-size: 26rem;
+  }
+
+  [data-ui="catalogue-frame"] > :is([data-ui="empty"], [data-ui="error"]) {
+    margin-block: 3rem;
+  }
+
+  /* ── Pointer states ───────────────────────────────────────────────────── */
+
+  @media (hover: hover) {
+    [data-ui="nav-item"]:hover {
+      background: var(--admin-surface);
+      color: var(--admin-ink);
+    }
+
+    [data-ui="nav-item"][data-active="true"]:hover {
+      background: var(--admin-accent-soft);
+      color: var(--admin-accent-text);
+    }
+
+    [data-ui="app-action"]:hover:not(:disabled) {
+      border-color: var(--admin-line-strong);
+      background: var(--admin-surface-hover);
+      color: var(--admin-ink);
+    }
+
+    [data-ui="app-action"][data-action="install"]:hover:not(:disabled) {
+      border-color: var(--admin-accent-hover);
+      background: var(--admin-accent-hover);
+      color: var(--admin-accent-ink);
+    }
+
+    [data-ui="row"]:hover td {
+      background: var(--admin-surface-hover);
+    }
+
+    [data-ui="catalogue-nav"] a:hover {
+      border-color: var(--admin-accent-line);
+      background: var(--admin-accent-soft);
+      color: var(--admin-accent-text);
+    }
+  }
+
+  /* ── Responsive composition ───────────────────────────────────────────── */
+
+  @media (max-width: 63.9375rem) {
+    [data-ui="content"] {
+      padding-inline: var(--admin-gap-md);
+    }
+
+    [data-ui="topbar"] {
+      padding-inline: var(--admin-gap-md);
+    }
+
+    [data-ui="table"] {
+      min-inline-size: 100%;
+    }
+
+    [data-ui="table"] th:first-child,
+    [data-ui="cell-path"] {
+      inline-size: 42%;
+    }
+
+    [data-ui="table"] th:last-child,
+    [data-ui="cell-state"] {
+      inline-size: 5.75rem;
+    }
+  }
+
+  @media (max-width: 47.9375rem) {
+    :root {
+      --admin-topbar-height: 3rem;
+    }
+
+    [data-ui="shell"] {
+      display: block;
+    }
+
+    [data-ui="sidebar"],
+    body > [data-ui="shell"] > [data-ui="sidebar"] {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 30;
+      display: flex;
+      inline-size: 100%;
+      block-size: auto;
+      flex-direction: row;
+      align-items: center;
+      gap: var(--admin-gap-sm);
+      padding: var(--admin-gap-sm);
+      overflow: hidden;
+      background: var(--admin-surface);
+      border-inline-end: 0;
+      border-block-end: 1px solid var(--admin-line);
+    }
+
+    [data-ui="brand"] {
+      block-size: 2rem;
+      flex: 0 0 auto;
+      padding-inline: 0;
+    }
+
+    [data-ui="brand"]::before {
+      inline-size: 1.375rem;
+      block-size: 1.375rem;
+    }
+
+    [data-ui="nav"] {
+      flex: 1 1 auto;
+      flex-direction: row;
+      gap: 2px;
+      padding-block-start: 0;
+      overflow-x: auto;
+      border-block-start: 0;
+    }
+
+    [data-ui="nav-item"] {
+      min-block-size: 2.75rem;
+      flex: 0 0 auto;
+      padding-inline: 0.625rem;
+      white-space: nowrap;
+    }
+
+    [data-ui="nav-item"][data-active="true"] {
+      box-shadow: inset 0 -2px 0 var(--admin-accent);
+    }
+
+    body > [data-ui="shell"] [data-ui="topbar"] {
+      position: static;
+    }
+
+    [data-ui="content"] {
+      padding: var(--admin-gap) var(--admin-gap) var(--admin-gap-lg);
+    }
+
+    [data-ui="app-grid"] {
+      grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+    }
+
+    [data-ui="app-action"] {
+      min-block-size: 2.75rem;
+      padding-inline: var(--admin-gap-md);
+    }
+
+    [data-ui="token"] {
+      grid-template-columns: 1fr;
+    }
+
+    [data-ui="token-value"] {
+      padding-block-start: 0;
+      border-inline-start: 0;
+    }
+
+    [data-ui="catalogue"] {
+      padding: var(--admin-gap);
+    }
+
+    [data-ui="catalogue-nav"] {
+      margin: calc(var(--admin-gap) * -1) calc(var(--admin-gap) * -1) var(--admin-gap-lg);
+      padding: var(--admin-gap);
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+  }
+
+  @media (max-width: 29.9375rem) {
+    [data-ui="brand"] {
+      font-size: 0;
+    }
+
+    [data-ui="brand"]::before {
+      font-size: var(--admin-size-sm);
+    }
+
+    [data-ui="app-grid"] {
+      grid-template-columns: 1fr;
+    }
+
+    [data-ui="app-card"] {
+      min-block-size: 9.5rem;
+      padding: var(--admin-gap);
+    }
+
+    [data-ui="empty"] {
+      margin-block: var(--admin-gap-md);
+      padding: var(--admin-gap-md);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto;
+      transition-duration: 0.01ms;
+    }
+  }
+
+  @media print {
+    [data-ui="sidebar"],
+    [data-ui="catalogue-nav"] {
+      display: none;
+    }
+
+    [data-ui="shell"] {
+      display: block;
+    }
+
+    [data-ui="topbar"] {
+      position: static;
+    }
+
+    [data-ui="content"] {
+      padding: 0;
+    }
+  }
 }
