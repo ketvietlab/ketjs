@@ -108,6 +108,41 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D14 — One log was the wrong abstraction; split by heat, not by shape
+**Retracted:** the claim that folding streams, jobs, the outbox and idempotency into
+a single append-only table was somewhere fullstack "gives some back". They were
+grouped by *shape* — all append-only — while differing completely in how hot they
+run and how long they live. The hottest rows in the system shared a table and an
+index with the coldest.
+
+**Measured before changing anything:** 2 database round trips per stream chunk
+(`SELECT MAX(seq)` then `INSERT`), which is 6 000 writes/second for 100 streams at
+30 tokens/second — hopeless against synchronous replication. `tail()` polling every
+10 ms cost 30 000 selects/second at 100 readers, purely to discover nothing had
+changed. Nothing was ever deleted.
+
+**What changed:**
+1. A stream has exactly one producer, so the sequence belongs to the writer. It is
+   recovered once at open and never read again.
+2. Chunks are batched (50 ms / 32 chunks). "Resumable" means no gap and no
+   duplicate, not one transaction per token.
+3. Readers on the same instance are woken by the writer; the poll fell from 10 ms
+   to 250 ms and exists only as the cross-instance fallback.
+4. Finished streams are swept after a grace period. Previously nothing expired.
+5. Three tables instead of one: `ket_stream`, `ket_job`, `ket_idem`.
+6. Postgres claims jobs with `FOR UPDATE SKIP LOCKED`; twenty concurrent workers,
+   twenty distinct jobs, verified against a live server.
+
+**Result:** 2.0 → 0.034 database round trips per chunk, a 59× reduction; 6 000
+writes/second becomes 102. `since()` went from three queries to one.
+
+**What did not change:** streams still have to be durable somewhere. An in-memory
+buffer loses the stream on restart, which is the exact failure the feature exists to
+prevent, and a reader reconnecting to a second instance would find nothing. The
+answer was never "take it out of the database" — it was that the database must not
+be the default for the hottest rows, and that when it is used the writes must be
+batched, notified and expired.
+
 ## D13 — Idempotency records live in the log, not in memory
 A process-local `Map` loses every record on restart and is invisible to a second
 instance, which makes the guarantee false exactly when it matters. Records now sit
