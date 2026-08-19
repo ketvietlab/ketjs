@@ -108,6 +108,63 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D35 — Sessions, with the store an interface because pods are the point
+**The seam was built for this.** `resolveScope` has been one function since D27
+precisely so that replacing headers with a login would be one change, and D32
+settled the shape a session has to produce: a set of companies to read and one to
+write. `sessions.scopeOf(record)` returns exactly that, so nothing downstream
+learned a new concept.
+
+**With sessions on, the header shim is gone — not kept as a fallback.** A system
+where `X-Ket-Company` can stand in for a login is a system with no login. An app
+that has not turned sessions on keeps the shim and keeps the banner apologising for
+it; the banner now names which of the two is in force.
+
+**The store is an interface, and that is the whole reason it exists as one.**
+Sessions in memory behind three pods means a login lands on one and the next
+request is anonymous on another — a bug that only appears once you scale, which is
+the worst moment to find it. `dbSessionStore` solves it with no extra
+infrastructure, because the database is already shared; verified on live Postgres
+with two runtimes over one store. Redis would be faster and belongs in its own
+package the way the Postgres driver does — the framework cannot depend on a client
+without spending an exception it has already spent.
+
+**The secret is the part that fails quietly, so it is said out loud.** A cookie
+signed by one pod and rejected by another is a login that works until the load
+balancer sends you elsewhere. Absent `KET_SECRET`, one is generated and the banner
+prints two lines saying sessions will not survive a restart and will not work
+across pods. Tested by signing on one instance and reading on another with a
+different secret.
+
+**Signing at all, given the id is 32 random bytes:** it makes a forged cookie cheap
+to reject — no store lookup at all, asserted by counting reads.
+
+**Refresh is capped.** A session extends while in use, never past
+`createdAt + absoluteTtl`. A session that renews forever is a session that never
+ends. Expiry is enforced on read as well as by the sweep, because a record that
+reads back after its expiry has outlived it for however long nothing swept — and
+the `UPDATE` that refreshes carries its own expiry guard, so a session that lapsed
+between the read and the write is not quietly revived.
+
+**Both stores take an injectable clock.** A store that reaches for `Date.now`
+cannot be tested for expiry without sleeping, and a test that sleeps is a test that
+flakes.
+
+**Login is a route, not a server function.** `Ctx` is data and nothing else — no
+request, no response, no cookie — and that boundary is what keeps handlers testable
+and HTTP out of the data layer. So `user.authenticate` decides whether the password
+is right and what the account may see, and the route decides what to do about it.
+It also means `/login` arrived through the module-route mechanism from D30 rather
+than needing anything new.
+
+**One answer for every failure.** A wrong password, an unknown login and an account
+with no company are three different reasons and one 401: telling them apart is how
+someone learns which of the three they hit.
+
+**`RouteResult` gained headers**, and a `withHeaders` helper rather than a spread —
+spreading would produce a plain object that only looks like a RouteResult, which is
+the hole the brand exists to close.
+
 ## D34 — Parties, legal entities and users, with the three things Odoo folds together kept apart
 **Parties are shared, and addresses are their own model.** `res.partner` is one
 table for customer, supplier, contact, delivery address, invoice address and legal

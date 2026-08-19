@@ -20,6 +20,8 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { registerFunctions, callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
+import { createSessions, dbSessionStore } from './session.ts'
+import type { Sessions, SessionOptions } from './session.ts'
 import { document, json, text } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname, isAbsolute } from 'node:path'
@@ -38,7 +40,7 @@ const MIME: Record<string, string> = {
 }
 
 export type { Html, RouteResult } from './respond.ts'
-export { page, fragment, text, raw } from './respond.ts'
+export { page, fragment, text, raw, withHeaders } from './respond.ts'
 export { json } from './respond.ts'
 import type { Html, RouteResult } from './respond.ts'
 export type Route = (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult
@@ -55,7 +57,7 @@ export type ServeContext = {
   adapter: Adapter
   apps: AppRegistry
   config: RuntimeConfig
-  scopeOf: (url: URL, req: IncomingMessage) => Scope
+  scopeOf: (url: URL, req: IncomingMessage) => Promise<Scope>
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
   /** A function call carrying this request's live manifest and scope. */
@@ -64,6 +66,8 @@ export type ServeContext = {
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Every installed module's stylesheets, in dependency order, as link tags. */
   styles: () => Promise<Html>
+  /** Null when the app has not turned sessions on. */
+  sessions: Sessions | null
 }
 
 /**
@@ -89,6 +93,11 @@ export type ServeSpec = {
   routes?: (ctx: ServeContext) => Record<string, Route>
   /** Anything other than SQLite; the framework cannot depend on a driver. */
   openStore?: OpenStore
+  /**
+   * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
+   * comes from a signed cookie; absent means the shim stays and the banner says so.
+   */
+  sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -138,14 +147,28 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   }
 
   /**
-   * The one place a request's identity is decided. Until authentication exists this
-   * reads headers; afterwards it reads a session, and nothing else changes.
-   *
-   * Two headers, because reads and writes are not the same question:
-   * X-Ket-Company is the one a new row is stamped with, X-Ket-Companies is the set
-   * a read may span. Absent, the set is just the active one — the safe default.
+   * Sessions, when the app asks for them. Absent, the header shim stays and the
+   * banner keeps saying so — an app that has not wired auth yet should look like
+   * one rather than quietly appear to have it.
    */
-  const scopeOf = (_url: URL, req: IncomingMessage): Scope => {
+  const sessions: Sessions | null = serve.sessions
+    ? await createSessions({
+        store: dbSessionStore(adapter),
+        ...(config.secret ? { secret: config.secret } : {}),
+        secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
+        ...serve.sessions,
+      })
+    : null
+
+  /**
+   * The one place a request's identity is decided — one function since D27,
+   * precisely so that replacing headers with a login would be one change.
+   *
+   * With sessions on the headers are gone entirely rather than kept as a fallback:
+   * a system where a header can stand in for a login is a system with no login.
+   */
+  const scopeOf = async (_url: URL, req: IncomingMessage): Promise<Scope> => {
+    if (sessions) return sessions.scopeOf(await sessions.of(req)) ?? { company: null }
     const list = (h: string) => ((req.headers[h] as string | undefined) ?? '').split(',').map(s => s.trim()).filter(Boolean)
     const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
     const companies = list('x-ket-companies')
@@ -191,9 +214,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   }
 
   const ctx: ServeContext = {
-    manifest, live, adapter, apps, config, scopeOf, localeOf, translate, styles,
+    manifest, live, adapter, apps, config, scopeOf, localeOf, translate, styles, sessions,
     call: async (name, input, url, req) =>
-      (await callFn(name, input, { adapter, manifest: await live(), scope: scopeOf(url, req) })).value,
+      (await callFn(name, input, { adapter, manifest: await live(), scope: await scopeOf(url, req) })).value,
     document,
   }
 
@@ -319,15 +342,22 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       ['database', adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`)],
       ['apps installed', enabled.join(', ') || '(none)'],
       ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
+      ['identity', sessions ? `sessions (${sessions.store.name})` : 'X-Ket-Company header'],
       // Silence here would be the wrong kind: a module that declared install:'auto'
       // and did not arrive should say why, not look broken.
       ...(config.autoInstall ? [] : [['auto-install', 'off (KET_AUTO_INSTALL=0)']]),
     ]
     const w = Math.max(...rows.map(r => (r[0] as string).length))
+    const note = sessions
+      ? (sessions.ephemeralSecret
+          ? `\n  KET_SECRET is not set, so a signing key was generated for this process.`
+            + `\n  Sessions will not survive a restart and will not work across pods.`
+          : '')
+      : `\n  No authentication yet: the company comes from the X-Ket-Company header,`
+        + `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.`
     return `\n  ${spec.name} is running\n\n`
       + rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n')
-      + `\n\n  No authentication yet: the company comes from the X-Ket-Company header,`
-      + `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.\n`
+      + `${note}\n`
   }
 
   const close = async () => { await server.close(); await adapter.close() }
