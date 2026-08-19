@@ -91,7 +91,9 @@ export function s3Storage(options: S3StorageOptions): Storage {
       // Without a declared length fetch frames the body as chunked, which S3 answers
       // with 411; refuse here rather than at the far end with an opaque error.
       if (o.size === undefined)
-        throw new Error(`S3 PUT of "${key}" requires a declared size; S3 rejects a body sent without content-length`)
+        throw new Error(
+          `S3 PUT of "${key}" requires a declared size; S3 rejects a body sent without content-length`,
+        )
       const url = urlOf(key)
       const headers = new Headers({ 'content-type': o.type, 'content-length': String(o.size) })
       const response = await checked(await signedFetch('PUT', url, { headers, body }), 'PUT')

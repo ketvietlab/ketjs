@@ -28,7 +28,7 @@
     "design": "npm run build --silent && node .build/apps/admin/serve.js",
     "start": "npm run build --silent && node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
     "start:pg": "npm run build --silent && DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
-    "ket": "npm run build --silent && node packages/ketjs/dist/cli.js --workspace .build/ket.workspace.js",
+    "ket": "npm run build --silent && node packages/ketjs/dist/cli.js",
     "dev": "tsx watch --clear-screen=false --exclude \"packages/*/dist/**/*\" --include \"packages/*/src/**/*.css\" --include \"packages/*/src/**/*.ktl\" --include \"packages/*/src/**/*.tmpl\" tools/dev.mjs serve --workspace ket.workspace.ts",
     "test:one": "npm run build --silent && node tools/test-one.mjs"
   },
