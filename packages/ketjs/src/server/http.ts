@@ -2,6 +2,7 @@
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
 import { createServer } from 'node:http'
+import { once } from 'node:events'
 import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
@@ -88,6 +89,34 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(s)
 }
 
+const contentType = (type: string): string => {
+  const lower = type.toLowerCase()
+  const textual =
+    lower.startsWith('text/') ||
+    lower === 'application/json' ||
+    lower.endsWith('+json') ||
+    lower === 'application/xml' ||
+    lower.endsWith('+xml') ||
+    lower === 'image/svg+xml'
+  return textual && !lower.includes('charset=') ? `${type}; charset=utf-8` : type
+}
+
+const send = async (res: ServerResponse, result: RouteResult): Promise<void> => {
+  res.writeHead(result.status ?? 200, {
+    'content-type': contentType(result.type ?? 'text/html'),
+    ...result.headers,
+  })
+  if (typeof result.body === 'string' || result.body instanceof Uint8Array) {
+    res.end(result.body)
+    return
+  }
+  for await (const chunk of result.body) {
+    if (res.destroyed || res.writableEnded) return
+    if (!res.write(chunk)) await once(res, 'drain')
+  }
+  res.end()
+}
+
 const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
@@ -153,7 +182,7 @@ export async function createKetServer(o: ServeOpts) {
         try {
           const body = await readFile(file)
           const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
-          res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-cache' })
+          res.writeHead(200, { 'content-type': contentType(type), 'cache-control': 'no-cache' })
           return res.end(body)
         } catch {
           break
@@ -167,11 +196,7 @@ export async function createKetServer(o: ServeOpts) {
       const route = matchRoute(url.pathname)
       if (route) {
         const r = await route.value(url, req, route.params)
-        res.writeHead(r.status ?? 200, {
-          'content-type': `${r.type ?? 'text/html'}; charset=utf-8`,
-          ...r.headers,
-        })
-        return res.end(r.body)
+        return await send(res, r)
       }
 
       if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
@@ -243,10 +268,10 @@ export async function createKetServer(o: ServeOpts) {
       // A streaming response has already sent its headers; there is no status code
       // left to send, so the only honest thing is to close the socket.
       if (res.headersSent) {
-        if (!res.writableEnded) res.end()
+        if (!res.writableEnded) res.destroy(e as Error)
         return
       }
-      if (e instanceof KetError) return json(res, 400, e.toJSON())
+      if (e instanceof KetError) return json(res, e.code === 'E_PAYLOAD_TOO_LARGE' ? 413 : 400, e.toJSON())
       return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
     }
   })

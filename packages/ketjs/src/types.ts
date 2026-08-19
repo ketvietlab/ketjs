@@ -433,6 +433,7 @@ export type Ctx = {
 export type JobContext = Ctx & {
   job: JobExecution
   signal: AbortSignal
+  storage: import('./server/storage/types.ts').Storage
 }
 
 // The adapter contract is asynchronous because a network database has no other

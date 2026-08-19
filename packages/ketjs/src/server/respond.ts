@@ -17,18 +17,19 @@ import type { TemplateResult } from 'ketjs-view'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */
 export type Html = TemplateResult
+export type ResponseBody = string | Uint8Array | AsyncIterable<Uint8Array>
 
 declare const RESPONSE: unique symbol
 export type RouteResult = {
   status?: number
   type?: string
-  body: string
+  body: ResponseBody
   /** Extra response headers. A cookie is the reason this exists. */
   headers?: Record<string, string>
   readonly [RESPONSE]: true
 }
 
-const made = (body: string, type: string, status?: number): RouteResult =>
+const made = (body: ResponseBody, type: string, status?: number): RouteResult =>
   ({ body, type, ...(status === undefined ? {} : { status }) }) as RouteResult
 
 /**
@@ -50,6 +51,16 @@ export function json(value: unknown, o: { status?: number } = {}): RouteResult {
 
 export function text(body: string, o: { type?: string; status?: number } = {}): RouteResult {
   return made(body, o.type ?? 'text/plain', o.status)
+}
+
+/** Binary data already resident in memory. Unlike raw(), it can never become HTML by accident. */
+export function bytes(body: Uint8Array, o: { type: string; status?: number }): RouteResult {
+  return made(body, o.type, o.status)
+}
+
+/** A backpressure-aware binary response; the HTTP layer consumes it chunk by chunk. */
+export function streamed(body: AsyncIterable<Uint8Array>, o: { type: string; status?: number }): RouteResult {
+  return made(body, o.type, o.status)
 }
 
 /**
