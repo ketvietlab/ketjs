@@ -20,6 +20,7 @@ import {
   linkButton,
   loadingState,
   metric,
+  mediaPanel,
   notice,
   person,
   recordList,
@@ -502,6 +503,12 @@ export const CASES: Array<{
         ],
         'loose',
       ),
+  },
+  {
+    id: 'product-media-scaffold',
+    label: 'Sản phẩm — hình ảnh chưa kết nối',
+    note: 'Không có request hay broken image; các thao tác bị vô hiệu cho tới khi backend media cung cấp adapter.',
+    render: () => mediaPanel({ status: 'unavailable' }),
   },
   {
     id: 'settings',

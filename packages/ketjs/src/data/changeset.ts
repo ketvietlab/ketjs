@@ -37,7 +37,16 @@ const castValue = (
       if (!Number.isInteger(n)) return { ok: false, message: `expected an integer, got ${n}` }
       return { ok: true, value: n }
     }
-    case 'decimal':
+    case 'decimal': {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v)) return { ok: false, message: `expected a decimal, got ${JSON.stringify(v)}` }
+        return { ok: true, value: String(v) }
+      }
+      if (typeof v !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(v.trim())) {
+        return { ok: false, message: `expected a decimal string, got ${JSON.stringify(v)}` }
+      }
+      return { ok: true, value: v.trim().replace(/^\+/, '') }
+    }
     case 'float': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
       if (typeof n !== 'number' || !Number.isFinite(n))

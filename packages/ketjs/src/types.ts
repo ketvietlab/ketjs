@@ -31,7 +31,14 @@ export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
 export type TypeParse = ({ ok: true } & ParsedType) | { ok: false; reason: string }
 
 export type Field = ParsedType & { by: string }
-export type ComposedModel = { owner: string; scope: ModelScope; fields: Record<string, Field> }
+export type IndexDef = { fields: string[]; unique?: boolean }
+export type ComposedIndex = { fields: string[]; unique: boolean; by: string }
+export type ComposedModel = {
+  owner: string
+  scope: ModelScope
+  fields: Record<string, Field>
+  indexes: Record<string, ComposedIndex>
+}
 
 /**
  * Where a model's rows live in the two isolation dimensions.
@@ -49,7 +56,12 @@ export type ComposedModel = { owner: string; scope: ModelScope; fields: Record<s
  */
 export type ModelScope = 'shared' | 'company' | 'company+branch'
 
-export type ModelDef = { scope: ModelScope; fields: Record<string, string> }
+export type ModelDef = {
+  scope: ModelScope
+  fields: Record<string, string>
+  /** Named database indexes. Names are local to the model and remain stable across migrations. */
+  indexes?: Record<string, IndexDef>
+}
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
 /**
@@ -373,6 +385,9 @@ export type Diagnostic = {
 
 export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
 export type Row = Record<string, unknown>
+export type WriteResult = { changes: number }
+export type InsertIfAbsentResult = WriteResult & { inserted: boolean }
+export type CompareAndSetResult = WriteResult & { matched: boolean }
 
 /** Which company, and which of its branches, this request is acting within. */
 export type Scope = {
@@ -425,8 +440,17 @@ export type Ctx = {
       where?: Row,
     ): Promise<{ changes: number } | { dryRun: true }>
     select(model: string, where?: Row): Promise<Row[]>
-    insert(model: string, row: Row): Promise<unknown>
-    update(model: string, where: Row, patch: Row): Promise<unknown>
+    insert(model: string, row: Row): Promise<WriteResult | { dryRun: true }>
+    /** Insert atomically, returning inserted=false when any declared unique constraint wins the race. */
+    insertIfAbsent(model: string, row: Row): Promise<InsertIfAbsentResult | { dryRun: true }>
+    update(model: string, where: Row, patch: Row): Promise<WriteResult | { dryRun: true }>
+    /** Update only when both identity (`where`) and the expected old values still match. */
+    compareAndSet(
+      model: string,
+      where: Row,
+      expected: Row,
+      patch: Row,
+    ): Promise<CompareAndSetResult | { dryRun: true }>
   }
 }
 

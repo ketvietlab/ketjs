@@ -16,6 +16,7 @@ import { HOOKS as actions } from './actions.tsx'
 import { HOOKS as surfaces } from './surfaces.tsx'
 import { HOOKS as navigation } from './navigation.tsx'
 import { HOOKS as data } from './data.tsx'
+import { HOOKS as media } from './media.tsx'
 
 const ALL = [
   ...icons,
@@ -25,6 +26,7 @@ const ALL = [
   ...surfaces,
   ...table,
   ...data,
+  ...media,
   ...navigation,
   ...nav,
   ...chrome,
@@ -52,6 +54,7 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['surfaces', surfaces],
           ['navigation', navigation],
           ['data', data],
+          ['media', media],
         ] as Array<[string, readonly string[]]>
       )
         .filter(([, list]) => (list as readonly string[]).includes(h))

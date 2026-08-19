@@ -28,6 +28,10 @@ export default defineModule({
   category: 'Hệ thống',
   routes,
   menus,
+  joints: {
+    'template.media': { props: { templateId: 'id' } },
+    'variant.media': { props: { productId: 'id' } },
+  },
   messages: {
     vi: {
       'app.title': 'Sản phẩm trong quản trị',
@@ -74,5 +78,5 @@ export default defineModule({
   },
 })
 
-export { productsScreen } from './screens.ts'
+export { productsScreen, productDetailScreen } from './screens.ts'
 export type { TemplateRow } from './screens.ts'

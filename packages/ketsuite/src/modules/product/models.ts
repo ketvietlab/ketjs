@@ -29,10 +29,10 @@ export const models: Record<string, ModelDef> = {
       // the column, because the type vocabulary is deliberately small.
       type: 'text',
       categoryId: 'ref:product.Category?',
-      // The unit this template is counted in. Optional so a service needs none,
-      // and so existing rows survive the module arriving.
-      uomId: 'ref:uom.Unit?',
       description: 'text?',
+      listPrice: 'decimal',
+      saleOk: 'bool',
+      purchaseOk: 'bool',
       active: 'bool',
     },
   },
@@ -43,20 +43,58 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       templateId: 'ref:product.Template',
-      sku: 'text',
+      defaultCode: 'text?',
       barcode: 'text?',
+      weight: 'decimal',
+      volume: 'decimal',
+      combinationKey: 'text',
       active: 'bool',
     },
+    indexes: {
+      template_combination: { fields: ['templateId', 'combinationKey'], unique: true },
+      barcode_unique: { fields: ['barcode'], unique: true },
+      default_code: { fields: ['defaultCode'] },
+    },
+  },
+
+  Cost: {
+    scope: 'company',
+    fields: { id: 'id', productId: 'ref:product.Product', amount: 'decimal' },
+    indexes: { product_company: { fields: ['companyId', 'productId'], unique: true } },
+  },
+
+  TemplateUom: {
+    scope: 'shared',
+    fields: { id: 'id', templateId: 'ref:product.Template', uomId: 'ref:uom.Unit', primary: 'bool' },
+    indexes: { template_uom: { fields: ['templateId', 'uomId'], unique: true } },
+  },
+
+  ProductUom: {
+    scope: 'shared',
+    fields: { id: 'id', productId: 'ref:product.Product', uomId: 'ref:uom.Unit' },
+    indexes: { product_uom: { fields: ['productId', 'uomId'], unique: true } },
   },
 
   Attribute: {
     scope: 'shared',
-    fields: { id: 'id', name: 'text' },
+    fields: { id: 'id', name: 'text', sequence: 'int' },
   },
 
   AttributeValue: {
     scope: 'shared',
-    fields: { id: 'id', attributeId: 'ref:product.Attribute', name: 'text' },
+    fields: { id: 'id', attributeId: 'ref:product.Attribute', name: 'text', sequence: 'int' },
+  },
+
+  TemplateAttributeLine: {
+    scope: 'shared',
+    fields: { id: 'id', templateId: 'ref:product.Template', attributeId: 'ref:product.Attribute' },
+    indexes: { template_attribute: { fields: ['templateId', 'attributeId'], unique: true } },
+  },
+
+  TemplateAttributeValue: {
+    scope: 'shared',
+    fields: { id: 'id', lineId: 'ref:product.TemplateAttributeLine', valueId: 'ref:product.AttributeValue' },
+    indexes: { line_value: { fields: ['lineId', 'valueId'], unique: true } },
   },
 
   /**
@@ -69,7 +107,8 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       productId: 'ref:product.Product',
-      attributeValueId: 'ref:product.AttributeValue',
+      templateAttributeValueId: 'ref:product.TemplateAttributeValue',
     },
+    indexes: { product_value: { fields: ['productId', 'templateAttributeValueId'], unique: true } },
   },
 }

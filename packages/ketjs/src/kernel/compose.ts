@@ -184,7 +184,40 @@ export function compose(
         }
         fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
       }
-      manifest.models[key] = { owner: m.name, scope: def.scope, fields }
+      const indexes: ComposedModel['indexes'] = {}
+      for (const [indexName, index] of Object.entries(def.indexes ?? {})) {
+        if (!/^[a-z][a-z0-9_]*$/.test(indexName)) {
+          diag.add({
+            code: 'E_INDEX_NAME',
+            module: m.name,
+            message: `${key} index name ${JSON.stringify(indexName)} must be lowercase snake_case`,
+          })
+          continue
+        }
+        if (!index.fields.length) {
+          diag.add({ code: 'E_INDEX_EMPTY', module: m.name, message: `${key}.${indexName} has no fields` })
+          continue
+        }
+        const unknown = index.fields.filter((field) => !fields[field])
+        if (unknown.length) {
+          diag.add({
+            code: 'E_INDEX_UNKNOWN_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} references unknown field(s): ${unknown.join(', ')}`,
+          })
+          continue
+        }
+        if (new Set(index.fields).size !== index.fields.length) {
+          diag.add({
+            code: 'E_INDEX_DUPLICATE_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} repeats a field`,
+          })
+          continue
+        }
+        indexes[indexName] = { fields: [...index.fields], unique: index.unique === true, by: m.name }
+      }
+      manifest.models[key] = { owner: m.name, scope: def.scope, fields, indexes }
     }
   }
 

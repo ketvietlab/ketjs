@@ -25,7 +25,11 @@ export const ketsuite = defineApp({
     suite.user,
     suite.uom,
     suite.product,
+    suite.pricing,
+    suite.stock,
     suite.productBackend,
+    suite.pricingBackend,
+    suite.stockBackend,
     backend,
   ],
   theme: suite.paperTheme,
@@ -36,7 +40,7 @@ export const ketsuite = defineApp({
   serve: {
     openStore,
     defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },
-    bootstrap: ['website', 'theme_paper', 'backend', 'product', 'user', 'storage'],
+    bootstrap: ['website', 'theme_paper', 'backend', 'product', 'pricing', 'stock', 'user', 'storage'],
     /**
      * Identity comes from a signed cookie now, not from X-Ket-Company. The store
      * is the database, so several pods share sessions without extra infrastructure;

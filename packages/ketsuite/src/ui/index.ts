@@ -34,6 +34,8 @@ export { stack, section, surface, cardGrid, contentCard, metric } from './surfac
 export { dataTable, visibleColumns } from './table.tsx'
 export type { Cell, Column, DataTable } from './table.tsx'
 export { kanbanCard, kanbanGrid, recordList } from './data.tsx'
+export { mediaPanel } from './media.tsx'
+export type { MediaItem, MediaPanelProps } from './media.tsx'
 export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { sidebar } from './nav.tsx'

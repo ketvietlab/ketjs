@@ -9,12 +9,20 @@ import { sqlTypeOf } from '../kernel/types.ts'
 import type { Adapter, Manifest, FieldBase } from '../types.ts'
 
 export type Column = { sql: string; base: FieldBase; optional: boolean; by: string; target: string | null }
-export type Table = { model: string; owner: string; columns: Record<string, Column> }
+export type Index = { fields: string[]; unique: boolean; by: string }
+export type Table = {
+  model: string
+  owner: string
+  columns: Record<string, Column>
+  indexes: Record<string, Index>
+}
 export type Schema = { version: number; tables: Record<string, Table> }
 
 export type MigrationOp =
   | { op: 'CREATE_TABLE'; table: string; columns: Record<string, Column>; destructive: false }
   | { op: 'ADD_COLUMN'; table: string; column: string; def: Column; destructive: false }
+  | { op: 'CREATE_INDEX'; table: string; name: string; def: Index; destructive: false }
+  | { op: 'DROP_INDEX'; table: string; name: string; destructive: true }
   | { op: 'DROP_COLUMN'; table: string; column: string; by: string; destructive: true }
   | { op: 'ALTER_COLUMN_TYPE'; table: string; column: string; from: string; to: string; destructive: true }
   | { op: 'DROP_TABLE'; table: string; destructive: true }
@@ -38,7 +46,7 @@ export function schemaFromManifest(manifest: Manifest): Schema {
         target: f.target ?? null,
       }
     }
-    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns }
+    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns, indexes: model.indexes }
   }
   return { version: 1, tables }
 }
@@ -64,6 +72,8 @@ export function planMigration(
     const before = prevTables[t]
     if (!before) {
       ops.push({ op: 'CREATE_TABLE', table: t, columns: def.columns, destructive: false })
+      for (const [name, index] of Object.entries(def.indexes ?? {}))
+        ops.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
       continue
     }
     for (const [c, cd] of Object.entries(def.columns)) {
@@ -84,6 +94,17 @@ export function planMigration(
     }
     for (const [c, bc] of Object.entries(before.columns)) {
       if (!def.columns[c]) ops.push({ op: 'DROP_COLUMN', table: t, column: c, by: bc.by, destructive: true })
+    }
+    for (const [name, index] of Object.entries(def.indexes ?? {})) {
+      const old = before.indexes?.[name]
+      if (!old) ops.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
+      else if (old.unique !== index.unique || old.fields.join('\0') !== index.fields.join('\0')) {
+        ops.push({ op: 'DROP_INDEX', table: t, name, destructive: true })
+        ops.push({ op: 'CREATE_INDEX', table: t, name, def: index, destructive: false })
+      }
+    }
+    for (const name of Object.keys(before.indexes ?? {})) {
+      if (!def.indexes?.[name]) ops.push({ op: 'DROP_INDEX', table: t, name, destructive: true })
     }
   }
   for (const t of Object.keys(prevTables)) {
@@ -119,6 +140,13 @@ export function renderSql(ops: MigrationOp[], adapter: Adapter): string[] {
       out.push(`CREATE TABLE ${q(o.table)} (\n  ${cols.join(',\n  ')}\n)`)
     } else if (o.op === 'ADD_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} ADD COLUMN ${q(o.column)} ${adapter.columnSql(o.def)}`)
+    } else if (o.op === 'CREATE_INDEX') {
+      const name = `${o.table}__${o.name}`
+      out.push(
+        `CREATE ${o.def.unique ? 'UNIQUE ' : ''}INDEX ${q(name)} ON ${q(o.table)} (${o.def.fields.map(q).join(', ')})`,
+      )
+    } else if (o.op === 'DROP_INDEX') {
+      out.push(`DROP INDEX ${q(`${o.table}__${o.name}`)}`)
     } else if (o.op === 'DROP_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} DROP COLUMN ${q(o.column)}`)
     } else if (o.op === 'ALTER_COLUMN_TYPE') {

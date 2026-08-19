@@ -310,6 +310,7 @@ export function createContext(o: {
       const t = adapter.quoteIdent(tableNameFor(model))
       const open = scopeOf(model) === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
+      fresh()
       const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
       const params: unknown[] = keys.map((k) => where[k])
       if (!open) {
@@ -319,7 +320,6 @@ export function createContext(o: {
         conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
         params.push(...cs)
       }
-      fresh()
       const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
       return decodeRows(model, await adapter.all(sql, params))
     },
@@ -345,6 +345,29 @@ export function createContext(o: {
         ks.map((k) => stamped[k]),
       )
     },
+    async insertIfAbsent(model, row) {
+      need('write', model)
+      const known = Object.keys(manifest.models[model]?.fields ?? {})
+      const unknown = Object.keys(row).filter((k) => !known.includes(k))
+      if (unknown.length) {
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          message: `${model} has no field(s): ${unknown.join(', ')}`,
+          hint: `fields: ${known.join(', ')}`,
+        })
+      }
+      const stamped = encodeRow(model, stamp(model, row))
+      writes.push({ op: 'insert', model, row: stamped })
+      if (dryRun) return { dryRun: true }
+      const ks = Object.keys(stamped)
+      fresh()
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map((k) => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')}) ON CONFLICT DO NOTHING`
+      const result = await adapter.run(
+        sql,
+        ks.map((k) => stamped[k]),
+      )
+      return { changes: result.changes, inserted: result.changes === 1 }
+    },
     async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
@@ -362,6 +385,11 @@ export function createContext(o: {
       const sql =
         `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
       return adapter.run(sql, [...pk.map((k) => patch2[k]), ...wk.map((k) => where3[k])])
+    },
+    async compareAndSet(model, where, expected, patch) {
+      const result = await db.update(model, { ...expected, ...where }, patch)
+      if ('dryRun' in result) return result
+      return { changes: result.changes, matched: result.changes === 1 }
     },
   }
 

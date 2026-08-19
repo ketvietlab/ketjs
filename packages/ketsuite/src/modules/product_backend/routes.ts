@@ -1,6 +1,6 @@
-import { page } from 'ketjs'
+import { page, text } from 'ketjs'
 import type { RouteEntry, Route, ServeContext } from 'ketjs'
-import { productsScreen, VIEWS } from './screens.ts'
+import { productDetailScreen, productsScreen, VIEWS } from './screens.ts'
 import type { TemplateRow, View } from './screens.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -103,6 +103,40 @@ export const routes: Record<string, RouteEntry> = {
               },
             },
             { shown: colsOf(url), colsHref: colsHref(url) },
+          ),
+        }),
+      })
+    },
+  '/admin/products/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const row = (await ctx.call('product.getTemplate', { id: params.id }, url, req)) as {
+        id: string
+        name: string
+        type: string
+        listPrice: number
+        uomId: string | null
+      } | null
+      if (!row) return text('Product not found', { status: 404 })
+      return page({
+        body: ctx.document({
+          lang,
+          title: row.name,
+          head: await ctx.styles(req),
+          body: productDetailScreen(
+            _,
+            row,
+            await ctx.joint(url, req, 'product_backend:template.media', { templateId: row.id }),
+            {
+              viewer: await viewerOf(ctx, url, req),
+              menu: await ctx.menu(url, req),
+              extras: {
+                'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
+                'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+              },
+            },
           ),
         }),
       })

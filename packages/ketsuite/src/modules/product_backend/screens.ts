@@ -1,6 +1,19 @@
 import type { TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
-import { framed, emptyState, badge, code, dataTable, inline, kanbanCard, kanbanGrid } from '../../ui/index.ts'
+import {
+  framed,
+  emptyState,
+  badge,
+  code,
+  dataTable,
+  inline,
+  kanbanCard,
+  kanbanGrid,
+  mediaPanel,
+  section,
+  stack,
+  surface,
+} from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
 
 export type TemplateRow = {
@@ -107,3 +120,36 @@ export const productsScreen = (
   )
 
 export type { MenuNode }
+
+export const productDetailScreen = (
+  _: Translator,
+  row: { id: string; name: string; type: string; listPrice: number; uomId: string | null },
+  mediaExtension: unknown,
+  frame: Frame = {},
+): TemplateResult =>
+  framed(
+    _,
+    row.name,
+    frame,
+    stack([
+      section({
+        title: 'Hình ảnh',
+        description: 'UI scaffold; dữ liệu và thao tác sẽ được nối với backend media sau.',
+        body: mediaPanel({ status: 'unavailable', extension: mediaExtension }),
+      }),
+      section({
+        title: 'Thông tin sản phẩm',
+        body: surface({
+          body: inline([
+            badge(
+              _(`product_backend.type.${row.type}`),
+              row.type === 'service' ? 'info' : 'neutral',
+              row.type,
+            ),
+            code(row.uomId, 'unit'),
+            String(row.listPrice),
+          ]),
+        }),
+      }),
+    ]),
+  )

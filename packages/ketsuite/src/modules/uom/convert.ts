@@ -9,7 +9,7 @@
  * precision, and that comparisons go through helpers that respect it — never `===`.
  */
 
-export type Unit = { id: string; categoryId: string; factor: number; rounding: number }
+export type Unit = { id: string; parentPath: string; factor: number; rounding: number }
 
 export class UomError extends Error {
   code: string
@@ -56,7 +56,7 @@ export function compareQty(a: number, b: number, precision: number): -1 | 0 | 1 
 export const isZero = (value: number, precision: number): boolean => roundTo(value, precision) === 0
 
 /**
- * Convert a quantity between two units of the same category.
+ * Convert a quantity between two units with the same root.
  *
  * Crossing categories is refused rather than approximated: there is no number of
  * kilograms in a litre, and a framework that guessed one would be worse than one
@@ -64,16 +64,18 @@ export const isZero = (value: number, precision: number): boolean => roundTo(val
  */
 export function convertQty(qty: number, from: Unit, to: Unit): number {
   if (from.id === to.id) return roundTo(qty, to.rounding)
-  if (from.categoryId !== to.categoryId) {
+  const fromRoot = from.parentPath.split('/').filter(Boolean)[0]
+  const toRoot = to.parentPath.split('/').filter(Boolean)[0]
+  if (!fromRoot || fromRoot !== toRoot) {
     throw new UomError({
-      code: 'E_UOM_CATEGORY_MISMATCH',
+      code: 'E_UOM_ROOT_MISMATCH',
       message: `cannot convert "${from.id}" to "${to.id}": they measure different things`,
-      hint: 'units convert only within their category — weight to weight, count to count',
+      hint: 'units convert only when they share a reference root',
     })
   }
   if (!(from.factor > 0) || !(to.factor > 0)) {
     throw new UomError({ code: 'E_UOM_BAD_FACTOR', message: 'a unit factor must be greater than zero' })
   }
-  // Through the reference: out of the source unit, then into the target.
-  return roundTo((qty / from.factor) * to.factor, to.rounding)
+  // Odoo 19 stores an absolute factor from each node to its root.
+  return roundTo((qty * from.factor) / to.factor, to.rounding)
 }

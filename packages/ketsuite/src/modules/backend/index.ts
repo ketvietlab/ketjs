@@ -95,6 +95,7 @@ export {
   recordList,
   breadcrumbs,
   tabs,
+  mediaPanel,
   HOOKS,
   OWNERS,
 } from '../../ui/index.ts'
@@ -119,4 +120,6 @@ export type {
   NoticeTone,
   Breadcrumb,
   Tab,
+  MediaItem,
+  MediaPanelProps,
 } from '../../ui/index.ts'

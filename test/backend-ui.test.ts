@@ -28,6 +28,7 @@ import {
   linkButton,
   loadingState,
   metric,
+  mediaPanel,
   notice,
   pagesScreen,
   person,
@@ -161,6 +162,15 @@ const componentContract = [
     card: () => contentCard({ title: 'Grid card' }),
   }),
   metric({ label: 'Orders', value: '42', detail: 'Today' }),
+  mediaPanel({ status: 'unavailable' }),
+  mediaPanel({
+    status: 'ready',
+    images: [
+      { id: 'main', src: '/fixture-main.png', alt: 'Main', primary: true },
+      { id: 'other', src: '/fixture-other.png', alt: 'Other' },
+    ],
+    extension: 'Adapter slot',
+  }),
   breadcrumbs({ label: 'Breadcrumb', items: [{ label: 'Home', href: '/' }, { label: 'Current' }] }),
   tabs({ label: 'Tabs', items: [{ id: 'all', label: 'All', href: '?tab=all', active: true, count: 3 }] }),
   kanbanGrid({
