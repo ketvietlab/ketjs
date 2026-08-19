@@ -24,10 +24,22 @@ const extra = assetDir({ 'extra.css': '.x { color: red }', 'logo.svg': '<svg/>' 
 
 const core = defineModule({ name: 'core', app: true, assets: base, styles: ['base.css'] })
 const skin = defineModule({
-  name: 'skin', app: true, depends: ['core'], assets: extra, styles: ['extra.css'],
+  name: 'skin',
+  app: true,
+  depends: ['core'],
+  assets: extra,
+  styles: ['extra.css'],
   routes: {
-    '/skin': (ctx: ServeContext): Route => async (url, req) =>
-      page({ body: ctx.document({ lang: ctx.localeOf(url, req), head: await ctx.styles(req), body: html`<h1>skin</h1>` }) }),
+    '/skin':
+      (ctx: ServeContext): Route =>
+      async (url, req) =>
+        page({
+          body: ctx.document({
+            lang: ctx.localeOf(url, req),
+            head: await ctx.styles(req),
+            body: html`<h1>skin</h1>`,
+          }),
+        }),
   },
 })
 
@@ -35,31 +47,50 @@ const skin = defineModule({
 
 test('compose: stylesheets come out in dependency order, so an extension can override', () => {
   const m = compose([core, skin])
-  assert.deepEqual(m.styles.map(s => s.by), ['core', 'skin'],
-    'core is a dependency of skin, so its stylesheet loads first')
-  assert.deepEqual(m.styles.map(s => s.href), ['/_ket/asset/core/base.css', '/_ket/asset/skin/extra.css'])
+  assert.deepEqual(
+    m.styles.map((s) => s.by),
+    ['core', 'skin'],
+    'core is a dependency of skin, so its stylesheet loads first',
+  )
+  assert.deepEqual(
+    m.styles.map((s) => s.href),
+    ['/_ket/asset/core/base.css', '/_ket/asset/skin/extra.css'],
+  )
 })
 
 test('compose: assets are namespaced by module, so two may ship the same file name', () => {
   const a = defineModule({ name: 'a', assets: base, styles: ['base.css'] })
   const b = defineModule({ name: 'b', assets: base, styles: ['base.css'] })
   const m = compose([a, b])
-  assert.deepEqual(m.styles.map(s => s.href), ['/_ket/asset/a/base.css', '/_ket/asset/b/base.css'])
+  assert.deepEqual(
+    m.styles.map((s) => s.href),
+    ['/_ket/asset/a/base.css', '/_ket/asset/b/base.css'],
+  )
 })
 
 test('compose: two modules claiming one path is a build error, not a race at boot', () => {
   const r = (path: string) => ({ [path]: () => (async () => page({ body: html`<p>x</p>` })) as Route })
-  assert.throws(() => compose([
-    defineModule({ name: 'one', routes: r('/clash') }),
-    defineModule({ name: 'two', routes: r('/clash') }),
-  ]), /both "one" and "two" serve "\/clash"/)
+  assert.throws(
+    () =>
+      compose([
+        defineModule({ name: 'one', routes: r('/clash') }),
+        defineModule({ name: 'two', routes: r('/clash') }),
+      ]),
+    /both "one" and "two" serve "\/clash"/,
+  )
 })
 
-test('compose: /_ket/ is the framework\'s, and a module claiming it is told so', () => {
-  assert.throws(() => compose([defineModule({
-    name: 'greedy',
-    routes: { '/_ket/health': () => (async () => page({ body: html`<p>x</p>` })) as Route },
-  })]), /which is reserved/)
+test("compose: /_ket/ is the framework's, and a module claiming it is told so", () => {
+  assert.throws(
+    () =>
+      compose([
+        defineModule({
+          name: 'greedy',
+          routes: { '/_ket/health': () => (async () => page({ body: html`<p>x</p>` })) as Route },
+        }),
+      ]),
+    /which is reserved/,
+  )
 })
 
 test('compose: a style with no assets directory to resolve against is refused', () => {
@@ -68,14 +99,21 @@ test('compose: a style with no assets directory to resolve against is refused', 
 
 test('compose: a theme may ship assets and styles — that is most of what a theme is', () => {
   const t = defineTheme({ name: 'theme_x', assets: base, styles: ['base.css'] })
-  assert.deepEqual(compose([t]).styles.map(s => s.href), ['/_ket/asset/theme_x/base.css'])
+  assert.deepEqual(
+    compose([t]).styles.map((s) => s.href),
+    ['/_ket/asset/theme_x/base.css'],
+  )
 })
 
 test('compose: but a theme may not serve routes, because a route is server code', () => {
-  assert.throws(() => defineTheme({
-    name: 'theme_y',
-    routes: { '/x': () => (async () => page({ body: html`<p>x</p>` })) as Route },
-  }), /theme "theme_y" declares routes/)
+  assert.throws(
+    () =>
+      defineTheme({
+        name: 'theme_y',
+        routes: { '/x': () => (async () => page({ body: html`<p>x</p>` })) as Route },
+      }),
+    /theme "theme_y" declares routes/,
+  )
 })
 
 // ── restriction ──────────────────────────────────────────────────────────────
@@ -83,14 +121,22 @@ test('compose: but a theme may not serve routes, because a route is server code'
 test('restrict: a switched-off module contributes no route, no asset, no stylesheet', () => {
   const m = compose([core, skin])
   const live = restrictManifest(m, new Set(['core']))
-  assert.deepEqual(Object.keys(live.routes), [], 'skin\'s route is gone')
-  assert.deepEqual(live.styles.map(s => s.by), ['core'])
+  assert.deepEqual(Object.keys(live.routes), [], "skin's route is gone")
+  assert.deepEqual(
+    live.styles.map((s) => s.by),
+    ['core'],
+  )
   assert.deepEqual(Object.keys(live.assets), ['core'])
 })
 
 // ── the whole thing, running ─────────────────────────────────────────────────
 
-const app = defineApp({ name: 'surfaceapp', modules: [core, skin], headless: true, serve: { bootstrap: ['skin'] } })
+const app = defineApp({
+  name: 'surfaceapp',
+  modules: [core, skin],
+  headless: true,
+  serve: { bootstrap: ['skin'] },
+})
 
 test('serving: a module route answers, its asset is served, its stylesheet is linked', async () => {
   const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })

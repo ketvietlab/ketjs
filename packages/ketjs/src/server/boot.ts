@@ -12,7 +12,7 @@
 // rather than as a closure the framework has to trust.
 
 import { compose } from '../kernel/compose.ts'
-import { createAppRegistry, restrictManifest } from '../kernel/apps.ts'
+import { createAppRegistry } from '../kernel/apps.ts'
 import { translator } from '../kernel/i18n.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createTheme } from '../theme/render.ts'
@@ -31,8 +31,7 @@ import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
 import type { Sessions, SessionOptions } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
-import { readFile } from 'node:fs/promises'
-import { join, normalize, extname, isAbsolute } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 import { html, each } from 'ketjs-view'
 import { readConfig, sqliteStore } from './config.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
@@ -41,11 +40,6 @@ import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
-
-const MIME: Record<string, string> = {
-  '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
-}
 
 export type { Html, RouteResult } from './respond.ts'
 export { page, fragment, text, raw, withHeaders } from './respond.ts'
@@ -84,7 +78,12 @@ export type ServeContext = {
    * a permission resolver that went through the check would be asking permission
    * to find out whether it has permission. Nothing else has that excuse.
    */
-  callUnchecked: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
+  callUnchecked: (
+    name: string,
+    input: Record<string, unknown>,
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Installed modules' stylesheets for this tenant, in dependency order. */
@@ -110,7 +109,6 @@ export type ServeContext = {
    */
   sessionsOf: (url: URL, req: IncomingMessage) => Promise<Sessions | null>
 }
-
 
 /**
  * How a path becomes a page. The resolver is named rather than passed, so the
@@ -169,12 +167,14 @@ export type BootedApp = {
   close: () => Promise<void>
 }
 
-
 /**
  * Opens, migrates, installs, serves. Returns before listening is announced so a
  * caller can print its own banner, or a test can boot on port 0 and never print.
  */
-export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | undefined>; port?: number } = {}): Promise<BootedApp> {
+export async function bootApp(
+  spec: AppSpec,
+  o: { env?: Record<string, string | undefined>; port?: number } = {},
+): Promise<BootedApp> {
   const serve = spec.serve ?? {}
   const config = readConfig(o.env ?? process.env, {
     sqliteFile: `.ket/${spec.name}.db`,
@@ -197,7 +197,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
     if (!bootstrap.length || (await apps.enabled()).size !== 0) return
     for (const name of bootstrap) await apps.install(name)
-    console.log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
+    console.log(
+      `  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`,
+    )
   }
 
   // Opened here only when there is one. With tenants there is no single datastore,
@@ -249,12 +251,17 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
 
   // Built per tenant, because which templates exist depends on what is installed.
-  const themeFactory = spec.headless || !spec.theme
-    ? {}
-    : { theme: (live: Manifest) => createTheme(live, modules, { translate: translate(config.defaultLocale) }) }
+  const themeFactory =
+    spec.headless || !spec.theme
+      ? {}
+      : {
+          theme: (live: Manifest) =>
+            createTheme(live, modules, { translate: translate(config.defaultLocale) }),
+        }
 
   // Fills are KTL, so they translate the way templates do.
-  const jointFactory = (live: Manifest, locale: string) => createJoints(live, { translate: translate(locale) })
+  const jointFactory = (live: Manifest, locale: string) =>
+    createJoints(live, { translate: translate(locale) })
 
   const tenants: Tenants = serve.tenants
     ? createTenants({
@@ -270,18 +277,27 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
         }),
         manifest,
         autoInstall: config.autoInstall,
-        ...(config.migrateOnBoot ? {
-          prepare: async (key, a) => {
-            const ops = await migrateOne(a, manifest)
-            if (ops.length) console.log(`  migrate [${key}]: ${ops.length} operation(s)`)
-          },
-        } : {}),
+        ...(config.migrateOnBoot
+          ? {
+              prepare: async (key, a) => {
+                const ops = await migrateOne(a, manifest)
+                if (ops.length) console.log(`  migrate [${key}]: ${ops.length} operation(s)`)
+              },
+            }
+          : {}),
         onFirstTouch: (key, made) => bootstrapInto(key, made),
         ...(makeSessions ? { sessions: makeSessions } : {}),
         joints: jointFactory,
         ...themeFactory,
       })
-    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, joints: jointFactory, ...themeFactory, sessions })
+    : singleTenant({
+        adapter: adapter as Adapter,
+        apps: apps as AppRegistry,
+        manifest,
+        joints: jointFactory,
+        ...themeFactory,
+        sessions,
+      })
 
   /**
    * Sessions, when the app asks for them. Absent, the header shim stays and the
@@ -305,7 +321,11 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
     if (!makeSessions) {
-      const list = (h: string) => ((req.headers[h] as string | undefined) ?? '').split(',').map(s => s.trim()).filter(Boolean)
+      const list = (h: string) =>
+        ((req.headers[h] as string | undefined) ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
       const companies = list('x-ket-companies')
       return {
@@ -326,15 +346,21 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    * closes the wider hole: the value reaches the `lang` attribute of every page,
    * and one drawn from a fixed set carries nothing into markup.
    */
-  const known = new Set([...Object.keys(manifest.messages ?? {}), config.defaultLocale, config.fallbackLocale])
+  const known = new Set([
+    ...Object.keys(manifest.messages ?? {}),
+    config.defaultLocale,
+    config.fallbackLocale,
+  ])
 
   const localeOf = (url: URL, req: IncomingMessage): string => {
     const asked = [
       url.searchParams.get('lang'),
-      ...(req.headers['accept-language'] as string | undefined ?? '')
-        .split(',').map(part => part.split(';')[0]?.trim()).flatMap(tag => tag ? [tag, tag.split('-')[0] as string] : []),
+      ...((req.headers['accept-language'] as string | undefined) ?? '')
+        .split(',')
+        .map((part) => part.split(';')[0]?.trim())
+        .flatMap((tag) => (tag ? [tag, tag.split('-')[0] as string] : [])),
     ]
-    return asked.find(l => l && known.has(l)) ?? config.defaultLocale
+    return asked.find((l) => l && known.has(l)) ?? config.defaultLocale
   }
 
   const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
@@ -348,14 +374,27 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const styles = async (req: IncomingMessage): Promise<Html> =>
     tenants.ofRequest(new URL('http://x/'), req, async (t) => {
       const on = await t.apps.enabled()
-      const hrefs = manifest.styles.filter(s => on.has(s.by)).map(s => s.href)
-      return html`${each(hrefs, h => h, h => html`<link rel="stylesheet" href=${h}>`)}`
+      const hrefs = manifest.styles.filter((s) => on.has(s.by)).map((s) => s.href)
+      return html`${each(
+        hrefs,
+        (h) => h,
+        (h) => html`<link rel="stylesheet" href=${h}>`,
+      )}`
     })
 
   const ctx: ServeContext = {
-    manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
-    joint: (url, req, key, props) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),
-    jointShows: (url, req, key) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).shows(key)),
+    manifest,
+    config,
+    scopeOf,
+    localeOf,
+    translate,
+    styles,
+    sessionsOf,
+    document,
+    joint: (url, req, key, props) =>
+      tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),
+    jointShows: (url, req, key) =>
+      tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).shows(key)),
     menu: async (url, req) => {
       const allow = await allowFor(url, req)
       const _ = translate(localeOf(url, req))
@@ -363,22 +402,30 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       // menu is a link and the back button walks out of it.
       const q = url.searchParams.get('menu')?.trim() || undefined
       return tenants.ofRequest(url, req, async (t) =>
-        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }))
+        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }),
+      )
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {
       const scope = await scopeOf(url, req)
-      return tenants.ofRequest(url, req, async (t) =>
-        (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope })).value)
+      return tenants.ofRequest(
+        url,
+        req,
+        async (t) => (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope })).value,
+      )
     },
     call: async (name, input, url, req) => {
       // One lease for the whole call: the scope and the allow-list are resolved
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
-      return tenants.ofRequest(url, req, async (t) =>
-        (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value)
+      return tenants.ofRequest(
+        url,
+        req,
+        async (t) =>
+          (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value,
+      )
     },
   }
 
@@ -398,7 +445,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     moduleRoutes[path] = async (url, req) => {
       const on = await tenants.ofRequest(url, req, (t) => t.apps.enabled())
       if (!on.has(entry.by)) {
-        return text(`${path} belongs to "${entry.by}", which is not installed on this database`, { status: 404 })
+        return text(`${path} belongs to "${entry.by}", which is not installed on this database`, {
+          status: 404,
+        })
       }
       // Closed unless the module said otherwise. A browser is sent to the sign-in
       // page carrying where it was going; anything else gets the status, because a
@@ -408,7 +457,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
         if (!(await s?.of(req))) {
           const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
           return wantsHtml
-            ? withHeaders(text('', { status: 303 }), { location: `/login?next=${encodeURIComponent(url.pathname + url.search)}` })
+            ? withHeaders(text('', { status: 303 }), {
+                location: `/login?next=${encodeURIComponent(url.pathname + url.search)}`,
+              })
             : text('sign in first', { status: 401 })
         }
       }
@@ -430,7 +481,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       const file = rest.slice(slash + 1)
       const dir = manifest.assets[owner]
       if (!dir || !file || file.startsWith('..') || isAbsolute(file)) return null
-        if (!(await tenants.ofRequest(url, req, (t) => t.apps.enabled())).has(owner)) return null
+      if (!(await tenants.ofRequest(url, req, (t) => t.apps.enabled())).has(owner)) return null
       return join(dir, file)
     },
   }
@@ -443,17 +494,18 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    * and that was a hole wide enough to create a user account through. A stranger
    * is not an unrestricted caller; a stranger is a stranger.
    */
-  const anonymousFns = Object.entries(manifest.functions).filter(([, f]) => f.anonymous).map(([k]) => k)
+  const anonymousFns = Object.entries(manifest.functions)
+    .filter(([, f]) => f.anonymous)
+    .map(([k]) => k)
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!makeSessions) return null                 // no login exists yet; the shim is the identity
+    if (!makeSessions) return null // no login exists yet; the shim is the identity
     const s = await sessionsOf(url, req)
     const record = await s?.of(req)
-    if (!record) return anonymousFns               // a stranger, not an administrator
+    if (!record) return anonymousFns // a stranger, not an administrator
     if (!serve.permissions) return null
     return serve.permissions(ctx, record.userId)
   }
-
 
   const pages = serve.pages
   if (pages && !manifest.functions[pages.resolve]) {
@@ -466,7 +518,8 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   }
 
   const server = await createKetServer({
-    manifest, adapter,
+    manifest,
+    adapter,
     /**
      * The HTTP layer gets a pool whose leases go through the tenant runtime, not
      * the raw one.
@@ -477,17 +530,24 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
      * failed with "no such table" while a page request to the same tenant worked.
      * One door, so there is one place preparation can be forgotten.
      */
-    ...(tenants.pool ? {
-      pool: { ...tenants.pool, with: <T>(key: string, fn: (a: Adapter) => Promise<T>) => tenants.with(key, (t) => fn(t.adapter)) },
-      resolveDatastore: (url: URL, req: IncomingMessage) => tenants.keyOf(url, req),
-    } : {}),
+    ...(tenants.pool
+      ? {
+          pool: {
+            ...tenants.pool,
+            with: <T>(key: string, fn: (a: Adapter) => Promise<T>) => tenants.with(key, (t) => fn(t.adapter)),
+          },
+          resolveDatastore: (url: URL, req: IncomingMessage) => tenants.keyOf(url, req),
+        }
+      : {}),
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
-    ...(spec.headless || !spec.theme ? {} : {
-      theme: (url: URL, req: IncomingMessage) => tenants.ofRequest(url, req, async (t) => t.theme),
-    }),
+    ...(spec.headless || !spec.theme
+      ? {}
+      : {
+          theme: (url: URL, req: IncomingMessage) => tenants.ofRequest(url, req, async (t) => t.theme),
+        }),
     /**
      * The storefront: a path becomes a page, and a page becomes its sections.
      *
@@ -495,42 +555,58 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
      * the app-installed check apply to a public page exactly as they do to an API
      * call — the front of the site is not a second door with different rules.
      */
-    ...(pages ? {
-      pageScope: async (url: URL, req: IncomingMessage) => {
-        const site = { title: pages.siteTitle ?? spec.name }
-        // The theme's layout writes <html lang>, so the locale has to reach it.
-        // It was hardcoded there, which made i18n untrue on the first tag of every
-        // storefront page.
-        const locale = localeOf(url, req)
-        const row = await ctx.call(pages.resolve, { path: url.pathname }, url, req) as
-          { id: string; title: string; layout: unknown } | null
-        if (!row) {
-          const _ = translate(locale)
-          return { site, locale, page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' }, sections: [] }
+    ...(pages
+      ? {
+          pageScope: async (url: URL, req: IncomingMessage) => {
+            const site = { title: pages.siteTitle ?? spec.name }
+            // The theme's layout writes <html lang>, so the locale has to reach it.
+            // It was hardcoded there, which made i18n untrue on the first tag of every
+            // storefront page.
+            const locale = localeOf(url, req)
+            const row = (await ctx.call(pages.resolve, { path: url.pathname }, url, req)) as {
+              id: string
+              title: string
+              layout: unknown
+            } | null
+            if (!row) {
+              const _ = translate(locale)
+              return {
+                site,
+                locale,
+                page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' },
+                sections: [],
+              }
+            }
+            return {
+              site,
+              locale,
+              page: { id: row.id, path: url.pathname, title: row.title },
+              meta: {},
+              sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+            }
+          },
         }
-        return {
-          site,
-          locale,
-          page: { id: row.id, path: url.pathname, title: row.title },
-          meta: {},
-          sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
-        }
-      },
-    } : {}),
+      : {}),
     routes: {
       ...moduleRoutes,
       ...(serve.routes?.(ctx) ?? {}),
       // The framework's own two, mounted last so an app cannot shadow them by accident.
       // Both answer for the tenant that asked: "which apps are on" has no
       // deployment-wide answer once there is more than one database.
-      '/_ket/health': async (url, req) => tenants.ofRequest(url, req, async (t) => json({
-        ok: true, app: spec.name, database: t.adapter.name,
-        ...(t.key ? { tenant: t.key } : {}),
-        apps: [...(await t.apps.enabled())].sort(),
-        orphans: await t.apps.orphans(),
-        locales: Object.keys(manifest.messages ?? {}),
-      })),
-      '/_ket/agent': async (url, req) => tenants.ofRequest(url, req, async (t) => json(agentDescriptor(t.live))),
+      '/_ket/health': async (url, req) =>
+        tenants.ofRequest(url, req, async (t) =>
+          json({
+            ok: true,
+            app: spec.name,
+            database: t.adapter.name,
+            ...(t.key ? { tenant: t.key } : {}),
+            apps: [...(await t.apps.enabled())].sort(),
+            orphans: await t.apps.orphans(),
+            locales: Object.keys(manifest.messages ?? {}),
+          }),
+        ),
+      '/_ket/agent': async (url, req) =>
+        tenants.ofRequest(url, req, async (t) => json(agentDescriptor(t.live))),
     },
   })
 
@@ -547,32 +623,45 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     if (pages) paths.set('/', 'site')
     // Module routes belong on the banner too, and only while installed — the list
     // is what the deployment actually serves, not what it could serve.
-    for (const [p, r] of Object.entries(manifest.routes)) if (enabled.includes(r.by)) paths.set(p, p.replace(/^\//, ''))
+    for (const [p, r] of Object.entries(manifest.routes))
+      if (enabled.includes(r.by)) paths.set(p, p.replace(/^\//, ''))
     for (const p of Object.keys(serve.routes?.(ctx) ?? {})) paths.set(p, p.replace(/^\//, '') || 'site')
     const rows = [
       ...[...paths].map(([p, label]) => [label, at + p]),
       ['health', `${at}/_ket/health`],
       ['agent descriptor', `${at}/_ket/agent`],
       ['', ''],
-      ['database', adapter ? adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`) : `${(await tenants.keys()).length} tenant(s), one database each`],
-      ['apps installed', apps ? (enabled.join(', ') || '(none)') : 'per tenant'],
+      [
+        'database',
+        adapter
+          ? adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`)
+          : `${(await tenants.keys()).length} tenant(s), one database each`,
+      ],
+      ['apps installed', apps ? enabled.join(', ') || '(none)' : 'per tenant'],
       ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
-      ['identity', makeSessions ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})` : 'X-Ket-Company header'],
+      [
+        'identity',
+        makeSessions
+          ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})`
+          : 'X-Ket-Company header',
+      ],
       // Silence here would be the wrong kind: a module that declared install:'auto'
       // and did not arrive should say why, not look broken.
       ...(config.autoInstall ? [] : [['auto-install', 'off (KET_AUTO_INSTALL=0)']]),
     ]
-    const w = Math.max(...rows.map(r => (r[0] as string).length))
+    const w = Math.max(...rows.map((r) => (r[0] as string).length))
     const note = makeSessions
-      ? ((sessions?.ephemeralSecret ?? !config.secret)
-          ? `\n  KET_SECRET is not set, so a signing key was generated for this process.`
-            + `\n  Sessions will not survive a restart and will not work across pods.`
-          : '')
-      : `\n  No authentication yet: the company comes from the X-Ket-Company header,`
-        + `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.`
-    return `\n  ${spec.name} is running\n\n`
-      + rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n')
-      + `${note}\n`
+      ? (sessions?.ephemeralSecret ?? !config.secret)
+        ? `\n  KET_SECRET is not set, so a signing key was generated for this process.` +
+          `\n  Sessions will not survive a restart and will not work across pods.`
+        : ''
+      : `\n  No authentication yet: the company comes from the X-Ket-Company header,` +
+        `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.`
+    return (
+      `\n  ${spec.name} is running\n\n` +
+      rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n') +
+      `${note}\n`
+    )
   }
 
   const close = async () => {
@@ -584,11 +673,16 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
 }
 
 /** bootApp, plus the banner and the signal handling a long-running process wants. */
-export async function serveApp(spec: AppSpec, o: { env?: Record<string, string | undefined>; port?: number } = {}): Promise<BootedApp> {
+export async function serveApp(
+  spec: AppSpec,
+  o: { env?: Record<string, string | undefined>; port?: number } = {},
+): Promise<BootedApp> {
   const booted = await bootApp(spec, o)
   console.log(await booted.banner())
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.on(signal, () => { void booted.close().then(() => process.exit(0)) })
+    process.on(signal, () => {
+      void booted.close().then(() => process.exit(0))
+    })
   }
   return booted
 }

@@ -1,6 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, createIdempotency, eq, from, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter, table } from 'ketjs'
+import {
+  callFn,
+  compose,
+  createIdempotency,
+  eq,
+  from,
+  planMigration,
+  registerFunctions,
+  renderSql,
+  schemaFromManifest,
+  sqliteAdapter,
+  table,
+} from 'ketjs'
 import type { Adapter } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
@@ -18,7 +30,14 @@ function fakeDriver() {
         calls.push({ text: `${tag}${text}`, params })
         return Promise.resolve(Object.assign([] as unknown[], { count: 1 }))
       },
-      reserve: () => Promise.resolve(Object.assign(handle('[tx] '), { release() { calls.push({ text: '[tx] RELEASE', params: [] }) } })),
+      reserve: () =>
+        Promise.resolve(
+          Object.assign(handle('[tx] '), {
+            release() {
+              calls.push({ text: '[tx] RELEASE', params: [] })
+            },
+          }),
+        ),
       end: () => Promise.resolve(),
     }
     return h
@@ -46,9 +65,20 @@ test('postgres: the query layer renders $n placeholders for this dialect', async
 test('postgres: column types differ from sqlite where the dialects differ', async () => {
   const { adapter } = await pg()
   const lite = sqliteAdapter()
-  const cols = [{ base: 'bool' as const }, { base: 'json' as const }, { base: 'datetime' as const }, { base: 'int' as const }]
-  assert.deepEqual(cols.map(c => adapter.columnSql(c)), ['BOOLEAN', 'JSONB', 'TIMESTAMPTZ', 'BIGINT'])
-  assert.deepEqual(cols.map(c => lite.columnSql(c)), ['INTEGER', 'TEXT', 'TEXT', 'INTEGER'])
+  const cols = [
+    { base: 'bool' as const },
+    { base: 'json' as const },
+    { base: 'datetime' as const },
+    { base: 'int' as const },
+  ]
+  assert.deepEqual(
+    cols.map((c) => adapter.columnSql(c)),
+    ['BOOLEAN', 'JSONB', 'TIMESTAMPTZ', 'BIGINT'],
+  )
+  assert.deepEqual(
+    cols.map((c) => lite.columnSql(c)),
+    ['INTEGER', 'TEXT', 'TEXT', 'INTEGER'],
+  )
   await adapter.close()
 })
 
@@ -64,30 +94,44 @@ test('postgres: one schema, two dialects, from the same manifest', async () => {
 
 test('postgres: a transaction runs BEGIN and the body on one reserved connection', async () => {
   const { adapter, calls } = await pg()
-  await adapter.tx(async (tx) => { await tx.run('UPDATE t SET a = $1', [1]) })
-  const texts = calls.map(c => c.text)
+  await adapter.tx(async (tx) => {
+    await tx.run('UPDATE t SET a = $1', [1])
+  })
+  const texts = calls.map((c) => c.text)
   assert.deepEqual(texts, ['[tx] BEGIN', '[tx] UPDATE t SET a = $1', '[tx] COMMIT', '[tx] RELEASE'])
-  assert.ok(texts.every(t => t.startsWith('[tx] ')), 'BEGIN and the body must share a session, not two pooled connections')
+  assert.ok(
+    texts.every((t) => t.startsWith('[tx] ')),
+    'BEGIN and the body must share a session, not two pooled connections',
+  )
   await adapter.close()
 })
 
 test('postgres: a failing transaction rolls back and still releases', async () => {
   const { adapter, calls } = await pg()
-  await assert.rejects(() => adapter.tx(async (tx) => { await tx.run('X'); throw new Error('boom') }))
-  assert.deepEqual(calls.map(c => c.text), ['[tx] BEGIN', '[tx] X', '[tx] ROLLBACK', '[tx] RELEASE'])
+  await assert.rejects(() =>
+    adapter.tx(async (tx) => {
+      await tx.run('X')
+      throw new Error('boom')
+    }),
+  )
+  assert.deepEqual(
+    calls.map((c) => c.text),
+    ['[tx] BEGIN', '[tx] X', '[tx] ROLLBACK', '[tx] RELEASE'],
+  )
   await adapter.close()
 })
 
 test('postgres: the driver is only loaded when the adapter is actually opened', async () => {
   const adapter = postgresAdapter('postgres://x/y')
-  assert.equal(adapter.name, 'postgres')          // constructing it imports nothing
+  assert.equal(adapter.name, 'postgres') // constructing it imports nothing
   await assert.rejects(() => adapter.all('SELECT 1'), /not open/)
 })
 
 test('idempotency: a record survives a restart because it lives in the log', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
+    await adapter.exec(sql)
   registerFunctions(mods)
 
   const args = { id: 'p1', title: 'Áo', priceCents: 5000, slug: 'ao' }
@@ -105,17 +149,31 @@ test('idempotency: a record survives a restart because it lives in the log', asy
 test('idempotency: a key claimed but not finished is reported, not silently re-run', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
+    await adapter.exec(sql)
   registerFunctions(mods)
 
   // Stand in for another instance that claimed the key and has not finished.
   const idem = await createIdempotency(adapter)
   const claimed = await idem.claim('catalog.createProduct:k9', 'catalog.createProduct')
   assert.equal(claimed, true)
-  assert.equal(await idem.claim('catalog.createProduct:k9', 'catalog.createProduct'), false, 'the primary key settles the race')
+  assert.equal(
+    await idem.claim('catalog.createProduct:k9', 'catalog.createProduct'),
+    false,
+    'the primary key settles the race',
+  )
 
   await assert.rejects(
-    () => callFn('catalog.createProduct', { id: 'p2', title: 'B', priceCents: 1, slug: 'b' }, { adapter, manifest, idempotencyKey: 'k9' }),
-    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_IDEMPOTENCY_IN_FLIGHT'); return true })
+    () =>
+      callFn(
+        'catalog.createProduct',
+        { id: 'p2', title: 'B', priceCents: 1, slug: 'b' },
+        { adapter, manifest, idempotencyKey: 'k9' },
+      ),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_IDEMPOTENCY_IN_FLIGHT')
+      return true
+    },
+  )
   await adapter.close()
 })

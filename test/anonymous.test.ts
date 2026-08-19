@@ -20,11 +20,16 @@ const post = (port: number, fn: string, body: unknown, cookie?: string) =>
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
     body: JSON.stringify(body),
-  }).then(r => r.json() as Promise<{ code?: string; ok?: boolean }>)
+  }).then((r) => r.json() as Promise<{ code?: string; ok?: boolean }>)
 
 test('anonymous: cannot create an account, which is the whole exploit', async () => {
   const b = await boot()
-  const r = await post(b.port, 'user.createUser', { id: 'hack', login: 'hack', password: '12345678', name: 'H' })
+  const r = await post(b.port, 'user.createUser', {
+    id: 'hack',
+    login: 'hack',
+    password: '12345678',
+    name: 'H',
+  })
   assert.equal(r.code, 'E_FN_NOT_PERMITTED')
   assert.equal((await b.adapter!.all('SELECT * FROM user_user', [])).length, 0, 'and nothing was written')
   await b.close()
@@ -32,8 +37,14 @@ test('anonymous: cannot create an account, which is the whole exploit', async ()
 
 test('anonymous: cannot hand itself a role either', async () => {
   const b = await boot()
-  assert.equal((await post(b.port, 'user.saveRole', { id: 'r', name: 'toàn quyền' })).code, 'E_FN_NOT_PERMITTED')
-  assert.equal((await post(b.port, 'user.grantFunction', { id: 'g', roleId: 'r', fnKey: 'user.createUser' })).code, 'E_FN_NOT_PERMITTED')
+  assert.equal(
+    (await post(b.port, 'user.saveRole', { id: 'r', name: 'toàn quyền' })).code,
+    'E_FN_NOT_PERMITTED',
+  )
+  assert.equal(
+    (await post(b.port, 'user.grantFunction', { id: 'g', roleId: 'r', fnKey: 'user.createUser' })).code,
+    'E_FN_NOT_PERMITTED',
+  )
   await b.close()
 })
 
@@ -79,11 +90,23 @@ test('routes: signing in opens what was closed', async () => {
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
-  await callFn('user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'A', defaultCompanyId: 'acme', superuser: true }, o)
+  await callFn(
+    'user.createUser',
+    {
+      id: 'u1',
+      login: 'admin',
+      password: 'correct horse',
+      name: 'A',
+      defaultCompanyId: 'acme',
+      superuser: true,
+    },
+    o,
+  )
   await callFn('user.grantCompany', { id: 'm1', userId: 'u1', companyId: 'acme' }, o)
 
   const login = await fetch(`http://127.0.0.1:${b.port}/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ login: 'admin', password: 'correct horse' }),
   })
   const jar = login.headers.get('set-cookie')!.split(';')[0]!
@@ -95,26 +118,33 @@ test('routes: signing in opens what was closed', async () => {
 // ── the declaration, at the level it is declared ─────────────────────────────
 
 test('declaration: a function is closed unless it says otherwise', () => {
-  const m = compose([defineModule({
-    name: 'd',
-    functions: {
-      shut: { effects: [], handler: () => null },
-      open: { anonymous: true, effects: [], handler: () => null },
-    },
-  })])
+  const m = compose([
+    defineModule({
+      name: 'd',
+      functions: {
+        shut: { effects: [], handler: () => null },
+        open: { anonymous: true, effects: [], handler: () => null },
+      },
+    }),
+  ])
   assert.equal(m.functions['d.shut']!.anonymous, false)
   assert.equal(m.functions['d.open']!.anonymous, true)
 })
 
 test('declaration: so is a route, and the terse form is the closed one', () => {
-  const handler = (_ctx: ServeContext): Route => async () => text('x')
-  const m = compose([defineModule({
-    name: 'r',
-    routes: {
-      '/shut': handler,
-      '/open': { anonymous: true, handler } satisfies RouteEntry,
-    },
-  })])
+  const handler =
+    (_ctx: ServeContext): Route =>
+    async () =>
+      text('x')
+  const m = compose([
+    defineModule({
+      name: 'r',
+      routes: {
+        '/shut': handler,
+        '/open': { anonymous: true, handler } satisfies RouteEntry,
+      },
+    }),
+  ])
   assert.equal(m.routes['/shut']!.anonymous, false, 'a default of open is a default nobody notices')
   assert.equal(m.routes['/open']!.anonymous, true)
 })
@@ -124,7 +154,12 @@ test('declaration: an app with no sessions is unaffected, since there is no logi
     name: 'solo',
     models: { Thing: { scope: 'shared', fields: { id: 'id' } } },
     functions: { list: { effects: ['read:solo.Thing'], handler: (ctx: Ctx) => ctx.db.select('solo.Thing') } },
-    routes: { '/things': (ctx: ServeContext): Route => async (url, req) => json(await ctx.call('solo.list', {}, url, req)) },
+    routes: {
+      '/things':
+        (ctx: ServeContext): Route =>
+        async (url, req) =>
+          json(await ctx.call('solo.list', {}, url, req)),
+    },
   })
   const app = defineApp({ name: 'nologin', modules: [solo], headless: true, serve: { bootstrap: ['solo'] } })
   const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })

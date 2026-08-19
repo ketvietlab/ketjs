@@ -21,6 +21,9 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['package.json.tmpl', () => 'package.json'],
   ['module.ts.tmpl', (n) => `modules/${n}.ts`],
   ['ket.workspace.ts.tmpl', () => 'ket.workspace.ts'],
+  ['tsconfig.json.tmpl', () => 'tsconfig.json'],
+  ['biome.json.tmpl', () => 'biome.json'],
+  ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
   ['gitignore.tmpl', () => '.gitignore'],
 ]
 
@@ -31,13 +34,15 @@ const render = (template: string, name: string): string =>
 
 export function scaffold(name: string, dir: string): string[] {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) {
-    throw new Error(`invalid app name "${name}" — lowercase letters, digits and underscore, starting with a letter`)
+    throw new Error(
+      `invalid app name "${name}" — lowercase letters, digits and underscore, starting with a letter`,
+    )
   }
   const written = LAYOUT.map(([tpl, to]) => [to(name), render(tpl, name)] as const)
 
   // Refuse rather than overwrite: a scaffold that can eat work is not a scaffold.
-  const clashes = written.map(([p]) => p).filter(p => existsSync(join(dir, p)))
-  if (clashes.length) throw new Error(`refusing to overwrite: ${clashes.map(p => join(dir, p)).join(', ')}`)
+  const clashes = written.map(([p]) => p).filter((p) => existsSync(join(dir, p)))
+  if (clashes.length) throw new Error(`refusing to overwrite: ${clashes.map((p) => join(dir, p)).join(', ')}`)
 
   const out: string[] = []
   for (const [path, body] of written) {

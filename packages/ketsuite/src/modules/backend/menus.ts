@@ -17,7 +17,13 @@ export const menus: Record<string, MenuDef> = {
   'admin.apps': { parent: 'admin', label: 'menu.apps', path: '/admin', sequence: 10 },
 
   'admin.content': { parent: 'admin', label: 'menu.content', sequence: 20 },
-  'admin.pages': { parent: 'admin.content', label: 'menu.pages', path: '/admin/pages', needs: 'website.listPages', sequence: 10 },
+  'admin.pages': {
+    parent: 'admin.content',
+    label: 'menu.pages',
+    path: '/admin/pages',
+    needs: 'website.listPages',
+    sequence: 10,
+  },
 
   'admin.config': { parent: 'admin', label: 'menu.config', sequence: 90 },
   'admin.settings': { parent: 'admin.config', label: 'menu.settings', path: '/admin/settings', sequence: 10 },

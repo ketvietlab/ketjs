@@ -14,16 +14,26 @@ export function lex(src: string): Token[] {
   const out: Token[] = []
   let i = 0
   let line = 1
-  const countLines = (s: string) => { for (const ch of s) if (ch === '\n') line++ }
+  const countLines = (s: string) => {
+    for (const ch of s) if (ch === '\n') line++
+  }
 
   while (i < src.length) {
     const openExpr = src.indexOf('{{', i)
     const openTag = src.indexOf('{%', i)
     const openNote = src.indexOf('{#', i)
-    const next = [openExpr, openTag, openNote].filter(n => n !== -1).sort((a, b) => a - b)[0] ?? -1
+    const next = [openExpr, openTag, openNote].filter((n) => n !== -1).sort((a, b) => a - b)[0] ?? -1
 
-    if (next === -1) { const value = src.slice(i); if (value) out.push({ type: 'text', value, line }); break }
-    if (next > i) { const value = src.slice(i, next); out.push({ type: 'text', value, line }); countLines(value) }
+    if (next === -1) {
+      const value = src.slice(i)
+      if (value) out.push({ type: 'text', value, line })
+      break
+    }
+    if (next > i) {
+      const value = src.slice(i, next)
+      out.push({ type: 'text', value, line })
+      countLines(value)
+    }
 
     // A comment is lexed and dropped rather than left to the text branch, so it
     // never reaches the output. Templates are files now; a language a theme author
@@ -43,5 +53,8 @@ export function lex(src: string): Token[] {
 export class KtlSyntaxError extends Error {
   code = 'E_KTL_SYNTAX'
   line: number
-  constructor(message: string, line: number) { super(message); this.line = line }
+  constructor(message: string, line: number) {
+    super(message)
+    this.line = line
+  }
 }

@@ -25,7 +25,16 @@ export const functions: Record<string, FnSpec> = {
     // Projection is one level deep: naming "variants" here says the caller gets
     // the variant rows whole. That is a decision, and it is visible as one — the
     // alternative for a narrower slice is a view model, which is a field list.
-    output: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?', active: 'bool?', variants: 'json?' },
+    output: {
+      id: 'id',
+      name: 'text',
+      type: 'text',
+      categoryId: 'id?',
+      uomId: 'id?',
+      description: 'text?',
+      active: 'bool?',
+      variants: 'json?',
+    },
     effects: ['read:product.Template', 'read:product.Product'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -48,7 +57,18 @@ export const functions: Record<string, FnSpec> = {
 
   getTemplate: defineFn({
     input: { id: 'id' },
-    output: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?', active: 'bool?', variants: 'json?', category: 'json?', uom: 'json?' },
+    output: {
+      id: 'id',
+      name: 'text',
+      type: 'text',
+      categoryId: 'id?',
+      uomId: 'id?',
+      description: 'text?',
+      active: 'bool?',
+      variants: 'json?',
+      category: 'json?',
+      uom: 'json?',
+    },
     effects: ['read:product.Template', 'read:product.Product', 'read:product.Category', 'read:uom.Unit'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -66,12 +86,16 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       const T = ctx.table('product.Template')
       const existing = await ctx.db.one(from(T).where(eq(T.id, a.id)))
-      let cs = ctx.change('product.Template', a, existing)
+      let cs = ctx
+        .change('product.Template', a, existing)
         .cast(['id', 'name', 'type', 'categoryId', 'uomId', 'description'])
         .required(['name', 'type'])
         // The vocabulary is small on purpose, so it is checked here rather than
         // widened into the column type.
-        .validate('type', v => PRODUCT_TYPES.includes(v as never) || `phải là một trong: ${PRODUCT_TYPES.join(', ')}`)
+        .validate(
+          'type',
+          (v) => PRODUCT_TYPES.includes(v as never) || `phải là một trong: ${PRODUCT_TYPES.join(', ')}`,
+        )
       if (!existing) cs = cs.put('active', true)
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
@@ -94,7 +118,8 @@ export const functions: Record<string, FnSpec> = {
       }
       const P = ctx.table('product.Product')
       const existing = await ctx.db.one(from(P).where(eq(P.id, a.id)))
-      let cs = ctx.change('product.Product', a, existing)
+      let cs = ctx
+        .change('product.Product', a, existing)
         .cast(['id', 'templateId', 'sku', 'barcode'])
         .required(['templateId', 'sku'])
       if (!existing) cs = cs.put('active', true)
@@ -137,11 +162,15 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       if (a.parentId === a.id) {
-        return { ok: false, errors: [{ field: 'parentId', message: 'một danh mục không thể là cha của chính nó' }] }
+        return {
+          ok: false,
+          errors: [{ field: 'parentId', message: 'một danh mục không thể là cha của chính nó' }],
+        }
       }
       const C = ctx.table('product.Category')
       const existing = await ctx.db.one(from(C).where(eq(C.id, a.id)))
-      const cs = ctx.change('product.Category', a, existing)
+      const cs = ctx
+        .change('product.Category', a, existing)
         .cast(['id', 'name', 'parentId'])
         .required(['name'])
       if (!cs.valid) return { ok: false, errors: cs.errors }

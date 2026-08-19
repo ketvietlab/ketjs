@@ -1,13 +1,15 @@
 import { asc, defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
-import { convertQty, roundTo, compareQty, UomError } from './convert.ts'
+import { convertQty, roundTo, compareQty, type UomError } from './convert.ts'
 import type { Unit } from './convert.ts'
 
 const UNIT_TYPES = ['reference', 'bigger', 'smaller'] as const
 
 const asUnit = (r: Row): Unit => ({
-  id: String(r.id), categoryId: String(r.categoryId),
-  factor: Number(r.factor), rounding: Number(r.rounding),
+  id: String(r.id),
+  categoryId: String(r.categoryId),
+  factor: Number(r.factor),
+  rounding: Number(r.rounding),
 })
 
 export const functions: Record<string, FnSpec> = {
@@ -33,7 +35,8 @@ export const functions: Record<string, FnSpec> = {
       const C = ctx.table('uom.Category')
       const errors: Array<{ field: string; message: string }> = []
 
-      if (!UNIT_TYPES.includes(a.type as never)) errors.push({ field: 'type', message: `phải là một trong: ${UNIT_TYPES.join(', ')}` })
+      if (!UNIT_TYPES.includes(a.type as never))
+        errors.push({ field: 'type', message: `phải là một trong: ${UNIT_TYPES.join(', ')}` })
       if (!(Number(a.factor) > 0)) errors.push({ field: 'factor', message: 'phải lớn hơn 0' })
       if (!(Number(a.rounding) > 0)) errors.push({ field: 'rounding', message: 'phải lớn hơn 0' })
       if (!(await ctx.db.one(from(C).where(eq(C.id, a.categoryId))))) {
@@ -43,7 +46,9 @@ export const functions: Record<string, FnSpec> = {
       // so its factor is 1 by definition and there is exactly one of them.
       if (a.type === 'reference') {
         if (Number(a.factor) !== 1) errors.push({ field: 'factor', message: 'đơn vị gốc luôn có hệ số 1' })
-        const already = await ctx.db.one(from(U).where(eq(U.categoryId, a.categoryId), eq(U.type, 'reference')))
+        const already = await ctx.db.one(
+          from(U).where(eq(U.categoryId, a.categoryId), eq(U.type, 'reference')),
+        )
         if (already && already.id !== a.id) {
           errors.push({ field: 'type', message: `nhóm này đã có đơn vị gốc là "${String(already.name)}"` })
         }
@@ -51,7 +56,9 @@ export const functions: Record<string, FnSpec> = {
       if (errors.length) return { ok: false, errors }
 
       const existing = await ctx.db.one(from(U).where(eq(U.id, a.id)))
-      let cs = ctx.change('uom.Unit', a, existing).cast(['id', 'name', 'categoryId', 'type', 'factor', 'rounding'])
+      let cs = ctx
+        .change('uom.Unit', a, existing)
+        .cast(['id', 'name', 'categoryId', 'type', 'factor', 'rounding'])
       if (!existing) cs = cs.put('active', true)
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
@@ -72,7 +79,10 @@ export const functions: Record<string, FnSpec> = {
       const from_ = await ctx.db.one(from(U).where(eq(U.id, a.fromId)))
       const to = await ctx.db.one(from(U).where(eq(U.id, a.toId)))
       if (!from_ || !to) {
-        return { ok: false, errors: [{ field: from_ ? 'toId' : 'fromId', message: 'không có đơn vị nào mang id này' }] }
+        return {
+          ok: false,
+          errors: [{ field: from_ ? 'toId' : 'fromId', message: 'không có đơn vị nào mang id này' }],
+        }
       }
       try {
         return { ok: true, qty: convertQty(Number(a.qty), asUnit(from_), asUnit(to)) }

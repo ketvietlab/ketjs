@@ -8,12 +8,23 @@ import { tsTypeOf } from '../kernel/types.ts'
 import type { Manifest } from '../types.ts'
 
 const pascal = (key: string): string =>
-  key.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('')
+  key
+    .split('.')
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join('')
 
 const tsInput = (spec: string): string => {
   const optional = spec.endsWith('?')
   const base = optional ? spec.slice(0, -1) : spec
-  const map: Record<string, string> = { id: 'string', text: 'string', int: 'number', float: 'number', bool: 'boolean', json: 'unknown', datetime: 'string' }
+  const map: Record<string, string> = {
+    id: 'string',
+    text: 'string',
+    int: 'number',
+    float: 'number',
+    bool: 'boolean',
+    json: 'unknown',
+    datetime: 'string',
+  }
   const t = base.startsWith('ref:') ? 'string' : (map[base] ?? 'unknown')
   return optional ? `${t} | undefined` : t
 }
@@ -61,26 +72,34 @@ export function generateDts(manifest: Manifest): string {
 
   out.push('export interface KetFunctions {')
   for (const [key, fn] of Object.entries(manifest.functions)) {
-    const input = Object.entries(fn.input).map(([n, t]) => `${n}${t.endsWith('?') ? '?' : ''}: ${tsInput(t)}`).join('; ')
+    const input = Object.entries(fn.input)
+      .map(([n, t]) => `${n}${t.endsWith('?') ? '?' : ''}: ${tsInput(t)}`)
+      .join('; ')
     const output = Object.keys(fn.output).length
-      ? `{ ${Object.entries(fn.output).map(([n, t]) => `${n}: ${tsInput(t)}`).join('; ')} }`
+      ? `{ ${Object.entries(fn.output)
+          .map(([n, t]) => `${n}: ${tsInput(t)}`)
+          .join('; ')} }`
       : 'unknown'
-    out.push(`  ${JSON.stringify(key)}: { input: { ${input} }; output: ${output}; effects: ${fn.effects.map(e => JSON.stringify(e)).join(' | ') || 'never'} }`)
+    out.push(
+      `  ${JSON.stringify(key)}: { input: { ${input} }; output: ${output}; effects: ${fn.effects.map((e) => JSON.stringify(e)).join(' | ') || 'never'} }`,
+    )
   }
   out.push('}')
   out.push('')
 
   out.push('export type KetClient = {')
-  out.push('  [K in keyof KetFunctions]: (args: KetFunctions[K]["input"]) => Promise<KetFunctions[K]["output"]>')
+  out.push(
+    '  [K in keyof KetFunctions]: (args: KetFunctions[K]["input"]) => Promise<KetFunctions[K]["output"]>',
+  )
   out.push('}')
   out.push('')
   out.push('export type JointKey =')
   const joints = Object.keys(manifest.joints)
-  out.push(joints.length ? joints.map(j => `  | ${JSON.stringify(j)}`).join('\n') : '  never')
+  out.push(joints.length ? joints.map((j) => `  | ${JSON.stringify(j)}`).join('\n') : '  never')
   out.push('')
   out.push('export type RegionName =')
   const regions = Object.keys(manifest.regions.provided)
-  out.push(regions.length ? regions.map(r => `  | ${JSON.stringify(r)}`).join('\n') : '  never')
+  out.push(regions.length ? regions.map((r) => `  | ${JSON.stringify(r)}`).join('\n') : '  never')
   out.push('')
   return out.join('\n')
 }

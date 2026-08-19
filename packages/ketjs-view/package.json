@@ -4,8 +4,25 @@
   "description": "Ket view layer — signals, surgical DOM rendering, SSR, hydration and islands. Browser-safe, zero dependencies.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=24.0.0" },
-  "exports": { ".": "./src/index.ts" },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/jsx-dev-runtime.d.ts",
+      "default": "./dist/jsx-dev-runtime.js"
+    }
+  },
   "dependencies": {},
-  "files": ["src"]
+  "files": [
+    "dist"
+  ]
 }

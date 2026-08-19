@@ -14,8 +14,16 @@ export default defineTheme({
   title: 'Theme Paper',
   summary: 'Giao diện mặc định cho website: nhẹ, nhiều khoảng trắng.',
   messages: {
-    vi: { 'app.title': 'Theme Paper', 'app.summary': 'Giao diện mặc định cho website: nhẹ, nhiều khoảng trắng.', 'app.category': 'Giao diện' },
-    en: { 'app.title': 'Paper theme', 'app.summary': 'The default website look: light, roomy.', 'app.category': 'Appearance' },
+    vi: {
+      'app.title': 'Theme Paper',
+      'app.summary': 'Giao diện mặc định cho website: nhẹ, nhiều khoảng trắng.',
+      'app.category': 'Giao diện',
+    },
+    en: {
+      'app.title': 'Paper theme',
+      'app.summary': 'The default website look: light, roomy.',
+      'app.category': 'Appearance',
+    },
   },
   templates: loadTemplates(new URL('./templates/', import.meta.url)),
   tokens,

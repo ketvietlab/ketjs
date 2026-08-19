@@ -1,8 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  callFn, compose, createTheme, migrateOne, registerFunctions, sqliteAdapter,
-  validateLayout, formatLayoutErrors, agentDescriptor, compositionSchema,
+  callFn,
+  compose,
+  createTheme,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
+  validateLayout,
+  formatLayoutErrors,
+  agentDescriptor,
+  compositionSchema,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
 import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
@@ -22,7 +30,15 @@ async function boot(): Promise<{ db: Adapter; manifest: Manifest }> {
 }
 
 const homeLayout = [
-  { type: 'website.hero', settings: { heading: 'Xin chào', subheading: 'Trang chủ', ctaLabel: 'Xem thêm', ctaHref: '/ve-chung-toi' } },
+  {
+    type: 'website.hero',
+    settings: {
+      heading: 'Xin chào',
+      subheading: 'Trang chủ',
+      ctaLabel: 'Xem thêm',
+      ctaHref: '/ve-chung-toi',
+    },
+  },
   { type: 'website.rich_text', settings: { heading: 'Giới thiệu', body: 'Nội dung trang chủ.' } },
 ]
 
@@ -34,7 +50,11 @@ test('website: seo adds typed fields to a page it does not own', () => {
 })
 
 test('website: sections from three modules land in one registry', () => {
-  assert.deepEqual(Object.keys(manifest.sections).sort(), ['menu.primary', 'website.hero', 'website.rich_text'])
+  assert.deepEqual(Object.keys(manifest.sections).sort(), [
+    'menu.primary',
+    'website.hero',
+    'website.rich_text',
+  ])
   assert.equal(manifest.sections['menu.primary']!.by, 'website_menu')
 })
 
@@ -63,14 +83,21 @@ test('agent: the composition schema tells an agent what a page may contain', () 
     settings: { heading: 'text', subheading: 'text?', image: 'text?', ctaLabel: 'text?', ctaHref: 'text?' },
   })
   const d = agentDescriptor(manifest)
-  assert.ok(d.tools.some(t => t.name === 'website__savePage'))
+  assert.ok(d.tools.some((t) => t.name === 'website__savePage'))
 })
 
 test('agent: savePage refuses a bad layout as data, not as an exception', async () => {
   const { db, manifest: m } = await boot()
-  const r = await callFn('website.savePage', {
-    id: 'p-bad', path: '/x', title: 'X', layout: [{ type: 'website.nope', settings: {} }],
-  }, { adapter: db, manifest: m, scope: SCOPE })
+  const r = await callFn(
+    'website.savePage',
+    {
+      id: 'p-bad',
+      path: '/x',
+      title: 'X',
+      layout: [{ type: 'website.nope', settings: {} }],
+    },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
   const value = r.value as { ok: boolean; errors: Array<{ type: string }> }
   assert.equal(value.ok, false)
   assert.equal(value.errors[0]!.type, 'website.nope')
@@ -80,22 +107,38 @@ test('agent: savePage refuses a bad layout as data, not as an exception', async 
 
 test('agent: a page round-trips through save, publish and fetch', async () => {
   const { db, manifest: m } = await boot()
-  const saved = await callFn('website.savePage', { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout },
-    { adapter: db, manifest: m, scope: SCOPE })
+  const saved = await callFn(
+    'website.savePage',
+    { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
   assert.deepEqual(saved.value, { ok: true, id: 'home', sections: 2 })
 
-  assert.equal(((await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })).value), null,
-    'a new page starts unpublished')
+  assert.equal(
+    (await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })).value,
+    null,
+    'a new page starts unpublished',
+  )
 
-  await callFn('website.publishPage', { id: 'home', published: true }, { adapter: db, manifest: m, scope: SCOPE })
-  const page = (await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })).value as { title: string; layout: string }
+  await callFn(
+    'website.publishPage',
+    { id: 'home', published: true },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
+  const page = (
+    await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })
+  ).value as { title: string; layout: string }
   assert.equal(page.title, 'Trang chủ')
   await db.close()
 })
 
 test('theme: a page renders from its layout, in order, through the theme', async () => {
   const { db, manifest: m } = await boot()
-  await callFn('website.savePage', { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout }, { adapter: db, manifest: m, scope: SCOPE })
+  await callFn(
+    'website.savePage',
+    { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
 
   const rt = createTheme(m, mods)
   const html = rt.renderRegion('website.page', {
@@ -123,13 +166,18 @@ test('theme: the full page carries what seo filled into the head joint', () => {
 
 test('theme: placing a section nobody provides fails loudly', () => {
   const rt = createTheme(manifest, mods)
-  assert.throws(() => rt.renderRegion('website.page', { page: {}, sections: [{ type: 'ghost.section', settings: {} }] }),
-    /places section "ghost.section", which no installed module provides/)
+  assert.throws(
+    () => rt.renderRegion('website.page', { page: {}, sections: [{ type: 'ghost.section', settings: {} }] }),
+    /places section "ghost.section", which no installed module provides/,
+  )
 })
 
 test('theme: the search box is placed by the theme and written by a module', () => {
   const rt = createTheme(manifest, mods)
-  const withSearch = rt.renderRegion('menu.primary', { showSearch: true, menu: [{ href: '/', label: 'Trang chủ' }] })
+  const withSearch = rt.renderRegion('menu.primary', {
+    showSearch: true,
+    menu: [{ href: '/', label: 'Trang chủ' }],
+  })
   assert.match(withSearch, /<ket-island data-island="website.search"/)
   assert.ok(!withSearch.includes('on:'), 'the handler never reaches the HTML')
 
@@ -139,12 +187,28 @@ test('theme: the search box is placed by the theme and written by a module', () 
 
 test('menu: items are validated and ordered', async () => {
   const { db, manifest: m } = await boot()
-  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'Trang chủ', href: '/', position: 1 }, { adapter: db, manifest: m, scope: SCOPE })
-  await callFn('website_menu.addMenuItem', { id: 'm2', label: 'Giới thiệu', href: '/gioi-thieu', position: 0 }, { adapter: db, manifest: m, scope: SCOPE })
-  const bad = await callFn('website_menu.addMenuItem', { id: 'm3', label: 'Sai', href: 'javascript:alert(1)' }, { adapter: db, manifest: m, scope: SCOPE })
+  await callFn(
+    'website_menu.addMenuItem',
+    { id: 'm1', label: 'Trang chủ', href: '/', position: 1 },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
+  await callFn(
+    'website_menu.addMenuItem',
+    { id: 'm2', label: 'Giới thiệu', href: '/gioi-thieu', position: 0 },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
+  const bad = await callFn(
+    'website_menu.addMenuItem',
+    { id: 'm3', label: 'Sai', href: 'javascript:alert(1)' },
+    { adapter: db, manifest: m, scope: SCOPE },
+  )
   assert.equal((bad.value as { ok: boolean }).ok, false)
 
-  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest: m, scope: SCOPE })).value as Array<{ label: string }>
-  assert.deepEqual(items.map(i => i.label), ['Giới thiệu', 'Trang chủ'])
+  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest: m, scope: SCOPE }))
+    .value as Array<{ label: string }>
+  assert.deepEqual(
+    items.map((i) => i.label),
+    ['Giới thiệu', 'Trang chủ'],
+  )
   await db.close()
 })

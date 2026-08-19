@@ -66,7 +66,12 @@ export type Sessions = {
   readonly store: SessionStore
   /** True when the secret was generated rather than configured — see the banner. */
   readonly ephemeralSecret: boolean
-  start(o: { userId: string; companies: string[]; company?: string | null; branches?: string[] | null }): Promise<{ record: SessionRecord; cookie: string }>
+  start(o: {
+    userId: string
+    companies: string[]
+    company?: string | null
+    branches?: string[] | null
+  }): Promise<{ record: SessionRecord; cookie: string }>
   /** The session a request carries, refreshed if it is still alive. */
   of(req: IncomingMessage): Promise<SessionRecord | null>
   end(req: IncomingMessage): Promise<void>
@@ -116,7 +121,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
           hint: 'grant the user at least one company first — a session that can read nothing is not a session',
         })
       }
-      const active = company ?? companies[0] as string
+      const active = company ?? (companies[0] as string)
       if (!companies.includes(active)) {
         throw new KetError({
           code: 'E_WRITE_COMPANY_NOT_READABLE',
@@ -147,7 +152,10 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       // Refreshed while in use, but never past the absolute limit: a session that
       // renews forever is a session that never ends.
       const ceiling = record.createdAt + absoluteTtl
-      if (at >= ceiling) { await store.destroy(id); return null }
+      if (at >= ceiling) {
+        await store.destroy(id)
+        return null
+      }
       const next = Math.min(at + idleTtl, ceiling)
       if (next > record.expiresAt) {
         if ((await store.touch(id, next)) === null) return null
@@ -161,16 +169,22 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       if (id) await store.destroy(id)
     },
 
-    endUser(userId) { return store.destroyUser(userId) },
+    endUser(userId) {
+      return store.destroyUser(userId)
+    },
 
-    clearCookie() { return cookie('', 0) },
+    clearCookie() {
+      return cookie('', 0)
+    },
 
     scopeOf(record) {
       if (!record) return o.anonymous ?? null
       return { company: record.company, companies: record.companies, branches: record.branches }
     },
 
-    sweep() { return store.sweep(now()) },
+    sweep() {
+      return store.sweep(now())
+    },
   }
 }
 

@@ -29,7 +29,10 @@ const isPlain = (v: unknown): v is Rec =>
 const pick = (fnKey: string, output: Record<string, string>, row: Rec): Rec => {
   const out: Rec = {}
   for (const [f, type] of Object.entries(output)) {
-    if (f in row) { out[f] = row[f]; continue }
+    if (f in row) {
+      out[f] = row[f]
+      continue
+    }
     // `?` means the same here as everywhere else: it may be absent. A function that
     // answers {ok:true, qty} or {ok:false, errors} needs it — the convention is a
     // union, and a flat record can only describe one without it.
@@ -54,7 +57,7 @@ export function project(fnKey: string, output: Record<string, string>, value: un
   const fields = Object.keys(output)
   if (!fields.length) return value
   if (value === null || value === undefined) return value
-  if (Array.isArray(value)) return value.map(v => project(fnKey, output, v))
+  if (Array.isArray(value)) return value.map((v) => project(fnKey, output, v))
   if (!isPlain(value)) {
     throw new KetError({
       code: 'E_OUTPUT_NOT_SHAPED',

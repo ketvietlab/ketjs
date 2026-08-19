@@ -19,7 +19,7 @@ export function loadTemplates(dir: URL | string): Record<string, string> {
   const base = typeof dir === 'string' ? new URL(`file://${dir}`) : dir
   let names: string[]
   try {
-    names = readdirSync(base).filter(n => n.endsWith(EXT))
+    names = readdirSync(base).filter((n) => n.endsWith(EXT))
   } catch {
     throw new KetError({
       code: 'E_TEMPLATE_DIR_MISSING',

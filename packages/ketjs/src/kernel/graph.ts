@@ -2,7 +2,7 @@ import { KetError } from './errors.ts'
 import type { KetModule } from '../types.ts'
 
 export function topoSort(modules: KetModule[]): KetModule[] {
-  const byName = new Map(modules.map(m => [m.name, m]))
+  const byName = new Map(modules.map((m) => [m.name, m]))
   for (const m of modules) {
     for (const d of m.depends) {
       if (!byName.has(d)) {

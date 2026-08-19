@@ -75,20 +75,37 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
 
   for (const key of functions) {
     const fn = manifest.functions[key]
-    if (!fn) { unknown.push(key); continue }
+    if (!fn) {
+      unknown.push(key)
+      continue
+    }
     const reads: string[] = []
     const writes: string[] = []
     for (const e of fn.effects) {
       const [verb, model] = splitEffect(e)
-      const slot = models.get(model) ?? { model, read: false, write: false, via: [], viewFields: viewFieldsOf(manifest, model) }
-      if (verb === 'read') { slot.read = true; reads.push(model) }
-      else { slot.write = true; writes.push(model) }
+      const slot = models.get(model) ?? {
+        model,
+        read: false,
+        write: false,
+        via: [],
+        viewFields: viewFieldsOf(manifest, model),
+      }
+      if (verb === 'read') {
+        slot.read = true
+        reads.push(model)
+      } else {
+        slot.write = true
+        writes.push(model)
+      }
       if (!slot.via.includes(key)) slot.via.push(key)
       models.set(model, slot)
     }
     granted.push({
-      key, by: fn.by, effects: [...fn.effects],
-      reads: [...new Set(reads)].sort(), writes: [...new Set(writes)].sort(),
+      key,
+      by: fn.by,
+      effects: [...fn.effects],
+      reads: [...new Set(reads)].sort(),
+      writes: [...new Set(writes)].sort(),
       crossCompany: fn.crossCompany,
       mutates: writes.length > 0,
       projected: Object.keys(fn.output).length > 0,
@@ -99,15 +116,17 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
   return {
     functions: granted.sort((a, b) => a.key.localeCompare(b.key)),
     models: [...models.values()].sort((a, b) => a.model.localeCompare(b.model)),
-    crossCompany: granted.filter(f => f.crossCompany).map(f => f.key),
-    unprojected: granted.filter(f => !f.projected).map(f => f.key),
+    crossCompany: granted.filter((f) => f.crossCompany).map((f) => f.key),
+    unprojected: granted.filter((f) => !f.projected).map((f) => f.key),
     unknown,
   }
 }
 
 /** Every function a module owns — what granting the whole module would mean. */
 export function functionsOf(manifest: Manifest, module: string): string[] {
-  const keys = Object.entries(manifest.functions).filter(([, f]) => f.by === module).map(([k]) => k)
+  const keys = Object.entries(manifest.functions)
+    .filter(([, f]) => f.by === module)
+    .map(([k]) => k)
   if (!keys.length && !manifest.modules[module]) {
     throw new KetError({
       code: 'E_UNKNOWN_MODULE',
@@ -124,18 +143,20 @@ export function formatReach(r: Reach): string {
   const out: string[] = []
   if (r.unknown.length) out.push(`unknown functions: ${r.unknown.join(', ')}\n`)
 
-  const w = Math.max(20, ...r.functions.map(f => f.key.length))
+  const w = Math.max(20, ...r.functions.map((f) => f.key.length))
   out.push('functions granted:')
   for (const f of r.functions) {
     const marks = [f.mutates ? 'writes' : 'reads', ...(f.crossCompany ? ['cross-company'] : [])]
     out.push(`  ${pad(f.key, w)}  ${marks.join(' · ')}`)
     // The field-level answer, which is the one that was missing: what a caller
     // actually receives, rather than which tables were touched to build it.
-    out.push(`  ${pad('', w)}  returns ${f.projected ? f.returns.join(', ') : 'WHOLE ROWS — output undeclared'}`)
+    out.push(
+      `  ${pad('', w)}  returns ${f.projected ? f.returns.join(', ') : 'WHOLE ROWS — output undeclared'}`,
+    )
   }
 
   out.push('\nmodels reachable:')
-  const mw = Math.max(20, ...r.models.map(m => m.model.length))
+  const mw = Math.max(20, ...r.models.map((m) => m.model.length))
   for (const m of r.models) {
     const access = [m.read ? 'read' : null, m.write ? 'write' : null].filter(Boolean).join('+')
     out.push(`  ${pad(m.model, mw)}  ${pad(access, 10)}  via ${m.via.join(', ')}`)
@@ -168,7 +189,7 @@ export function formatInventory(manifest: Manifest): string {
   let unprojected = 0
   for (const [module, keys] of [...byModule].sort()) {
     out.push(`${module}:`)
-    const w = Math.max(...keys.map(k => k.length))
+    const w = Math.max(...keys.map((k) => k.length))
     for (const key of keys.sort()) {
       const fn = manifest.functions[key]!
       total++
@@ -201,7 +222,10 @@ export async function grantsOfRole(adapter: import('../types.ts').Adapter, role:
   const p = (n: number) => (pg ? `$${n}` : '?')
   const q = (s: string) => adapter.quoteIdent(s)
   try {
-    const roles = await adapter.all(`SELECT id FROM user_role WHERE ${q('name')} = ${p(1)} OR id = ${p(2)}`, [role, role])
+    const roles = await adapter.all(`SELECT id FROM user_role WHERE ${q('name')} = ${p(1)} OR id = ${p(2)}`, [
+      role,
+      role,
+    ])
     if (!roles.length) {
       throw new KetError({
         code: 'E_UNKNOWN_ROLE',
@@ -209,10 +233,12 @@ export async function grantsOfRole(adapter: import('../types.ts').Adapter, role:
         hint: 'roles are rows, so this reads what is actually there — check the name, or the datastore',
       })
     }
-    const ids = roles.map(r => String(r.id))
+    const ids = roles.map((r) => String(r.id))
     const rows = await adapter.all(
-      `SELECT ${q('fnKey')} FROM user_grant WHERE ${q('roleId')} IN (${ids.map((_, i) => p(i + 1)).join(', ')})`, ids)
-    return [...new Set(rows.map(r => String(r.fnKey)))].sort()
+      `SELECT ${q('fnKey')} FROM user_grant WHERE ${q('roleId')} IN (${ids.map((_, i) => p(i + 1)).join(', ')})`,
+      ids,
+    )
+    return [...new Set(rows.map((r) => String(r.fnKey)))].sort()
   } catch (e) {
     if (e instanceof KetError) throw e
     throw new KetError({

@@ -25,11 +25,17 @@ export async function permittedFor(ctx: Ctx, userId: string): Promise<string[] |
   const who = await ctx.db.one(from(U).where(eq(U.id, userId)))
   if (who?.superuser) return null
   const A = ctx.table('user.Assignment')
-  const roleIds = (await ctx.db.all(from(A).select(A.roleId).where(eq(A.userId, userId)))).map(r => String(r.roleId))
+  const roleIds = (await ctx.db.all(from(A).select(A.roleId).where(eq(A.userId, userId)))).map((r) =>
+    String(r.roleId),
+  )
   if (!roleIds.length) return []
   const G = ctx.table('user.Grant')
-  const rows = await ctx.db.all(from(G).select(G.fnKey).where(inArray({ model: 'user.Grant', name: 'roleId' }, roleIds)))
-  return [...new Set(rows.map(r => String(r.fnKey)))].sort()
+  const rows = await ctx.db.all(
+    from(G)
+      .select(G.fnKey)
+      .where(inArray({ model: 'user.Grant', name: 'roleId' }, roleIds)),
+  )
+  return [...new Set(rows.map((r) => String(r.fnKey)))].sort()
 }
 
 export const roleFunctions: Record<string, FnSpec> = {
@@ -80,7 +86,10 @@ export const roleFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       const key = String(a.fnKey)
       if (!ctx.manifest.functions[key]) {
-        return { ok: false, errors: [{ field: 'fnKey', message: `không có hàm "${key}" trong bản triển khai này` }] }
+        return {
+          ok: false,
+          errors: [{ field: 'fnKey', message: `không có hàm "${key}" trong bản triển khai này` }],
+        }
       }
       const R = ctx.table('user.Role')
       if (!(await ctx.db.one(from(R).where(eq(R.id, a.roleId))))) {
@@ -135,7 +144,9 @@ export const roleFunctions: Record<string, FnSpec> = {
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const A = ctx.table('user.Assignment')
-      const { changes } = await ctx.db.del(deleteFrom(A).where(eq(A.userId, a.userId), eq(A.roleId, a.roleId)))
+      const { changes } = await ctx.db.del(
+        deleteFrom(A).where(eq(A.userId, a.userId), eq(A.roleId, a.roleId)),
+      )
       return { ok: true, removed: changes }
     },
   }),

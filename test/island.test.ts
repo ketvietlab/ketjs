@@ -12,7 +12,8 @@ const clicks = signal(0)
 const cart = defineModule({
   name: 'cart',
   islands: {
-    'cart.widget': (props: IslandProps) => html`<button on:click=${() => clicks.set(c => c + 1)}>Giỏ (${(props.qty as number) + clicks()})</button>`,
+    'cart.widget': (props: IslandProps) =>
+      html`<button on:click=${() => clicks.set((c) => c + 1)}>Giỏ (${(props.qty as number) + clicks()})</button>`,
   },
 })
 
@@ -38,15 +39,23 @@ test('island: a theme places behaviour it cannot write', () => {
 })
 
 test('island: a theme declaring one is refused outright', () => {
-  const e = (() => { try { defineTheme({ name: 't', islands: { x: () => html`<b>x</b>` } }) } catch (err) { return err as KetError } })()!
+  const e = (() => {
+    try {
+      defineTheme({ name: 't', islands: { x: () => html`<b>x</b>` } })
+    } catch (err) {
+      return err as KetError
+    }
+  })()!
   assert.equal(e.code, 'E_THEME_OVERREACH')
   assert.match(e.hint!, /places an island .* but never defines one/)
 })
 
 test('island: placing one nobody provides fails at build time', () => {
   const bad = defineTheme({ name: 't2', templates: { p: `{% island "ghost.widget" %}` } })
-  assert.throws(() => createTheme(compose([cart, bad]), [cart, bad]),
-    /places island "ghost.widget", which no installed module provides/)
+  assert.throws(
+    () => createTheme(compose([cart, bad]), [cart, bad]),
+    /places island "ghost.widget", which no installed module provides/,
+  )
 })
 
 test('island: two modules cannot claim the same island', () => {
@@ -79,5 +88,8 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
 
 test('island: hydrating one nobody registered says which', () => {
   const container = parseFragment(`<${ISLAND_TAG} data-island="ghost" data-props="{}"></${ISLAND_TAG}>`)
-  assert.throws(() => hydrateIslands(domHost(document), container as never, {}), /island "ghost", which no installed module provides/)
+  assert.throws(
+    () => hydrateIslands(domHost(document), container as never, {}),
+    /island "ghost", which no installed module provides/,
+  )
 })
