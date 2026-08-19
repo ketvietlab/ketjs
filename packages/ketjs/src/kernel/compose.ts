@@ -26,6 +26,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
     sections: {},
+    relations: {},
     tokens: {}, patches: [], messages: {},
   }
 
@@ -117,6 +118,62 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
           continue
         }
         model.fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+      }
+    }
+  }
+
+  // --- relations -----------------------------------------------------------
+  //
+  // Checked against the models that exist and the key the relation travels on, so a
+  // typo is a build error rather than a query that quietly returns nothing. Reaching
+  // another module follows the same rule as extending it: only what you depend on.
+  for (const m of order) {
+    for (const [modelKey, rels] of Object.entries(m.relations)) {
+      const model = manifest.models[modelKey]
+      if (!model) {
+        diag.add({ code: 'E_RELATION_UNKNOWN_MODEL', module: m.name, message: `relation declared on "${modelKey}", which is not a model` })
+        continue
+      }
+      if (!canSee(m, model.owner)) {
+        diag.add({ code: 'E_RELATION_NOT_DEPENDED', module: m.name, message: `declares a relation on "${modelKey}" but does not depend on "${model.owner}"`, hint: `add "${model.owner}" to ${m.name}.depends` })
+        continue
+      }
+      for (const [name, def] of Object.entries(rels)) {
+        const kind = 'belongsTo' in def ? 'belongsTo' : 'hasMany'
+        const target = 'belongsTo' in def ? def.belongsTo : def.hasMany
+        const targetModel = manifest.models[target]
+        if (!targetModel) {
+          diag.add({ code: 'E_RELATION_UNKNOWN_TARGET', module: m.name, message: `relation "${modelKey}.${name}" points at "${target}", which is not a model`, hint: `known models: ${Object.keys(manifest.models).join(', ')}` })
+          continue
+        }
+        if (!canSee(m, targetModel.owner)) {
+          diag.add({ code: 'E_RELATION_NOT_DEPENDED', module: m.name, message: `relation "${modelKey}.${name}" reaches "${target}" but "${m.name}" does not depend on "${targetModel.owner}"` })
+          continue
+        }
+        // The key lives on whichever side carries the foreign id: the model itself
+        // for belongsTo, the far side for hasMany.
+        const holderKey = kind === 'belongsTo' ? modelKey : target
+        const holder = kind === 'belongsTo' ? model : targetModel
+        if (!holder.fields[def.by]) {
+          diag.add({
+            code: 'E_RELATION_NO_KEY', module: m.name,
+            message: `relation "${modelKey}.${name}" travels on "${holderKey}.${def.by}", which does not exist`,
+            hint: `fields on ${holderKey}: ${Object.keys(holder.fields).join(', ')}`,
+          })
+          continue
+        }
+        // Crossing the company boundary through a relation would be a leak the
+        // scope check never sees, because the child query is built from parent ids.
+        if (model.scope !== 'shared' && targetModel.scope === 'shared') { /* narrowing: fine */ }
+        else if (model.scope === 'shared' && targetModel.scope !== 'shared') {
+          diag.add({
+            code: 'E_RELATION_WIDENS_SCOPE', module: m.name,
+            message: `relation "${modelKey}.${name}" reaches company-scoped "${target}" from shared "${modelKey}"`,
+            hint: 'a shared row would expose rows of every company through it — put the relation on the scoped side',
+          })
+          continue
+        }
+        ;(manifest.relations[modelKey] ??= {})[name] = { kind, target, by: def.by, declaredBy: m.name }
       }
     }
   }

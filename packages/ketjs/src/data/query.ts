@@ -34,6 +34,9 @@ export function table(manifest: Manifest, model: string): Table {
 
 export type QueryKind = 'select' | 'count' | 'delete'
 
+/** Related rows a query has asked for. Never populated by touching a property. */
+export type Preload = { name: string }
+
 export class Query {
   readonly kind: QueryKind
   readonly model: string
@@ -42,8 +45,9 @@ export class Query {
   readonly order: readonly Order[]
   readonly limitN: number | null
   readonly offsetN: number | null
+  readonly preloads: readonly Preload[]
 
-  constructor(init: { kind: QueryKind; model: string; columns?: readonly string[] | null; condition?: Expr | null; order?: readonly Order[]; limitN?: number | null; offsetN?: number | null }) {
+  constructor(init: { kind: QueryKind; model: string; columns?: readonly string[] | null; condition?: Expr | null; order?: readonly Order[]; limitN?: number | null; offsetN?: number | null; preloads?: readonly Preload[] }) {
     this.kind = init.kind
     this.model = init.model
     this.columns = init.columns ?? null
@@ -51,13 +55,14 @@ export class Query {
     this.order = init.order ?? []
     this.limitN = init.limitN ?? null
     this.offsetN = init.offsetN ?? null
+    this.preloads = init.preloads ?? []
     Object.freeze(this)
   }
 
   private with(patch: Partial<ConstructorParameters<typeof Query>[0]>): Query {
     return new Query({
       kind: this.kind, model: this.model, columns: this.columns, condition: this.condition,
-      order: this.order, limitN: this.limitN, offsetN: this.offsetN, ...patch,
+      order: this.order, limitN: this.limitN, offsetN: this.offsetN, preloads: this.preloads, ...patch,
     })
   }
 
@@ -71,6 +76,15 @@ export class Query {
   limit(n: number): Query { return this.with({ limitN: n }) }
   offset(n: number): Query { return this.with({ offsetN: n }) }
   count(): Query { return this.with({ kind: 'count', columns: null, order: [] }) }
+
+  /**
+   * Ask for a declared relation alongside the rows. Two queries, not one per row:
+   * the parents, then the children by id. There is no lazy alternative, which is
+   * exactly why an accidental N+1 cannot be written here.
+   */
+  preload(...names: string[]): Query {
+    return this.with({ preloads: [...this.preloads, ...names.map(name => ({ name }))] })
+  }
 
   /** Every model this query reads or writes. Checked against declared effects. */
   get touches(): string[] {
@@ -118,7 +132,7 @@ export class Query {
   }
 
   toJSON() {
-    return { kind: this.kind, model: this.model, columns: this.columns, where: this.condition, order: this.order, limit: this.limitN, offset: this.offsetN, touches: this.touches }
+    return { kind: this.kind, model: this.model, columns: this.columns, where: this.condition, order: this.order, limit: this.limitN, offset: this.offsetN, preloads: this.preloads.map(p => p.name), touches: this.touches }
   }
 }
 
