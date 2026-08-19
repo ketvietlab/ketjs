@@ -16,9 +16,14 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'Hệ thống',
 
     'nav.apps': 'Ứng dụng',
+    'nav.search': 'Tìm ứng dụng, menu…',
+    'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
     'nav.pages': 'Trang',
     'nav.settings': 'Cài đặt',
     'brand': 'KetSuite',
+
+    'table.columns': 'Chọn cột',
+    'table.id': 'Mã',
 
     'chrome.breadcrumb': 'Đường dẫn',
     'chrome.removeFilter': 'Bỏ bộ lọc',
@@ -66,9 +71,14 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'System',
 
     'nav.apps': 'Apps',
+    'nav.search': 'Search apps and menus…',
+    'nav.noMatch': 'No app or menu matches.',
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
     'brand': 'KetSuite',
+
+    'table.columns': 'Columns',
+    'table.id': 'Id',
 
     'chrome.breadcrumb': 'Breadcrumb',
     'chrome.removeFilter': 'Remove filter',

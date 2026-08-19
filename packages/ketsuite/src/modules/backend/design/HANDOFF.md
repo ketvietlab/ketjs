@@ -249,3 +249,63 @@ trong HTML.
 | `[data-ui="view-switch"]`, `[data-ui="view-kind"][data-active]` | đổi kiểu xem |
 | `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
 | `[data-ui="table"] [data-align="end"]` | cột số — canh phải, `tabular-nums` |
+
+## Bảng dữ liệu
+
+Cột là **dữ liệu** do module khai báo, không phải markup. Nên mọi danh sách trong sản
+phẩm có cùng chiều cao dòng, cùng header dính, cùng cách tràn ngang.
+
+Cột tuỳ chọn khi tắt thì **không có trong HTML** — đừng viết CSS để ẩn. Menu chọn cột
+là danh sách link (checkbox sẽ cần handler, mà handler là state phía client).
+
+Danh sách **chạy hết chiều ngang của khung**: không viền hai bên, không bo góc, không
+đổ bóng. Màn hình để *đọc* (lưới ứng dụng, danh sách token) thì vẫn giữ bề rộng đọc —
+chọn bằng `:has()`, không phải bằng class.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="table-scroll"]` | hộp cuộn ngang; trang **không** được cuộn ngang theo |
+| `[data-ui="table"]`, `[data-ui="col"][data-align]` | bảng và ô tiêu đề cột |
+| `[data-ui="row"][data-row]`, `[data-ui="cell"][data-col][data-align]` | dòng và ô; `data-col` là khoá cột |
+| `[data-ui="col-actions"]`, `[data-ui="cell-actions"]` | cột cuối chứa nút chọn cột |
+| `[data-ui="col-config"]`, `[data-ui="col-config-open"]`, `[data-ui="col-config-menu"]` | `<details>` chọn cột |
+| `[data-ui="col-toggle"][data-on]`, `[data-ui="col-toggle-mark"]` | một cột trong menu đó |
+| `[data-ui="badge"][data-tone][data-value]` | trạng thái; tone là `neutral` `info` `positive` `warning` `danger` |
+| `[data-ui="person"]`, `[data-ui="person-name"]`, `[data-ui="avatar"]` | tên người kèm chữ đầu |
+
+**Đổi hợp đồng:** `[data-ui="badge"][data-published]` đã bỏ, thay bằng `[data-tone]`.
+`[data-ui="cell-path"]`, `[data-ui="cell-title"]`, `[data-ui="cell-state"]` cũng bỏ —
+giờ là `[data-ui="cell"][data-col="path"]` và tương tự.
+
+Thanh công cụ **chỉ có một**: tiêu đề bên trái, ô tìm ở giữa, pager và nút đổi kiểu
+xem ở cuối. **Không có breadcrumb** — sidebar đã nói đang ở ứng dụng nào, mục nào.
+
+Người đang đăng nhập nằm ở **đáy sidebar**, cùng hàng đếm việc/thông báo
+(`[data-ui="sidebar-foot"]`, `[data-ui="indicators"]`, `[data-ui="indicator"][data-kind]`,
+`[data-ui="indicator-count"]`). Số 0 thì **không** render con số, chỉ còn icon.
+
+## Sidebar — port từ vidoo_backend_theme
+
+Sidebar ở đây **là** sidebar của `vidoo_backend_theme` trong repo kingfruit: 228px,
+không có thanh ứng dụng ngang trên desktop, systray nằm ở chân. Cùng số đo, cùng
+bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên nào thì phải nói bên
+kia — mục tiêu là hai sản phẩm trông như một.
+
+Icon: 12 glyph Lucide (ISC) **chép vào** `icons.ts`, không cài package — giống hệt
+cách theme Odoo làm. `MenuDef.icon` là *tên* icon; tên nào không có thì rơi về
+monogram (chữ đầu), không mất dòng.
+
+`[data-ui="icon"]` mặc định `1em`. Hộp nào cỡ cố định thì tự khai báo cho `<svg>`
+bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="sidebar-header"]`, `[data-ui="sidebar-brand"]` | hàng thương hiệu / tên app đang mở |
+| `[data-ui="sidebar-search"]`, `[data-ui="sidebar-search-input"]` | **tìm menu** (khác ô tìm bản ghi ở control panel) |
+| `[data-ui="sidebar-nav"]` | vùng cuộn; brand, search và chân đứng yên |
+| `[data-ui="sidebar-section-label"][data-scope="app"]` | nhãn nhóm; `data-scope="app"` là nhãn của app đang mở |
+| `[data-ui="sidebar-empty"]` | không tìm thấy gì |
+| `[data-ui="app-entry"][data-active]`, `[data-ui="app-icon"]`, `[data-ui="app-monogram"]` | một app |
+| `[data-ui="menu-item-wrap"][data-depth]` | một mục, kèm độ sâu |
+| `[data-ui="menu-section-chevron"]`, `[data-ui="menu-section-text"]`, `[data-ui="menu-section-children"]` | nhóm; con có đường kẻ dọc bên trái |
+| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá |
