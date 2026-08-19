@@ -163,3 +163,38 @@ test('uom: a rounded value is a multiple of its own precision', () => {
     assert.equal(roundTo(r, precision), r, `roundTo(${value}, ${precision}) = ${r} is not stable`)
   }
 })
+
+test('decimal: a value survives the round trip through the database unchanged', async () => {
+  const db = await boot()
+  // Every one of these is a number a double cannot hold exactly.
+  const awkward = [0.1, 0.001, 0.07, 1 / 3, 12345.6789, 0.30000000000000004]
+  for (const [i, value] of awkward.entries()) {
+    await call('uom.saveUnit', { id: `u${i}`, name: `u${i}`, categoryId: 'weight', type: 'smaller', factor: value, rounding: 0.001 }, db)
+  }
+  const rows = (await call('uom.listUnits', { categoryId: 'weight' }, db)).value as Row[]
+  for (const [i, value] of awkward.entries()) {
+    const got = rows.find(r => r.id === `u${i}`)!
+    assert.equal(got.factor, value, `factor ${value} came back as ${String(got.factor)}`)
+    assert.equal(typeof got.factor, 'number', 'and it arrives as a number, not the string it was stored as')
+  }
+  await db.close()
+})
+
+test('decimal: what is stored is the decimal, not a binary approximation of it', async () => {
+  const db = await boot()
+  await call('uom.saveUnit', { id: 'tenth', name: 'tenth', categoryId: 'weight', type: 'smaller', factor: 0.1, rounding: 0.001 }, db)
+  const raw = (await db.all('SELECT factor FROM uom_unit WHERE id = ?', ['tenth']))[0]!
+  assert.equal(String(raw.factor), '0.1', 'the column holds "0.1", not 0.1000000000000000055')
+  await db.close()
+})
+
+test('decimal: a conversion built from stored factors matches one built in memory', async () => {
+  const db = await boot()
+  await call('uom.saveUnit', { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 }, db)
+  await call('uom.saveUnit', { id: 't', name: 'tấn', categoryId: 'weight', type: 'bigger', factor: 0.001, rounding: 0.001 }, db)
+
+  const viaDb = (await call('uom.convert', { qty: 2500, fromId: 'kg', toId: 't' }, db)).value as { qty: number }
+  assert.equal(viaDb.qty, 2.5)
+  assert.equal(viaDb.qty, convertQty(2500, KG, TONNE), 'the database is not a second source of drift')
+  await db.close()
+})

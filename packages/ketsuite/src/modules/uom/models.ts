@@ -30,8 +30,11 @@ export const models: Record<string, ModelDef> = {
       categoryId: 'ref:uom.Category',
       // 'reference' | 'bigger' | 'smaller' — validated on write, see functions.ts
       type: 'text',
-      factor: 'float',
-      rounding: 'float',
+      // decimal, not float: a factor of 0.001 written to a double comes back as
+      // 0.001000000000000000020816681711721685, and every conversion through it
+      // carries that error into a stock figure.
+      factor: 'decimal',
+      rounding: 'decimal',
       active: 'bool',
     },
   },

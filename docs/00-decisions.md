@@ -137,6 +137,23 @@ and that comparisons go through `compareQty` and `isZero` — never `===`.
 **Product depends on uom**, as in Odoo: a template counts in a unit, optional so a
 service needs none and so existing rows survive the module arriving.
 
+**`decimal` is a separate type from `float`, and the difference is storage only.**
+Odoo splits these and the split is right: a quantity or a price is stored as exact
+decimal and computed as a binary float, with the rounding helpers standing between.
+The first version here copied the arithmetic and missed the storage — quantities
+went into `DOUBLE PRECISION`, where 0.1 comes back as 0.1000000000000000055 and
+every trip through the database puts back the error the rounding just took out.
+
+- Postgres: `NUMERIC`, unbounded, as Odoo uses.
+- SQLite: `TEXT`. SQLite has no exact decimal at all — `NUMERIC` affinity silently
+  becomes `REAL` — so text is the only storage that returns what it was given.
+- Both adapters hand it back as a string; `ctx` converts, because it is the one
+  place that knows the model and the row. Arithmetic stays on numbers, as in Odoo.
+
+Tested both ways: awkward values round-trip unchanged through SQLite and through a
+live Postgres, and the raw column is confirmed to hold `"0.1"` rather than a binary
+approximation of it.
+
 **Cut:** purchase units, and the reference-changing migration Odoo needs when a
 category's reference moves. Both wait for a real case.
 
