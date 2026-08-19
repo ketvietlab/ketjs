@@ -1,6 +1,7 @@
 import { defineModule } from '../../../src/kernel/define.ts'
 import { defineFn } from '../../../src/server/fn.ts'
-import type { Row } from '../../../src/types.ts'
+import { from, desc } from '../../../src/data/query.ts'
+import { eq, gte } from '../../../src/data/expr.ts'
 
 export default defineModule({
   name: 'catalog',
@@ -34,10 +35,15 @@ export default defineModule({
       handler: (ctx, args) => ctx.db.select('catalog.Product', { id: args.id })[0] ?? null,
     }),
     listProducts: defineFn({
-      input: {},
+      input: { minPriceCents: 'int?', limit: 'int?' },
       effects: ['read:catalog.Product'],
       agent: true,
-      handler: (ctx) => ctx.db.select('catalog.Product'),
+      handler: (ctx, args) => {
+        const P = ctx.table('catalog.Product')
+        let q = from(P).where_(eq(P.active!, true))
+        if (args.minPriceCents != null) q = q.where_(gte(P.priceCents!, args.minPriceCents))
+        return ctx.db.all(q.orderBy(desc(P.priceCents!)).limit(Number(args.limit ?? 20)))
+      },
     }),
     createProduct: defineFn({
       input: { id: 'id', title: 'text', priceCents: 'int', slug: 'text' },
@@ -45,8 +51,13 @@ export default defineModule({
       idempotent: true,
       agent: true,
       handler: (ctx, args) => {
-        const row: Row = { id: args.id, title: args.title, priceCents: args.priceCents, slug: args.slug, active: true }
-        ctx.db.insert('catalog.Product', row)
+        // Casting is an explicit allow-list: anything else in args never reaches the row.
+        const cs = ctx.change('catalog.Product', args)
+          .cast(['id', 'title', 'priceCents', 'slug'])
+          .required(['id', 'title'])
+          .validate('priceCents', v => (v as number) > 0 || 'phải lớn hơn 0')
+          .put('active', true)
+        ctx.db.commit(cs)
         return { id: args.id }
       },
     }),

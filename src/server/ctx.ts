@@ -6,6 +6,8 @@
 // rather than merely discouraged.
 
 import { tableNameFor } from '../data/migrate.ts'
+import { table, Query } from '../data/query.ts'
+import { Changeset, changeset } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter, Ctx, Manifest, Row, WriteRecord } from '../types.ts'
 
@@ -31,7 +33,52 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     })
   }
 
+  // A query is a value, so what it touches is known before it runs. This is the
+  // pay-off for not building a string-based query builder: effect enforcement
+  // happens on the query itself, not on a guess about the SQL it produced.
+  const checkQuery = (q: Query): void => {
+    for (const model of q.touches) need(q.effect, model)
+  }
+  const dialect = adapter.name === 'postgres' ? 'postgres' : 'sqlite'
+
   const db: Ctx['db'] = {
+    all(q) {
+      checkQuery(q)
+      const { text, params } = q.toSQL(dialect)
+      return adapter.all(text, params)
+    },
+    one(q) {
+      checkQuery(q)
+      const { text, params } = q.limit(1).toSQL(dialect)
+      return adapter.all(text, params)[0] ?? null
+    },
+    count(q) {
+      const c = q.count()
+      checkQuery(c)
+      const { text, params } = c.toSQL(dialect)
+      return Number((adapter.all(text, params)[0] as { count: number }).count)
+    },
+    del(q) {
+      checkQuery(q)
+      writes.push({ op: 'update', model: q.model, where: {} })
+      if (dryRun) return { changes: 0 }
+      const { text, params } = q.toSQL(dialect)
+      return adapter.run(text, params)
+    },
+    commit(cs, where) {
+      if (!cs.valid) {
+        throw new KetError({
+          code: 'E_INVALID_CHANGESET',
+          module: fn.by,
+          message: `${cs.model}: ${cs.errors.map(e => `${e.field} ${e.message}`).join('; ')}`,
+          hint: 'inspect changeset.errors for the structured form',
+        })
+      }
+      if (cs.action === 'insert') return db.insert(cs.model, cs.changes) as { changes: number }
+      if (!where) throw new KetError({ code: 'E_UPDATE_NEEDS_WHERE', message: `updating ${cs.model} requires a where clause` })
+      if (!Object.keys(cs.changes).length) return { changes: 0 }
+      return db.update(cs.model, where, cs.changes) as { changes: number }
+    },
     select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
@@ -63,5 +110,9 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     },
   }
 
-  return { fnKey, actor: o.actor ?? null, dryRun, db, writes, effects: [...effects] }
+  return {
+    fnKey, actor: o.actor ?? null, dryRun, db, writes, effects: [...effects],
+    table: (model: string) => table(manifest, model),
+    change: (model: string, params: Row, base: Row | null = null): Changeset => changeset(manifest, model, params, base),
+  }
 }

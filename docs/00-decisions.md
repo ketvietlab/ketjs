@@ -89,6 +89,40 @@ computed and checked at build.
 classic umbrella failure is the shared database becoming invisible coupling — here
 two apps disagreeing about a column is a build error.
 
+## D11 — SQL layer: Ecto's architecture, Drizzle's surface, no ORM
+**Chosen:** hand-written, not a dependency. A query is an **immutable value**, built
+by a chainable typed builder and rendered per dialect. Casting and validation live in
+**changesets**, separate from persistence. `ctx` is the Repo — the only thing that
+touches the database.
+
+**Why a value and not a SQL string:** this is the decisive point, and it is forced by
+pillars 3 and 5 rather than being a matter of taste. A query you can inspect can be
+checked against a function's declared `effects` *before it runs*, handed to an agent
+as data, and rendered for SQLite and Postgres from one shape. A tagged SQL literal
+gives up all three.
+
+```ts
+const q = from(P).where_(eq(P.active, true)).orderBy(desc(P.priceCents)).limit(20)
+q.touches            // ['catalog.Product'] -> effect check happens here
+q.toSQL('postgres')  // { text, params } -- values always parameterised
+```
+
+**Why changesets rather than reaching for a validation library:**
+1. Casting rules come from the manifest, so field types are declared once, not twice.
+2. Errors are structured data; an agent cannot act on a thrown string.
+3. `changes` is a real diff against the existing row — exactly what dry-run reports.
+4. `cast()` is an explicit allow-list, so mass assignment is not possible by default.
+
+**Deliberately absent — this is what "no ORM" means here:** identity map, lazy
+loading, dirty tracking on objects, Active Record, automatic association loading,
+unit of work. Rows are plain objects. Nothing loads itself, so N+1 cannot happen by
+accident.
+
+**Deferred:** relations. `ref:module.Model` exists in the type system and is unused.
+The hard part is specific to Ket: module B must be able to relate A's model to B's
+own, because that is the lego pillar, and Ecto never faces this. Deferred on purpose
+until the query shape has run against real data.
+
 ## D10 — Name
 `Ket`, from *kết* — to join. npm `ketjs` is free; `ket` is held by a dead 2022
 package. Flagged: `ket` is UK slang for ketamine and bra-ket notation in physics.
