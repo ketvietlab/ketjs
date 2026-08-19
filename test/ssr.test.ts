@@ -135,3 +135,20 @@ test('hydration: an implied element is diagnosed, not just reported', () => {
   assert.match(e.message, /expected <tr>, found <tbody>/)
   assert.match(e.hint, /parser inserted <tbody> on its own — write it in the template/)
 })
+
+test('ssr: a hole inside <title> gets no hydration markers, because they are not comments there', () => {
+  // An HTML parser reads title and textarea as text, not markup, so `<!--k[-->`
+  // arrives as literal characters. The browser tab said "<!--k[-->KetSuite<!--k-->".
+  assert.equal(renderToString(html`<title>${'KetSuite'}</title>`), '<title>KetSuite</title>')
+  assert.equal(renderToString(html`<textarea>${'ghi chú'}</textarea>`), '<textarea>ghi chú</textarea>')
+})
+
+test('ssr: and the value is still escaped there', () => {
+  assert.equal(
+    renderToString(html`<title>${'<script>x</script>'}</title>`),
+    '<title>&lt;script&gt;x&lt;/script&gt;</title>')
+})
+
+test('ssr: everywhere else the markers stay, because the hydration walk counts on them', () => {
+  assert.match(renderToString(html`<p>giá trị ${5}</p>`), /<!--k\[-->5<!--k-->/)
+})
