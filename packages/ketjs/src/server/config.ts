@@ -33,6 +33,12 @@ export type RuntimeConfig = {
   fallbackLocale: string
   /** Until there is authentication, the company a request acts as comes from here. */
   defaultCompany: string
+  /**
+   * Signing key for session cookies. It MUST be the same on every pod — a cookie
+   * signed by one and rejected by another is a login that works until the load
+   * balancer sends you elsewhere.
+   */
+  secret: string | null
 }
 
 const list = (v: string | undefined): string[] | null =>
@@ -53,6 +59,7 @@ export function readConfig(
     defaultLocale: env.KET_LOCALE ?? defaults.defaultLocale ?? 'en',
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultCompany: env.KET_COMPANY ?? defaults.defaultCompany ?? 'default',
+    secret: env.KET_SECRET ?? defaults.secret ?? null,
   }
 }
 

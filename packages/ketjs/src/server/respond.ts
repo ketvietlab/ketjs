@@ -23,6 +23,8 @@ export type RouteResult = {
   status?: number
   type?: string
   body: string
+  /** Extra response headers. A cookie is the reason this exists. */
+  headers?: Record<string, string>
   readonly [RESPONSE]: true
 }
 
@@ -59,6 +61,15 @@ export function text(body: string, o: { type?: string; status?: number } = {}): 
  */
 export function raw(body: string, o: { type?: string; status?: number } = {}): RouteResult {
   return made(body, o.type ?? 'text/html', o.status)
+}
+
+/**
+ * Add headers to a response without rebuilding it, and without spreading — a
+ * spread would produce a plain object that only looks like a RouteResult, which
+ * is exactly the hole the brand exists to close.
+ */
+export function withHeaders(result: RouteResult, headers: Record<string, string>): RouteResult {
+  return { ...result, headers: { ...result.headers, ...headers } } as RouteResult
 }
 
 /**
