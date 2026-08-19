@@ -25,6 +25,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     functions: {}, views: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
+    sections: {},
     tokens: {}, patches: [],
   }
 
@@ -42,6 +43,14 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
       for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
         const t = parseType(tspec)
         if (!t.ok) { diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` }); continue }
+        if (t.base === 'ref' && t.target === key && !t.optional) {
+          diag.add({
+            code: 'E_SELF_REF_REQUIRED', module: m.name,
+            message: `field "${key}.${fname}" is a required reference to its own model`,
+            hint: `the first row could never satisfy it — write "${tspec}?"`,
+          })
+          continue
+        }
         fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
       }
       manifest.models[key] = { owner: m.name, fields }
@@ -143,6 +152,18 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         continue
       }
       manifest.islands[name] = { by: m.name }
+    }
+  }
+
+  // --- sections: placeable by data, so their settings must be declared -------
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.sections)) {
+      const existing = manifest.sections[name]
+      if (existing) {
+        diag.add({ code: 'E_SECTION_DUPLICATE', module: m.name, message: `section "${name}" is already provided by "${existing.by}"` })
+        continue
+      }
+      manifest.sections[name] = { ...def, by: m.name }
     }
   }
 

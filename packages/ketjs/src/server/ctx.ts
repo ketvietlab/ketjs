@@ -118,7 +118,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   }
 
   return {
-    fnKey, actor: o.actor ?? null, dryRun, db, writes, effects: [...effects],
+    fnKey, manifest, actor: o.actor ?? null, dryRun, db, writes, effects: [...effects],
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset => changeset(manifest, model, params, base),
   }

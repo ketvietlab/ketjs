@@ -47,6 +47,8 @@ export function agentTools(manifest: Manifest): AgentTool[] {
 
 // The safest write surface an agent has: schema-validated composition data, not code.
 export type CompositionSchema = {
+  /** What a page may be composed of, and what each part accepts. */
+  sections: Record<string, { by: string; title: string; settings: Record<string, string> }>
   regions: Record<string, { providedBy: string[] }>
   joints: Record<string, { owner: string; props: Record<string, string>; filledBy: string[] }>
   tokens: string[]
@@ -57,9 +59,13 @@ export function compositionSchema(manifest: Manifest): CompositionSchema {
   for (const [key, j] of Object.entries(manifest.joints)) {
     joints[key] = { owner: j.owner, props: j.props, filledBy: manifest.fills.filter(f => f.joint === key).map(f => f.by) }
   }
+  const sections: CompositionSchema['sections'] = {}
+  for (const [name, s] of Object.entries(manifest.sections)) {
+    sections[name] = { by: s.by, title: s.title ?? name, settings: s.settings ?? {} }
+  }
   const regions: CompositionSchema['regions'] = {}
   for (const [name, by] of Object.entries(manifest.regions.provided)) regions[name] = { providedBy: by }
-  return { regions, joints, tokens: Object.keys(manifest.tokens) }
+  return { sections, regions, joints, tokens: Object.keys(manifest.tokens) }
 }
 
 // What an agent is allowed to read to orient itself, in one call.

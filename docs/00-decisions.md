@@ -108,6 +108,31 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D20 — Sections: placement by data, not by code
+**Chosen:** a page's body is an ordered list of section placements, each with
+settings validated against a schema the providing module declared. A joint is placed
+by code; a section is placed by data.
+
+**This is where pillar 3 stops being a slogan.** An agent composing a page writes
+JSON that is checked against the sections that actually exist, before anything is
+stored, and gets back a list of what is wrong and where — a bad section type, a
+missing required setting, a setting of the wrong shape. A list, not an exception,
+because a list is what an agent can act on.
+
+**And where pillar 4 pays off:** the theme owns how a section looks, the data owns
+which sections exist and in what order, and neither writes the other's half. The
+same declaration serves both — no second schema to drift.
+
+**A module is one file per concern.** `index.ts` assembles; models, joints,
+sections, views, functions and tokens each live in their own file. The alternative
+is the giant `models.py` that every mature Odoo module turns into.
+
+**Writing a real module found a real gap:** `parentId: 'ref:MenuItem'` declared
+required is a contradiction — the first row can never satisfy it — and nothing
+caught it until SQLite refused the insert. The composer now rejects a required
+self-reference at build time. This is the argument for writing a vertical rather
+than more framework.
+
 ## D19 — Monorepo, so the fences become shapes
 **Chosen:** four packages — `ketjs-view`, `ketjs`, `ketjs-postgres`, `ketsuite` —
 in one repository under npm workspaces.

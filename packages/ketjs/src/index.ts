@@ -1,6 +1,8 @@
 export { defineModule, defineTheme } from './kernel/define.ts'
 export { defineApp, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 export { compose } from './kernel/compose.ts'
+export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
+export type { Placement, LayoutError } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
 

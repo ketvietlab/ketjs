@@ -109,3 +109,13 @@ test('errors carry a code and a hint, so an agent can act on them', () => {
   assert.equal(typeof d.hint, 'string')
   assert.equal(d.module, 'z')
 })
+
+test('lego: a required reference to one own model is a contradiction, and is refused', () => {
+  const tree = defineModule({
+    name: 'tree',
+    models: { Node: { fields: { id: 'id', parentId: 'ref:tree.Node' } } },
+  })
+  const e = fails(() => compose([tree]))
+  assert.ok(codes(e).includes('E_SELF_REF_REQUIRED'))
+  assert.match(e.items![0]!.hint!, /the first row could never satisfy it/)
+})

@@ -4,8 +4,17 @@
   "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=24.0.0" },
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "ketjs": "0.0.0" },
-  "files": ["src"]
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ketjs": "0.0.0",
+    "ketjs-view": "0.0.0"
+  },
+  "files": [
+    "src"
+  ]
 }
