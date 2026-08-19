@@ -222,3 +222,57 @@ test('scope: a transaction keeps the company it was opened with', async () => {
   assert.equal((await callFn('ok.pair', {}, { adapter: db, manifest: m, scope: A })).value, 1)
   await db.close()
 })
+
+test('effects: an undeclared preload is refused whether or not the table has rows', async () => {
+  // The check used to live where the children are fetched, so it only ran when the
+  // parent returned rows: an empty table let an undeclared preload through, which
+  // means a test suite with empty fixtures goes green and production throws on the
+  // first customer that has data.
+  const m = defineModule({
+    name: 'reach',
+    models: {
+      Partner: { scope: 'shared', fields: { id: 'id', name: 'text' } },
+      Order: { scope: 'company', fields: { id: 'id', partnerId: 'text' } },
+    },
+    relations: { 'reach.Order': { partner: { belongsTo: 'reach.Partner', by: 'partnerId' } } },
+    functions: {
+      sneak: {
+        effects: ['read:reach.Order'],
+        handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('reach.Order')).preload('partner')),
+      },
+    },
+  })
+  const manifest = compose([m])
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions([m])
+  const scope = { company: 'c1', branches: null }
+
+  const refused = async (why: string) => {
+    await assert.rejects(() => callFn('reach.sneak', {}, { adapter, manifest, scope }),
+      (e: unknown) => { assert.equal((e as { code: string }).code, 'E_EFFECT_NOT_DECLARED', why); return true })
+  }
+  await refused('empty table')
+  await adapter.run('INSERT INTO reach_partner (id, name) VALUES (?, ?)', ['p1', 'Acme'])
+  await adapter.run('INSERT INTO reach_order (id, "companyId", "partnerId") VALUES (?, ?, ?)', ['o1', 'c1', 'p1'])
+  await refused('with rows — the answer must not depend on the data')
+  await adapter.close()
+})
+
+test('effects: a preload of a relation nobody declared is named, not silently empty', async () => {
+  const m = defineModule({
+    name: 'norel',
+    models: { Thing: { scope: 'shared', fields: { id: 'id' } } },
+    functions: {
+      go: { effects: ['read:norel.Thing'], handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('norel.Thing')).preload('nope')) },
+    },
+  })
+  const manifest = compose([m])
+  const adapter = sqliteAdapter(); await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions([m])
+  await assert.rejects(() => callFn('norel.go', {}, { adapter, manifest, scope: { company: 'c1', branches: null } }),
+    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_UNKNOWN_RELATION'); return true })
+  await adapter.close()
+})
