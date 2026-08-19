@@ -1105,10 +1105,11 @@ eventually have it chosen.
 ## D17 — A framework table appears only when something uses it
 Asked why the framework owns tables at all, the honest audit found that
 `createKetServer` created `ket_stream` at boot — so an app that never streamed still
-found a stream table in its database. Now every framework table is created on first
-use: migrating an app yields `ket_migration` and the app's own tables and nothing
-else, `ket_stream` appears on the first stream, `ket_idem` on the first idempotency
-key, `ket_job` on the first enqueue.
+found a stream table in its database. Framework tables now arrive with the runtime
+that owns them: `ket_stream` on the first stream, `ket_idem` on the first
+idempotency key, and `ket_job` when a queue producer or worker first prepares the
+database. Queue preparation happens before user transactions so rolling back a
+first enqueue cannot also roll back its system schema.
 
 The same audit found two gaps in idempotency, both the kind that only bite during an
 incident:
@@ -1416,3 +1417,31 @@ menu; the one in the control panel narrows the list. Both are GET forms with the
 state in the URL (D43), so a filtered sidebar is also a link. A filter that matches
 nothing says so — the label and silence under it read as broken rather than as
 "nothing here".
+
+## D46 — Durable jobs live with tenant data; notification is only a bell
+
+**Chosen:** PostgreSQL or SQLite owns every job state. Redis is not required.
+`LISTEN/NOTIFY` carries only the queue name and only shortens wake-up latency;
+adaptive polling, due-time checks and expired-lease rescue are the correctness
+path. PostgreSQL sends `pg_notify` on the enqueue transaction's reserved
+connection, so rollback leaves neither business data, job nor notification.
+
+**One app, two process roles.** `ket serve` and `ket worker` both start with
+`bootRuntime`, compose the same `AppSpec` and register the same emitted module
+artifact. Production runs them as separate processes; `ket dev --all` runs both
+loops under the existing single source watcher. There is no second build watcher
+and no execution of source TypeScript in production.
+
+**Delivery is at least once.** A claim is a short transaction, the handler runs
+outside it, and completion is another short transaction. A process can therefore
+die after a business write and before completion; every job must explicitly state
+`idempotent: true`. Leases, heartbeat and exponential full-jitter retry recover the
+other crash positions. A handler receives an `AbortSignal`, but Node cannot
+forcibly stop a Promise that ignores it.
+
+**Tenant fairness is scheduler state, not central queue state.** Jobs stay in each
+tenant database so enqueue and business writes share one transaction. The worker
+refreshes the tenant list, claims one bounded batch per turn and rotates the first
+tenant. It does not reserve one PostgreSQL listener connection per tenant. If a
+future fleet needs sub-100ms wake-up across thousands of databases, that is a
+separate wake-up plane; durable ownership remains with the tenant database.

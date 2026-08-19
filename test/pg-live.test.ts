@@ -168,6 +168,55 @@ test('live pg: SKIP LOCKED hands each job to exactly one worker', live, async ()
   })
 })
 
+test('live pg: concurrent unique enqueue creates one durable row', live, async () => {
+  await withPg(async (a) => {
+    const q = await createQueue(a)
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        q.enqueue('mail.once', { orderId: 'o1' }, { queue: 'default', uniqueKey: 'o1' }),
+      ),
+    )
+    assert.equal(new Set(results.map((result) => result.id)).size, 1)
+    assert.equal(results.filter((result) => !result.existing).length, 1)
+    assert.equal((await q.list()).length, 1)
+  })
+})
+
+test('live pg: transactional NOTIFY arrives only after commit and rollback leaves no job', live, async () => {
+  await withPg(async (a) => {
+    const q = await createQueue(a)
+    const messages: string[] = []
+    let ready = 0
+    const stop = await a.notifications?.subscribe?.(
+      'ket_job_ready',
+      (payload) => messages.push(payload),
+      () => ready++,
+    )
+    assert.equal(ready, 1)
+
+    await assert.rejects(() =>
+      a.tx(async (tx) => {
+        const transactional = await createQueue(tx)
+        await transactional.enqueue('mail.rollback', {}, { queue: 'maintenance' })
+        throw new Error('rollback')
+      }),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    assert.deepEqual(messages, [])
+    assert.equal((await q.list()).length, 0)
+
+    await a.tx(async (tx) => {
+      const transactional = await createQueue(tx)
+      await transactional.enqueue('mail.commit', {}, { queue: 'default' })
+    })
+    const deadline = Date.now() + 2_000
+    while (!messages.length && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(messages, ['default'])
+    assert.equal((await q.list()).length, 1)
+    await stop?.()
+  })
+})
+
 test('live pg: idempotency is settled by the primary key across concurrent calls', live, async () => {
   await withPg(async (a) => {
     const args = { id: 'o1', productId: 'p1', qty: 2 }

@@ -32,6 +32,11 @@ type Sql = {
   unsafe(text: string, params?: unknown[]): Promise<unknown[]> & { count?: number }
   reserve(): Promise<Sql & { release(): void }>
   end(opts?: { timeout?: number }): Promise<void>
+  listen?(
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+  ): Promise<{ unlisten(): Promise<void> }>
 }
 
 export type PostgresOptions = {
@@ -50,6 +55,13 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
 
   const fromHandle = (handle: Sql): Adapter => ({
     ...a,
+    notifications: {
+      // pg_notify participates in the transaction on this reserved connection;
+      // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
+      async publish(channel, payload) {
+        await handle.unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+      },
+    },
     async exec(text) {
       await handle.unsafe(text)
     },
@@ -100,6 +112,20 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     async run(text, params = []) {
       const r = (await need().unsafe(text, params.map(bind))) as unknown[] & { count?: number }
       return { changes: Number(r.count ?? r.length ?? 0) }
+    },
+    notifications: {
+      async publish(channel, payload) {
+        await need().unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+      },
+      async subscribe(channel, onMessage, onReady) {
+        const listen = need().listen
+        if (!listen) throw new Error('this injected postgres handle does not support LISTEN')
+        // postgres.js owns a dedicated listener connection and reconnects it. Its
+        // onReady callback also runs after a reconnect, so the worker drains any
+        // notifications missed during the gap.
+        const request = await listen.call(need(), channel, onMessage, onReady)
+        return () => request.unlisten()
+      },
     },
 
     // A reserved connection, so BEGIN and the body are guaranteed to be the same

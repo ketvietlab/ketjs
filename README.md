@@ -16,8 +16,10 @@ Plus an **umbrella layout**: one codebase, many deployable apps, shared modules.
 npm start                                   # KetSuite on SQLite, at :3000
 DATABASE_URL=postgres://… npm start         # …or on Postgres
 npm run dev                                 # …restarted on every change
+npm run dev -- --all                       # HTTP + worker, still one tsx watcher
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
+npm run bench:queue                         # queue across many physical databases
 ```
 
 Production, tests and release commands build first, then run emitted JavaScript.
@@ -27,6 +29,13 @@ untransformed source. A first run migrates, installs the app's bootstrap set, an
 serves. Every knob has a default that works;
 `KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules that would
 otherwise install themselves, which is what you want mid-change.
+
+The production worker is a separate process role of the same app artifact:
+`ket worker --app ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
+through `tx.jobs.enqueue(...)` in the same transaction as business data. PostgreSQL
+`LISTEN/NOTIFY` wakes a single-database worker quickly; polling and leases remain the
+guarantee, so Redis is not required. Operators can inspect and control durable rows
+with `ket jobs list|retry|cancel|prune`.
 
 ```bash
 npx ket new shop && cd shop && npm install && npm run dev
@@ -72,6 +81,7 @@ found bugs in Ket, which is the point of running them.
 | DOM: create 1 000 rows | **1.80 ms** | lit-html 2.60 ms |
 | DOM: reorder rows | 0.100 ms | lit-html 0.092 ms |
 | hydrate a 495-node page | **0.025 ms** (islands, 9 nodes) | 0.660 ms (whole tree) |
+| queue, 8 PostgreSQL databases | **377 jobs/s** (400 jobs, pool 8) | every tenant completed |
 
 ## What is actually proven
 
@@ -94,6 +104,7 @@ found bugs in Ket, which is the point of running them.
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
 | Zero required dependencies | `npm run audit:zero-dep` — enforces that only `ketjs-postgres` may import the one allowlisted driver |
+| A committed job is not lost | PostgreSQL transaction/notify, concurrent unique enqueue, lease rescue and multi-database fairness are exercised live |
 
 ## Layout
 
