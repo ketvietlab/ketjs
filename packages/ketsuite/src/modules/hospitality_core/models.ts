@@ -201,4 +201,183 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { property_type: { fields: ['companyId', 'propertyId', 'type'], unique: true } },
   },
+
+  /** Operational account for one payer and one or more physical stays. */
+  Folio: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      code: 'text',
+      propertyId: 'ref:hospitality_core.Property',
+      partnerId: 'ref:partner.Partner',
+      state: 'text',
+      amountTotal: 'decimal',
+      version: 'int',
+      openedAt: 'datetime',
+      closedAt: 'datetime?',
+    },
+    indexes: {
+      code_company: { fields: ['companyId', 'code'], unique: true },
+      property_state: { fields: ['companyId', 'propertyId', 'state', 'openedAt'] },
+    },
+  },
+
+  /** Commercial booking intent. Physical occupancy belongs to Stay. */
+  Reservation: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      code: 'text',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      folioId: 'ref:hospitality_core.Folio',
+      stayId: 'ref:hospitality_core.Stay?',
+      partnerId: 'ref:partner.Partner',
+      provider: 'text',
+      externalId: 'text?',
+      channelRef: 'text?',
+      bookingType: 'text',
+      checkIn: 'datetime',
+      checkOut: 'datetime',
+      adults: 'int',
+      children: 'int',
+      rate: 'decimal',
+      quantity: 'decimal',
+      billingMode: 'text',
+      amountTotal: 'decimal',
+      state: 'text',
+      cancelReason: 'text?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      code_company: { fields: ['companyId', 'code'], unique: true },
+      provider_external: {
+        fields: ['companyId', 'propertyId', 'provider', 'externalId'],
+        unique: true,
+      },
+      property_schedule: {
+        fields: ['companyId', 'propertyId', 'state', 'checkIn', 'checkOut'],
+      },
+      room_type_schedule: {
+        fields: ['companyId', 'roomTypeId', 'state', 'checkIn', 'checkOut'],
+      },
+    },
+  },
+
+  /** A physical occupancy. One reservation may create one stay in this version. */
+  Stay: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      code: 'text',
+      folioId: 'ref:hospitality_core.Folio',
+      reservationId: 'ref:hospitality_core.Reservation?',
+      partnerId: 'ref:partner.Partner',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      currentRoomId: 'ref:hospitality_core.Room?',
+      bookingType: 'text',
+      checkIn: 'datetime',
+      checkOut: 'datetime',
+      adults: 'int',
+      children: 'int',
+      billingMode: 'text',
+      rate: 'decimal',
+      state: 'text',
+      checkedInAt: 'datetime?',
+      checkedOutAt: 'datetime?',
+    },
+    indexes: {
+      code_company: { fields: ['companyId', 'code'], unique: true },
+      reservation: { fields: ['companyId', 'reservationId'], unique: true },
+      property_state: { fields: ['companyId', 'propertyId', 'state', 'checkIn'] },
+    },
+  },
+
+  /** Append-only room history; moving rooms closes one row and inserts another. */
+  RoomAssignment: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      stayId: 'ref:hospitality_core.Stay',
+      propertyId: 'ref:hospitality_core.Property',
+      roomId: 'ref:hospitality_core.Room',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      startAt: 'datetime',
+      endAt: 'datetime?',
+      state: 'text',
+      reason: 'text?',
+    },
+    indexes: {
+      stay_state: { fields: ['companyId', 'stayId', 'state', 'startAt'] },
+      room_schedule: { fields: ['companyId', 'roomId', 'startAt', 'endAt'] },
+    },
+  },
+
+  StayGuest: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      stayId: 'ref:hospitality_core.Stay',
+      propertyId: 'ref:hospitality_core.Property',
+      partnerId: 'ref:partner.Partner?',
+      displayName: 'text',
+      primary: 'bool',
+      primaryKey: 'text?',
+    },
+    indexes: {
+      stay_partner: { fields: ['companyId', 'stayId', 'partnerId'], unique: true },
+      stay_primary: { fields: ['companyId', 'stayId', 'primaryKey'], unique: true },
+    },
+  },
+
+  /** Operational charge only. Accounting documents are a later integration. */
+  Charge: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      folioId: 'ref:hospitality_core.Folio',
+      stayId: 'ref:hospitality_core.Stay?',
+      description: 'text',
+      type: 'text',
+      quantity: 'decimal',
+      unitPrice: 'decimal',
+      amount: 'decimal',
+      occurredAt: 'datetime',
+      sourceKey: 'text?',
+      state: 'text',
+    },
+    indexes: {
+      folio_date: { fields: ['companyId', 'folioId', 'occurredAt'] },
+      source: { fields: ['companyId', 'sourceKey'], unique: true },
+    },
+  },
+
+  /** PII-minimised identity data; scanned images are ordinary storage attachments. */
+  GuestDocument: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      stayId: 'ref:hospitality_core.Stay?',
+      partnerId: 'ref:partner.Partner',
+      type: 'text',
+      number: 'text?',
+      fullName: 'text',
+      dateOfBirth: 'datetime?',
+      gender: 'text?',
+      nationality: 'text?',
+      permanentAddress: 'text?',
+      issueDate: 'datetime?',
+      issuePlace: 'text?',
+      frontAttachmentId: 'ref:storage.Attachment?',
+      backAttachmentId: 'ref:storage.Attachment?',
+      ocrState: 'text',
+      ocrRaw: 'json?',
+    },
+    indexes: {
+      partner: { fields: ['companyId', 'partnerId'] },
+      stay: { fields: ['companyId', 'stayId'] },
+    },
+  },
 }

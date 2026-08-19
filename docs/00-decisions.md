@@ -1604,3 +1604,25 @@ agreed deployment has only two hospitality modules. They still compose the share
 KetSuite UI kit and write no private markup. Media remains `storage.Attachment`
 metadata plus the storage backend; hospitality does not invent another binary
 table or object-key convention.
+
+## D51 — Reservation intent, physical stay and operational folio are separate records
+
+A reservation is the commercial promise, a stay is the physical visit, and a
+folio is the operational account for room and service charges. They are created in
+one transaction but have independent state machines: cancelling before arrival
+does not delete audit rows, checking in assigns a physical room, and checkout
+closes the stay and folio. The `Charge` table is deliberately not an invoice or
+accounting entry; accounting will consume this boundary in a later stack.
+
+Room assignment history is append-only. Check-in claims a room with compare-and-set,
+moving closes the current assignment and appends another, and checkout closes the
+last assignment while marking the room dirty. A PostgreSQL benchmark opens two
+connections against the same room and requires exactly one winner. SQLite keeps
+the same transition contract for development but is only a single-writer target.
+
+The tape chart reads stays and assignment history rather than becoming a second
+availability source. Confirmed stays without a physical room have dedicated rows,
+so overlapping unassigned bookings remain legible instead of painting over each
+other. The browser acceptance path runs every hospitality route with seeded data
+in Vietnamese and English, plus the calendar at a narrow viewport; this is part of
+the feature definition, not a release-only visual pass.
