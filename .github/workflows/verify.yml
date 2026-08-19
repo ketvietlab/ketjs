@@ -1,0 +1,80 @@
+# The full suite runs here, not on a laptop.
+#
+# Locally the useful loop is "test what you just wrote"; running 380 tests to
+# check a twenty-line change is a tax paid on every iteration for a signal that
+# arrives once. So the whole of it — the dependency audit, the type check, every
+# test, and the type-level assertions — belongs on the way into develop, where it
+# is paid once per pull request and blocks the merge rather than the author.
+name: verify
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# A new push supersedes the run it interrupts: the older answer is about code
+# nobody is merging any more.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to what the framework actually claims: TypeScript runs natively,
+      # so an older Node does not merely warn here, it cannot parse the source.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+
+      - run: npm ci
+
+      # Each step separately, so a red build says which contract broke rather
+      # than that something did.
+      - name: dependencies stay where they are declared
+        run: npm run audit:zero-dep
+
+      - name: types check
+        run: npm run check
+
+      - name: tests
+        run: npm test
+
+      - name: the type-level claims still hold
+        run: npm run type-proof
+
+  # Postgres is the adapter that catches what SQLite cannot: placeholder
+  # rendering, NUMERIC round-trips, and the reserved words only it has.
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dev
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: ketjs_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm ci
+      - name: tests against a real Postgres
+        env:
+          DATABASE_URL: postgres://dev:devpassword@127.0.0.1:5432/ketjs_ci
+        run: npm test
