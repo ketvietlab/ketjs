@@ -7,9 +7,25 @@ export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
 export type TypeParse = ({ ok: true } & ParsedType) | { ok: false; reason: string }
 
 export type Field = ParsedType & { by: string }
-export type ComposedModel = { owner: string; fields: Record<string, Field> }
+export type ComposedModel = { owner: string; scope: ModelScope; fields: Record<string, Field> }
 
-export type ModelDef = { fields: Record<string, string> }
+/**
+ * Where a model's rows live in the two isolation dimensions.
+ *
+ *   'shared'          tenant-wide. Master data: products, partners, price lists.
+ *   'company'         one legal entity's rows. The filter is mandatory and a module
+ *                     cannot widen it — a mistake here leaks between legal entities
+ *                     that share a table, which no database boundary would catch.
+ *   'company+branch'  additionally carries a branch. Branch is an operational
+ *                     dimension, not an isolation boundary: aggregating across the
+ *                     branches of one company is ordinary and needs no permission.
+ *
+ * There is no default. A model that does not say is a build error, because the
+ * safe-looking default — 'shared' — is the one that leaks.
+ */
+export type ModelScope = 'shared' | 'company' | 'company+branch'
+
+export type ModelDef = { scope: ModelScope; fields: Record<string, string> }
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
 /**
@@ -23,6 +39,13 @@ export type FnSpec = {
   input?: Record<string, string>
   output?: Record<string, string>
   effects?: string[]
+  /**
+   * Read across legal entities. Consolidated reporting needs it; almost nothing
+   * else does. Declaring it puts the function in the manifest, the upgrade diff and
+   * the agent descriptor, so a cross-company read is visible rather than lost among
+   * ordinary queries.
+   */
+  crossCompany?: boolean
   idempotent?: boolean
   dryRun?: boolean
   agent?: boolean
@@ -34,6 +57,7 @@ export type FnMeta = {
   input: Record<string, string>
   output: Record<string, string>
   effects: string[]
+  crossCompany: boolean
   idempotent: boolean
   dryRun: boolean
   agent: boolean
@@ -118,8 +142,16 @@ export type Diagnostic = { code: string; message: string; module?: string | null
 export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
 export type Row = Record<string, unknown>
 
+/** Which company, and which of its branches, this request is acting within. */
+export type Scope = {
+  company: string | null
+  /** Null means every branch of the company — ordinary, not privileged. */
+  branches?: string[] | null
+}
+
 export type Ctx = {
   fnKey: string
+  scope: Scope
   /** The composed manifest, so a module can check data against what is installed. */
   manifest: Manifest
   actor: string | null
@@ -130,6 +162,8 @@ export type Ctx = {
   table(model: string): import('./data/query.ts').Table
   /** A changeset bound to this app's manifest. */
   change(model: string, params: Row, base?: Row | null): import('./data/changeset.ts').Changeset
+  /** Run several writes atomically. Stock reservation is unsafe without it. */
+  tx<T>(fn: (ctx: Ctx) => Promise<T>): Promise<T>
   db: {
     all(q: import('./data/query.ts').Query): Promise<Row[]>
     one(q: import('./data/query.ts').Query): Promise<Row | null>
