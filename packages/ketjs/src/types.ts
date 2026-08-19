@@ -91,9 +91,24 @@ export type AppMeta = {
   title?: string
   summary?: string
   category?: string
-  /** Install itself as soon as everything it depends on is installed. */
+  /**
+   * The boundary between what a module permits and what an operator chooses.
+   *
+   *   'manual' — installed only when someone asks for it by name (the default)
+   *   'auto'   — installs itself as soon as everything it depends on is installed
+   *   'never'  — cannot be installed on its own at all; it arrives only by being
+   *              depended on, which is how machinery stays out of the app list
+   *
+   * A module says what it permits. Whether 'auto' actually fires is the
+   * deployment's call — see RuntimeConfig.autoInstall, which a developer turns off
+   * when they want to watch each install happen rather than arrive.
+   */
+  install?: InstallPolicy
+  /** The older spelling of `install: 'auto'`. Normalised away by defineModule. */
   autoInstall?: boolean
 }
+
+export type InstallPolicy = 'manual' | 'auto' | 'never'
 
 export type ModuleSpec = AppMeta & {
   kind?: 'module' | 'theme'
@@ -142,7 +157,7 @@ export type KetModule = Readonly<AppMeta> & {
 export type Manifest = {
   ket: string
   order: string[]
-  modules: Record<string, { version: string; kind: string; depends: string[] } & AppMeta>
+  modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy } & AppMeta>
   models: Record<string, ComposedModel>
   joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean }>
   fills: Array<{ joint: string; by: string; template: string }>

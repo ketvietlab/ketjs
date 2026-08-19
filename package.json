@@ -18,8 +18,10 @@
     "audit:zero-dep": "node tools/zero-dep-audit.ts",
     "verify": "npm run audit:zero-dep && npm run check && npm test && npm run type-proof",
     "design": "node apps/admin/serve.ts",
-    "start": "node apps/ketsuite/serve.ts",
-    "start:pg": "DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node apps/ketsuite/serve.ts"
+    "start": "node packages/ketjs/src/cli.ts serve",
+    "start:pg": "DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/src/cli.ts serve",
+    "ket": "node packages/ketjs/src/cli.ts",
+    "dev": "node packages/ketjs/src/cli.ts dev"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

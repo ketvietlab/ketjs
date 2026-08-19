@@ -15,6 +15,7 @@ import { Diagnostics } from './errors.ts'
 import { schemaFromManifest } from '../data/migrate.ts'
 import type { Schema } from '../data/migrate.ts'
 import type { KetModule, Manifest } from '../types.ts'
+import type { ServeSpec } from '../server/boot.ts'
 
 export type AppSpec = {
   name: string
@@ -24,6 +25,8 @@ export type AppSpec = {
   requires?: string[]
   /** An app that exposes functions but renders no pages: no theme, no region contract. */
   headless?: boolean
+  /** How the app runs: pages, routes, assets, datastore. Absent means it is never served. */
+  serve?: ServeSpec
 }
 
 export type Workspace = {
@@ -36,6 +39,7 @@ export type Workspace = {
 export function defineApp(spec: AppSpec): AppSpec {
   if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
   if (spec.headless && spec.theme) throw new Error(`app "${spec.name}" is headless but installs a theme`)
+  if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
   return spec
 }
 
