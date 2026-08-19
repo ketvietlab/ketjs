@@ -12,6 +12,9 @@ import {
 import type { Adapter } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
+/** Every request acts as some company; these tests act as one. */
+const SCOPE = { company: 'c1', branches: null }
+
 const URL = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)
@@ -54,9 +57,9 @@ test('live pg: the manifest migrates onto a real server', live, async () => {
 test('live pg: server functions round-trip through the query layer', live, async () => {
   await withPg(async (a) => {
   for (const [id, price] of [['p1', 30_000], ['p2', 90_000], ['p3', 60_000]] as const) {
-    await callFn('catalog.createProduct', { id, title: `SP ${id}`, priceCents: price, slug: id }, { adapter: a, manifest })
+    await callFn('catalog.createProduct', { id, title: `SP ${id}`, priceCents: price, slug: id }, { adapter: a, manifest, scope: SCOPE })
   }
-  const dear = await callFn('catalog.listProducts', { minPriceCents: 60_000 }, { adapter: a, manifest })
+  const dear = await callFn('catalog.listProducts', { minPriceCents: 60_000 }, { adapter: a, manifest, scope: SCOPE })
   assert.deepEqual((dear.value as Array<{ id: string }>).map(r => r.id), ['p2', 'p3'])
 
   const P = table(manifest, 'catalog.Product')
@@ -67,7 +70,7 @@ test('live pg: server functions round-trip through the query layer', live, async
 
 test('live pg: booleans and bigints survive the round trip as themselves', live, async () => {
   await withPg(async (a) => {
-  await callFn('catalog.createProduct', { id: 'b1', title: 'X', priceCents: 12_345, slug: 'x' }, { adapter: a, manifest })
+  await callFn('catalog.createProduct', { id: 'b1', title: 'X', priceCents: 12_345, slug: 'x' }, { adapter: a, manifest, scope: SCOPE })
   const row = (await a.all('SELECT "active", "priceCents" FROM catalog_product WHERE id = $1', ['b1']))[0]!
   assert.equal(row.active, true, 'a real boolean comes back, not 1')
   assert.equal(Number(row.priceCents), 12_345)
@@ -119,10 +122,10 @@ test('live pg: SKIP LOCKED hands each job to exactly one worker', live, async ()
 test('live pg: idempotency is settled by the primary key across concurrent calls', live, async () => {
   await withPg(async (a) => {
   const args = { id: 'o1', productId: 'p1', qty: 2 }
-  await callFn('catalog.createProduct', { id: 'p1', title: 'Áo', priceCents: 5000, slug: 'ao' }, { adapter: a, manifest })
+  await callFn('catalog.createProduct', { id: 'p1', title: 'Áo', priceCents: 5000, slug: 'ao' }, { adapter: a, manifest, scope: SCOPE })
 
   const results = await Promise.allSettled(
-    Array.from({ length: 5 }, () => callFn('checkout.placeOrder', args, { adapter: a, manifest, idempotencyKey: 'same' })))
+    Array.from({ length: 5 }, () => callFn('checkout.placeOrder', args, { adapter: a, manifest, scope: SCOPE, idempotencyKey: 'same' })))
   const ok = results.filter(r => r.status === 'fulfilled')
   assert.ok(ok.length >= 1)
   assert.equal((await a.all('SELECT id FROM checkout_order', [])).length, 1, 'five concurrent calls, one order')
@@ -146,8 +149,8 @@ test('live pg: a database per tenant, migrated as a fleet', live, async () => {
     assert.ok(first.every(r => r.applied && !r.error), formatFleet(first))
 
     // real isolation: the same product id in both, different data, no bleed
-    await pool.with('ketjs_t1', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t1', priceCents: 1000, slug: 'p1' }, { adapter: a, manifest }))
-    await pool.with('ketjs_t2', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t2', priceCents: 2000, slug: 'p1' }, { adapter: a, manifest }))
+    await pool.with('ketjs_t1', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t1', priceCents: 1000, slug: 'p1' }, { adapter: a, manifest, scope: SCOPE }))
+    await pool.with('ketjs_t2', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t2', priceCents: 2000, slug: 'p1' }, { adapter: a, manifest, scope: SCOPE }))
 
     const t1 = await pool.with('ketjs_t1', a => a.all('SELECT title FROM catalog_product', []))
     const t2 = await pool.with('ketjs_t2', a => a.all('SELECT title FROM catalog_product', []))

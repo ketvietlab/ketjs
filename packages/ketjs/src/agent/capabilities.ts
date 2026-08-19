@@ -15,6 +15,8 @@ export type AgentTool = {
   idempotent: boolean
   dryRunnable: boolean
   mutates: boolean
+  /** Reads past the company boundary. Rare, and worth an agent knowing about. */
+  crossCompany: boolean
 }
 
 const JSON_TYPE: Record<string, string> = { id: 'string', text: 'string', ref: 'string', int: 'integer', float: 'number', bool: 'boolean', datetime: 'string', json: 'object' }
@@ -34,12 +36,13 @@ export function agentTools(manifest: Manifest): AgentTool[] {
     const mutates = fn.effects.some(e => e.startsWith('write:'))
     tools.push({
       name: key.replace('.', '__'),
-      description: `${key} — declared effects: ${fn.effects.join(', ') || 'none'}`,
+      description: `${key} — declared effects: ${fn.effects.join(', ') || 'none'}` + (fn.crossCompany ? ' · reads across companies' : ''),
       inputSchema: { type: 'object', properties, required },
       effects: fn.effects,
       idempotent: fn.idempotent,
       dryRunnable: fn.dryRun,
       mutates,
+      crossCompany: fn.crossCompany,
     })
   }
   return tools

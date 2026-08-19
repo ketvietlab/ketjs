@@ -4,7 +4,7 @@ import { KetError, compose, defineModule, defineTheme, diffManifests } from 'ket
 
 const base = defineModule({
   name: 'base',
-  models: { Thing: { fields: { id: 'id', title: 'text' } } },
+  models: { Thing: { scope: 'shared', fields: { id: 'id', title: 'text' } } },
   joints: { 'thing.footer': {} },
 })
 
@@ -64,7 +64,7 @@ test('lego: composition order is deterministic', () => {
 })
 
 test('theming: a theme may not declare models or server functions', () => {
-  const e = fails(() => defineTheme({ name: 't', models: { X: { fields: { id: 'id' } } } })) as KetError
+  const e = fails(() => defineTheme({ name: 't', models: { X: { scope: 'shared', fields: { id: 'id' } } } })) as KetError
   assert.equal(e.code, 'E_THEME_OVERREACH')
 })
 
@@ -83,7 +83,7 @@ test('theming: view models cannot expose fields that do not exist', () => {
 test('upgrade diff: a removed joint names who was standing on it', () => {
   const filler = defineModule({ name: 'filler', depends: ['base'], fills: { 'base:thing.footer': 'x' } })
   const before = compose([base, filler])
-  const base2 = defineModule({ name: 'base', version: '2.0.0', models: { Thing: { fields: { id: 'id', title: 'text' } } } })
+  const base2 = defineModule({ name: 'base', version: '2.0.0', models: { Thing: { scope: 'shared', fields: { id: 'id', title: 'text' } } } })
   const after = { ...compose([base2]), fills: before.fills }
   const items = diffManifests(before, after)
   const j = items.find(i => i.code === 'JOINT_REMOVED')!
@@ -94,7 +94,7 @@ test('upgrade diff: a removed joint names who was standing on it', () => {
 test('upgrade diff: a removed field names the view that reads it', () => {
   const v = defineModule({ name: 'v', depends: ['base'], views: { t: { of: 'base.Thing', fields: ['title'] } } })
   const before = compose([base, v])
-  const base2 = defineModule({ name: 'base', models: { Thing: { fields: { id: 'id' } } } })
+  const base2 = defineModule({ name: 'base', models: { Thing: { scope: 'shared', fields: { id: 'id' } } } })
   const v2 = defineModule({ name: 'v', depends: ['base'], views: { t: { of: 'base.Thing', fields: ['id'] } } })
   const after = compose([base2, v2])
   after.views['v.t'] = { of: 'base.Thing', fields: ['title'], by: 'v' }
@@ -113,7 +113,7 @@ test('errors carry a code and a hint, so an agent can act on them', () => {
 test('lego: a required reference to one own model is a contradiction, and is refused', () => {
   const tree = defineModule({
     name: 'tree',
-    models: { Node: { fields: { id: 'id', parentId: 'ref:tree.Node' } } },
+    models: { Node: { scope: 'shared', fields: { id: 'id', parentId: 'ref:tree.Node' } } },
   })
   const e = fails(() => compose([tree]))
   assert.ok(codes(e).includes('E_SELF_REF_REQUIRED'))

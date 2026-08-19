@@ -7,6 +7,9 @@ import type { ModelDef } from 'ketjs'
  */
 export const models: Record<string, ModelDef> = {
   Page: {
+    // Website content belongs to a legal entity, not to a branch: two branches of
+    // one company share a site.
+    scope: 'company',
     fields: {
       id: 'id',
       path: 'text',

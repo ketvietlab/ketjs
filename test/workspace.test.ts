@@ -23,8 +23,8 @@ test('umbrella: apps sharing a datastore get one union schema', () => {
 })
 
 test('umbrella: two apps disagreeing about the same table is a build error', () => {
-  const catalogV1 = defineModule({ name: 'catalog', models: { Product: { fields: { id: 'id', price: 'int' } } } })
-  const catalogV2 = defineModule({ name: 'catalog', models: { Product: { fields: { id: 'id', price: 'text' } } } })
+  const catalogV1 = defineModule({ name: 'catalog', models: { Product: { scope: 'shared', fields: { id: 'id', price: 'int' } } } })
+  const catalogV2 = defineModule({ name: 'catalog', models: { Product: { scope: 'shared', fields: { id: 'id', price: 'text' } } } })
   const a = defineApp({ name: 'a', modules: [catalogV1], datastore: 'main', headless: true })
   const b = defineApp({ name: 'b', modules: [catalogV2], datastore: 'main', headless: true })
   assert.throws(() => composeWorkspace([a, b]), /E_DATASTORE_COLUMN_CLASH|is int .* but text/)

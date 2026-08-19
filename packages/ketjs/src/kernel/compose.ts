@@ -44,7 +44,25 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         diag.add({ code: 'E_MODEL_DUPLICATE', module: m.name, message: `model "${key}" is already defined`, hint: 'rename it, or extend the existing one via `extend`' })
         continue
       }
+      if (!def.scope) {
+        diag.add({
+          code: 'E_MODEL_NO_SCOPE', module: m.name,
+          message: `model "${key}" does not declare a scope`,
+          hint: "every model must say 'shared', 'company' or 'company+branch' — there is no default, because the safe-looking one is the one that leaks",
+        })
+        continue
+      }
+      if (!['shared', 'company', 'company+branch'].includes(def.scope)) {
+        diag.add({ code: 'E_MODEL_BAD_SCOPE', module: m.name, message: `model "${key}" has unknown scope "${def.scope}"` })
+        continue
+      }
+
       const fields: ComposedModel['fields'] = {}
+      // The scope columns are added by the composer, never by the module: a module
+      // that spelled them itself could spell them differently, and the filter would
+      // silently stop matching.
+      if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (def.scope === 'company+branch') fields['branchId'] = { base: 'text', optional: true, by: '(scope)' }
       for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
         const t = parseType(tspec)
         if (!t.ok) { diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` }); continue }
@@ -58,7 +76,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         }
         fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
       }
-      manifest.models[key] = { owner: m.name, fields }
+      manifest.models[key] = { owner: m.name, scope: def.scope, fields }
     }
   }
 
@@ -75,6 +93,16 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         continue
       }
       for (const [fname, tspec] of Object.entries(addl)) {
+        // Checked ahead of the collision below so the message names the real cause:
+        // these columns are the isolation boundary, not a name somebody took first.
+        if (fname === 'companyId' || fname === 'branchId') {
+          diag.add({
+            code: 'E_SCOPE_FIELD_RESERVED', module: m.name,
+            message: `"${target}.${fname}" is managed by the model's scope and cannot be extended`,
+            hint: 'the scope columns are the company boundary — a module able to redefine them would be able to move rows across it',
+          })
+          continue
+        }
         const existing = model.fields[fname]
         if (existing) {
           diag.add({ code: 'E_FIELD_COLLISION', module: m.name, message: `field "${target}.${fname}" already contributed by "${existing.by}"`, hint: `pick a distinct name, e.g. "${m.name}_${fname}"` })
@@ -126,6 +154,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         by: m.name,
         input: def.input ?? {}, output: def.output ?? {},
         effects: [...(def.effects ?? [])],
+        crossCompany: def.crossCompany === true,
         idempotent: def.idempotent === true,
         dryRun: def.dryRun !== false,
         agent: def.agent === true,

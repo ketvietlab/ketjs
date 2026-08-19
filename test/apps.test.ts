@@ -7,6 +7,9 @@ import {
 import type { Adapter, Manifest } from 'ketjs'
 import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
 
+/** Every request acts as some company; these tests act as one. */
+const SCOPE = { company: 'c1', branches: null }
+
 const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
 const manifest = compose(mods)
 
@@ -64,7 +67,7 @@ test('apps: uninstalling deletes nothing — the data is still there on re-insta
   const { db, apps } = await boot()
   await apps.install('website_menu')
   await callFn('website_menu.addMenuItem', { id: 'm1', label: 'Trang chủ', href: '/', position: 0 },
-    { adapter: db, manifest })
+    { adapter: db, manifest, scope: SCOPE })
   assert.equal((await db.all('SELECT * FROM website_menu_menu_item', [])).length, 1)
 
   await apps.uninstall('website_menu')
@@ -72,7 +75,7 @@ test('apps: uninstalling deletes nothing — the data is still there on re-insta
     'turning an app off must never be a way to lose rows')
 
   await apps.install('website_menu')
-  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest })).value as unknown[]
+  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest, scope: SCOPE })).value as unknown[]
   assert.equal(items.length, 1, 'and the data is right where it was')
   await db.close()
 })
@@ -93,13 +96,13 @@ test('restrict: a disabled app answers nothing, and says why', async () => {
   const restricted = restrictManifest(manifest, await apps.enabled())
 
   await assert.rejects(
-    () => callFn('website_menu.listMenu', {}, { adapter: db, manifest: restricted }),
+    () => callFn('website_menu.listMenu', {}, { adapter: db, manifest: restricted, scope: SCOPE }),
     (e: unknown) => {
       assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLED')
       assert.match((e as Error).message, /belongs to "website_menu", which is not installed/)
       return true
     })
-  assert.equal((await callFn('website.listPages', {}, { adapter: db, manifest: restricted })).ok, true)
+  assert.equal((await callFn('website.listPages', {}, { adapter: db, manifest: restricted, scope: SCOPE })).ok, true)
   await db.close()
 })
 
@@ -255,11 +258,11 @@ test('edge: two databases on one deployment keep their own install state', async
 test('edge: rows of a removed app survive, and nothing can read them until it returns', async () => {
   const { db, apps } = await boot()
   await apps.install('website_menu')
-  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'A', href: '/', position: 0 }, { adapter: db, manifest })
+  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'A', href: '/', position: 0 }, { adapter: db, manifest, scope: SCOPE })
   await apps.uninstall('website_menu')
 
   const restricted = restrictManifest(manifest, await apps.enabled())
-  await assert.rejects(() => callFn('website_menu.listMenu', {}, { adapter: db, manifest: restricted }), /E_APP_NOT_INSTALLED|not installed/)
+  await assert.rejects(() => callFn('website_menu.listMenu', {}, { adapter: db, manifest: restricted, scope: SCOPE }), /E_APP_NOT_INSTALLED|not installed/)
   assert.equal((await db.all('SELECT * FROM website_menu_menu_item', [])).length, 1, 'the rows are simply unreachable, not gone')
   await db.close()
 })

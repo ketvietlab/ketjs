@@ -78,7 +78,7 @@ test('fleet: a second run is a no-op because each database records its own schem
 
 test('fleet: a tenant created later catches up to the same shape', async () => {
   const pool = createAdapterPool({ create })
-  const older = defineModule({ name: 'catalog', models: { Product: { fields: { id: 'id', title: 'text' } } } })
+  const older = defineModule({ name: 'catalog', models: { Product: { scope: 'shared', fields: { id: 'id', title: 'text' } } } })
   const v1 = compose([older], { headless: true })
 
   await migrateFleet(pool, ['early'], v1)          // tenant created against the old manifest
@@ -107,7 +107,7 @@ test('fleet: one failing tenant does not stop the others, and says so', async ()
 test('fleet: destructive changes are refused per tenant, not silently applied', async () => {
   const pool = createAdapterPool({ create })
   await migrateFleet(pool, ['shrink'], manifest)
-  const shrunk = compose([defineModule({ name: 'catalog', models: { Product: { fields: { id: 'id' } } } })], { headless: true })
+  const shrunk = compose([defineModule({ name: 'catalog', models: { Product: { scope: 'shared', fields: { id: 'id' } } } })], { headless: true })
   const r = await migrateFleet(pool, ['shrink'], shrunk)
   assert.equal(r[0]!.applied, false)
   assert.match(r[0]!.error!, /destructive operation/)

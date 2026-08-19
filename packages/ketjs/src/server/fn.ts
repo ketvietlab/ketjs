@@ -60,7 +60,7 @@ export const _resetIdempotency = (): void => { /* records are durable; nothing t
 export async function callFn(
   fnKey: string,
   args: Record<string, unknown>,
-  o: { adapter: Adapter; manifest: Manifest; dryRun?: boolean; actor?: string | null; idempotencyKey?: string | null },
+  o: { adapter: Adapter; manifest: Manifest; dryRun?: boolean; actor?: string | null; idempotencyKey?: string | null; scope?: import('../types.ts').Scope },
 ): Promise<CallResult> {
   const def = registry.get(fnKey)
   const owner = fnKey.split('.')[0] as string
@@ -105,7 +105,7 @@ export async function callFn(
   }
   if (dryRun && !meta.dryRun) throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
 
-  const ctx: Ctx = createContext({ adapter: o.adapter, manifest: o.manifest, fnKey, dryRun, actor: o.actor ?? null })
+  const ctx: Ctx = createContext({ adapter: o.adapter, manifest: o.manifest, fnKey, dryRun, actor: o.actor ?? null, scope: o.scope })
 
   let result: CallResult
   try {

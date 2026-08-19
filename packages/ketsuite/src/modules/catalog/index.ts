@@ -5,7 +5,9 @@ export default defineModule({
   version: '1.0.0',
 
   models: {
+    // Master data: one catalogue across every company in the tenant.
     Product: {
+      scope: 'shared',
       fields: { id: 'id', title: 'text', priceCents: 'int', slug: 'text', active: 'bool' },
     },
   },
