@@ -14,15 +14,17 @@ export type Filter = (value: unknown, arg?: unknown) => unknown
 export type Scope = Record<string, unknown>
 export type JointRenderer = (joint: string, scope: Scope) => string
 export type RegionRenderer = (name: string, scope: Scope) => string
+export type IslandRenderer = (name: string, scope: Scope) => string
 
 export type CompileOpts = {
   filters?: Record<string, Filter>
   renderJoint?: JointRenderer
   renderRegion?: RegionRenderer
+  renderIsland?: IslandRenderer
   name?: string
 }
 
-export type Compiled = { render(scope: Scope): string; jointsUsed: string[]; regionsUsed: string[] }
+export type Compiled = { render(scope: Scope): string; jointsUsed: string[]; regionsUsed: string[]; islandsUsed: string[] }
 
 // Intl formatters are expensive to construct and cheap to reuse. Building one per
 // interpolation made the money filter cost more than the entire rest of the
@@ -102,6 +104,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const filters = { ...BASE_FILTERS, ...(opts.filters ?? {}) }
   const jointsUsed: string[] = []
   const regionsUsed: string[] = []
+  const islandsUsed: string[] = []
 
   const compileNodes = (nodes: Node[]): Array<(s: Scope, out: string[]) => void> =>
     nodes.map(n => {
@@ -141,6 +144,11 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         const key = n.joint
         return (s, out) => { out.push(opts.renderJoint ? opts.renderJoint(key, s) : '') }
       }
+      if (n.k === 'island') {
+        islandsUsed.push(n.name)
+        const iname = n.name
+        return (s, out) => { out.push(opts.renderIsland ? opts.renderIsland(iname, s) : '') }
+      }
       regionsUsed.push(n.name)
       const rname = n.name
       return (s, out) => { out.push(opts.renderRegion ? opts.renderRegion(rname, s) : '') }
@@ -151,6 +159,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   return {
     jointsUsed,
     regionsUsed,
+    islandsUsed,
     render(scope) {
       const out: string[] = []
       // sealScope() already hands over a null-prototype object; copying it again

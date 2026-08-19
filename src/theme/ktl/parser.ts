@@ -15,6 +15,7 @@ export type Node =
   | { k: 'for'; name: string; src: Expr; body: Node[]; line: number }
   | { k: 'joint'; joint: string; line: number }
   | { k: 'region'; name: string; line: number }
+  | { k: 'island'; name: string; line: number }
 
 const IDENT = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 // Property names that could reach the prototype chain are rejected at parse time,
@@ -111,6 +112,13 @@ export function parse(src: string): Node[] {
         const m = /^joint\s+["']([^"']+)["']$/.exec(t.value)
         if (!m) throw new KtlSyntaxError(`bad joint tag at line ${t.line}`, t.line)
         nodes.push({ k: 'joint', joint: m[1] as string, line: t.line })
+        i++
+        continue
+      }
+      if (head === 'island') {
+        const m = /^island\s+["']([^"']+)["']$/.exec(t.value)
+        if (!m) throw new KtlSyntaxError(`bad island tag at line ${t.line}`, t.line)
+        nodes.push({ k: 'island', name: m[1] as string, line: t.line })
         i++
         continue
       }
