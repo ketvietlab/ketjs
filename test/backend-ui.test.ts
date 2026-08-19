@@ -5,7 +5,7 @@ import { compose, translator } from 'ketjs'
 import type { MenuNode } from 'ketjs'
 import backend from 'ketsuite/backend'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState, CASES, cataloguePage } from 'ketsuite/backend'
-import type { AppRow, PageRow } from 'ketsuite/backend'
+import type { AppRow, ListChrome, PageRow } from 'ketsuite/backend'
 
 /**
  * The design team writes CSS against these attributes. Locking them here means a
@@ -21,6 +21,9 @@ const CONTRACT = [
   'menu', 'menu-app', 'menu-item', 'menu-section', 'menu-section-title',
   'app-groups', 'app-group', 'group-title', 'app-grid', 'app-card', 'app-title',
   'app-summary', 'app-meta', 'app-depends', 'app-dependents', 'app-actions', 'app-action',
+  'list-chrome', 'chrome-lead', 'chrome-tail', 'chrome-create', 'crumbs', 'crumb',
+  'chrome-search', 'chrome-search-input', 'facet', 'facet-label', 'facet-remove',
+  'pager', 'pager-range', 'pager-step', 'view-switch', 'view-kind',
   'table', 'row', 'cell-path', 'cell-title', 'cell-state', 'badge',
   'tokens', 'token-list', 'token', 'token-name', 'token-value',
   'empty', 'empty-message', 'empty-hint', 'error', 'error-code', 'error-message', 'error-hint',
@@ -43,12 +46,24 @@ const MENU: MenuNode[] = [
   node('other', { icon: 'O' }),
 ]
 
+/** Every control at once — the contract test only sees what is rendered. */
+const CHROME: ListChrome = {
+  crumbs: [{ label: 'Quản trị', path: '/admin' }, { label: 'Trang' }],
+  create: { label: 'Mới', path: '/admin/pages/new' },
+  search: { name: 'q', value: 'x', placeholder: 'Tìm', facets: [{ label: 'Tìm: x', without: '/admin/pages' }] },
+  pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
+  views: [
+    { id: 'list', label: 'Danh sách', icon: '☰', path: '?view=list', active: true },
+    { id: 'kanban', label: 'Thẻ', icon: '▦', path: '?view=kanban', active: false },
+  ],
+}
+
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
 const everything = [
-  appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })], null, {}, MENU),
-  pagesScreen(_, [page(), page({ id: 'q', published: false })], null, {}, MENU),
-  settingsScreen(_, { 'color-accent': 'x' }, null, {}, MENU),
+  appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })], { menu: MENU }),
+  pagesScreen(_, [page(), page({ id: 'q', published: false })], { menu: MENU, chrome: CHROME }),
+  settingsScreen(_, { 'color-accent': 'x' }, { menu: MENU }),
   emptyState('a', 'b'),
   errorState('E_X', 'msg', 'hint'),
 ].map(r => renderToString(r)).join('')
