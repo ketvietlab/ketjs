@@ -1,18 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { postgresAdapter } from '../src/data/postgres.ts'
-import { sqliteAdapter } from '../src/data/sqlite.ts'
-import { compose } from '../src/kernel/compose.ts'
-import { schemaFromManifest, planMigration, renderSql } from '../src/data/migrate.ts'
-import { table, from } from '../src/data/query.ts'
-import { eq } from '../src/data/expr.ts'
-import { registerFunctions, callFn } from '../src/server/fn.ts'
-import { createIdempotency } from '../src/server/idem.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
-import type { Adapter } from '../src/types.ts'
+import { callFn, compose, createIdempotency, eq, from, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter, table } from 'ketjs'
+import type { Adapter } from 'ketjs'
+import { postgresAdapter } from 'ketjs-postgres'
+import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)

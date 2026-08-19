@@ -1,15 +1,10 @@
 // The lego pillar's riskiest claim, checked by a real type-checker:
 // a field module B adds to module A's model must be visible, correctly typed, to
 // module C — and everything that is NOT declared must be a compile error.
-
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { compose } from '../src/kernel/compose.ts'
-import { generateDts } from '../src/codegen/dts.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
+import { compose, generateDts } from 'ketjs'
+import { catalog, inventory, checkout, defaultTheme as theme } from 'ketsuite'
 
 const manifest = compose([catalog, inventory, checkout, theme])
 const dts = generateDts(manifest)

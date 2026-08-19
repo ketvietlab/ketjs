@@ -1,18 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compose } from '../src/kernel/compose.ts'
-import { table, from, deleteFrom, asc, desc } from '../src/data/query.ts'
-import { eq, gt, gte, and, or, not, inArray, like, isNull } from '../src/data/expr.ts'
-import { changeset } from '../src/data/changeset.ts'
-import { sqliteAdapter } from '../src/data/sqlite.ts'
-import { schemaFromManifest, planMigration, renderSql } from '../src/data/migrate.ts'
-import { registerFunctions, callFn, _resetIdempotency } from '../src/server/fn.ts'
-import { defineModule } from '../src/kernel/define.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
-import type { Adapter, Manifest } from '../src/types.ts'
+import { _resetIdempotency, and, asc, callFn, changeset, compose, defineModule, deleteFrom, desc, eq, from, gt, gte, inArray, isNull, like, not, or, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter, table } from 'ketjs'
+import type { Adapter, Manifest } from 'ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)

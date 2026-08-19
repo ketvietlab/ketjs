@@ -1,5 +1,7 @@
 # Ket
 
+A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
+
 A zero-dependency fullstack framework for Node, built on five pillars:
 
 1. **Lego** — modules compose through extension points the base module *publishes*, not through arbitrary patching
@@ -75,14 +77,19 @@ found bugs in Ket, which is the point of running them.
 ## Layout
 
 ```
-src/kernel      define, compose, contracts, upgrade diff, umbrella workspace
-src/data        model -> schema -> reviewable migrations; query values, changesets, sqlite + postgres adapters
-src/server      server functions, effects, dry-run, resumable streams, jobs, http
-src/view        signals + surgical DOM (app code)
-src/theme       KTL restricted language, view-model drops, tokens (third-party themes)
-src/agent       capability descriptors and the safe write surface
-src/codegen     manifest -> .d.ts
+packages/
+  ketjs-view/      signals, surgical DOM, SSR, hydration, islands — browser-safe, 0 deps
+  ketjs/           kernel, data, server, theme, agent, codegen — depends only on ketjs-view
+  ketjs-postgres/  the one package permitted a driver, and the reason it is a package
+  ketsuite/        KetSuite — business modules, using only the public entry
+examples/          umbrella apps composed from the packages
+tools/  test/  bench/  docs/
 ```
+
+The split is not decoration. `ketjs` cannot import a database driver because no such
+dependency exists in its package; `ketsuite` cannot reach past the public entry
+because the audit rejects it. What used to be rules about which file may import what
+are now facts about which package declares what.
 
 ## Static typing
 

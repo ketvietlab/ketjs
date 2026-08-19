@@ -1,0 +1,15 @@
+{
+  "name": "ketjs",
+  "version": "0.0.0",
+  "description": "Ket — a zero-dependency, module-composable, theme-driven fullstack framework for Node.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=24.0.0" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme/index.ts"
+  },
+  "bin": { "ket": "./src/cli.ts" },
+  "dependencies": { "ketjs-view": "0.0.0" },
+  "files": ["src"]
+}

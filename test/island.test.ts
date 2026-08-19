@@ -1,16 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defineModule, defineTheme } from '../src/kernel/define.ts'
-import { compose } from '../src/kernel/compose.ts'
-import { createTheme } from '../src/theme/render.ts'
-import { html } from '../src/view/render.ts'
-import { hydrateIslands, ISLAND_TAG } from '../src/view/island.ts'
-import { domHost } from '../src/view/host.ts'
-import { signal } from '../src/view/signal.ts'
 import { parseFragment, document } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
-import type { IslandProps } from '../src/view/island.ts'
-import type { KetError } from '../src/kernel/errors.ts'
+import { compose, createTheme, defineModule, defineTheme } from 'ketjs'
+import type { KetError } from 'ketjs'
+import { ISLAND_TAG, domHost, html, hydrateIslands, signal } from 'ketjs-view'
+import type { IslandProps } from 'ketjs-view'
 
 // A module provides behaviour...
 const clicks = signal(0)

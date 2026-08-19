@@ -1,14 +1,20 @@
-// Rule 1 is a hard rule, so it gets a checker rather than a promise in a README.
+// The dependency rules, enforced per package.
 //
-// One exception is allowed and fenced (decision D4a): the Postgres driver. It must
-// be an optionalDependency — so `npm i ketjs` still installs nothing — and exactly
-// one file may import it. Widening this list is a visible diff someone has to
-// justify, which is the only thing that keeps an exception from becoming the default.
+// Splitting into a monorepo turned the fence from a rule into a shape: the
+// Postgres driver is not "allowed in one file" any more, it lives in the one
+// package that declares it, and every other package is structurally incapable of
+// reaching it. This checks that the shape is still what it claims to be.
+//
+// It also enforces the rule that keeps the framework honest: KetSuite may only use
+// the public entry point, the same one a third-party module has. If the suite needs
+// a deep import, so does everyone else — and it should be exported, not smuggled.
 
 import { readFileSync } from 'node:fs'
 import { glob } from 'node:fs/promises'
 
 type Pkg = {
+  name?: string
+  private?: boolean
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
@@ -16,70 +22,88 @@ type Pkg = {
   peerDependenciesMeta?: Record<string, { optional?: boolean }>
 }
 
-const ALLOWED_DEV = new Set(['typescript', '@types/node'])
-const ALLOWED_OPTIONAL = new Set(['postgres'])
-// file -> the external specifiers it alone may import
-const EXTERNAL_IMPORT_ALLOWLIST = new Map<string, Set<string>>([
-  ['src/data/postgres.ts', new Set(['postgres'])],
-])
+type Rule = {
+  /** Packages this one may depend on and import. */
+  allow: string[]
+  /** External packages it may declare as an optional peer, and import. */
+  optionalPeers?: string[]
+  /** Only the package's own entry point may be imported, never a path inside it. */
+  publicOnly?: boolean
+}
 
-const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as Pkg
+const RULES: Record<string, Rule> = {
+  'ketjs-view': { allow: [] },
+  'ketjs': { allow: ['ketjs-view'] },
+  'ketjs-postgres': { allow: ['ketjs'], optionalPeers: ['postgres'] },
+  'ketsuite': { allow: ['ketjs'], publicOnly: true },
+}
+const ALLOWED_DEV = new Set(['typescript', '@types/node', 'postgres'])
+
 const problems: string[] = []
-
-const runtimeDeps = Object.keys(pkg.dependencies ?? {})
-if (runtimeDeps.length) problems.push(`package.json declares REQUIRED runtime dependencies: ${runtimeDeps.join(', ')} — these must be optionalDependencies or removed`)
-
-// npm installs optionalDependencies by default — they are only skipped when
-// installation fails. An *optional peer* dependency is the one kind npm will not
-// pull in on its own, which is what "install ketjs and get nothing" requires.
-const stillOptional = Object.keys(pkg.optionalDependencies ?? {})
-if (stillOptional.length) {
-  problems.push(`optionalDependencies are installed by default by npm: ${stillOptional.join(', ')} — move them to peerDependencies with peerDependenciesMeta.optional`)
-}
-
-const peerDeps = Object.keys(pkg.peerDependencies ?? {})
-for (const d of peerDeps) {
-  if (!ALLOWED_OPTIONAL.has(d)) problems.push(`peerDependency "${d}" is not in the fenced set (${[...ALLOWED_OPTIONAL].join(', ')}) — see decision D4a`)
-  if (!pkg.peerDependenciesMeta?.[d]?.optional) problems.push(`peerDependency "${d}" is not marked optional, so npm will install it for every consumer`)
-}
-const optionalDeps = peerDeps
-
-const devDeps = Object.keys(pkg.devDependencies ?? {})
-for (const d of devDeps) if (!ALLOWED_DEV.has(d)) problems.push(`devDependency "${d}" is not in the allowed set (${[...ALLOWED_DEV].join(', ')})`)
-if (devDeps.length > 2) problems.push(`${devDeps.length} devDependencies, budget is 2`)
-
 const IMPORT_RE = /(?:^|\s)(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g
 
-let files = 0
-let fenced = 0
-for await (const file of glob('src/**/*.ts')) {
-  files++
-  const src = readFileSync(file, 'utf8')
-  const allowedHere = EXTERNAL_IMPORT_ALLOWLIST.get(file) ?? new Set<string>()
+const root = JSON.parse(readFileSync('package.json', 'utf8')) as Pkg
+if (!root.private) problems.push('the workspace root must be private so it is never published')
+if (Object.keys(root.dependencies ?? {}).length) problems.push(`the workspace root declares dependencies: ${Object.keys(root.dependencies!).join(', ')}`)
 
-  for (const m of src.matchAll(IMPORT_RE)) {
-    const spec = (m[1] ?? m[2] ?? m[3]) as string
-    if (spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../')) continue
-    if (allowedHere.has(spec)) { fenced++; continue }
-    problems.push(
-      allowedHere.size === 0
-        ? `${file} imports "${spec}" — only ${[...EXTERNAL_IMPORT_ALLOWLIST.keys()].join(', ')} may import anything external`
-        : `${file} imports "${spec}", which is outside its allowance (${[...allowedHere].join(', ')})`)
+const summary: string[] = []
+
+for (const [name, rule] of Object.entries(RULES)) {
+  const dir = `packages/${name}`
+  const pkg = JSON.parse(readFileSync(`${dir}/package.json`, 'utf8')) as Pkg
+
+  const deps = Object.keys(pkg.dependencies ?? {})
+  for (const d of deps) if (!rule.allow.includes(d)) problems.push(`${name}: depends on "${d}", which is outside its allowance (${rule.allow.join(', ') || 'nothing'})`)
+
+  const stillOptional = Object.keys(pkg.optionalDependencies ?? {})
+  if (stillOptional.length) problems.push(`${name}: optionalDependencies are installed by npm anyway — use peerDependenciesMeta.optional (${stillOptional.join(', ')})`)
+
+  const peers = Object.keys(pkg.peerDependencies ?? {})
+  for (const p of peers) {
+    if (!(rule.optionalPeers ?? []).includes(p)) problems.push(`${name}: declares peer "${p}", which only ${Object.entries(RULES).filter(([, r]) => r.optionalPeers?.includes(p)).map(([n]) => n).join('/') || 'no package'} may`)
+    if (!pkg.peerDependenciesMeta?.[p]?.optional) problems.push(`${name}: peer "${p}" is not optional, so npm installs it for every consumer`)
+  }
+  for (const d of Object.keys(pkg.devDependencies ?? {})) {
+    if (!ALLOWED_DEV.has(d)) problems.push(`${name}: devDependency "${d}" is outside the allowed set`)
   }
 
-  // The theme sandbox argument rests on these never appearing.
-  if (/\bnew Function\s*\(/.test(src) || /(?<![\w.])eval\s*\(/.test(src)) {
-    problems.push(`${file} uses eval/new Function — the theme sandbox argument depends on this staying absent`)
+  let files = 0
+  let external = 0
+  for await (const file of glob(`${dir}/src/**/*.ts`)) {
+    files++
+    const src = readFileSync(file, 'utf8')
+    for (const m of src.matchAll(IMPORT_RE)) {
+      const spec = (m[1] ?? m[2] ?? m[3]) as string
+      if (spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../')) continue
+
+      const target = spec.split('/')[0] as string
+      const isSibling = rule.allow.includes(target)
+      const isPeer = (rule.optionalPeers ?? []).includes(target)
+      if (!isSibling && !isPeer) {
+        problems.push(`${file} imports "${spec}" — ${name} may only reach ${[...rule.allow, ...(rule.optionalPeers ?? [])].join(', ') || 'node: builtins'}`)
+        continue
+      }
+      if (isSibling && rule.publicOnly && spec !== target) {
+        problems.push(`${file} imports "${spec}" — ${name} must use the public entry "${target}" alone. If the suite needs it, export it; do not reach past the contract everyone else has.`)
+        continue
+      }
+      external++
+    }
+    if (/\bnew Function\s*\(/.test(src) || /(?<![\w.])eval\s*\(/.test(src)) {
+      problems.push(`${file} uses eval/new Function — the theme sandbox argument depends on this staying absent`)
+    }
   }
+  summary.push(`  ${name.padEnd(16)} ${String(files).padStart(2)} files  deps: ${deps.join(', ') || 'none'}${peers.length ? `  optional peer: ${peers.join(', ')}` : ''}  cross-package imports: ${external}`)
 }
 
-console.log(`zero-dep audit: scanned ${files} source files`)
+console.log('dependency audit, per package:')
+for (const line of summary) console.log(line)
 if (problems.length) {
+  console.log('')
   for (const p of problems) console.error(`  FAIL  ${p}`)
   process.exit(1)
 }
-console.log('  required runtime dependencies: 0')
-console.log(`  optional (fenced, D4a): ${optionalDeps.join(', ') || '(none declared yet)'}`)
-console.log(`  fenced external imports in use: ${fenced}`)
-console.log(`  devDependencies: ${devDeps.join(', ') || '(none)'} (type-checking only, never loaded at runtime)`)
+console.log('')
+console.log('  the only package that may touch a driver is ketjs-postgres, and it does so as an optional peer')
+console.log('  ketsuite reaches the framework only through its public entry, exactly as a third-party module would')
 console.log('  eval / new Function: absent')

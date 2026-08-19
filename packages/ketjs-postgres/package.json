@@ -1,0 +1,30 @@
+{
+  "name": "ketjs-postgres",
+  "version": "0.0.0",
+  "description": "Postgres adapter for Ket. The one package permitted a dependency (decision D4a) — which is why it is a package.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ketjs": "0.0.0"
+  },
+  "peerDependencies": {
+    "postgres": "^3.4.9"
+  },
+  "peerDependenciesMeta": {
+    "postgres": {
+      "optional": true
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "devDependencies": {
+    "postgres": "^3.4.9"
+  }
+}

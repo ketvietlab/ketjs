@@ -1,0 +1,11 @@
+{
+  "name": "ketjs-view",
+  "version": "0.0.0",
+  "description": "Ket view layer — signals, surgical DOM rendering, SSR, hydration and islands. Browser-safe, zero dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=24.0.0" },
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {},
+  "files": ["src"]
+}

@@ -1,18 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createAdapterPool } from '../src/data/pool.ts'
-import { migrateOne, migrateFleet, formatFleet } from '../src/data/fleet.ts'
-import { createIdempotency } from '../src/server/idem.ts'
-import { sqliteAdapter } from '../src/data/sqlite.ts'
-import { compose } from '../src/kernel/compose.ts'
-import { defineModule } from '../src/kernel/define.ts'
-import { registerFunctions, callFn } from '../src/server/fn.ts'
-import { createKetServer } from '../src/server/http.ts'
-import { createTheme } from '../src/theme/render.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
+import { callFn, compose, createAdapterPool, createIdempotency, createKetServer, createTheme, defineModule, formatFleet, migrateFleet, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)

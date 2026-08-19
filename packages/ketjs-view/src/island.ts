@@ -11,9 +11,24 @@ import { escapeHtml } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
 import { mountHydrated } from './mount.ts'
-import { KetError } from '../kernel/errors.ts'
+
 
 export const ISLAND_TAG = 'ket-island'
+
+// The view layer carries its own errors rather than reaching into the kernel for
+// them. That single import was the only thing pointing out of this layer, and it
+// is what would have made the view and the kernel mutually dependent once they
+// became separate packages.
+export class IslandError extends Error {
+  code: string
+  hint: string | null
+  constructor(d: { code: string; message: string; hint?: string }) {
+    super(d.message)
+    this.name = 'IslandError'
+    this.code = d.code
+    this.hint = d.hint ?? null
+  }
+}
 
 export type IslandProps = Record<string, unknown>
 export type IslandView = (props: IslandProps) => TemplateResult
@@ -59,7 +74,7 @@ export function hydrateIslands(
     if (!name) continue
     const view = registry[name]
     if (!view) {
-      throw new KetError({
+      throw new IslandError({
         code: 'E_UNKNOWN_ISLAND',
         message: `the page places island "${name}", which no installed module provides`,
         hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
@@ -69,7 +84,7 @@ export function hydrateIslands(
     const raw = element.getAttribute('data-props')
     if (raw) {
       try { props = JSON.parse(raw) as IslandProps } catch {
-        throw new KetError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
+        throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
       }
     }
     const mounted = mountHydrated(host, element, () => view(props))

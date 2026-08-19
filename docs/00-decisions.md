@@ -108,6 +108,29 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D19 — Monorepo, so the fences become shapes
+**Chosen:** four packages — `ketjs-view`, `ketjs`, `ketjs-postgres`, `ketsuite` —
+in one repository under npm workspaces.
+
+**Each boundary earns its place:**
+- `ketjs-view` is browser-safe and depends on nothing, so a client that never
+  touches the server half can install it alone.
+- `ketjs-postgres` exists *because of* D4a. The driver is no longer "allowed in one
+  file" — it lives in the one package that declares it, and every other package is
+  structurally unable to reach it.
+- `ketsuite` may only import `ketjs`'s public entry. If the suite needs something
+  deeper, so does every third-party module, and it should be exported rather than
+  smuggled. This is the rule that keeps the framework honest, and it is now checked
+  rather than promised.
+
+**One cycle had to be cut first:** `view/island.ts` imported `KetError` from the
+kernel, while the theme layer imported the view. A single line, and the only thing
+that would have made the two packages mutually dependent. The view layer now carries
+its own errors, which is better layering regardless of packaging.
+
+**Verified by trying to break it:** a suite file importing `ketjs/src/kernel/...` is
+rejected; a core file importing `postgres` is rejected.
+
 ## D18 — A theme places behaviour; it never writes it
 **Chosen:** interactivity lives in islands — a module's `html` view, trusted code —
 and a theme places one with `{% island "name" %}`, a tag that cannot carry code.

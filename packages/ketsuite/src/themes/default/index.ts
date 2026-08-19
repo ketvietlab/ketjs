@@ -1,4 +1,4 @@
-import { defineTheme } from '../../../src/kernel/define.ts'
+import { defineTheme } from 'ketjs'
 
 // A theme may only declare templates, fills, tokens and regions. Try adding
 // `models` or `functions` here and defineTheme() refuses it.

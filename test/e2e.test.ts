@@ -1,15 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compose } from '../src/kernel/compose.ts'
-import { sqliteAdapter } from '../src/data/sqlite.ts'
-import { schemaFromManifest, planMigration, renderSql } from '../src/data/migrate.ts'
-import { registerFunctions, _resetIdempotency } from '../src/server/fn.ts'
-import { createKetServer } from '../src/server/http.ts'
-import { createTheme } from '../src/theme/render.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
+import { _resetIdempotency, compose, createKetServer, createTheme, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter } from 'ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 

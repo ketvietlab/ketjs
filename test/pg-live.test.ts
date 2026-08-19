@@ -1,24 +1,16 @@
 // Runs against a real Postgres when one is reachable, and skips otherwise so the
 // suite still passes on a machine without it. Everything above this line has been
 // proven against a stand-in; this is the part only a live server can settle.
-
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { postgresAdapter } from '../src/data/postgres.ts'
-import { compose } from '../src/kernel/compose.ts'
-import { schemaFromManifest, planMigration, renderSql } from '../src/data/migrate.ts'
-import { table, from } from '../src/data/query.ts'
-import { eq, gte } from '../src/data/expr.ts'
-import { registerFunctions, callFn } from '../src/server/fn.ts'
-import { createStreams, dbStreamStore } from '../src/server/stream.ts'
-import { createQueue } from '../src/server/queue.ts'
-import { createAdapterPool } from '../src/data/pool.ts'
-import { migrateFleet, formatFleet } from '../src/data/fleet.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import checkout from '../examples/modules/checkout/index.ts'
-import theme from '../examples/themes/default/index.ts'
-import type { Adapter } from '../src/types.ts'
+import { postgresAdapter } from 'ketjs-postgres'
+import {
+  callFn, compose, createAdapterPool, createIdempotency, createQueue, createStreams,
+  dbStreamStore, eq, formatFleet, from, gte, migrateFleet, planMigration,
+  registerFunctions, renderSql, schemaFromManifest, table,
+} from 'ketjs'
+import type { Adapter } from 'ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 const URL = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const mods = [catalog, inventory, checkout, theme]
