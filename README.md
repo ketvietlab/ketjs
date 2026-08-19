@@ -20,6 +20,7 @@ npm run dev -- --all                       # HTTP + worker, still one tsx watche
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
 npm run bench:queue                         # queue across many physical databases
+npm run bench:storage                       # S3 storage across tenant databases
 ```
 
 Production, tests and release commands build first, then run emitted JavaScript.
@@ -38,6 +39,13 @@ guarantee, so Redis is not required. Operators can inspect and control durable r
 with `ket jobs list|retry|cancel|prune`. Every producer must declare the exact
 `enqueue:module.job` effect; moving a write into a worker does not widen what a
 server function is allowed to cause.
+
+Blob bytes use one tenant-namespaced `Storage` contract backed by local disk or an
+S3-compatible service; attachment metadata remains in each tenant database. Set
+`KET_STORAGE=s3`, `KET_S3_ENDPOINT`, `KET_S3_BUCKET`, `KET_S3_KEY` and
+`KET_S3_SECRET` for S3/MinIO. Local storage defaults to `.ket/storage`. Uploads are
+streamed through a bounded multipart parser, and cleanup runs on the existing
+`maintenance` queue.
 
 ```bash
 npx ket new shop && cd shop && npm install && npm run dev
@@ -107,6 +115,7 @@ found bugs in Ket, which is the point of running them.
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
 | Zero required dependencies | `npm run audit:zero-dep` — enforces that only `ketjs-postgres` may import the one allowlisted driver |
 | A committed job is not lost | PostgreSQL transaction/notify, concurrent unique enqueue, lease rescue and multi-database fairness are exercised live |
+| S3 compatibility is real | upload, HEAD, streamed GET, listing, presigned GET and delete run against MinIO in CI |
 
 ## Layout
 
