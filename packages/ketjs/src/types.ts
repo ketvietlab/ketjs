@@ -152,6 +152,18 @@ export type ModuleSpec = AppMeta & {
   extend?: Record<string, Record<string, string>>
   joints?: Record<string, JointDef>
   fills?: Record<string, string>
+  /**
+   * Joints this module wants gone — "owner:joint" keys, as fills use.
+   *
+   * Removing rather than hiding, because CSS hides at the wrong layer: the data
+   * still travels, and the tab order still walks through what nobody can see. A
+   * column a business does not track should not be in the HTML at all.
+   *
+   * It needs the same depends as a fill. Omitting something you never declared a
+   * dependency on is a decision about somebody else's screen made by a module that
+   * may not even be installed with it.
+   */
+  omits?: string[]
   functions?: Record<string, FnSpec>
   views?: Record<string, ViewDef>
   requires?: string[]
@@ -200,6 +212,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string>>
   readonly joints: Record<string, JointDef>
+  readonly omits: readonly string[]
   readonly fills: Record<string, string>
   readonly functions: Record<string, FnSpec>
   readonly views: Record<string, ViewDef>
@@ -221,7 +234,7 @@ export type Manifest = {
   order: string[]
   modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta>
   models: Record<string, ComposedModel>
-  joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean }>
+  joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean; omittedBy: string[] }>
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>
   views: Record<string, ViewDef & { by: string }>

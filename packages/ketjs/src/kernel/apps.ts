@@ -217,7 +217,11 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
   const pick = <T extends { by: string }>(rec: Record<string, T>): Record<string, T> =>
     Object.fromEntries(Object.entries(rec).filter(([, v]) => keep(v.by)))
 
-  const joints = Object.fromEntries(Object.entries(manifest.joints).filter(([, j]) => keep(j.owner)))
+  // An omission by a module that is switched off is not an omission: the joint
+  // comes back, exactly as its fills would.
+  const joints = Object.fromEntries(Object.entries(manifest.joints)
+    .filter(([, j]) => keep(j.owner))
+    .map(([k, j]) => [k, { ...j, omittedBy: j.omittedBy.filter(keep) }]))
   const provided: Record<string, string[]> = {}
   for (const [region, by] of Object.entries(manifest.regions.provided)) {
     const live = by.filter(keep)

@@ -1,6 +1,7 @@
 export { createTheme } from './render.ts'
 export { compileKtl } from './ktl/compile.ts'
 export { loadTemplates } from './templates.ts'
+export { createJoints } from './joints.ts'
 export type { Compiled, Filter, Scope } from './ktl/compile.ts'
 export { makeDrop, makeDrops, sealScope } from './viewmodel.ts'
 export { tokensToCss, scopedCss, LAYER_ORDER } from './tokens.ts'

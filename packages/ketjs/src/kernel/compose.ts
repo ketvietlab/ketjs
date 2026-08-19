@@ -230,7 +230,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
   // --- joints (published extension points) and fills -----------------------
   for (const m of order) {
     for (const [name, def] of Object.entries(m.joints)) {
-      manifest.joints[jointKey(m.name, name)] = { owner: m.name, props: def.props ?? {}, multiple: def.multiple !== false }
+      manifest.joints[jointKey(m.name, name)] = { owner: m.name, props: def.props ?? {}, multiple: def.multiple !== false, omittedBy: [] }
     }
   }
   for (const m of order) {
@@ -250,6 +250,40 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         continue
       }
       manifest.fills.push({ joint: key, by: m.name, template: value })
+    }
+  }
+  // Omissions travel the same road as fills: a declared joint, and a declared
+  // dependency on whoever published it.
+  for (const m of order) {
+    for (const key of m.omits) {
+      const joint = manifest.joints[key]
+      if (!joint) {
+        diag.add({
+          code: 'E_OMIT_UNKNOWN_JOINT', module: m.name,
+          message: `omits joint "${key}", which no installed module publishes`,
+          hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
+        })
+        continue
+      }
+      if (!canSee(m, joint.owner)) {
+        diag.add({ code: 'E_OMIT_NOT_DEPENDED', module: m.name, message: `omits "${key}" but does not depend on "${joint.owner}"`, hint: `add "${joint.owner}" to ${m.name}.depends` })
+        continue
+      }
+      joint.omittedBy.push(m.name)
+    }
+  }
+  // An omitted joint that somebody else fills is a fill nobody will ever see. It
+  // is not an error — the two modules may be deliberate — but it is exactly the
+  // kind of thing that gets discovered six months later, so it is recorded where
+  // `ket check` and the upgrade diff will show it.
+  for (const [key, joint] of Object.entries(manifest.joints)) {
+    if (!joint.omittedBy.length) continue
+    const fillers = manifest.fills.filter(f => f.joint === key).map(f => f.by)
+    if (fillers.length) {
+      manifest.patches.push({
+        by: joint.omittedBy.join(', '), target: key,
+        reason: `omitted, so fills from ${fillers.join(', ')} will not render`,
+      })
     }
   }
 
