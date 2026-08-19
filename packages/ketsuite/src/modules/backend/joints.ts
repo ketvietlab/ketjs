@@ -24,6 +24,9 @@ export const joints: Record<string, JointDef> = {
   'app-card.actions': { props: { app: 'json' }, multiple: true },
   /** The far end of the topbar, before the identity strip. */
   'topbar.end': { multiple: true },
+  // The foot of the sidebar: a module with a queue of anything can put its count
+  // there, beside who you are signed in as.
+  'sidebar.foot': { multiple: true },
   /** Under the last group on the apps screen. */
   'apps.footer': { multiple: true },
 }

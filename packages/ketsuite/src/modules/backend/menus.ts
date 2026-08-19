@@ -11,7 +11,7 @@
 import type { MenuDef } from 'ketjs'
 
 export const menus: Record<string, MenuDef> = {
-  admin: { label: 'menu.admin', icon: '⚙', sequence: 90 },
+  admin: { label: 'menu.admin', icon: 'settings', sequence: 90 },
 
   // The apps screen is the way back in, so it needs no heading above it.
   'admin.apps': { parent: 'admin', label: 'menu.apps', path: '/admin', sequence: 10 },

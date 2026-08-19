@@ -114,3 +114,18 @@ test('menu: a gate on a module that is here, naming a function that is not, is a
   assert.equal(v!.code, 'E_MENU_UNKNOWN_FUNCTION')
   assert.match(v!.message, /"sales" does not declare/)
 })
+
+test('menu: the sidebar search keeps a branch that matches anywhere along it', () => {
+  const m = compose([sales, admin])
+  const vi = m.messages?.['vi'] ?? {}
+  const t = (q: string) => buildMenu(m, { translate: (k) => (vi[k] as string | undefined) ?? k, q })
+
+  const quotes = t('báo giá')
+  assert.deepEqual(quotes.map(n => n.id), ['sales'], 'the app above the match survives')
+  assert.deepEqual(quotes[0]!.children[0]!.children.map(n => n.id), ['sales.quotes'],
+    'and its siblings do not — a leaf arrives with the words that explain where it lives')
+
+  assert.deepEqual(t('BÁO GIÁ').map(n => n.id), ['sales'], 'case does not matter')
+  assert.deepEqual(t('không có gì').map(n => n.id), [], 'nothing matching leaves nothing behind')
+  assert.deepEqual(t('').map(n => n.id), ['sales', 'admin'], 'an empty search is not a search')
+})

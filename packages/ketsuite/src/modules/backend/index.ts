@@ -37,7 +37,7 @@ export default defineModule({
 })
 
 export { shell, framed, listChrome, appsScreen, pagesScreen, pageColumns, settingsScreen, emptyState, errorState } from './screens.ts'
-export type { Frame, ListChrome, Crumb, Facet, Pager, ViewKind } from './screens.ts'
+export type { Frame, ListChrome, Facet, Pager, ViewKind } from './screens.ts'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { dataTable, visibleColumns, badge, avatar, person, initials } from './table.ts'
 export type { Cell, Column, DataTable, Tone } from './table.ts'

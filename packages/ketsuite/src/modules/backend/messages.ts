@@ -16,6 +16,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'Hệ thống',
 
     'nav.apps': 'Ứng dụng',
+    'nav.search': 'Tìm ứng dụng, menu…',
+    'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
     'nav.pages': 'Trang',
     'nav.settings': 'Cài đặt',
     'brand': 'KetSuite',
@@ -69,6 +71,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'System',
 
     'nav.apps': 'Apps',
+    'nav.search': 'Search apps and menus…',
+    'nav.noMatch': 'No app or menu matches.',
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
     'brand': 'KetSuite',

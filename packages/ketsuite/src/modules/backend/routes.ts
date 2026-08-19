@@ -39,6 +39,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
   const viewer = await viewerOf(ctx, url, req)
   // Installed, and permitted: the sidebar never offers what the click would refuse.
   const menu = await ctx.menu(url, req)
+  const menuFilter = url.searchParams.get('menu')?.trim() || null
   // Rendered once per request, so a screen stays a pure function of its data and
   // the catalogue can render the same screens with no server at all.
   const extras: Extras = {
@@ -51,7 +52,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
       lang,
       title: 'KetSuite',
       head: await ctx.styles(req),
-      body: await build(ctx.translate(lang), { url, raw: req, frame: { viewer, extras, menu } }),
+      body: await build(ctx.translate(lang), { url, raw: req, frame: { viewer, extras, menu, menuFilter } }),
     }),
   })
 }
@@ -86,7 +87,6 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
     return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), {
       ...frame,
       chrome: {
-        crumbs: [{ label: _('backend.menu.admin'), path: '/admin' }, { label: _('backend.pages.title') }],
         search: {
           name: 'q', value: search ?? '', placeholder: _('backend.chrome.searchPages'),
           facets: search ? [{ label: `${_('backend.chrome.searchFacet')}: ${search}`, without: url.pathname }] : [],

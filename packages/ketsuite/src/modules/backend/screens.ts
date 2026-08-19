@@ -1,7 +1,8 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
-import { badge, dataTable } from './table.ts'
+import { badge, dataTable, initials } from './table.ts'
+import { hasIcon, icon } from './icons.ts'
 import type { Column, DataTable } from './table.ts'
 export { badge, dataTable, visibleColumns, avatar, person, initials } from './table.ts'
 export type { Cell, Column, DataTable, Tone } from './table.ts'
@@ -61,6 +62,7 @@ export type Viewer = { name: string; company: string | null; companies: string[]
  */
 export type Extras = {
   'topbar.end'?: unknown
+  'sidebar.foot'?: unknown
   'apps.footer'?: unknown
   /** Rendered per card, keyed by app name — the joint takes the app as a prop. */
   'nav.items'?: unknown
@@ -87,16 +89,34 @@ const destination = (node: MenuNode): string => {
   return '#'
 }
 
-const menuLink = (item: MenuNode): TemplateResult => html`
-  <a data-ui="menu-item" data-active=${String(item.active)} href=${destination(item)}>${item.label}</a>`
-
-// <details> rather than a button: a section collapses with no script at all, which
-// means it still collapses on the first paint and on a page with a broken bundle.
-const menuSection = (section: MenuNode): TemplateResult => html`
-  <details data-ui="menu-section" open=${true}>
-    <summary data-ui="menu-section-title">${section.label}</summary>
-    ${each(section.children, c => c.id, c => c.children.length ? menuSection(c) : menuLink(c))}
-  </details>`
+/**
+ * One entry in the app's menu, at some depth.
+ *
+ * A heading is a <details>, so it collapses with no script at all — it still
+ * works on the first paint and on a page whose bundle failed. A leaf gets a dot,
+ * and children get a rule down their left: in a column this narrow, depth has to
+ * be visible without counting indents.
+ */
+const menuItem = (node: MenuNode, depth: number): TemplateResult => node.children.length
+  ? html`
+  <li data-ui="menu-item-wrap" data-depth=${String(depth)}>
+    <details data-ui="menu-section" open=${node.active || depth === 0}>
+      <summary data-ui="menu-section-title">
+        <span data-ui="menu-section-chevron">${icon('chevron-right')}</span>
+        <span data-ui="menu-section-text">${node.label}</span>
+      </summary>
+      <ul data-ui="menu-section-children">
+        ${each(node.children, c => c.id, c => menuItem(c, depth + 1))}
+      </ul>
+    </details>
+  </li>`
+  : html`
+  <li data-ui="menu-item-wrap" data-depth=${String(depth)}>
+    <a data-ui="menu-item" data-active=${String(node.active)} href=${destination(node)}>
+      <span data-ui="menu-dot" aria-hidden="true"></span>
+      <span data-ui="menu-label">${node.label}</span>
+    </a>
+  </li>`
 
 /**
  * Everything around the data, in one argument.
@@ -105,8 +125,27 @@ const menuSection = (section: MenuNode): TemplateResult => html`
  * menu, then the chrome — and `f(_, rows, null, {}, MENU)` is a call nobody can
  * read. A screen takes its data, and then its frame.
  */
+/**
+ * A counter at the foot of the sidebar: things waiting for you.
+ *
+ * Data, so the shell does not know what an activity is — a module with a queue of
+ * anything says so, and it appears. A count of zero renders the icon with no
+ * number rather than a "0": the icon is still the way in, and a badge that says
+ * nothing is a badge people stop reading.
+ */
+export type Indicator = {
+  id: string
+  icon: string
+  label: string
+  count: number
+  path: string
+}
+
 export type Frame = {
   viewer?: Viewer | null
+  indicators?: Indicator[]
+  /** What was typed into the sidebar's search, so the box still holds it. */
+  menuFilter?: string | null
   extras?: Extras
   menu?: MenuNode[]
   chrome?: ListChrome | null
@@ -118,45 +157,77 @@ export const shell = (
   body: TemplateResult,
   frame: Frame = {},
 ): TemplateResult => {
-  const { viewer = null, extras = {}, menu = [] } = frame
+  const { viewer = null, extras = {}, menu = [], indicators = [] } = frame
   const app = menu.find(a => a.active) ?? menu[0] ?? null
   return html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
-    <div data-ui="app-switch">
-      <span data-ui="app-current">${app ? app.label : _('backend.brand')}</span>
+    <div data-ui="sidebar-header">
+      <a data-ui="sidebar-brand" href="/admin" title=${_('backend.nav.apps')}>
+        <span data-ui="sidebar-brand-name">${app ? app.label : _('backend.nav.apps')}</span>
+        <span data-ui="sidebar-brand-chevron">${icon('chevron-down')}</span>
+      </a>
     </div>
 
-    <div data-ui="app-list" role="navigation">
-      <div data-ui="app-list-title">${_('backend.nav.apps')}</div>
-      ${each(menu, a => a.id, a => html`
-        <a data-ui="app-entry" data-active=${String(a.active)} href=${destination(a)}>
-          <span data-ui="app-icon">${a.icon ?? a.label.slice(0, 1)}</span>
-          <span data-ui="app-name">${a.label}</span>
-        </a>`)}
+    <form data-ui="sidebar-search" method="get" role="search">
+      <span data-ui="sidebar-search-icon">${icon('search')}</span>
+      <input data-ui="sidebar-search-input" type="search" name="menu" value=${frame.menuFilter ?? ''}
+             placeholder=${_('backend.nav.search')} aria-label=${_('backend.nav.search')} autocomplete="off">
+    </form>
+
+    <nav data-ui="sidebar-nav">
+      ${when(menu.length === 0, () => html`
+        <p data-ui="sidebar-empty">${_('backend.nav.noMatch')}</p>`)}
+
+      ${when(menu.length > 0, () => html`<p data-ui="sidebar-section-label">${_('backend.nav.apps')}</p>`)}
+      <ul data-ui="app-list">
+        ${each(menu, a => a.id, a => html`
+          <li>
+            <a data-ui="app-entry" data-active=${String(a.active)} href=${destination(a)} title=${a.label}>
+              <span data-ui="app-icon">${a.icon && hasIcon(a.icon) ? icon(a.icon) : html`<span data-ui="app-monogram">${a.label.slice(0, 1)}</span>`}</span>
+              <span data-ui="app-name">${a.label}</span>
+            </a>
+          </li>`)}
+      </ul>
+
+      ${when(!!app && app.children.length > 0, () => html`
+        <p data-ui="sidebar-section-label" data-scope="app">${app!.label}</p>
+        <ul data-ui="menu" aria-label=${app!.label}>
+          ${each(app!.children, c => c.id, c => menuItem(c, 0))}
+        </ul>`)}
+
+      ${extras['nav.items'] ?? ''}
+    </nav>
+
+    <div data-ui="sidebar-foot">
+      ${when(indicators.length > 0 || !!extras['sidebar.foot'], () => html`
+      <div data-ui="indicators">
+        ${each(indicators, i => i.id, i => html`
+          <a data-ui="indicator" data-kind=${i.id} href=${i.path} title=${i.label} aria-label=${i.label}>
+            <span data-ui="indicator-icon">${icon(i.icon)}</span>
+            ${when(i.count > 0, () => html`<span data-ui="indicator-count">${String(i.count)}</span>`)}
+          </a>`)}
+        ${extras['sidebar.foot'] ?? ''}
+      </div>`)}
+
+      ${when(!!viewer, () => html`
+      <div data-ui="viewer">
+        <span data-ui="avatar" aria-hidden="true">${initials(viewer!.name)}</span>
+        <span data-ui="viewer-who">
+          <span data-ui="viewer-name">${viewer!.name}</span>
+          ${when((viewer!.companies.length) > 1, () => html`<span data-ui="viewer-company">${viewer!.company}</span>`)}
+        </span>
+        <form data-ui="signout" method="post" action="/logout"><button data-ui="signout-button" type="submit" title=${_('backend.signOut')} aria-label=${_('backend.signOut')}>${icon('log-out')}</button></form>
+      </div>`)}
     </div>
-
-    ${when(!!app && app.children.length > 0, () => html`
-      <nav data-ui="menu" aria-label=${app!.label}>
-        <div data-ui="menu-app">${app!.label}</div>
-        ${each(app!.children, c => c.id, c => c.children.length ? menuSection(c) : menuLink(c))}
-      </nav>`)}
-
-    ${extras['nav.items'] ?? ''}
   </aside>
 
   <main data-ui="main">
     <header data-ui="topbar">
       ${frame.chrome
-        ? listChrome(_, frame.chrome)
+        ? listChrome(_, title, frame.chrome)
         : html`<h1 data-ui="title">${title}</h1>`}
       ${extras['topbar.end'] ?? ''}
-      ${when(!!viewer, () => html`
-      <div data-ui="viewer">
-        <span data-ui="viewer-name">${viewer!.name}</span>
-        ${when((viewer!.companies.length) > 1, () => html`<span data-ui="viewer-company">${viewer!.company}</span>`)}
-        <form data-ui="signout" method="post" action="/logout"><button data-ui="signout-button" type="submit">${_('backend.signOut')}</button></form>
-      </div>`)}
     </header>
     <div data-ui="content">${body}</div>
   </main>
@@ -207,8 +278,6 @@ const appCard = (_: Translator, app: AppRow, extras: Extras = {}): TemplateResul
  * rather than re-implementing a toolbar. A field left out is a control that does
  * not appear — a screen with no second page has no pager at all.
  */
-export type Crumb = { label: string; path?: string }
-
 export type Facet = {
   /** What it says: "Loại: Hàng hoá". */
   label: string
@@ -229,7 +298,6 @@ export type Pager = {
 export type ViewKind = { id: string; label: string; icon: string; path: string; active: boolean }
 
 export type ListChrome = {
-  crumbs: Crumb[]
   /** The primary action. Absent when this list cannot be added to. */
   create?: { label: string; path: string } | null
   search?: {
@@ -260,11 +328,12 @@ const pagerLabel = (p: Pager): string => (p.total === 0 ? '0' : `${p.from}-${p.t
  */
 export const topbarSearch = (_: Translator, c: ListChrome): TemplateResult => html`
   <form data-ui="chrome-search" method="get" role="search">
+    <span data-ui="chrome-search-icon">${icon('search')}</span>
     ${each(Object.entries(c.search!.keep ?? {}), ([k]) => k, ([k, v]) => html`<input type="hidden" name=${k} value=${v}>`)}
     ${each(c.search!.facets ?? [], f => f.label, f => html`
       <span data-ui="facet">
         <span data-ui="facet-label">${f.label}</span>
-        <a data-ui="facet-remove" href=${f.without} aria-label=${_('backend.chrome.removeFilter')}>×</a>
+        <a data-ui="facet-remove" href=${f.without} aria-label=${_('backend.chrome.removeFilter')}>${icon('x')}</a>
       </span>`)}
     <input data-ui="chrome-search-input" type="search" name=${c.search!.name}
            value=${c.search!.value ?? ''} placeholder=${c.search!.placeholder}
@@ -280,17 +349,20 @@ export const topbarSearch = (_: Translator, c: ListChrome): TemplateResult => ht
  * sentence twice. So the breadcrumb IS the title, the search takes the middle,
  * and the pager and view switcher sit at the end beside the identity strip.
  */
-export const listChrome = (_: Translator, c: ListChrome): TemplateResult => html`
-  ${chromeLead(_, c)}${when(!!c.search, () => topbarSearch(_, c))}${chromeTail(_, c)}`
+export const listChrome = (_: Translator, title: string, c: ListChrome): TemplateResult => html`
+  ${chromeLead(title, c)}${when(!!c.search, () => topbarSearch(_, c))}${chromeTail(_, c)}`
 
-const chromeLead = (_: Translator, c: ListChrome): TemplateResult => html`
+/**
+ * The title, and what you can add to what it names.
+ *
+ * No breadcrumb. The sidebar already says which app you are in and which entry is
+ * open, in two places you are looking at anyway — a trail across the top repeats
+ * both and earns its 2rem back only on screens nested deeper than this product goes.
+ */
+const chromeLead = (title: string, c: ListChrome): TemplateResult => html`
   <div data-ui="chrome-lead">
-    ${when(!!c.create, () => html`<a data-ui="chrome-create" href=${c.create!.path}>${c.create!.label}</a>`)}
-    <nav data-ui="crumbs" aria-label=${_('backend.chrome.breadcrumb')}>
-      ${each(c.crumbs, (b, i) => `${i}:${b.label}`, (b) => b.path
-        ? html`<a data-ui="crumb" href=${b.path}>${b.label}</a>`
-        : html`<span data-ui="crumb" aria-current="page">${b.label}</span>`)}
-    </nav>
+    ${when(!!c.create, () => html`<a data-ui="chrome-create" href=${c.create!.path}>${icon('plus')}${c.create!.label}</a>`)}
+    <h1 data-ui="title">${title}</h1>
   </div>`
 
 const chromeTail = (_: Translator, c: ListChrome): TemplateResult => html`
@@ -299,17 +371,17 @@ const chromeTail = (_: Translator, c: ListChrome): TemplateResult => html`
     <div data-ui="pager">
       <span data-ui="pager-range">${pagerLabel(c.pager!)}</span>
       ${c.pager!.prev
-        ? html`<a data-ui="pager-step" data-dir="prev" href=${c.pager!.prev} aria-label=${_('backend.chrome.previous')}>‹</a>`
-        : html`<span data-ui="pager-step" data-dir="prev" aria-disabled="true">‹</span>`}
+        ? html`<a data-ui="pager-step" data-dir="prev" href=${c.pager!.prev} aria-label=${_('backend.chrome.previous')}>${icon('chevron-left')}</a>`
+        : html`<span data-ui="pager-step" data-dir="prev" aria-disabled="true">${icon('chevron-left')}</span>`}
       ${c.pager!.next
-        ? html`<a data-ui="pager-step" data-dir="next" href=${c.pager!.next} aria-label=${_('backend.chrome.next')}>›</a>`
-        : html`<span data-ui="pager-step" data-dir="next" aria-disabled="true">›</span>`}
+        ? html`<a data-ui="pager-step" data-dir="next" href=${c.pager!.next} aria-label=${_('backend.chrome.next')}>${icon('chevron-right')}</a>`
+        : html`<span data-ui="pager-step" data-dir="next" aria-disabled="true">${icon('chevron-right')}</span>`}
     </div>`)}
 
     ${when((c.views ?? []).length > 1, () => html`
     <div data-ui="view-switch" role="group" aria-label=${_('backend.chrome.views')}>
       ${each(c.views!, v => v.id, v => html`
-        <a data-ui="view-kind" data-kind=${v.id} data-active=${String(v.active)} href=${v.path} title=${v.label} aria-label=${v.label}>${v.icon}</a>`)}
+        <a data-ui="view-kind" data-kind=${v.id} data-active=${String(v.active)} href=${v.path} title=${v.label} aria-label=${v.label}>${icon(v.icon)}</a>`)}
     </div>`)}
   </div>`
 

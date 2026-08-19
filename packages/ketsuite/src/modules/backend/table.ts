@@ -13,6 +13,7 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import type { Translator } from 'ketjs'
+import { icon } from './icons.ts'
 
 export type Cell = TemplateResult | string
 
@@ -53,7 +54,7 @@ const menu = <R,>(_: Translator, t: DataTable<R>): TemplateResult => {
   const on = new Set(t.shown ?? [])
   return html`
   <details data-ui="col-config">
-    <summary data-ui="col-config-open" aria-label=${_('backend.table.columns')}>⚙</summary>
+    <summary data-ui="col-config-open" aria-label=${_('backend.table.columns')}>${icon('sliders-horizontal')}</summary>
     <div data-ui="col-config-menu">
       ${each(optional, c => c.key, c => html`
         <a data-ui="col-toggle" data-on=${String(on.has(c.key))}

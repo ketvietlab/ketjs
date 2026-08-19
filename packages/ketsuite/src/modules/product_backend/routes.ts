@@ -50,11 +50,8 @@ export const routes: Record<string, RouteEntry> = {
           viewer: await viewerOf(ctx, url, req),
           extras,
           menu: await ctx.menu(url, req),
+          menuFilter: url.searchParams.get('menu')?.trim() || null,
           chrome: {
-            crumbs: [
-              { label: _('product_backend.menu.app'), path: '/admin/products' },
-              { label: _('product_backend.menu.templates') },
-            ],
             search: {
               name: 'q', value: search ?? '', placeholder: _('product_backend.chrome.search'),
               // Searching must not silently switch you back to the list view.
@@ -63,7 +60,7 @@ export const routes: Record<string, RouteEntry> = {
             },
             pager: pager(url, current, rows.length, count),
             views: VIEWS.map(v => ({
-              id: v, label: _(`backend.chrome.view.${v}`), icon: v === 'kanban' ? '▦' : '☰',
+              id: v, label: _(`backend.chrome.view.${v}`), icon: v === 'kanban' ? 'layout-grid' : 'list',
               path: withParam(url, 'view', v), active: v === view,
             })),
           },
