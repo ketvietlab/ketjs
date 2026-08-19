@@ -178,15 +178,20 @@ export type BootedApp = {
   close: () => Promise<void>
 }
 
+export type BootAppOptions = {
+  env?: Record<string, string | undefined>
+  port?: number
+  /** Boot progress. Long-running serve keeps its banner separate. */
+  log?: (line: string) => void
+}
+
 /**
  * Opens, migrates, installs, serves. Returns before listening is announced so a
  * caller can print its own banner, or a test can boot on port 0 and never print.
  */
-export async function bootApp(
-  spec: AppSpec,
-  o: { env?: Record<string, string | undefined>; port?: number } = {},
-): Promise<BootedApp> {
+export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
   const serve = spec.serve ?? {}
+  const log = o.log ?? console.log
   const { config, modules, manifest } = await bootRuntime(spec, o)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
   const storages = new Map<string, Storage>()
@@ -209,9 +214,7 @@ export async function bootApp(
   const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
     if (!bootstrap.length || (await apps.enabled()).size !== 0) return
     for (const name of bootstrap) await apps.install(name)
-    console.log(
-      `  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`,
-    )
+    log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
   }
 
   // Opened here only when there is one. With tenants there is no single datastore,
@@ -221,7 +224,7 @@ export async function bootApp(
   if (adapter) {
     if (config.migrateOnBoot) {
       const ops = await migrateOne(adapter, manifest)
-      if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
+      if (ops.length) log(`  migrate: ${ops.length} operation(s)`)
     }
     apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
     await bootstrapInto('', apps)
@@ -293,7 +296,7 @@ export async function bootApp(
           ? {
               prepare: async (key, a) => {
                 const ops = await migrateOne(a, manifest)
-                if (ops.length) console.log(`  migrate [${key}]: ${ops.length} operation(s)`)
+                if (ops.length) log(`  migrate [${key}]: ${ops.length} operation(s)`)
               },
             }
           : {}),
@@ -744,10 +747,7 @@ export async function bootApp(
 }
 
 /** bootApp, plus the banner and the signal handling a long-running process wants. */
-export async function serveApp(
-  spec: AppSpec,
-  o: { env?: Record<string, string | undefined>; port?: number } = {},
-): Promise<BootedApp> {
+export async function serveApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
   const booted = await bootApp(spec, o)
   console.log(await booted.banner())
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {

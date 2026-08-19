@@ -253,10 +253,12 @@ test('ket new: writes an app whose workspace composes', async () => {
   assert.ok(existsSync(join(dir, 'tsconfig.json')))
   assert.ok(existsSync(join(dir, 'biome.json')))
   assert.ok(existsSync(join(dir, 'tools/dev.mjs')))
+  assert.ok(existsSync(join(dir, 'test/app.test.ts')))
   assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),
     /ket serve --workspace dist\/ket\.workspace\.js/,
   )
+  assert.match(readFileSync(join(dir, 'package.json'), 'utf8'), /ket test dist\/test/)
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
