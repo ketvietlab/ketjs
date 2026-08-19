@@ -108,6 +108,33 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D27 — One command that starts the thing
+There was a design entry point and a CLI that could check and migrate, but nothing
+that *ran* KetSuite. `npm start` now opens a database, migrates to the manifest,
+installs a starter set of apps if none are installed, and serves — storefront,
+backend and API on one port.
+
+**Configuration is a value, read once.** A misspelt variable is then a visible
+default rather than an `undefined` that surfaces three layers down as something
+else. `DATABASE_URL` is what switches SQLite for Postgres; the adapter contract
+being fixed on day one is why nothing else changes.
+
+**The storefront goes through `callFn` like everything else.** A path becomes a
+page through `website.getPageByPath`, so the company filter and the app-installed
+check apply to a public page exactly as they do to an API call. The front of the
+site is not a second door with different rules — verified by two companies serving
+different pages on the same path.
+
+**`resolveScope` joins `resolveDatastore` and `resolveLocale`.** Building this
+found that the HTTP layer had no way to say which company a request was: every
+company-scoped function would have failed over HTTP. Resolution now happens in one
+place for the same reason as the others — a handler that had to remember would
+eventually forget, and forgetting means answering with another company's rows.
+
+**The authentication gap is stated in the banner the server prints**, not buried in
+a document. Until there is a session, the company comes from a header, which is
+fine for development and not for production.
+
 ## D26 — Units of measure: Odoo's model, and the rounding it depends on
 **Chosen:** Odoo's shape, deliberately. A category groups units that convert between
 one another; exactly one is the reference; every other records `factor` — how many
