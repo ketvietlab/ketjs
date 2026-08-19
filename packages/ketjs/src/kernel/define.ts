@@ -8,7 +8,7 @@ import type { KetModule, ModuleSpec } from '../types.ts'
 const MODULE_KEYS = new Set([
   'name', 'version', 'depends', 'models', 'extend', 'joints', 'fills',
   'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands', 'sections', 'relations',
-  'app', 'title', 'summary', 'category', 'install', 'autoInstall', 'messages',
+  'app', 'title', 'summary', 'category', 'install', 'autoInstall', 'removable', 'messages',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -53,6 +53,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     summary: spec.summary ?? '',
     category: spec.category ?? 'Khác',
     install: spec.install ?? (spec.autoInstall === true ? 'auto' : 'manual'),
+    removable: spec.removable !== false,
     messages: spec.messages ?? {},
   })
 }

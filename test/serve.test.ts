@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, defineApp, defineModule, readConfig, sqliteAdapter, createAppRegistry, compose, from, eq } from 'ketjs'
+import { bootApp, defineApp, defineModule, readConfig, sqliteAdapter, createAppRegistry, compose, from, eq, json } from 'ketjs'
 import type { Ctx } from 'ketjs'
+import backend from 'ketsuite/backend'
 import { scaffold } from '../packages/ketjs/src/scaffold/index.ts'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,7 +68,7 @@ test('boot: one declaration produces a running server, framework routes included
     name: 'notesapp', modules: [notes], headless: true,
     serve: {
       bootstrap: ['notes'],
-      routes: (ctx) => ({ '/notes': async (url, req) => ({ type: 'application/json', body: JSON.stringify(await ctx.call('notes.list', {}, url, req)) }) }),
+      routes: (ctx) => ({ '/notes': async (url, req) => json(await ctx.call('notes.list', {}, url, req)) }),
     },
   })
   const booted = await bootApp(app, { env: memory, port: 0 })
@@ -191,4 +192,33 @@ test('ket new: refuses to overwrite rather than eat work', () => {
 
 test('ket new: rejects a name that is not a module name', () => {
   assert.throws(() => scaffold('My Shop', '/tmp/x'), /invalid app name/)
+})
+
+// ── the removal boundary ─────────────────────────────────────────────────────
+
+const core = defineModule({ name: 'core', app: true, removable: false })
+
+test('uninstall: a module that declares removable: false is refused, not merely discouraged', async () => {
+  const { db, apps } = await registry([core])
+  await apps.install('core')
+  await assert.rejects(() => apps.uninstall('core'), (e: unknown) => {
+    assert.equal((e as { code: string }).code, 'E_APP_NOT_REMOVABLE')
+    return true
+  })
+  assert.ok((await apps.enabled()).has('core'))
+  await db.close()
+})
+
+test('uninstall: removable defaults to true, so refusing has to be argued for', async () => {
+  const { db, apps } = await registry([notes])
+  await apps.install('notes')
+  assert.deepEqual(await apps.uninstall('notes'), ['notes'])
+  await db.close()
+})
+
+test('uninstall: the backend is the screen you would use to put something back, so it stays', async () => {
+  const { db, apps } = await registry([backend])
+  await apps.install('backend')
+  await assert.rejects(() => apps.uninstall('backend'), /removable: false/)
+  await db.close()
 })
