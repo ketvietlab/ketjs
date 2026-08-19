@@ -108,6 +108,40 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D32 — Reads span a set of companies, writes go to exactly one
+**Chosen:** Odoo's split, deliberately. `scope.companies` is what a read may see;
+`scope.company` is what a new row is stamped with. The split is right because the
+two questions genuinely differ: a report may span three legal entities, but an
+invoice belongs to one.
+
+**Absent, the set is just the company being written to.** Widening what a request
+can see should take saying so — the default that looks convenient is the one that
+leaks. Which is also why nothing existing had to change: 23 call sites already
+passed `{ company, branches }` and kept working, with the narrow meaning.
+
+**The guard that earns its place:** writing to a company you cannot read back is
+*silent* corruption. The row lands, every later query filters it out, and nothing
+anywhere says why. So `scope.company` must be in `scope.companies`, checked before
+the first query runs, with the error naming both sides.
+
+**A readable set and nothing to write to is its own error**, listing the companies
+it does have — because the fix is to pick one, and the message may as well say
+which ones are available.
+
+**The convenience path had to part company with its `column = ?` map.** `db.select`
+builds equality pairs, which cannot express a set, so it now appends an explicit
+`IN` with its own placeholders. Two ways to read must not disagree about who you
+are; both are tested, on SQLite and on live Postgres, where placeholder rendering
+differs.
+
+**`crossCompany` is unchanged and still means all of them.** It remains the
+declared, descriptor-visible exception rather than the ambient one.
+
+**Over HTTP:** `X-Ket-Company` names the write target, `X-Ket-Companies` widens the
+read, and the active company is folded into the set without the caller having to
+repeat it. Still headers, still not authentication — but the shape a session will
+produce is now the shape that exists.
+
 ## D31 — Permissions are reported before they are enforced
 **Chosen:** `ket permissions` first, the role model second. Deciding how roles
 should be shaped is much easier while looking at what the functions already imply,
