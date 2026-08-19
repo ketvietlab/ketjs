@@ -108,6 +108,53 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D30 — A module contributes to the served surface, not just to the database
+**The hole, stated as a measurement.** With `backend` uninstalled, `/admin` still
+answered 200 and its stylesheet was still linked. "Enable at run" reached the
+database and stopped there. The cause was that the app assembled the surface by
+hand: it reached into `packages/ketsuite/src/modules/backend/design/` by filesystem
+path, named two stylesheets, and declared four routes belonging to that module —
+so it went on serving all of it after the module was switched off, and it also
+walked straight past the rule the dependency audit enforces for imports.
+
+**Chosen:** a module declares `assets`, `styles` and `routes`, compose aggregates
+them, and `restrictManifest` drops them with the rest of the module's behaviour.
+
+**Paths are data, handlers are factories.** `routes` is one factory per path, not
+one factory returning many, because compose has to settle ownership — two modules
+claiming a path is a build error naming both — while a handler needs the running
+server, which does not exist at compose time. Dispatch then checks the *live*
+manifest per request, so uninstalling stops a route answering without a restart,
+and reinstalling brings it back the same way. `/_ket/` is refused to modules: it is
+where health, the agent descriptor, streams and assets live.
+
+**Stylesheets come out in dependency order**, which is the point of composing them
+rather than gathering them: a module that extends another loads after it and can
+override it. `ctx.styles()` returns every installed module's, so no module names
+even its own file, let alone another's.
+
+**Assets are namespaced `/_ket/asset/<module>/`**, so two modules may both ship
+`tokens.css`, and an uninstalled one can be refused by name before any file system
+call happens.
+
+**A theme may ship assets and styles — that is most of what a theme is — but not
+routes.** A route is code running on the server, which is the line themes exist on
+the far side of.
+
+**The static handler kept its own file reading.** An asset body cannot go through
+the `Html` constructors from D29: a PNG is not markup and a string-typed body would
+corrupt it. So `ServeOpts.assets` became a list of mounts, each either a fixed
+directory or a resolver answering per request — the resolver is what lets a
+module's files disappear when the module does. Traversal is refused in both encoded
+and unencoded forms, tested.
+
+**Measured, because "every module's schema in every tenant database" deserved a
+number rather than a shrug:** 400 empty tables of twelve columns cost 17 MB in
+Postgres 17, and adding a column to all 400 took 43 ms — a catalogue change, not a
+table rewrite. That is the price of D7 per tenant database, and what it buys is
+that switching a module on for a tenant is one UPDATE with no migration and no data
+loss when it goes off again.
+
 ## D29 — HTML is a value, templates are files, and removal has a boundary too
 **The premise was wrong in an interesting way.** "We cannot write HTML as strings"
 sounded like KetJS had no template engine. It has two: `html\`\`` for first-party
