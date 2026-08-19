@@ -15,12 +15,21 @@ Plus an **umbrella layout**: one codebase, many deployable apps, shared modules.
 ```bash
 npm start                                   # KetSuite on SQLite, at :3000
 DATABASE_URL=postgres://… npm start         # …or on Postgres
+npm run dev                                 # …restarted on every change
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
 ```
 
-A first run migrates, installs a starter set of apps, and serves. Configuration is
-in `apps/ketsuite/config.ts` — every knob has a default that works.
+Those are `ket serve` and `ket dev` reading `ket.workspace.ts`. A first run
+migrates, installs the app's bootstrap set, and serves. Every knob has a default
+that works; `KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules
+that would otherwise install themselves, which is what you want mid-change.
+
+```bash
+npx ket new shop && cd shop && npm install && npm run dev
+```
+
+writes an app that runs unedited: a module, a model, a function and a route.
 
 **No authentication yet.** The company a request acts as comes from the
 `X-Ket-Company` header. Fine for development, not for production; the resolver is
