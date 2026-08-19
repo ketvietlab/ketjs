@@ -40,6 +40,8 @@ const skin = defineModule({
             body: html`<h1>skin</h1>`,
           }),
         }),
+    '/catalog/new': () => async () => page({ body: html`<h1>new product</h1>` }),
+    '/catalog/{slug}': () => async (_url, _req, params) => page({ body: html`<h1>${params.slug}</h1>` }),
   },
 })
 
@@ -77,6 +79,34 @@ test('compose: two modules claiming one path is a build error, not a race at boo
         defineModule({ name: 'two', routes: r('/clash') }),
       ]),
     /both "one" and "two" serve "\/clash"/,
+  )
+})
+
+test('compose: equally specific dynamic routes that overlap are refused', () => {
+  const route = (path: string) => ({
+    [path]: () => (async () => page({ body: html`<p>x</p>` })) as Route,
+  })
+  assert.throws(
+    () =>
+      compose([
+        defineModule({ name: 'one', routes: route('/shop/{slug}') }),
+        defineModule({ name: 'two', routes: route('/{section}/new') }),
+      ]),
+    /can match the same path with equal priority/,
+  )
+})
+
+test('compose: route parameters are whole, named segments', () => {
+  const route = (path: string) => ({
+    [path]: () => (async () => page({ body: html`<p>x</p>` })) as Route,
+  })
+  assert.throws(
+    () => compose([defineModule({ name: 'bad', routes: route('/shop/product-{slug}') })]),
+    /invalid dynamic segment/,
+  )
+  assert.throws(
+    () => compose([defineModule({ name: 'bad', routes: route('/{slug}/{slug}') })]),
+    /declares parameter "slug" more than once/,
   )
 })
 
@@ -147,6 +177,14 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
   assert.match(body, /\/_ket\/asset\/core\/base\.css/)
   assert.match(body, /\/_ket\/asset\/skin\/extra\.css/)
   assert.ok(body.indexOf('core/base.css') < body.indexOf('skin/extra.css'), 'and in dependency order')
+  await b.close()
+})
+
+test('serving: dynamic segments are decoded and a static route wins over a parameter', async () => {
+  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${b.port}`
+  assert.match(await fetch(`${at}/catalog/%C3%A1o-thun`).then((r) => r.text()), /áo-thun/)
+  assert.match(await fetch(`${at}/catalog/new`).then((r) => r.text()), /new product/)
   await b.close()
 })
 
