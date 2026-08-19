@@ -49,6 +49,7 @@ found bugs in Ket, which is the point of running them.
 | DOM: update 1 row of 1 000 | **0.070 ms** | lit-html 0.100 ms |
 | DOM: create 1 000 rows | **1.80 ms** | lit-html 2.60 ms |
 | DOM: reorder rows | 0.220 ms | **lit-html 0.096 ms** |
+| hydrate a 495-node page | **0.025 ms** (islands, 9 nodes) | 0.660 ms (whole tree) |
 
 ## What is actually proven
 
