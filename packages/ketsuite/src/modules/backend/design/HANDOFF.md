@@ -1,5 +1,28 @@
 # Backend UI — bàn giao cho đội design
 
+## Trạng thái triển khai — 2026-08-19
+
+Visual baseline đã hoàn tất trong `design/tokens.css` và `design/admin.css` theo hướng
+**enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
+divider và typography thay vì khoảng trắng/card/shadow quá mức.
+
+Các thông số đã chốt:
+
+| Vai trò | Giá trị |
+|---|---:|
+| Sidebar desktop | `228px` |
+| Topbar desktop | `52px` |
+| Data row | `44px` |
+| Control compact desktop | `32px` |
+| Touch target mobile | `44px` |
+| Body / compact UI | `14px` / `13px` |
+| Breakpoint mobile shell | `< 768px` |
+
+Ngôn ngữ thị giác kế thừa KétViệt Design System: warm-neutral canvas, white/dark
+surface, border mảnh và indigo chỉ dành cho primary action, focus và selection.
+Primary action dùng `brand-600`; active navigation dùng label `brand-700` trên nền
+sáng, đóng hai migration gap còn tồn tại trong theme Odoo.
+
 ## Chạy lên trong 30 giây
 
 ```bash
@@ -74,14 +97,41 @@ chung cơ chế — chi tiết trong `docs/00-decisions.md` (D3, D18).
 Hệ quả với các bạn: ở đây các bạn có toàn quyền về CSS, nhưng markup thì đề xuất chứ
 không tự sửa, vì nó gắn với dữ liệu thật.
 
-## Bàn giao lại
+## Quyết định List View — zero dependencies
 
-Xong phần CSS thì gửi lại nguyên hai file đó. Việc còn lại là của tôi:
+List View không dùng TanStack Table, AG Grid hoặc CSS framework. Nền tảng là semantic
+HTML (`table`, `thead`, `tbody`, `th`) + CSS thuần; hành vi tương tác sau này là island
+nhỏ dùng signal/DOM API đã có trong `ketjs-view`.
 
-- nối nút Cài/Gỡ vào server function (hiện là nút tĩnh)
-- thêm island cho những chỗ cần tương tác thật
-- form tạo/sửa trang
-- trạng thái đang tải và xử lý lỗi trên giao diện
+Quy ước triển khai tiếp theo:
 
-Thiếu trạng thái nào trong `/catalogue` thì nói, tôi thêm — tốt hơn là phát hiện lúc
-đã ghép xong.
+- column schema typed khai báo label, kiểu dữ liệu, alignment, width, priority và khả
+  năng sort;
+- sort, filter và cursor pagination chạy phía server; URL giữ query state để reload,
+  back và deep link đúng;
+- selection và bulk action hydrate riêng, không hydrate toàn bảng;
+- mặc định lấy `50–100` dòng mỗi trang, không render hàng nghìn dòng;
+- chỉ làm virtual scrolling khi benchmark thực tế chứng minh pagination không đủ;
+- mobile giữ `3–5` field cần ra quyết định, không tự biến mọi row thành card;
+- table hiện tại giữ đủ ba cột trên `360px`, không gây document-level overflow.
+
+CSS hiện tại chỉ triển khai presentation contract đang có. Column schema, sorting,
+filtering, pagination và selection cần một thay đổi framework riêng thay vì được giả
+lập bằng CSS.
+
+## Bàn giao cho framework
+
+Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại thuộc markup/behavior:
+
+- nối nút Cài/Gỡ vào server function;
+- thêm island cho List View và những chỗ cần tương tác thật;
+- thêm status label semantic riêng cho app đã cài/chưa cài;
+- liên kết lý do nút disabled bằng `aria-describedby`;
+- thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
+- thêm toggle `data-theme="light|dark"`; system preference hiện là fallback;
+- form tạo/sửa trang;
+- trạng thái loading và xử lý lỗi trên giao diện.
+
+Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
+40 dòng, chuỗi tiếng Việt dài, disabled action, empty/error state và dark system
+preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
