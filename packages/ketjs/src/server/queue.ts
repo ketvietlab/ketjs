@@ -115,6 +115,17 @@ const DDL_PG = DDL.replaceAll('scheduled_at  TEXT', 'scheduled_at  TIMESTAMPTZ')
   .replaceAll('updated_at    TEXT', 'updated_at    TIMESTAMPTZ')
 
 const encode = (value: unknown): string => JSON.stringify(value ?? null)
+let lastIdMs = -1
+let idSequence = 0
+const nextJobId = (at: Date): string => {
+  const milliseconds = at.getTime()
+  idSequence = milliseconds === lastIdMs ? idSequence + 1 : 0
+  lastIdMs = milliseconds
+  // The timestamp and per-process sequence retain FIFO for jobs inserted in one
+  // producer at the same priority/due time; UUID entropy keeps ids collision-safe
+  // across producers and nodes.
+  return `${milliseconds.toString(36).padStart(10, '0')}-${idSequence.toString(36).padStart(4, '0')}-${randomUUID()}`
+}
 const decode = <T>(value: unknown, fallback: T): T => {
   if (value == null) return fallback
   if (typeof value !== 'string') return value as T
@@ -284,7 +295,7 @@ export async function createQueue(
       if (!Number.isInteger(o.maxAttempts ?? 20) || (o.maxAttempts ?? 20) < 1)
         throw new Error('job maxAttempts must be an integer >= 1')
       const state: JobState = runAt.getTime() > at.getTime() ? 'scheduled' : 'available'
-      const id = randomUUID()
+      const id = nextJobId(at)
       const scope = o.scope ?? { company: null }
       const values = [
         id,
