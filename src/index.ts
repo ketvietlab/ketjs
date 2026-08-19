@@ -9,6 +9,7 @@ export { createKetServer } from './server/http.ts'
 export { createStreams, createQueue } from './server/stream.ts'
 
 export { sqliteAdapter } from './data/sqlite.ts'
+export { postgresAdapter } from './data/postgres.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type { Dialect, Sql, Table, Order } from './data/query.ts'
 export { eq, ne, gt, lt, gte, lte, like, inArray, isNull, isNotNull, and, or, not } from './data/expr.ts'

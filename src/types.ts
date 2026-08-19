@@ -98,27 +98,36 @@ export type Ctx = {
   /** A changeset bound to this app's manifest. */
   change(model: string, params: Row, base?: Row | null): import('./data/changeset.ts').Changeset
   db: {
-    all(q: import('./data/query.ts').Query): Row[]
-    one(q: import('./data/query.ts').Query): Row | null
-    count(q: import('./data/query.ts').Query): number
-    del(q: import('./data/query.ts').Query): { changes: number }
+    all(q: import('./data/query.ts').Query): Promise<Row[]>
+    one(q: import('./data/query.ts').Query): Promise<Row | null>
+    count(q: import('./data/query.ts').Query): Promise<number>
+    del(q: import('./data/query.ts').Query): Promise<{ changes: number }>
     /** Write a changeset. An invalid one is refused with its structured errors. */
-    commit(cs: import('./data/changeset.ts').Changeset, where?: Row): { changes: number } | { dryRun: true }
-    select(model: string, where?: Row): Row[]
-    insert(model: string, row: Row): unknown
-    update(model: string, where: Row, patch: Row): unknown
+    commit(cs: import('./data/changeset.ts').Changeset, where?: Row): Promise<{ changes: number } | { dryRun: true }>
+    select(model: string, where?: Row): Promise<Row[]>
+    insert(model: string, row: Row): Promise<unknown>
+    update(model: string, where: Row, patch: Row): Promise<unknown>
   }
 }
 
+// The adapter contract is asynchronous because a network database has no other
+// option. SQLite is synchronous underneath and simply resolves immediately; making
+// the shared contract match the harder case is cheaper than having two contracts.
+// Only quoteIdent and columnSql stay synchronous: they are pure string functions.
 export type Adapter = {
   name: string
-  open(): void
-  close(): void
-  exec(sql: string): void
-  all(sql: string, params?: unknown[]): Row[]
-  run(sql: string, params?: unknown[]): { changes: number }
-  tx<T>(fn: () => T): T
+  open(): Promise<void>
+  close(): Promise<void>
+  exec(sql: string): Promise<void>
+  all(sql: string, params?: unknown[]): Promise<Row[]>
+  run(sql: string, params?: unknown[]): Promise<{ changes: number }>
+  /**
+   * The callback receives an adapter scoped to the transaction. Without it a
+   * network driver would run the body on a different pooled connection than the
+   * BEGIN — a bug SQLite could never have shown us.
+   */
+  tx<T>(fn: (tx: Adapter) => Promise<T>): Promise<T>
   quoteIdent(name: string): string
   columnSql(c: { base: FieldBase }): string
-  introspect(): Record<string, Record<string, string>>
+  introspect(): Promise<Record<string, Record<string, string>>>
 }

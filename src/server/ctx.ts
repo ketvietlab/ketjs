@@ -42,30 +42,31 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   const dialect = adapter.name === 'postgres' ? 'postgres' : 'sqlite'
 
   const db: Ctx['db'] = {
-    all(q) {
+    async all(q) {
       checkQuery(q)
       const { text, params } = q.toSQL(dialect)
       return adapter.all(text, params)
     },
-    one(q) {
+    async one(q) {
       checkQuery(q)
       const { text, params } = q.limit(1).toSQL(dialect)
-      return adapter.all(text, params)[0] ?? null
+      return (await adapter.all(text, params))[0] ?? null
     },
-    count(q) {
+    async count(q) {
       const c = q.count()
       checkQuery(c)
       const { text, params } = c.toSQL(dialect)
-      return Number((adapter.all(text, params)[0] as { count: number }).count)
+      const rows = await adapter.all(text, params)
+      return Number((rows[0] as { count: number }).count)
     },
-    del(q) {
+    async del(q) {
       checkQuery(q)
       writes.push({ op: 'update', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
       const { text, params } = q.toSQL(dialect)
       return adapter.run(text, params)
     },
-    commit(cs, where) {
+    async commit(cs, where) {
       if (!cs.valid) {
         throw new KetError({
           code: 'E_INVALID_CHANGESET',
@@ -74,19 +75,19 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
           hint: 'inspect changeset.errors for the structured form',
         })
       }
-      if (cs.action === 'insert') return db.insert(cs.model, cs.changes) as { changes: number }
+      if (cs.action === 'insert') return await db.insert(cs.model, cs.changes) as { changes: number }
       if (!where) throw new KetError({ code: 'E_UPDATE_NEEDS_WHERE', message: `updating ${cs.model} requires a where clause` })
       if (!Object.keys(cs.changes).length) return { changes: 0 }
-      return db.update(cs.model, where, cs.changes) as { changes: number }
+      return await db.update(cs.model, where, cs.changes) as { changes: number }
     },
-    select(model, where = {}) {
+    async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
       const keys = Object.keys(where)
       const sql = `SELECT * FROM ${t}` + (keys.length ? ` WHERE ${keys.map(k => `${adapter.quoteIdent(k)} = ?`).join(' AND ')}` : '')
       return adapter.all(sql, keys.map(k => where[k]))
     },
-    insert(model, row) {
+    async insert(model, row) {
       need('write', model)
       const known = Object.keys(manifest.models[model]?.fields ?? {})
       const unknown = Object.keys(row).filter(k => !known.includes(k))
@@ -99,7 +100,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map(k => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => '?').join(', ')})`
       return adapter.run(sql, ks.map(k => normalize(row[k])))
     },
-    update(model, where, patch) {
+    async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }

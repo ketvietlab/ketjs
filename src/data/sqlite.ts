@@ -24,20 +24,20 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
 
   const a: Adapter = {
     name: 'sqlite',
-    open() { db = new DatabaseSync(path); db.exec('PRAGMA journal_mode = WAL'); db.exec('PRAGMA foreign_keys = ON') },
-    close() { db?.close(); db = null },
-    exec(sql) { need().exec(sql) },
-    all(sql, params = []) { return need().prepare(sql).all(...(params.map(bind) as never[])) as Row[] },
-    run(sql, params = []) { const r = need().prepare(sql).run(...(params.map(bind) as never[])); return { changes: Number(r.changes) } },
-    tx(fn) {
+    async open() { db = new DatabaseSync(path); db.exec('PRAGMA journal_mode = WAL'); db.exec('PRAGMA foreign_keys = ON') },
+    async close() { db?.close(); db = null },
+    async exec(sql) { need().exec(sql) },
+    async all(sql, params = []) { return need().prepare(sql).all(...(params.map(bind) as never[])) as Row[] },
+    async run(sql, params = []) { const r = need().prepare(sql).run(...(params.map(bind) as never[])); return { changes: Number(r.changes) } },
+    async tx(fn) {
       const d = need()
       d.exec('BEGIN')
-      try { const r = fn(); d.exec('COMMIT'); return r }
+      try { const r = await fn(a); d.exec('COMMIT'); return r }
       catch (e) { d.exec('ROLLBACK'); throw e }
     },
     quoteIdent(n) { return `"${String(n).replace(/"/g, '""')}"` },
     columnSql(c) { return SQL[c.base] ?? 'TEXT' },
-    introspect() {
+    async introspect() {
       const tables: Record<string, Record<string, string>> = {}
       const names = need().prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`).all() as Array<{ name: string }>
       for (const t of names) {

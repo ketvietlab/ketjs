@@ -31,8 +31,8 @@ const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> 
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
 }
 
-export function createKetServer(o: ServeOpts) {
-  const streams = createStreams(o.adapter)
+export async function createKetServer(o: ServeOpts) {
+  const streams = await createStreams(o.adapter)
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)

@@ -10,20 +10,22 @@ import type { Adapter } from '../types.ts'
 export type Chunk = { seq: number; data: unknown }
 export type Since = { chunks: Chunk[]; done: boolean; summary: unknown; nextSeq: number }
 
-export function createStreams(adapter: Adapter, o: { now?: () => string } = {}) {
-  const log = createLog(adapter, o)
+export type Streams = Awaited<ReturnType<typeof createStreams>>
 
-  const since = (id: string, fromSeq = 0): Since => {
-    const entries = log.read(id, fromSeq)
+export async function createStreams(adapter: Adapter, o: { now?: () => string } = {}) {
+  const log = await createLog(adapter, o)
+
+  const since = async (id: string, fromSeq = 0): Promise<Since> => {
+    const entries = await log.read(id, fromSeq)
     const chunks = entries.filter(e => e.kind === 'chunk').map(e => ({ seq: e.seq, data: e.data }))
-    const end = entries.find(e => e.kind === 'end') ?? log.read(id, 0).find(e => e.kind === 'end')
-    return { chunks, done: !!end, summary: end?.data ?? null, nextSeq: log.head(id) }
+    const end = entries.find(e => e.kind === 'end') ?? (await log.read(id, 0)).find(e => e.kind === 'end')
+    return { chunks, done: !!end, summary: end?.data ?? null, nextSeq: await log.head(id) }
   }
 
   return {
-    open(id: string): string { log.append(id, 'open', { id }); return id },
-    write(id: string, chunk: unknown): number { return log.append(id, 'chunk', chunk) },
-    end(id: string, summary: unknown = null): number { return log.append(id, 'end', summary) },
+    async open(id: string): Promise<string> { await log.append(id, 'open', { id }); return id },
+    write(id: string, chunk: unknown): Promise<number> { return log.append(id, 'chunk', chunk) },
+    end(id: string, summary: unknown = null): Promise<number> { return log.append(id, 'end', summary) },
     since,
     async *tail(id: string, fromSeq = 0, opt: { pollMs?: number; timeoutMs?: number } = {}): AsyncGenerator<Chunk> {
       const pollMs = opt.pollMs ?? 10
@@ -31,7 +33,7 @@ export function createStreams(adapter: Adapter, o: { now?: () => string } = {}) 
       let cursor = fromSeq
       const started = Date.now()
       for (;;) {
-        const s = since(id, cursor)
+        const s = await since(id, cursor)
         for (const c of s.chunks) { cursor = c.seq + 1; yield c }
         if (s.done) return
         if (Date.now() - started > timeoutMs) throw new Error(`stream "${id}" timed out after ${timeoutMs}ms`)
@@ -43,13 +45,13 @@ export function createStreams(adapter: Adapter, o: { now?: () => string } = {}) 
 }
 
 // The job queue is the same primitive with a different state machine.
-export function createQueue(adapter: Adapter, o: { now?: () => string } = {}) {
-  const log = createLog(adapter, o)
+export async function createQueue(adapter: Adapter, o: { now?: () => string } = {}) {
+  const log = await createLog(adapter, o)
   return {
-    enqueue(queue: string, payload: unknown): number { return log.append(queue, 'job', payload, 'ready') },
+    enqueue(queue: string, payload: unknown): Promise<number> { return log.append(queue, 'job', payload, 'ready') },
     claim(queue: string) { return log.claim(queue) },
-    complete(queue: string, seq: number): void { log.setState(queue, seq, 'done') },
-    fail(queue: string, seq: number): void { log.setState(queue, seq, 'failed') },
-    pending(queue: string): number { return log.read(queue, 0).filter(e => e.state === 'ready').length },
+    complete(queue: string, seq: number): Promise<void> { return log.setState(queue, seq, 'done') },
+    fail(queue: string, seq: number): Promise<void> { return log.setState(queue, seq, 'failed') },
+    async pending(queue: string): Promise<number> { return (await log.read(queue, 0)).filter(e => e.state === 'ready').length },
   }
 }

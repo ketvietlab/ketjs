@@ -47,7 +47,8 @@ nothing can be safely changed.
 | Swap 2 rows of 1000 | **2** moves (LIS reconciliation, no cascade) |
 | A theme cannot run code | no `eval`/`new Function` anywhere; prototype access rejected at parse time |
 | A stream survives a reload | resumes from cursor, no gap and no duplicate |
-| An agent cannot double-apply | idempotency key replays the first result |
+| An agent cannot double-apply | idempotency key replays the first result, and survives a restart |
+| A transaction is really one transaction | BEGIN and body share a reserved connection |
 | A query is checked before it runs | `q.touches` vs declared effects — a query reading an undeclared model is blocked |
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
@@ -57,7 +58,7 @@ nothing can be safely changed.
 
 ```
 src/kernel      define, compose, contracts, upgrade diff, umbrella workspace
-src/data        model -> schema -> reviewable migrations; query values, changesets, sqlite adapter
+src/data        model -> schema -> reviewable migrations; query values, changesets, sqlite + postgres adapters
 src/server      server functions, effects, dry-run, resumable streams, jobs, http
 src/view        signals + surgical DOM (app code)
 src/theme       KTL restricted language, view-model drops, tokens (third-party themes)

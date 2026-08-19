@@ -16,12 +16,12 @@ const mods = [catalog, inventory, checkout, theme]
 async function boot() {
   const manifest = compose(mods)
   const adapter = sqliteAdapter()
-  adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) adapter.exec(sql)
+  await adapter.open()
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
   registerFunctions(mods)
   _resetIdempotency()
   const rt = createTheme(manifest, mods)
-  const app = createKetServer({
+  const app = await createKetServer({
     manifest, adapter, theme: rt,
     pageScope: () => ({
       site: { title: 'Cửa hàng Ket', tagline: null },
@@ -45,7 +45,7 @@ test('e2e: one declaration serves an HTTP endpoint', async () => {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'p1' }),
   }).then(r => r.json()) as { value: { title: string } }
   assert.equal(got.value.title, 'Áo thun')
-  await app.close(); adapter.close()
+  await app.close(); await adapter.close()
 })
 
 test('e2e: the same declaration serves an agent descriptor', async () => {
@@ -54,7 +54,7 @@ test('e2e: the same declaration serves an agent descriptor', async () => {
   const tool = d.tools.find(t => t.name === 'checkout__placeOrder')!
   assert.equal(tool.mutates, true)
   assert.equal(tool.dryRunnable, true)
-  await app.close(); adapter.close()
+  await app.close(); await adapter.close()
 })
 
 test('e2e: a bad call returns a structured error an agent can act on', async () => {
@@ -66,7 +66,7 @@ test('e2e: a bad call returns a structured error an agent can act on', async () 
   const body = await res.json() as { code: string; hint: string }
   assert.equal(body.code, 'E_INVALID_INPUT')
   assert.match(body.hint, /signature/)
-  await app.close(); adapter.close()
+  await app.close(); await adapter.close()
 })
 
 test('e2e: dry-run over HTTP reports writes and commits nothing', async () => {
@@ -77,15 +77,15 @@ test('e2e: dry-run over HTTP reports writes and commits nothing', async () => {
   }).then(r => r.json()) as { dryRun: boolean; writes: unknown[] }
   assert.equal(r.dryRun, true)
   assert.equal(r.writes.length, 1)
-  assert.equal(adapter.all('SELECT * FROM catalog_product', []).length, 0)
-  await app.close(); adapter.close()
+  assert.equal((await adapter.all('SELECT * FROM catalog_product', [])).length, 0)
+  await app.close(); await adapter.close()
 })
 
 test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   const { app, adapter, base } = await boot()
-  app.streams.open('gen1')
-  app.streams.write('gen1', 'Xin')
-  app.streams.write('gen1', ' chào')
+  await app.streams.open('gen1')
+  await app.streams.write('gen1', 'Xin')
+  await app.streams.write('gen1', ' chào')
 
   // first client reads what exists, then "reloads" (aborts)
   const ac = new AbortController()
@@ -100,15 +100,15 @@ test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   ac.abort()
 
   // generation continues while nobody is listening
-  app.streams.write('gen1', ' bạn')
-  app.streams.end('gen1')
+  await app.streams.write('gen1', ' bạn')
+  await app.streams.end('gen1')
 
   const res2 = await fetch(`${base}/_ket/stream/gen1?from=${lastId + 1}`)
   const text = await res2.text()
   assert.match(text, /bạn/)
   assert.ok(!text.includes('Xin'), 'a resumed stream must not replay chunks the client already had')
   assert.match(text, /event: done/)
-  await app.close(); adapter.close()
+  await app.close(); await adapter.close()
 })
 
 test('e2e: a page renders through the theme, joint fills included', async () => {
@@ -118,5 +118,5 @@ test('e2e: a page renders through the theme, joint fills included', async () => 
   assert.match(html, /<h1>Áo thun<\/h1>/)
   assert.match(html, /Giao sau 3 ngày/)
   assert.match(html, /Chạy trên Ket/)
-  await app.close(); adapter.close()
+  await app.close(); await adapter.close()
 })
