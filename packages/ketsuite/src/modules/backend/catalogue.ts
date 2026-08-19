@@ -23,6 +23,7 @@ import {
   mediaPanel,
   notice,
   person,
+  recordForm,
   recordList,
   section,
   stack,
@@ -505,10 +506,70 @@ export const CASES: Array<{
       ),
   },
   {
+    id: 'kit-form',
+    label: 'Component — biểu mẫu nghiệp vụ',
+    note: 'Required, helper, lỗi tại field, lỗi tổng hợp, checkbox và disabled đều có hierarchy và liên kết semantic.',
+    render: () =>
+      surface({
+        body: recordForm({
+          action: '#kit-form',
+          submit: 'Lưu sản phẩm',
+          cancelHref: '#kit-form',
+          cancelLabel: 'Hủy',
+          errors: ['Tên sản phẩm cần ít nhất 3 ký tự.'],
+          fields: [
+            {
+              name: 'name',
+              label: 'Tên sản phẩm',
+              value: 'X',
+              required: true,
+              help: 'Tên hiển thị trên đơn hàng và chứng từ.',
+              error: 'Nhập ít nhất 3 ký tự.',
+            },
+            {
+              name: 'type',
+              label: 'Loại sản phẩm',
+              type: 'select',
+              value: 'goods',
+              options: [
+                { value: 'goods', label: 'Hàng hóa' },
+                { value: 'service', label: 'Dịch vụ' },
+              ],
+            },
+            {
+              name: 'saleOk',
+              label: 'Có thể bán',
+              type: 'checkbox',
+              value: true,
+              help: 'Cho phép chọn sản phẩm trên báo giá và đơn hàng.',
+            },
+            {
+              name: 'reference',
+              label: 'Mã nội bộ',
+              value: 'SKU-2026-001',
+              disabled: true,
+              help: 'Mã do hệ thống quản lý.',
+            },
+            {
+              name: 'description',
+              label: 'Mô tả bán hàng',
+              type: 'textarea',
+              span: 'full',
+              placeholder: 'Thông tin cần xuất hiện trên báo giá…',
+            },
+          ],
+        }),
+      }),
+  },
+  {
     id: 'product-media-scaffold',
     label: 'Sản phẩm — hình ảnh chưa kết nối',
     note: 'Không có request hay broken image; các thao tác bị vô hiệu cho tới khi backend media cung cấp adapter.',
-    render: () => mediaPanel({ status: 'unavailable' }),
+    render: () =>
+      mediaPanel({
+        status: 'unavailable',
+        labels: { unavailable: 'Chưa kết nối dịch vụ hình ảnh.', add: 'Thêm ảnh' },
+      }),
   },
   {
     id: 'product-media-ready',
@@ -518,17 +579,26 @@ export const CASES: Array<{
       mediaPanel({
         status: 'ready',
         uploadAction: '/fixture/media',
+        labels: {
+          primary: 'Ảnh chính',
+          makePrimary: 'Đặt làm ảnh chính',
+          moveUp: 'Dịch lên',
+          moveDown: 'Dịch xuống',
+          remove: 'Xóa ảnh',
+          choose: 'Chọn ảnh',
+          add: 'Thêm ảnh',
+        },
         images: [
           {
             id: 'front',
-            src: '/fixture-main.png',
+            src: '/design/fixtures/product-front.svg',
             alt: 'Mặt trước',
             primary: true,
             actions: { remove: '/fixture/media/front/remove', moveDown: '/fixture/media/front/down' },
           },
           {
             id: 'back',
-            src: '/fixture-other.png',
+            src: '/design/fixtures/product-back.svg',
             alt: 'Mặt sau',
             actions: {
               primary: '/fixture/media/back/primary',

@@ -9,6 +9,8 @@ export const HOOKS = [
   'form-label',
   'form-control',
   'form-help',
+  'form-required',
+  'form-error',
   'form-errors',
   'form-actions',
 ] as const
@@ -23,12 +25,13 @@ export type FormField = {
   required?: boolean
   disabled?: boolean
   help?: string | null
+  error?: string | null
   options?: readonly FormOption[]
   span?: 'full' | 'half'
   step?: string | null
 }
 
-const control = (field: FormField, id: string): TemplateResult => {
+const control = (field: FormField, id: string, describedBy: string | null): TemplateResult => {
   if (field.type === 'textarea')
     return (
       <textarea
@@ -38,6 +41,8 @@ const control = (field: FormField, id: string): TemplateResult => {
         placeholder={field.placeholder ?? null}
         required={field.required === true}
         disabled={field.disabled === true}
+        aria-invalid={field.error ? 'true' : null}
+        aria-describedby={describedBy}
       >
         {String(field.value ?? '')}
       </textarea>
@@ -50,6 +55,8 @@ const control = (field: FormField, id: string): TemplateResult => {
         name={field.name}
         required={field.required === true}
         disabled={field.disabled === true}
+        aria-invalid={field.error ? 'true' : null}
+        aria-describedby={describedBy}
       >
         {each(
           field.options ?? [],
@@ -72,6 +79,8 @@ const control = (field: FormField, id: string): TemplateResult => {
         value="1"
         checked={field.value === true || field.value === '1'}
         disabled={field.disabled === true}
+        aria-invalid={field.error ? 'true' : null}
+        aria-describedby={describedBy}
       />
     )
   return (
@@ -84,6 +93,8 @@ const control = (field: FormField, id: string): TemplateResult => {
       placeholder={field.placeholder ?? null}
       required={field.required === true}
       disabled={field.disabled === true}
+      aria-invalid={field.error ? 'true' : null}
+      aria-describedby={describedBy}
       step={field.type === 'decimal' ? (field.step ?? 'any') : (field.step ?? null)}
     />
   )
@@ -108,7 +119,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
       <input type="hidden" name={name} value={value} />
     ))}
     {!!o.errors?.length && (
-      <ul data-ui="form-errors">
+      <ul data-ui="form-errors" role="alert">
         {each(
           o.errors,
           (error, index) => `${index}:${error}`,
@@ -124,11 +135,40 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
         (field) => field.name,
         (field) => {
           const id = `field-${o.action}-${field.name}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+          const helpId = field.help ? `${id}-help` : null
+          const errorId = field.error ? `${id}-error` : null
+          const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
+          const fieldLabel = (
+            <span data-ui="form-label">
+              {field.label}
+              {field.required && (
+                <span data-ui="form-required" aria-hidden="true">
+                  {' *'}
+                </span>
+              )}
+            </span>
+          )
           return (
-            <label data-ui="form-field" data-span={field.span ?? 'half'} for={id}>
-              <span data-ui="form-label">{field.label}</span>
-              {control(field, id)}
-              {!!field.help && <small data-ui="form-help">{field.help}</small>}
+            <label
+              data-ui="form-field"
+              data-span={field.span ?? 'half'}
+              data-kind={field.type ?? 'text'}
+              data-invalid={String(!!field.error)}
+              for={id}
+            >
+              {field.type === 'checkbox' && control(field, id, describedBy)}
+              {fieldLabel}
+              {field.type !== 'checkbox' && control(field, id, describedBy)}
+              {!!field.help && (
+                <small data-ui="form-help" id={helpId ?? undefined}>
+                  {field.help}
+                </small>
+              )}
+              {!!field.error && (
+                <small data-ui="form-error" id={errorId ?? undefined}>
+                  {field.error}
+                </small>
+              )}
             </label>
           )
         },

@@ -168,7 +168,7 @@ const componentContract = [
     submit: 'Save',
     errors: ['Invalid value'],
     fields: [
-      { name: 'name', label: 'Name', required: true, help: 'Required' },
+      { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
       { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
     ],
   }),
@@ -269,6 +269,82 @@ test('ui contract: every documented hook has an explicit CSS rule', () => {
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
 
+test('design tokens: every admin role used by components is declared', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
+  const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
+  assert.deepEqual(
+    [...referenced].filter((name) => !declared.has(name)).sort(),
+    [],
+    'a visual role must exist before a component can consume it',
+  )
+})
+
+test('design tokens: status surfaces stay fixed across light and dark themes', () => {
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  for (const name of [
+    '--admin-neutral-soft',
+    '--admin-success-soft',
+    '--admin-warning-soft',
+    '--admin-danger-soft',
+  ]) {
+    assert.equal(
+      [...tokens.matchAll(new RegExp(`${name}\\s*:`, 'g'))].length,
+      1,
+      `${name} is a self-contained status surface, not a theme role`,
+    )
+  }
+})
+
+test('form: required, help and error states are visible and semantically connected', () => {
+  const html = renderToString(
+    recordForm({
+      action: '/records',
+      submit: 'Save',
+      fields: [
+        {
+          name: 'name',
+          label: 'Name',
+          required: true,
+          help: 'Public label',
+          error: 'Enter a name',
+        },
+        { name: 'active', label: 'Active', type: 'checkbox', value: true },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="form-required" aria-hidden="true"/)
+  assert.match(
+    html,
+    /aria-invalid="true" aria-describedby="field--records-name-help field--records-name-error"/,
+  )
+  assert.match(html, /data-ui="form-help" id="field--records-name-help"/)
+  assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
+  assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
+})
+
+test('media: primary state has a label and image actions keep accessible icon controls', () => {
+  const html = renderToString(
+    mediaPanel({
+      status: 'ready',
+      images: [
+        { id: 'main', src: '/main.png', alt: 'Main', primary: true },
+        {
+          id: 'other',
+          src: '/other.png',
+          alt: 'Other',
+          actions: { primary: '/primary', moveUp: '/up', remove: '/remove' },
+        },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="media-item" data-primary="true"/)
+  assert.match(html, /data-value="primary"/)
+  assert.match(html, /data-icon-only="true"[\s\S]*aria-label="Set as primary"/)
+  assert.match(html, /data-variant="destructive"[\s\S]*aria-label="Remove image"/)
+})
+
 test('ui contract: the states a stylesheet branches on are present', () => {
   assert.match(everything, /data-state="installed"/)
   assert.match(everything, /data-state="available"/)
@@ -295,6 +371,7 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
     'apps-blocked',
     'pages-empty',
     'pages-long',
+    'kit-form',
     'state-error',
   ]) {
     assert.ok(
