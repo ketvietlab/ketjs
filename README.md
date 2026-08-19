@@ -62,6 +62,8 @@ found bugs in Ket, which is the point of running them.
 | A stream survives a reload | resumes from cursor, no gap and no duplicate |
 | An agent cannot double-apply | idempotency key replays the first result, and survives a restart |
 | A transaction is really one transaction | BEGIN and body share a reserved connection |
+| Hydration adopts server DOM | 20 rows hydrated in a real browser: **0** nodes created, same node objects |
+| A tenant cannot see another tenant | resolution happens once, in ctx; unresolvable requests get `E_UNKNOWN_TENANT` |
 | A query is checked before it runs | `q.touches` vs declared effects — a query reading an undeclared model is blocked |
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
