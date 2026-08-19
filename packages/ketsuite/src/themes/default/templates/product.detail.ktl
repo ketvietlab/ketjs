@@ -1,0 +1,10 @@
+<article data-ket-section="product" data-id="{{ product.id }}">
+  <h1>{{ product.title }}</h1>
+  <p class="price">{{ product.priceCents | money }}</p>
+  {% if related %}
+  <ul class="related">
+    {% for r in related %}{% render 'product.related_row', n: loop.index, item: r %}{% endfor %}
+  </ul>
+  {% endif %}
+  {% joint "catalog:product.detail.footer" %}
+</article>

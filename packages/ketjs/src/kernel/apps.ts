@@ -44,6 +44,8 @@ export type AppInfo = {
   /** Installed modules that would break if this one went away. */
   dependents: string[]
   install: InstallPolicy
+  /** False means an operator may not remove it — see AppMeta.removable. */
+  removable: boolean
 }
 
 export type AppRegistry = {
@@ -142,6 +144,7 @@ export async function createAppRegistry(
           depends: [...m.depends],
           dependents: dependentsOf(manifest, name).filter(d => on.has(d)),
           install: m.install,
+          removable: m.removable,
         }))
         .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
     },
@@ -172,9 +175,19 @@ export async function createAppRegistry(
     },
 
     async uninstall(name) {
-      known(name)
+      const target = known(name)
       const on = await enabled()
       if (!on.has(name)) return []
+      // Removing this would remove the way back: the boundary is the module's,
+      // drawn once, rather than a rule the UI is trusted to remember.
+      if (!target.removable) {
+        throw new KetError({
+          code: 'E_APP_NOT_REMOVABLE',
+          module: name,
+          message: `"${name}" declares removable: false, so it cannot be uninstalled`,
+          hint: 'it is part of what this deployment is, not a choice made on this database',
+        })
+      }
 
       const blocking = dependentsOf(manifest, name).filter(d => on.has(d))
       if (blocking.length) {

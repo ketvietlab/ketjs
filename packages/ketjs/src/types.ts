@@ -104,6 +104,16 @@ export type AppMeta = {
    * when they want to watch each install happen rather than arrive.
    */
   install?: InstallPolicy
+  /**
+   * Whether an operator may remove this module once it is installed.
+   *
+   * `install` draws the boundary on the way in; this one draws it on the way out,
+   * and they are genuinely different axes. The case that forces it: the backend is
+   * the screen you would use to put something back, so a deployment that let you
+   * remove it would let you remove your way out of ever fixing it. Default true —
+   * refusing removal is the exception and has to be argued for.
+   */
+  removable?: boolean
   /** The older spelling of `install: 'auto'`. Normalised away by defineModule. */
   autoInstall?: boolean
 }
@@ -157,7 +167,7 @@ export type KetModule = Readonly<AppMeta> & {
 export type Manifest = {
   ket: string
   order: string[]
-  modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy } & AppMeta>
+  modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta>
   models: Record<string, ComposedModel>
   joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean }>
   fills: Array<{ joint: string; by: string; template: string }>

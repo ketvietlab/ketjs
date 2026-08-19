@@ -1,0 +1,1 @@
+<li>{{ n }}. {{ item.title | truncate: 20 }}</li>

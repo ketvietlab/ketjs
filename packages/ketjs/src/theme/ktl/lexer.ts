@@ -19,18 +19,23 @@ export function lex(src: string): Token[] {
   while (i < src.length) {
     const openExpr = src.indexOf('{{', i)
     const openTag = src.indexOf('{%', i)
-    const next = openExpr === -1 ? openTag : openTag === -1 ? openExpr : Math.min(openExpr, openTag)
+    const openNote = src.indexOf('{#', i)
+    const next = [openExpr, openTag, openNote].filter(n => n !== -1).sort((a, b) => a - b)[0] ?? -1
 
     if (next === -1) { const value = src.slice(i); if (value) out.push({ type: 'text', value, line }); break }
     if (next > i) { const value = src.slice(i, next); out.push({ type: 'text', value, line }); countLines(value) }
 
-    const isExpr = src.startsWith('{{', next)
-    const close = src.indexOf(isExpr ? '}}' : '%}', next + 2)
-    if (close === -1) throw new KtlSyntaxError(`unterminated ${isExpr ? '{{' : '{%'} at line ${line}`, line)
+    // A comment is lexed and dropped rather than left to the text branch, so it
+    // never reaches the output. Templates are files now; a language a theme author
+    // cannot annotate is a language they will annotate wrongly, in the markup.
+    const open = src.slice(next, next + 2)
+    const closer = open === '{{' ? '}}' : open === '{%' ? '%}' : '#}'
+    const close = src.indexOf(closer, next + 2)
+    if (close === -1) throw new KtlSyntaxError(`unterminated ${open} at line ${line}`, line)
     const raw = src.slice(next + 2, close).trim()
-    out.push({ type: isExpr ? 'expr' : 'tag', value: raw, line })
+    if (open !== '{#') out.push({ type: open === '{{' ? 'expr' : 'tag', value: raw, line })
     countLines(src.slice(next, close))
-    i = close + 2
+    i = close + closer.length
   }
   return out
 }

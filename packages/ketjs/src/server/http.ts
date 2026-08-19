@@ -2,6 +2,7 @@
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
 import { createServer } from 'node:http'
+import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -45,7 +46,7 @@ export type ServeOpts = {
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
   assets?: { prefix: string; dir: string }
   /** Extra routes, matched before the theme takes the request. */
-  routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<{ status?: number; type?: string; body: string }>>
+  routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
 }
 

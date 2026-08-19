@@ -6,10 +6,10 @@
 // installing, resolving who the request is, mounting /_ket, the banner, shutting
 // down cleanly — is `ket serve`.
 
-import { defineApp } from 'ketjs'
+import { defineApp, page } from 'ketjs'
 import * as suite from 'ketsuite'
 import backend, { appsScreen, pagesScreen, settingsScreen } from 'ketsuite/backend'
-import { renderToString } from 'ketjs-view'
+import { html } from 'ketjs-view'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { openStore } from './config.ts'
@@ -22,14 +22,17 @@ type Build = (
   req: { url: URL; raw: Parameters<Route>[1] },
 ) => Promise<TemplateResult> | TemplateResult
 
-const screen = (ctx: ServeContext, build: Build): Route => async (url, raw) => ({
-  body: ctx.html({
-    lang: ctx.localeOf(url, raw),
-    title: 'KetSuite',
-    head: '<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">',
-    body: renderToString(await build(ctx.translate(ctx.localeOf(url, raw)), { url, raw })),
-  }),
-})
+const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
+
+const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
+  const lang = ctx.localeOf(url, req)
+  return page({
+    body: ctx.document({
+      lang, title: 'KetSuite', head: STYLES,
+      body: await build(ctx.translate(lang), { url, raw: req }),
+    }),
+  })
+}
 
 export const ketsuite = defineApp({
   name: 'ketsuite',

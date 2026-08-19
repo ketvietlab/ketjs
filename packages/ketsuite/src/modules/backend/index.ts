@@ -19,6 +19,9 @@ export default defineModule({
   title: 'Quản trị',
   summary: 'Màn hình quản lý ứng dụng, trang và cài đặt.',
   category: 'Hệ thống',
+  // The screen you would use to put something back. A deployment that let you
+  // remove it would let you remove your way out of ever fixing it.
+  removable: false,
   messages,
 })
 

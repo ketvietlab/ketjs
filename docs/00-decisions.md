@@ -108,6 +108,59 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D29 — HTML is a value, templates are files, and removal has a boundary too
+**The premise was wrong in an interesting way.** "We cannot write HTML as strings"
+sounded like KetJS had no template engine. It has two: `html\`\`` for first-party
+screens, KTL for third-party themes — and that split is right, because the two
+audiences differ in exactly one way that matters, whether their code may run. What
+was actually string concatenation was narrower and worse placed: the document
+shell, the thing every page passes through.
+
+**A route's body was `string`, so escaped and hand-built were the same type.**
+Nothing could tell them apart — not the compiler, not a reviewer reading a diff —
+and the shell was concatenation because concatenation was allowed. `RouteResult` is
+branded now with a type-only symbol, so an object literal is not assignable and the
+only ways to make one are `page`, `fragment`, `json`, `text` and `raw`. `raw` is the
+single hatch, and it is one word to grep for. The type-level claim is asserted in
+tools/type-proof.ts, because a rule nothing checks is a rule that decays.
+
+**Two bugs fell out of building it, both found by probing rather than by tests:**
+
+1. `localeOf` split `Accept-Language` and handed the result to Intl. Node's own
+   fetch sends `Accept-Language: *` by default, so **any client that did not set the
+   header got a 500**. Every earlier check used curl, which does not send it. The
+   locale is now resolved against the catalogues the deployment actually ships,
+   which fixes the crash and closes the wider hole at once: the value reaches the
+   `lang` attribute of every page, and one drawn from a fixed set carries nothing.
+2. **`apps/**` was never in tsconfig.** The application entry point had never been
+   type-checked. It is now, and it needed fixing when it was.
+
+**Templates are .ktl files.** The file name is the template name, so an error can
+name a place without a second map. Themes gained comments (`{# … #}`) at the same
+time — a language a theme author cannot annotate is one they will annotate in the
+markup — and KTL errors now carry the line.
+
+**`{% render %}`, with no inheritance.** Shopify made the same call and the reason
+holds here twice: a partial that sees only what it was passed is a partial you can
+read on its own, and a theme is a stranger's code, so one that silently saw the page
+scope would leak whatever the page was carrying. The callee's scope is a
+null-prototype object holding the passed arguments and nothing else. A depth cap
+turns a self-rendering template into an error naming the template and the line
+rather than a stack overflow.
+
+**`removable: false`, which the install policy had no answer for.** D28 drew the
+boundary on the way in; there was none on the way out, and the backend — the screen
+you would use to put something back — could be uninstalled. A deployment that lets
+you remove that lets you remove your way out of ever fixing it. Default is true:
+refusing removal is the exception and has to be argued for.
+
+**Still open, and now visible:** a module cannot contribute assets, stylesheets or
+routes. The app reaches into `packages/ketsuite/src/modules/backend/design/` by
+filesystem path and names two stylesheets by hand, which is why uninstalling a
+module leaves its routes mounted and its CSS linked. That is the next change, and
+it is the same defect class as this one: the app assembling by hand what the
+manifest should carry.
+
 ## D28 — The framework boots the app, and a module says whether it may arrive
 **Chosen:** `ket serve` and `ket dev`, with the boot sequence as a function
 (`bootApp`) rather than a script. What moved into the framework is everything that

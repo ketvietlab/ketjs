@@ -104,11 +104,40 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
     return t.render(sealScope(scope))
   }
 
+  /**
+   * {% render %}. The depth cap exists because a template naming itself is a
+   * stack overflow, and a stack overflow in a stranger's theme is a 500 with no
+   * explanation. The error says which template and where instead.
+   */
+  const MAX_RENDER_DEPTH = 16
+  let depth = 0
+  const renderTemplate = (name: string, scope: Scope, from: string): string => {
+    const t = templates[name]
+    if (!t) {
+      throw new KetError({
+        code: 'E_TEMPLATE_NOT_FOUND',
+        message: `${from} renders "${name}", which no installed module provides`,
+        hint: `available templates: ${Object.keys(templates).sort().join(', ') || '(none)'}`,
+      })
+    }
+    if (depth >= MAX_RENDER_DEPTH) {
+      throw new KetError({
+        code: 'E_RENDER_TOO_DEEP',
+        message: `${from} renders "${name}" more than ${MAX_RENDER_DEPTH} levels deep`,
+        hint: 'a template that renders itself, directly or through another, will not terminate',
+      })
+    }
+    depth++
+    try { return t.render(scope) } finally { depth-- }
+  }
+
+  const wiring = { renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt, renderTemplate }
+
   for (const [joint, srcs] of Object.entries(fillSources)) {
-    fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt }))
+    fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, ...wiring }))
   }
   for (const [name, src] of Object.entries(sources)) {
-    templates[name] = compileKtl(src, { ...opts, name, renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt })
+    templates[name] = compileKtl(src, { ...opts, name, ...wiring })
   }
 
   // A theme that points at a joint nobody publishes is a build error, not a blank spot.
