@@ -228,13 +228,14 @@ export type ModuleSpec = AppMeta & {
    */
   styles?: string[]
   /**
-   * Routes this module serves, one factory per path.
+   * Routes this module serves, one factory per path or dynamic segment pattern.
    *
-   * The path is data so composition can settle ownership — two modules claiming
-   * one path is an error at build, not a race at boot. The handler is a factory
-   * because it needs the running server, which does not exist yet. Dispatch checks
-   * the live manifest, so a route belonging to an uninstalled module is 404 rather
-   * than quietly still answering.
+   * A parameter occupies one whole segment (`/products/{slug}`), and its decoded
+   * value reaches the handler in the route params. The path is data so composition
+   * can settle ownership — two modules claiming one path is an error at build, not
+   * a race at boot. The handler is a factory because it needs the running server,
+   * which does not exist yet. Dispatch checks the live manifest, so a route belonging
+   * to an uninstalled module is 404 rather than quietly still answering.
    */
   routes?: Record<string, RouteEntry>
   /** Interactive views a theme may place but never write. */
