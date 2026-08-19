@@ -4,8 +4,19 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'user.User': {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
     memberships: { hasMany: 'user.Membership', by: 'userId' },
+    assignments: { hasMany: 'user.Assignment', by: 'userId' },
   },
   'user.Membership': {
     user: { belongsTo: 'user.User', by: 'userId' },
+  },
+  'user.Role': {
+    grants: { hasMany: 'user.Grant', by: 'roleId' },
+  },
+  'user.Grant': {
+    role: { belongsTo: 'user.Role', by: 'roleId' },
+  },
+  'user.Assignment': {
+    user: { belongsTo: 'user.User', by: 'userId' },
+    role: { belongsTo: 'user.Role', by: 'roleId' },
   },
 }

@@ -22,3 +22,4 @@ export default defineModule({
 
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'
 export { routes } from './routes.ts'
+export { permittedFor } from './roles.ts'

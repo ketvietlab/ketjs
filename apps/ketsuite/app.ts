@@ -7,6 +7,7 @@
 // that module was switched off.
 
 import { defineApp } from 'ketjs'
+import { permittedFor } from 'ketsuite'
 import * as suite from 'ketsuite'
 import backend from 'ketsuite/backend'
 import { openStore } from './config.ts'
@@ -31,6 +32,13 @@ export const ketsuite = defineApp({
      * anonymous requests still get a company, because a public storefront needs one.
      */
     sessions: { anonymous: { company: 'default' } },
+    /**
+     * The framework enforces the list; this decides what is in it. Resolved per
+     * request, so revoking a role takes effect on the next call rather than on the
+     * next login — one query is a better trade than "why can they still do that".
+     */
+    permissions: (ctx, userId) => ctx.call('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
+      .then(r => (r as { superuser: boolean; functions?: string[] }).superuser ? null : (r as { functions: string[] }).functions),
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
   },
 })

@@ -43,6 +43,8 @@ export type ServeOpts = {
    * eventually forget, and forgetting means answering with another company's rows.
    */
   resolveScope?: (url: URL, req: IncomingMessage) => Scope | Promise<Scope>
+  /** Functions this request may call. Null means unrestricted — see boot.ts. */
+  resolveAllow?: (url: URL, req: IncomingMessage) => Promise<readonly string[] | null>
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
   /** Static file mounts. One fixed directory, or a resolver that answers per request. */
   assets?: AssetMount | AssetMount[]
@@ -172,10 +174,12 @@ export async function createKetServer(o: ServeOpts) {
         const args = await readBody(req)
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)
+        const allow = await o.resolveAllow?.(url, req)
         const result = await withDb(url, req, adapter => callFn(fnKey, args, {
           adapter,
           manifest: o.manifest,
           scope,
+          allow,
           dryRun: url.searchParams.get('dryRun') === '1',
           idempotencyKey: req.headers['idempotency-key'] as string | undefined ?? null,
         }))
