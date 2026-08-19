@@ -17,16 +17,16 @@ export const functions: Record<string, FnSpec> = {
 
   getTemplate: defineFn({
     input: { id: 'id' },
-    effects: ['read:product.Template', 'read:product.Product', 'read:product.Category'],
+    effects: ['read:product.Template', 'read:product.Product', 'read:product.Category', 'read:uom.Unit'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const T = ctx.table('product.Template')
-      return ctx.db.one(from(T).where(eq(T.id, a.id)).preload('variants', 'category'))
+      return ctx.db.one(from(T).where(eq(T.id, a.id)).preload('variants', 'category', 'uom'))
     },
   }),
 
   saveTemplate: defineFn({
-    input: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', description: 'text?' },
+    input: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?' },
     effects: ['read:product.Template', 'write:product.Template'],
     idempotent: true,
     agent: true,
@@ -34,7 +34,7 @@ export const functions: Record<string, FnSpec> = {
       const T = ctx.table('product.Template')
       const existing = await ctx.db.one(from(T).where(eq(T.id, a.id)))
       let cs = ctx.change('product.Template', a, existing)
-        .cast(['id', 'name', 'type', 'categoryId', 'description'])
+        .cast(['id', 'name', 'type', 'categoryId', 'uomId', 'description'])
         .required(['name', 'type'])
         // The vocabulary is small on purpose, so it is checked here rather than
         // widened into the column type.

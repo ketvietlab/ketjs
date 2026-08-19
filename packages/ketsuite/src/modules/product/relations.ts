@@ -9,6 +9,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'product.Template': {
     variants: { hasMany: 'product.Product', by: 'templateId' },
     category: { belongsTo: 'product.Category', by: 'categoryId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
   },
   'product.Product': {
     template: { belongsTo: 'product.Template', by: 'templateId' },

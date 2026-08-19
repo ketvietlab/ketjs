@@ -5,13 +5,13 @@ import {
   restrictManifest, sqliteAdapter, translator,
 } from 'ketjs'
 import type { Adapter, KetError, Row } from 'ketjs'
-import { product } from 'ketsuite'
+import { product, uom } from 'ketsuite'
 
 /** Products are shared master data, so the company in scope should not matter. */
 const SCOPE = { company: 'acme', branches: null }
 const OTHER = { company: 'globex', branches: null }
 
-const manifest = compose([product], { headless: true })
+const manifest = compose([uom, product], { headless: true })
 const call = (fn: string, args: Record<string, unknown>, db: Adapter, scope = SCOPE) =>
   callFn(fn, args, { adapter: db, manifest, scope })
 
@@ -19,7 +19,7 @@ async function boot(): Promise<Adapter> {
   const db = sqliteAdapter()
   await db.open()
   await migrateOne(db, manifest)
-  registerFunctions([product])
+  registerFunctions([uom, product])
   return db
 }
 
@@ -42,7 +42,7 @@ test('product: stock extends the template rather than the type enum carrying its
     depends: ['product'],
     extend: { 'product.Template': { tracked: 'bool?' } },
   })
-  const withStock = compose([product, stock], { headless: true })
+  const withStock = compose([uom, product, stock], { headless: true })
   const fields = withStock.models['product.Template']!.fields
   assert.equal(fields.tracked!.by, 'stock')
   assert.equal(fields.type!.by, 'product')

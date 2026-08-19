@@ -7,10 +7,10 @@ import { postgresAdapter } from 'ketjs-postgres'
 import {
   callFn, compose, createAdapterPool, createIdempotency, createQueue, createStreams,
   dbStreamStore, eq, formatFleet, from, gte, migrateFleet, planMigration,
-  registerFunctions, renderSql, schemaFromManifest, table,
+  migrateOne, registerFunctions, renderSql, schemaFromManifest, table,
 } from 'ketjs'
 import type { Adapter } from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
+import { catalog, checkout, defaultTheme as theme, inventory, uom } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
@@ -161,6 +161,50 @@ test('live pg: a database per tenant, migrated as a fleet', live, async () => {
     const second = await migrateFleet(pool, ['ketjs_t1', 'ketjs_t2'], manifest)
     assert.ok(second.every(r => r.ops.length === 0), formatFleet(second))
     assert.equal(pool.size, 2)
+  } finally {
+    await pool.close()
+  }
+})
+
+test('live pg: a decimal column is NUMERIC, and gives back exactly what it was given', live, async () => {
+  const base = URL.replace(/\/[^/]*$/, '')
+  const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 2 })
+  try {
+    const m = compose([uom], { headless: true })
+    await pool.with('ketjs_t2', async (a) => {
+      // A clean slate, including the migration record: this database is left in
+      // whatever shape the fleet test gave it, and the destructive guard rightly
+      // refuses to drop those tables on the way to a uom-only schema.
+      for (const t of ['uom_unit', 'uom_category', 'catalog_product', 'checkout_order', 'ket_migration', 'ket_app', 'ket_idem', 'ket_job', 'ket_stream']) {
+        await a.exec(`DROP TABLE IF EXISTS "${t}" CASCADE`)
+      }
+      await migrateOne(a, m)
+
+      const cols = (await a.introspect())['uom_unit']!
+      assert.equal(cols['factor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
+      assert.equal(cols['rounding'], 'numeric')
+
+      registerFunctions([uom])
+      await a.run('INSERT INTO uom_category (id, name) VALUES ($1, $2)', ['weight', 'Khối lượng'])
+
+      // Values a double cannot hold. The point of the column type is that these
+      // come back as themselves rather than as the nearest binary approximation.
+      const awkward = [0.1, 0.001, 0.07, 12345.6789]
+      for (const [i, factor] of awkward.entries()) {
+        await callFn('uom.saveUnit', { id: `u${i}`, name: `u${i}`, categoryId: 'weight', type: 'smaller', factor, rounding: 0.001 },
+          { adapter: a, manifest: m, scope: { company: 'acme', branches: null } })
+      }
+      const rows = (await callFn('uom.listUnits', { categoryId: 'weight' }, { adapter: a, manifest: m, scope: { company: 'acme', branches: null } })).value as Array<{ id: string; factor: number }>
+      for (const [i, factor] of awkward.entries()) {
+        assert.equal(rows.find(r => r.id === `u${i}`)!.factor, factor)
+      }
+
+      // And the driver hands NUMERIC over as a string, which is what keeps it exact
+      // before the framework turns it into a number.
+      const raw = (await a.all('SELECT factor FROM uom_unit WHERE id = $1', ['u0']))[0]!
+      assert.equal(typeof raw.factor, 'string')
+      assert.equal(raw.factor, '0.1')
+    })
   } finally {
     await pool.close()
   }

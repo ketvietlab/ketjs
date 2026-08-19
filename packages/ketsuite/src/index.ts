@@ -13,6 +13,11 @@ export { default as websiteSearch } from './modules/website_search/index.ts'
 export { default as paperTheme } from './themes/paper/index.ts'
 export type { SectionPlacement } from './modules/website/types.ts'
 
+// units of measure — product depends on it
+export { default as uom } from './modules/uom/index.ts'
+export { convertQty, roundTo, compareQty, isZero, UomError } from './modules/uom/convert.ts'
+export type { Unit } from './modules/uom/convert.ts'
+
 // product vertical
 export { default as product } from './modules/product/index.ts'
 export { PRODUCT_TYPES } from './modules/product/types.ts'
