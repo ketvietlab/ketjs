@@ -10,7 +10,7 @@ import type { MenuNode, ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
 import type { Extras, Frame, Viewer } from './screens.ts'
-import { pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
+import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 type Build = (
   _: ReturnType<ServeContext['translate']>,
@@ -39,6 +39,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
   const viewer = await viewerOf(ctx, url, req)
   // Installed, and permitted: the sidebar never offers what the click would refuse.
   const menu = await ctx.menu(url, req)
+  const menuFilter = url.searchParams.get('menu')?.trim() || null
   // Rendered once per request, so a screen stays a pure function of its data and
   // the catalogue can render the same screens with no server at all.
   const extras: Extras = {
@@ -51,7 +52,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
       lang,
       title: 'KetSuite',
       head: await ctx.styles(req),
-      body: await build(ctx.translate(lang), { url, raw: req, frame: { viewer, extras, menu } }),
+      body: await build(ctx.translate(lang), { url, raw: req, frame: { viewer, extras, menu, menuFilter } }),
     }),
   })
 }
@@ -86,14 +87,13 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
     return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), {
       ...frame,
       chrome: {
-        crumbs: [{ label: _('backend.menu.admin'), path: '/admin' }, { label: _('backend.pages.title') }],
         search: {
           name: 'q', value: search ?? '', placeholder: _('backend.chrome.searchPages'),
           facets: search ? [{ label: `${_('backend.chrome.searchFacet')}: ${search}`, without: url.pathname }] : [],
         },
         pager: pager(url, page, rows.length, count),
       },
-    })
+    }, { shown: colsOf(url), colsHref: colsHref(url) })
   }),
   '/admin/settings': (ctx) => screen(ctx, (_, { frame }) => settingsScreen(_, ctx.manifest.tokens, frame)),
 }

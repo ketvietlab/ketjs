@@ -29,6 +29,11 @@ export type MenuOptions = {
   translate?: (key: string) => string
   /** The path currently showing, used to mark the branch leading to it. */
   active?: string
+  /**
+   * Narrow the tree to what matches. A heading survives if anything under it
+   * does, so filtering never orphans a leaf from the words above it.
+   */
+  q?: string
 }
 
 const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
@@ -56,6 +61,10 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
     return out && out !== key ? out : (o.translate?.(def.label) ?? def.label)
   }
 
+  const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
+  const matches = (text: string): boolean =>
+    !needle || text.toLocaleLowerCase('vi').includes(needle)
+
   const build = (parent: string | undefined, depth: number): MenuNode[] => {
     if (depth > 8) return []      // a cycle would otherwise recurse forever
     const out: MenuNode[] = []
@@ -64,6 +73,9 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       const children = build(id, depth + 1)
       // A heading is only worth showing if something is under it.
       if (!def.path && !children.length) continue
+      // A search keeps a branch that matches anywhere along it, so a leaf never
+      // arrives without the words that explain where it lives.
+      if (needle && !children.length && !matches(label(def))) continue
       const active = (def.path !== undefined && def.path === o.active) || children.some(c => c.active)
       out.push({ id, label: label(def), path: def.path ?? null, icon: def.icon ?? null, active, children })
     }

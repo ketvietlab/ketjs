@@ -20,12 +20,25 @@ export const searchOf = (url: URL): string | undefined => {
   return q ? q : undefined
 }
 
-/** The same URL with one parameter changed, and page reset unless it is page. */
-export const withParam = (url: URL, key: string, value: string | null): string => {
+/** Which optional columns this viewer asked for: ?cols=id,category. */
+export const colsOf = (url: URL): string[] =>
+  (url.searchParams.get('cols') ?? '').split(',').map(s => s.trim()).filter(Boolean)
+
+/** Where a column-menu entry points: the same list showing a different set. */
+export const colsHref = (url: URL) => (keys: readonly string[]): string =>
+  withParam(url, 'cols', keys.length ? [...keys].join(',') : null, false)
+
+/**
+ * The same URL with one parameter changed.
+ *
+ * Page resets by default, because a new filter on page three shows an empty page
+ * three. Showing one more column is not a new filter, so that passes false.
+ */
+export const withParam = (url: URL, key: string, value: string | null, resetPage = true): string => {
   const next = new URL(url.href)
   if (value === null) next.searchParams.delete(key)
   else next.searchParams.set(key, value)
-  if (key !== 'page') next.searchParams.delete('page')
+  if (resetPage && key !== 'page') next.searchParams.delete('page')
   return next.pathname + (next.search || '')
 }
 

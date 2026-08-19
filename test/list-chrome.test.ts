@@ -8,9 +8,9 @@ import type { ListChrome } from 'ketsuite/backend'
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 const at = (href: string): URL => new URL(href, 'http://x')
-const render = (c: ListChrome): string => renderToString(listChrome(_, c))
+const render = (c: ListChrome): string => renderToString(listChrome(_, 'Trang', c))
 
-const base: ListChrome = { crumbs: [{ label: 'Trang' }] }
+const base: ListChrome = {}
 
 test('paging: the URL is the state, so a page is a link somebody can send', () => {
   assert.equal(pageOf(at('/admin/pages')), 1, 'no parameter means the first page')
@@ -59,10 +59,10 @@ test('chrome: a single view is not a choice, so no switcher appears', () => {
   assert.ok(!one.includes('data-ui="view-switch"'))
 })
 
-test('chrome: the last crumb is where you are, and is not a link', () => {
-  const html = render({ crumbs: [{ label: 'Quản trị', path: '/admin' }, { label: 'Trang' }] })
-  assert.match(html, /<a data-ui="crumb" href="\/admin">/)
-  assert.match(html, /<span data-ui="crumb" aria-current="page">/)
+test('chrome: the title is the title — no breadcrumb repeating the sidebar', () => {
+  const html = render(base)
+  assert.match(html, /<h1 data-ui="title">[\s\S]*Trang/)
+  assert.ok(!html.includes('data-ui="crumb"'), 'the sidebar already says which app and which entry')
 })
 
 test('chrome: a facet shows what was filtered and where the × undoes it', () => {
@@ -86,7 +86,6 @@ test('chrome: an empty list says nothing rather than "1-0 / 0"', () => {
 
 test('chrome: every control is a link or a form, so the back button needs no help', () => {
   const html = render({
-    crumbs: [{ label: 'a' }],
     create: { label: 'Mới', path: '/new' },
     search: { name: 'q', value: '', placeholder: 'Tìm' },
     pager: { from: 1, to: 30, total: 84, prev: null, next: '/p?page=2' },
