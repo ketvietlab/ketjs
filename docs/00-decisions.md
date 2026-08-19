@@ -1485,3 +1485,38 @@ refreshes the tenant list, claims one bounded batch per turn and rotates the fir
 tenant. It does not reserve one PostgreSQL listener connection per tenant. If a
 future fleet needs sub-100ms wake-up across thousands of databases, that is a
 separate wake-up plane; durable ownership remains with the tenant database.
+
+## D48 — Blob bytes are outside SQL; their authority is not
+
+**Metadata and bytes have different jobs.** `storage.Attachment` is a
+company-scoped row in each tenant database: ownership, target record, media type,
+size, checksum and visibility remain queryable and transactional. The byte stream
+lives behind one `Storage` contract on local disk or an S3-compatible service.
+Putting large opaque bodies in SQL would make ordinary backups, replication and
+table scans pay for data they cannot inspect.
+
+**Tenant isolation is applied before a key reaches an adapter.** HTTP and worker
+roles open the same configured storage and receive a namespace derived from the
+resolved tenant key. A module never supplies that namespace, just as it never
+supplies a database connection. Inside it, stored attachments are content
+addressed by company and SHA-256; duplicate metadata rows share bytes safely.
+
+**The contract streams.** `put` and `get` use async byte iterables. Local writes go
+to a unique temporary file, sync, validate their declared length and rename into
+place. S3 requests use Signature V4 with no SDK dependency; live MinIO tests cover
+PUT, HEAD, GET, ListObjectsV2, presigned GET and DELETE. Multipart parsing is
+bounded by total, part and header limits and keeps boundary fragments across
+network chunks rather than buffering the upload in memory.
+
+**A filename and media type are data, not trust.** Responses add `nosniff` and
+force unknown or active content to `application/octet-stream` plus attachment
+disposition. Only a small inline-safe set may use a short-lived S3 redirect. Public
+download is a separately declared anonymous function that still passes through
+company scope and the attachment's `public` predicate.
+
+**Deletion is asynchronous and conservative.** Removing metadata does not delete
+a content-addressed blob another row may share. `storage.sweep` runs on the durable
+`maintenance` queue, lists only the captured company prefix and removes only
+unreferenced objects older than a grace period. Its blob reads/removals are declared
+effects, so adding storage to a job does not become a new way around the operation
+boundary.
