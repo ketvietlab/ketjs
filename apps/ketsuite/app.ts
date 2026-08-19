@@ -18,7 +18,7 @@ export const ketsuite = defineApp({
   modules: [
     suite.website, suite.websiteMenu, suite.websiteSeo, suite.websiteSearch,
     suite.partner, suite.company, suite.user,
-    suite.uom, suite.product, backend,
+    suite.uom, suite.product, suite.productBackend, backend,
   ],
   theme: suite.paperTheme,
   datastore: 'main',

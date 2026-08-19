@@ -113,3 +113,23 @@ test('screen: the fill lands verbatim between the hydration markers', () => {
   const out = renderToString(html`<div data-ui="app-actions">${markup}</div>`)
   assert.equal(out, '<div data-ui="app-actions"><!--k[--><a href="/x">Kho</a><!--k--></div>')
 })
+
+test('bridge: a module does not depend on the admin just to add a button to it', async () => {
+  // Putting the fill in `product` made every test that composes a catalogue
+  // without an admin fail with E_MISSING_DEPENDENCY — a headless API could not
+  // have products. CI found it; running only the tests I had touched did not,
+  // because I had touched product without thinking of it that way.
+  //
+  // The fill belongs in a bridge that installs itself once both sides are there,
+  // which is what install:'auto' was built for and what Odoo does with sale_stock.
+  const { product, productBackend, uom } = await import('ketsuite')
+  const backend = (await import('ketsuite/backend')).default
+
+  const catalogueOnly = compose([uom, product])
+  assert.ok(catalogueOnly.modules['product'], 'a catalogue composes with no admin at all')
+
+  const both = compose([uom, product, backend, productBackend])
+  assert.equal(both.modules['product_backend']!.install, 'auto',
+    'so it appears when the admin does, and not before')
+  assert.equal(both.fills.filter(f => f.joint === 'backend:app-card.actions').length, 1)
+})

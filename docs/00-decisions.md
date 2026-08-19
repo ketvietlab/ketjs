@@ -158,6 +158,14 @@ prop, so the route renders one per card and hands the screen a map keyed by name
 Passing a function would have been shorter and would have made a screen depend on a
 server — and the design catalogue renders these same screens with no server at all.
 
+**A module does not depend on the admin just to add a button to it.** The fill
+went into `product` first, which made `product` depend on `backend` — so every
+composition without an admin failed, and a headless API could not have a catalogue.
+It belongs in a bridge that installs itself once both sides are present, which is
+what `install: 'auto'` was built for and what Odoo does with `sale_stock`. CI found
+this; running only the tests I had touched did not, because I had touched
+`product` without thinking of it as touched.
+
 **Cut, deliberately:** replace and reorder. Replace is the one that severs the
 upstream link, and the vertical-rewrite case it serves is better answered by a
 different screen on a different route than by replacing slots in a generic one.
