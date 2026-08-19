@@ -35,6 +35,19 @@ export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 export type SectionDef = { title?: string; settings?: Record<string, string> }
 export type ViewDef = { of: string; fields: string[] }
 
+/**
+ * A relation between two models, declared by a module that depends on both.
+ *
+ * There is no lazy side. Nothing loads itself when touched, so the N+1 that makes
+ * ORMs slow in ways nobody can see is not expressible: a caller either asks for the
+ * related rows with preload(), or does not get them.
+ */
+export type RelationDef =
+  | { belongsTo: string; by: string }
+  | { hasMany: string; by: string }
+
+export type ComposedRelation = { kind: 'belongsTo' | 'hasMany'; target: string; by: string; declaredBy: string }
+
 export type FnSpec = {
   input?: Record<string, string>
   output?: Record<string, string>
@@ -91,6 +104,7 @@ export type ModuleSpec = AppMeta & {
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandView>
   sections?: Record<string, SectionDef>
+  relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
   messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
@@ -112,6 +126,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly provides: readonly string[]
   readonly islands: Record<string, import('ketjs-view').IslandView>
   readonly sections: Record<string, SectionDef>
+  readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
 
@@ -127,6 +142,7 @@ export type Manifest = {
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<string, { by: string }>
   sections: Record<string, SectionDef & { by: string }>
+  relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>

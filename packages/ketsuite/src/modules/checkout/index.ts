@@ -11,6 +11,13 @@ export default defineModule({
       fields: { id: 'id', productId: 'ref:catalog.Product', qty: 'int', totalCents: 'int', placedAt: 'datetime' } },
   },
 
+  // Only the narrowing direction is declared. The other way — a shared product
+  // listing its orders — would reach every company's rows through a row that
+  // belongs to none of them, and the composer refuses it.
+  relations: {
+    'checkout.Order': { product: { belongsTo: 'catalog.Product', by: 'productId' } },
+  },
+
   views: {
     order: { of: 'checkout.Order', fields: ['id', 'qty', 'totalCents'] },
   },

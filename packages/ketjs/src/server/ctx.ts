@@ -8,6 +8,7 @@
 import { tableNameFor } from '../data/migrate.ts'
 import { table, Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
+import { from } from '../data/query.ts'
 import { Changeset, changeset } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
@@ -99,16 +100,60 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   const ph = () => (dialect === 'postgres' ? `$${++n}` : (n++, '?'))
   const fresh = () => { n = 0 }
 
+  /**
+   * Fill in what a query asked to preload: one extra query per relation, never one
+   * per row. The children go through the same scoped path as anything else, so a
+   * relation cannot be a way around the company filter.
+   */
+  const fillPreloads = async (q: Query, rows: Row[]): Promise<Row[]> => {
+    if (!q.preloads.length || !rows.length) return rows
+
+    for (const { name } of q.preloads) {
+      const rel = manifest.relations[q.model]?.[name]
+      if (!rel) {
+        throw new KetError({
+          code: 'E_UNKNOWN_RELATION',
+          module: fn.by,
+          message: `"${q.model}" has no relation "${name}"`,
+          hint: `declared: ${Object.keys(manifest.relations[q.model] ?? {}).join(', ') || '(none)'}`,
+        })
+      }
+      need('read', rel.target)
+
+      if (rel.kind === 'belongsTo') {
+        const ids = [...new Set(rows.map(r => r[rel.by]).filter(v => v != null))]
+        if (!ids.length) { for (const r of rows) r[name] = null; continue }
+        const parents = await db.all(from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: 'id' }, ids)))
+        const byId = new Map(parents.map(p => [p.id, p]))
+        for (const r of rows) r[name] = byId.get(r[rel.by]) ?? null
+      } else {
+        const ids = rows.map(r => r.id).filter(v => v != null)
+        if (!ids.length) { for (const r of rows) r[name] = []; continue }
+        const children = await db.all(from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: rel.by }, ids)))
+        const grouped = new Map<unknown, Row[]>()
+        for (const child of children) {
+          const key = child[rel.by]
+          const list = grouped.get(key)
+          if (list) list.push(child)
+          else grouped.set(key, [child])
+        }
+        for (const r of rows) r[name] = grouped.get(r.id) ?? []
+      }
+    }
+    return rows
+  }
+
   const db: Ctx['db'] = {
     async all(q) {
       checkQuery(q)
       const { text, params } = scoped(q).toSQL(dialect)
-      return adapter.all(text, params)
+      return fillPreloads(q, await adapter.all(text, params))
     },
     async one(q) {
       checkQuery(q)
       const { text, params } = scoped(q).limit(1).toSQL(dialect)
-      return (await adapter.all(text, params))[0] ?? null
+      const rows = await fillPreloads(q, await adapter.all(text, params))
+      return rows[0] ?? null
     },
     async count(q) {
       const c = scoped(q).count()

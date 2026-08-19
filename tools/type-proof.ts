@@ -67,6 +67,19 @@ declare const client: KetClient
 export const ok = () => client['checkout.placeOrder']({ id: 'o1', productId: 'p1', qty: 2 })`,
   },
   {
+    name: 'a preloaded relation is optional on the type, because it is optional in fact',
+    shouldCompile: false,
+    expect: /possibly 'undefined'|possibly 'null'/,
+    code: `import type { CheckoutOrder } from './types.ts'
+export const bad = (o: CheckoutOrder) => o.product.title`,
+  },
+  {
+    name: 'and reading it after checking is fine',
+    shouldCompile: true,
+    code: `import type { CheckoutOrder } from './types.ts'
+export const ok = (o: CheckoutOrder) => o.product?.title ?? '(chưa preload)'`,
+  },
+  {
     name: 'joint keys are a closed union - a typo cannot compile',
     shouldCompile: false,
     expect: /not assignable to type 'JointKey'/,
