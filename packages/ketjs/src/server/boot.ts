@@ -26,7 +26,7 @@ import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
 import type { Sessions, SessionOptions } from './session.ts'
-import { document, json, text } from './respond.ts'
+import { document, json, text, withHeaders } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname, isAbsolute } from 'node:path'
 import { html, each } from 'ketjs-view'
@@ -366,12 +366,17 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       if (!on.has(entry.by)) {
         return text(`${path} belongs to "${entry.by}", which is not installed on this database`, { status: 404 })
       }
-      // Closed unless the module said otherwise. /admin was reachable by anyone
-      // because nothing here asked; the check belongs in one place rather than in
-      // every screen, which is where it would eventually be missing from one.
+      // Closed unless the module said otherwise. A browser is sent to the sign-in
+      // page carrying where it was going; anything else gets the status, because a
+      // redirect to an HTML form is a useless answer to a fetch().
       if (makeSessions && !entry.anonymous) {
         const s = await sessionsOf(url, req)
-        if (!(await s?.of(req))) return text('sign in first', { status: 401 })
+        if (!(await s?.of(req))) {
+          const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
+          return wantsHtml
+            ? withHeaders(text('', { status: 303 }), { location: `/login?next=${encodeURIComponent(url.pathname + url.search)}` })
+            : text('sign in first', { status: 401 })
+        }
       }
       return (routeHandlers.get(path) as Route)(url, req)
     }
