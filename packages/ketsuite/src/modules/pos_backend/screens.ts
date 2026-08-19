@@ -337,7 +337,7 @@ export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): Templ
 export const registerScreen = (
   _: Translator,
   frame: Frame,
-  session: AnyRow,
+  _session: AnyRow,
   orders: AnyRow[],
   createFields: FormField[],
   actionPath: string,
