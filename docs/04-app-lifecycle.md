@@ -25,6 +25,9 @@ all five are now tests in `test/apps.test.ts`.
 | Remove an app something installed depends on | refused, **naming the dependents** | removing it would break them silently |
 | Remove something not installed | no-op | idempotent |
 | Remove an `install: 'auto'` app | **stays removed** | ← was a bug. The row records a *decision*, not a fact: `state='removed'` survives the next sweep. Deleting the row let the app walk straight back in the moment anything else was installed. |
+| Routes of a removed app | **404**, naming the module | ← was a bug. They stayed mounted, because the app declared them instead of the module. Dispatch now checks the live manifest per request. |
+| Assets and stylesheets of a removed app | **stop being served and stop being linked** | same cause, same fix: the module declares them, `restrictManifest` drops them |
+| Remove a module declaring `removable: false` | `E_APP_NOT_REMOVABLE` | the backend is the screen you would use to put something back |
 | Rows belonging to a removed app | **kept, untouched** | turning an app off must never be a way to lose data (D7 one level up) |
 | Re-install after removing | data is where it was | the columns never went anywhere |
 

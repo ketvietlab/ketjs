@@ -1,38 +1,15 @@
 // KetSuite — the application, as a declaration.
 //
 // What is left here is only what the framework cannot know: which modules ship,
-// which function turns a path into a page, which screens the backend serves, and
-// how to open a datastore that is not SQLite. Everything else — migrating,
-// installing, resolving who the request is, mounting /_ket, the banner, shutting
-// down cleanly — is `ket serve`.
+// which function turns a path into a page, and how to open a datastore that is not
+// SQLite. Screens, stylesheets and static files belong to the modules that own
+// them — an app that named another module's files would go on serving them after
+// that module was switched off.
 
-import { defineApp, page } from 'ketjs'
+import { defineApp } from 'ketjs'
 import * as suite from 'ketsuite'
-import backend, { appsScreen, pagesScreen, settingsScreen } from 'ketsuite/backend'
-import { html } from 'ketjs-view'
-import type { ServeContext, Route } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import backend from 'ketsuite/backend'
 import { openStore } from './config.ts'
-
-const DESIGN = new URL('../../packages/ketsuite/src/modules/backend/design/', import.meta.url).pathname
-
-/** The backend's shell: the framework's bare page, plus this app's stylesheets. */
-type Build = (
-  _: ReturnType<ServeContext['translate']>,
-  req: { url: URL; raw: Parameters<Route>[1] },
-) => Promise<TemplateResult> | TemplateResult
-
-const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
-
-const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
-  const lang = ctx.localeOf(url, req)
-  return page({
-    body: ctx.document({
-      lang, title: 'KetSuite', head: STYLES,
-      body: await build(ctx.translate(lang), { url, raw: req }),
-    }),
-  })
-}
 
 export const ketsuite = defineApp({
   name: 'ketsuite',
@@ -48,18 +25,6 @@ export const ketsuite = defineApp({
     defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },
     bootstrap: ['website', 'theme_paper', 'backend', 'product'],
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
-    assets: { prefix: '/design/', dir: DESIGN },
-    routes: (ctx) => ({
-      '/admin': screen(ctx, async (_) => appsScreen(_, await ctx.apps.list())),
-      '/admin/apps': screen(ctx, async (_) => appsScreen(_, await ctx.apps.list())),
-      '/admin/pages': screen(ctx, async (_, { url, raw }) => {
-        // The same call path as the API: this request's live manifest and company.
-        const rows = await ctx.call('website.listPages', { includeDrafts: true }, url, raw) as
-          Array<{ id: string; path: string; title: string; published: number }>
-        return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })))
-      }),
-      '/admin/settings': screen(ctx, _ => settingsScreen(_, ctx.manifest.tokens)),
-    }),
   },
 })
 
