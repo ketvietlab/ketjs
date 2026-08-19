@@ -4,12 +4,16 @@ import { compose, formatMissing, missingMessages, renderToString, translator } f
 import backend, { appsScreen } from 'ketsuite/backend'
 import {
   company,
+  account,
+  accountBackend,
   partner,
   pricing,
   pricingBackend,
   product,
   productBackend,
   productMedia,
+  purchase,
+  purchaseBackend,
   stock,
   stockBackend,
   storage,
@@ -28,14 +32,18 @@ const modules = [
   productMedia,
   pricing,
   stock,
+  account,
+  purchase,
   backend,
   productBackend,
   pricingBackend,
   stockBackend,
+  accountBackend,
+  purchaseBackend,
 ]
 const manifest = compose(modules, { headless: true })
 
-test('ketsuite i18n: Product, Pricing and Stock catalogues have complete vi/en parity', () => {
+test('ketsuite i18n: business catalogues have complete vi/en parity', () => {
   const gaps = missingMessages(manifest, ['vi', 'en'])
   assert.deepEqual(gaps, {}, formatMissing(gaps))
 })
@@ -46,10 +54,14 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
     productMedia,
     pricing,
     stock,
+    account,
+    purchase,
     storage,
     productBackend,
     pricingBackend,
     stockBackend,
+    accountBackend,
+    purchaseBackend,
   ].map((module) => ({
     name: module.name,
     title: module.title ?? module.name,
