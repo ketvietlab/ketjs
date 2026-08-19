@@ -108,6 +108,56 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D31 — Permissions are reported before they are enforced
+**Chosen:** `ket permissions` first, the role model second. Deciding how roles
+should be shaped is much easier while looking at what the functions already imply,
+and the report costs a fraction of what guessing wrong would.
+
+**The question that prompted it:** a user needs orders but must not have products.
+In most systems answering that takes reading every module, because permission is
+granted on a *table* and a table is used everywhere — grant read on
+`product.template` in Odoo and you have granted it in the order form, the list
+view, the export, XML-RPC, and every `search()` any module makes.
+
+**Here the unit is the action, so the answer is arithmetic rather than
+investigation.** A function cannot touch a model it did not declare — not through
+a relation (D10, and the hole that let an undeclared preload through on an empty
+table is closed), and not by calling another function, because `Ctx` has no way to
+call one. So the reach of a set of functions is the union of their effects. There
+is nothing to traverse, which is why the report is thirty lines and exact.
+
+```
+ket permissions --grant product.listTemplates
+
+models reachable:
+  product.Product   read   via product.listTemplates
+  product.Template  read   via product.listTemplates
+```
+
+Every model names the function that granted it, because a surprise has to be
+traceable to its cause.
+
+**What the report immediately showed, which is the real value:** of KetSuite's 17
+functions, **16 return an undeclared shape**. Model-level reach is exact;
+field-level reach is not stated at all. So the honest answer to "may they see the
+product name but not its cost" is currently *no, they see the whole row*.
+
+`FnSpec.output` already exists and is already composed into the manifest — and is
+read by nothing. Meanwhile the mechanism that would enforce it exists and runs:
+view models (`views`) build a null-prototype frozen projection of exactly the
+declared fields, which is the boundary that keeps a third-party theme from touching
+anything else. The two have simply never been connected.
+
+**Not enforced in this change, deliberately.** Making `output` mandatory is a
+migration across every function; making it enforced-when-present is a decision
+about defaults that is better made with the count in front of you. The report
+flags every unprojected function so the field-level gap is *visible* rather than
+remembered — which is the same move as the banner saying auto-install is off.
+
+**Cost:** granting by function means more functions than Odoo has rules — two
+audiences needing two slices of one model is two functions, not one function with a
+flag. In exchange the reach is computable, which Odoo cannot do at all.
+
 ## D30 — A module contributes to the served surface, not just to the database
 **The hole, stated as a measurement.** With `backend` uninstalled, `/admin` still
 answered 200 and its stylesheet was still linked. "Enable at run" reached the
