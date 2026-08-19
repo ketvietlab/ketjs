@@ -32,13 +32,13 @@ export default defineModule({
       output: { id: 'id', title: 'text', priceCents: 'int' },
       effects: ['read:catalog.Product'],
       agent: true,
-      handler: (ctx, args) => ctx.db.select('catalog.Product', { id: args.id })[0] ?? null,
+      handler: async (ctx, args) => (await ctx.db.select('catalog.Product', { id: args.id }))[0] ?? null,
     }),
     listProducts: defineFn({
       input: { minPriceCents: 'int?', limit: 'int?' },
       effects: ['read:catalog.Product'],
       agent: true,
-      handler: (ctx, args) => {
+      handler: async (ctx, args) => {
         const P = ctx.table('catalog.Product')
         let q = from(P).where_(eq(P.active!, true))
         if (args.minPriceCents != null) q = q.where_(gte(P.priceCents!, args.minPriceCents))
@@ -50,14 +50,14 @@ export default defineModule({
       effects: ['write:catalog.Product'],
       idempotent: true,
       agent: true,
-      handler: (ctx, args) => {
+      handler: async (ctx, args) => {
         // Casting is an explicit allow-list: anything else in args never reaches the row.
         const cs = ctx.change('catalog.Product', args)
           .cast(['id', 'title', 'priceCents', 'slug'])
           .required(['id', 'title'])
           .validate('priceCents', v => (v as number) > 0 || 'phải lớn hơn 0')
           .put('active', true)
-        ctx.db.commit(cs)
+        await ctx.db.commit(cs)
         return { id: args.id }
       },
     }),

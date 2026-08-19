@@ -14,22 +14,21 @@ import type { Adapter, Manifest } from '../src/types.ts'
 
 const mods = [catalog, inventory, checkout, theme]
 
-function boot(): { adapter: Adapter; manifest: Manifest } {
+async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
   const manifest = compose(mods)
   const adapter = sqliteAdapter()
-  adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) adapter.exec(sql)
+  await adapter.open()
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
   registerFunctions(mods)
-  _resetIdempotency()
   return { adapter, manifest }
 }
 
-test('fullstack: schema is derived from the composed manifest, extensions included', () => {
-  const { adapter } = boot()
-  const cols = adapter.introspect()['catalog_product']!
+test('fullstack: schema is derived from the composed manifest, extensions included', async () => {
+  const { adapter } = await boot()
+  const cols = (await adapter.introspect())['catalog_product']!
   assert.ok('title' in cols)
   assert.ok('leadTimeDays' in cols, 'the column inventory added to catalog.Product must exist')
-  adapter.close()
+  await adapter.close()
 })
 
 test('fullstack: destructive migrations are generated but refused by default', () => {
@@ -47,7 +46,7 @@ test('fullstack: destructive migrations are generated but refused by default', (
 })
 
 test('fullstack: a server function cannot touch a model it did not declare', async () => {
-  const { adapter, manifest } = boot()
+  const { adapter, manifest } = await boot()
   const rogue = defineModule({
     name: 'rogue', depends: ['catalog'],
     functions: { peek: { effects: [], handler: (ctx) => ctx.db.select('catalog.Product') } },
@@ -59,79 +58,79 @@ test('fullstack: a server function cannot touch a model it did not declare', asy
     assert.match((e as Error).message, /declares effects \[none\]/)
     return true
   })
-  adapter.close()
+  await adapter.close()
 })
 
 test('fullstack: input is validated against the declared signature', async () => {
-  const { adapter, manifest } = boot()
+  const { adapter, manifest } = await boot()
   await assert.rejects(
     () => callFn('catalog.createProduct', { id: 'p1', title: 'X', priceCents: 'nhieu', slug: 's' }, { adapter, manifest }),
     (e: unknown) => { assert.match((e as Error).message, /expects int \(number\), got string/); return true })
   await assert.rejects(
     () => callFn('catalog.getProduct', { id: 'p1', surprise: 1 }, { adapter, manifest }),
     (e: unknown) => { assert.match((e as Error).message, /unknown input "surprise"/); return true })
-  adapter.close()
+  await adapter.close()
 })
 
 test('agent safety: dry-run reports intended writes and commits nothing', async () => {
-  const { adapter, manifest } = boot()
+  const { adapter, manifest } = await boot()
   const res = await callFn('catalog.createProduct', { id: 'p9', title: 'Thu', priceCents: 1000, slug: 'thu' },
     { adapter, manifest, dryRun: true })
   assert.equal(res.dryRun, true)
   assert.equal(res.writes.length, 1)
   assert.equal(res.writes[0]!.model, 'catalog.Product')
-  const rows = adapter.all('SELECT * FROM catalog_product WHERE id = ?', ['p9'])
+  const rows = await adapter.all('SELECT * FROM catalog_product WHERE id = ?', ['p9'])
   assert.equal(rows.length, 0, 'dry-run must not commit')
-  adapter.close()
+  await adapter.close()
 })
 
 test('agent safety: an idempotency key makes a retry replay instead of double-apply', async () => {
-  const { adapter, manifest } = boot()
+  const { adapter, manifest } = await boot()
   const args = { id: 'o1', productId: 'p1', qty: 2 }
   await callFn('catalog.createProduct', { id: 'p1', title: 'Ao', priceCents: 5000, slug: 'ao' }, { adapter, manifest })
   const a = await callFn('checkout.placeOrder', args, { adapter, manifest, idempotencyKey: 'k1' })
   const b = await callFn('checkout.placeOrder', args, { adapter, manifest, idempotencyKey: 'k1' })
   assert.equal(b.replayed, true)
   assert.deepEqual(a.value, b.value)
-  assert.equal(adapter.all('SELECT * FROM checkout_order', []).length, 1, 'retry must not create a second order')
-  adapter.close()
+  assert.equal((await adapter.all('SELECT * FROM checkout_order', [])).length, 1, 'retry must not create a second order')
+  await adapter.close()
 })
 
 test('agent safety: an idempotency key on a non-idempotent function is refused', async () => {
-  const { adapter, manifest } = boot()
+  const { adapter, manifest } = await boot()
   await assert.rejects(
     () => callFn('catalog.listProducts', {}, { adapter, manifest, idempotencyKey: 'k' }),
     (e: unknown) => { assert.equal((e as { code: string }).code, 'E_NOT_IDEMPOTENT'); return true })
-  adapter.close()
+  await adapter.close()
 })
 
-test('streams: a client that reloads mid-generation resumes exactly where it stopped', () => {
-  const adapter = sqliteAdapter(); adapter.open()
-  const s = createStreams(adapter)
-  s.open('gen'); s.write('gen', 'Xin'); s.write('gen', ' chao')
-  const first = s.since('gen', 0)
+test('streams: a client that reloads mid-generation resumes exactly where it stopped', async () => {
+  const adapter = sqliteAdapter(); await adapter.open()
+  const s = await createStreams(adapter)
+  await s.open('gen'); await s.write('gen', 'Xin'); await s.write('gen', ' chao')
+  const first = await s.since('gen', 0)
   assert.equal(first.chunks.map(c => c.data).join(''), 'Xin chao')
   assert.equal(first.done, false)
 
   // ... the browser reloads here; generation keeps running on the server
-  s.write('gen', ' ban'); s.end('gen', { tokens: 3 })
+  await s.write('gen', ' ban'); await s.end('gen', { tokens: 3 })
 
-  const resumed = s.since('gen', first.nextSeq)
+  const resumed = await s.since('gen', first.nextSeq)
   assert.equal(resumed.chunks.map(c => c.data).join(''), ' ban', 'only the missed chunk, no duplicates')
   assert.equal(resumed.done, true)
   assert.deepEqual(resumed.summary, { tokens: 3 })
-  adapter.close()
+  await adapter.close()
 })
 
-test('streams: the job queue is the same log with a different state machine', () => {
-  const adapter = sqliteAdapter(); adapter.open()
-  const q = createQueue(adapter)
-  q.enqueue('mail', { to: 'a@b.c' })
-  q.enqueue('mail', { to: 'd@e.f' })
-  assert.equal(q.pending('mail'), 2)
-  const job = q.claim('mail')!
+test('streams: the job queue is the same log with a different state machine', async () => {
+  const adapter = sqliteAdapter(); await adapter.open()
+  const q = await createQueue(adapter)
+  await q.enqueue('mail', { to: 'a@b.c' })
+  await q.enqueue('mail', { to: 'd@e.f' })
+  assert.equal(await q.pending('mail'), 2)
+  const job = (await q.claim('mail'))!
   assert.deepEqual(job.data, { to: 'a@b.c' })
-  q.complete('mail', job.seq)
-  assert.equal(q.pending('mail'), 1)
-  adapter.close()
+  await q.complete('mail', job.seq)
+  assert.equal(await q.pending('mail'), 1)
+  await adapter.close()
 })

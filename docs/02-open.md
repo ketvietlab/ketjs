@@ -7,8 +7,6 @@ Honest list of what is not settled or not built.
   host, so a string host and a DOM host both exist in principle — but walking a
   server-rendered DOM and re-attaching the holes is not written. Predicted to be
   the single most time-consuming remaining piece.
-- **Postgres adapter.** The adapter contract is fixed; the ~2.5k-line wire-protocol
-  driver is not written. This is where rule 1 is most likely to be broken under pressure.
 - **Auth.** Decided to be core (session, identity, permission check) because the
   agent pillar needs a permission boundary. Not implemented.
 - **i18n and storage primitives.** Decided core, not implemented.
@@ -37,7 +35,7 @@ Honest list of what is not settled or not built.
 - `Instance.nextSibling()` walks the parent's children array; on a real DOM host this
   must use `node.nextSibling` instead. The counting host is exercised by tests, the
   DOM host is not.
-- Idempotency keys live in a process-local `Map`. They belong in the log table so
-  they survive a restart and work across instances.
+- The Postgres adapter is proven against a recording stand-in for the driver, not
+  against a live server. Running it against a real cluster is the next real test.
 - The KTL parser accepts a small expression grammar with no operator precedence
   beyond comparison and filters. Adding arithmetic later needs a real precedence climb.

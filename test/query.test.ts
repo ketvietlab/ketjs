@@ -18,12 +18,11 @@ const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)
 const P = table(manifest, 'catalog.Product')
 
-function boot(): { adapter: Adapter; manifest: Manifest } {
+async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
   const adapter = sqliteAdapter()
-  adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) adapter.exec(sql)
+  await adapter.open()
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
   registerFunctions(mods)
-  _resetIdempotency()
   return { adapter, manifest }
 }
 
@@ -81,7 +80,7 @@ test('query: a raw string where a column belongs is refused', () => {
 })
 
 test('query: a query the function did not declare is blocked before it runs', async () => {
-  const { adapter } = boot()
+  const { adapter } = await boot()
   const rogue = defineModule({
     name: 'rogue', depends: ['catalog', 'checkout'],
     functions: {
@@ -101,11 +100,11 @@ test('query: a query the function did not declare is blocked before it runs', as
     assert.match((e as Error).message, /read on checkout\.Order/)
     return true
   })
-  adapter.close()
+  await adapter.close()
 })
 
 test('query: end to end through a real server function', async () => {
-  const { adapter, manifest: m } = boot()
+  const { adapter, manifest: m } = await boot()
   for (const [id, price] of [['p1', 30_000], ['p2', 90_000], ['p3', 60_000]] as const) {
     await callFn('catalog.createProduct', { id, title: `SP ${id}`, priceCents: price, slug: id }, { adapter, manifest: m })
   }
@@ -115,7 +114,7 @@ test('query: end to end through a real server function', async () => {
   const dear = await callFn('catalog.listProducts', { minPriceCents: 60_000 }, { adapter, manifest: m })
   const rows = dear.value as Array<{ id: string; priceCents: number }>
   assert.deepEqual(rows.map(r => r.id), ['p2', 'p3'], 'filtered and ordered by price descending')
-  adapter.close()
+  await adapter.close()
 })
 
 test('changeset: fields that were not cast are dropped, not written', () => {
@@ -161,7 +160,7 @@ test('changeset: put sets a server-controlled field the client cannot supply', (
 })
 
 test('changeset: committing an invalid one is refused with its errors', async () => {
-  const { adapter, manifest: m } = boot()
+  const { adapter, manifest: m } = await boot()
   await assert.rejects(
     () => callFn('catalog.createProduct', { id: 'x', title: 'Áo', priceCents: 0, slug: 'ao' }, { adapter, manifest: m }),
     (e: unknown) => {
@@ -169,8 +168,8 @@ test('changeset: committing an invalid one is refused with its errors', async ()
       assert.match((e as Error).message, /priceCents phải lớn hơn 0/)
       return true
     })
-  assert.equal(adapter.all('SELECT * FROM catalog_product', []).length, 0)
-  adapter.close()
+  assert.equal((await adapter.all('SELECT * FROM catalog_product', [])).length, 0)
+  await adapter.close()
 })
 
 test('query: delete is a write and is checked as one', () => {

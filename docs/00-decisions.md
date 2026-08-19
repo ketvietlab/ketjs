@@ -89,6 +89,30 @@ computed and checked at build.
 classic umbrella failure is the shared database becoming invisible coupling — here
 two apps disagreeing about a column is a build error.
 
+## D12 — The adapter contract is asynchronous, and transactions are scoped
+**What happened:** the day-one contract was synchronous, because `node:sqlite` is.
+Postgres over a socket is not, and no amount of API design makes it so. The contract
+moved to async: SQLite resolves immediately and pays nothing measurable, while the
+harder case becomes expressible at all.
+
+**The second correction was subtler.** `tx(fn)` originally gave the callback no
+handle, so the body would have run on whatever pooled connection came next rather
+than the one that issued BEGIN — a transaction that silently is not one. It now
+passes an adapter scoped to a reserved connection. SQLite could never have surfaced
+this bug, which is the argument for building the second adapter earlier rather than
+later.
+
+**Cost:** every `ctx.db` call and every handler is now async, and the test suite
+had to follow. Paid once, at the cheapest possible moment.
+
+## D13 — Idempotency records live in the log, not in memory
+A process-local `Map` loses every record on restart and is invisible to a second
+instance, which makes the guarantee false exactly when it matters. Records now sit
+in `ket_log` under `idem:<fn>:<key>` at seq 0, claimed with
+`INSERT ... ON CONFLICT DO NOTHING` so the primary key settles the race rather than a
+check-then-insert. A key that is claimed but unfinished returns
+`E_IDEMPOTENCY_IN_FLIGHT` instead of quietly running the work twice.
+
 ## D11 — SQL layer: Ecto's architecture, Drizzle's surface, no ORM
 **Chosen:** hand-written, not a dependency. A query is an **immutable value**, built
 by a chainable typed builder and rendered per dialect. Casting and validation live in

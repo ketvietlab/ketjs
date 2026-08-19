@@ -3,6 +3,8 @@
 // Written once, never restated.
 
 import { createContext } from './ctx.ts'
+import { createLog } from './log.ts'
+import type { Log } from './log.ts'
 import { KetError } from '../kernel/errors.ts'
 import { parseType } from '../kernel/types.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
@@ -44,8 +46,15 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
   }
 }
 
-const idemStore = new Map<string, CallResult>()
-export const _resetIdempotency = (): void => idemStore.clear()
+// Idempotency records live in the log, not in a process-local Map: they have to
+// survive a restart and be visible to every instance, which a Map is not.
+const logs = new WeakMap<Adapter, Promise<Log>>()
+const logFor = (adapter: Adapter): Promise<Log> => {
+  let p = logs.get(adapter)
+  if (!p) { p = createLog(adapter); logs.set(adapter, p) }
+  return p
+}
+export const _resetIdempotency = (): void => { /* records are durable; nothing to clear */ }
 
 export async function callFn(
   fnKey: string,
@@ -59,7 +68,10 @@ export async function callFn(
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false
 
-  if (o.idempotencyKey) {
+  const idemTopic = o.idempotencyKey ? `idem:${fnKey}:${o.idempotencyKey}` : null
+  let log: Log | null = null
+
+  if (idemTopic) {
     if (!meta.idempotent) {
       throw new KetError({
         code: 'E_NOT_IDEMPOTENT',
@@ -67,8 +79,19 @@ export async function callFn(
         hint: 'declare `idempotent: true` on the function, or drop the key',
       })
     }
-    const cached = idemStore.get(`${fnKey}::${o.idempotencyKey}`)
-    if (cached) return { ...cached, replayed: true }
+    log = await logFor(o.adapter)
+    // Claim the key before doing any work. Losing the race means another caller is
+    // either mid-flight or already finished, and both are answered from the record.
+    const claimed = await log.putOnce(idemTopic, 'idem', null)
+    if (!claimed) {
+      const existing = await log.readOne(idemTopic)
+      if (existing?.state === 'done') return { ...(existing.data as CallResult), replayed: true }
+      throw new KetError({
+        code: 'E_IDEMPOTENCY_IN_FLIGHT',
+        message: `"${fnKey}" is already running with idempotency key "${o.idempotencyKey}"`,
+        hint: 'retry shortly; the first call has not finished yet',
+      })
+    }
   }
   if (dryRun && !meta.dryRun) throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
 
@@ -76,6 +99,6 @@ export async function callFn(
   const value = await def.handler(ctx, args ?? {})
   const result: CallResult = { ok: true, value, writes: ctx.writes, dryRun }
 
-  if (o.idempotencyKey) idemStore.set(`${fnKey}::${o.idempotencyKey}`, result)
+  if (idemTopic && log) await log.complete(idemTopic, result)
   return result
 }

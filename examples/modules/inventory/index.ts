@@ -27,8 +27,8 @@ export default defineModule({
       effects: ['write:catalog.Product'],
       idempotent: true,
       agent: true,
-      handler: (ctx, args) => {
-        ctx.db.update('catalog.Product', { id: args.productId }, { leadTimeDays: args.days })
+      handler: async (ctx, args) => {
+        await ctx.db.update('catalog.Product', { id: args.productId }, { leadTimeDays: args.days })
         return { ok: true }
       },
     }),
