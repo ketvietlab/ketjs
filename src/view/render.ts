@@ -92,11 +92,30 @@ class Part {
     const keyed = this.keyed as Map<unknown, Instance>
     const prevKeys = this.keys
 
-    const nextKeys: unknown[] = []
-    const results: TemplateResult[] = []
-    for (let i = 0; i < list.items.length; i++) {
-      nextKeys.push(list.keyOf(list.items[i], i))
-      results.push(list.render(list.items[i], i))
+    const n = list.items.length
+    const nextKeys: unknown[] = new Array(n)
+    const results: TemplateResult[] = new Array(n)
+    // Same length and same keys in the same places is by far the most common
+    // render: a value changed, nothing moved. Detecting it here skips the Set, the
+    // Map, the LIS and the anchor walk below — six N-sized structures that existed
+    // only to answer a question already answered.
+    let sameOrder = prevKeys.length === n
+    for (let i = 0; i < n; i++) {
+      const key = list.keyOf(list.items[i], i)
+      nextKeys[i] = key
+      results[i] = list.render(list.items[i], i)
+      if (sameOrder && prevKeys[i] !== key) sameOrder = false
+    }
+
+    if (sameOrder) {
+      for (let i = 0; i < n; i++) {
+        const inst = keyed.get(nextKeys[i])
+        const result = results[i] as TemplateResult
+        if (inst && inst.strings === result.strings) { inst.update(result.values); continue }
+        sameOrder = false     // a template swapped shape; fall through to the full path
+        break
+      }
+      if (sameOrder) { this.keys = nextKeys; return }
     }
 
     // 1. drop what disappeared, before anything is measured or moved
@@ -110,11 +129,13 @@ class Part {
     let live = 0
     for (const k of prevKeys) if (keyed.has(k)) prevPos.set(k, live++)
 
-    const oldIndex: number[] = nextKeys.map(k => {
+    // The index is already in hand here. Looking it up with indexOf made this
+    // quadratic — a million comparisons per render of a thousand rows, and the
+    // reason an unchanged re-render still cost half a millisecond.
+    const oldIndex: number[] = nextKeys.map((k, i) => {
       const inst = keyed.get(k)
       if (!inst) return -1
-      const r = results[nextKeys.indexOf(k)] as TemplateResult
-      return inst.strings === r.strings ? (prevPos.get(k) ?? -1) : -1
+      return inst.strings === (results[i] as TemplateResult).strings ? (prevPos.get(k) ?? -1) : -1
     })
 
     // 3. entries in the longest increasing subsequence are already in order
@@ -228,7 +249,11 @@ class Instance {
 
   nextSibling(): HostNode | null {
     const last = this.roots[this.roots.length - 1]
-    if (!last?.parent) return null
+    if (!last) return null
+    // A real DOM node knows its own neighbour; the counting mock keeps an array.
+    const native = (last as unknown as { nextSibling?: HostNode | null }).nextSibling
+    if (native !== undefined) return native ?? null
+    if (!last.parent) return null
     const sibs = last.parent.children ?? []
     return sibs[sibs.indexOf(last) + 1] ?? null
   }

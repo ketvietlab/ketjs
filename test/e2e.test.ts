@@ -83,9 +83,9 @@ test('e2e: dry-run over HTTP reports writes and commits nothing', async () => {
 
 test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   const { app, adapter, base } = await boot()
-  await app.streams.open('gen1')
-  await app.streams.write('gen1', 'Xin')
-  await app.streams.write('gen1', ' chào')
+  const w = await app.streams.open('gen1')
+  w.write('Xin'); w.write(' chào')
+  await w.flush()
 
   // first client reads what exists, then "reloads" (aborts)
   const ac = new AbortController()
@@ -100,8 +100,8 @@ test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   ac.abort()
 
   // generation continues while nobody is listening
-  await app.streams.write('gen1', ' bạn')
-  await app.streams.end('gen1')
+  w.write(' bạn')
+  await w.end()
 
   const res2 = await fetch(`${base}/_ket/stream/gen1?from=${lastId + 1}`)
   const text = await res2.text()

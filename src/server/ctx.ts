@@ -11,9 +11,6 @@ import { Changeset, changeset } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter, Ctx, Manifest, Row, WriteRecord } from '../types.ts'
 
-const normalize = (v: unknown): unknown =>
-  typeof v === 'boolean' ? (v ? 1 : 0) : v && typeof v === 'object' ? JSON.stringify(v) : v
-
 export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: string; dryRun?: boolean; actor?: string | null }): Ctx {
   const { adapter, manifest, fnKey } = o
   const dryRun = o.dryRun ?? false
@@ -40,6 +37,11 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     for (const model of q.touches) need(q.effect, model)
   }
   const dialect = adapter.name === 'postgres' ? 'postgres' : 'sqlite'
+  // Placeholders are dialect-specific. The query builder already knew this; these
+  // direct helpers did not, which is a bug only a second dialect could reveal.
+  let n = 0
+  const ph = () => (dialect === 'postgres' ? `$${++n}` : (n++, '?'))
+  const fresh = () => { n = 0 }
 
   const db: Ctx['db'] = {
     async all(q) {
@@ -84,7 +86,8 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
       const keys = Object.keys(where)
-      const sql = `SELECT * FROM ${t}` + (keys.length ? ` WHERE ${keys.map(k => `${adapter.quoteIdent(k)} = ?`).join(' AND ')}` : '')
+      fresh()
+      const sql = `SELECT * FROM ${t}` + (keys.length ? ` WHERE ${keys.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')}` : '')
       return adapter.all(sql, keys.map(k => where[k]))
     },
     async insert(model, row) {
@@ -97,17 +100,20 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       writes.push({ op: 'insert', model, row })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(row)
-      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map(k => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => '?').join(', ')})`
-      return adapter.run(sql, ks.map(k => normalize(row[k])))
+      fresh()
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map(k => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')})`
+      return adapter.run(sql, ks.map(k => row[k]))
     },
     async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const pk = Object.keys(patch), wk = Object.keys(where)
-      const sql = `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${pk.map(k => `${adapter.quoteIdent(k)} = ?`).join(', ')}` +
-        (wk.length ? ` WHERE ${wk.map(k => `${adapter.quoteIdent(k)} = ?`).join(' AND ')}` : '')
-      return adapter.run(sql, [...pk.map(k => normalize(patch[k])), ...wk.map(k => where[k])])
+      fresh()
+      const sets = pk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
+      const conds = wk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
+      const sql = `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
+      return adapter.run(sql, [...pk.map(k => patch[k]), ...wk.map(k => where[k])])
     },
   }
 

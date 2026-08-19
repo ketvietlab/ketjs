@@ -7,7 +7,7 @@ import { schemaFromManifest, planMigration, renderSql } from '../src/data/migrat
 import { table, from } from '../src/data/query.ts'
 import { eq } from '../src/data/expr.ts'
 import { registerFunctions, callFn } from '../src/server/fn.ts'
-import { createLog } from '../src/server/log.ts'
+import { createIdempotency } from '../src/server/idem.ts'
 import catalog from '../examples/modules/catalog/index.ts'
 import inventory from '../examples/modules/inventory/index.ts'
 import checkout from '../examples/modules/checkout/index.ts'
@@ -118,10 +118,10 @@ test('idempotency: a key claimed but not finished is reported, not silently re-r
   registerFunctions(mods)
 
   // Stand in for another instance that claimed the key and has not finished.
-  const log = await createLog(adapter)
-  const claimed = await log.putOnce('idem:catalog.createProduct:k9', 'idem', null)
+  const idem = await createIdempotency(adapter)
+  const claimed = await idem.claim('catalog.createProduct:k9', 'catalog.createProduct')
   assert.equal(claimed, true)
-  assert.equal(await log.putOnce('idem:catalog.createProduct:k9', 'idem', null), false, 'the primary key settles the race')
+  assert.equal(await idem.claim('catalog.createProduct:k9', 'catalog.createProduct'), false, 'the primary key settles the race')
 
   await assert.rejects(
     () => callFn('catalog.createProduct', { id: 'p2', title: 'B', priceCents: 1, slug: 'b' }, { adapter, manifest, idempotencyKey: 'k9' }),

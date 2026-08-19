@@ -27,7 +27,12 @@
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "postgres": "^3.4.9"
+  },
+  "peerDependenciesMeta": {
+    "postgres": {
+      "optional": true
+    }
   }
 }

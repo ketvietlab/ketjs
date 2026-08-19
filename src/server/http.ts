@@ -4,7 +4,8 @@
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
-import { createStreams } from './stream.ts'
+import { createStreams, dbStreamStore } from './stream.ts'
+import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter, Manifest } from '../types.ts'
@@ -15,6 +16,8 @@ export type ServeOpts = {
   adapter: Adapter
   theme?: ThemeRuntime
   port?: number
+  /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
+  streamStore?: StreamStore
   pageScope?: (url: URL) => Record<string, unknown>
 }
 
@@ -32,7 +35,7 @@ const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 export async function createKetServer(o: ServeOpts) {
-  const streams = await createStreams(o.adapter)
+  const streams = await createStreams(o.streamStore ?? dbStreamStore(o.adapter))
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)

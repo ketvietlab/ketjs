@@ -37,6 +37,19 @@ aimed at an unpublished joint is a **build error**, not a blank spot — that is
 line between this and Odoo/WordPress, where anything can be patched and therefore
 nothing can be safely changed.
 
+## Measured against the competition
+
+Full methodology in [docs/03-benchmarks.md](docs/03-benchmarks.md). Three of these
+found bugs in Ket, which is the point of running them.
+
+| | KetJS | best competitor |
+|---|---|---|
+| `npm i` footprint | **1 package, 0.4 MB** | SvelteKit — 53 packages, 28 MB |
+| template renders/s | **10 652** | EJS 10 311 · LiquidJS 824 |
+| DOM: update 1 row of 1 000 | **0.070 ms** | lit-html 0.100 ms |
+| DOM: create 1 000 rows | **1.80 ms** | lit-html 2.60 ms |
+| DOM: reorder rows | 0.220 ms | **lit-html 0.096 ms** |
+
 ## What is actually proven
 
 | Claim | Evidence |
