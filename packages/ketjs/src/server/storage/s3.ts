@@ -88,13 +88,16 @@ export function s3Storage(options: S3StorageOptions): Storage {
   return {
     name: 's3',
     async put(key, body, o) {
+      // Without a declared length fetch frames the body as chunked, which S3 answers
+      // with 411; refuse here rather than at the far end with an opaque error.
+      if (o.size === undefined)
+        throw new Error(`S3 PUT of "${key}" requires a declared size; S3 rejects a body sent without content-length`)
       const url = urlOf(key)
-      const headers = new Headers({ 'content-type': o.type })
-      if (o.size !== undefined) headers.set('content-length', String(o.size))
+      const headers = new Headers({ 'content-type': o.type, 'content-length': String(o.size) })
       const response = await checked(await signedFetch('PUT', url, { headers, body }), 'PUT')
       return {
         key,
-        size: o.size ?? 0,
+        size: o.size,
         type: o.type,
         ...(response.headers.get('etag')
           ? { etag: (response.headers.get('etag') as string).replace(/^"|"$/g, '') }
@@ -103,7 +106,10 @@ export function s3Storage(options: S3StorageOptions): Storage {
     },
     async get(key) {
       const response = await signedFetch('GET', urlOf(key))
-      if (response.status === 404) return null
+      if (response.status === 404) {
+        await response.body?.cancel()
+        return null
+      }
       await checked(response, 'GET')
       if (!response.body) throw new Error('S3 GET returned no body')
       return {
@@ -113,7 +119,9 @@ export function s3Storage(options: S3StorageOptions): Storage {
     },
     async head(key) {
       const response = await signedFetch('HEAD', urlOf(key))
-      if (response.status === 404) return null
+      // Without s3:ListBucket S3 answers 403, not 404, for a key that is not there,
+      // so treating only 404 as absent breaks every first upload of new content.
+      if (response.status === 404 || response.status === 403) return null
       await checked(response, 'HEAD')
       return meta(key, response.headers)
     },
@@ -126,6 +134,9 @@ export function s3Storage(options: S3StorageOptions): Storage {
       url.searchParams.set('prefix', prefix)
       url.searchParams.set('max-keys', String(Math.max(1, Math.min(1_000, o.limit ?? 100))))
       if (o.after) url.searchParams.set('start-after', o.after)
+      // URLSearchParams serialises a space as "+" but SigV4 signs it as %20, and the
+      // two must agree or the request is refused.
+      url.search = url.search.replace(/\+/g, '%20')
       const response = await checked(await signedFetch('GET', url), 'LIST')
       const body = await response.text()
       const keys = [...body.matchAll(/<Key>([\s\S]*?)<\/Key>/g)].map((match) => xml(match[1] as string))

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -64,10 +64,22 @@ test('storage module: upload, safe download, deduplication and queued GC work en
       const body = await response.text()
       assert.equal(response.status, 200, body)
     }
+    // Sweep on the real default grace period rather than switching it off, and give
+    // it one orphan of each age: only the one older than the window may be taken.
+    const fresh = `blobs/acme/ff/${'f'.repeat(64)}`
+    await root.put(
+      fresh,
+      (async function* () {
+        yield Buffer.from('a young orphan')
+      })(),
+      { type: 'text/plain' },
+    )
+    const aged = new Date(Date.now() - 2 * 60 * 60 * 1_000)
+    await utimes(join(storageDir, 'storageapp', String(first.storeKey)), aged, aged)
     const queued = await fetch(`${at}/_ket/fn/storage.requestSweep`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-ket-company': 'acme' },
-      body: JSON.stringify({ minAgeMs: 0 }),
+      body: JSON.stringify({}),
     })
     const queuedBody = await queued.text()
     assert.equal(queued.status, 200, queuedBody)
@@ -79,7 +91,8 @@ test('storage module: upload, safe download, deduplication and queued GC work en
       log: () => {},
     })
     assert.equal(await worker.drain(), 1)
-    assert.deepEqual((await root.list('blobs/acme/')).keys, [])
+    // The aged orphan is collected; the one written moments ago is still protected.
+    assert.deepEqual((await root.list('blobs/acme/')).keys, [fresh])
   } finally {
     await worker?.close()
     await server?.close()

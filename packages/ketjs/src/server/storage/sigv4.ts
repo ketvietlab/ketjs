@@ -24,7 +24,9 @@ const canonicalPath = (pathname: string): string =>
 const canonicalQuery = (params: URLSearchParams): string =>
   [...params.entries()]
     .map(([key, value]) => [encode(key), encode(value)] as const)
-    .sort(([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv))
+    // SigV4 orders by code point, not by collation: localeCompare reorders case
+    // and ignores punctuation, which yields a canonical request S3 will not rebuild.
+    .sort(([ak, av], [bk, bv]) => (ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0))
     .map(([key, value]) => `${key}=${value}`)
     .join('&')
 
@@ -71,7 +73,7 @@ export function signRequest(options: {
   headers.delete('authorization')
   const entries = [...headers.entries()]
     .map(([key, value]) => [key.toLowerCase(), value.trim().replace(/\s+/g, ' ')] as const)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   const signedHeaders = entries.map(([key]) => key).join(';')
   const canonicalHeaders = entries.map(([key, value]) => `${key}:${value}\n`).join('')
   const canonical = [
@@ -117,5 +119,8 @@ export function presignUrl(options: {
     'UNSIGNED-PAYLOAD',
   ].join('\n')
   url.searchParams.set('X-Amz-Signature', signature(canonical, options.credentials, date).value)
+  // Emit the encoding the signature was taken over; URLSearchParams would write a
+  // space as "+", which SigV4 does not accept.
+  url.search = url.search.replace(/\+/g, '%20')
   return url.toString()
 }

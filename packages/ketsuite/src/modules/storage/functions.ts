@@ -54,6 +54,9 @@ export const functions: Record<string, FnSpec> = {
         if (!target || (target.protocol !== 'https:' && target.protocol !== 'http:'))
           invalid('an attachment URL must use http or https')
         if (args.storeKey || args.checksum) invalid('a URL attachment cannot carry a stored object')
+        // Store what was validated: the parser normalises, so the raw input and the
+        // URL the checks ran against are not always the same string.
+        if (target) args.url = target.href
       }
       await ctx.db.insert('storage.Attachment', args as Row)
       return args

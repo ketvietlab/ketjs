@@ -10,7 +10,8 @@
 // cannot return `{ body: '<div>' + name }` because that object is not a
 // RouteResult. The only ways to make one are below, and the only one that accepts
 // a string is `raw`, which is one word to grep for and one word to argue about in
-// review.
+// review. `bytes` and `streamed` carry octets rather than a string, and they refuse
+// markup content types so that the same claim holds for them.
 
 import { renderToString, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
@@ -53,14 +54,21 @@ export function text(body: string, o: { type?: string; status?: number } = {}): 
   return made(body, o.type ?? 'text/plain', o.status)
 }
 
+/** Octets are not markup, and these two keep it that way; raw() remains the one word to grep for. */
+const octets = (type: string): string => {
+  if (/^\s*(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)\b/i.test(type))
+    throw new Error(`bytes()/streamed() will not serve "${type}"; use raw() if markup is intended`)
+  return type
+}
+
 /** Binary data already resident in memory. Unlike raw(), it can never become HTML by accident. */
 export function bytes(body: Uint8Array, o: { type: string; status?: number }): RouteResult {
-  return made(body, o.type, o.status)
+  return made(body, octets(o.type), o.status)
 }
 
 /** A backpressure-aware binary response; the HTTP layer consumes it chunk by chunk. */
 export function streamed(body: AsyncIterable<Uint8Array>, o: { type: string; status?: number }): RouteResult {
-  return made(body, o.type, o.status)
+  return made(body, octets(o.type), o.status)
 }
 
 /**

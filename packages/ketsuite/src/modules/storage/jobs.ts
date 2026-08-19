@@ -11,7 +11,10 @@ export const jobs: Record<string, JobSpec> = {
       const company = ctx.scope.company
       if (!company) throw new Error('storage.sweep requires a company scope')
       const A = ctx.table('storage.Attachment')
-      const cutoff = Date.now() - Number(args.minAgeMs ?? 60 * 60 * 1_000)
+      // A caller may shorten the grace period but never erase it: upload writes the
+      // bytes before it records the row, so a zero floor collects objects an
+      // in-flight request is about to reference.
+      const cutoff = Date.now() - Math.max(5 * 60_000, Number(args.minAgeMs ?? 60 * 60 * 1_000))
       const prefix = `blobs/${company}/`
       let after: string | undefined
       do {

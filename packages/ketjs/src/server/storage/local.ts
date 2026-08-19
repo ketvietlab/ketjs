@@ -17,10 +17,35 @@ export function localStorage(options: { dir: string }): Storage {
   }
   const metaPath = (path: string) => `${path}.ketmeta`
 
+  /**
+   * A crash between open() and rename() strands a temp file that list() hides, so
+   * the sweep can never reach it. Each write clears the stale ones beside it.
+   */
+  const reapTemps = async (dir: string): Promise<void> => {
+    const cutoff = Date.now() - 60 * 60 * 1_000
+    let entries: Dirent[]
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.includes('.ket-tmp-')) continue
+      const stale = resolve(dir, entry.name)
+      try {
+        if ((await stat(stale)).mtimeMs < cutoff) await rm(stale, { force: true })
+      } catch {}
+    }
+  }
+
   const head = async (key: string): Promise<Stored | null> => {
     const path = pathOf(key)
     try {
       const info = await stat(path)
+      // A directory satisfies stat() but is not an object. Without this a key naming
+      // a shard reports a plausible size and get() then hands back an EISDIR stream
+      // after the response headers have already gone out.
+      if (!info.isFile()) return null
       let meta: LocalMeta = { type: 'application/octet-stream' }
       try {
         meta = JSON.parse(await readFile(metaPath(path), 'utf8')) as LocalMeta
@@ -43,6 +68,7 @@ export function localStorage(options: { dir: string }): Storage {
     async put(key, body, options) {
       const path = pathOf(key)
       await mkdir(dirname(path), { recursive: true })
+      await reapTemps(dirname(path))
       const temp = `${path}.ket-tmp-${randomUUID()}`
       const handle = await open(temp, 'wx')
       const hash = createHash('sha256')
@@ -86,6 +112,14 @@ export function localStorage(options: { dir: string }): Storage {
       if (prefix) storageKey(prefix.endsWith('/') ? `${prefix}x` : prefix)
       const keys: string[] = []
       const limit = Math.max(1, Math.min(1_000, options.limit ?? 100))
+      // Visit in key order — a directory sorts as "name/", which is the prefix every
+      // key beneath it carries — so results come out sorted and the walk stops once
+      // the page plus one look-ahead is full. Sorting on arrival instead made a
+      // paginated sweep re-read the whole tree for every page.
+      const ordered = (entries: Dirent[]) =>
+        entries
+          .map((entry) => ({ entry, at: entry.isDirectory() ? `${entry.name}/` : entry.name }))
+          .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
       const walk = async (dir: string): Promise<void> => {
         let entries: Dirent[]
         try {
@@ -94,18 +128,14 @@ export function localStorage(options: { dir: string }): Storage {
           if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
           throw error
         }
-        for (const entry of entries) {
+        for (const { entry } of ordered(entries)) {
+          if (keys.length > limit) return
           const path = resolve(dir, entry.name)
           if (entry.isDirectory()) await walk(path)
           else if (!entry.name.endsWith('.ketmeta') && !entry.name.includes('.ket-tmp-')) {
             const key = relative(root, path).split(sep).join('/')
             if (!key.startsWith(prefix) || (options.after && key <= options.after)) continue
-            // Keep only the next page plus one look-ahead. A sweep over a million
-            // objects must not build a million-element array just to return 100.
-            const at = keys.findIndex((candidate) => candidate > key)
-            if (at === -1) keys.push(key)
-            else keys.splice(at, 0, key)
-            if (keys.length > limit + 1) keys.pop()
+            keys.push(key)
           }
         }
       }

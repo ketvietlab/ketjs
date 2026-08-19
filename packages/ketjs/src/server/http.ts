@@ -2,7 +2,7 @@
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
 import { createServer } from 'node:http'
-import { once } from 'node:events'
+import { pipeline } from 'node:stream/promises'
 import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
@@ -110,11 +110,10 @@ const send = async (res: ServerResponse, result: RouteResult): Promise<void> => 
     res.end(result.body)
     return
   }
-  for await (const chunk of result.body) {
-    if (res.destroyed || res.writableEnded) return
-    if (!res.write(chunk)) await once(res, 'drain')
-  }
-  res.end()
+  // pipeline owns backpressure and destroys the source when the client disappears.
+  // Awaiting 'drain' by hand never settles on an abort — the response emits only
+  // 'close' — which hung the handler and leaked one fd per cancelled download.
+  await pipeline(result.body, res)
 }
 
 const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
