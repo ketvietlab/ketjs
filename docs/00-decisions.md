@@ -108,6 +108,63 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D41 — Backend screens open up, by name, and only by name
+**The gap, found by being asked about it.** Backend screens are `html`` ` and
+joints only existed in KTL, so `backend` published none and nothing could reach
+them. A module could not add a column, a button or a menu item. For a framework
+whose first pillar is lego, that was a hole rather than a style choice.
+
+**What actually hurts in Odoo is not extension.** It is two specific things, and
+naming them is what settled the design:
+
+1. **XPath into unpromised anchors.** `<xpath expr="//field[@name='partner_id']"
+   position="after">` addresses a node upstream never promised would exist or stay
+   put. Rename it and every extension breaks.
+2. **`position="replace"` severs the link.** Upstream fixes and improvements never
+   arrive, and nobody is told.
+
+So the axis is not *insert versus modify*. It is **declared anchor versus
+undeclared**, and **link kept versus link cut**.
+
+**Fills are KTL, not functions — and this reversed my first proposal.** A
+function-valued fill would have been typed, and it would have been arbitrary
+JavaScript from another module running in this process, which is the thing KTL
+exists to prevent. It would also have made `fills` the first part of the manifest
+that is not data: unprintable by `ket manifest`, undiffable by `ket diff`,
+unsnapshotable. A fill is text. One extension language for the storefront and the
+backend, sandboxed by construction rather than by promise, and a fill that wants
+behaviour places an island the way a theme does.
+
+**What that took in the view:** a value kind for markup a trusted compiler already
+escaped. Inserting it as a plain string double-escapes — the tags render as text —
+so it is its own kind, branded so it cannot be made from an arbitrary string. SSR
+writes it verbatim; hydration, which cannot count nodes it did not produce, runs
+to the closing marker instead. That worked because a hole has been fenced on
+*both* sides since the SSR text-merge fix, which was done for an unrelated reason
+and paid for itself here.
+
+**Omit removes rather than hides.** CSS hides at the wrong layer: the data still
+travels and the tab order still walks through what nobody can see. An omitted
+joint renders nothing at all, server-side. An omission by a module that is switched
+off is not an omission — the joint returns, exactly as its fills would.
+
+**A fill that will never render is recorded, not silently dropped.** Omitting a
+joint someone else fills is not an error — both modules may be deliberate — but it
+is exactly what gets discovered six months later, so it lands in `manifest.patches`
+where `ket check` and the upgrade diff show it.
+
+**Screens still receive data, not a runtime.** The card joint takes the app as a
+prop, so the route renders one per card and hands the screen a map keyed by name.
+Passing a function would have been shorter and would have made a screen depend on a
+server — and the design catalogue renders these same screens with no server at all.
+
+**Cut, deliberately:** replace and reorder. Replace is the one that severs the
+upstream link, and the vertical-rewrite case it serves is better answered by a
+different screen on a different route than by replacing slots in a generic one.
+Reorder needs the joint list to become ordered data, which is a bigger declaration
+change worth making once a real screen has slots in it. Both are additive later;
+neither is blocked by this.
+
 ## D39 — The screens that make the enforcement usable
 D38 closed the door. This gives it a handle: a browser arriving uninvited gets a
 sign-in page rather than a bare 401, and lands where it was going once it signs in.
