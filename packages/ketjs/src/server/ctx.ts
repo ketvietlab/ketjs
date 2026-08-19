@@ -74,6 +74,18 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   //
   // Branch is not a security boundary. Reading every branch of one company is
   // ordinary, so an empty branch list means "all of them" rather than "none".
+  // Writing somewhere you cannot read back is silent corruption: the row lands,
+  // every later query filters it out, and nothing anywhere says why. So the two
+  // halves of the scope have to agree before the first query runs.
+  if (scope.company && scope.companies && !scope.companies.includes(scope.company)) {
+    throw new KetError({
+      code: 'E_WRITE_COMPANY_NOT_READABLE',
+      module: fn.by,
+      message: `the request writes to "${scope.company}" but may only read ${scope.companies.join(', ')}`,
+      hint: 'scope.company must be one of scope.companies — otherwise a row is written and then invisible',
+    })
+  }
+
   const scopeOf = (model: string) => manifest.models[model]?.scope ?? 'shared'
 
   // ── decimal columns ────────────────────────────────────────────────────────
@@ -100,8 +112,16 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     return rows
   }
 
-  const requireCompany = (model: string): string => {
-    if (scope.company) return scope.company
+  /**
+   * The companies a read may see. Absent means just the one being written to.
+   *
+   * A request that names none is refused rather than answered, because the failure
+   * mode of getting this wrong is silent: a missing filter does not throw, it
+   * returns another legal entity's rows.
+   */
+  const readCompanies = (model: string): string[] => {
+    const set = scope.companies ?? (scope.company ? [scope.company] : [])
+    if (set.length) return set
     throw new KetError({
       code: 'E_NO_COMPANY_IN_SCOPE',
       module: fn.by,
@@ -110,13 +130,30 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     })
   }
 
-  /** Narrow a query to the caller's company and branches. */
+  const requireCompany = (model: string): string => {
+    if (scope.company) return scope.company
+    const readable = scope.companies ?? []
+    throw new KetError({
+      code: 'E_NO_COMPANY_IN_SCOPE',
+      module: fn.by,
+      message: readable.length
+        ? `"${fnKey}" writes ${model}, but the request names ${readable.length} readable compan${readable.length > 1 ? 'ies' : 'y'} and none to write to`
+        : `"${fnKey}" touches ${model}, which is company-scoped, but the request carries no company`,
+      hint: readable.length
+        ? `set scope.company to one of: ${readable.join(', ')} — a row belongs to exactly one legal entity`
+        : 'resolve a company for the request, or declare crossCompany: true if this really reads across legal entities',
+    })
+  }
+
+  /** Narrow a query to the companies the caller may read, and to its branches. */
   const scoped = (q: Query): Query => {
     const kind = scopeOf(q.model)
     if (kind === 'shared') return q
     if (fn.crossCompany) return q       // declared, and visible in the manifest
 
-    let out = q.where(eq({ model: q.model, name: 'companyId' }, requireCompany(q.model)))
+    const cs = readCompanies(q.model)
+    const col = { model: q.model, name: 'companyId' }
+    let out = q.where(cs.length === 1 ? eq(col, cs[0] as string) : inArray(col, cs))
     if (kind === 'company+branch' && scope.branches && scope.branches.length > 0) {
       out = out.where(inArray({ model: q.model, name: 'branchId' }, scope.branches))
     }
@@ -224,11 +261,20 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
-      const where2 = scopeOf(model) === 'shared' || fn.crossCompany ? where : { ...where, companyId: requireCompany(model) }
-      const keys = Object.keys(where2)
+      const open = scopeOf(model) === 'shared' || fn.crossCompany
+      const keys = Object.keys(where)
+      const conds = keys.map(k => `${adapter.quoteIdent(k)} = ${ph()}`)
+      const params: unknown[] = keys.map(k => where[k])
+      if (!open) {
+        // A set, not a value: this is the one place the convenience path has to
+        // part company with a plain `column = ?` map.
+        const cs = readCompanies(model)
+        conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
+        params.push(...cs)
+      }
       fresh()
-      const sql = `SELECT * FROM ${t}` + (keys.length ? ` WHERE ${keys.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')}` : '')
-      return decodeRows(model, await adapter.all(sql, keys.map(k => where2[k])))
+      const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
+      return decodeRows(model, await adapter.all(sql, params))
     },
     async insert(model, row) {
       need('write', model)
