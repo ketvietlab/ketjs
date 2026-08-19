@@ -9,6 +9,7 @@ const MODULE_KEYS = new Set([
   'name', 'version', 'depends', 'models', 'extend', 'joints', 'fills',
   'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands', 'sections', 'relations',
   'app', 'title', 'summary', 'category', 'install', 'autoInstall', 'removable', 'messages',
+  'assets', 'styles', 'routes',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -45,6 +46,9 @@ export function defineModule(spec: ModuleSpec): KetModule {
     tokens: spec.tokens ?? {},
     templates: spec.templates ?? {},
     provides: Object.freeze([...(spec.provides ?? [])]),
+    assets: spec.assets ?? null,
+    styles: Object.freeze([...(spec.styles ?? [])]),
+    routes: spec.routes ?? {},
     islands: spec.islands ?? {},
     sections: spec.sections ?? {},
     relations: spec.relations ?? {},
@@ -70,6 +74,17 @@ const THEME_FORBIDDEN = ['models', 'extend', 'functions', 'islands'] as const
  * own category: a theme nobody can switch on is a theme nobody can use.
  */
 export function defineTheme(spec: ModuleSpec): KetModule {
+  // Assets and styles a theme may ship — that is most of what a theme *is*. Routes
+  // it may not: a route is code running on the server, which is the line themes
+  // exist on the far side of.
+  if (spec.routes) {
+    throw new KetError({
+      code: 'E_THEME_OVERREACH',
+      module: spec.name,
+      message: `theme "${spec.name}" declares routes, which themes are not allowed to do`,
+      hint: 'a route is server code; a theme may ship assets and styles, and place an island for behaviour',
+    })
+  }
   for (const k of THEME_FORBIDDEN) {
     const v = spec[k]
     if (v && Object.keys(v).length > 0) {

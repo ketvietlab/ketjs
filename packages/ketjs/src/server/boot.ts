@@ -20,8 +20,10 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { registerFunctions, callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
-import { document, json } from './respond.ts'
-import { html } from 'ketjs-view'
+import { document, json, text } from './respond.ts'
+import { readFile } from 'node:fs/promises'
+import { join, normalize, extname, isAbsolute } from 'node:path'
+import { html, each } from 'ketjs-view'
 import { readConfig, sqliteStore } from './config.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
@@ -29,6 +31,11 @@ import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
+
+const MIME: Record<string, string> = {
+  '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
+}
 
 export type { Html, RouteResult } from './respond.ts'
 export { page, fragment, text, raw } from './respond.ts'
@@ -55,6 +62,8 @@ export type ServeContext = {
   call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
+  /** Every installed module's stylesheets, in dependency order, as link tags. */
+  styles: () => Promise<Html>
 }
 
 /**
@@ -159,11 +168,63 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const live = async () => restrictManifest(manifest, await apps.enabled())
   const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
 
+  /**
+   * Every installed module's stylesheets, in dependency order, so a module that
+   * extends another loads after it and can override it. The app used to name two
+   * files belonging to another module by hand — which meant knowing that module's
+   * file layout, and going on linking them after it was uninstalled.
+   */
+  const styles = async (): Promise<Html> => {
+    const live = (await apps.enabled())
+    const hrefs = manifest.styles.filter(s => live.has(s.by)).map(s => s.href)
+    return html`${each(hrefs, h => h, h => html`<link rel="stylesheet" href=${h}>`)}`
+  }
+
   const ctx: ServeContext = {
-    manifest, live, adapter, apps, config, scopeOf, localeOf, translate,
+    manifest, live, adapter, apps, config, scopeOf, localeOf, translate, styles,
     call: async (name, input, url, req) =>
       (await callFn(name, input, { adapter, manifest: await live(), scope: scopeOf(url, req) })).value,
     document,
+  }
+
+  /**
+   * Module-contributed routes and assets.
+   *
+   * Both are looked up per request against the LIVE manifest rather than mounted
+   * once at boot. That costs a set lookup and buys the property the app model
+   * claims: switching a module off stops its routes answering and stops its
+   * stylesheet being served, without a restart.
+   */
+  const routeHandlers = new Map<string, Route>()
+  for (const [path, entry] of Object.entries(manifest.routes)) routeHandlers.set(path, entry.make(ctx))
+
+  const moduleRoutes: Record<string, Route> = {}
+  for (const [path, entry] of Object.entries(manifest.routes)) {
+    moduleRoutes[path] = async (url, req) => {
+      if (!(await apps.enabled()).has(entry.by)) {
+        return text(`${path} belongs to "${entry.by}", which is not installed on this database`, { status: 404 })
+      }
+      return (routeHandlers.get(path) as Route)(url, req)
+    }
+  }
+
+  /**
+   * A module's assets, resolved per request so that switching the module off stops
+   * them being served — without a restart, and without the app knowing where any
+   * module keeps its files.
+   */
+  const assetMount = {
+    prefix: '/_ket/asset/',
+    resolve: async (rest: string): Promise<string | null> => {
+      const slash = rest.indexOf('/')
+      if (slash <= 0) return null
+      const owner = rest.slice(0, slash)
+      const file = rest.slice(slash + 1)
+      const dir = manifest.assets[owner]
+      if (!dir || !file || file.startsWith('..') || isAbsolute(file)) return null
+      if (!(await apps.enabled()).has(owner)) return null
+      return join(dir, file)
+    },
   }
 
   const pages = serve.pages
@@ -180,7 +241,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     manifest, adapter,
     resolveLocale: localeOf,
     resolveScope: scopeOf,
-    ...(serve.assets ? { assets: serve.assets } : {}),
+    assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme ? {} : {
       theme: createTheme(await live(), modules, { translate: translate(config.defaultLocale) }),
     }),
@@ -214,6 +275,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       },
     } : {}),
     routes: {
+      ...moduleRoutes,
       ...(serve.routes?.(ctx) ?? {}),
       // The framework's own two, mounted last so an app cannot shadow them by accident.
       '/_ket/health': async () => json({
@@ -235,6 +297,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     // declares its own "/" route would otherwise be listed twice, once wrongly.
     const paths = new Map<string, string>()
     if (pages) paths.set('/', 'site')
+    // Module routes belong on the banner too, and only while installed — the list
+    // is what the deployment actually serves, not what it could serve.
+    for (const [p, r] of Object.entries(manifest.routes)) if (enabled.includes(r.by)) paths.set(p, p.replace(/^\//, ''))
     for (const p of Object.keys(serve.routes?.(ctx) ?? {})) paths.set(p, p.replace(/^\//, '') || 'site')
     const rows = [
       ...[...paths].map(([p, label]) => [label, at + p]),

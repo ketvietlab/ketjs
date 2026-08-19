@@ -206,7 +206,8 @@ export async function createAppRegistry(
 /**
  * The manifest as an app with only some modules turned on sees it.
  *
- * Behaviour is filtered — functions, sections, joints, fills, views, templates.
+ * Behaviour is filtered — functions, sections, joints, fills, views, templates,
+ * and the served surface: routes, assets and stylesheets.
  * Models are NOT: the columns exist in every database by construction, and the rows
  * of an uninstalled app are still its rows. Turning an app off must never be a way
  * to lose data.
@@ -231,6 +232,12 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     disabledSections: Object.entries(manifest.sections).filter(([, s]) => !keep(s.by)).map(([n]) => n),
     disabledIslands: Object.entries(manifest.islands).filter(([, s]) => !keep(s.by)).map(([n]) => n),
     order: manifest.order.filter(keep),
+    // The served surface goes with the behaviour. A route of a switched-off module
+    // must stop answering and its stylesheet must stop being linked — otherwise
+    // "enable at run" stops at the database and never reaches what anyone can see.
+    assets: Object.fromEntries(Object.entries(manifest.assets).filter(([by]) => keep(by))),
+    styles: manifest.styles.filter(s => keep(s.by)),
+    routes: pick(manifest.routes),
     functions: pick(manifest.functions),
     sections: pick(manifest.sections),
     islands: pick(manifest.islands),

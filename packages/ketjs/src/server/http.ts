@@ -44,10 +44,27 @@ export type ServeOpts = {
    */
   resolveScope?: (url: URL, req: IncomingMessage) => Scope
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
-  assets?: { prefix: string; dir: string }
+  /** Static file mounts. One fixed directory, or a resolver that answers per request. */
+  assets?: AssetMount | AssetMount[]
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
+}
+
+/**
+ * A mount is either a directory, or a function from the rest of the path to an
+ * absolute file — which is how a module's assets can stop being served the moment
+ * the module is uninstalled, without rebuilding the server.
+ */
+export type AssetMount = {
+  prefix: string
+  dir?: string
+  resolve?: (rest: string) => Promise<string | null>
+}
+
+const ASSET_MIME: Record<string, string> = {
+  '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
 }
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
@@ -85,23 +102,37 @@ export async function createKetServer(o: ServeOpts) {
   // With one database the stream store lives in it. With a database per tenant it
   // does not: whose database a stream belongs to is a separate question, so the
   // default stays in memory and the caller passes a store when they have answered it.
+  const mounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
+
   const streams = await createStreams(o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()))
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     try {
-      if (o.assets && url.pathname.startsWith(o.assets.prefix)) {
+      // Static files. Several mounts, because the app has its own and every
+      // installed module may ship some — and a module's must stop being served the
+      // moment it is switched off, which is what `resolve` is for: it answers per
+      // request instead of being fixed when the server was built.
+      for (const mount of mounts) {
+        if (!url.pathname.startsWith(mount.prefix)) continue
         // Path traversal is the one thing a static handler must not get wrong.
-        const rel = normalize(url.pathname.slice(o.assets.prefix.length)).replace(/^(\.\.[/\\])+/, '')
+        const rel = normalize(url.pathname.slice(mount.prefix.length)).replace(/^(\.\.[/\\])+/, '')
+        const file = mount.dir !== undefined
+          ? (rel && !rel.startsWith('..') ? join(mount.dir, rel) : null)
+          : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel)
+        if (file === null) break
         try {
-          const body = await readFile(join(o.assets.dir, rel))
-          const type = ({ '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' })[extname(rel)] ?? 'application/octet-stream'
+          const body = await readFile(file)
+          const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
           res.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-cache' })
           return res.end(body)
         } catch {
-          res.writeHead(404, { 'content-type': 'text/plain' })
-          return res.end('not found')
+          break
         }
+      }
+      if (mounts.some(m => url.pathname.startsWith(m.prefix))) {
+        res.writeHead(404, { 'content-type': 'text/plain' })
+        return res.end('not found')
       }
 
       const route = o.routes?.[url.pathname]
