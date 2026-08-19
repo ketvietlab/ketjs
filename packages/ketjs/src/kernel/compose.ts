@@ -29,7 +29,12 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     tokens: {}, patches: [],
   }
 
-  for (const m of order) manifest.modules[m.name] = { version: m.version, kind: m.kind, depends: [...m.depends] }
+  for (const m of order) {
+    manifest.modules[m.name] = {
+      version: m.version, kind: m.kind, depends: [...m.depends],
+      app: m.app, title: m.title, summary: m.summary, category: m.category, autoInstall: m.autoInstall,
+    }
+  }
 
   // --- models -------------------------------------------------------------
   for (const m of order) {

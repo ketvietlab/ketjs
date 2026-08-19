@@ -63,6 +63,15 @@ export async function callFn(
   o: { adapter: Adapter; manifest: Manifest; dryRun?: boolean; actor?: string | null; idempotencyKey?: string | null },
 ): Promise<CallResult> {
   const def = registry.get(fnKey)
+  const owner = fnKey.split('.')[0] as string
+  if (o.manifest.disabledModules?.includes(owner)) {
+    throw new KetError({
+      code: 'E_APP_NOT_INSTALLED',
+      module: owner,
+      message: `"${fnKey}" belongs to "${owner}", which is not installed on this database`,
+      hint: `install "${owner}" first — the code ships with this deployment, it is simply switched off here`,
+    })
+  }
   if (!def) throw new KetError({ code: 'E_UNKNOWN_FUNCTION', message: `no server function "${fnKey}"`, hint: `known: ${[...registry.keys()].join(', ')}` })
   validateInput(fnKey, o.manifest, args)
 

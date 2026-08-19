@@ -16,6 +16,12 @@ export type ThemeRuntime = {
 }
 
 export function createTheme(manifest: Manifest, modules: KetModule[], opts: { filters?: Record<string, Filter> } = {}): ThemeRuntime {
+  // A theme is written against what the DEPLOYMENT ships, not against what a
+  // particular database has switched on. So the strict check belongs to the full
+  // manifest — where a typo is a build error — while a restricted manifest, which
+  // is a runtime view, degrades to rendering nothing. Uninstalling an app must not
+  // take the whole theme down with it.
+  const atRuntime = manifest.disabledModules !== undefined
   // Islands come from modules; the theme only names them.
   const islands: IslandRegistry = {}
   for (const m of modules) for (const [name, view] of Object.entries(m.islands)) islands[name] = view
@@ -44,6 +50,9 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
       const placement = raw as { type?: string; settings?: Record<string, unknown> }
       if (!placement?.type) continue
       if (!manifest.sections[placement.type]) {
+        // A page saved while an app was installed still names its sections after it
+        // is removed. Skip them; re-installing brings the section back with its data.
+        if (atRuntime) continue
         throw new KetError({
           code: 'E_UNKNOWN_SECTION',
           message: `the page places section "${placement.type}", which no installed module provides`,
@@ -57,7 +66,8 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
 
   const renderIslandAt = (name: string, scope: Scope): string => {
     const view = islands[name]
-    if (!view) {
+    if (!view || (atRuntime && !manifest.islands[name])) {
+      if (atRuntime) return ''
       throw new KetError({
         code: 'E_UNKNOWN_ISLAND',
         message: `a template places island "${name}", which no installed module provides`,
@@ -102,7 +112,7 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
 
   // Placing an island nobody provides is a build error, exactly like a missing joint.
   for (const [name, t] of Object.entries(templates)) {
-    for (const island of t.islandsUsed) {
+    for (const island of atRuntime ? [] : t.islandsUsed) {
       if (!manifest.islands[island]) {
         throw new KetError({
           code: 'E_TEMPLATE_UNKNOWN_ISLAND',
