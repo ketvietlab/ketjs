@@ -3,6 +3,16 @@ import { DatabaseSync } from 'node:sqlite'
 import { assertAdapter } from './adapter.ts'
 import type { Adapter, FieldBase, Row } from '../types.ts'
 
+// Binding rules belong to the adapter, not to the layers above it: SQLite has no
+// boolean and no JSON, Postgres has both. Normalising here means every call path —
+// query builder, changeset, raw run — is covered once.
+const bind = (v: unknown): unknown => {
+  if (typeof v === 'boolean') return v ? 1 : 0
+  if (v === undefined) return null
+  if (v !== null && typeof v === 'object') return JSON.stringify(v)
+  return v
+}
+
 const SQL: Record<FieldBase, string> = {
   id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL',
   bool: 'INTEGER', json: 'TEXT', datetime: 'TEXT', ref: 'TEXT',
@@ -17,8 +27,8 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
     open() { db = new DatabaseSync(path); db.exec('PRAGMA journal_mode = WAL'); db.exec('PRAGMA foreign_keys = ON') },
     close() { db?.close(); db = null },
     exec(sql) { need().exec(sql) },
-    all(sql, params = []) { return need().prepare(sql).all(...(params as never[])) as Row[] },
-    run(sql, params = []) { const r = need().prepare(sql).run(...(params as never[])); return { changes: Number(r.changes) } },
+    all(sql, params = []) { return need().prepare(sql).all(...(params.map(bind) as never[])) as Row[] },
+    run(sql, params = []) { const r = need().prepare(sql).run(...(params.map(bind) as never[])); return { changes: Number(r.changes) } },
     tx(fn) {
       const d = need()
       d.exec('BEGIN')

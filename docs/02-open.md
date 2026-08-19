@@ -15,6 +15,12 @@ Honest list of what is not settled or not built.
 - **Client-side bundling.** Deliberately optional; unbundled ESM is the dev path.
   No production bundler exists yet.
 
+## Deferred on purpose
+- **Relations / preload.** Decided (D11) to defer until the query layer has run
+  against real data. Leaning: declare relations in the manifest as another kind of
+  joint, load them through an explicit `preload`, and forbid relating to a model
+  whose module you do not depend on.
+
 ## Not settled
 - **Does a theme get its own routes?** Currently regions only; Shopify-style JSON
   templates with merchant-editable section order are sketched in the agent

@@ -93,7 +93,17 @@ export type Ctx = {
   dryRun: boolean
   effects: string[]
   writes: WriteRecord[]
+  /** Column handles for a model, for building queries. */
+  table(model: string): import('./data/query.ts').Table
+  /** A changeset bound to this app's manifest. */
+  change(model: string, params: Row, base?: Row | null): import('./data/changeset.ts').Changeset
   db: {
+    all(q: import('./data/query.ts').Query): Row[]
+    one(q: import('./data/query.ts').Query): Row | null
+    count(q: import('./data/query.ts').Query): number
+    del(q: import('./data/query.ts').Query): { changes: number }
+    /** Write a changeset. An invalid one is refused with its structured errors. */
+    commit(cs: import('./data/changeset.ts').Changeset, where?: Row): { changes: number } | { dryRun: true }
     select(model: string, where?: Row): Row[]
     insert(model: string, row: Row): unknown
     update(model: string, where: Row, patch: Row): unknown
