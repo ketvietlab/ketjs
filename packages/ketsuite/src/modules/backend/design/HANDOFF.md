@@ -188,5 +188,19 @@ hỏng khi script lỗi là trang hỏng đúng lúc người ta cần vào nh�
 | `[data-ui="signout"]` | form POST tới `/logout` |
 | `[data-ui="signout-button"]` | nút bên trong nó |
 
-Xem cả hai bằng `npm run design` rồi vào `/catalogue`; trạng thái sai mật khẩu
-và trạng thái nhiều công ty đều cần được vẽ, không chỉ trạng thái thành công.
+Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
+
+    login            đăng nhập, trống
+    login-failed     sai mật khẩu — thông báo có role="alert"
+    login-next       có ô ẩn "next", quay lại nơi đang tới
+    viewer-one       thanh trên, tài khoản một công ty
+    viewer-many      thanh trên, nhiều công ty — có tên công ty đang chọn
+    viewer-long      tên người và tên công ty đều dài, kiểm tra thanh trên không vỡ
+
+Hiện **chưa có quy tắc CSS nào** cho các selector này: trang đăng nhập nhúng
+`tokens.css` và `admin.css` như mọi màn hình khác, nhưng hai file đó chưa nói gì
+về `[data-ui="login"]`. Đó là phần việc tiếp theo của đội design.
+
+Một chỗ chưa có điều khiển: tài khoản thuộc nhiều công ty thì `viewer-company` chỉ
+**hiện** công ty đang chọn, chưa **đổi** được. Khi vẽ tới đó, cần một control ở chính
+chỗ này.

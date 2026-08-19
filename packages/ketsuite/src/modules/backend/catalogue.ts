@@ -1,7 +1,8 @@
 import { html, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
-import type { AppRow, PageRow } from './screens.ts'
+import type { AppRow, PageRow, Viewer } from './screens.ts'
+import { loginScreen } from '../user/login.ts'
 import type { Translator } from 'ketjs'
 
 /**
@@ -22,7 +23,35 @@ const app = (over: Partial<AppRow> = {}): AppRow => ({
 const page = (over: Partial<PageRow> = {}): PageRow =>
   ({ id: 'p1', path: '/', title: 'Trang chủ', published: true, ...over })
 
+const viewer = (over: Partial<Viewer> = {}): Viewer =>
+  ({ name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme'], ...over })
+
 export const CASES: Array<{ id: string; label: string; note: string; render: (t: Translator) => TemplateResult }> = [
+  {
+    id: 'login', label: 'Đăng nhập — trống', note: 'Trang đầu tiên ai cũng thấy, và là trang duy nhất chạy không cần JavaScript. Chưa có CSS.',
+    render: (_) => loginScreen(_, { locales: ['vi', 'en'], locale: 'vi' }),
+  },
+  {
+    id: 'login-failed', label: 'Đăng nhập — sai mật khẩu', note: 'Thông báo lỗi có role="alert". Sai mật khẩu và sai tên đăng nhập cho cùng một câu — đừng tách ra.',
+    render: (_) => loginScreen(_, { failed: true, locales: ['vi', 'en'], locale: 'vi' }),
+  },
+  {
+    id: 'login-next', label: 'Đăng nhập — quay lại nơi đang tới', note: 'Có ô ẩn "next". Vào /admin/pages khi chưa đăng nhập thì sau khi vào phải quay lại đúng đó.',
+    render: (_) => loginScreen(_, { next: '/admin/pages', locales: ['vi', 'en'], locale: 'vi' }),
+  },
+  {
+    id: 'viewer-one', label: 'Thanh trên — một công ty', note: 'Chỉ tên và nút đăng xuất. Tên công ty cố tình ẩn khi tài khoản chỉ thuộc một.',
+    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer()),
+  },
+  {
+    id: 'viewer-many', label: 'Thanh trên — nhiều công ty', note: 'Có tên công ty đang chọn. Chưa có cách đổi công ty — chỗ này sẽ cần một điều khiển.',
+    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer({ companies: ['acme', 'globex', 'initech'] })),
+  },
+  {
+    id: 'viewer-long', label: 'Thanh trên — tên dài', note: 'Kiểm tra thanh trên không vỡ khi tên người và tên công ty đều dài.',
+    render: (_) => appsScreen(_, [app({ state: 'installed' })],
+      viewer({ name: 'Nguyễn Thị Hoàng Yến Vy Khánh Linh', company: 'cong-ty-co-phan-thuong-mai-dich-vu', companies: ['a', 'b'] })),
+  },
   {
     id: 'apps-typical', label: 'Ứng dụng — thường gặp', note: 'Hai nhóm, có cái đã cài có cái chưa.',
     render: (_) => appsScreen(_, [
