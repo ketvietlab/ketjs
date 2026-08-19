@@ -1,0 +1,3 @@
+{# Rendered by menu.primary. It receives `item` and nothing else — a partial that
+   could see the page scope would be a partial you cannot read on its own. #}
+<li><a href="{{ item.href }}">{{ item.label }}</a></li>

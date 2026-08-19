@@ -25,6 +25,8 @@ export type CompileOpts = {
   renderRegion?: RegionRenderer
   renderIsland?: IslandRenderer
   renderSections?: SectionsRenderer
+  /** Renders another template by name, with the scope this one built for it. */
+  renderTemplate?: (name: string, scope: Scope, from: string) => string
   name?: string
 }
 
@@ -56,7 +58,7 @@ const BASE_FILTERS: Record<string, Filter> = {
 // nothing above it to walk into even if a name slipped past the parser.
 const hasOwn = Object.prototype.hasOwnProperty
 
-function readPath(scope: Scope, parts: string[], name: string): unknown {
+function readPath(scope: Scope, parts: string[], where: string): unknown {
   // The scope chain bottoms out at a null-prototype object, so the first hop needs
   // no own-property guard: "constructor" and friends resolve to undefined anyway.
   let cur: unknown = scope[parts[0] as string]
@@ -67,16 +69,16 @@ function readPath(scope: Scope, parts: string[], name: string): unknown {
     cur = (cur as Record<string, unknown>)[p]
   }
   if (typeof cur === 'function') {
-    throw new KetError({ code: 'E_KTL_CALLABLE', message: `template "${name}" reached a function via "${parts.join('.')}"`, hint: 'view models must expose data only' })
+    throw new KetError({ code: 'E_KTL_CALLABLE', message: `${where} reached a function via "${parts.join('.')}"`, hint: 'view models must expose data only' })
   }
   return cur
 }
 
 type Thunk = (scope: Scope) => unknown
 
-function compileExpr(e: Expr, o: Required<Pick<CompileOpts, 'filters' | 'name'>>): Thunk {
+function compileExpr(e: Expr, o: Required<Pick<CompileOpts, 'filters' | 'name'>> & { line?: number }): Thunk {
   if (e.k === 'lit') { const v = e.value; return () => v }
-  if (e.k === 'path') { const parts = e.parts; return (s) => readPath(s, parts, o.name) }
+  if (e.k === 'path') { const parts = e.parts, where = at(o); return (s) => readPath(s, parts, where) }
   if (e.k === 'not') { const inner = compileExpr(e.src, o); return (s) => !inner(s) }
   if (e.k === 'cmp') {
     const l = compileExpr(e.left, o), r = compileExpr(e.right, o), op = e.op
@@ -96,12 +98,16 @@ function compileExpr(e: Expr, o: Required<Pick<CompileOpts, 'filters' | 'name'>>
   if (!fn) {
     throw new KetError({
       code: 'E_KTL_UNKNOWN_FILTER',
-      message: `template "${o.name}" uses unknown filter "${e.name}"`,
+      message: `${at(o)} uses unknown filter "${e.name}"`,
       hint: `registered filters: ${Object.keys(o.filters).sort().join(', ')}`,
     })
   }
   return (s) => fn(src(s), arg ? arg(s) : undefined)
 }
+
+/** Where an error is: the template name doubles as its file name, plus the line. */
+const at = (o: { name: string; line?: number }): string =>
+  `template "${o.name}"` + (o.line ? ` line ${o.line}` : '')
 
 export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const name = opts.name ?? '(anonymous)'
@@ -124,17 +130,17 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
     nodes.map(n => {
       if (n.k === 'text') { const v = n.value; return (_s, out) => { out.push(v) } }
       if (n.k === 'out') {
-        const t = compileExpr(n.expr, { filters, name })
+        const t = compileExpr(n.expr, { filters, name, line: n.line })
         const raw = n.raw
         return (s, out) => { const v = t(s); out.push(v == null ? '' : raw ? String(v) : escapeHtml(v)) }
       }
       if (n.k === 'if') {
-        const cond = compileExpr(n.cond, { filters, name })
+        const cond = compileExpr(n.cond, { filters, name, line: n.line })
         const a = compileNodes(n.then), b = compileNodes(n.else)
         return (s, out) => { for (const f of (cond(s) ? a : b)) f(s, out) }
       }
       if (n.k === 'for') {
-        const src = compileExpr(n.src, { filters, name })
+        const src = compileExpr(n.src, { filters, name, line: n.line })
         const body = compileNodes(n.body)
         const varName = n.name
         return (s, out) => {
@@ -160,6 +166,18 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
       }
       if (n.k === 'sections') {
         return (s, out) => { out.push(opts.renderSections ? opts.renderSections(s) : '') }
+      }
+      if (n.k === 'render') {
+        const target = n.template
+        const args = Object.entries(n.args).map(([k, e]) => [k, compileExpr(e, { filters, name, line: n.line })] as const)
+        const where = at({ name, line: n.line })
+        return (s, out) => {
+          // A null-prototype object with only what was passed. Not Object.create(s):
+          // the callee must not be able to read the caller by accident, or on purpose.
+          const inner = Object.create(null) as Scope
+          for (const [k, thunk] of args) inner[k] = thunk(s)
+          out.push(opts.renderTemplate ? opts.renderTemplate(target, inner, where) : '')
+        }
       }
       if (n.k === 'island') {
         islandsUsed.push(n.name)

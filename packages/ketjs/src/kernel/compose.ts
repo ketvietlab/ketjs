@@ -33,7 +33,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
   for (const m of order) {
     manifest.modules[m.name] = {
       version: m.version, kind: m.kind, depends: [...m.depends],
-      app: m.app, title: m.title, summary: m.summary, category: m.category, install: m.install ?? 'manual',
+      app: m.app, title: m.title, summary: m.summary, category: m.category, install: m.install ?? 'manual', removable: m.removable !== false,
     }
   }
 

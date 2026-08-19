@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="{{ locale | default: 'vi' }}"><head><meta charset="utf-8"><title>{{ site.title }}</title></head>
+<body class="ket" data-ket-section="layout">
+  <header><a href="/">{{ site.title }}</a></header>
+  <main>{% region "product.detail" %}</main>
+  <footer>{{ site.tagline | default: "Chạy trên Ket" }}</footer>
+</body></html>
