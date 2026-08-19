@@ -236,6 +236,9 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     disabledSections: Object.entries(manifest.sections).filter(([, s]) => !keep(s.by)).map(([n]) => n),
     disabledIslands: Object.entries(manifest.islands).filter(([, s]) => !keep(s.by)).map(([n]) => n),
     order: manifest.order.filter(keep),
+    // A menu entry of a switched-off module goes with it, and so does anything
+    // hanging under it — buildMenu drops a heading left with no children.
+    menus: Object.fromEntries(Object.entries(manifest.menus).filter(([, m]) => keep(m.by))),
     // The served surface goes with the behaviour. A route of a switched-off module
     // must stop answering and its stylesheet must stop being linked — otherwise
     // "enable at run" stops at the database and never reaches what anyone can see.

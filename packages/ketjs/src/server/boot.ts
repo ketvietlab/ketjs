@@ -23,6 +23,8 @@ import { createKetServer } from './http.ts'
 import { createSessions, dbSessionStore } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
+import { buildMenu } from '../kernel/menu.ts'
+import type { MenuNode } from '../kernel/menu.ts'
 import type { Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
@@ -96,6 +98,12 @@ export type ServeContext = {
   joint: (url: URL, req: IncomingMessage, key: string, props?: Record<string, unknown>) => Promise<Markup>
   /** False when an installed module omitted this joint — see jointShows in screens. */
   jointShows: (url: URL, req: IncomingMessage, key: string) => Promise<boolean>
+  /**
+   * The navigation tree as this viewer sees it: what the deployment ships, what
+   * this database has switched on, and what this request may call — in that order,
+   * because each filter depends on the one before.
+   */
+  menu: (url: URL, req: IncomingMessage) => Promise<MenuNode[]>
   /**
    * This request's sessions. A function because with subdomain tenants they live
    * in that tenant's database — one per tenant, not one per deployment.
@@ -348,6 +356,12 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
     joint: (url, req, key, props) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),
     jointShows: (url, req, key) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).shows(key)),
+    menu: async (url, req) => {
+      const allow = await allowFor(url, req)
+      const _ = translate(localeOf(url, req))
+      return tenants.ofRequest(url, req, async (t) =>
+        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname }))
+    },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {

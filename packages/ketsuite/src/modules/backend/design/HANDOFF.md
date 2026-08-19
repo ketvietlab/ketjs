@@ -204,3 +204,24 @@ về `[data-ui="login"]`. Đó là phần việc tiếp theo của đội design
 Một chỗ chưa có điều khiển: tài khoản thuộc nhiều công ty thì `viewer-company` chỉ
 **hiện** công ty đang chọn, chưa **đổi** được. Khi vẽ tới đó, cần một control ở chính
 chỗ này.
+
+## Điều hướng hai cấp
+
+Sidebar giờ có hai tầng: danh sách ứng dụng, rồi menu bên trong ứng dụng đang mở.
+Cây menu do module khai báo (xem D42) và **đã được lọc trước khi tới CSS** — cái gì
+chưa cài, hoặc người đang đăng nhập không có quyền gọi, thì không có trong HTML.
+Không cần CSS ẩn gì cả.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="app-switch"]`, `[data-ui="app-current"]` | tên ứng dụng đang mở, trên cùng |
+| `[data-ui="app-list"]`, `[data-ui="app-list-title"]` | danh sách ứng dụng và nhãn của nó |
+| `[data-ui="app-entry"][data-active]` | một ứng dụng; `true` là cái đang mở |
+| `[data-ui="app-icon"]`, `[data-ui="app-name"]` | dấu hiệu và tên bên trong `app-entry` |
+| `[data-ui="menu"]`, `[data-ui="menu-app"]` | menu của ứng dụng đang mở, và tên nó |
+| `[data-ui="menu-item"][data-active]` | một mục dẫn tới trang; `true` là trang đang xem |
+| `[data-ui="menu-section"][open]` | một nhóm — là `<details>`, gập được không cần JavaScript |
+| `[data-ui="menu-section-title"]` | `<summary>` của nhóm đó |
+
+`[data-ui="nav-item"]` vẫn còn, nhưng chỉ dành cho module khác chèn thêm qua joint
+`backend:nav.items`. Màn hình không tự sinh ra nó nữa.
