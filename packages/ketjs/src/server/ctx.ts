@@ -36,8 +36,31 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   // A query is a value, so what it touches is known before it runs. This is the
   // pay-off for not building a string-based query builder: effect enforcement
   // happens on the query itself, not on a guess about the SQL it produced.
+  const relationOf = (model: string, name: string) => {
+    const rel = manifest.relations[model]?.[name]
+    if (!rel) {
+      throw new KetError({
+        code: 'E_UNKNOWN_RELATION',
+        module: fn.by,
+        message: `"${model}" has no relation "${name}"`,
+        hint: `declared: ${Object.keys(manifest.relations[model] ?? {}).join(', ') || '(none)'}`,
+      })
+    }
+    return rel
+  }
+
+  /**
+   * What a query touches, checked before it runs — preloads included.
+   *
+   * The preload check used to live where the children are fetched, which meant it
+   * only ran when the parent returned rows. An undeclared preload against an empty
+   * table passed silently, so a test suite with empty fixtures would go green and
+   * the same code would throw the first time a customer had data. A check that
+   * depends on the data is not a check.
+   */
   const checkQuery = (q: Query): void => {
     for (const model of q.touches) need(q.effect, model)
+    for (const { name } of q.preloads) need('read', relationOf(q.model, name).target)
   }
   const dialect = adapter.name === 'postgres' ? 'postgres' : 'sqlite'
 
@@ -133,16 +156,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     if (!q.preloads.length || !rows.length) return rows
 
     for (const { name } of q.preloads) {
-      const rel = manifest.relations[q.model]?.[name]
-      if (!rel) {
-        throw new KetError({
-          code: 'E_UNKNOWN_RELATION',
-          module: fn.by,
-          message: `"${q.model}" has no relation "${name}"`,
-          hint: `declared: ${Object.keys(manifest.relations[q.model] ?? {}).join(', ') || '(none)'}`,
-        })
-      }
-      need('read', rel.target)
+      const rel = relationOf(q.model, name)
 
       if (rel.kind === 'belongsTo') {
         const ids = [...new Set(rows.map(r => r[rel.by]).filter(v => v != null))]
