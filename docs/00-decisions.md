@@ -108,6 +108,48 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D23 — Company is a row-level boundary; branch is a dimension
+**The situation being replaced:** Odoo has no branch concept, so a business with
+several branches of one legal entity models each branch as a `res.company`. That
+forces a chart of accounts per branch, turns internal transfers into inter-company
+invoices that then have to be eliminated, and fragments master data. It is not the
+right model — it is the model Odoo leaves you with.
+
+**Chosen:** two dimensions with different semantics.
+
+| | `company` | `branch` |
+|---|---|---|
+| is | a legal entity | an operational unit inside one |
+| filter | **mandatory**, a module cannot widen it | **default**, widenable within the company |
+| crossing it | needs `crossCompany: true`, visible in manifest, diff and agent descriptor | ordinary; aggregating branches needs no permission |
+
+**Every model must declare its scope** — `shared`, `company` or `company+branch`.
+Omitting it is a build error, because the safe-looking default is the one that leaks.
+The scope columns are added by the composer, never by the module: a module that spelt
+them itself could spell them differently and the filter would silently stop matching.
+Extending them is refused for the same reason.
+
+**Why this had to come before any vertical:** isolation used to be a database
+boundary, where a miss fails loudly. It is now a WHERE clause, where a miss quietly
+returns another legal entity's rows. Every query written before the filter existed
+would have been unscoped, and nothing would have caught it. This is a D1-class
+decision — tightening later is not possible.
+
+**Writes are stamped from the request.** A module cannot set `companyId` itself;
+attempting it is `E_SCOPE_FIELD_WRITTEN`. Otherwise a write could be aimed at another
+company.
+
+**A request with no company cannot touch company data at all** — it fails rather than
+falling back to everything, which is the failure mode that would have gone unnoticed.
+
+**`ctx.tx()` arrives with it.** Stock reservation is unsafe without a transaction
+spanning several writes, and the transaction hands the body a ctx bound to the
+transaction's connection — carrying the same company, on the same session that issued
+BEGIN.
+
+**Shared master data, by decision:** products, partners and price lists are
+tenant-wide; warehouses and branches are scoped.
+
 ## D22 — Translations belong to the module that owns the strings
 **Chosen:** a module declares `messages` per locale; the composer prefixes every key
 with the module name and merges them. Same rule as models, joints and sections — a

@@ -22,6 +22,10 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
 
   for (const [mkey, bmodel] of Object.entries(before.models)) {
     const amodel = after.models[mkey]
+    if (amodel && amodel.scope !== bmodel.scope) {
+      push('breaking', 'MODEL_SCOPE_CHANGED', `model "${mkey}" moved from ${bmodel.scope} to ${amodel.scope}`,
+        'existing rows carry the old shape; widening leaks and narrowing hides data')
+    }
     if (!amodel) {
       const extenders = new Set(Object.values(bmodel.fields).filter(f => f.by !== bmodel.owner).map(f => f.by))
       push('breaking', 'MODEL_REMOVED', `model "${mkey}" was removed`,
@@ -54,6 +58,10 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
       }
     }
     if (bfn.idempotent && !afn.idempotent) push('risky', 'IDEMPOTENCY_LOST', `"${fkey}" is no longer idempotent`, 'agent retries may double-apply it')
+    if (!bfn.crossCompany && afn.crossCompany) {
+      push('risky', 'CROSS_COMPANY_GAINED', `"${fkey}" now reads across legal entities`,
+        'the company filter no longer applies to it — confirm that is intended')
+    }
   }
 
   for (const r of Object.keys(before.regions.provided)) {

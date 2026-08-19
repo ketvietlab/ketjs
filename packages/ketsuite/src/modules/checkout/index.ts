@@ -6,7 +6,9 @@ export default defineModule({
   depends: ['catalog'],
 
   models: {
-    Order: { fields: { id: 'id', productId: 'ref:catalog.Product', qty: 'int', totalCents: 'int', placedAt: 'datetime' } },
+    Order: {
+      scope: 'company+branch',
+      fields: { id: 'id', productId: 'ref:catalog.Product', qty: 'int', totalCents: 'int', placedAt: 'datetime' } },
   },
 
   views: {

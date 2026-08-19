@@ -7,6 +7,9 @@ import {
 import type { Adapter, Manifest } from 'ketjs'
 import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
 
+/** Every request acts as some company; these tests act as one. */
+const SCOPE = { company: 'c1', branches: null }
+
 const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
 const manifest = compose(mods)
 
@@ -67,7 +70,7 @@ test('agent: savePage refuses a bad layout as data, not as an exception', async 
   const { db, manifest: m } = await boot()
   const r = await callFn('website.savePage', {
     id: 'p-bad', path: '/x', title: 'X', layout: [{ type: 'website.nope', settings: {} }],
-  }, { adapter: db, manifest: m })
+  }, { adapter: db, manifest: m, scope: SCOPE })
   const value = r.value as { ok: boolean; errors: Array<{ type: string }> }
   assert.equal(value.ok, false)
   assert.equal(value.errors[0]!.type, 'website.nope')
@@ -78,21 +81,21 @@ test('agent: savePage refuses a bad layout as data, not as an exception', async 
 test('agent: a page round-trips through save, publish and fetch', async () => {
   const { db, manifest: m } = await boot()
   const saved = await callFn('website.savePage', { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout },
-    { adapter: db, manifest: m })
+    { adapter: db, manifest: m, scope: SCOPE })
   assert.deepEqual(saved.value, { ok: true, id: 'home', sections: 2 })
 
-  assert.equal(((await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m })).value), null,
+  assert.equal(((await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })).value), null,
     'a new page starts unpublished')
 
-  await callFn('website.publishPage', { id: 'home', published: true }, { adapter: db, manifest: m })
-  const page = (await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m })).value as { title: string; layout: string }
+  await callFn('website.publishPage', { id: 'home', published: true }, { adapter: db, manifest: m, scope: SCOPE })
+  const page = (await callFn('website.getPageByPath', { path: '/' }, { adapter: db, manifest: m, scope: SCOPE })).value as { title: string; layout: string }
   assert.equal(page.title, 'Trang chủ')
   await db.close()
 })
 
 test('theme: a page renders from its layout, in order, through the theme', async () => {
   const { db, manifest: m } = await boot()
-  await callFn('website.savePage', { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout }, { adapter: db, manifest: m })
+  await callFn('website.savePage', { id: 'home', path: '/', title: 'Trang chủ', layout: homeLayout }, { adapter: db, manifest: m, scope: SCOPE })
 
   const rt = createTheme(m, mods)
   const html = rt.renderRegion('website.page', {
@@ -136,12 +139,12 @@ test('theme: the search box is placed by the theme and written by a module', () 
 
 test('menu: items are validated and ordered', async () => {
   const { db, manifest: m } = await boot()
-  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'Trang chủ', href: '/', position: 1 }, { adapter: db, manifest: m })
-  await callFn('website_menu.addMenuItem', { id: 'm2', label: 'Giới thiệu', href: '/gioi-thieu', position: 0 }, { adapter: db, manifest: m })
-  const bad = await callFn('website_menu.addMenuItem', { id: 'm3', label: 'Sai', href: 'javascript:alert(1)' }, { adapter: db, manifest: m })
+  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'Trang chủ', href: '/', position: 1 }, { adapter: db, manifest: m, scope: SCOPE })
+  await callFn('website_menu.addMenuItem', { id: 'm2', label: 'Giới thiệu', href: '/gioi-thieu', position: 0 }, { adapter: db, manifest: m, scope: SCOPE })
+  const bad = await callFn('website_menu.addMenuItem', { id: 'm3', label: 'Sai', href: 'javascript:alert(1)' }, { adapter: db, manifest: m, scope: SCOPE })
   assert.equal((bad.value as { ok: boolean }).ok, false)
 
-  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest: m })).value as Array<{ label: string }>
+  const items = (await callFn('website_menu.listMenu', {}, { adapter: db, manifest: m, scope: SCOPE })).value as Array<{ label: string }>
   assert.deepEqual(items.map(i => i.label), ['Giới thiệu', 'Trang chủ'])
   await db.close()
 })

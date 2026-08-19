@@ -4,6 +4,9 @@ import { DestructiveMigrationError, _resetIdempotency, callFn, compose, createQu
 import type { Adapter, Manifest } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
+/** Every request acts as some company; these tests act as one. */
+const SCOPE = { company: 'c1', branches: null }
+
 const mods = [catalog, inventory, checkout, theme]
 
 async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
@@ -25,7 +28,7 @@ test('fullstack: schema is derived from the composed manifest, extensions includ
 
 test('fullstack: destructive migrations are generated but refused by default', () => {
   const before = schemaFromManifest(compose(mods))
-  const shrunk = defineModule({ name: 'catalog', models: { Product: { fields: { id: 'id', title: 'text' } } } })
+  const shrunk = defineModule({ name: 'catalog', models: { Product: { scope: 'shared', fields: { id: 'id', title: 'text' } } } })
   const after = schemaFromManifest(compose([shrunk]))
   assert.throws(() => planMigration(before, after), (e: unknown) => {
     const err = e as DestructiveMigrationError
@@ -80,8 +83,8 @@ test('agent safety: an idempotency key makes a retry replay instead of double-ap
   const { adapter, manifest } = await boot()
   const args = { id: 'o1', productId: 'p1', qty: 2 }
   await callFn('catalog.createProduct', { id: 'p1', title: 'Ao', priceCents: 5000, slug: 'ao' }, { adapter, manifest })
-  const a = await callFn('checkout.placeOrder', args, { adapter, manifest, idempotencyKey: 'k1' })
-  const b = await callFn('checkout.placeOrder', args, { adapter, manifest, idempotencyKey: 'k1' })
+  const a = await callFn('checkout.placeOrder', args, { adapter, manifest, scope: SCOPE, idempotencyKey: 'k1' })
+  const b = await callFn('checkout.placeOrder', args, { adapter, manifest, scope: SCOPE, idempotencyKey: 'k1' })
   assert.equal(b.replayed, true)
   assert.deepEqual(a.value, b.value)
   assert.equal((await adapter.all('SELECT * FROM checkout_order', [])).length, 1, 'retry must not create a second order')
