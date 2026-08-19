@@ -1,0 +1,255 @@
+// Booting an app: the sequence every deployment repeats, written once.
+//
+// Before this, running a KetSuite-shaped app meant ~150 lines of hand-written boot
+// in the app itself — open a database, migrate, register functions, install a
+// bootstrap set, decide who the request is, build the theme, mount the framework's
+// own routes, print something useful, shut down cleanly. Every one of those lines
+// is app-agnostic, and every second app would have copied them, drift included.
+//
+// What stays with the app is what only the app knows: which modules it ships, which
+// function turns a path into a page, which extra routes it serves, and how to open
+// a datastore that is not SQLite. Those arrive through `AppSpec.serve` as data
+// rather than as a closure the framework has to trust.
+
+import { compose } from '../kernel/compose.ts'
+import { createAppRegistry, restrictManifest } from '../kernel/apps.ts'
+import { translator } from '../kernel/i18n.ts'
+import { KetError } from '../kernel/errors.ts'
+import { createTheme } from '../theme/render.ts'
+import { agentDescriptor } from '../agent/capabilities.ts'
+import { migrateOne } from '../data/fleet.ts'
+import { registerFunctions, callFn } from './fn.ts'
+import { createKetServer } from './http.ts'
+import { readConfig, sqliteStore } from './config.ts'
+import type { RuntimeConfig, OpenStore } from './config.ts'
+import type { AppSpec } from '../kernel/workspace.ts'
+import type { AppRegistry } from '../kernel/apps.ts'
+import type { Translator } from '../kernel/i18n.ts'
+import type { Adapter, Manifest, Scope } from '../types.ts'
+import type { IncomingMessage } from 'node:http'
+
+export type RouteResult = { status?: number; type?: string; body: string }
+export type Route = (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult
+
+/**
+ * What a route needs that only the running server has. Handed to `serve.routes` so
+ * an app's screens can read live state without reaching for module-level globals.
+ */
+export type ServeContext = {
+  /** Everything this deployment ships, installed or not. */
+  manifest: Manifest
+  /** Restricted to what is switched on in this database, right now. */
+  live: () => Promise<Manifest>
+  adapter: Adapter
+  apps: AppRegistry
+  config: RuntimeConfig
+  scopeOf: (url: URL, req: IncomingMessage) => Scope
+  localeOf: (url: URL, req: IncomingMessage) => string
+  translate: (locale: string) => Translator
+  /** A function call carrying this request's live manifest and scope. */
+  call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
+  html: (o: { lang: string; title?: string; head?: string; body: string }) => string
+}
+
+/**
+ * How a path becomes a page. The resolver is named rather than passed, so the
+ * framework never learns which module provides pages — swap the module and this
+ * one string changes.
+ *
+ * The named function takes `{ path }` and returns null, or a row with `title` and
+ * `layout` (the sections, as an array or as the JSON the database gave back).
+ */
+export type PagesSpec = {
+  resolve: string
+  /** Message key for the title of a path that has no page. */
+  notFound?: string
+  siteTitle?: string
+}
+
+export type ServeSpec = {
+  pages?: PagesSpec
+  assets?: { prefix: string; dir: string }
+  /** Installed on an empty database so a first run has something to look at. */
+  bootstrap?: string[]
+  routes?: (ctx: ServeContext) => Record<string, Route>
+  /** Anything other than SQLite; the framework cannot depend on a driver. */
+  openStore?: OpenStore
+  defaults?: Partial<RuntimeConfig>
+}
+
+export type BootedApp = {
+  name: string
+  manifest: Manifest
+  adapter: Adapter
+  apps: AppRegistry
+  config: RuntimeConfig
+  port: number
+  banner: () => Promise<string>
+  close: () => Promise<void>
+}
+
+const shell = ({ lang, title, head = '', body }: { lang: string; title?: string; head?: string; body: string }) =>
+  `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">`
+  + `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  + (title ? `<title>${title}</title>` : '')
+  + `${head}</head><body>${body}</body></html>`
+
+/**
+ * Opens, migrates, installs, serves. Returns before listening is announced so a
+ * caller can print its own banner, or a test can boot on port 0 and never print.
+ */
+export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | undefined>; port?: number } = {}): Promise<BootedApp> {
+  const serve = spec.serve ?? {}
+  const config = readConfig(o.env ?? process.env, {
+    sqliteFile: `.ket/${spec.name}.db`,
+    ...serve.defaults,
+    ...(o.port !== undefined ? { port: o.port } : {}),
+  })
+  if (o.port !== undefined) config.port = o.port
+
+  const modules = spec.theme ? [...spec.modules, spec.theme] : [...spec.modules]
+  const manifest = compose(modules, { appRequires: spec.requires ?? [], headless: spec.headless ?? false })
+
+  const adapter = await (serve.openStore ?? sqliteStore)(config)
+  if (config.migrateOnBoot) {
+    const ops = await migrateOne(adapter, manifest)
+    if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
+  }
+
+  registerFunctions(modules)
+  const apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
+
+  // An empty database is not a useful one to look at, so a first run installs
+  // enough to see something. A database that has been used is left exactly as it is.
+  const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
+  if (bootstrap.length && (await apps.enabled()).size === 0) {
+    for (const name of bootstrap) await apps.install(name)
+    console.log(`  first run, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
+  }
+
+  /**
+   * The one place a request's identity is decided. Until authentication exists this
+   * reads headers; afterwards it reads a session, and nothing else changes.
+   */
+  const scopeOf = (_url: URL, req: IncomingMessage): Scope => ({
+    company: (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany,
+    branches: ((req.headers['x-ket-branch'] as string | undefined) ?? '').split(',').filter(Boolean) || null,
+  })
+  const localeOf = (url: URL, req: IncomingMessage): string =>
+    url.searchParams.get('lang')
+    ?? (req.headers['accept-language'] as string | undefined)?.split(',')[0]?.split('-')[0]
+    ?? config.defaultLocale
+
+  const live = async () => restrictManifest(manifest, await apps.enabled())
+  const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
+
+  const ctx: ServeContext = {
+    manifest, live, adapter, apps, config, scopeOf, localeOf, translate,
+    call: async (name, input, url, req) =>
+      (await callFn(name, input, { adapter, manifest: await live(), scope: scopeOf(url, req) })).value,
+    html: shell,
+  }
+
+  const pages = serve.pages
+  if (pages && !manifest.functions[pages.resolve]) {
+    throw new KetError({
+      code: 'E_PAGE_RESOLVER_MISSING',
+      module: spec.name,
+      message: `app "${spec.name}" resolves pages with "${pages.resolve}", which no installed module declares`,
+      hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
+    })
+  }
+
+  const server = await createKetServer({
+    manifest, adapter,
+    resolveLocale: localeOf,
+    resolveScope: scopeOf,
+    ...(serve.assets ? { assets: serve.assets } : {}),
+    ...(spec.headless || !spec.theme ? {} : {
+      theme: createTheme(await live(), modules, { translate: translate(config.defaultLocale) }),
+    }),
+    /**
+     * The storefront: a path becomes a page, and a page becomes its sections.
+     *
+     * The lookup runs through callFn like anything else, so the company filter and
+     * the app-installed check apply to a public page exactly as they do to an API
+     * call — the front of the site is not a second door with different rules.
+     */
+    ...(pages ? {
+      pageScope: async (url: URL, req: IncomingMessage) => {
+        const site = { title: pages.siteTitle ?? spec.name }
+        const row = await ctx.call(pages.resolve, { path: url.pathname }, url, req) as
+          { id: string; title: string; layout: unknown } | null
+        if (!row) {
+          const _ = translate(localeOf(url, req))
+          return { site, page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' }, sections: [] }
+        }
+        return {
+          site,
+          page: { id: row.id, path: url.pathname, title: row.title },
+          meta: {},
+          sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+        }
+      },
+    } : {}),
+    routes: {
+      ...(serve.routes?.(ctx) ?? {}),
+      // The framework's own two, mounted last so an app cannot shadow them by accident.
+      '/_ket/health': async () => ({
+        type: 'application/json',
+        body: JSON.stringify({
+          ok: true, app: spec.name, database: adapter.name,
+          apps: [...(await apps.enabled())].sort(),
+          orphans: await apps.orphans(),
+          locales: Object.keys(manifest.messages ?? {}),
+        }, null, 2),
+      }),
+      '/_ket/agent': async () => ({
+        type: 'application/json',
+        body: JSON.stringify(agentDescriptor(await live()), null, 2),
+      }),
+    },
+  })
+
+  const port = await server.listen(config.port)
+
+  const banner = async () => {
+    const enabled = [...(await apps.enabled())].sort()
+    const at = `http://${config.host}:${port}`
+    // A "site" row only means something if a path can become a page; an app that
+    // declares its own "/" route would otherwise be listed twice, once wrongly.
+    const paths = new Map<string, string>()
+    if (pages) paths.set('/', 'site')
+    for (const p of Object.keys(serve.routes?.(ctx) ?? {})) paths.set(p, p.replace(/^\//, '') || 'site')
+    const rows = [
+      ...[...paths].map(([p, label]) => [label, at + p]),
+      ['health', `${at}/_ket/health`],
+      ['agent descriptor', `${at}/_ket/agent`],
+      ['', ''],
+      ['database', adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`)],
+      ['apps installed', enabled.join(', ') || '(none)'],
+      ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
+      // Silence here would be the wrong kind: a module that declared install:'auto'
+      // and did not arrive should say why, not look broken.
+      ...(config.autoInstall ? [] : [['auto-install', 'off (KET_AUTO_INSTALL=0)']]),
+    ]
+    const w = Math.max(...rows.map(r => (r[0] as string).length))
+    return `\n  ${spec.name} is running\n\n`
+      + rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n')
+      + `\n\n  No authentication yet: the company comes from the X-Ket-Company header,`
+      + `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.\n`
+  }
+
+  const close = async () => { await server.close(); await adapter.close() }
+  return { name: spec.name, manifest, adapter, apps, config, port, banner, close }
+}
+
+/** bootApp, plus the banner and the signal handling a long-running process wants. */
+export async function serveApp(spec: AppSpec, o: { env?: Record<string, string | undefined>; port?: number } = {}): Promise<BootedApp> {
+  const booted = await bootApp(spec, o)
+  console.log(await booted.banner())
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => { void booted.close().then(() => process.exit(0)) })
+  }
+  return booted
+}
