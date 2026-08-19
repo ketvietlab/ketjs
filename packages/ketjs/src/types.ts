@@ -39,7 +39,17 @@ export type FnMeta = {
   agent: boolean
 }
 
-export type ModuleSpec = {
+export type AppMeta = {
+  /** Shown in the app list. A module without this is machinery, not an app. */
+  app?: boolean
+  title?: string
+  summary?: string
+  category?: string
+  /** Install itself as soon as everything it depends on is installed. */
+  autoInstall?: boolean
+}
+
+export type ModuleSpec = AppMeta & {
   kind?: 'module' | 'theme'
   name: string
   version?: string
@@ -59,7 +69,7 @@ export type ModuleSpec = {
   sections?: Record<string, SectionDef>
 }
 
-export type KetModule = {
+export type KetModule = Readonly<AppMeta> & {
   readonly kind: 'module' | 'theme'
   readonly name: string
   readonly version: string
@@ -81,7 +91,7 @@ export type KetModule = {
 export type Manifest = {
   ket: string
   order: string[]
-  modules: Record<string, { version: string; kind: string; depends: string[] }>
+  modules: Record<string, { version: string; kind: string; depends: string[] } & AppMeta>
   models: Record<string, ComposedModel>
   joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean }>
   fills: Array<{ joint: string; by: string; template: string }>
@@ -92,6 +102,8 @@ export type Manifest = {
   sections: Record<string, SectionDef & { by: string }>
   tokens: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
+  /** Set by restrictManifest: modules this deployment ships but this database has off. */
+  disabledModules?: string[]
   diagnostics?: Diagnostic[]
 }
 

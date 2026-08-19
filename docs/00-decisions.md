@@ -108,6 +108,38 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D21 — Apps install at build, switch on at run
+KetSuite needs what Odoo has: a list of apps, installed or not, with install and
+remove. Odoo gets it by letting each database hold a different set of modules — the
+exact thing D16 refused, because it is why a fleet upgrade there is N unknown
+migrations instead of one known one.
+
+**The split:** a deployment decides at BUILD time which modules exist, and every
+database it serves has the same schema. A database decides at RUN time which of them
+are ON. Installing changes behaviour — which functions answer, which sections may be
+placed, which fills appear — and never the shape of the database. Verified: the table
+list is byte-identical before and after installing and removing an app.
+
+**Uninstalling deletes nothing.** The columns stay, the rows stay, re-installing
+finds the data where it was. Odoo drops columns on uninstall and people lose data to
+a misclick. Refusing that is the same rule as D7, applied one level up.
+
+**The cost, stated:** a database carries columns for apps it does not use. Nullable
+columns are nearly free, and this is precisely the price that buys a fleet where the
+upgrade diff runs once.
+
+**What "installed" gates:** `restrictManifest` filters behaviour — functions,
+sections, islands, joints, fills, regions — and never models, because rows outlive an
+install. A call into a switched-off app answers `E_APP_NOT_INSTALLED` naming the app,
+not "no such function", which would send the reader hunting for a typo.
+
+**One thing this surfaced:** a theme is written against what the *deployment* ships,
+not against what one database has on. So the strict check — a template naming an
+island nobody provides — belongs to the full manifest, where it is a build error,
+while a restricted manifest renders nothing instead. A page saved while an app was
+installed still names its sections afterwards; those sections are skipped and come
+back with their data when the app returns. Uninstalling must not take the theme down.
+
 ## D20 — Sections: placement by data, not by code
 **Chosen:** a page's body is an ordered list of section placements, each with
 settings validated against a schema the providing module declared. A joint is placed

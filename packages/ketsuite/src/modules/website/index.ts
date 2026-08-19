@@ -13,6 +13,10 @@ import { tokens } from './tokens.ts'
 export default defineModule({
   name: 'website',
   version: '0.1.0',
+  app: true,
+  title: 'Website',
+  summary: 'Trang, section và điều hướng — nội dung soạn bằng dữ liệu, không phải code.',
+  category: 'Website',
   requires: ['layout', 'website.page'],
   models, joints, sections, views, functions, tokens,
 })
