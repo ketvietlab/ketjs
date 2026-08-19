@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToString } from 'ketjs-view'
+import { compose, translator } from 'ketjs'
+import backend from 'ketsuite/backend'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState, CASES, cataloguePage } from 'ketsuite/backend'
 import type { AppRow, PageRow } from 'ketsuite/backend'
 
@@ -27,10 +29,12 @@ const app = (over: Partial<AppRow> = {}): AppRow => ({
 })
 const page = (over: Partial<PageRow> = {}): PageRow => ({ id: 'p', path: '/', title: 'T', published: true, ...over })
 
+const _ = translator(compose([backend], { headless: true }), 'vi')
+
 const everything = [
-  appsScreen([app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })]),
-  pagesScreen([page(), page({ id: 'q', published: false })]),
-  settingsScreen({ 'color-accent': 'x' }),
+  appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })]),
+  pagesScreen(_, [page(), page({ id: 'q', published: false })]),
+  settingsScreen(_, { 'color-accent': 'x' }),
   emptyState('a', 'b'),
   errorState('E_X', 'msg', 'hint'),
 ].map(r => renderToString(r)).join('')
@@ -66,7 +70,7 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
   for (const needed of ['apps-empty', 'apps-long', 'apps-blocked', 'pages-empty', 'pages-long', 'state-error']) {
     assert.ok(ids.includes(needed), `the catalogue must show "${needed}" — a design that skips it gets built twice`)
   }
-  const html = renderToString(cataloguePage())
+  const html = renderToString(cataloguePage(_))
   assert.equal([...html.matchAll(/data-ui="catalogue-case"/g)].length, CASES.length)
   assert.ok(CASES.every(c => c.note.length > 10), 'every case says what it is testing')
 })

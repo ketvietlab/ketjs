@@ -108,6 +108,40 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D22 — Translations belong to the module that owns the strings
+**Chosen:** a module declares `messages` per locale; the composer prefixes every key
+with the module name and merges them. Same rule as models, joints and sections — a
+module declares what it contributes and nothing reaches in from outside.
+
+Prefixing is what stops the collision that rots a flat global catalogue: two modules
+may both own a "title" without either knowing the other exists.
+
+**Bound to `_`, after gettext.** It appears often enough in markup that a longer
+name would cost more than it explains. In KTL it is a **filter**, not a function in
+scope — `{{ 'website.page.title' | _ }}` — because scope holds data only, and a theme
+that could call functions would be a theme that could run code (D3).
+
+**Missing translations never break a build.** They fall back to the default locale,
+then to the key itself, which is visible and greppable rather than blank.
+`missingMessages()` reports the gaps for whoever is filling them in. A build that
+fails because one Danish string is absent is a build nobody translates into Danish.
+
+**Plural rules come from `Intl.PluralRules`,** not from a hand-written table.
+Vietnamese has one form, English has two, and neither is our business to encode.
+
+**The pseudo-locale earns its place.** `qps` returns every string longer and
+bracketed, so a layout tuned to short Vietnamese shows its seams before a real
+translation exists. It found two things immediately: app titles, summaries and
+categories were not translatable at all, and `label()` was asking `has()` — which is
+about *this* locale — when it needed `resolves()`, which is about whether a
+translation exists anywhere. Using the wrong one made the pseudo-locale silently stop
+expanding, which is the one thing it is for.
+
+**Module metadata translates by convention, not by new syntax.** `title`, `summary`
+and `category` stay plain strings so a module reads without a catalogue; a module
+that wants them translated adds `app.title` and friends to its own messages. No
+module has to change, and the pseudo-locale shows which ones have not been done.
+
 ## D21 — Apps install at build, switch on at run
 KetSuite needs what Odoo has: a list of apps, installed or not, with install and
 remove. Odoo gets it by letting each database hold a different set of modules — the

@@ -11,6 +11,10 @@ export default defineModule({
   title: 'Menu điều hướng',
   summary: 'Thanh menu cho website.',
   category: 'Website',
+  messages: {
+    vi: { 'app.title': "Menu điều hướng", 'app.summary': "Thanh menu cho website.", 'app.category': "Website" },
+    en: { 'app.title': "Navigation", 'app.summary': "A menu bar for the website.", 'app.category': "Website" },
+  },
   depends: ['website'],
   models, sections, views, functions,
 })

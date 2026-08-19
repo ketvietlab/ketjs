@@ -67,6 +67,8 @@ export type ModuleSpec = AppMeta & {
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandView>
   sections?: Record<string, SectionDef>
+  /** Strings this module owns, per locale. Keys get the module name prefixed. */
+  messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
 
 export type KetModule = Readonly<AppMeta> & {
@@ -86,6 +88,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly provides: readonly string[]
   readonly islands: Record<string, import('ketjs-view').IslandView>
   readonly sections: Record<string, SectionDef>
+  readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
 
 export type Manifest = {
@@ -100,6 +103,7 @@ export type Manifest = {
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<string, { by: string }>
   sections: Record<string, SectionDef & { by: string }>
+  messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */

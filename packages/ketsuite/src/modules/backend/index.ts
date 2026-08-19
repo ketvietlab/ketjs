@@ -10,6 +10,7 @@
 // tokens. See design/HANDOFF.md.
 
 import { defineModule } from 'ketjs'
+import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'backend',
@@ -18,8 +19,10 @@ export default defineModule({
   title: 'Quản trị',
   summary: 'Màn hình quản lý ứng dụng, trang và cài đặt.',
   category: 'Hệ thống',
+  messages,
 })
 
 export { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
+export { messages } from './messages.ts'

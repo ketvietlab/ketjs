@@ -88,6 +88,24 @@ ket.reset  <  ket.theme  <  ket.app  <  ket.user
 Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đấu specificity. Chế độ
 tối chỉ cần đổi token, không cần viết lại quy tắc.
 
+## Đa ngôn ngữ — thêm sau bản thiết kế đầu
+
+Mọi chuỗi giờ đã nằm trong catalog. Đổi ngôn ngữ bằng `?lang=` trên bất kỳ màn hình nào:
+
+| | |
+|---|---|
+| `?lang=vi` | tiếng Việt (mặc định) |
+| `?lang=en` | tiếng Anh — bản dịch thật, không phải chữ giả |
+| `?lang=qps` | **pseudo-locale**: mọi chuỗi dài hơn và có ngoặc vuông |
+
+`qps` là thứ đáng dùng nhất. Nó trả về `⟦Quuản trị⟧` thay vì `Quản trị` — dài hơn và
+có ranh giới nhìn thấy được. Layout nào chỉnh vừa khít tiếng Việt sẽ **lộ chỗ vỡ ngay**,
+trước khi có bản dịch tiếng Đức hay tiếng Anh thật. Xin kiểm mọi màn hình ở `?lang=qps`
+trước khi coi là xong.
+
+Chuỗi tiếng Anh trong catalog là bản dịch thật chứ không phải placeholder — một locale
+thứ hai mà giả thì không chứng minh được gì về việc layout có sống nổi với nó không.
+
 ## Ranh giới: đây **không** phải theme storefront
 
 Theme storefront là code của người lạ, nên viết bằng ngôn ngữ hạn chế không chạy được

@@ -1,5 +1,6 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
+import type { Translator } from 'ketjs'
 
 /**
  * The backend screens.
@@ -8,6 +9,11 @@ import type { TemplateResult } from 'ketjs-view'
  * design/admin.css. The contract between the two is the `data-ui` attribute on every
  * meaningful element — those are the selectors the stylesheet is written against, and
  * they will not change without a note in HANDOFF.md.
+ *
+ * Every screen takes a translator, bound to `_` after gettext. It is a parameter
+ * rather than a module-level import because the locale is a fact about the request:
+ * a screen that reached for a global would answer the wrong language the moment two
+ * requests overlapped.
  *
  * Classes are deliberately absent: a class means someone has already decided how a
  * thing looks, and that decision belongs to the design team.
@@ -25,14 +31,28 @@ export type PageRow = { id: string; path: string; title: string; published: bool
 
 export type Screen = 'apps' | 'pages' | 'settings'
 
-const shell = (active: Screen, title: string, body: TemplateResult): TemplateResult => html`
+/**
+ * An app's name, summary and category are declared as plain strings so a module
+ * stays readable without a catalogue. A module that wants them translated adds
+ * `app.title`, `app.summary` or `app.category` to its own messages, and this picks
+ * the translation up when it exists.
+ *
+ * The convention beats a second declaration syntax: no module has to change, and
+ * the pseudo-locale shows immediately which ones have not been translated yet.
+ */
+const label = (_: Translator, module: string, field: 'title' | 'summary' | 'category', literal: string): string => {
+  const key = `${module}.app.${field}`
+  return _.resolves(key) ? _(key) : literal
+}
+
+const shell = (_: Translator, active: Screen, title: string, body: TemplateResult): TemplateResult => html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
-    <div data-ui="brand">KetSuite</div>
+    <div data-ui="brand">${_('backend.brand')}</div>
     <nav data-ui="nav">
-      <a data-ui="nav-item" data-active=${String(active === 'apps')} href="/admin/apps">Ứng dụng</a>
-      <a data-ui="nav-item" data-active=${String(active === 'pages')} href="/admin/pages">Trang</a>
-      <a data-ui="nav-item" data-active=${String(active === 'settings')} href="/admin/settings">Cài đặt</a>
+      <a data-ui="nav-item" data-active=${String(active === 'apps')} href="/admin/apps">${_('backend.nav.apps')}</a>
+      <a data-ui="nav-item" data-active=${String(active === 'pages')} href="/admin/pages">${_('backend.nav.pages')}</a>
+      <a data-ui="nav-item" data-active=${String(active === 'settings')} href="/admin/settings">${_('backend.nav.settings')}</a>
     </nav>
   </aside>
   <main data-ui="main">
@@ -54,51 +74,55 @@ export const errorState = (code: string, message: string, hint: string): Templat
   ${when(!!hint, () => html`<p data-ui="error-hint">${hint}</p>`)}
 </div>`
 
-const appCard = (app: AppRow): TemplateResult => html`
+const appCard = (_: Translator, app: AppRow): TemplateResult => html`
 <article data-ui="app-card" data-state=${app.state} data-app=${app.name}>
-  <h3 data-ui="app-title">${app.title}</h3>
-  <p data-ui="app-summary">${app.summary}</p>
+  <h3 data-ui="app-title">${label(_, app.name, 'title', app.title)}</h3>
+  <p data-ui="app-summary">${label(_, app.name, 'summary', app.summary)}</p>
   <dl data-ui="app-meta">
-    <dt>Phụ thuộc</dt><dd data-ui="app-depends">${app.depends.join(', ') || '—'}</dd>
-    ${when(app.dependents.length > 0, () => html`<dt>Đang được dùng bởi</dt><dd data-ui="app-dependents">${app.dependents.join(', ')}</dd>`)}
+    <dt>${_('backend.apps.depends')}</dt><dd data-ui="app-depends">${app.depends.join(', ') || _('backend.apps.none')}</dd>
+    ${when(app.dependents.length > 0, () => html`<dt>${_('backend.apps.dependents')}</dt><dd data-ui="app-dependents">${app.dependents.join(', ')}</dd>`)}
   </dl>
   <div data-ui="app-actions">
     <button data-ui="app-action" data-action=${app.state === 'installed' ? 'uninstall' : 'install'}
             disabled=${app.state === 'installed' && app.dependents.length > 0}>
-      ${app.state === 'installed' ? 'Gỡ' : 'Cài đặt'}
+      ${app.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install')}
     </button>
   </div>
 </article>`
 
-export const appsScreen = (apps: AppRow[]): TemplateResult => {
+export const appsScreen = (_: Translator, apps: AppRow[]): TemplateResult => {
   const categories = [...new Set(apps.map(a => a.category))].sort()
-  return shell('apps', 'Ứng dụng', apps.length === 0
-    ? emptyState('Bản triển khai này chưa có ứng dụng nào.', 'Ứng dụng phải được đưa vào lúc build trước khi cài được.')
+  const categoryLabel = (c: string): string => {
+    const owner = apps.find(a => a.category === c)
+    return owner ? label(_, owner.name, 'category', c) : c
+  }
+  return shell(_, 'apps', _('backend.apps.title'), apps.length === 0
+    ? emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
     : html`<div data-ui="app-groups">${each(categories, c => c, category => html`
         <section data-ui="app-group" data-category=${category}>
-          <h2 data-ui="group-title">${category}</h2>
-          <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, appCard)}</div>
+          <h2 data-ui="group-title">${categoryLabel(category)}</h2>
+          <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a))}</div>
         </section>`)}</div>`)
 }
 
-export const pagesScreen = (pages: PageRow[]): TemplateResult =>
-  shell('pages', 'Trang', pages.length === 0
-    ? emptyState('Chưa có trang nào.', 'Tạo trang đầu tiên để bắt đầu.')
+export const pagesScreen = (_: Translator, pages: PageRow[]): TemplateResult =>
+  shell(_, 'pages', _('backend.pages.title'), pages.length === 0
+    ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
     : html`<table data-ui="table">
-        <thead><tr><th>Đường dẫn</th><th>Tiêu đề</th><th>Trạng thái</th></tr></thead>
+        <thead><tr><th>${_('backend.pages.col.path')}</th><th>${_('backend.pages.col.title')}</th><th>${_('backend.pages.col.state')}</th></tr></thead>
         <tbody>${each(pages, p => p.id, p => html`
           <tr data-ui="row" data-page=${p.id}>
             <td data-ui="cell-path"><code>${p.path}</code></td>
             <td data-ui="cell-title">${p.title}</td>
-            <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? 'Đã đăng' : 'Nháp'}</span></td>
+            <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
           </tr>`)}
         </tbody>
       </table>`)
 
-export const settingsScreen = (tokens: Record<string, string>): TemplateResult =>
-  shell('settings', 'Cài đặt', html`
+export const settingsScreen = (_: Translator, tokens: Record<string, string>): TemplateResult =>
+  shell(_, 'settings', _('backend.settings.title'), html`
     <section data-ui="tokens">
-      <h2 data-ui="group-title">Design token đang áp dụng</h2>
+      <h2 data-ui="group-title">${_('backend.settings.tokens')}</h2>
       <dl data-ui="token-list">${each(Object.entries(tokens), ([k]) => k, ([k, v]) => html`
         <div data-ui="token"><dt data-ui="token-name">--ket-${k}</dt><dd data-ui="token-value">${v}</dd></div>`)}
       </dl>

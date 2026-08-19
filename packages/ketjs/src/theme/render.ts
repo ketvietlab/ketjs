@@ -15,7 +15,7 @@ export type ThemeRuntime = {
   islands: IslandRegistry
 }
 
-export function createTheme(manifest: Manifest, modules: KetModule[], opts: { filters?: Record<string, Filter> } = {}): ThemeRuntime {
+export function createTheme(manifest: Manifest, modules: KetModule[], opts: { filters?: Record<string, Filter>; translate?: (key: string, params?: Record<string, unknown>) => string } = {}): ThemeRuntime {
   // A theme is written against what the DEPLOYMENT ships, not against what a
   // particular database has switched on. So the strict check belongs to the full
   // manifest — where a typo is a build error — while a restricted manifest, which

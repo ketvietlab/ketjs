@@ -26,7 +26,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
     sections: {},
-    tokens: {}, patches: [],
+    tokens: {}, patches: [], messages: {},
   }
 
   for (const m of order) {
@@ -190,6 +190,14 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         message: `region "${r}" is required but no installed theme provides it`,
         hint: `add a template named "${r}" to your theme, or drop the requirement`,
       })
+    }
+  }
+
+  // --- messages: prefixed by module, so two modules may both own a "title" ---
+  for (const m of order) {
+    for (const [locale, catalog] of Object.entries(m.messages)) {
+      const target = (manifest.messages![locale] ??= {})
+      for (const [key, message] of Object.entries(catalog)) target[`${m.name}.${key}`] = message
     }
   }
 
