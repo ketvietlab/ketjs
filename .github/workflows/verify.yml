@@ -35,6 +35,19 @@ jobs:
 
       - run: npm ci
 
+      - name: start a real S3-compatible server
+        run: |
+          docker run -d --name ketjs-minio -p 19000:9000 \
+            -e MINIO_ROOT_USER=ketjsminio \
+            -e MINIO_ROOT_PASSWORD=ketjsminiosecret \
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:19000/minio/health/live && exit 0
+            sleep 1
+          done
+          docker logs ketjs-minio
+          exit 1
+
       # Each step separately, so a red build says which contract broke rather
       # than that something did.
       - name: dependencies stay where they are declared
