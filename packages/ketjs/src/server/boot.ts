@@ -72,6 +72,15 @@ export type ServeContext = {
   translate: (locale: string) => Translator
   /** A function call carrying this request's tenant, live manifest and scope. */
   call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
+  /**
+   * The same call with the permission check off.
+   *
+   * Named so it is one word to grep for, like `raw`. It exists because deciding
+   * *what* a caller may do is itself a question someone has to be allowed to ask:
+   * a permission resolver that went through the check would be asking permission
+   * to find out whether it has permission. Nothing else has that excuse.
+   */
+  callUnchecked: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Installed modules' stylesheets for this tenant, in dependency order. */
@@ -324,6 +333,11 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
+    callUnchecked: async (name, input, url, req) => {
+      const scope = await scopeOf(url, req)
+      return tenants.ofRequest(url, req, async (t) =>
+        (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope })).value)
+    },
     call: async (name, input, url, req) => {
       // One lease for the whole call: the scope and the allow-list are resolved
       // outside it, so a session lookup never holds a pooled connection.
@@ -352,6 +366,13 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       if (!on.has(entry.by)) {
         return text(`${path} belongs to "${entry.by}", which is not installed on this database`, { status: 404 })
       }
+      // Closed unless the module said otherwise. /admin was reachable by anyone
+      // because nothing here asked; the check belongs in one place rather than in
+      // every screen, which is where it would eventually be missing from one.
+      if (makeSessions && !entry.anonymous) {
+        const s = await sessionsOf(url, req)
+        if (!(await s?.of(req))) return text('sign in first', { status: 401 })
+      }
       return (routeHandlers.get(path) as Route)(url, req)
     }
   }
@@ -376,26 +397,24 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   }
 
   /**
-   * Which functions a request may call.
+   * Every function a request with no session may call — which is not "all of them".
    *
-   * The framework enforces the list and the app decides what is in it — the same
-   * split as the datastore driver, and for the same reason: roles are the app's
-   * model, and a framework that knew their shape would be a framework every app
-   * had to agree with.
-   *
-   * A request with no session is unrestricted rather than empty. That reads
-   * backwards until you see what the alternative means: the header shim, internal
-   * calls, migrations and the public storefront all carry no identity, and
-   * narrowing them by one would break every path that has no user at all. The
-   * restriction begins where identity does.
+   * `allow: null` means unrestricted, and that is correct for an in-process call:
+   * a migration, a test, a script. It was also what an anonymous HTTP request got,
+   * and that was a hole wide enough to create a user account through. A stranger
+   * is not an unrestricted caller; a stranger is a stranger.
    */
+  const anonymousFns = Object.entries(manifest.functions).filter(([, f]) => f.anonymous).map(([k]) => k)
+
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!makeSessions || !serve.permissions) return null
+    if (!makeSessions) return null                 // no login exists yet; the shim is the identity
     const s = await sessionsOf(url, req)
     const record = await s?.of(req)
-    if (!record) return null
+    if (!record) return anonymousFns               // a stranger, not an administrator
+    if (!serve.permissions) return null
     return serve.permissions(ctx, record.userId)
   }
+
 
   const pages = serve.pages
   if (pages && !manifest.functions[pages.resolve]) {

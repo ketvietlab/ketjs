@@ -9,6 +9,18 @@
  * the database can put back the error the rounding just took out — 0.1 written to
  * a double comes back as 0.1000000000000000055.
  */
+/**
+ * A route, and whether a stranger may reach it.
+ *
+ * The bare function form is the common case and stays terse. Anything a request
+ * with no session may see has to say so — a login form is the obvious one, and
+ * everything else defaults to closed, because a default of open is a default
+ * nobody notices until it is on the internet.
+ */
+export type RouteEntry =
+  | ((ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route)
+  | { anonymous?: boolean; handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }
+
 export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'datetime'
 export type FieldBase = Scalar | 'ref'
 
@@ -58,6 +70,16 @@ export type RelationDef =
 export type ComposedRelation = { kind: 'belongsTo' | 'hasMany'; target: string; by: string; declaredBy: string }
 
 export type FnSpec = {
+  /**
+   * Callable by a request carrying no session.
+   *
+   * Default false, and the default is the point. A request that has not logged in
+   * is not an unrestricted caller, it is a stranger — treating "no identity" as
+   * "no limits" is how logging in became optional. The exceptions are real and
+   * few: the function that checks a password (there is no session yet), and
+   * whatever a public storefront reads.
+   */
+  anonymous?: boolean
   input?: Record<string, string>
   output?: Record<string, string>
   effects?: string[]
@@ -76,6 +98,7 @@ export type FnSpec = {
 
 export type FnMeta = {
   by: string
+  anonymous: boolean
   input: Record<string, string>
   output: Record<string, string>
   effects: string[]
@@ -160,7 +183,7 @@ export type ModuleSpec = AppMeta & {
    * the live manifest, so a route belonging to an uninstalled module is 404 rather
    * than quietly still answering.
    */
-  routes?: Record<string, (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route>
+  routes?: Record<string, RouteEntry>
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandView>
   sections?: Record<string, SectionDef>
@@ -186,7 +209,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly provides: readonly string[]
   readonly assets: string | URL | null
   readonly styles: readonly string[]
-  readonly routes: Record<string, (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route>
+  readonly routes: Record<string, RouteEntry>
   readonly islands: Record<string, import('ketjs-view').IslandView>
   readonly sections: Record<string, SectionDef>
   readonly relations: Record<string, Record<string, RelationDef>>
@@ -213,7 +236,7 @@ export type Manifest = {
   /** Stylesheets in dependency order. A disabled module's are dropped by restrictManifest. */
   styles: Array<{ by: string; href: string }>
   /** Path -> the module that owns it and the factory that builds its handler. */
-  routes: Record<string, { by: string; make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }>
+  routes: Record<string, { by: string; anonymous: boolean; make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }>
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */
   disabledModules?: string[]

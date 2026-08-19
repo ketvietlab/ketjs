@@ -88,6 +88,8 @@ export const functions: Record<string, FnSpec> = {
    * password: telling those apart is how an attacker enumerates accounts.
    */
   authenticate: defineFn({
+    // There is no session yet — checking the password is how one begins.
+    anonymous: true,
     input: { login: 'text', password: 'text' },
     output: { ok: 'bool', userId: 'id?', companies: 'json?', defaultCompanyId: 'id?', rehash: 'bool?' },
     effects: ['read:user.User', 'read:user.Membership'],
