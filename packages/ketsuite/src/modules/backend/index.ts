@@ -34,6 +34,7 @@ export default defineModule({
 
 export { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
+export type { Viewer } from './screens.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes } from './routes.ts'

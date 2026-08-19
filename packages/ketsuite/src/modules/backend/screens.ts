@@ -45,7 +45,10 @@ const label = (_: Translator, module: string, field: 'title' | 'summary' | 'cate
   return _.resolves(key) ? _(key) : literal
 }
 
-const shell = (_: Translator, active: Screen, title: string, body: TemplateResult): TemplateResult => html`
+/** Who the screen is being shown to. Absent only while nothing is signed in. */
+export type Viewer = { name: string; company: string | null; companies: string[] }
+
+const shell = (_: Translator, active: Screen, title: string, body: TemplateResult, viewer?: Viewer | null): TemplateResult => html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
     <div data-ui="brand">${_('backend.brand')}</div>
@@ -56,7 +59,15 @@ const shell = (_: Translator, active: Screen, title: string, body: TemplateResul
     </nav>
   </aside>
   <main data-ui="main">
-    <header data-ui="topbar"><h1 data-ui="title">${title}</h1></header>
+    <header data-ui="topbar">
+      <h1 data-ui="title">${title}</h1>
+      ${when(!!viewer, () => html`
+      <div data-ui="viewer">
+        <span data-ui="viewer-name">${viewer!.name}</span>
+        ${when((viewer!.companies.length) > 1, () => html`<span data-ui="viewer-company">${viewer!.company}</span>`)}
+        <form data-ui="signout" method="post" action="/logout"><button data-ui="signout-button" type="submit">${_('backend.signOut')}</button></form>
+      </div>`)}
+    </header>
     <div data-ui="content">${body}</div>
   </main>
 </div>`
@@ -90,7 +101,7 @@ const appCard = (_: Translator, app: AppRow): TemplateResult => html`
   </div>
 </article>`
 
-export const appsScreen = (_: Translator, apps: AppRow[]): TemplateResult => {
+export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null): TemplateResult => {
   const categories = [...new Set(apps.map(a => a.category))].sort()
   const categoryLabel = (c: string): string => {
     const owner = apps.find(a => a.category === c)
@@ -102,10 +113,10 @@ export const appsScreen = (_: Translator, apps: AppRow[]): TemplateResult => {
         <section data-ui="app-group" data-category=${category}>
           <h2 data-ui="group-title">${categoryLabel(category)}</h2>
           <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a))}</div>
-        </section>`)}</div>`)
+        </section>`)}</div>`, viewer)
 }
 
-export const pagesScreen = (_: Translator, pages: PageRow[]): TemplateResult =>
+export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null): TemplateResult =>
   shell(_, 'pages', _('backend.pages.title'), pages.length === 0
     ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
     : html`<table data-ui="table">
@@ -117,9 +128,9 @@ export const pagesScreen = (_: Translator, pages: PageRow[]): TemplateResult =>
             <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
           </tr>`)}
         </tbody>
-      </table>`)
+      </table>`, viewer)
 
-export const settingsScreen = (_: Translator, tokens: Record<string, string>): TemplateResult =>
+export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null): TemplateResult =>
   shell(_, 'settings', _('backend.settings.title'), html`
     <section data-ui="tokens">
       <h2 data-ui="group-title">${_('backend.settings.tokens')}</h2>
