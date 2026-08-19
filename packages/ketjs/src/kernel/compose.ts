@@ -21,7 +21,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
   const manifest: Manifest = {
     ket: '0.0.0',
     order: order.map(m => m.name),
-    modules: {}, models: {}, joints: {}, fills: [],
+    modules: {}, models: {}, menus: {}, joints: {}, fills: [],
     functions: {}, views: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
@@ -227,6 +227,48 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     }
   }
 
+  // --- navigation ----------------------------------------------------------
+  //
+  // Ids are global and chosen by the module, the way a joint key is: a second
+  // module claiming one is a build error naming both, rather than one of them
+  // quietly winning. Parenting onto somebody else's entry needs the same declared
+  // dependency filling their joint would.
+  for (const m of order) {
+    for (const [id, def] of Object.entries(m.menus)) {
+      const taken = manifest.menus[id]
+      if (taken) {
+        diag.add({
+          code: 'E_MENU_DUPLICATE', module: m.name,
+          message: `both "${taken.by}" and "${m.name}" declare menu "${id}"`,
+          hint: 'menu ids are global — prefix yours with the module name',
+        })
+        continue
+      }
+      manifest.menus[id] = { ...def, by: m.name }
+    }
+  }
+  for (const [id, def] of Object.entries(manifest.menus)) {
+    if (def.parent !== undefined) {
+      const parent = manifest.menus[def.parent]
+      if (!parent) {
+        diag.add({
+          code: 'E_MENU_UNKNOWN_PARENT', module: def.by,
+          message: `menu "${id}" hangs under "${def.parent}", which nothing declares`,
+          hint: `declared menus: ${Object.keys(manifest.menus).join(', ') || '(none)'}`,
+        })
+        continue
+      }
+      const owner = manifest.modules[def.by]
+      if (parent.by !== def.by && !canSee({ name: def.by, depends: owner?.depends ?? [] } as never, parent.by)) {
+        diag.add({
+          code: 'E_MENU_NOT_DEPENDED', module: def.by,
+          message: `menu "${id}" hangs under "${def.parent}", owned by "${parent.by}", which "${def.by}" does not depend on`,
+          hint: `add "${parent.by}" to ${def.by}.depends`,
+        })
+      }
+    }
+  }
+
   // --- joints (published extension points) and fills -----------------------
   for (const m of order) {
     for (const [name, def] of Object.entries(m.joints)) {
@@ -301,6 +343,25 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         agent: def.agent === true,
       }
     }
+  }
+
+  // A gate on a function that does not exist. Checked here rather than with the
+  // rest of navigation, because the functions it names are only collected above.
+  //
+  // Which of two things it is depends on whether the module is here. If it is and
+  // the function is not, somebody mistyped, and hiding the entry would hide the
+  // mistake — that is a build error. If the module is absent, the entry is gated on
+  // something this deployment simply does not ship, which is a soft dependency and
+  // exactly what a gate is for: buildMenu drops it and nobody is told off.
+  for (const [id, def] of Object.entries(manifest.menus)) {
+    if (def.needs === undefined || manifest.functions[def.needs]) continue
+    const owner = def.needs.split('.')[0]!
+    if (!manifest.modules[owner]) continue
+    diag.add({
+      code: 'E_MENU_UNKNOWN_FUNCTION', module: def.by,
+      message: `menu "${id}" needs "${def.needs}", which "${owner}" does not declare`,
+      hint: 'the entry is hidden from anyone who may not call it, so the name has to exist',
+    })
   }
 
   // --- view models: the only data surface a theme may read -----------------

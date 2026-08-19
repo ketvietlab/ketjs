@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToString } from 'ketjs-view'
 import { compose, translator } from 'ketjs'
+import type { MenuNode } from 'ketjs'
 import backend from 'ketsuite/backend'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState, CASES, cataloguePage } from 'ketsuite/backend'
 import type { AppRow, PageRow } from 'ketsuite/backend'
@@ -15,7 +16,9 @@ import type { AppRow, PageRow } from 'ketsuite/backend'
  * design/HANDOFF.md at the same time.
  */
 const CONTRACT = [
-  'shell', 'sidebar', 'brand', 'nav', 'nav-item', 'main', 'topbar', 'title', 'content',
+  'shell', 'sidebar', 'main', 'topbar', 'title', 'content',
+  'app-switch', 'app-current', 'app-list', 'app-list-title', 'app-entry', 'app-icon', 'app-name',
+  'menu', 'menu-app', 'menu-item', 'menu-section', 'menu-section-title',
   'app-groups', 'app-group', 'group-title', 'app-grid', 'app-card', 'app-title',
   'app-summary', 'app-meta', 'app-depends', 'app-dependents', 'app-actions', 'app-action',
   'table', 'row', 'cell-path', 'cell-title', 'cell-state', 'badge',
@@ -29,12 +32,23 @@ const app = (over: Partial<AppRow> = {}): AppRow => ({
 })
 const page = (over: Partial<PageRow> = {}): PageRow => ({ id: 'p', path: '/', title: 'T', published: true, ...over })
 
+/** A tree with every shape the shell draws: an app, a section, and a plain link. */
+const node = (id: string, over: Partial<MenuNode> = {}): MenuNode =>
+  ({ id, label: id, path: null, icon: null, active: false, children: [], ...over })
+const MENU: MenuNode[] = [
+  node('admin', { icon: 'A', active: true, children: [
+    node('admin.apps', { path: '/admin', active: true }),
+    node('admin.content', { children: [node('admin.pages', { path: '/admin/pages' })] }),
+  ] }),
+  node('other', { icon: 'O' }),
+]
+
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
 const everything = [
-  appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })]),
-  pagesScreen(_, [page(), page({ id: 'q', published: false })]),
-  settingsScreen(_, { 'color-accent': 'x' }),
+  appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })], null, {}, MENU),
+  pagesScreen(_, [page(), page({ id: 'q', published: false })], null, {}, MENU),
+  settingsScreen(_, { 'color-accent': 'x' }, null, {}, MENU),
   emptyState('a', 'b'),
   errorState('E_X', 'msg', 'hint'),
 ].map(r => renderToString(r)).join('')
