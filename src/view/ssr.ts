@@ -72,9 +72,25 @@ function writeResult(result: TemplateResult, out: string[]): void {
 // The walk itself lives in render.ts, next to the Instance and Part it has to
 // build. Only the error type is shared.
 
+/**
+ * An HTML parser does not give back exactly the markup it was handed: it inserts
+ * implied elements. `<table><tr>` becomes `<table><tbody><tr>`, and a template that
+ * omitted the tbody then walks into a node it never wrote. The mismatch is real and
+ * the fix is to write the element, so the error says so instead of leaving the
+ * author to discover it.
+ */
+const IMPLIED: Record<string, string> = {
+  tbody: 'table', thead: 'table', tfoot: 'table', tr: 'tbody', html: '(document)', head: 'html', body: 'html',
+}
+
 export class HydrationMismatch extends Error {
   code = 'E_HYDRATION_MISMATCH'
+  hint: string | null
   constructor(what: string, expected: string, got: string) {
     super(`hydration mismatch at ${what}: expected ${expected}, found ${got}`)
+    const implied = Object.keys(IMPLIED).find(tag => got.includes(`<${tag}>`))
+    this.hint = implied
+      ? `the HTML parser inserted <${implied}> on its own — write it in the template so the server and the browser agree`
+      : 'the markup does not match the template that rendered it; fall back to a clean client render'
   }
 }

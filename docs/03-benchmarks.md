@@ -87,6 +87,33 @@ the common paths now skip. That is the next thing to fix here.
    never have seen it, because it counts DOM operations and this cost none.
    An unchanged re-render was costing 0.55 ms; it now costs 0.060 ms.
 
+## Islands — what they actually buy
+
+A realistic product page: 120 spec rows, 40 related items, and three small
+interactive widgets. 495 elements, of which 9 are interactive. Median of 15 runs,
+20 hydrations per timed sample. Both variants render the same content; only the
+hydration strategy differs.
+
+| | hydration | nodes walked |
+|---|---|---|
+| **islands** | **0.025 ms** | **9 of 495 — 1.8%** |
+| whole tree | 0.660 ms | 493 of 493 — 100% |
+
+26× faster, for a payload cost of **208 bytes** — the serialised props the client
+needs to revive each island with exactly the input the server used.
+
+**Read the ratio honestly.** It is the static-to-interactive ratio of the page and
+nothing else. This page is 98% inert, so islands win by roughly that much; a page
+that is mostly interactive gains nothing at all, and would be simpler hydrated
+whole. The measurement says islands are worth having for content-shaped pages, not
+that they are always right.
+
+**This benchmark found a bug too**, and a classic one: an HTML parser does not hand
+back the markup it was given. `<table><tr>` comes back as `<table><tbody><tr>`, so a
+template that omitted the tbody walked into a node it never wrote. The fix is to
+write the element — but the error now says so, naming the tag the parser inserted,
+instead of leaving the author to work it out from "expected <tr>, found <tbody>".
+
 ## What the op counter is still good for
 
 `bench/view.bench.ts` counts host operations rather than time, and those numbers

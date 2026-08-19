@@ -124,3 +124,16 @@ test('ssr and client render agree on the markup they produce', () => {
   const client = container.innerHTML.replace(/<!--k\[?-->/g, '')
   assert.equal(server.replace(/<!--k\[?-->/g, ''), client)
 })
+
+test('hydration: an implied element is diagnosed, not just reported', () => {
+  // The template omits <tbody>; a parser inserts one, so the walk finds a node the
+  // template never wrote. This is the most common SSR trap there is.
+  const view = () => html`<table><tr><td>${'x'}</td></tr></table>`
+  const server = renderToString(view())
+  assert.ok(!server.includes('tbody'), 'the server wrote exactly what the template said')
+
+  const asParsed = parseFragment(server.replace('<table>', '<table><tbody>').replace('</table>', '</tbody></table>'))
+  const e = (() => { try { hydrateRoot(domHost(document), asParsed as unknown as HostNode, view()) } catch (err) { return err as HydrationMismatch & { hint: string } } })()!
+  assert.match(e.message, /expected <tr>, found <tbody>/)
+  assert.match(e.hint, /parser inserted <tbody> on its own — write it in the template/)
+})
