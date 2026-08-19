@@ -48,6 +48,8 @@ export type ModuleSpec = {
   tokens?: Record<string, string>
   templates?: Record<string, string>
   provides?: string[]
+  /** Interactive views a theme may place but never write. */
+  islands?: Record<string, import('./view/island.ts').IslandView>
 }
 
 export type KetModule = {
@@ -65,6 +67,7 @@ export type KetModule = {
   readonly tokens: Record<string, string>
   readonly templates: Record<string, string>
   readonly provides: readonly string[]
+  readonly islands: Record<string, import('./view/island.ts').IslandView>
 }
 
 export type Manifest = {
@@ -77,6 +80,7 @@ export type Manifest = {
   functions: Record<string, FnMeta>
   views: Record<string, ViewDef & { by: string }>
   regions: { required: string[]; provided: Record<string, string[]> }
+  islands: Record<string, { by: string }>
   tokens: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
   diagnostics?: Diagnostic[]

@@ -10,8 +10,6 @@ Honest list of what is not settled or not built.
   No production bundler exists yet.
 
 ## Not built
-- **Islands.** SSR and hydration work for a whole tree; splitting a page into
-  independently hydrated islands is not written.
 - **Streams under a database-per-tenant layout.** Whose database a stream belongs to
   is unanswered, so the pooled server defaults to an in-memory store.
 

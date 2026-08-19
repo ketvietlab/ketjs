@@ -108,6 +108,29 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D18 — A theme places behaviour; it never writes it
+**Chosen:** interactivity lives in islands — a module's `html` view, trusted code —
+and a theme places one with `{% island "name" %}`, a tag that cannot carry code.
+`defineTheme` refuses an `islands` key outright.
+
+**Why not let KTL run on the client instead:** the moment a theme runs in the
+browser, either it gets a way to invoke behaviour — reopening the door D3 closed —
+or KTL grows into a real programming language. Neither is worth it. Keeping KTL
+string-only forever is what keeps a stranger's theme safe to install.
+
+**The joint was already the seam.** Nothing new was needed to connect the two
+halves: a theme names a place, a module fills it. Placing an island nobody provides
+is a build error, exactly like filling a joint nobody publishes.
+
+**Only islands hydrate.** The rest of the page stays inert markup, which is the
+point of rendering a theme to a string at all.
+
+**An API note worth keeping:** `hydrateIslands` first took the mount function as a
+parameter, and its first caller passed the one that BUILDS instead of the one that
+ADOPTS — so an island quietly rendered a second copy of itself beside the server's.
+The parameter is gone. An API that makes the wrong choice expressible will
+eventually have it chosen.
+
 ## D17 — A framework table appears only when something uses it
 Asked why the framework owns tables at all, the honest audit found that
 `createKetServer` created `ket_stream` at boot — so an app that never streamed still

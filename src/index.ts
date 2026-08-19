@@ -25,7 +25,7 @@ export { changeset, Changeset } from './data/changeset.ts'
 export type { FieldError, Validator } from './data/changeset.ts'
 export { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 
-export { renderToString, hydrateRoot, mount, mountHydrated } from './view/index.ts'
+export { renderToString, hydrateRoot, mount, mountHydrated, renderIsland, hydrateIslands, ISLAND_TAG } from './view/index.ts'
 export { createTheme } from './theme/render.ts'
 export { compileKtl } from './theme/ktl/compile.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'

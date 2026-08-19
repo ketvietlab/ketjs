@@ -7,7 +7,7 @@ import type { KetModule, ModuleSpec } from '../types.ts'
 
 const MODULE_KEYS = new Set([
   'name', 'version', 'depends', 'models', 'extend', 'joints', 'fills',
-  'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind',
+  'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -44,6 +44,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     tokens: spec.tokens ?? {},
     templates: spec.templates ?? {},
     provides: Object.freeze([...(spec.provides ?? [])]),
+    islands: spec.islands ?? {},
   })
 }
 
@@ -51,7 +52,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
 // joints and declare tokens; it may NOT declare models, extend models, or register
 // server functions. Third-party themes are only safe to install because this
 // restriction is enforced here rather than left to convention.
-const THEME_FORBIDDEN = ['models', 'extend', 'functions'] as const
+const THEME_FORBIDDEN = ['models', 'extend', 'functions', 'islands'] as const
 
 export function defineTheme(spec: ModuleSpec): KetModule {
   for (const k of THEME_FORBIDDEN) {
@@ -61,7 +62,9 @@ export function defineTheme(spec: ModuleSpec): KetModule {
         code: 'E_THEME_OVERREACH',
         module: spec.name,
         message: `theme "${spec.name}" declares "${k}", which themes are not allowed to do`,
-        hint: `themes may only declare: templates, provides, fills, tokens, requires. Move "${k}" into a module.`,
+        hint: k === 'islands'
+          ? 'a theme places an island with {% island "name" %} but never defines one — move it into a module'
+          : `themes may only declare: templates, provides, fills, tokens, requires. Move "${k}" into a module.`,
       })
     }
   }

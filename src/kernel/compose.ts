@@ -24,6 +24,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     modules: {}, models: {}, joints: {}, fills: [],
     functions: {}, views: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
+    islands: {},
     tokens: {}, patches: [],
   }
 
@@ -130,6 +131,18 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         continue
       }
       manifest.views[key] = { of: def.of, fields: [...(def.fields ?? [])], by: m.name }
+    }
+  }
+
+  // --- islands -------------------------------------------------------------
+  for (const m of order) {
+    for (const name of Object.keys(m.islands)) {
+      const existing = manifest.islands[name]
+      if (existing) {
+        diag.add({ code: 'E_ISLAND_DUPLICATE', module: m.name, message: `island "${name}" is already provided by "${existing.by}"` })
+        continue
+      }
+      manifest.islands[name] = { by: m.name }
     }
   }
 
