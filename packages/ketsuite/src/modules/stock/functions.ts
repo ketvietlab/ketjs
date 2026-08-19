@@ -1,6 +1,7 @@
 import { defineFn } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { compareQty } from '../uom/convert.ts'
+import { pushFromCompletedMove } from './routing.ts'
 
 export const RECEPTION_STEPS = ['one_step', 'two_steps', 'three_steps'] as const
 export const DELIVERY_STEPS = ['ship_only', 'pick_ship', 'pick_pack_ship'] as const
@@ -57,8 +58,11 @@ async function mutateQuant(
   for (let attempt = 0; attempt < 8; attempt++) {
     const current = (await ctx.db.select('stock.Quant', { id }))[0]
     if (!current) {
-      if (args.quantity < 0 || args.reserved < 0 || args.reserved > args.quantity)
-        throw new Error('quant cannot become negative or over-reserved')
+      // Odoo keeps the other side of completed moves on supplier, customer and
+      // inventory locations as well. Those virtual locations legitimately carry
+      // negative quantities; only a positive physical balance can be reserved.
+      if (args.reserved < 0 || args.reserved > Math.max(args.quantity, 0))
+        throw new Error('quant cannot become over-reserved')
       const inserted = await ctx.db.insertIfAbsent('stock.Quant', {
         id,
         productId: args.productId,
@@ -89,8 +93,8 @@ async function mutateQuant(
     }
     const quantity = Number(current.quantity) + args.quantity
     const reservedQuantity = Number(current.reservedQuantity) + args.reserved
-    if (quantity < -1e-12 || reservedQuantity < -1e-12 || reservedQuantity - quantity > 1e-12)
-      throw new Error(`quant ${id} cannot become negative or over-reserved`)
+    if (reservedQuantity < -1e-12 || reservedQuantity - Math.max(quantity, 0) > 1e-12)
+      throw new Error(`quant ${id} cannot become over-reserved`)
     const changed = await ctx.db.compareAndSet(
       'stock.Quant',
       { id },
@@ -250,6 +254,12 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.Location',
       'read:stock.PickingType',
       'write:stock.PickingType',
+      'read:stock.Route',
+      'write:stock.Route',
+      'read:stock.Rule',
+      'write:stock.Rule',
+      'read:stock.WarehouseRoute',
+      'write:stock.WarehouseRoute',
     ],
     idempotent: true,
     agent: true,
@@ -271,15 +281,45 @@ export const functions: Record<string, FnSpec> = {
         await tx.db.commit(cs, existing ? { id: args.id } : undefined)
         const viewId = `${String(args.id)}:view`
         const locations = [
-          { suffix: 'view', name: String(args.name), usage: 'view', parentId: null },
-          { suffix: 'stock', name: 'Stock', usage: 'internal', parentId: viewId },
-          { suffix: 'input', name: 'Input', usage: 'internal', parentId: viewId },
-          { suffix: 'quality', name: 'Quality', usage: 'internal', parentId: viewId },
-          { suffix: 'output', name: 'Output', usage: 'internal', parentId: viewId },
-          { suffix: 'pick', name: 'Pick', usage: 'internal', parentId: viewId },
-          { suffix: 'pack', name: 'Pack', usage: 'internal', parentId: viewId },
-          { suffix: 'supplier', name: 'Supplier', usage: 'supplier', parentId: null },
-          { suffix: 'customer', name: 'Customer', usage: 'customer', parentId: null },
+          { suffix: 'view', name: String(args.name), usage: 'view', parentId: null, active: true },
+          { suffix: 'stock', name: 'Stock', usage: 'internal', parentId: viewId, active: true },
+          {
+            suffix: 'input',
+            name: 'Input',
+            usage: 'internal',
+            parentId: viewId,
+            active: receptionSteps !== 'one_step',
+          },
+          {
+            suffix: 'quality',
+            name: 'Quality',
+            usage: 'internal',
+            parentId: viewId,
+            active: receptionSteps === 'three_steps',
+          },
+          {
+            suffix: 'output',
+            name: 'Output',
+            usage: 'internal',
+            parentId: viewId,
+            active: deliverySteps !== 'ship_only',
+          },
+          {
+            suffix: 'pick',
+            name: 'Pick',
+            usage: 'internal',
+            parentId: viewId,
+            active: deliverySteps !== 'ship_only',
+          },
+          {
+            suffix: 'pack',
+            name: 'Pack',
+            usage: 'internal',
+            parentId: viewId,
+            active: deliverySteps === 'pick_pack_ship',
+          },
+          { suffix: 'supplier', name: 'Supplier', usage: 'supplier', parentId: null, active: true },
+          { suffix: 'customer', name: 'Customer', usage: 'customer', parentId: null, active: true },
         ]
         for (const location of locations) {
           const id = `${String(args.id)}:${location.suffix}`
@@ -289,7 +329,7 @@ export const functions: Record<string, FnSpec> = {
             parentId: location.parentId,
             parentPath: location.parentId ? `${viewId}/${id}/` : `${id}/`,
             warehouseId: args.id,
-            active: true,
+            active: location.active,
           }
           const found = (await tx.db.select('stock.Location', { id }))[0]
           if (found) await tx.db.update('stock.Location', { id }, values)
@@ -298,7 +338,7 @@ export const functions: Record<string, FnSpec> = {
         const incomingDestination =
           receptionSteps === 'one_step' ? `${String(args.id)}:stock` : `${String(args.id)}:input`
         const outgoingSource =
-          deliverySteps === 'ship_only' ? `${String(args.id)}:stock` : `${String(args.id)}:pick`
+          deliverySteps === 'ship_only' ? `${String(args.id)}:stock` : `${String(args.id)}:output`
         const types = [
           {
             id: `${String(args.id)}:incoming`,
@@ -313,6 +353,7 @@ export const functions: Record<string, FnSpec> = {
             code: 'outgoing',
             source: outgoingSource,
             destination: `${String(args.id)}:customer`,
+            active: true,
           },
           {
             id: `${String(args.id)}:internal`,
@@ -320,6 +361,41 @@ export const functions: Record<string, FnSpec> = {
             code: 'internal',
             source: `${String(args.id)}:stock`,
             destination: `${String(args.id)}:output`,
+            active: true,
+          },
+          {
+            id: `${String(args.id)}:quality`,
+            name: 'Quality Control',
+            code: 'internal',
+            source: `${String(args.id)}:input`,
+            destination: `${String(args.id)}:quality`,
+            active: receptionSteps === 'three_steps',
+          },
+          {
+            id: `${String(args.id)}:store`,
+            name: 'Store',
+            code: 'internal',
+            source:
+              receptionSteps === 'three_steps' ? `${String(args.id)}:quality` : `${String(args.id)}:input`,
+            destination: `${String(args.id)}:stock`,
+            active: receptionSteps !== 'one_step',
+          },
+          {
+            id: `${String(args.id)}:pick`,
+            name: 'Pick',
+            code: 'internal',
+            source: `${String(args.id)}:stock`,
+            destination:
+              deliverySteps === 'pick_pack_ship' ? `${String(args.id)}:pack` : `${String(args.id)}:output`,
+            active: deliverySteps !== 'ship_only',
+          },
+          {
+            id: `${String(args.id)}:pack`,
+            name: 'Pack',
+            code: 'internal',
+            source: `${String(args.id)}:pack`,
+            destination: `${String(args.id)}:output`,
+            active: deliverySteps === 'pick_pack_ship',
           },
         ]
         for (const type of types) {
@@ -330,11 +406,144 @@ export const functions: Record<string, FnSpec> = {
             defaultLocationSrcId: type.source,
             defaultLocationDestId: type.destination,
             createBackorder: 'ask',
-            active: true,
+            active: type.active ?? true,
           }
           const found = (await tx.db.select('stock.PickingType', { id: type.id }))[0]
           if (found) await tx.db.update('stock.PickingType', { id: type.id }, values)
           else await tx.db.insert('stock.PickingType', { id: type.id, ...values })
+        }
+
+        const warehouseId = String(args.id)
+        const receiptRouteId = `${warehouseId}:receipt-route`
+        const deliveryRouteId = `${warehouseId}:delivery-route`
+        const routes = [
+          { id: receiptRouteId, name: `${String(args.name)}: ${receptionSteps}`, sequence: 50 },
+          { id: deliveryRouteId, name: `${String(args.name)}: ${deliverySteps}`, sequence: 60 },
+        ]
+        for (const route of routes) {
+          const found = (await tx.db.select('stock.Route', { id: route.id }))[0]
+          const values = { name: route.name, sequence: route.sequence, active: true }
+          if (found) await tx.db.update('stock.Route', { id: route.id }, values)
+          else await tx.db.insert('stock.Route', { id: route.id, ...values })
+          await tx.db.insertIfAbsent('stock.WarehouseRoute', {
+            id: `${company(tx)}:${warehouseId}:${route.id}`,
+            warehouseId: args.id,
+            routeId: route.id,
+          })
+        }
+
+        // The subset executes route chains backwards from demand, so each leg is
+        // represented as a pull rule. The resulting locations and operation types
+        // match Odoo 19's receipt/delivery topology.
+        const ruleDefinitions = [
+          {
+            id: `${warehouseId}:receipt:supplier-stock`,
+            name: 'Receive in Stock',
+            routeId: receiptRouteId,
+            source: `${warehouseId}:supplier`,
+            destination: `${warehouseId}:stock`,
+            pickingTypeId: `${warehouseId}:incoming`,
+            active: receptionSteps === 'one_step',
+          },
+          {
+            id: `${warehouseId}:receipt:supplier-input`,
+            name: 'Receive in Input',
+            routeId: receiptRouteId,
+            source: `${warehouseId}:supplier`,
+            destination: `${warehouseId}:input`,
+            pickingTypeId: `${warehouseId}:incoming`,
+            active: receptionSteps !== 'one_step',
+          },
+          {
+            id: `${warehouseId}:receipt:input-stock`,
+            name: 'Input to Stock',
+            routeId: receiptRouteId,
+            source: `${warehouseId}:input`,
+            destination: `${warehouseId}:stock`,
+            pickingTypeId: `${warehouseId}:store`,
+            active: receptionSteps === 'two_steps',
+          },
+          {
+            id: `${warehouseId}:receipt:input-quality`,
+            name: 'Input to Quality',
+            routeId: receiptRouteId,
+            source: `${warehouseId}:input`,
+            destination: `${warehouseId}:quality`,
+            pickingTypeId: `${warehouseId}:quality`,
+            active: receptionSteps === 'three_steps',
+          },
+          {
+            id: `${warehouseId}:receipt:quality-stock`,
+            name: 'Quality to Stock',
+            routeId: receiptRouteId,
+            source: `${warehouseId}:quality`,
+            destination: `${warehouseId}:stock`,
+            pickingTypeId: `${warehouseId}:store`,
+            active: receptionSteps === 'three_steps',
+          },
+          {
+            id: `${warehouseId}:delivery:stock-customer`,
+            name: 'Deliver from Stock',
+            routeId: deliveryRouteId,
+            source: `${warehouseId}:stock`,
+            destination: `${warehouseId}:customer`,
+            pickingTypeId: `${warehouseId}:outgoing`,
+            active: deliverySteps === 'ship_only',
+          },
+          {
+            id: `${warehouseId}:delivery:stock-output`,
+            name: 'Pick to Output',
+            routeId: deliveryRouteId,
+            source: `${warehouseId}:stock`,
+            destination: `${warehouseId}:output`,
+            pickingTypeId: `${warehouseId}:pick`,
+            procureMethod: 'make_to_stock',
+            active: deliverySteps === 'pick_ship',
+          },
+          {
+            id: `${warehouseId}:delivery:stock-pack`,
+            name: 'Pick to Pack',
+            routeId: deliveryRouteId,
+            source: `${warehouseId}:stock`,
+            destination: `${warehouseId}:pack`,
+            pickingTypeId: `${warehouseId}:pick`,
+            procureMethod: 'make_to_stock',
+            active: deliverySteps === 'pick_pack_ship',
+          },
+          {
+            id: `${warehouseId}:delivery:pack-output`,
+            name: 'Pack to Output',
+            routeId: deliveryRouteId,
+            source: `${warehouseId}:pack`,
+            destination: `${warehouseId}:output`,
+            pickingTypeId: `${warehouseId}:pack`,
+            active: deliverySteps === 'pick_pack_ship',
+          },
+          {
+            id: `${warehouseId}:delivery:output-customer`,
+            name: 'Ship from Output',
+            routeId: deliveryRouteId,
+            source: `${warehouseId}:output`,
+            destination: `${warehouseId}:customer`,
+            pickingTypeId: `${warehouseId}:outgoing`,
+            active: deliverySteps !== 'ship_only',
+          },
+        ]
+        for (const [sequence, rule] of ruleDefinitions.entries()) {
+          const values = {
+            name: rule.name,
+            routeId: rule.routeId,
+            action: 'pull',
+            sequence: sequence + 10,
+            locationSrcId: rule.source,
+            locationDestId: rule.destination,
+            pickingTypeId: rule.pickingTypeId,
+            procureMethod: rule.procureMethod ?? 'make_to_order',
+            active: rule.active,
+          }
+          const found = (await tx.db.select('stock.Rule', { id: rule.id }))[0]
+          if (found) await tx.db.update('stock.Rule', { id: rule.id }, values)
+          else await tx.db.insert('stock.Rule', { id: rule.id, ...values })
         }
       })
       return { ok: true, id: args.id }
@@ -492,6 +701,8 @@ export const functions: Record<string, FnSpec> = {
         ? (await ctx.db.select('stock.Picking', { id: args.pickingId }))[0]
         : null
       if (args.pickingId && !picking) return invalid('pickingId', 'transfer không tồn tại')
+      if (picking && ['done', 'cancel'].includes(String(picking.state)))
+        return invalid('pickingId', 'không thể thêm move vào transfer đã kết thúc')
       if (!(await ctx.db.select('product.Product', { id: args.productId }))[0])
         return invalid('productId', 'biến thể không tồn tại')
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
@@ -651,6 +862,8 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('stock.Move', { id: args.moveId }))[0]
       if (!move) return invalid('moveId', 'move không tồn tại')
+      if (['done', 'cancel'].includes(String(move.state)))
+        return invalid('moveId', 'không thể sửa dòng của move đã kết thúc')
       const tracking = await trackingOf(ctx, move.productId)
       if (tracking !== 'none' && !args.lotId)
         return invalid('lotId', `${tracking} tracked product cần lot/serial`)
@@ -741,6 +954,13 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.Quant',
       'read:product.Product',
       'read:product.Template',
+      'read:product.Category',
+      'read:stock.Route',
+      'read:stock.Rule',
+      'read:stock.ProductRoute',
+      'read:stock.CategoryRoute',
+      'read:stock.WarehouseRoute',
+      'read:stock.MoveLink',
       'write:stock.MoveLink',
     ],
     agent: true,
@@ -748,6 +968,7 @@ export const functions: Record<string, FnSpec> = {
       const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
       if (picking.state === 'done') return { ok: true, id: args.id }
+      if (picking.state === 'cancel') return invalid('state', 'transfer đã hủy')
       const requested = new Map<string, number>()
       if (Array.isArray(args.quantities))
         for (const entry of args.quantities as Array<{ moveLineId: string; quantity: number }>)
@@ -803,8 +1024,18 @@ export const functions: Record<string, FnSpec> = {
                 quantity: -quantity,
                 reserved: -Math.min(reserved, held),
               })
+            } else {
+              await mutateQuant(tx, {
+                productId: move.productId,
+                locationId: move.locationId,
+                lotId: line.lotId,
+                quantity: -quantity,
+                reserved: 0,
+              })
             }
-            if (destination.usage === 'internal' || destination.usage === 'transit')
+            // Keep both sides of every completed move in the quant ledger. The
+            // forecast still counts only internal/transit locations.
+            if (destination)
               await mutateQuant(tx, {
                 productId: move.productId,
                 locationId: move.locationDestId,
@@ -824,6 +1055,7 @@ export const functions: Record<string, FnSpec> = {
             { id: move.id },
             { quantity: String(done), picked: true, state: 'done' },
           )
+          await pushFromCompletedMove(tx, move, done)
           const left = Math.max(0, Number(move.productUomQty) - done)
           if (left > 0) remaining.push({ move, quantity: left })
         }
@@ -932,9 +1164,16 @@ export const functions: Record<string, FnSpec> = {
       await ctx.tx(async (tx) => {
         await mutateQuant(tx, {
           productId: args.productId,
-          locationId: args.locationId,
+          locationId: source,
           lotId: args.lotId,
-          quantity: difference,
+          quantity: -Math.abs(difference),
+          reserved: 0,
+        })
+        await mutateQuant(tx, {
+          productId: args.productId,
+          locationId: destination,
+          lotId: args.lotId,
+          quantity: Math.abs(difference),
           reserved: 0,
         })
         await tx.db.insertIfAbsent('stock.PickingType', {
@@ -1153,6 +1392,9 @@ functions.assignPicking = defineFn({
   handler: async (ctx, args) => {
     const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
+    if (picking.state === 'draft') return invalid('state', 'xác nhận transfer trước khi giữ hàng')
+    if (picking.state === 'done' || picking.state === 'cancel')
+      return invalid('state', 'transfer đã kết thúc')
     const allocations: Row[] = []
     const shortages: Row[] = []
     for (const move of await ctx.db.select('stock.Move', { pickingId: args.id })) {

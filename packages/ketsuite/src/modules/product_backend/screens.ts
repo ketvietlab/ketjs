@@ -38,6 +38,7 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const key = `product_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
 }
+const localized = (path: string, locale: string): string => `${path}${locale}`
 
 export type TemplateRow = {
   id: string
@@ -130,6 +131,7 @@ export const productsScreen = (
   view: View,
   frame: Frame = {},
   table: Partial<DataTable<TemplateRow>> = {},
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -139,7 +141,7 @@ export const productsScreen = (
       inline([
         linkButton({
           label: _('product_backend.action.create'),
-          href: '/admin/products/new',
+          href: localized('/admin/products/new', locale),
           variant: 'primary',
         }),
       ]),
@@ -178,6 +180,7 @@ export const productDetailScreen = (
     errors?: string[]
   },
   frame: Frame = {},
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -196,7 +199,7 @@ export const productDetailScreen = (
         title: _('product_backend.detail.information'),
         body: surface({
           body: recordForm({
-            action: `/admin/products/${row.id}`,
+            action: localized(`/admin/products/${row.id}`, locale),
             submit: _('product_backend.action.save'),
             errors: management.errors,
             fields: [
@@ -277,7 +280,7 @@ export const productDetailScreen = (
       section({
         title: _('product_backend.variants.title'),
         actions: recordForm({
-          action: `/admin/products/${row.id}/variants/generate`,
+          action: localized(`/admin/products/${row.id}/variants/generate`, locale),
           submit: _('product_backend.variants.generate'),
           fields: [],
         }),
@@ -294,7 +297,7 @@ export const productDetailScreen = (
                     cell: (variant) =>
                       linkButton({
                         label: variant.defaultCode || variant.id,
-                        href: `/admin/products/${row.id}/variants/${variant.id}`,
+                        href: localized(`/admin/products/${row.id}/variants/${variant.id}`, locale),
                         variant: 'tertiary',
                       }),
                   },
@@ -318,7 +321,7 @@ export const productDetailScreen = (
         title: _('product_backend.attributes.lines'),
         description: _('product_backend.attributes.linesHint'),
         body: recordForm({
-          action: `/admin/products/${row.id}/attribute-lines`,
+          action: localized(`/admin/products/${row.id}/attribute-lines`, locale),
           submit: _('product_backend.action.add'),
           fields: [
             {
@@ -344,6 +347,7 @@ export const newProductScreen = (
   _: Translator,
   options: { uoms: FormOption[]; categories: FormOption[]; stockEnabled?: boolean; errors?: string[] },
   frame: Frame,
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -351,9 +355,9 @@ export const newProductScreen = (
     frame,
     surface({
       body: recordForm({
-        action: '/admin/products/new',
+        action: localized('/admin/products/new', locale),
         submit: _('product_backend.action.create'),
-        cancelHref: '/admin/products',
+        cancelHref: localized('/admin/products', locale),
         cancelLabel: _('product_backend.action.cancel'),
         errors: options.errors,
         fields: [
@@ -416,6 +420,7 @@ export const variantScreen = (
   uoms: FormOption[],
   frame: Frame,
   errors?: string[],
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -429,7 +434,7 @@ export const variantScreen = (
       }),
       surface({
         body: recordForm({
-          action: `/admin/products/${templateId}/variants/${String(row.id)}`,
+          action: localized(`/admin/products/${templateId}/variants/${String(row.id)}`, locale),
           submit: _('product_backend.action.save'),
           errors,
           fields: [
@@ -475,6 +480,7 @@ export const attributesScreen = (
   rows: Array<Record<string, unknown>>,
   frame: Frame,
   errors?: string[],
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -483,7 +489,7 @@ export const attributesScreen = (
     stack([
       surface({
         body: recordForm({
-          action: '/admin/product-attributes',
+          action: localized('/admin/product-attributes', locale),
           submit: _('product_backend.action.create'),
           errors,
           fields: [
@@ -519,7 +525,7 @@ export const attributesScreen = (
             ? values.map((value) => String(value.name)).join(', ')
             : _('product_backend.attributes.noValues'),
           body: recordForm({
-            action: `/admin/product-attributes/${String(row.id)}/values`,
+            action: localized(`/admin/product-attributes/${String(row.id)}/values`, locale),
             submit: _('product_backend.action.add'),
             fields: [
               { name: 'name', label: _('product_backend.attributes.valueName'), required: true },

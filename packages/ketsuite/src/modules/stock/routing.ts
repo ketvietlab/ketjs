@@ -65,6 +65,67 @@ async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unkno
   return []
 }
 
+/** Create the next move(s) for Odoo-style push and pull-push rules. */
+export async function pushFromCompletedMove(ctx: Ctx, move: Row, quantity: number): Promise<string[]> {
+  if (!(quantity > 0)) return []
+  const product = (await ctx.db.select('product.Product', { id: move.productId }))[0]
+  const source = (await ctx.db.select('stock.Location', { id: move.locationDestId }))[0]
+  if (!product || !source) return []
+  const routeIds = await routesFor(ctx, product, source)
+  const routeRank = new Map(routeIds.map((routeId, index) => [routeId, index]))
+  const candidates: Row[] = []
+  for (const routeId of routeIds)
+    candidates.push(
+      ...(await ctx.db.select('stock.Rule', {
+        routeId,
+        locationSrcId: move.locationDestId,
+        active: true,
+      })),
+    )
+  const rules = candidates
+    .filter((rule) => rule.action === 'push' || rule.action === 'pull_push')
+    .sort(
+      (a, b) =>
+        Number(routeRank.get(String(a.routeId))) - Number(routeRank.get(String(b.routeId))) ||
+        Number(a.sequence) - Number(b.sequence) ||
+        String(a.id).localeCompare(String(b.id)),
+    )
+  const ids: string[] = []
+  const links = await ctx.db.select('stock.MoveLink', { originMoveId: move.id })
+  const linkedRules = new Set<string>()
+  for (const link of links) {
+    const destination = (await ctx.db.select('stock.Move', { id: link.destinationMoveId }))[0]
+    if (destination?.ruleId) linkedRules.add(String(destination.ruleId))
+  }
+  for (const rule of rules) {
+    if (linkedRules.has(String(rule.id))) continue
+    const id = `${String(move.id)}:push:${String(rule.id)}`
+    await ctx.db.insertIfAbsent('stock.Move', {
+      id,
+      name: String(rule.name),
+      pickingId: null,
+      productId: move.productId,
+      productUomId: move.productUomId,
+      productUomQty: String(quantity),
+      quantity: '0',
+      locationId: move.locationDestId,
+      locationDestId: rule.locationDestId,
+      state: 'confirmed',
+      picked: false,
+      procureMethod: rule.procureMethod,
+      ruleId: rule.id,
+      origin: `push:${String(move.id)}`,
+    })
+    await ctx.db.insertIfAbsent('stock.MoveLink', {
+      id: `${String(move.id)}:${id}`,
+      originMoveId: move.id,
+      destinationMoveId: id,
+    })
+    ids.push(id)
+  }
+  return ids
+}
+
 async function available(ctx: Ctx, productId: unknown, locationId: unknown): Promise<number> {
   const quants = await ctx.db.select('stock.Quant', { productId, locationId })
   return quants.reduce((sum, quant) => sum + Number(quant.quantity) - Number(quant.reservedQuantity), 0)

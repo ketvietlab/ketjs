@@ -58,6 +58,92 @@ test('product 19: company cost, UoM links and concurrent-safe variant generation
   }
 })
 
+test('product 19: default/no-variant behavior, archive/reactivate, barcode and company cost invariants', async () => {
+  const adapter = await boot()
+  try {
+    const initial = (await call('product.generateVariants', { templateId: 'tpl' }, adapter)).value as Row
+    assert.deepEqual(initial.ids, ['p1'])
+    assert.equal(initial.created, 0)
+
+    assert.equal(
+      (
+        (await call('product.saveVariant', { id: 'p1', templateId: 'tpl', barcode: '893000000001' }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    const collision = (
+      await call('product.saveVariant', { id: 'p2', templateId: 'tpl', barcode: '893000000001' }, adapter)
+    ).value as Row
+    assert.equal(collision.ok, false)
+
+    await call('product.saveAttribute', { id: 'color', name: 'Color', createVariant: 'always' }, adapter)
+    await call('product.saveAttributeValue', { id: 'red', attributeId: 'color', name: 'Red' }, adapter)
+    await call('product.saveAttributeValue', { id: 'blue', attributeId: 'color', name: 'Blue' }, adapter)
+    await call('product.saveAttribute', { id: 'note', name: 'Note', createVariant: 'no_variant' }, adapter)
+    await call('product.saveAttributeValue', { id: 'gift', attributeId: 'note', name: 'Gift' }, adapter)
+    await call(
+      'product.saveAttributeLine',
+      { id: 'tpl:color', templateId: 'tpl', attributeId: 'color', valueIds: ['red', 'blue'] },
+      adapter,
+    )
+    await call(
+      'product.saveAttributeLine',
+      { id: 'tpl:note', templateId: 'tpl', attributeId: 'note', valueIds: ['gift'] },
+      adapter,
+    )
+    const generated = (await call('product.generateVariants', { templateId: 'tpl' }, adapter)).value as Row
+    assert.deepEqual(generated.ids, ['tpl:blue', 'tpl:red'])
+
+    await call(
+      'product.saveAttributeLine',
+      { id: 'tpl:color', templateId: 'tpl', attributeId: 'color', valueIds: ['red'] },
+      adapter,
+    )
+    await call('product.generateVariants', { templateId: 'tpl' }, adapter)
+    assert.equal(
+      (await adapter.all('SELECT active FROM product_product WHERE id = ?', ['tpl:blue']))[0]!.active,
+      0,
+    )
+    await call(
+      'product.saveAttributeLine',
+      { id: 'tpl:color', templateId: 'tpl', attributeId: 'color', valueIds: ['red', 'blue'] },
+      adapter,
+    )
+    const reactivated = (await call('product.generateVariants', { templateId: 'tpl' }, adapter)).value as Row
+    assert.equal(reactivated.created, 0)
+    assert.equal(
+      (await adapter.all('SELECT active FROM product_product WHERE id = ?', ['tpl:blue']))[0]!.active,
+      1,
+    )
+
+    await call('product.setCost', { productId: 'p1', standardPrice: '60' }, adapter)
+    await call('partner.savePartner', { id: 'beta-party', kind: 'company', name: 'Beta' }, adapter)
+    await call('company.saveCompany', { id: 'beta', partnerId: 'beta-party', currency: 'VND' }, adapter)
+    await callFn(
+      'product.setCost',
+      { productId: 'p1', standardPrice: '75' },
+      { adapter, manifest, scope: { company: 'beta', branches: null } },
+    )
+    const acme = (await call('product.getVariant', { id: 'p1' }, adapter)).value as Row
+    const beta = (
+      await callFn(
+        'product.getVariant',
+        { id: 'p1' },
+        {
+          adapter,
+          manifest,
+          scope: { company: 'beta', branches: null },
+        },
+      )
+    ).value as Row
+    assert.equal(Number((acme.cost as Row).standardPrice), 60)
+    assert.equal(Number((beta.cost as Row).standardPrice), 75)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pricing 19: Odoo precedence and percentage formula use company currency only', async () => {
   const adapter = await boot()
   try {
@@ -121,6 +207,133 @@ test('pricing 19: Odoo precedence and percentage formula use company currency on
     )
     assert.equal(Number((formula.value as Row).price), 83)
     assert.equal('currencyId' in manifest.models['pricing.Pricelist']!.fields, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pricing 19: ancestor scope, UoM quantity, date bounds, nesting, margins and loops are deterministic', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeUomId: 'unit', relativeFactor: '10' },
+      adapter,
+    )
+    await call('product.saveCategory', { id: 'all', name: 'All' }, adapter)
+    await call('product.saveCategory', { id: 'shirts', name: 'Shirts', parentId: 'all' }, adapter)
+    await call(
+      'product.saveTemplate',
+      { id: 'tpl', name: 'Áo', type: 'goods', categoryId: 'shirts', uomId: 'unit' },
+      adapter,
+    )
+    await call('pricing.savePricelist', { id: 'category-list', name: 'Category' }, adapter)
+    for (const item of [
+      { id: 'parent-price', categoryId: 'all', fixedPrice: '80' },
+      { id: 'child-price', categoryId: 'shirts', fixedPrice: '70' },
+    ])
+      await call(
+        'pricing.savePricelistItem',
+        {
+          ...item,
+          pricelistId: 'category-list',
+          appliedOn: '2_product_category',
+          computePrice: 'fixed',
+          minQuantity: '10',
+        },
+        adapter,
+      )
+    const converted = (
+      await call(
+        'pricing.priceFor',
+        { pricelistId: 'category-list', productId: 'p1', quantity: '1', uomId: 'box' },
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual([Number(converted.price), converted.ruleId], [70, 'child-price'])
+
+    await call('pricing.savePricelist', { id: 'dated', name: 'Dated' }, adapter)
+    await call(
+      'pricing.savePricelistItem',
+      {
+        id: 'dated-rule',
+        pricelistId: 'dated',
+        appliedOn: '3_global',
+        computePrice: 'fixed',
+        fixedPrice: '77',
+        dateStart: '2026-08-01T00:00:00.000Z',
+        dateEnd: '2026-08-31T23:59:59.999Z',
+      },
+      adapter,
+    )
+    for (const date of ['2026-08-01T00:00:00.000Z', '2026-08-31T23:59:59.999Z']) {
+      const result = (
+        await call(
+          'pricing.priceFor',
+          { pricelistId: 'dated', productId: 'p1', quantity: '1', date },
+          adapter,
+        )
+      ).value as Row
+      assert.equal(Number(result.price), 77)
+    }
+
+    await call('pricing.savePricelist', { id: 'base-list', name: 'Base' }, adapter)
+    await call('pricing.savePricelist', { id: 'nested-list', name: 'Nested' }, adapter)
+    await call(
+      'pricing.savePricelistItem',
+      {
+        id: 'base-rule',
+        pricelistId: 'base-list',
+        appliedOn: '3_global',
+        computePrice: 'fixed',
+        fixedPrice: '80',
+      },
+      adapter,
+    )
+    await call(
+      'pricing.savePricelistItem',
+      {
+        id: 'nested-rule',
+        pricelistId: 'nested-list',
+        appliedOn: '3_global',
+        base: 'pricelist',
+        basePricelistId: 'base-list',
+        computePrice: 'formula',
+        priceDiscount: '-20',
+        priceRound: '5',
+        priceSurcharge: '3',
+        priceMaxMargin: '8',
+      },
+      adapter,
+    )
+    const nested = (
+      await call('pricing.priceFor', { pricelistId: 'nested-list', productId: 'p1', quantity: '1' }, adapter)
+    ).value as Row
+    assert.equal(Number(nested.price), 88)
+
+    await call('pricing.savePricelist', { id: 'loop-a', name: 'Loop A' }, adapter)
+    await call('pricing.savePricelist', { id: 'loop-b', name: 'Loop B' }, adapter)
+    for (const [id, pricelistId, basePricelistId] of [
+      ['loop-a-rule', 'loop-a', 'loop-b'],
+      ['loop-b-rule', 'loop-b', 'loop-a'],
+    ])
+      await call(
+        'pricing.savePricelistItem',
+        {
+          id,
+          pricelistId,
+          appliedOn: '3_global',
+          base: 'pricelist',
+          basePricelistId,
+          computePrice: 'formula',
+        },
+        adapter,
+      )
+    const loop = (
+      await call('pricing.priceFor', { pricelistId: 'loop-a', productId: 'p1', quantity: '1' }, adapter)
+    ).value as Row
+    assert.equal(loop.ok, false)
+    assert.match(String((loop.errors as Row[])[0]!.message), /recursive pricelist/)
   } finally {
     await adapter.close()
   }
@@ -194,9 +407,49 @@ test('stock 19: reservation lives on move lines, partial completion creates a ba
     assert.equal(quant.quantity, '5')
     assert.equal(quant.reservedQuantity, '0')
     assert.equal(
+      Number((await adapter.all('SELECT SUM(CAST(quantity AS REAL)) AS total FROM stock_quant'))[0]!.total),
+      0,
+    )
+    assert.equal(
       (await adapter.all('SELECT COUNT(*) AS n FROM stock_picking WHERE "backorderId" = ?', ['pick1']))[0]!.n,
       1,
     )
+    assert.equal(
+      (
+        (
+          await call(
+            'stock.addMove',
+            {
+              id: 'late-move',
+              name: 'Too late',
+              pickingId: 'pick1',
+              productId: 'p1',
+              productUomId: 'unit',
+              productUomQty: '1',
+            },
+            adapter,
+          )
+        ).value as Row
+      ).ok,
+      false,
+    )
+    assert.equal(
+      (
+        (
+          await call(
+            'stock.saveMoveLine',
+            { id: line.id, moveId: 'move1', quantity: '1', picked: true },
+            adapter,
+          )
+        ).value as Row
+      ).ok,
+      false,
+    )
+
+    await call('stock.createPicking', { id: 'cancelled', name: 'WH/OUT/C', pickingTypeId: 'out' }, adapter)
+    assert.equal(((await call('stock.assignPicking', { id: 'cancelled' }, adapter)).value as Row).ok, false)
+    await call('stock.cancelPicking', { id: 'cancelled' }, adapter)
+    assert.equal(((await call('stock.completePicking', { id: 'cancelled' }, adapter)).value as Row).ok, false)
   } finally {
     await adapter.close()
   }
@@ -255,6 +508,164 @@ test('routes 19: mts_else_mto chooses stock or procurement and links upstream mo
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM stock_move_link'))[0]!.n, 1)
   } finally {
     await adapter.close()
+  }
+})
+
+test('routes 19: completing a move triggers assigned push rules exactly once', async () => {
+  const adapter = await boot()
+  try {
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+    for (const [id, usage] of [
+      ['supplier', 'supplier'],
+      ['input', 'internal'],
+      ['stock', 'internal'],
+    ] as const)
+      await call('stock.saveLocation', { id, name: id, usage }, adapter)
+    await call(
+      'stock.savePickingType',
+      {
+        id: 'incoming',
+        name: 'Receipts',
+        code: 'incoming',
+        defaultLocationSrcId: 'supplier',
+        defaultLocationDestId: 'input',
+      },
+      adapter,
+    )
+    await call('stock.saveRoute', { id: 'push-route', name: 'Push to Stock' }, adapter)
+    await call(
+      'stock.saveRule',
+      {
+        id: 'input-push-stock',
+        name: 'Input to Stock',
+        routeId: 'push-route',
+        action: 'push',
+        locationSrcId: 'input',
+        locationDestId: 'stock',
+        pickingTypeId: 'incoming',
+      },
+      adapter,
+    )
+    await call('stock.assignProductRoute', { productId: 'p1', routeId: 'push-route' }, adapter)
+    await call('stock.createPicking', { id: 'receipt', name: 'IN/1', pickingTypeId: 'incoming' }, adapter)
+    await call(
+      'stock.addMove',
+      {
+        id: 'receipt-move',
+        name: 'Receipt',
+        pickingId: 'receipt',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '4',
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'receipt' }, adapter)
+    await call('stock.saveMoveLine', { id: 'receipt-line', moveId: 'receipt-move', quantity: '4' }, adapter)
+    await call('stock.completePicking', { id: 'receipt' }, adapter)
+    await call('stock.completePicking', { id: 'receipt' }, adapter)
+    const pushed = await adapter.all(
+      'SELECT "locationId", "locationDestId", "ruleId" FROM stock_move WHERE origin = ?',
+      ['push:receipt-move'],
+    )
+    assert.deepEqual(
+      pushed.map((row) => [row.locationId, row.locationDestId, row.ruleId]),
+      [['input', 'stock', 'input-push-stock']],
+    )
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM stock_move_link'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('warehouse 19: two and three step settings generate idempotent route chains', async () => {
+  const cases = [
+    {
+      receptionSteps: 'two_steps',
+      deliverySteps: 'pick_ship',
+      receipt: [
+        ['wh:supplier', 'wh:input'],
+        ['wh:input', 'wh:stock'],
+      ],
+      delivery: [
+        ['wh:stock', 'wh:output'],
+        ['wh:output', 'wh:customer'],
+      ],
+    },
+    {
+      receptionSteps: 'three_steps',
+      deliverySteps: 'pick_pack_ship',
+      receipt: [
+        ['wh:supplier', 'wh:input'],
+        ['wh:input', 'wh:quality'],
+        ['wh:quality', 'wh:stock'],
+      ],
+      delivery: [
+        ['wh:stock', 'wh:pack'],
+        ['wh:pack', 'wh:output'],
+        ['wh:output', 'wh:customer'],
+      ],
+    },
+  ] as const
+  for (const [index, entry] of cases.entries()) {
+    const adapter = await boot()
+    try {
+      await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+      const input = {
+        id: 'wh',
+        name: 'Main',
+        code: 'WH',
+        receptionSteps: entry.receptionSteps,
+        deliverySteps: entry.deliverySteps,
+      }
+      assert.deepEqual((await call('stock.saveWarehouse', input, adapter)).value, { ok: true, id: 'wh' })
+      await call('stock.saveWarehouse', input, adapter)
+      assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM stock_route'))[0]!.n, 2)
+      assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM stock_warehouse_route'))[0]!.n, 2)
+
+      const receipt = (
+        await call(
+          'stock.procure',
+          {
+            moveId: `receipt:${index}`,
+            productId: 'p1',
+            productUomId: 'unit',
+            quantity: '4',
+            locationId: 'wh:stock',
+          },
+          adapter,
+        )
+      ).value as Row
+      const delivery = (
+        await call(
+          'stock.procure',
+          {
+            moveId: `delivery:${index}`,
+            productId: 'p1',
+            productUomId: 'unit',
+            quantity: '3',
+            locationId: 'wh:customer',
+          },
+          adapter,
+        )
+      ).value as Row
+      assert.equal(receipt.ok, true)
+      assert.equal(delivery.ok, true)
+      const pairs = async (ids: unknown[]) => {
+        const result: string[][] = []
+        for (const id of ids) {
+          const move = (
+            await adapter.all('SELECT "locationId", "locationDestId" FROM stock_move WHERE id = ?', [id])
+          )[0]!
+          result.push([String(move.locationId), String(move.locationDestId)])
+        }
+        return result
+      }
+      assert.deepEqual(await pairs(receipt.moveIds as unknown[]), entry.receipt)
+      assert.deepEqual(await pairs(delivery.moveIds as unknown[]), entry.delivery)
+    } finally {
+      await adapter.close()
+    }
   }
 })
 
@@ -475,7 +886,8 @@ test('multi-warehouse: stock, forecast, reservation and default routes stay ware
     )
     await call('stock.reserveMove', { id: 'a-out' }, adapter)
     const quants = await adapter.all(
-      'SELECT "locationId", "reservedQuantity" FROM stock_quant ORDER BY "locationId"',
+      'SELECT "locationId", "reservedQuantity" FROM stock_quant WHERE "locationId" IN (?, ?) ORDER BY "locationId"',
+      ['a-stock', 'b-stock'],
     )
     assert.deepEqual(
       quants.map((row) => [row.locationId, row.reservedQuantity]),
@@ -483,6 +895,10 @@ test('multi-warehouse: stock, forecast, reservation and default routes stay ware
         ['a-stock', '4'],
         ['b-stock', '0'],
       ],
+    )
+    assert.equal(
+      Number((await adapter.all('SELECT SUM(CAST(quantity AS REAL)) AS total FROM stock_quant'))[0]!.total),
+      0,
     )
 
     await call('stock.savePickingType', { id: 'internal', name: 'Internal', code: 'internal' }, adapter)

@@ -67,6 +67,7 @@ async function priceFor(
   if (seen.has(pricelistId)) throw new Error(`recursive pricelist: ${[...seen, pricelistId].join(' -> ')}`)
   const nextSeen = new Set(seen).add(pricelistId)
   const categories = await categoryAncestors(ctx, template.categoryId)
+  const categoryRank = new Map([...categories].map((categoryId, index) => [categoryId, index]))
   const items = (await ctx.db.select('pricing.PricelistItem', { pricelistId }))
     .filter((item) => applies(item, product, template, categories, qty, date))
     .sort((a, b) => {
@@ -74,8 +75,13 @@ async function priceFor(
       if (specific) return specific
       const quantity = Number(b.minQuantity) - Number(a.minQuantity)
       if (quantity) return quantity
-      const category = String(b.categoryId ?? '').localeCompare(String(a.categoryId ?? ''))
-      return category || String(b.id).localeCompare(String(a.id))
+      if (a.appliedOn === '2_product_category') {
+        const category =
+          Number(categoryRank.get(String(a.categoryId)) ?? Number.MAX_SAFE_INTEGER) -
+          Number(categoryRank.get(String(b.categoryId)) ?? Number.MAX_SAFE_INTEGER)
+        if (category) return category
+      }
+      return String(a.id).localeCompare(String(b.id))
     })
   const rule = items[0]
   if (!rule) return { price: Number(template.listPrice), ruleId: null }
@@ -170,7 +176,14 @@ export const functions: Record<string, FnSpec> = {
       priceMaxMargin: 'decimal?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:pricing.Pricelist', 'read:pricing.PricelistItem', 'write:pricing.PricelistItem'],
+    effects: [
+      'read:pricing.Pricelist',
+      'read:pricing.PricelistItem',
+      'write:pricing.PricelistItem',
+      'read:product.Category',
+      'read:product.Template',
+      'read:product.Product',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -185,6 +198,8 @@ export const functions: Record<string, FnSpec> = {
       const start = at(args.dateStart)
       const end = at(args.dateEnd)
       if (start !== null && end !== null && start >= end) return invalid('dateEnd', 'phải sau dateStart')
+      if (Number(args.minQuantity ?? 0) < 0) return invalid('minQuantity', 'không được âm')
+      if (Number(args.priceRound ?? 0) < 0) return invalid('priceRound', 'không được âm')
       if (base === 'pricelist' && !args.basePricelistId)
         return invalid('basePricelistId', 'bắt buộc khi base là pricelist')
       if (args.basePricelistId === args.pricelistId)
@@ -204,6 +219,21 @@ export const functions: Record<string, FnSpec> = {
               ? args.categoryId
               : true
       if (!target) return invalid('appliedOn', 'quy tắc thiếu đối tượng áp dụng')
+      if (
+        args.appliedOn === '0_product_variant' &&
+        !(await ctx.db.select('product.Product', { id: args.productId }))[0]
+      )
+        return invalid('productId', 'biến thể không tồn tại')
+      if (
+        args.appliedOn === '1_product' &&
+        !(await ctx.db.select('product.Template', { id: args.templateId }))[0]
+      )
+        return invalid('templateId', 'template không tồn tại')
+      if (
+        args.appliedOn === '2_product_category' &&
+        !(await ctx.db.select('product.Category', { id: args.categoryId }))[0]
+      )
+        return invalid('categoryId', 'danh mục không tồn tại')
       const existing = (await ctx.db.select('pricing.PricelistItem', { id: args.id }))[0]
       const values = {
         ...args,

@@ -5,10 +5,7 @@ import type { Row } from 'ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const SCOPE = { company: 'acme', branches: null }
-type HttpCall = <T = unknown>(
-  name: string,
-  input?: Record<string, unknown>,
-) => Promise<{ value: T }>
+type HttpCall = <T = unknown>(name: string, input?: Record<string, unknown>) => Promise<{ value: T }>
 
 async function bootSuite(t: TestContext) {
   const e2e = await createTestApp(ketsuite, { worker: false })
@@ -147,30 +144,33 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
     minQuantity: '2',
   })
   assert.equal(
-    (await call<Row>('pricing.priceFor', { pricelistId: 'retail', productId: 'p1', quantity: '1' }))
-      .value.price,
+    (await call<Row>('pricing.priceFor', { pricelistId: 'retail', productId: 'p1', quantity: '1' })).value
+      .price,
     '95',
   )
   assert.equal(
-    (await call<Row>('pricing.priceFor', { pricelistId: 'retail', productId: 'p1', quantity: '2' }))
-      .value.price,
+    (await call<Row>('pricing.priceFor', { pricelistId: 'retail', productId: 'p1', quantity: '2' })).value
+      .price,
     '90',
   )
 
-  const productPage = await e2e.client.get('/admin/products/tpl', {
+  const productPage = await e2e.client.get('/admin/products/tpl?lang=vi', {
     headers: { accept: 'text/html' },
   })
   assert.equal(productPage.status, 200)
   const productHtml = await productPage.text()
   assert.match(productHtml, /Áo thun/)
   assert.match(productHtml, /data-ui="media" data-state="ready"/)
+  assert.match(productHtml, /action="\/admin\/products\/tpl\?lang=vi"/)
   assert.ok((productHtml.match(/<img /g) ?? []).length >= 2)
 
-  const pricingPage = await e2e.client.get('/admin/pricelists/retail', {
+  const pricingPage = await e2e.client.get('/admin/pricelists/retail?lang=vi', {
     headers: { accept: 'text/html' },
   })
   assert.equal(pricingPage.status, 200)
-  assert.match(await pricingPage.text(), /Bán lẻ/)
+  const pricingHtml = await pricingPage.text()
+  assert.match(pricingHtml, /Bán lẻ/)
+  assert.match(pricingHtml, /action="\/admin\/pricelists\/retail\?lang=vi"/)
 })
 
 test('e2e stock 19: inventory, reservation, partial completion and backorder cross HTTP', async (t) => {
@@ -192,7 +192,10 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   ).value
   assert.equal(adjustment.ok, true)
   assert.ok(adjustment.pickingId)
-  assert.equal((await call<Row>('stock.getPicking', { id: String(adjustment.pickingId) })).value.state, 'done')
+  assert.equal(
+    (await call<Row>('stock.getPicking', { id: String(adjustment.pickingId) })).value.state,
+    'done',
+  )
 
   await call('stock.createPicking', {
     id: 'pick1',
@@ -229,6 +232,70 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     (await call<Row>('stock.forecast', { productId: 'p1', warehouseId: 'wh' })).value.forecast,
     '2',
   )
+
+  // Exercise the same partial flow through the rendered backend form, including
+  // the Odoo `ask` backorder choice rather than bypassing it with a direct call.
+  await call('stock.createPicking', {
+    id: 'ui-pick',
+    name: 'WH/OUT/UI',
+    pickingTypeId: 'wh:outgoing',
+  })
+  await call('stock.addMove', {
+    id: 'ui-move',
+    name: 'Áo thun UI',
+    pickingId: 'ui-pick',
+    productId: 'p1',
+    productUomId: 'unit',
+    productUomQty: '3',
+  })
+  await call('stock.confirmPicking', { id: 'ui-pick' })
+  await call('stock.assignPicking', { id: 'ui-pick' })
+  const uiPicking = (await call<Row>('stock.getPicking', { id: 'ui-pick' })).value
+  const uiLine = ((uiPicking.moves as Row[])[0]!.lines as Row[])[0]!
+  const uiPage = await e2e.client.get('/admin/transfers/ui-pick?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const uiHtml = await uiPage.text()
+  assert.match(uiHtml, /name="operationId"/)
+  assert.match(uiHtml, /name="backorder" value="create"/)
+  await e2e.client.form<string>('/admin/transfers/ui-pick?lang=vi', {
+    action: 'pick',
+    operationId: `line:${String(uiLine.id)}`,
+    quantity: '2',
+  })
+  await e2e.client.form<string>('/admin/transfers/ui-pick?lang=vi', {
+    action: 'validate',
+    backorder: 'create',
+  })
+  const uiDone = (await call<Row>('stock.getPicking', { id: 'ui-pick' })).value
+  assert.equal(uiDone.state, 'done')
+  assert.equal(
+    (await call<Row[]>('stock.listPickings', {})).value.filter((row) => row.backorderId === 'ui-pick').length,
+    1,
+  )
+  const localizedDonePage = await e2e.client.get('/admin/transfers/ui-pick?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const localizedDoneHtml = await localizedDonePage.text()
+  assert.match(localizedDoneHtml, /<html lang="vi">/)
+  assert.doesNotMatch(localizedDoneHtml, /stock_backend\./)
+
+  await call('stock.saveWarehouse', {
+    id: 'wh-config',
+    name: 'Kho cấu hình',
+    code: 'WHC',
+    receptionSteps: 'three_steps',
+    deliverySteps: 'pick_pack_ship',
+  })
+  const operationTypesPage = await e2e.client.get('/admin/picking-types?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const operationTypesHtml = await operationTypesPage.text()
+  assert.match(operationTypesHtml, /Kiểm tra chất lượng/)
+  assert.match(operationTypesHtml, /Nhập kho nội bộ/)
+  assert.match(operationTypesHtml, /Lấy hàng/)
+  assert.match(operationTypesHtml, /Đóng gói/)
+  assert.doesNotMatch(operationTypesHtml, /Quality Control|Store|Pick|Pack/)
 
   for (const path of ['/admin/inventory', '/admin/transfers/pick1', '/admin/forecast']) {
     const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
@@ -276,13 +343,10 @@ test('e2e stock 19: serial reservation keeps one unit on each move line', async 
   assert.equal((await call<Row>('stock.reserveMove', { id: 'serial-move' })).value.reserved, '2')
   const picking = (await call<Row>('stock.getPicking', { id: 'serial-pick' })).value
   const lines = (picking.moves as Row[])[0]!.lines as Row[]
-  assert.deepEqual(
-    lines.map((line) => [line.lotId, line.quantity]).sort(),
-    [
-      ['s1', 1],
-      ['s2', 1],
-    ],
-  )
+  assert.deepEqual(lines.map((line) => [line.lotId, line.quantity]).sort(), [
+    ['s1', 1],
+    ['s2', 1],
+  ])
   await call('stock.completePicking', { id: 'serial-pick' })
   const quants = (await call<Row[]>('stock.listQuants', { productId: 'p1', locationId: 'wh:stock' })).value
   assert.ok(quants.every((quant) => quant.quantity === 0 && quant.reservedQuantity === 0))
@@ -320,11 +384,17 @@ test('e2e multi-warehouse 19: forecast, routes and replenishment remain warehous
 
   const quants = (await call<Row[]>('stock.listQuants', { productId: 'p1' })).value
   assert.deepEqual(
-    quants.map((row) => [row.locationId, row.quantity]),
+    quants
+      .filter((row) => row.locationId === 'wh-a:stock' || row.locationId === 'wh-b:stock')
+      .map((row) => [row.locationId, row.quantity]),
     [
       ['wh-a:stock', 9],
       ['wh-b:stock', 3],
     ],
+  )
+  assert.equal(
+    quants.reduce((sum, row) => sum + Number(row.quantity), 0),
+    0,
   )
   const warehouseALocations = (await call<Row[]>('stock.listLocations', { warehouseId: 'wh-a' })).value
   assert.ok(warehouseALocations.some((row) => row.id === 'wh-a:stock'))

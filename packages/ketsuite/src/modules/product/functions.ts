@@ -191,6 +191,11 @@ export const functions: Record<string, FnSpec> = {
       if (!(await ctx.db.select('product.Template', { id: args.templateId }))[0])
         return { ok: false, errors: [{ field: 'templateId', message: 'không có template nào mang id này' }] }
       const existing = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      if (args.barcode) {
+        const collision = (await ctx.db.select('product.Product', { barcode: args.barcode }))[0]
+        if (collision && collision.id !== args.id)
+          return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng' }] }
+      }
       const values = {
         ...args,
         defaultCode: args.defaultCode ?? args.sku ?? null,

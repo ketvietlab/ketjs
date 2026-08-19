@@ -25,10 +25,20 @@ type MediaRow = {
 }
 type AnyVariant = Record<string, unknown> | null
 
-const seeProduct = (id: string) =>
-  withHeaders(text('', { status: 303 }), { location: `/admin/products/${id}` })
-const seeVariant = (templateId: string, productId: string) =>
-  seeOther(`/admin/products/${templateId}/variants/${productId}`)
+const localeSuffix = (url: URL): string => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
+const inLocale = (url: URL, path: string): string => {
+  const target = new URL(path, 'http://ket.local')
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
+}
+const seeProduct = (id: string, url: URL) =>
+  withHeaders(text('', { status: 303 }), { location: inLocale(url, `/admin/products/${id}`) })
+const seeVariant = (templateId: string, productId: string, url: URL) =>
+  seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}`))
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   viewer: await viewerOf(ctx, url, req),
@@ -195,6 +205,7 @@ export const routes: Record<string, RouteEntry> = {
               },
             },
             { shown: colsOf(url), colsHref: colsHref(url) },
+            localeSuffix(url),
           ),
         }),
       })
@@ -225,13 +236,15 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if (!(result as { ok?: boolean }).ok)
-          return seeOther(`/admin/products/new?invalid=1&count=${errorsOf(result).length}`)
+          return seeOther(inLocale(url, `/admin/products/new?invalid=1&count=${errorsOf(result).length}`))
         if (hasStock) {
           const stockResult = await configureStock(ctx, url, req, id, form)
           if (!(stockResult as { ok?: boolean }).ok)
-            return seeOther(`/admin/products/${id}?invalid=1&count=${errorsOf(stockResult).length}`)
+            return seeOther(
+              inLocale(url, `/admin/products/${id}?invalid=1&count=${errorsOf(stockResult).length}`),
+            )
         }
-        return seeProduct(id)
+        return seeProduct(id, url)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
@@ -244,6 +257,7 @@ export const routes: Record<string, RouteEntry> = {
             _,
             { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
             await frameFor(ctx, url, req),
+            localeSuffix(url),
           ),
         }),
       })
@@ -269,8 +283,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther('/admin/product-attributes')
-          : seeOther('/admin/product-attributes?invalid=1')
+          ? seeOther(inLocale(url, '/admin/product-attributes'))
+          : seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('product.listAttributes', {}, url, req)) as Array<Record<string, unknown>>
@@ -279,7 +293,13 @@ export const routes: Record<string, RouteEntry> = {
           lang,
           title: _('product_backend.attributes.title'),
           head: await ctx.styles(req),
-          body: attributesScreen(_, rows, await frameFor(ctx, url, req), invalidErrors(url, _)),
+          body: attributesScreen(
+            _,
+            rows,
+            await frameFor(ctx, url, req),
+            invalidErrors(url, _),
+            localeSuffix(url),
+          ),
         }),
       })
     },
@@ -300,8 +320,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther('/admin/product-attributes')
-        : seeOther('/admin/product-attributes?invalid=1')
+        ? seeOther(inLocale(url, '/admin/product-attributes'))
+        : seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
     },
   '/admin/products/{id}':
     (ctx: ServeContext): Route =>
@@ -328,13 +348,17 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if (!(result as { ok?: boolean }).ok)
-          return seeOther(`/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`)
+          return seeOther(
+            inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`),
+          )
         if (hasStock) {
           const stockResult = await configureStock(ctx, url, req, params.id, form)
           if (!(stockResult as { ok?: boolean }).ok)
-            return seeOther(`/admin/products/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`)
+            return seeOther(
+              inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`),
+            )
         }
-        return seeProduct(params.id)
+        return seeProduct(params.id, url)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const row = (await ctx.call('product.getTemplate', { id: params.id }, url, req)) as {
@@ -369,18 +393,20 @@ export const routes: Record<string, RouteEntry> = {
             { ...row, ...(stockConfig as Record<string, unknown> | null) },
             {
               status: 'ready',
-              uploadAction: `/admin/products/${row.id}/media`,
+              uploadAction: inLocale(url, `/admin/products/${row.id}/media`),
               images: mediaRows.map((image, index) => ({
                 id: image.id,
                 src: `/files/${image.attachmentId}`,
                 alt: image.alt || image.attachment?.name || row.name,
                 primary: image.primary,
                 actions: {
-                  primary: `/admin/products/${row.id}/media/${image.id}/primary`,
-                  remove: `/admin/products/${row.id}/media/${image.id}/remove`,
-                  ...(index > 0 ? { moveUp: `/admin/products/${row.id}/media/${image.id}/move-up` } : {}),
+                  primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary`),
+                  remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove`),
+                  ...(index > 0
+                    ? { moveUp: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-up`) }
+                    : {}),
                   ...(index + 1 < mediaRows.length
-                    ? { moveDown: `/admin/products/${row.id}/media/${image.id}/move-down` }
+                    ? { moveDown: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-down`) }
                     : {}),
                 },
               })),
@@ -390,6 +416,7 @@ export const routes: Record<string, RouteEntry> = {
             },
             { ...options, variants, stockEnabled: hasStock, errors: invalidErrors(url, _) },
             await frameFor(ctx, url, req),
+            localeSuffix(url),
           ),
         }),
       })
@@ -400,8 +427,8 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const result = await ctx.call('product.generateVariants', { templateId: params.id }, url, req)
       return (result as { ok?: boolean }).ok
-        ? seeProduct(params.id)
-        : seeOther(`/admin/products/${params.id}?invalid=1`)
+        ? seeProduct(params.id, url)
+        : seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1`))
     },
   '/admin/products/{id}/attribute-lines':
     (ctx: ServeContext): Route =>
@@ -424,8 +451,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeProduct(params.id)
-        : seeOther(`/admin/products/${params.id}?invalid=1`)
+        ? seeProduct(params.id, url)
+        : seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1`))
     },
   '/admin/products/{id}/variants/{variantId}':
     (ctx: ServeContext): Route =>
@@ -453,7 +480,9 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if (!(saved as { ok?: boolean }).ok)
-          return seeOther(`/admin/products/${params.id}/variants/${params.variantId}?invalid=1`)
+          return seeOther(
+            inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+          )
         await ctx.call(
           'product.setCost',
           { productId: params.variantId, standardPrice: form.standardPrice || '0' },
@@ -467,7 +496,7 @@ export const routes: Record<string, RouteEntry> = {
             url,
             req,
           )
-        return seeOther(`/admin/products/${params.id}/variants/${params.variantId}`)
+        return seeOther(inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}`))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [options, mediaRows] = await Promise.all([
@@ -485,23 +514,35 @@ export const routes: Record<string, RouteEntry> = {
             current,
             {
               status: 'ready',
-              uploadAction: `/admin/products/${params.id}/variants/${params.variantId}/media`,
+              uploadAction: inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}/media`),
               images: mediaRows.map((image, index) => ({
                 id: image.id,
                 src: `/files/${image.attachmentId}`,
                 alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
                 primary: image.primary,
                 actions: {
-                  primary: `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary`,
-                  remove: `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove`,
+                  primary: inLocale(
+                    url,
+                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary`,
+                  ),
+                  remove: inLocale(
+                    url,
+                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove`,
+                  ),
                   ...(index > 0
                     ? {
-                        moveUp: `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up`,
+                        moveUp: inLocale(
+                          url,
+                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up`,
+                        ),
                       }
                     : {}),
                   ...(index + 1 < mediaRows.length
                     ? {
-                        moveDown: `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down`,
+                        moveDown: inLocale(
+                          url,
+                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down`,
+                        ),
                       }
                     : {}),
                 },
@@ -513,6 +554,7 @@ export const routes: Record<string, RouteEntry> = {
             options.uoms,
             await frameFor(ctx, url, req),
             invalidErrors(url, _),
+            localeSuffix(url),
           ),
         }),
       })
@@ -545,7 +587,7 @@ export const routes: Record<string, RouteEntry> = {
         await ctx.call('storage.removeAttachment', { id: attachment.id }, url, req).catch(() => undefined)
         throw error
       }
-      return seeVariant(params.id, params.variantId)
+      return seeVariant(params.id, params.variantId, url)
     },
   '/admin/products/{id}/variants/{variantId}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
@@ -554,7 +596,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
-      return seeVariant(params.id, params.variantId)
+      return seeVariant(params.id, params.variantId, url)
     },
   '/admin/products/{id}/variants/{variantId}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
@@ -563,7 +605,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
-      return seeVariant(params.id, params.variantId)
+      return seeVariant(params.id, params.variantId, url)
     },
   '/admin/products/{id}/variants/{variantId}/media/{mediaId}/move-up':
     (ctx: ServeContext): Route =>
@@ -601,7 +643,7 @@ export const routes: Record<string, RouteEntry> = {
         await ctx.call('storage.removeAttachment', { id: attachment.id }, url, req).catch(() => undefined)
         throw error
       }
-      return seeProduct(params.id)
+      return seeProduct(params.id, url)
     },
   '/admin/products/{id}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
@@ -610,7 +652,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
-      return seeProduct(params.id)
+      return seeProduct(params.id, url)
     },
   '/admin/products/{id}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
@@ -619,7 +661,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
-      return seeProduct(params.id)
+      return seeProduct(params.id, url)
     },
   '/admin/products/{id}/media/{mediaId}/move-up':
     (ctx: ServeContext): Route =>
@@ -649,7 +691,7 @@ const move = async (
     ;[ids[index], ids[destination]] = [ids[destination]!, ids[index]!]
     await ctx.call('product_media.reorderMedia', { templateId, ids }, url, req)
   }
-  return seeProduct(templateId)
+  return seeProduct(templateId, url)
 }
 
 const moveVariant = async (
@@ -671,5 +713,5 @@ const moveVariant = async (
     ;[ids[index], ids[destination]] = [ids[destination]!, ids[index]!]
     await ctx.call('product_media.reorderMedia', { productId, ids }, url, req)
   }
-  return seeVariant(templateId, productId)
+  return seeVariant(templateId, productId, url)
 }

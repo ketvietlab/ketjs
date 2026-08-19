@@ -21,14 +21,24 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const key = `pricing_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
 }
+const localized = (path: string, locale: string): string => `${path}${locale}`
 
-export const pricelistsScreen = (_: Translator, rows: PricelistRow[], frame: Frame): TemplateResult => {
+export const pricelistsScreen = (
+  _: Translator,
+  rows: PricelistRow[],
+  frame: Frame,
+  locale = '',
+): TemplateResult => {
   const columns: Array<Column<PricelistRow>> = [
     {
       key: 'name',
       label: _('pricing_backend.col.name'),
       cell: (row) =>
-        linkButton({ label: row.name, href: `/admin/pricelists/${row.id}`, variant: 'tertiary' }),
+        linkButton({
+          label: row.name,
+          href: localized(`/admin/pricelists/${row.id}`, locale),
+          variant: 'tertiary',
+        }),
       priority: 'primary',
     },
     { key: 'currency', label: _('pricing_backend.col.currency'), cell: (row) => row.currency },
@@ -47,7 +57,7 @@ export const pricelistsScreen = (_: Translator, rows: PricelistRow[], frame: Fra
     stack([
       surface({
         body: recordForm({
-          action: '/admin/pricelists',
+          action: localized('/admin/pricelists', locale),
           submit: _('pricing_backend.action.create'),
           fields: [
             { name: 'name', label: _('pricing_backend.col.name'), required: true },
@@ -67,6 +77,7 @@ export const pricelistDetailScreen = (
   row: Record<string, unknown>,
   items: Array<Record<string, unknown>>,
   frame: Frame,
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
@@ -77,7 +88,7 @@ export const pricelistDetailScreen = (
         title: _('pricing_backend.detail.settings'),
         body: surface({
           body: recordForm({
-            action: `/admin/pricelists/${String(row.id)}`,
+            action: localized(`/admin/pricelists/${String(row.id)}`, locale),
             submit: _('pricing_backend.action.save'),
             hidden: { action: 'save-pricelist' },
             fields: [
@@ -144,7 +155,7 @@ export const pricelistDetailScreen = (
         description: _('pricing_backend.items.formulaHint'),
         body: surface({
           body: recordForm({
-            action: `/admin/pricelists/${String(row.id)}`,
+            action: localized(`/admin/pricelists/${String(row.id)}`, locale),
             submit: _('pricing_backend.action.add'),
             hidden: { action: 'add-item' },
             fields: [

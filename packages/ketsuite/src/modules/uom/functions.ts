@@ -83,7 +83,7 @@ export const functions: Record<string, FnSpec> = {
   savePrecision: defineFn({
     input: { digits: 'int' },
     output: { ok: 'bool', errors: 'json?', digits: 'int?' },
-    effects: ['read:uom.Precision', 'write:uom.Precision', 'read:uom.Unit', 'write:uom.Unit'],
+    effects: ['read:uom.Precision', 'write:uom.Precision', 'read:uom.Unit'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -91,11 +91,19 @@ export const functions: Record<string, FnSpec> = {
       if (digits < 0 || digits > 12)
         return { ok: false, errors: [{ field: 'digits', message: 'phải nằm trong khoảng 0..12' }] }
       const existing = (await ctx.db.select('uom.Precision', { id: PRECISION_ID }))[0]
+      const units = await ctx.db.select('uom.Unit')
+      if (units.length && Number(existing?.digits ?? 2) !== digits)
+        return {
+          ok: false,
+          errors: [
+            {
+              field: 'digits',
+              message: 'precision phải được cấu hình trước khi tạo đơn vị và không thể đổi sau đó',
+            },
+          ],
+        }
       if (existing) await ctx.db.update('uom.Precision', { id: PRECISION_ID }, { digits })
       else await ctx.db.insert('uom.Precision', { id: PRECISION_ID, digits })
-      const rounding = String(10 ** -digits)
-      for (const unit of await ctx.db.select('uom.Unit'))
-        await ctx.db.update('uom.Unit', { id: unit.id }, { rounding })
       return { ok: true, digits }
     },
   }),
@@ -124,15 +132,28 @@ export const functions: Record<string, FnSpec> = {
       const precision = (await ctx.db.select('uom.Precision', { id: PRECISION_ID }))[0]
       const digits = precision ? Number(precision.digits) : 2
       const rounding = 10 ** -digits
-      if (
-        current?.locked &&
+      const conversionChanged =
+        current &&
         (String(current.relativeUomId ?? '') !== String(args.relativeUomId ?? '') ||
           Number(current.relativeFactor) !== Number(args.relativeFactor))
-      )
+      const lockedDescendant = conversionChanged
+        ? stored.find(
+            (row) =>
+              row.id !== args.id &&
+              Boolean(row.locked) &&
+              String(row.parentPath).split('/').includes(String(args.id)),
+          )
+        : null
+      if (conversionChanged && (current?.locked || lockedDescendant))
         return {
           ok: false,
           errors: [
-            { field: 'relativeFactor', message: 'conversion identity đã được sử dụng và không thể đổi' },
+            {
+              field: 'relativeFactor',
+              message: lockedDescendant
+                ? `conversion identity ảnh hưởng đơn vị đã sử dụng ${String(lockedDescendant.id)}`
+                : 'conversion identity đã được sử dụng và không thể đổi',
+            },
           ],
         }
       const candidate: UnitRow = {

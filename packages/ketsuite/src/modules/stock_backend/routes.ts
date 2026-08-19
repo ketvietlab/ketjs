@@ -65,14 +65,19 @@ const generatedNames: Record<string, string> = {
 const localizeGeneratedRecords = (_: Translator, rows: AnyRow[], group: 'location' | 'pickingType') =>
   rows.map((row) => {
     if (group === 'pickingType') {
-      const code = String(row.code ?? '')
+      const suffix = String(row.id).split(':').at(-1) ?? ''
       const defaults: Record<string, string> = {
         incoming: 'Receipts',
         outgoing: 'Delivery Orders',
         internal: 'Internal Transfers',
+        quality: 'Quality Control',
+        store: 'Store',
+        pick: 'Pick',
+        pack: 'Pack',
+        adjustment: 'Inventory Adjustments',
       }
-      return defaults[code] === row.name
-        ? { ...row, name: selectionLabel(_, 'record.pickingType', code) }
+      return defaults[suffix] === row.name
+        ? { ...row, name: selectionLabel(_, 'record.pickingType', suffix) }
         : row
     }
     const suffix = String(row.id).split(':').at(-1) ?? ''
@@ -83,7 +88,15 @@ const localizeGeneratedRecords = (_: Translator, rows: AnyRow[], group: 'locatio
 const invalid = (url: URL, _: Translator) =>
   url.searchParams.has('invalid') ? [_('stock_backend.error.invalid')] : undefined
 const resultRedirect = (result: unknown, success: string) =>
-  (result as { ok?: boolean }).ok ? seeOther(success) : seeOther(`${success}?invalid=1`)
+  (result as { ok?: boolean }).ok
+    ? seeOther(success)
+    : seeOther(`${success}${success.includes('?') ? '&' : '?'}invalid=1`)
+const inLocale = (url: URL, path: string): string => {
+  const target = new URL(path, 'http://ket.local')
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
+}
 
 const common = async (ctx: ServeContext, url: URL, req: Req) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -127,7 +140,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/inventory')
+        return resultRedirect(result, inLocale(url, '/admin/inventory'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [quants, data] = (await Promise.all([
@@ -181,7 +194,7 @@ export const routes: Record<string, RouteEntry> = {
             title: _('stock_backend.adjustment.title'),
             body: surface({
               body: recordForm({
-                action: '/admin/inventory',
+                action: inLocale(url, '/admin/inventory'),
                 submit: _('stock_backend.action.apply'),
                 errors: invalid(url, _),
                 fields,
@@ -212,8 +225,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(`/admin/transfers/${id}`)
-          : seeOther('/admin/transfers?invalid=1')
+          ? seeOther(inLocale(url, `/admin/transfers/${id}`))
+          : seeOther(inLocale(url, '/admin/transfers?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [pickings, data] = (await Promise.all([
@@ -231,12 +244,12 @@ export const routes: Record<string, RouteEntry> = {
           kind: 'transfer',
           state: String(row.state),
           detail: String(row.scheduledDate),
-          href: `/admin/transfers/${String(row.id)}`,
+          href: inLocale(url, `/admin/transfers/${String(row.id)}`),
         })),
         [
           surface({
             body: recordForm({
-              action: '/admin/transfers',
+              action: inLocale(url, '/admin/transfers'),
               submit: _('stock_backend.action.create'),
               errors: invalid(url, _),
               fields: [
@@ -263,8 +276,10 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/transfers/{id}':
     (ctx): Route =>
     async (url, req, params) => {
+      const here = `${url.pathname}${url.search}`
       const current = (await ctx.call('stock.getPicking', { id: params.id }, url, req)) as AnyRow | null
       if (!current) return text('Transfer not found', { status: 404 })
+      const moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
       if (req.method === 'POST') {
         const form = await readForm(req)
         let result: unknown
@@ -286,78 +301,173 @@ export const routes: Record<string, RouteEntry> = {
           result = await ctx.call('stock.confirmPicking', { id: params.id }, url, req)
         else if (form.action === 'assign')
           result = await ctx.call('stock.assignPicking', { id: params.id }, url, req)
-        else if (form.action === 'validate')
-          result = await ctx.call('stock.validatePicking', { id: params.id }, url, req)
+        else if (form.action === 'pick') {
+          const operationId = String(form.operationId ?? '')
+          const existingLine = moves
+            .flatMap((move) => (Array.isArray(move.lines) ? (move.lines as AnyRow[]) : []))
+            .find((line) => `line:${String(line.id)}` === operationId)
+          const move = existingLine
+            ? moves.find((candidate) => candidate.id === existingLine.moveId)
+            : moves.find((candidate) => `move:${String(candidate.id)}` === operationId)
+          result = move
+            ? await ctx.call(
+                'stock.saveMoveLine',
+                {
+                  id: existingLine?.id ?? randomUUID(),
+                  moveId: move.id,
+                  quantity: form.quantity || existingLine?.quantity || '0',
+                  picked: true,
+                  ...(form.lotId || existingLine?.lotId ? { lotId: form.lotId || existingLine?.lotId } : {}),
+                },
+                url,
+                req,
+              )
+            : { ok: false }
+        } else if (form.action === 'validate')
+          result = await ctx.call(
+            'stock.validatePicking',
+            { id: params.id, ...(form.backorder ? { backorder: form.backorder } : {}) },
+            url,
+            req,
+          )
         else if (form.action === 'cancel')
           result = await ctx.call('stock.cancelPicking', { id: params.id }, url, req)
         else return text('Unknown transfer action', { status: 400 })
-        return resultRedirect(result, `/admin/transfers/${params.id}`)
+        return resultRedirect(result, here)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const data = await common(ctx, url, req)
-      const moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
-      const actionForm = (action: string, label: string) =>
+      const actionForm = (action: string, label: string, hidden: Record<string, unknown> = {}) =>
         recordForm({
-          action: `/admin/transfers/${params.id}`,
+          action: here,
           submit: label,
-          hidden: { action },
+          hidden: { action, ...hidden },
           fields: [],
         })
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.transferDetail',
-        moves.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
+      const operationOptions = moves.flatMap((move) => {
+        const lines = Array.isArray(move.lines) ? (move.lines as AnyRow[]) : []
+        return lines.length
+          ? lines.map((line) => ({
+              value: `line:${String(line.id)}`,
+              label: `${String(move.name)} · ${String(line.lotId ?? '—')} · ${String(line.quantity)}`,
+            }))
+          : [{ value: `move:${String(move.id)}`, label: String(move.name) }]
+      })
+      const pickingType = data.pickingTypes.find((row) => row.id === current.pickingTypeId)
+      const backorderPolicy = String(pickingType?.createBackorder ?? 'ask')
+      const state = String(current.state)
+      const editable = !['done', 'cancel'].includes(state)
+      const moveRows = moves.flatMap((move) => [
+        {
+          id: String(move.id),
+          name: String(move.name),
           kind: 'move',
-          state: String(row.state),
-          detail: `${String(row.quantity)} / ${String(row.productUomQty)} ${String(row.productUomId)}`,
+          state: String(move.state),
+          detail: `${String(move.quantity)} / ${String(move.productUomQty)} ${String(move.productUomId)}`,
+        },
+        ...(Array.isArray(move.lines) ? (move.lines as AnyRow[]) : []).map((line) => ({
+          id: String(line.id),
+          name: `${String(move.name)} · ${String(line.lotId ?? '—')}`,
+          kind: 'move-line',
+          state: line.picked ? 'done' : 'reserved',
+          detail: `${String(line.quantity)} ${String(line.productUomId)}`,
         })),
-        [
-          stack([
-            metric({ label: _('stock_backend.field.reference'), value: String(current.name) }),
-            metric({
-              label: _('stock_backend.col.state'),
-              value: selectionLabel(_, 'state', current.state),
-            }),
-          ]),
-          surface({
-            body: recordForm({
-              action: `/admin/transfers/${params.id}`,
-              submit: _('stock_backend.action.addMove'),
-              hidden: { action: 'add-move' },
-              errors: invalid(url, _),
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name') },
-                { name: 'productId', label: _('stock_backend.field.productId'), required: true },
-                {
-                  name: 'productUomId',
-                  label: _('stock_backend.field.uom'),
-                  type: 'select',
-                  options: options(data.units),
-                  required: true,
-                },
-                {
-                  name: 'productUomQty',
-                  label: _('stock_backend.field.demand'),
-                  type: 'decimal',
-                  required: true,
-                },
-              ],
-            }),
+      ])
+      return render(ctx, url, req, 'stock_backend.transferDetail', moveRows, [
+        stack([
+          metric({ label: _('stock_backend.field.reference'), value: String(current.name) }),
+          metric({
+            label: _('stock_backend.col.state'),
+            value: selectionLabel(_, 'state', current.state),
           }),
-          stack([
-            actionForm('confirm', _('stock_backend.action.confirm')),
-            actionForm('assign', _('stock_backend.action.assign')),
-            actionForm('validate', _('stock_backend.action.validate')),
-            actionForm('cancel', _('stock_backend.action.cancel')),
-          ]),
-        ],
-      )
+        ]),
+        ...(editable
+          ? [
+              surface({
+                body: recordForm({
+                  action: here,
+                  submit: _('stock_backend.action.addMove'),
+                  hidden: { action: 'add-move' },
+                  errors: invalid(url, _),
+                  fields: [
+                    { name: 'name', label: _('stock_backend.col.name') },
+                    { name: 'productId', label: _('stock_backend.field.productId'), required: true },
+                    {
+                      name: 'productUomId',
+                      label: _('stock_backend.field.uom'),
+                      type: 'select',
+                      options: options(data.units),
+                      required: true,
+                    },
+                    {
+                      name: 'productUomQty',
+                      label: _('stock_backend.field.demand'),
+                      type: 'decimal',
+                      required: true,
+                    },
+                  ],
+                }),
+              }),
+            ]
+          : []),
+        ...(editable && operationOptions.length
+          ? [
+              surface({
+                body: recordForm({
+                  action: here,
+                  submit: _('stock_backend.action.recordDone'),
+                  hidden: { action: 'pick' },
+                  errors: invalid(url, _),
+                  fields: [
+                    {
+                      name: 'operationId',
+                      label: _('stock_backend.field.operationLine'),
+                      type: 'select',
+                      options: operationOptions,
+                      required: true,
+                    },
+                    {
+                      name: 'quantity',
+                      label: _('stock_backend.field.doneQuantity'),
+                      type: 'decimal',
+                      required: true,
+                    },
+                    {
+                      name: 'lotId',
+                      label: _('stock_backend.field.lot'),
+                      type: 'select',
+                      options: [{ value: '', label: '—' }, ...options(data.lots)],
+                    },
+                  ],
+                }),
+              }),
+            ]
+          : []),
+        ...(editable
+          ? [
+              stack([
+                ...(state === 'draft'
+                  ? [actionForm('confirm', _('stock_backend.action.confirm'))]
+                  : [actionForm('assign', _('stock_backend.action.assign'))]),
+                ...(state === 'draft'
+                  ? []
+                  : backorderPolicy === 'ask'
+                    ? [
+                        actionForm('validate', _('stock_backend.action.validateCreateBackorder'), {
+                          backorder: 'create',
+                        }),
+                        actionForm('validate', _('stock_backend.action.validateNoBackorder'), {
+                          backorder: 'cancel',
+                        }),
+                      ]
+                    : [actionForm('validate', _('stock_backend.action.validate'))]),
+                actionForm('cancel', _('stock_backend.action.cancel')),
+              ]),
+            ]
+          : []),
+      ])
     },
 
   '/admin/warehouses':
@@ -379,7 +489,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/warehouses')
+        return resultRedirect(result, inLocale(url, '/admin/warehouses'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
@@ -397,7 +507,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/warehouses',
+              action: inLocale(url, '/admin/warehouses'),
               submit: _('stock_backend.action.create'),
               errors: invalid(url, _),
               fields: [
@@ -441,7 +551,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/locations')
+        return resultRedirect(result, inLocale(url, '/admin/locations'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -459,7 +569,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/locations',
+              action: inLocale(url, '/admin/locations'),
               submit: _('stock_backend.action.create'),
               errors: invalid(url, _),
               fields: [
@@ -518,7 +628,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/picking-types')
+        return resultRedirect(result, inLocale(url, '/admin/picking-types'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -536,7 +646,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/picking-types',
+              action: inLocale(url, '/admin/picking-types'),
               submit: _('stock_backend.action.create'),
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
@@ -596,7 +706,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/lots')
+        return resultRedirect(result, inLocale(url, '/admin/lots'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
@@ -614,7 +724,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/lots',
+              action: inLocale(url, '/admin/lots'),
               submit: _('stock_backend.action.create'),
               errors: invalid(url, _),
               fields: [
@@ -644,8 +754,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(`/admin/stock-routes/${id}`)
-          : seeOther('/admin/stock-routes?invalid=1')
+          ? seeOther(inLocale(url, `/admin/stock-routes/${id}`))
+          : seeOther(inLocale(url, '/admin/stock-routes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listRoutes', {}, url, req)) as AnyRow[]
@@ -659,12 +769,12 @@ export const routes: Record<string, RouteEntry> = {
           name: String(row.name),
           kind: 'route',
           detail: String(row.sequence),
-          href: `/admin/stock-routes/${String(row.id)}`,
+          href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
         })),
         [
           surface({
             body: recordForm({
-              action: '/admin/stock-routes',
+              action: inLocale(url, '/admin/stock-routes'),
               submit: _('stock_backend.action.create'),
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
@@ -700,7 +810,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, `/admin/stock-routes/${params.id}`)
+        return resultRedirect(result, inLocale(url, `/admin/stock-routes/${params.id}`))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -723,7 +833,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: `/admin/stock-routes/${params.id}`,
+              action: inLocale(url, `/admin/stock-routes/${params.id}`),
               submit: _('stock_backend.action.addRule'),
               errors: invalid(url, _),
               fields: [
@@ -795,7 +905,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, '/admin/replenishment')
+        return resultRedirect(result, inLocale(url, '/admin/replenishment'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [points, data] = (await Promise.all([
@@ -816,7 +926,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/replenishment',
+              action: inLocale(url, '/admin/replenishment'),
               submit: _('stock_backend.action.create'),
               errors: invalid(url, _),
               fields: [
@@ -870,7 +980,7 @@ export const routes: Record<string, RouteEntry> = {
           }),
           ...points.map((row) =>
             recordForm({
-              action: `/admin/replenishment/${String(row.id)}/run`,
+              action: inLocale(url, `/admin/replenishment/${String(row.id)}/run`),
               submit: `${_('stock_backend.action.run')}: ${String(row.productId)}`,
               fields: [],
             }),
@@ -889,7 +999,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      return resultRedirect(result, '/admin/replenishment')
+      return resultRedirect(result, inLocale(url, '/admin/replenishment'))
     },
 
   '/admin/forecast':
@@ -919,7 +1029,7 @@ export const routes: Record<string, RouteEntry> = {
         [
           surface({
             body: recordForm({
-              action: '/admin/forecast',
+              action: inLocale(url, '/admin/forecast'),
               method: 'get',
               submit: _('stock_backend.action.calculate'),
               fields: [

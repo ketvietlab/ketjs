@@ -5,6 +5,17 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { pricelistDetailScreen, pricelistsScreen } from './screens.ts'
 
+const localeSuffix = (url: URL): string => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
+const inLocale = (url: URL, path: string): string => {
+  const target = new URL(path, 'http://ket.local')
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
+}
+
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
@@ -47,8 +58,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther('/admin/pricelists')
-            : seeOther('/admin/pricelists?invalid=1')
+            ? seeOther(inLocale(url, '/admin/pricelists'))
+            : seeOther(inLocale(url, '/admin/pricelists?invalid=1'))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (
@@ -65,9 +76,7 @@ export default defineModule({
             lang,
             title: _('pricing_backend.title'),
             head: await ctx.styles(req),
-            body: pricelistsScreen(_, rows, {
-              ...(await frame(ctx, url, req)),
-            }),
+            body: pricelistsScreen(_, rows, { ...(await frame(ctx, url, req)) }, localeSuffix(url)),
           }),
         })
       },
@@ -96,8 +105,8 @@ export default defineModule({
               req,
             )
             return (result as { ok?: boolean }).ok
-              ? seeOther(`/admin/pricelists/${params.id}`)
-              : seeOther(`/admin/pricelists/${params.id}?invalid=1`)
+              ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
+              : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
           }
           const optional = (name: string) => (form[name] ? { [name]: form[name] } : {})
           const result = await ctx.call(
@@ -127,8 +136,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther(`/admin/pricelists/${params.id}`)
-            : seeOther(`/admin/pricelists/${params.id}?invalid=1`)
+            ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
+            : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const items = (await ctx.call(
@@ -142,7 +151,7 @@ export default defineModule({
             lang,
             title: String(row.name),
             head: await ctx.styles(req),
-            body: pricelistDetailScreen(_, row, items, await frame(ctx, url, req)),
+            body: pricelistDetailScreen(_, row, items, await frame(ctx, url, req), localeSuffix(url)),
           }),
         })
       },

@@ -85,14 +85,36 @@ test('uom 19: changing an ancestor recomputes all descendant factors', async () 
   }
 })
 
-test('uom 19: Product Unit precision is singleton and updates stored rounding', async () => {
+test('uom 19: Product Unit precision is singleton and immutable after units exist', async () => {
   const adapter = await boot()
   try {
+    assert.deepEqual((await callFn('uom.savePrecision', { digits: 3 }, { adapter, manifest })).value, {
+      ok: true,
+      digits: 3,
+    })
     await save(adapter, 'unit', '1')
-    await callFn('uom.savePrecision', { digits: 3 }, { adapter, manifest })
     const units = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
     assert.equal(units[0]!.rounding, 0.001)
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM uom_precision'))[0]!.n, 1)
+    const changed = await callFn('uom.savePrecision', { digits: 4 }, { adapter, manifest })
+    assert.equal((changed.value as Row).ok, false)
+    assert.equal((await adapter.all('SELECT digits FROM uom_precision'))[0]!.digits, 3)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('uom 19: an ancestor cannot change after a descendant conversion identity is used', async () => {
+  const adapter = await boot()
+  try {
+    await save(adapter, 'unit', '1')
+    await save(adapter, 'box', '10', 'unit')
+    await save(adapter, 'pallet', '5', 'box')
+    await callFn('uom.lockUnit', { id: 'pallet' }, { adapter, manifest })
+    const changed = await save(adapter, 'box', '12', 'unit')
+    assert.equal((changed.value as Row).ok, false)
+    const rows = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
+    assert.equal(rows.find((row) => row.id === 'pallet')!.absoluteFactor, 50)
   } finally {
     await adapter.close()
   }
