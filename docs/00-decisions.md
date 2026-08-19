@@ -135,6 +135,55 @@ eventually forget, and forgetting means answering with another company's rows.
 a document. Until there is a session, the company comes from a header, which is
 fine for development and not for production.
 
+## D26 — Units of measure: Odoo's model, and the rounding it depends on
+**Chosen:** Odoo's shape, deliberately. A category groups units that convert between
+one another; exactly one is the reference; every other records `factor` — how many
+of itself make one reference unit — and `rounding`, the precision it is meaningful
+to. Conversion runs through the reference, both ways.
+
+**Crossing a category is refused, not approximated.** There is no number of
+kilograms in a litre, and a framework that guessed one would be worse than one that
+stopped.
+
+**Quantities are floats, as in Odoo, and that has teeth.** 0.1 + 0.2 is not 0.3, and
+a figure that drifts by 1e-16 per movement eventually compares unequal to zero. The
+defence is that every value crossing a boundary is rounded to its unit's precision,
+and that comparisons go through `compareQty` and `isZero` — never `===`.
+
+**Writing the tests found two bugs in the rounding, both of the quiet kind:**
+
+1. `Math.round` sends .5 toward positive infinity, so `-0.5` becomes `-0`. A
+   quantity half a unit *below* a threshold compared **equal** to it while half a
+   unit above compared greater — an asymmetry in one direction only, which is
+   exactly the sort that hides for months in a stock ledger. Now spelt out as
+   half-away-from-zero.
+2. Multiplying back by the precision reintroduced the error: three times 0.1 is
+   0.30000000000000004, so `roundTo` returned a value it would not itself consider
+   rounded. A test now asserts every result is stable under a second rounding.
+
+**Product depends on uom**, as in Odoo: a template counts in a unit, optional so a
+service needs none and so existing rows survive the module arriving.
+
+**`decimal` is a separate type from `float`, and the difference is storage only.**
+Odoo splits these and the split is right: a quantity or a price is stored as exact
+decimal and computed as a binary float, with the rounding helpers standing between.
+The first version here copied the arithmetic and missed the storage — quantities
+went into `DOUBLE PRECISION`, where 0.1 comes back as 0.1000000000000000055 and
+every trip through the database puts back the error the rounding just took out.
+
+- Postgres: `NUMERIC`, unbounded, as Odoo uses.
+- SQLite: `TEXT`. SQLite has no exact decimal at all — `NUMERIC` affinity silently
+  becomes `REAL` — so text is the only storage that returns what it was given.
+- Both adapters hand it back as a string; `ctx` converts, because it is the one
+  place that knows the model and the row. Arithmetic stays on numbers, as in Odoo.
+
+Tested both ways: awkward values round-trip unchanged through SQLite and through a
+live Postgres, and the raw column is confirmed to hold `"0.1"` rather than a binary
+approximation of it.
+
+**Cut:** purchase units, and the reference-changing migration Odoo needs when a
+category's reference moves. Both wait for a real case.
+
 ## D25 — Product: template and variant, with the stock concern left to stock
 **Naming follows Odoo** — `product.Template` and `product.Product`, where Product is
 the variant — so the migration map stays one to one. The name reads oddly and a

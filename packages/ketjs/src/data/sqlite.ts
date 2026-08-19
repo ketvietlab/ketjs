@@ -14,7 +14,7 @@ const bind = (v: unknown): unknown => {
 }
 
 const SQL: Record<FieldBase, string> = {
-  id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL',
+  id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL', decimal: 'TEXT',
   bool: 'INTEGER', json: 'TEXT', datetime: 'TEXT', ref: 'TEXT',
 }
 
