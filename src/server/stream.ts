@@ -39,12 +39,17 @@ const expand = (r: SinceResult): Since => ({
 export async function createStreams(store: StreamStore = memoryStreamStore(), o: StreamOptions = {}) {
   const flushMs = o.flushMs ?? 50
   const flushEvery = o.flushEvery ?? 32
-  await store.init()
+
+  // The table is created on first use, not at construction. An app that never
+  // streams should not find a stream table in its database.
+  let inited: Promise<void> | null = null
+  const ensure = (): Promise<void> => (inited ??= store.init())
 
   return {
     store,
 
     async open(id: string): Promise<Writer> {
+      await ensure()
       // The only sequence read there is: once, at open, so a writer that restarts
       // mid-stream continues after what is already durable instead of overwriting it.
       let seq = await store.head(id)
@@ -78,6 +83,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     },
 
     async since(id: string, fromSeq = 0): Promise<Since> {
+      await ensure()
       return expand(await store.since(id, Math.floor(fromSeq)))
     },
 
@@ -88,6 +94,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     async *tail(id: string, fromSeq = 0, opt: { pollMs?: number; timeoutMs?: number } = {}): AsyncGenerator<Chunk> {
       const pollMs = opt.pollMs ?? 250
       const timeoutMs = opt.timeoutMs ?? 30_000
+      await ensure()
       let cursor = Math.floor(fromSeq)
       const started = Date.now()
 
@@ -111,7 +118,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     },
 
     /** Drop finished streams past their grace period. Nothing else expires them. */
-    sweep(olderThanMs = 10 * 60_000): Promise<number> { return store.sweep(olderThanMs) },
+    async sweep(olderThanMs = 10 * 60_000): Promise<number> { await ensure(); return store.sweep(olderThanMs) },
   }
 }
 

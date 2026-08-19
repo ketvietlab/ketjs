@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createAdapterPool } from '../src/data/pool.ts'
 import { migrateOne, migrateFleet, formatFleet } from '../src/data/fleet.ts'
+import { createIdempotency } from '../src/server/idem.ts'
 import { sqliteAdapter } from '../src/data/sqlite.ts'
 import { compose } from '../src/kernel/compose.ts'
 import { defineModule } from '../src/kernel/define.ts'
@@ -165,4 +166,53 @@ test('server: each request is served by its own tenant database', async () => {
 
   await app.close()
   await pool.close()
+})
+
+test('tables: a framework table only appears once something uses it', async () => {
+  const a = sqliteAdapter(); await a.open()
+  await migrateOne(a, manifest)
+  assert.deepEqual(Object.keys(await a.introspect()).sort(),
+    ['catalog_product', 'checkout_order', 'ket_migration'],
+    'migrating creates the app schema and the version record, nothing else')
+
+  registerFunctions(mods)
+  const app = await createKetServer({ manifest, adapter: a })
+  assert.equal('ket_stream' in await a.introspect(), false, 'an app that never streams gets no stream table')
+
+  const w = await app.streams.open('s'); w.write('x'); await w.end()
+  assert.equal('ket_stream' in await a.introspect(), true, 'it appears on first use')
+  assert.equal('ket_idem' in await a.introspect(), false, 'and still no idempotency table')
+
+  await callFn('catalog.createProduct', { id: 'i1', title: 'T', priceCents: 1, slug: 'i' },
+    { adapter: a, manifest, idempotencyKey: 'k' })
+  assert.equal('ket_idem' in await a.introspect(), true, 'which appears the first time a key is used')
+  await app.close(); await a.close()
+})
+
+test('idempotency: a claim abandoned by a dead caller is taken over, not blocked forever', async () => {
+  const a = sqliteAdapter(); await a.open()
+  await migrateOne(a, manifest)
+  let clock = Date.parse('2026-08-19T00:00:00.000Z')
+  const idem = await createIdempotency(a, { now: () => new Date(clock).toISOString() })
+
+  assert.equal(await idem.claim('k1', 'fn'), true)
+  assert.equal(await idem.claim('k1', 'fn'), false, 'still held while fresh')
+
+  clock += 6 * 60_000                                  // the caller died six minutes ago
+  assert.equal(await idem.claim('k1', 'fn'), true, 'a stale claim is taken over')
+  await a.close()
+})
+
+test('idempotency: finished records expire, so the table does not grow forever', async () => {
+  const a = sqliteAdapter(); await a.open()
+  await migrateOne(a, manifest)
+  let clock = Date.parse('2026-08-19T00:00:00.000Z')
+  const idem = await createIdempotency(a, { now: () => new Date(clock).toISOString() })
+  await idem.claim('old', 'fn'); await idem.complete('old', { ok: true })
+
+  assert.equal(await idem.sweep(), 0, 'nothing is stale yet')
+  clock += 25 * 60 * 60_000
+  assert.equal(await idem.sweep(), 1, 'a day later it goes')
+  assert.equal(await idem.read('old'), null)
+  await a.close()
 })
