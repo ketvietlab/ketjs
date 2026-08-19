@@ -59,10 +59,11 @@ export type Extras = {
   'topbar.end'?: unknown
   'apps.footer'?: unknown
   /** Rendered per card, keyed by app name — the joint takes the app as a prop. */
+  'nav.items'?: unknown
   'app-card.actions'?: Record<string, unknown>
 }
 
-const shell = (_: Translator, active: Screen, title: string, body: TemplateResult, viewer?: Viewer | null, extras: Extras = {}): TemplateResult => html`
+export const shell = (_: Translator, active: string, title: string, body: TemplateResult, viewer?: Viewer | null, extras: Extras = {}): TemplateResult => html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
     <div data-ui="brand">${_('backend.brand')}</div>
@@ -70,6 +71,7 @@ const shell = (_: Translator, active: Screen, title: string, body: TemplateResul
       <a data-ui="nav-item" data-active=${String(active === 'apps')} href="/admin/apps">${_('backend.nav.apps')}</a>
       <a data-ui="nav-item" data-active=${String(active === 'pages')} href="/admin/pages">${_('backend.nav.pages')}</a>
       <a data-ui="nav-item" data-active=${String(active === 'settings')} href="/admin/settings">${_('backend.nav.settings')}</a>
+      ${extras['nav.items'] ?? ''}
     </nav>
   </aside>
   <main data-ui="main">

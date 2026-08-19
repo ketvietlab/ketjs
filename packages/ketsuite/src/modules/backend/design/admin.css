@@ -321,6 +321,13 @@
   }
 
   [data-ui="app-action"] {
+  /* A button and a link both wear this. The rule was written for the button, so
+     an anchor got the border and none of the shape: min-block-size does nothing
+     to an inline box, and the browser kept its underline. Now it fits either. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
     min-block-size: var(--admin-control-height);
     padding-inline: 0.75rem;
     border: 1px solid var(--admin-line-strong);

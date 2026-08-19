@@ -20,7 +20,7 @@ type Build = (
  * Who is looking. The screens show it in the topbar, which is the difference
  * between a page that happens to be behind a login and one that says so.
  */
-const viewerOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Viewer | null> => {
+export const viewerOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Viewer | null> => {
   const sessions = await ctx.sessionsOf(url, req)
   const record = await sessions?.of(req)
   if (!record) return null
@@ -39,8 +39,9 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
   // Rendered once per request, so a screen stays a pure function of its data and
   // the catalogue can render the same screens with no server at all.
   const extras: Extras = {
-    'topbar.end': await ctx.joint(req, 'backend:topbar.end'),
-    'apps.footer': await ctx.joint(req, 'backend:apps.footer'),
+    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
+    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+    'apps.footer': await ctx.joint(url, req, 'backend:apps.footer'),
   }
   return page({
     body: ctx.document({
@@ -61,7 +62,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
 const appsWith = (ctx: ServeContext): Build => async (_, r) => {
   const apps = await ctx.appsOf(r.raw)
   const perApp = Object.fromEntries(await Promise.all(
-    apps.map(async (app) => [app.name, await ctx.joint(r.raw, 'backend:app-card.actions', { app })] as const),
+    apps.map(async (app) => [app.name, await ctx.joint(r.url, r.raw, 'backend:app-card.actions', { app })] as const),
   ))
   return appsScreen(_, apps, r.viewer, { ...r.extras, 'app-card.actions': perApp })
 }
