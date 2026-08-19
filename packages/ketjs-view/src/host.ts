@@ -2,7 +2,14 @@
 // browser, a string builder on the server, and a counting mock in tests.
 // The counting mock is how "surgical update" stops being a claim and becomes a number.
 
-export type HostNode = { id: number; tag?: string; attrs?: Record<string, string>; children?: HostNode[]; text?: string; parent: HostNode | null }
+export type HostNode = {
+  id: number
+  tag?: string
+  attrs?: Record<string, string>
+  children?: HostNode[]
+  text?: string
+  parent: HostNode | null
+}
 
 export type Host = {
   ops: Record<string, number> | null
@@ -17,7 +24,13 @@ export type Host = {
   listen(node: HostNode, event: string, handler: (e: unknown) => void): () => void
 }
 
-const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
 const NEEDS_ESCAPE = /[&<>"']/
 const ESCAPE_ALL = /[&<>"']/g
 
@@ -25,7 +38,7 @@ export const escapeHtml = (s: unknown): string => {
   const str = String(s)
   // Most interpolated values contain nothing to escape, and testing is far cheaper
   // than replacing. The lookup table is hoisted; it used to be rebuilt per character.
-  return NEEDS_ESCAPE.test(str) ? str.replace(ESCAPE_ALL, c => ESCAPES[c] as string) : str
+  return NEEDS_ESCAPE.test(str) ? str.replace(ESCAPE_ALL, (c) => ESCAPES[c] as string) : str
 }
 
 export type CountingHost = Host & {
@@ -39,7 +52,16 @@ export type CountingHost = Host & {
 
 export function countingHost(): CountingHost {
   let id = 0
-  const ops = { createElement: 0, createText: 0, setText: 0, setAttribute: 0, insert: 0, remove: 0, move: 0, listen: 0 }
+  const ops = {
+    createElement: 0,
+    createText: 0,
+    setText: 0,
+    setAttribute: 0,
+    insert: 0,
+    remove: 0,
+    move: 0,
+    listen: 0,
+  }
   const listeners = new Map<HostNode, Map<string, Set<(e: unknown) => void>>>()
 
   const detach = (node: HostNode): void => {
@@ -60,11 +82,24 @@ export function countingHost(): CountingHost {
 
   const host: CountingHost = {
     ops,
-    reset() { for (const k of Object.keys(ops)) ops[k as keyof typeof ops] = 0 },
-    root() { return { id: -1, tag: '#root', attrs: {}, children: [], parent: null } },
-    createElement(tag) { ops.createElement++; return { id: id++, tag, attrs: {}, children: [], parent: null } },
-    createText(value) { ops.createText++; return { id: id++, text: String(value), parent: null } },
-    setText(node, value) { ops.setText++; node.text = String(value) },
+    reset() {
+      for (const k of Object.keys(ops)) ops[k as keyof typeof ops] = 0
+    },
+    root() {
+      return { id: -1, tag: '#root', attrs: {}, children: [], parent: null }
+    },
+    createElement(tag) {
+      ops.createElement++
+      return { id: id++, tag, attrs: {}, children: [], parent: null }
+    },
+    createText(value) {
+      ops.createText++
+      return { id: id++, text: String(value), parent: null }
+    },
+    setText(node, value) {
+      ops.setText++
+      node.text = String(value)
+    },
     setAttribute(node, name, value) {
       ops.setAttribute++
       const attrs = (node.attrs ??= {})
@@ -78,17 +113,34 @@ export function countingHost(): CountingHost {
       const set = byEvent.get(event) ?? new Set<(e: unknown) => void>()
       byEvent.set(event, set)
       set.add(handler)
-      return () => { set.delete(handler) }
+      return () => {
+        set.delete(handler)
+      }
     },
-    fire(node, event, payload) { for (const fn of listeners.get(node)?.get(event) ?? []) fn(payload ?? { type: event }) },
-    insert(parent, node, before = null) { ops.insert++; place(parent, node, before) },
-    move(parent, node, before = null) { ops.move++; place(parent, node, before) },
-    remove(node) { ops.remove++; detach(node) },
-    text(node) { return node.text != null ? node.text : (node.children ?? []).map(c => host.text(c)).join('') },
+    fire(node, event, payload) {
+      for (const fn of listeners.get(node)?.get(event) ?? []) fn(payload ?? { type: event })
+    },
+    insert(parent, node, before = null) {
+      ops.insert++
+      place(parent, node, before)
+    },
+    move(parent, node, before = null) {
+      ops.move++
+      place(parent, node, before)
+    },
+    remove(node) {
+      ops.remove++
+      detach(node)
+    },
+    text(node) {
+      return node.text != null ? node.text : (node.children ?? []).map((c) => host.text(c)).join('')
+    },
     html(node) {
       if (node.text != null) return escapeHtml(node.text)
-      const attrs = Object.entries(node.attrs ?? {}).map(([k, v]) => ` ${k}="${escapeHtml(v)}"`).join('')
-      return `<${node.tag}${attrs}>${(node.children ?? []).map(c => host.html(c)).join('')}</${node.tag}>`
+      const attrs = Object.entries(node.attrs ?? {})
+        .map(([k, v]) => ` ${k}="${escapeHtml(v)}"`)
+        .join('')
+      return `<${node.tag}${attrs}>${(node.children ?? []).map((c) => host.html(c)).join('')}</${node.tag}>`
     },
   }
   return host
@@ -116,16 +168,27 @@ export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).do
     ops: null,
     createElement: (tag) => doc.createElement(tag) as unknown as HostNode,
     createText: (value) => doc.createTextNode(String(value)) as unknown as HostNode,
-    setText: (node, value) => { el(node).data = String(value) },
+    setText: (node, value) => {
+      el(node).data = String(value)
+    },
     setAttribute: (node, name, value) => {
       if (value == null || value === false) el(node).removeAttribute(name)
       else el(node).setAttribute(name, String(value))
     },
-    insert: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
-    move: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
-    remove: (node) => { el(node).remove() },
+    insert: (parent, node, before = null) => {
+      el(parent).insertBefore(node, before)
+    },
+    move: (parent, node, before = null) => {
+      el(parent).insertBefore(node, before)
+    },
+    remove: (node) => {
+      el(node).remove()
+    },
     listen: (node, event, handler) => {
-      const target = node as unknown as { addEventListener(e: string, h: (ev: unknown) => void): void; removeEventListener(e: string, h: (ev: unknown) => void): void }
+      const target = node as unknown as {
+        addEventListener(e: string, h: (ev: unknown) => void): void
+        removeEventListener(e: string, h: (ev: unknown) => void): void
+      }
       target.addEventListener(event, handler)
       return () => target.removeEventListener(event, handler)
     },

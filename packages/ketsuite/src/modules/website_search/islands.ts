@@ -10,10 +10,12 @@ export const islands: Record<string, IslandView> = {
     const open = signal(false)
     const term = signal('')
     return html`<div class="search" data-open=${open()}>
-      <button on:click=${() => open.set(v => !v)} aria-expanded=${open()}>${props.label ?? 'Tìm'}</button>
-      ${open()
-        ? html`<form action="/tim-kiem"><input name="q" value=${term()} on:input=${(e: unknown) => term.set(String((e as { target: { value: string } }).target.value))} placeholder="Nhập từ khoá"></form>`
-        : ''}
+      <button on:click=${() => open.set((v) => !v)} aria-expanded=${open()}>${props.label ?? 'Tìm'}</button>
+      ${
+        open()
+          ? html`<form action="/tim-kiem"><input name="q" value=${term()} on:input=${(e: unknown) => term.set(String((e as { target: { value: string } }).target.value))} placeholder="Nhập từ khoá"></form>`
+          : ''
+      }
     </div>`
   },
 }

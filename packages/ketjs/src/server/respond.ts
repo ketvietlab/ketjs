@@ -79,7 +79,8 @@ export function withHeaders(result: RouteResult, headers: Record<string, string>
  * where the old concatenated shell put whatever the query string said.
  */
 export function document(o: { lang: string; title?: string; head?: Html; body: Html }): Html {
-  return html`<html lang=${o.lang}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${
-    when(o.title !== undefined, () => html`<title>${o.title}</title>`)
-  }${o.head ?? ''}</head><body>${o.body}</body></html>`
+  return html`<html lang=${o.lang}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${when(
+    o.title !== undefined,
+    () => html`<title>${o.title}</title>`,
+  )}${o.head ?? ''}</head><body>${o.body}</body></html>`
 }

@@ -25,12 +25,18 @@ const IDENT = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype', '__defineGetter__', '__defineSetter__'])
 
 export function parseExpr(src: string, line: number): Expr {
-  let s = src.trim()
+  const s = src.trim()
   if (s.startsWith('not ')) return { k: 'not', src: parseExpr(s.slice(4), line) }
 
   for (const op of ['==', '!=', '>=', '<=', '>', '<']) {
     const at = splitTop(s, op)
-    if (at >= 0) return { k: 'cmp', op, left: parseExpr(s.slice(0, at), line), right: parseExpr(s.slice(at + op.length), line) }
+    if (at >= 0)
+      return {
+        k: 'cmp',
+        op,
+        left: parseExpr(s.slice(0, at), line),
+        right: parseExpr(s.slice(at + op.length), line),
+      }
   }
 
   const pipe = splitTop(s, '|')
@@ -44,12 +50,13 @@ export function parseExpr(src: string, line: number): Expr {
     return { k: 'filter', src: head, name, arg }
   }
 
-  if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) return { k: 'lit', value: s.slice(1, -1) }
+  if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
+    return { k: 'lit', value: s.slice(1, -1) }
   if (/^-?\d+(\.\d+)?$/.test(s)) return { k: 'lit', value: Number(s) }
   if (s === 'true') return { k: 'lit', value: true }
   if (s === 'false') return { k: 'lit', value: false }
 
-  const parts = s.split('.').map(p => p.trim())
+  const parts = s.split('.').map((p) => p.trim())
   for (const p of parts) {
     if (!IDENT.test(p)) throw new KtlSyntaxError(`invalid path segment "${p}" at line ${line}`, line)
     if (FORBIDDEN.has(p)) throw new KtlSyntaxError(`forbidden property "${p}" at line ${line}`, line)
@@ -62,10 +69,18 @@ function splitTop(s: string, op: string): number {
   let q: string | null = null
   for (let i = 0; i < s.length; i++) {
     const c = s[i] as string
-    if (q) { if (c === q) q = null; continue }
-    if (c === "'" || c === '"') { q = c; continue }
+    if (q) {
+      if (c === q) q = null
+      continue
+    }
+    if (c === "'" || c === '"') {
+      q = c
+      continue
+    }
     if (s.startsWith(op, i)) {
-      if (op === '>' || op === '<') { if (s[i + 1] === '=') continue }
+      if (op === '>' || op === '<') {
+        if (s[i + 1] === '=') continue
+      }
       if (op === '|' && (s[i + 1] === '|' || s[i - 1] === '|')) continue
       return i
     }
@@ -81,12 +96,21 @@ function splitParts(s: string, sep: string): string[] {
   let start = 0
   for (let i = 0; i < s.length; i++) {
     const c = s[i] as string
-    if (q) { if (c === q) q = null; continue }
-    if (c === "'" || c === '"') { q = c; continue }
-    if (c === sep) { out.push(s.slice(start, i)); start = i + 1 }
+    if (q) {
+      if (c === q) q = null
+      continue
+    }
+    if (c === "'" || c === '"') {
+      q = c
+      continue
+    }
+    if (c === sep) {
+      out.push(s.slice(start, i))
+      start = i + 1
+    }
   }
   out.push(s.slice(start))
-  return out.map(p => p.trim()).filter(Boolean)
+  return out.map((p) => p.trim()).filter(Boolean)
 }
 
 export function parse(src: string): Node[] {
@@ -97,7 +121,11 @@ export function parse(src: string): Node[] {
     const nodes: Node[] = []
     while (i < tokens.length) {
       const t = tokens[i] as Token
-      if (t.type === 'text') { nodes.push({ k: 'text', value: t.value }); i++; continue }
+      if (t.type === 'text') {
+        nodes.push({ k: 'text', value: t.value })
+        i++
+        continue
+      }
       if (t.type === 'expr') {
         const raw = t.value.startsWith('raw ')
         nodes.push({ k: 'out', expr: parseExpr(raw ? t.value.slice(4) : t.value, t.line), raw, line: t.line })
@@ -112,9 +140,19 @@ export function parse(src: string): Node[] {
         i++
         const thenPart = parseBlock(['else', 'endif'])
         let elsePart: Node[] = []
-        if (thenPart.stopped === 'else') { i++; const e = parseBlock(['endif']); elsePart = e.nodes }
+        if (thenPart.stopped === 'else') {
+          i++
+          const e = parseBlock(['endif'])
+          elsePart = e.nodes
+        }
         i++
-        nodes.push({ k: 'if', cond: parseExpr(t.value.slice(2), t.line), then: thenPart.nodes, else: elsePart, line: t.line })
+        nodes.push({
+          k: 'if',
+          cond: parseExpr(t.value.slice(2), t.line),
+          then: thenPart.nodes,
+          else: elsePart,
+          line: t.line,
+        })
         continue
       }
       if (head === 'for') {
@@ -123,7 +161,13 @@ export function parse(src: string): Node[] {
         i++
         const body = parseBlock(['endfor'])
         i++
-        nodes.push({ k: 'for', name: m[1] as string, src: parseExpr(m[2] as string, t.line), body: body.nodes, line: t.line })
+        nodes.push({
+          k: 'for',
+          name: m[1] as string,
+          src: parseExpr(m[2] as string, t.line),
+          body: body.nodes,
+          line: t.line,
+        })
         continue
       }
       if (head === 'joint') {
@@ -148,9 +192,11 @@ export function parse(src: string): Node[] {
         if (m[2]) {
           for (const pair of splitParts(m[2], ',')) {
             const at = pair.indexOf(':')
-            if (at === -1) throw new KtlSyntaxError(`render argument needs "name: value" at line ${t.line}`, t.line)
+            if (at === -1)
+              throw new KtlSyntaxError(`render argument needs "name: value" at line ${t.line}`, t.line)
             const key = pair.slice(0, at).trim()
-            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) throw new KtlSyntaxError(`bad render argument "${key}" at line ${t.line}`, t.line)
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key))
+              throw new KtlSyntaxError(`bad render argument "${key}" at line ${t.line}`, t.line)
             args[key] = parseExpr(pair.slice(at + 1).trim(), t.line)
           }
         }
@@ -158,7 +204,11 @@ export function parse(src: string): Node[] {
         i++
         continue
       }
-      if (head === 'sections') { nodes.push({ k: 'sections', line: t.line }); i++; continue }
+      if (head === 'sections') {
+        nodes.push({ k: 'sections', line: t.line })
+        i++
+        continue
+      }
       if (head === 'island') {
         const m = /^island\s+["']([^"']+)["']$/.exec(t.value)
         if (!m) throw new KtlSyntaxError(`bad island tag at line ${t.line}`, t.line)

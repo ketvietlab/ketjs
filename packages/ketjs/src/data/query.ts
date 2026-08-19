@@ -21,7 +21,8 @@ export function table(manifest: Manifest, model: string): Table {
   const def = manifest.models[model]
   if (!def) {
     throw new KetError({
-      code: 'E_UNKNOWN_MODEL', message: `no model "${model}"`,
+      code: 'E_UNKNOWN_MODEL',
+      message: `no model "${model}"`,
       hint: `known models: ${Object.keys(manifest.models).join(', ') || '(none)'}`,
     })
   }
@@ -47,7 +48,16 @@ export class Query {
   readonly offsetN: number | null
   readonly preloads: readonly Preload[]
 
-  constructor(init: { kind: QueryKind; model: string; columns?: readonly string[] | null; condition?: Expr | null; order?: readonly Order[]; limitN?: number | null; offsetN?: number | null; preloads?: readonly Preload[] }) {
+  constructor(init: {
+    kind: QueryKind
+    model: string
+    columns?: readonly string[] | null
+    condition?: Expr | null
+    order?: readonly Order[]
+    limitN?: number | null
+    offsetN?: number | null
+    preloads?: readonly Preload[]
+  }) {
     this.kind = init.kind
     this.model = init.model
     this.columns = init.columns ?? null
@@ -61,21 +71,38 @@ export class Query {
 
   private with(patch: Partial<ConstructorParameters<typeof Query>[0]>): Query {
     return new Query({
-      kind: this.kind, model: this.model, columns: this.columns, condition: this.condition,
-      order: this.order, limitN: this.limitN, offsetN: this.offsetN, preloads: this.preloads, ...patch,
+      kind: this.kind,
+      model: this.model,
+      columns: this.columns,
+      condition: this.condition,
+      order: this.order,
+      limitN: this.limitN,
+      offsetN: this.offsetN,
+      preloads: this.preloads,
+      ...patch,
     })
   }
 
-  select(...cols: Col[]): Query { return this.with({ columns: cols.map(c => c.name) }) }
+  select(...cols: Col[]): Query {
+    return this.with({ columns: cols.map((c) => c.name) })
+  }
   /** Additional conditions are ANDed, so a query can be narrowed by several callers. */
   where(...parts: Expr[]): Query {
     const next = parts.length === 1 ? parts[0]! : and(...parts)
     return this.with({ condition: this.condition ? and(this.condition, next) : next })
   }
-  orderBy(...order: Order[]): Query { return this.with({ order: [...this.order, ...order] }) }
-  limit(n: number): Query { return this.with({ limitN: n }) }
-  offset(n: number): Query { return this.with({ offsetN: n }) }
-  count(): Query { return this.with({ kind: 'count', columns: null, order: [] }) }
+  orderBy(...order: Order[]): Query {
+    return this.with({ order: [...this.order, ...order] })
+  }
+  limit(n: number): Query {
+    return this.with({ limitN: n })
+  }
+  offset(n: number): Query {
+    return this.with({ offsetN: n })
+  }
+  count(): Query {
+    return this.with({ kind: 'count', columns: null, order: [] })
+  }
 
   /**
    * Ask for a declared relation alongside the rows. Two queries, not one per row:
@@ -83,7 +110,7 @@ export class Query {
    * exactly why an accidental N+1 cannot be written here.
    */
   preload(...names: string[]): Query {
-    return this.with({ preloads: [...this.preloads, ...names.map(name => ({ name }))] })
+    return this.with({ preloads: [...this.preloads, ...names.map((name) => ({ name }))] })
   }
 
   /** Every model this query reads or writes. Checked against declared effects. */
@@ -93,13 +120,18 @@ export class Query {
     return [...s].sort()
   }
 
-  get effect(): 'read' | 'write' { return this.kind === 'delete' ? 'write' : 'read' }
+  get effect(): 'read' | 'write' {
+    return this.kind === 'delete' ? 'write' : 'read'
+  }
 
   toSQL(dialect: Dialect = 'sqlite'): Sql {
     const params: unknown[] = []
     const q = (s: string) => `"${s.replace(/"/g, '""')}"`
     const ph = () => (dialect === 'postgres' ? `$${params.length}` : '?')
-    const bind = (v: unknown) => { params.push(v); return ph() }
+    const bind = (v: unknown) => {
+      params.push(v)
+      return ph()
+    }
     const colSql = (c: Col) => `${q(tableNameFor(c.model))}.${q(c.name)}`
 
     const render = (e: Expr): string => {
@@ -121,10 +153,12 @@ export class Query {
     let text: string
     if (this.kind === 'delete') text = `DELETE FROM ${t}`
     else if (this.kind === 'count') text = `SELECT COUNT(*) AS count FROM ${t}`
-    else text = `SELECT ${this.columns ? this.columns.map(c => `${t}.${q(c)}`).join(', ') : `${t}.*`} FROM ${t}`
+    else
+      text = `SELECT ${this.columns ? this.columns.map((c) => `${t}.${q(c)}`).join(', ') : `${t}.*`} FROM ${t}`
 
     if (this.condition) text += ` WHERE ${render(this.condition)}`
-    if (this.order.length) text += ` ORDER BY ${this.order.map(o => `${colSql(o.col)} ${o.dir.toUpperCase()}`).join(', ')}`
+    if (this.order.length)
+      text += ` ORDER BY ${this.order.map((o) => `${colSql(o.col)} ${o.dir.toUpperCase()}`).join(', ')}`
     if (this.limitN != null) text += ` LIMIT ${bind(this.limitN)}`
     if (this.offsetN != null) text += ` OFFSET ${bind(this.offsetN)}`
 
@@ -132,7 +166,17 @@ export class Query {
   }
 
   toJSON() {
-    return { kind: this.kind, model: this.model, columns: this.columns, where: this.condition, order: this.order, limit: this.limitN, offset: this.offsetN, preloads: this.preloads.map(p => p.name), touches: this.touches }
+    return {
+      kind: this.kind,
+      model: this.model,
+      columns: this.columns,
+      where: this.condition,
+      order: this.order,
+      limit: this.limitN,
+      offset: this.offsetN,
+      preloads: this.preloads.map((p) => p.name),
+      touches: this.touches,
+    }
   }
 }
 

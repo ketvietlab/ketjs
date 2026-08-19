@@ -40,7 +40,8 @@ export async function createQueue(adapter: Adapter, o: { now?: () => string } = 
     async enqueue(queue: string, payload: unknown): Promise<void> {
       await adapter.run(
         `INSERT INTO ket_job (queue, payload, created_at) VALUES (${p(1)}, ${p(2)}, ${p(3)})`,
-        [queue, payload == null ? null : JSON.stringify(payload), now()])
+        [queue, payload == null ? null : JSON.stringify(payload), now()],
+      )
     },
 
     /**
@@ -53,24 +54,50 @@ export async function createQueue(adapter: Adapter, o: { now?: () => string } = 
         const rows = await adapter.all(
           `UPDATE ket_job SET state = 'claimed', attempts = attempts + 1
            WHERE id = (SELECT id FROM ket_job WHERE queue = $1 AND state = 'ready' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)
-           RETURNING id, payload, attempts`, [queue])
+           RETURNING id, payload, attempts`,
+          [queue],
+        )
         const r = rows[0]
-        return r ? { id: Number(r.id), payload: r.payload == null ? null : JSON.parse(String(r.payload)), attempts: Number(r.attempts) } : null
+        return r
+          ? {
+              id: Number(r.id),
+              payload: r.payload == null ? null : JSON.parse(String(r.payload)),
+              attempts: Number(r.attempts),
+            }
+          : null
       }
       const rows = await adapter.all(
-        `SELECT id, payload, attempts FROM ket_job WHERE queue = ? AND state = 'ready' ORDER BY id LIMIT 1`, [queue])
+        `SELECT id, payload, attempts FROM ket_job WHERE queue = ? AND state = 'ready' ORDER BY id LIMIT 1`,
+        [queue],
+      )
       const r = rows[0]
       if (!r) return null
-      const upd = await adapter.run(`UPDATE ket_job SET state = 'claimed', attempts = attempts + 1 WHERE id = ? AND state = 'ready'`, [r.id])
+      const upd = await adapter.run(
+        `UPDATE ket_job SET state = 'claimed', attempts = attempts + 1 WHERE id = ? AND state = 'ready'`,
+        [r.id],
+      )
       if (upd.changes !== 1) return null
-      return { id: Number(r.id), payload: r.payload == null ? null : JSON.parse(String(r.payload)), attempts: Number(r.attempts) + 1 }
+      return {
+        id: Number(r.id),
+        payload: r.payload == null ? null : JSON.parse(String(r.payload)),
+        attempts: Number(r.attempts) + 1,
+      }
     },
 
-    async complete(id: number): Promise<void> { await adapter.run(`UPDATE ket_job SET state = 'done' WHERE id = ${p(1)}`, [id]) },
-    async fail(id: number): Promise<void> { await adapter.run(`UPDATE ket_job SET state = 'failed' WHERE id = ${p(1)}`, [id]) },
-    async release(id: number): Promise<void> { await adapter.run(`UPDATE ket_job SET state = 'ready' WHERE id = ${p(1)}`, [id]) },
+    async complete(id: number): Promise<void> {
+      await adapter.run(`UPDATE ket_job SET state = 'done' WHERE id = ${p(1)}`, [id])
+    },
+    async fail(id: number): Promise<void> {
+      await adapter.run(`UPDATE ket_job SET state = 'failed' WHERE id = ${p(1)}`, [id])
+    },
+    async release(id: number): Promise<void> {
+      await adapter.run(`UPDATE ket_job SET state = 'ready' WHERE id = ${p(1)}`, [id])
+    },
     async pending(queue: string): Promise<number> {
-      const r = await adapter.all(`SELECT COUNT(*) AS c FROM ket_job WHERE queue = ${p(1)} AND state = 'ready'`, [queue])
+      const r = await adapter.all(
+        `SELECT COUNT(*) AS c FROM ket_job WHERE queue = ${p(1)} AND state = 'ready'`,
+        [queue],
+      )
       return Number((r[0] as { c: number }).c)
     },
   }

@@ -66,12 +66,25 @@ which is what makes D3 affordable at all.
 **Measured:** 1 host operation to change one row of a thousand; 0 for a no-op
 re-render; 2 moves for a swap.
 
-## D6 — Node runs TypeScript; it does not check it
-**Verified:** `const n: number = "a string"` executes without complaint, and `enum`
-throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` — the engine is a stripper.
-**Chosen:** source in `.ts` run natively by Node; `tsc --noEmit` for checking, as an
-optional devDependency; `erasableSyntaxOnly` so nothing unrunnable creeps in.
-**Cost:** no `enum`, no `namespace`, no parameter properties.
+## D6 — Source is built; Node only runs artifacts
+**Verified:** Node's type stripping neither checks types nor transforms TSX. It is
+therefore not a compilation boundary suitable for a framework.
+**Chosen:** `tsc` emits workspace JavaScript into `.build`, package JavaScript and
+declarations into `dist`, and rewrites relative TypeScript extensions. Every
+production serve, test, benchmark and audit command builds first and executes only
+`.js` artifacts. Development is the explicit exception: `tsx watch` transforms
+source modules in memory while `tsc --noEmit --watch` checks them independently.
+It writes neither `.build` nor `dist`, eliminating output races during editing. The
+CLI rejects a source workspace unless the dev orchestrator sets its private source
+mode. Artifact builds remain serialized and fingerprinted, so concurrent production
+or verification commands reuse the same revision instead of deleting each other's
+outputs.
+**Why:** TSX lets UI components be authored structurally while the custom JSX
+runtime still produces Ket's existing `TemplateResult`; there is no React or VDOM.
+The explicit build also makes published package contents identical to what was
+tested locally.
+**Cost:** a compiler is a required development dependency and startup waits for an
+initial build. It remains absent from runtime dependencies.
 
 ## D7 — Destructive migrations are generated but refused
 **Why:** Odoo alters schema silently at install time, which is a root cause of its
@@ -767,8 +780,9 @@ normalises it away, so the manifest has one spelling.
 calling its route, not by reading it. It refuses to overwrite: a scaffold that can
 eat work is not a scaffold.
 
-**Cut:** hot module replacement. `ket dev` re-execs under `node --watch`, because a
-file watcher of our own that disagreed with the runtime's would be worse than none.
+**Cut:** hot module replacement. The project compiler watches source and emits
+JavaScript; `ket dev` watches only that emitted graph and restarts it. Source is
+never handed to Node as an executable input.
 
 ## D27 — One command that starts the thing
 There was a design entry point and a CLI that could check and migrate, but nothing

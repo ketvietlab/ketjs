@@ -13,6 +13,6 @@ export default defineTheme({
 
   tokens: {
     'color-accent': 'oklch(0.58 0.19 268)',
-    'radius': '0.75rem',
+    radius: '0.75rem',
   },
 })

@@ -1,6 +1,29 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { _resetIdempotency, and, asc, callFn, changeset, compose, defineModule, deleteFrom, desc, eq, from, gt, gte, inArray, isNull, like, not, or, planMigration, registerFunctions, renderSql, schemaFromManifest, sqliteAdapter, table } from 'ketjs'
+import {
+  and,
+  asc,
+  callFn,
+  changeset,
+  compose,
+  defineModule,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  gt,
+  inArray,
+  isNull,
+  like,
+  not,
+  or,
+  planMigration,
+  registerFunctions,
+  renderSql,
+  schemaFromManifest,
+  sqliteAdapter,
+  table,
+} from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
@@ -11,7 +34,8 @@ const P = table(manifest, 'catalog.Product')
 async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
   const adapter = sqliteAdapter()
   await adapter.open()
-  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter)) await adapter.exec(sql)
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
+    await adapter.exec(sql)
   registerFunctions(mods)
   return { adapter, manifest }
 }
@@ -51,7 +75,8 @@ test('query: the whole set of operators renders', () => {
     .select(P.id!, P.title!)
     .where(inArray(P.id!, ['a', 'b']), like(P.title!, '%áo%'), isNull(P.slug!))
     .orderBy(desc(P.priceCents!), asc(P.title!))
-    .limit(10).offset(20)
+    .limit(10)
+    .offset(20)
   const sql = q.toSQL()
   assert.match(sql.text, /SELECT "catalog_product"\."id", "catalog_product"\."title"/)
   assert.match(sql.text, /IN \(\?, \?\)/)
@@ -72,12 +97,14 @@ test('query: a raw string where a column belongs is refused', () => {
 test('query: a query the function did not declare is blocked before it runs', async () => {
   const { adapter } = await boot()
   const rogue = defineModule({
-    name: 'rogue', depends: ['catalog', 'checkout'],
+    name: 'rogue',
+    depends: ['catalog', 'checkout'],
     functions: {
       snoop: {
-        effects: ['read:catalog.Product'],       // reads Product but not Order
+        effects: ['read:catalog.Product'], // reads Product but not Order
         handler: (ctx) => {
-          const p = ctx.table('catalog.Product'), o = ctx.table('checkout.Order')
+          const p = ctx.table('catalog.Product'),
+            o = ctx.table('checkout.Order')
           return ctx.db.all(from(p).where(gt(o.qty!, 0)))
         },
       },
@@ -85,38 +112,57 @@ test('query: a query the function did not declare is blocked before it runs', as
   })
   const m2 = compose([...mods, rogue])
   registerFunctions([...mods, rogue])
-  await assert.rejects(() => callFn('rogue.snoop', {}, { adapter, manifest: m2 }), (e: unknown) => {
-    assert.equal((e as { code: string }).code, 'E_EFFECT_NOT_DECLARED')
-    assert.match((e as Error).message, /read on checkout\.Order/)
-    return true
-  })
+  await assert.rejects(
+    () => callFn('rogue.snoop', {}, { adapter, manifest: m2 }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_EFFECT_NOT_DECLARED')
+      assert.match((e as Error).message, /read on checkout\.Order/)
+      return true
+    },
+  )
   await adapter.close()
 })
 
 test('query: end to end through a real server function', async () => {
   const { adapter, manifest: m } = await boot()
-  for (const [id, price] of [['p1', 30_000], ['p2', 90_000], ['p3', 60_000]] as const) {
-    await callFn('catalog.createProduct', { id, title: `SP ${id}`, priceCents: price, slug: id }, { adapter, manifest: m })
+  for (const [id, price] of [
+    ['p1', 30_000],
+    ['p2', 90_000],
+    ['p3', 60_000],
+  ] as const) {
+    await callFn(
+      'catalog.createProduct',
+      { id, title: `SP ${id}`, priceCents: price, slug: id },
+      { adapter, manifest: m },
+    )
   }
   const all = await callFn('catalog.listProducts', {}, { adapter, manifest: m })
   assert.equal((all.value as unknown[]).length, 3)
 
   const dear = await callFn('catalog.listProducts', { minPriceCents: 60_000 }, { adapter, manifest: m })
   const rows = dear.value as Array<{ id: string; priceCents: number }>
-  assert.deepEqual(rows.map(r => r.id), ['p2', 'p3'], 'filtered and ordered by price descending')
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ['p2', 'p3'],
+    'filtered and ordered by price descending',
+  )
   await adapter.close()
 })
 
 test('changeset: fields that were not cast are dropped, not written', () => {
-  const cs = changeset(manifest, 'catalog.Product', { title: 'Áo', active: false, leadTimeDays: 99 })
-    .cast(['title'])
+  const cs = changeset(manifest, 'catalog.Product', { title: 'Áo', active: false, leadTimeDays: 99 }).cast([
+    'title',
+  ])
   assert.deepEqual(cs.changes, { title: 'Áo' })
   assert.deepEqual(cs.dropped.sort(), ['active', 'leadTimeDays'])
   assert.equal(cs.valid, true)
 })
 
 test('changeset: casting coerces what it safely can and refuses the rest', () => {
-  const ok = changeset(manifest, 'catalog.Product', { priceCents: '15000', active: 'true' }).cast(['priceCents', 'active'])
+  const ok = changeset(manifest, 'catalog.Product', { priceCents: '15000', active: 'true' }).cast([
+    'priceCents',
+    'active',
+  ])
   assert.deepEqual(ok.changes, { priceCents: 15000, active: true })
 
   const bad = changeset(manifest, 'catalog.Product', { priceCents: '15.5' }).cast(['priceCents'])
@@ -126,7 +172,10 @@ test('changeset: casting coerces what it safely can and refuses the rest', () =>
 
 test('changeset: changes are a real diff against the existing row', () => {
   const base = { id: 'p1', title: 'Áo', priceCents: 5000, slug: 'ao', active: true }
-  const cs = changeset(manifest, 'catalog.Product', { title: 'Áo', priceCents: 7000 }, base).cast(['title', 'priceCents'])
+  const cs = changeset(manifest, 'catalog.Product', { title: 'Áo', priceCents: 7000 }, base).cast([
+    'title',
+    'priceCents',
+  ])
   assert.deepEqual(cs.changes, { priceCents: 7000 }, 'an unchanged value is not a change')
   assert.equal(cs.action, 'update')
 })
@@ -135,7 +184,7 @@ test('changeset: errors are structured data an agent can act on', () => {
   const cs = changeset(manifest, 'catalog.Product', { priceCents: -5 })
     .cast(['priceCents'])
     .required(['title'])
-    .validate('priceCents', v => (v as number) > 0 || 'phải lớn hơn 0')
+    .validate('priceCents', (v) => (v as number) > 0 || 'phải lớn hơn 0')
   assert.equal(cs.valid, false)
   assert.deepEqual(cs.errors, [
     { field: 'title', message: 'is required' },
@@ -152,12 +201,18 @@ test('changeset: put sets a server-controlled field the client cannot supply', (
 test('changeset: committing an invalid one is refused with its errors', async () => {
   const { adapter, manifest: m } = await boot()
   await assert.rejects(
-    () => callFn('catalog.createProduct', { id: 'x', title: 'Áo', priceCents: 0, slug: 'ao' }, { adapter, manifest: m }),
+    () =>
+      callFn(
+        'catalog.createProduct',
+        { id: 'x', title: 'Áo', priceCents: 0, slug: 'ao' },
+        { adapter, manifest: m },
+      ),
     (e: unknown) => {
       assert.equal((e as { code: string }).code, 'E_INVALID_CHANGESET')
       assert.match((e as Error).message, /priceCents phải lớn hơn 0/)
       return true
-    })
+    },
+  )
   assert.equal((await adapter.all('SELECT * FROM catalog_product', [])).length, 0)
   await adapter.close()
 })

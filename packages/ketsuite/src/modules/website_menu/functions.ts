@@ -18,10 +18,14 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      let cs = ctx.change('website_menu.MenuItem', args)
+      let cs = ctx
+        .change('website_menu.MenuItem', args)
         .cast(['id', 'label', 'href', 'position'])
         .required(['label', 'href'])
-        .validate('href', v => String(v).startsWith('/') || String(v).startsWith('http') || 'liên kết phải là / hoặc http')
+        .validate(
+          'href',
+          (v) => String(v).startsWith('/') || String(v).startsWith('http') || 'liên kết phải là / hoặc http',
+        )
       if (args.position == null) cs = cs.put('position', 0)
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs)

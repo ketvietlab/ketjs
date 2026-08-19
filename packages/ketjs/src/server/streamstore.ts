@@ -33,31 +33,46 @@ class Notifier {
   private bus = new EventEmitter().setMaxListeners(0)
   subscribe(topic: string, cb: () => void): () => void {
     this.bus.on(topic, cb)
-    return () => { this.bus.off(topic, cb) }
+    return () => {
+      this.bus.off(topic, cb)
+    }
   }
-  notify(topic: string): void { this.bus.emit(topic) }
+  notify(topic: string): void {
+    this.bus.emit(topic)
+  }
 }
 
 export function memoryStreamStore(): StreamStore {
-  const topics = new Map<string, { batches: Batch[]; done: boolean; summary: unknown; endedAt: number | null }>()
+  const topics = new Map<
+    string,
+    { batches: Batch[]; done: boolean; summary: unknown; endedAt: number | null }
+  >()
   const notifier = new Notifier()
   const slot = (t: string) => {
     let s = topics.get(t)
-    if (!s) { s = { batches: [], done: false, summary: null, endedAt: null }; topics.set(t, s) }
+    if (!s) {
+      s = { batches: [], done: false, summary: null, endedAt: null }
+      topics.set(t, s)
+    }
     return s
   }
   return {
     name: 'memory',
     async init() {},
-    async append(topic, seq, chunks) { slot(topic).batches.push({ seq, chunks }); notifier.notify(topic) },
+    async append(topic, seq, chunks) {
+      slot(topic).batches.push({ seq, chunks })
+      notifier.notify(topic)
+    },
     async markEnd(topic, _seq, summary) {
       const s = slot(topic)
-      s.done = true; s.summary = summary; s.endedAt = Date.now()
+      s.done = true
+      s.summary = summary
+      s.endedAt = Date.now()
       notifier.notify(topic)
     },
     async since(topic, fromSeq) {
       const s = slot(topic)
-      const batches = s.batches.filter(b => b.seq >= fromSeq)
+      const batches = s.batches.filter((b) => b.seq >= fromSeq)
       const head = s.batches.length ? (s.batches[s.batches.length - 1] as Batch).seq + 1 : 0
       return { batches, done: s.done, summary: s.summary, nextSeq: head }
     },
@@ -69,7 +84,11 @@ export function memoryStreamStore(): StreamStore {
     async sweep(olderThanMs) {
       const cutoff = Date.now() - olderThanMs
       let n = 0
-      for (const [t, s] of topics) if (s.endedAt != null && s.endedAt <= cutoff) { topics.delete(t); n++ }
+      for (const [t, s] of topics)
+        if (s.endedAt != null && s.endedAt <= cutoff) {
+          topics.delete(t)
+          n++
+        }
       return n
     },
   }
@@ -96,26 +115,32 @@ export function dbStreamStore(adapter: Adapter, o: { now?: () => string } = {}):
 
   return {
     name: `db:${adapter.name}`,
-    async init() { await adapter.exec(STREAM_DDL) },
+    async init() {
+      await adapter.exec(STREAM_DDL)
+    },
 
     async append(topic, seq, chunks) {
       await adapter.run(
         `INSERT INTO ket_stream (topic, seq, chunks, created_at) VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)})`,
-        [topic, seq, JSON.stringify(chunks), now()])
+        [topic, seq, JSON.stringify(chunks), now()],
+      )
       notifier.notify(topic)
     },
 
     async markEnd(topic, seq, summary) {
       await adapter.run(
         `INSERT INTO ket_stream (topic, seq, chunks, ended, summary, created_at) VALUES (${p(1)}, ${p(2)}, ${p(3)}, 1, ${p(4)}, ${p(5)})`,
-        [topic, seq, '[]', summary == null ? null : JSON.stringify(summary), now()])
+        [topic, seq, '[]', summary == null ? null : JSON.stringify(summary), now()],
+      )
       notifier.notify(topic)
     },
 
     // One query, not the three the old implementation used.
     async since(topic, fromSeq) {
       const rows = await adapter.all(
-        `SELECT seq, chunks, ended, summary FROM ket_stream WHERE topic = ${p(1)} ORDER BY seq`, [topic])
+        `SELECT seq, chunks, ended, summary FROM ket_stream WHERE topic = ${p(1)} ORDER BY seq`,
+        [topic],
+      )
       let done = false
       let summary: unknown = null
       let head = 0
@@ -123,14 +148,21 @@ export function dbStreamStore(adapter: Adapter, o: { now?: () => string } = {}):
       for (const r of rows) {
         const seq = Number(r.seq)
         head = Math.max(head, seq + 1)
-        if (Number(r.ended) === 1) { done = true; summary = r.summary == null ? null : JSON.parse(String(r.summary)); continue }
+        if (Number(r.ended) === 1) {
+          done = true
+          summary = r.summary == null ? null : JSON.parse(String(r.summary))
+          continue
+        }
         if (seq >= fromSeq) batches.push({ seq, chunks: JSON.parse(String(r.chunks)) as unknown[] })
       }
       return { batches, done, summary, nextSeq: head }
     },
 
     async head(topic) {
-      const r = await adapter.all(`SELECT COALESCE(MAX(seq), -1) AS m FROM ket_stream WHERE topic = ${p(1)}`, [topic])
+      const r = await adapter.all(
+        `SELECT COALESCE(MAX(seq), -1) AS m FROM ket_stream WHERE topic = ${p(1)}`,
+        [topic],
+      )
       return Number((r[0] as { m: number }).m) + 1
     },
 
@@ -139,7 +171,9 @@ export function dbStreamStore(adapter: Adapter, o: { now?: () => string } = {}):
     async sweep(olderThanMs) {
       const cutoff = new Date(Date.now() - olderThanMs).toISOString()
       const ended = await adapter.all(
-        `SELECT topic FROM ket_stream WHERE ended = 1 AND created_at <= ${p(1)}`, [cutoff])
+        `SELECT topic FROM ket_stream WHERE ended = 1 AND created_at <= ${p(1)}`,
+        [cutoff],
+      )
       let n = 0
       for (const row of ended) {
         const r = await adapter.run(`DELETE FROM ket_stream WHERE topic = ${p(1)}`, [String(row.topic)])

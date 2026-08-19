@@ -62,11 +62,10 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   }
 
   const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
-  const matches = (text: string): boolean =>
-    !needle || text.toLocaleLowerCase('vi').includes(needle)
+  const matches = (text: string): boolean => !needle || text.toLocaleLowerCase('vi').includes(needle)
 
   const build = (parent: string | undefined, depth: number): MenuNode[] => {
-    if (depth > 8) return []      // a cycle would otherwise recurse forever
+    if (depth > 8) return [] // a cycle would otherwise recurse forever
     const out: MenuNode[] = []
     for (const [id, def] of (byParent.get(parent) ?? []).sort(order)) {
       if (!permitted(def)) continue
@@ -76,7 +75,7 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       // A search keeps a branch that matches anywhere along it, so a leaf never
       // arrives without the words that explain where it lives.
       if (needle && !children.length && !matches(label(def))) continue
-      const active = (def.path !== undefined && def.path === o.active) || children.some(c => c.active)
+      const active = (def.path !== undefined && def.path === o.active) || children.some((c) => c.active)
       out.push({ id, label: label(def), path: def.path ?? null, icon: def.icon ?? null, active, children })
     }
     return out
@@ -87,5 +86,5 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
 
 /** The app a path belongs to: the root whose branch contains it. */
 export function activeApp(tree: MenuNode[]): MenuNode | null {
-  return tree.find(n => n.active) ?? null
+  return tree.find((n) => n.active) ?? null
 }

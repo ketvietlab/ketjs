@@ -10,7 +10,12 @@ export type Expr =
   | { readonly op: 'and'; readonly parts: Expr[] }
   | { readonly op: 'or'; readonly parts: Expr[] }
   | { readonly op: 'not'; readonly expr: Expr }
-  | { readonly op: 'cmp'; readonly col: Col; readonly cmp: '=' | '<>' | '>' | '<' | '>=' | '<='; readonly value: unknown }
+  | {
+      readonly op: 'cmp'
+      readonly col: Col
+      readonly cmp: '=' | '<>' | '>' | '<' | '>=' | '<='
+      readonly value: unknown
+    }
   | { readonly op: 'like'; readonly col: Col; readonly value: string }
   | { readonly op: 'in'; readonly col: Col; readonly values: unknown[] }
   | { readonly op: 'null'; readonly col: Col; readonly negated: boolean }
@@ -19,7 +24,8 @@ const isCol = (c: unknown): c is Col =>
   !!c && typeof c === 'object' && typeof (c as Col).model === 'string' && typeof (c as Col).name === 'string'
 
 const col = (c: Col): Col => {
-  if (!isCol(c)) throw new Error(`expected a column from table(), got ${JSON.stringify(c)} — did you use a plain string?`)
+  if (!isCol(c))
+    throw new Error(`expected a column from table(), got ${JSON.stringify(c)} — did you use a plain string?`)
   return c
 }
 
@@ -43,7 +49,10 @@ export const not = (expr: Expr): Expr => ({ op: 'not', expr })
 // without executing anything.
 export function exprTouches(e: Expr | null, out = new Set<string>()): Set<string> {
   if (!e) return out
-  if (e.op === 'and' || e.op === 'or') { for (const p of e.parts) exprTouches(p, out); return out }
+  if (e.op === 'and' || e.op === 'or') {
+    for (const p of e.parts) exprTouches(p, out)
+    return out
+  }
   if (e.op === 'not') return exprTouches(e.expr, out)
   out.add(e.col.model)
   return out

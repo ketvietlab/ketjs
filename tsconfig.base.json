@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["esnext", "dom"],
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "ketjs-view": ["./packages/ketjs-view/src/index.ts"],
+      "ketjs-view/jsx-runtime": ["./packages/ketjs-view/src/jsx-runtime.ts"],
+      "ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
+      "ketjs": ["./packages/ketjs/src/index.ts"],
+      "ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
+      "ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
+      "ketsuite": ["./packages/ketsuite/src/index.ts"],
+      "ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
+      "ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"]
+    },
+    "jsx": "react-jsx",
+    "jsxImportSource": "ketjs-view"
+  }
+}

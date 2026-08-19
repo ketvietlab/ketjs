@@ -30,16 +30,21 @@ export type Joints = {
   shows(key: string): boolean
 }
 
-export function createJoints(manifest: Manifest, o: { translate?: (key: string, params?: Record<string, unknown>) => string } = {}): Joints {
+export function createJoints(
+  manifest: Manifest,
+  o: { translate?: (key: string, params?: Record<string, unknown>) => string } = {},
+): Joints {
   // Compiled once. A fill is KTL source, so compiling per request would parse the
   // same text on every page view.
   const compiled = new Map<string, Array<ReturnType<typeof compileKtl>>>()
   for (const fill of manifest.fills) {
     const list = compiled.get(fill.joint) ?? []
-    list.push(compileKtl(fill.template, {
-      name: `${fill.joint}#${list.length}`,
-      ...(o.translate ? { translate: o.translate } : {}),
-    }))
+    list.push(
+      compileKtl(fill.template, {
+        name: `${fill.joint}#${list.length}`,
+        ...(o.translate ? { translate: o.translate } : {}),
+      }),
+    )
     compiled.set(fill.joint, list)
   }
 
@@ -54,7 +59,7 @@ export function createJoints(manifest: Manifest, o: { translate?: (key: string, 
       // sealScope is what keeps a function out of a template's reach — the same
       // guard the theme runtime applies, for the same reason.
       const scope = sealScope(props)
-      return trustedMarkup(list.map(c => c.render(scope)).join(''))
+      return trustedMarkup(list.map((c) => c.render(scope)).join(''))
     },
   }
 }

@@ -65,8 +65,13 @@ export type AssetMount = {
 }
 
 const ASSET_MIME: Record<string, string> = {
-  '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon',
 }
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
@@ -83,8 +88,13 @@ const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 export async function createKetServer(o: ServeOpts) {
-  if (!o.adapter && !o.pool) throw new KetErr({ code: 'E_NO_DATABASE', message: 'createKetServer needs either an adapter or a pool' })
-  if (o.pool && !o.resolveDatastore) throw new KetErr({ code: 'E_NO_RESOLVER', message: 'a pool needs resolveDatastore to know which database a request belongs to' })
+  if (!o.adapter && !o.pool)
+    throw new KetErr({ code: 'E_NO_DATABASE', message: 'createKetServer needs either an adapter or a pool' })
+  if (o.pool && !o.resolveDatastore)
+    throw new KetErr({
+      code: 'E_NO_RESOLVER',
+      message: 'a pool needs resolveDatastore to know which database a request belongs to',
+    })
 
   // Per-request database resolution. The single-adapter case is the same code path
   // with a resolver that always answers the same thing.
@@ -106,7 +116,9 @@ export async function createKetServer(o: ServeOpts) {
   // default stays in memory and the caller passes a store when they have answered it.
   const mounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
 
-  const streams = await createStreams(o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()))
+  const streams = await createStreams(
+    o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()),
+  )
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
@@ -119,9 +131,12 @@ export async function createKetServer(o: ServeOpts) {
         if (!url.pathname.startsWith(mount.prefix)) continue
         // Path traversal is the one thing a static handler must not get wrong.
         const rel = normalize(url.pathname.slice(mount.prefix.length)).replace(/^(\.\.[/\\])+/, '')
-        const file = mount.dir !== undefined
-          ? (rel && !rel.startsWith('..') ? join(mount.dir, rel) : null)
-          : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
+        const file =
+          mount.dir !== undefined
+            ? rel && !rel.startsWith('..')
+              ? join(mount.dir, rel)
+              : null
+            : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
         if (file === null) break
         try {
           const body = await readFile(file)
@@ -132,7 +147,7 @@ export async function createKetServer(o: ServeOpts) {
           break
         }
       }
-      if (mounts.some(m => url.pathname.startsWith(m.prefix))) {
+      if (mounts.some((m) => url.pathname.startsWith(m.prefix))) {
         res.writeHead(404, { 'content-type': 'text/plain' })
         return res.end('not found')
       }
@@ -140,7 +155,10 @@ export async function createKetServer(o: ServeOpts) {
       const route = o.routes?.[url.pathname]
       if (route) {
         const r = await route(url, req)
-        res.writeHead(r.status ?? 200, { 'content-type': `${r.type ?? 'text/html'}; charset=utf-8`, ...r.headers })
+        res.writeHead(r.status ?? 200, {
+          'content-type': `${r.type ?? 'text/html'}; charset=utf-8`,
+          ...r.headers,
+        })
         return res.end(r.body)
       }
 
@@ -152,12 +170,18 @@ export async function createKetServer(o: ServeOpts) {
       if (url.pathname.startsWith('/_ket/stream/')) {
         const id = url.pathname.slice('/_ket/stream/'.length)
         const from = Number(url.searchParams.get('from') ?? 0)
-        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        })
         // A client that reloads mid-stream simply disappears. Stop tailing the
         // moment that happens: the durable log keeps the chunks, and the next
         // connection resumes from its cursor.
         let open = true
-        const stop = () => { open = false }
+        const stop = () => {
+          open = false
+        }
         req.on('close', stop)
         res.on('close', stop)
         for await (const chunk of streams.tail(id, from, { timeoutMs: 30_000 })) {
@@ -175,14 +199,16 @@ export async function createKetServer(o: ServeOpts) {
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)
         const allow = await o.resolveAllow?.(url, req)
-        const result = await withDb(url, req, adapter => callFn(fnKey, args, {
-          adapter,
-          manifest: o.manifest,
-          scope,
-          allow,
-          dryRun: url.searchParams.get('dryRun') === '1',
-          idempotencyKey: req.headers['idempotency-key'] as string | undefined ?? null,
-        }))
+        const result = await withDb(url, req, (adapter) =>
+          callFn(fnKey, args, {
+            adapter,
+            manifest: o.manifest,
+            scope,
+            allow,
+            dryRun: url.searchParams.get('dryRun') === '1',
+            idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
+          }),
+        )
         return json(res, 200, result)
       }
 
@@ -201,7 +227,10 @@ export async function createKetServer(o: ServeOpts) {
     } catch (e) {
       // A streaming response has already sent its headers; there is no status code
       // left to send, so the only honest thing is to close the socket.
-      if (res.headersSent) { if (!res.writableEnded) res.end(); return }
+      if (res.headersSent) {
+        if (!res.writableEnded) res.end()
+        return
+      }
       if (e instanceof KetError) return json(res, 400, e.toJSON())
       return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
     }
@@ -211,8 +240,12 @@ export async function createKetServer(o: ServeOpts) {
     server,
     streams,
     listen(port = o.port ?? 3000): Promise<number> {
-      return new Promise(resolve => server.listen(port, () => resolve((server.address() as { port: number }).port)))
+      return new Promise((resolve) =>
+        server.listen(port, () => resolve((server.address() as { port: number }).port)),
+      )
     },
-    close(): Promise<void> { return new Promise(r => server.close(() => r())) },
+    close(): Promise<void> {
+      return new Promise((r) => server.close(() => r()))
+    },
   }
 }

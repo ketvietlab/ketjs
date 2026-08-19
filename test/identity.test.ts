@@ -15,8 +15,12 @@ async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
   registerFunctions(mods)
   return { adapter, manifest }
 }
-const call = (o: { adapter: Adapter; manifest: Manifest }, fn: string, args: Record<string, unknown> = {}, scope: Scope = SCOPE) =>
-  callFn(fn, args, { ...o, scope }).then(r => r.value as Record<string, unknown>)
+const call = (
+  o: { adapter: Adapter; manifest: Manifest },
+  fn: string,
+  args: Record<string, unknown> = {},
+  scope: Scope = SCOPE,
+) => callFn(fn, args, { ...o, scope }).then((r) => r.value as Record<string, unknown>)
 
 // ── the party model, and what splitting addresses out removed ────────────────
 
@@ -33,8 +37,18 @@ test('partner: a party is a person or an organisation, and nothing else', async 
 test('partner: an address is its own row, so there is nothing to compute about who to bill', async () => {
   const o = await boot()
   await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
-  for (const [id, use] of [['a1', 'invoice'], ['a2', 'delivery']] as const) {
-    const r = await call(o, 'partner.saveAddress', { id, partnerId: 'p1', use, street: '1 Lê Lợi', city: 'Hà Nội', country: 'VN' })
+  for (const [id, use] of [
+    ['a1', 'invoice'],
+    ['a2', 'delivery'],
+  ] as const) {
+    const r = await call(o, 'partner.saveAddress', {
+      id,
+      partnerId: 'p1',
+      use,
+      street: '1 Lê Lợi',
+      city: 'Hà Nội',
+      country: 'VN',
+    })
     assert.equal(r.ok, true)
   }
   const got = await call(o, 'partner.getPartner', { id: 'p1' })
@@ -48,7 +62,14 @@ test('partner: an address is its own row, so there is nothing to compute about w
 
 test('partner: an address must belong to a party that exists', async () => {
   const o = await boot()
-  const r = await call(o, 'partner.saveAddress', { id: 'a1', partnerId: 'ghost', use: 'invoice', street: 'x', city: 'y', country: 'VN' })
+  const r = await call(o, 'partner.saveAddress', {
+    id: 'a1',
+    partnerId: 'ghost',
+    use: 'invoice',
+    street: 'x',
+    city: 'y',
+    country: 'VN',
+  })
   assert.equal(r.ok, false)
   await o.adapter.close()
 })
@@ -59,7 +80,7 @@ test('partner: roles are rows, so being both customer and supplier costs no colu
   await call(o, 'partner.grantRole', { id: 'r1', partnerId: 'p1', role: 'customer' })
   await call(o, 'partner.grantRole', { id: 'r2', partnerId: 'p1', role: 'supplier' })
   const got = await call(o, 'partner.getPartner', { id: 'p1' })
-  assert.deepEqual((got.roles as Array<{ role: string }>).map(r => r.role).sort(), ['customer', 'supplier'])
+  assert.deepEqual((got.roles as Array<{ role: string }>).map((r) => r.role).sort(), ['customer', 'supplier'])
 
   // Granting twice is success: the caller wanted it true, and it is.
   const again = await call(o, 'partner.grantRole', { id: 'r3', partnerId: 'p1', role: 'customer' })
@@ -67,7 +88,10 @@ test('partner: roles are rows, so being both customer and supplier costs no colu
   assert.equal(((await call(o, 'partner.getPartner', { id: 'p1' })).roles as unknown[]).length, 2)
 
   await call(o, 'partner.revokeRole', { partnerId: 'p1', role: 'supplier' })
-  assert.deepEqual(((await call(o, 'partner.getPartner', { id: 'p1' })).roles as Array<{ role: string }>).map(r => r.role), ['customer'])
+  assert.deepEqual(
+    ((await call(o, 'partner.getPartner', { id: 'p1' })).roles as Array<{ role: string }>).map((r) => r.role),
+    ['customer'],
+  )
   await o.adapter.close()
 })
 
@@ -86,7 +110,10 @@ test('terms: the same shared party carries different terms per legal entity', as
   await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', paymentTermDays: 30 }, { company: 'c1' })
   await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', paymentTermDays: 0 }, { company: 'c2' })
 
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).paymentTermDays, 30)
+  assert.equal(
+    (await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).paymentTermDays,
+    30,
+  )
   assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).paymentTermDays, 0)
   // And the party itself is one row, seen identically from both.
   assert.equal((await call(o, 'partner.getPartner', { id: 'p1' }, { company: 'c2' })).name, 'Acme')
@@ -110,7 +137,10 @@ test('company: a legal entity is backed by an organisation, not by a person', as
   assert.match(JSON.stringify(bad.errors), /loại/)
 
   await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Acme JSC' })
-  assert.equal((await call(o, 'company.saveCompany', { id: 'c1', partnerId: 'p2', currency: 'VND' })).ok, true)
+  assert.equal(
+    (await call(o, 'company.saveCompany', { id: 'c1', partnerId: 'p2', currency: 'VND' })).ok,
+    true,
+  )
   await o.adapter.close()
 })
 
@@ -130,7 +160,10 @@ test('user: no function hands back the password hash, because none declares it',
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
 
-  for (const [fn, args] of [['user.listUsers', {}], ['user.getUser', { id: 'u1' }]] as const) {
+  for (const [fn, args] of [
+    ['user.listUsers', {}],
+    ['user.getUser', { id: 'u1' }],
+  ] as const) {
     const got = JSON.stringify(await call(o, fn, args))
     assert.ok(!got.includes('scrypt'), `${fn} leaked the hash`)
     assert.ok(!got.includes('password'), `${fn} leaked the field`)
@@ -143,9 +176,17 @@ test('user: no function hands back the password hash, because none declares it',
 
 test('user: a short password is refused, and a duplicate login too', async () => {
   const o = await boot()
-  assert.equal((await call(o, 'user.createUser', { id: 'u1', login: 'a', password: 'short', name: 'A' })).ok, false)
+  assert.equal(
+    (await call(o, 'user.createUser', { id: 'u1', login: 'a', password: 'short', name: 'A' })).ok,
+    false,
+  )
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'A' })
-  const dup = await call(o, 'user.createUser', { id: 'u2', login: 'admin', password: 'correct horse', name: 'B' })
+  const dup = await call(o, 'user.createUser', {
+    id: 'u2',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'B',
+  })
   assert.equal(dup.ok, false)
   assert.match(JSON.stringify(dup.errors), /đã tồn tại/)
   await o.adapter.close()
@@ -155,8 +196,11 @@ test('user: authenticate answers a verdict, and answers the same for unknown and
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
   assert.deepEqual(await call(o, 'user.authenticate', { login: 'nobody', password: 'x' }), { ok: false })
-  assert.deepEqual(await call(o, 'user.authenticate', { login: 'admin', password: 'wrong' }), { ok: false },
-    'a different shape here is how an attacker learns which logins exist')
+  assert.deepEqual(
+    await call(o, 'user.authenticate', { login: 'admin', password: 'wrong' }),
+    { ok: false },
+    'a different shape here is how an attacker learns which logins exist',
+  )
 
   const ok = await call(o, 'user.authenticate', { login: 'admin', password: 'correct horse' })
   assert.equal(ok.ok, true)
@@ -171,7 +215,13 @@ test('user: authenticating yields the company set a session will carry', async (
   await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Globex' })
   await call(o, 'company.saveCompany', { id: 'c1', partnerId: 'p1', currency: 'VND' })
   await call(o, 'company.saveCompany', { id: 'c2', partnerId: 'p2', currency: 'VND' })
-  await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin', defaultCompanyId: 'c2' })
+  await call(o, 'user.createUser', {
+    id: 'u1',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'Admin',
+    defaultCompanyId: 'c2',
+  })
   await call(o, 'user.grantCompany', { id: 'm1', userId: 'u1', companyId: 'c1' })
   await call(o, 'user.grantCompany', { id: 'm2', userId: 'u1', companyId: 'c2' })
 
@@ -180,7 +230,10 @@ test('user: authenticating yields the company set a session will carry', async (
   assert.equal(s.defaultCompanyId, 'c2', 'and this becomes scope.company')
 
   await call(o, 'user.revokeCompany', { userId: 'u1', companyId: 'c1' })
-  assert.deepEqual((await call(o, 'user.authenticate', { login: 'admin', password: 'correct horse' })).companies, ['c2'])
+  assert.deepEqual(
+    (await call(o, 'user.authenticate', { login: 'admin', password: 'correct horse' })).companies,
+    ['c2'],
+  )
   await o.adapter.close()
 })
 
@@ -188,23 +241,41 @@ test('user: an archived account cannot authenticate', async () => {
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
   await call(o, 'user.archiveUser', { id: 'u1', active: false })
-  assert.deepEqual(await call(o, 'user.authenticate', { login: 'admin', password: 'correct horse' }), { ok: false })
+  assert.deepEqual(await call(o, 'user.authenticate', { login: 'admin', password: 'correct horse' }), {
+    ok: false,
+  })
   await o.adapter.close()
 })
 
 test('user: changing a password takes the old one, even for your own account', async () => {
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
-  assert.equal((await call(o, 'user.setPassword', { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' })).ok, false)
-  assert.equal((await call(o, 'user.setPassword', { id: 'u1', currentPassword: 'correct horse', newPassword: 'battery staple' })).ok, true)
+  assert.equal(
+    (await call(o, 'user.setPassword', { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' }))
+      .ok,
+    false,
+  )
+  assert.equal(
+    (
+      await call(o, 'user.setPassword', {
+        id: 'u1',
+        currentPassword: 'correct horse',
+        newPassword: 'battery staple',
+      })
+    ).ok,
+    true,
+  )
   assert.equal((await call(o, 'user.authenticate', { login: 'admin', password: 'battery staple' })).ok, true)
   await o.adapter.close()
 })
 
 test('user: minting a login is not an agent tool', () => {
   const m = compose(mods)
-  assert.equal(m.functions['user.createUser']!.agent, false,
-    'an agent that can mint logins can mint itself one')
+  assert.equal(
+    m.functions['user.createUser']!.agent,
+    false,
+    'an agent that can mint logins can mint itself one',
+  )
   assert.equal(m.functions['user.authenticate']!.agent, false)
 })
 

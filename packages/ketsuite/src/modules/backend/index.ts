@@ -36,15 +36,87 @@ export default defineModule({
   messages,
 })
 
-export { shell, framed, listChrome, appsScreen, pagesScreen, pageColumns, settingsScreen, emptyState, errorState } from './screens.ts'
-export type { Frame, ListChrome, Facet, Pager, ViewKind } from './screens.ts'
-export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
-export { dataTable, visibleColumns, badge, avatar, person, initials } from './table.ts'
-export type { Cell, Column, DataTable, Tone } from './table.ts'
+// The screens this module owns: data assembly, no markup.
+export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
-export type { Viewer } from './screens.ts'
+export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'
 export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes, viewerOf } from './routes.ts'
+
+/**
+ * The kit, re-exported.
+ *
+ * It is not this module's — it lives in `ketsuite/ui` so a module can use a button
+ * without depending on the admin. These are here so an existing caller keeps
+ * working and so `import backend, { badge } from 'ketsuite/backend'` still reads
+ * naturally on a backend screen.
+ */
+export {
+  shell,
+  framed,
+  listChrome,
+  topbarSearch,
+  emptyState,
+  errorState,
+  dataTable,
+  visibleColumns,
+  badge,
+  avatar,
+  person,
+  initials,
+  icon,
+  hasIcon,
+  appCard,
+  card,
+  cardGroups,
+  definitionList,
+  actionButton,
+  code,
+  inline,
+  button,
+  linkButton,
+  iconButton,
+  actionGroup,
+  tag,
+  countBadge,
+  notice,
+  loadingState,
+  stack,
+  section,
+  surface,
+  cardGrid,
+  contentCard,
+  metric,
+  kanbanCard,
+  kanbanGrid,
+  recordList,
+  breadcrumbs,
+  tabs,
+  HOOKS,
+  OWNERS,
+} from '../../ui/index.ts'
+export type {
+  Cell,
+  Column,
+  DataTable,
+  Tone,
+  Frame,
+  Extras,
+  Facet,
+  ListChrome,
+  Pager,
+  ViewKind,
+  Indicator,
+  Viewer,
+  CardMeta,
+  ActionVariant,
+  ActionSize,
+  ButtonSpec,
+  LinkButtonSpec,
+  NoticeTone,
+  Breadcrumb,
+  Tab,
+} from '../../ui/index.ts'

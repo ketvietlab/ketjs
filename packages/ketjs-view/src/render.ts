@@ -11,20 +11,38 @@ const RESULT = Symbol('ket.result')
 const EACH = Symbol('ket.each')
 
 export type TemplateResult = { [RESULT]: true; strings: readonly string[]; values: unknown[] }
-export type EachResult = { [EACH]: true; items: unknown[]; keyOf: (item: unknown, i: number) => unknown; render: (item: unknown, i: number) => TemplateResult }
+export type EachResult = {
+  [EACH]: true
+  items: unknown[]
+  keyOf: (item: unknown, i: number) => unknown
+  render: (item: unknown, i: number) => TemplateResult
+}
 
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult {
   return { [RESULT]: true, strings, values }
 }
 export const isResult = (v: unknown): v is TemplateResult => !!(v as TemplateResult)?.[RESULT]
 
-export function each<T>(items: Iterable<T>, keyOf: (item: T, i: number) => unknown, render: (item: T, i: number) => TemplateResult): EachResult {
-  return { [EACH]: true, items: [...items] as unknown[], keyOf: keyOf as EachResult['keyOf'], render: render as EachResult['render'] }
+export function each<T>(
+  items: Iterable<T>,
+  keyOf: (item: T, i: number) => unknown,
+  render: (item: T, i: number) => TemplateResult,
+): EachResult {
+  return {
+    [EACH]: true,
+    items: [...items] as unknown[],
+    keyOf: keyOf as EachResult['keyOf'],
+    render: render as EachResult['render'],
+  }
 }
 export const isEach = (v: unknown): v is EachResult => !!(v as EachResult)?.[EACH]
 
-export function when(cond: unknown, render: () => TemplateResult, otherwise?: () => TemplateResult): TemplateResult | string {
-  return cond ? render() : (otherwise ? otherwise() : '')
+export function when(
+  cond: unknown,
+  render: () => TemplateResult,
+  otherwise?: () => TemplateResult,
+): TemplateResult | string {
+  return cond ? render() : otherwise ? otherwise() : ''
 }
 
 type AttrPart = { attr: true; node: HostNode; name: string; last: unknown }
@@ -40,7 +58,9 @@ export const EVENT_PREFIX = 'on:'
 const isEventAttr = (name: string) => name.startsWith(EVENT_PREFIX)
 
 function bindEvent(host: Host, node: HostNode, name: string, initial: unknown): EventPart {
-  const box: { fn: ((e: unknown) => void) | null } = { fn: typeof initial === 'function' ? initial as (e: unknown) => void : null }
+  const box: { fn: ((e: unknown) => void) | null } = {
+    fn: typeof initial === 'function' ? (initial as (e: unknown) => void) : null,
+  }
   const detach = host.listen(node, name.slice(EVENT_PREFIX.length), (e) => box.fn?.(e))
   return { event: true, detach, box }
 }
@@ -57,20 +77,38 @@ class Part {
   keys: unknown[] = []
 
   constructor(host: Host, parent: HostNode, anchor: HostNode) {
-    this.host = host; this.parent = parent; this.anchor = anchor
+    this.host = host
+    this.parent = parent
+    this.anchor = anchor
   }
 
   clear(): void {
-    if (this.node) { this.host.remove(this.node); this.node = null }
-    if (this.child) { this.child.remove(); this.child = null }
-    if (this.keyed) { for (const inst of this.keyed.values()) inst.remove(); this.keyed = null; this.keys = [] }
+    if (this.node) {
+      this.host.remove(this.node)
+      this.node = null
+    }
+    if (this.child) {
+      this.child.remove()
+      this.child = null
+    }
+    if (this.keyed) {
+      for (const inst of this.keyed.values()) inst.remove()
+      this.keyed = null
+      this.keys = []
+    }
     this.kind = null
   }
 
   commit(value: unknown): void {
-    if (isResult(value)) return this.commitResult(value)
-    if (isEach(value)) return this.commitEach(value)
-    return this.commitText(value)
+    if (isResult(value)) {
+      this.commitResult(value)
+      return
+    }
+    if (isEach(value)) {
+      this.commitEach(value)
+      return
+    }
+    this.commitText(value)
   }
 
   commitText(value: unknown): void {
@@ -104,7 +142,12 @@ class Part {
   // are already in relative order. Only entries outside that subsequence move, so
   // a swap costs one move rather than cascading through the whole list.
   commitEach(list: EachResult): void {
-    if (this.kind !== 'each') { this.clear(); this.kind = 'each'; this.keyed = new Map(); this.keys = [] }
+    if (this.kind !== 'each') {
+      this.clear()
+      this.kind = 'each'
+      this.keyed = new Map()
+      this.keys = []
+    }
     const keyed = this.keyed as Map<unknown, Instance>
     const prevKeys = this.keys
 
@@ -127,8 +170,11 @@ class Part {
       for (let i = 0; i < n; i++) {
         const inst = keyed.get(nextKeys[i])
         const result = results[i] as TemplateResult
-        if (inst && inst.strings === result.strings) { inst.update(result.values); continue }
-        sameOrder = false     // a template swapped shape; fall through to the full path
+        if (inst && inst.strings === result.strings) {
+          inst.update(result.values)
+          continue
+        }
+        sameOrder = false // a template swapped shape; fall through to the full path
         break
       }
       if (sameOrder) {
@@ -146,8 +192,10 @@ class Part {
     let reused = 0
     for (let i = 0; i < n; i++) {
       const inst = keyed.get(nextKeys[i])
-      if (inst && inst.strings === (results[i] as TemplateResult).strings) { oldIndex[i] = inst.pos; reused++ }
-      else oldIndex[i] = -1
+      if (inst && inst.strings === (results[i] as TemplateResult).strings) {
+        oldIndex[i] = inst.pos
+        reused++
+      } else oldIndex[i] = -1
     }
 
     // Every existing entry accounted for means nothing disappeared; only then is the
@@ -155,7 +203,10 @@ class Part {
     if (reused !== keyed.size) {
       const wanted = new Set(nextKeys)
       for (const [k, inst] of keyed) {
-        if (!wanted.has(k)) { inst.remove(); keyed.delete(k) }
+        if (!wanted.has(k)) {
+          inst.remove()
+          keyed.delete(k)
+        }
       }
     }
 
@@ -197,7 +248,8 @@ function lisIndices(arr: number[]): Uint8Array {
   for (let i = 0; i < arr.length; i++) {
     const v = arr[i] as number
     if (v < 0) continue
-    let lo = 0, hi = piles.length
+    let lo = 0,
+      hi = piles.length
     while (lo < hi) {
       const mid = (lo + hi) >> 1
       if ((arr[piles[mid] as number] as number) < v) lo = mid + 1
@@ -209,7 +261,10 @@ function lisIndices(arr: number[]): Uint8Array {
   }
   const out = new Uint8Array(arr.length)
   let k = piles.length ? (piles[piles.length - 1] as number) : -1
-  while (k >= 0) { out[k] = 1; k = parent[k] as number }
+  while (k >= 0) {
+    out[k] = 1
+    k = parent[k] as number
+  }
   return out
 }
 
@@ -224,7 +279,9 @@ class Instance {
   pos = -1
 
   constructor(host: Host, strings: readonly string[]) {
-    this.host = host; this.strings = strings; this.tpl = templateFor(strings)
+    this.host = host
+    this.strings = strings
+    this.tpl = templateFor(strings)
   }
 
   mount(parent: HostNode, anchor: HostNode | null): void {
@@ -245,7 +302,10 @@ class Instance {
       }
       const el = this.host.createElement((node as TplEl).tag)
       for (const a of (node as TplEl).attrs) {
-        if (a.hole == null) { this.host.setAttribute(el, a.name, a.value ?? ''); continue }
+        if (a.hole == null) {
+          this.host.setAttribute(el, a.name, a.value ?? '')
+          continue
+        }
         this.parts[a.hole] = isEventAttr(a.name)
           ? bindEvent(this.host, el, a.name, undefined)
           : { attr: true, node: el, name: a.name, last: undefined }
@@ -262,9 +322,15 @@ class Instance {
       const p = this.parts[i]
       if (!p) continue
       const v = values[i]
-      if ('event' in p) { p.box.fn = typeof v === 'function' ? v as (e: unknown) => void : null; continue }
+      if ('event' in p) {
+        p.box.fn = typeof v === 'function' ? (v as (e: unknown) => void) : null
+        continue
+      }
       if (p.attr) {
-        if (!Object.is(p.last, v)) { this.host.setAttribute(p.node, p.name, v); p.last = v }
+        if (!Object.is(p.last, v)) {
+          this.host.setAttribute(p.node, p.name, v)
+          p.last = v
+        }
         continue
       }
       if (Object.is(this.values[i], v) && !isResult(v) && !isEach(v)) continue
@@ -273,7 +339,9 @@ class Instance {
     this.values = values
   }
 
-  firstNode(): HostNode | null { return this.roots[0] ?? null }
+  firstNode(): HostNode | null {
+    return this.roots[0] ?? null
+  }
 
   nextSibling(): HostNode | null {
     const last = this.roots[this.roots.length - 1]
@@ -293,7 +361,10 @@ class Instance {
   remove(): void {
     for (const p of this.parts) {
       if (!p) continue
-      if ('event' in p) { p.detach(); continue }
+      if ('event' in p) {
+        p.detach()
+        continue
+      }
       if (!p.attr) (p as Part).clear()
     }
     for (const n of this.roots) this.host.remove(n)
@@ -324,7 +395,6 @@ export function createRoot(host: Host, container: HostNode): Root {
 // server left as its anchor, and record what the hole currently holds — otherwise
 // the first client update would rebuild instead of patching.
 
-
 type DomNode = HostNode & {
   nodeType: number
   nodeName: string
@@ -333,27 +403,38 @@ type DomNode = HostNode & {
   firstChild: DomNode | null
 }
 
-const ELEMENT = 1, TEXT = 3, COMMENT = 8
+const ELEMENT = 1,
+  TEXT = 3,
+  COMMENT = 8
 
 const describe = (n: DomNode | null): string =>
-  !n ? 'nothing'
-    : n.nodeType === COMMENT ? `comment "${n.data ?? ''}"`
-    : n.nodeType === TEXT ? `text "${(n.data ?? '').slice(0, 20)}"`
-    : `<${n.nodeName.toLowerCase()}>`
+  !n
+    ? 'nothing'
+    : n.nodeType === COMMENT
+      ? `comment "${n.data ?? ''}"`
+      : n.nodeType === TEXT
+        ? `text "${(n.data ?? '').slice(0, 20)}"`
+        : `<${n.nodeName.toLowerCase()}>`
 
-function hydrateInstance(host: Host, strings: readonly string[], values: unknown[], parent: DomNode, cursor: DomNode | null): { instance: Instance; cursor: DomNode | null } {
+function hydrateInstance(
+  host: Host,
+  strings: readonly string[],
+  values: unknown[],
+  parent: DomNode,
+  cursor: DomNode | null,
+): { instance: Instance; cursor: DomNode | null } {
   const instance = new Instance(host, strings)
   let c = cursor
 
   const claimValue = (value: unknown, part: Part): void => {
-      // Pre-rendered markup: an unknown number of nodes, so the walk cannot
-      // count them. It runs to the marker the server left instead — which is
-      // why a hole is fenced on both sides rather than only anchored at the end.
-      if (isMarkup(value)) {
-        part.kind = 'markup'
-        while (c && !(c.nodeType === COMMENT && c.data === HOLE_MARKER)) c = c.nextSibling
-        return
-      }
+    // Pre-rendered markup: an unknown number of nodes, so the walk cannot
+    // count them. It runs to the marker the server left instead — which is
+    // why a hole is fenced on both sides rather than only anchored at the end.
+    if (isMarkup(value)) {
+      part.kind = 'markup'
+      while (c && !(c.nodeType === COMMENT && c.data === HOLE_MARKER)) c = c.nextSibling
+      return
+    }
     if (isResult(value)) {
       const r = hydrateInstance(host, value.strings, value.values, part.parent as DomNode, c)
       part.kind = 'result'
@@ -375,7 +456,10 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
       }
       return
     }
-    if (value == null || value === false) { part.kind = null; return }
+    if (value == null || value === false) {
+      part.kind = null
+      return
+    }
     if (!c || c.nodeType !== TEXT) throw new HydrationMismatch('a text hole', 'a text node', describe(c))
     part.kind = 'text'
     part.node = c
@@ -385,7 +469,8 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
   const walk = (node: TplNode, target: DomNode): void => {
     const atRoot = target === parent
     if (node.type === 'text') {
-      if (!c || c.nodeType !== TEXT) throw new HydrationMismatch('static text', JSON.stringify(node.value.slice(0, 20)), describe(c))
+      if (!c || c.nodeType !== TEXT)
+        throw new HydrationMismatch('static text', JSON.stringify(node.value.slice(0, 20)), describe(c))
       if (atRoot) instance.roots.push(c)
       c = c.nextSibling
       return
@@ -442,7 +527,13 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
  * that fails loudly: the caller can fall back to a clean client render.
  */
 export function hydrateRoot(host: Host, container: HostNode, result: TemplateResult): Root {
-  const { instance: hydrated } = hydrateInstance(host, result.strings, result.values, container as DomNode, (container as DomNode).firstChild)
+  const { instance: hydrated } = hydrateInstance(
+    host,
+    result.strings,
+    result.values,
+    container as DomNode,
+    (container as DomNode).firstChild,
+  )
   let instance: Instance | null = hydrated
   return {
     render(next) {
