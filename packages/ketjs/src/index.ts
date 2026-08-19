@@ -48,6 +48,8 @@ export { reachOf, functionsOf, formatReach, formatInventory } from './agent/perm
 export type { Reach, GrantedFn, ModelReach } from './agent/permissions.ts'
 export { compileKtl } from './theme/ktl/compile.ts'
 export { loadTemplates } from './theme/templates.ts'
+export { createJoints } from './theme/joints.ts'
+export type { Joints } from './theme/joints.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
 export { tokensToCss, scopedCss } from './theme/tokens.ts'
 

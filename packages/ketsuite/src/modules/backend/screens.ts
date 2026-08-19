@@ -48,7 +48,21 @@ const label = (_: Translator, module: string, field: 'title' | 'summary' | 'cate
 /** Who the screen is being shown to. Absent only while nothing is signed in. */
 export type Viewer = { name: string; company: string | null; companies: string[] }
 
-const shell = (_: Translator, active: Screen, title: string, body: TemplateResult, viewer?: Viewer | null): TemplateResult => html`
+/**
+ * What other modules contributed to this screen, already rendered.
+ *
+ * Passed in rather than fetched: a screen stays a pure function of its data, and
+ * reaching for a runtime here is how it stops being testable — the catalogue
+ * renders every one of these with no server at all.
+ */
+export type Extras = {
+  'topbar.end'?: unknown
+  'apps.footer'?: unknown
+  /** Rendered per card, keyed by app name — the joint takes the app as a prop. */
+  'app-card.actions'?: Record<string, unknown>
+}
+
+const shell = (_: Translator, active: Screen, title: string, body: TemplateResult, viewer?: Viewer | null, extras: Extras = {}): TemplateResult => html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
     <div data-ui="brand">${_('backend.brand')}</div>
@@ -61,6 +75,7 @@ const shell = (_: Translator, active: Screen, title: string, body: TemplateResul
   <main data-ui="main">
     <header data-ui="topbar">
       <h1 data-ui="title">${title}</h1>
+      ${extras['topbar.end'] ?? ''}
       ${when(!!viewer, () => html`
       <div data-ui="viewer">
         <span data-ui="viewer-name">${viewer!.name}</span>
@@ -85,7 +100,7 @@ export const errorState = (code: string, message: string, hint: string): Templat
   ${when(!!hint, () => html`<p data-ui="error-hint">${hint}</p>`)}
 </div>`
 
-const appCard = (_: Translator, app: AppRow): TemplateResult => html`
+const appCard = (_: Translator, app: AppRow, extras: Extras = {}): TemplateResult => html`
 <article data-ui="app-card" data-state=${app.state} data-app=${app.name}>
   <h3 data-ui="app-title">${label(_, app.name, 'title', app.title)}</h3>
   <p data-ui="app-summary">${label(_, app.name, 'summary', app.summary)}</p>
@@ -98,10 +113,11 @@ const appCard = (_: Translator, app: AppRow): TemplateResult => html`
             disabled=${app.state === 'installed' && app.dependents.length > 0}>
       ${app.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install')}
     </button>
+    ${extras['app-card.actions']?.[app.name] ?? ''}
   </div>
 </article>`
 
-export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null): TemplateResult => {
+export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null, extras: Extras = {}): TemplateResult => {
   const categories = [...new Set(apps.map(a => a.category))].sort()
   const categoryLabel = (c: string): string => {
     const owner = apps.find(a => a.category === c)
@@ -112,11 +128,11 @@ export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null
     : html`<div data-ui="app-groups">${each(categories, c => c, category => html`
         <section data-ui="app-group" data-category=${category}>
           <h2 data-ui="group-title">${categoryLabel(category)}</h2>
-          <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a))}</div>
-        </section>`)}</div>`, viewer)
+          <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a, extras))}</div>
+        </section>`)}${extras['apps.footer'] ?? ''}</div>`, viewer, extras)
 }
 
-export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null): TemplateResult =>
+export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null, extras: Extras = {}): TemplateResult =>
   shell(_, 'pages', _('backend.pages.title'), pages.length === 0
     ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
     : html`<table data-ui="table">
@@ -128,15 +144,15 @@ export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | n
             <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
           </tr>`)}
         </tbody>
-      </table>`, viewer)
+      </table>`, viewer, extras)
 
-export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null): TemplateResult =>
+export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null, extras: Extras = {}): TemplateResult =>
   shell(_, 'settings', _('backend.settings.title'), html`
     <section data-ui="tokens">
       <h2 data-ui="group-title">${_('backend.settings.tokens')}</h2>
       <dl data-ui="token-list">${each(Object.entries(tokens), ([k]) => k, ([k, v]) => html`
         <div data-ui="token"><dt data-ui="token-name">--ket-${k}</dt><dd data-ui="token-value">${v}</dd></div>`)}
       </dl>
-    </section>`)
+    </section>`, null, extras)
 
 export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState, errorState }
