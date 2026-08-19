@@ -15,6 +15,10 @@ import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
+import { compileRoutes } from '../kernel/routes.ts'
+import type { RouteParams } from '../kernel/routes.ts'
+
+type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
 export type ServeOpts = {
   manifest: Manifest
@@ -53,7 +57,7 @@ export type ServeOpts = {
   /** Static file mounts. One fixed directory, or a resolver that answers per request. */
   assets?: AssetMount | AssetMount[]
   /** Extra routes, matched before the theme takes the request. */
-  routes?: Record<string, (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult>
+  routes?: Record<string, HttpRoute>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
 }
 
@@ -99,6 +103,10 @@ export async function createKetServer(o: ServeOpts) {
       code: 'E_NO_RESOLVER',
       message: 'a pool needs resolveDatastore to know which database a request belongs to',
     })
+
+  // Compile once: matching stays cheap per request, and an ambiguous surface is
+  // refused before the server starts rather than depending on object insertion order.
+  const matchRoute = compileRoutes(o.routes ?? {})
 
   // Per-request database resolution. The single-adapter case is the same code path
   // with a resolver that always answers the same thing.
@@ -156,9 +164,9 @@ export async function createKetServer(o: ServeOpts) {
         return res.end('not found')
       }
 
-      const route = o.routes?.[url.pathname]
+      const route = matchRoute(url.pathname)
       if (route) {
-        const r = await route(url, req)
+        const r = await route.value(url, req, route.params)
         res.writeHead(r.status ?? 200, {
           'content-type': `${r.type ?? 'text/html'}; charset=utf-8`,
           ...r.headers,

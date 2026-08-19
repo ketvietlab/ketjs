@@ -40,12 +40,17 @@ import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
+import type { RouteParams } from '../kernel/routes.ts'
 
 export type { Html, RouteResult } from './respond.ts'
 export { page, fragment, text, raw, withHeaders } from './respond.ts'
 export { json } from './respond.ts'
 import type { Html, RouteResult } from './respond.ts'
-export type Route = (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult
+export type Route = (
+  url: URL,
+  req: IncomingMessage,
+  params: RouteParams,
+) => Promise<RouteResult> | RouteResult
 
 /**
  * What a route needs that only the running server has. Handed to `serve.routes` so
@@ -468,7 +473,7 @@ export async function bootApp(
 
   const moduleRoutes: Record<string, Route> = {}
   for (const [path, entry] of Object.entries(manifest.routes)) {
-    moduleRoutes[path] = async (url, req) => {
+    moduleRoutes[path] = async (url, req, params) => {
       const on = await tenants.ofRequest(url, req, (t) => t.apps.enabled())
       if (!on.has(entry.by)) {
         return text(`${path} belongs to "${entry.by}", which is not installed on this database`, {
@@ -489,7 +494,7 @@ export async function bootApp(
             : text('sign in first', { status: 401 })
         }
       }
-      return (routeHandlers.get(path) as Route)(url, req)
+      return (routeHandlers.get(path) as Route)(url, req, params)
     }
   }
 
@@ -540,6 +545,27 @@ export async function bootApp(
       message: `app "${spec.name}" resolves pages with "${pages.resolve}", which no installed module declares`,
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
     })
+  }
+
+  const appRoutes = serve.routes?.(ctx) ?? {}
+  for (const path of Object.keys(appRoutes)) {
+    if (path.startsWith('/_ket/')) {
+      throw new KetError({
+        code: 'E_ROUTE_RESERVED',
+        module: spec.name,
+        message: `app "${spec.name}" claims "${path}", which is reserved`,
+        hint: '/_ket/ belongs to the framework: health, the agent descriptor, streams and assets',
+      })
+    }
+    const owner = manifest.routes[path]?.by
+    if (owner) {
+      throw new KetError({
+        code: 'E_ROUTE_CLASH',
+        module: spec.name,
+        message: `module "${owner}" and app "${spec.name}" both serve "${path}"`,
+        hint: 'two owners cannot share one path — rename one, or keep the route in its module',
+      })
+    }
   }
 
   const server = await createKetServer({
@@ -616,7 +642,7 @@ export async function bootApp(
       : {}),
     routes: {
       ...moduleRoutes,
-      ...(serve.routes?.(ctx) ?? {}),
+      ...appRoutes,
       // The framework's own two, mounted last so an app cannot shadow them by accident.
       // Both answer for the tenant that asked: "which apps are on" has no
       // deployment-wide answer once there is more than one database.
@@ -652,7 +678,7 @@ export async function bootApp(
     // is what the deployment actually serves, not what it could serve.
     for (const [p, r] of Object.entries(manifest.routes))
       if (enabled.includes(r.by)) paths.set(p, p.replace(/^\//, ''))
-    for (const p of Object.keys(serve.routes?.(ctx) ?? {})) paths.set(p, p.replace(/^\//, '') || 'site')
+    for (const p of Object.keys(appRoutes)) paths.set(p, p.replace(/^\//, '') || 'site')
     const rows = [
       ...[...paths].map(([p, label]) => [label, at + p]),
       ['health', `${at}/_ket/health`],

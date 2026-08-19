@@ -9,6 +9,8 @@ import { topoSort } from './graph.ts'
 import { Diagnostics } from './errors.ts'
 import { parseType } from './types.ts'
 import type { KetModule, Manifest, ComposedModel } from '../types.ts'
+import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
+import type { RoutePattern } from './routes.ts'
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
@@ -81,8 +83,12 @@ export function compose(
       manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${href}` })
     }
     for (const [path, make] of Object.entries(m.routes)) {
-      if (!path.startsWith('/')) {
-        diag.add({ code: 'E_ROUTE_PATH', module: m.name, message: `route "${path}" must start with "/"` })
+      let pattern: RoutePattern
+      try {
+        pattern = parseRoutePattern(path)
+      } catch (error) {
+        const e = error as { code?: string; message: string; hint?: string | null }
+        diag.add({ code: e.code ?? 'E_ROUTE_PATTERN', module: m.name, message: e.message, hint: e.hint })
         continue
       }
       if (path.startsWith('/_ket/')) {
@@ -101,6 +107,19 @@ export function compose(
           module: m.name,
           message: `both "${taken.by}" and "${m.name}" serve "${path}"`,
           hint: 'two modules cannot own one path — rename one, or have one fill a joint in the other',
+        })
+        continue
+      }
+      const ambiguous = Object.keys(manifest.routes).find((other) =>
+        ambiguousRoutes(parseRoutePattern(other), pattern),
+      )
+      if (ambiguous) {
+        const owner = manifest.routes[ambiguous]!.by
+        diag.add({
+          code: 'E_ROUTE_AMBIGUOUS',
+          module: m.name,
+          message: `routes "${ambiguous}" owned by "${owner}" and "${path}" owned by "${m.name}" can match the same path with equal priority`,
+          hint: 'make one route more specific, or let one module own both paths',
         })
         continue
       }

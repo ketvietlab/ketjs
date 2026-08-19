@@ -1418,7 +1418,28 @@ state in the URL (D43), so a filtered sidebar is also a link. A filter that matc
 nothing says so — the label and silence under it read as broken rather than as
 "nothing here".
 
-## D46 — Durable jobs live with tenant data; notification is only a bell
+## D46 — Dynamic routes belong to the engine, not to website modules
+**A parameter is one whole path segment.** `/products/{slug}` is a route;
+`/products/product-{slug}` is not. Parameters use identifier names, may not repeat
+inside one pattern, are URL-decoded once by the engine, and arrive as the third
+argument of the route handler. Existing handlers that only need the URL and request
+remain valid.
+
+**Specificity, not registration order, chooses the route.** The pattern with more
+static segments wins, so `/products/new` beats `/products/{slug}`. Two patterns that
+can match the same pathname with the same specificity are a composition error. An
+application must not change behaviour because two modules happened to be listed in
+a different order.
+
+**The rest of the route contract still applies.** A dynamic route belongs to its
+module, disappears when that module is disabled, and is closed to strangers unless
+it declares `anonymous: true`. Framework paths under `/_ket/` remain reserved.
+Declared routes run before the theme page resolver, exactly as static routes already
+did; the resolver is the fallback for paths no route owns. Website modules therefore
+declare the public URL they own rather than teaching their own handlers to parse a
+path the engine claimed not to understand.
+
+## D47 — Durable jobs live with tenant data; notification is only a bell
 
 **Chosen:** PostgreSQL or SQLite owns every job state. Redis is not required.
 `LISTEN/NOTIFY` carries only the queue name and only shortens wake-up latency;
