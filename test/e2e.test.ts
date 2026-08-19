@@ -2,15 +2,18 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   _resetIdempotency,
+  bytes,
   compose,
   createKetServer,
   createTheme,
+  KetError,
   migrateOne,
   planMigration,
   registerFunctions,
   renderSql,
   schemaFromManifest,
   sqliteAdapter,
+  streamed,
 } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
@@ -83,6 +86,45 @@ test('e2e: a bad call returns a structured error an agent can act on', async () 
   assert.match(body.hint, /signature/)
   await app.close()
   await adapter.close()
+})
+
+test('e2e: binary and streamed routes preserve bytes without inventing a charset', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const manifest = compose([], { headless: true })
+  const app = await createKetServer({
+    manifest,
+    adapter,
+    routes: {
+      '/binary': () => bytes(Uint8Array.of(0, 255, 1), { type: 'image/png' }),
+      '/stream': () =>
+        streamed(
+          (async function* () {
+            yield Uint8Array.of(1, 2)
+            yield Uint8Array.of(3)
+          })(),
+          { type: 'application/octet-stream' },
+        ),
+      '/large': () => {
+        throw new KetError({ code: 'E_PAYLOAD_TOO_LARGE', message: 'too large' })
+      },
+    },
+  })
+  const port = await app.listen(0)
+  const base = `http://127.0.0.1:${port}`
+  try {
+    const binary = await fetch(`${base}/binary`)
+    assert.equal(binary.headers.get('content-type'), 'image/png')
+    assert.deepEqual(new Uint8Array(await binary.arrayBuffer()), Uint8Array.of(0, 255, 1))
+    const stream = await fetch(`${base}/stream`)
+    assert.equal(stream.headers.get('content-type'), 'application/octet-stream')
+    assert.deepEqual(new Uint8Array(await stream.arrayBuffer()), Uint8Array.of(1, 2, 3))
+    const large = await fetch(`${base}/large`)
+    assert.equal(large.status, 413)
+  } finally {
+    await app.close()
+    await adapter.close()
+  }
 })
 
 test('e2e: dry-run over HTTP reports writes and commits nothing', async () => {

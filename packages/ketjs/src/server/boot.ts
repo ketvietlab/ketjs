@@ -35,6 +35,8 @@ import { html, each } from 'ketjs-view'
 import { sqliteStore } from './config.ts'
 import { bootRuntime } from './runtime.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
+import { namespacedStorage, storageFromConfig } from './storage/index.ts'
+import type { OpenStorage, Storage } from './storage/index.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
 import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
@@ -43,7 +45,7 @@ import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 
 export type { Html, RouteResult } from './respond.ts'
-export { page, fragment, text, raw, withHeaders } from './respond.ts'
+export { page, fragment, text, bytes, streamed, raw, withHeaders } from './respond.ts'
 export { json } from './respond.ts'
 import type { Html, RouteResult } from './respond.ts'
 export type Route = (
@@ -113,6 +115,8 @@ export type ServeContext = {
    * in that tenant's database — one per tenant, not one per deployment.
    */
   sessionsOf: (url: URL, req: IncomingMessage) => Promise<Sessions | null>
+  /** Blob storage isolated to this request's tenant. */
+  storageOf: (url: URL, req: IncomingMessage) => Promise<Storage>
 }
 
 /**
@@ -138,6 +142,8 @@ export type ServeSpec = {
   routes?: (ctx: ServeContext) => Record<string, Route>
   /** Anything other than SQLite; the framework cannot depend on a driver. */
   openStore?: OpenStore
+  /** Override the built-in local/S3 storage selected by RuntimeConfig. */
+  openStorage?: OpenStorage
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
@@ -182,6 +188,17 @@ export async function bootApp(
 ): Promise<BootedApp> {
   const serve = spec.serve ?? {}
   const { config, modules, manifest } = await bootRuntime(spec, o)
+  const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
+  const storages = new Map<string, Storage>()
+  const storageFor = (key: string): Storage => {
+    const namespace = key || spec.name
+    let storage = storages.get(namespace)
+    if (!storage) {
+      storage = namespacedStorage(baseStorage, namespace)
+      storages.set(namespace, storage)
+    }
+    return storage
+  }
 
   /**
    * An empty database is not a useful one to look at, so a first run installs
@@ -401,6 +418,7 @@ export async function bootApp(
     translate,
     styles,
     sessionsOf,
+    storageOf: async (url, req) => storageFor(tenants.keyOf(url, req)),
     document,
     joint: (url, req, key, props) =>
       tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),

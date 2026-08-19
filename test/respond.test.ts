@@ -3,6 +3,11 @@ import assert from 'node:assert/strict'
 import { page, fragment, json, text, raw, document, bootApp, defineApp, defineModule } from 'ketjs'
 import { html } from 'ketjs-view'
 
+const stringBody = (body: ReturnType<typeof page>['body']): string => {
+  assert.equal(typeof body, 'string')
+  return body as string
+}
+
 /**
  * A route's body used to be a `string`, so a value that had been through the
  * escaper and a value someone concatenated by hand were the same type. Nothing
@@ -17,26 +22,30 @@ test('respond: a document is markup, so a hole cannot become markup', () => {
   const r = page({
     body: document({ lang: 'en', title: 'Home', body: html`<p>${'<script>alert(1)</script>'}</p>` }),
   })
-  assert.match(r.body, /^<!doctype html><html lang="en">/)
-  assert.ok(r.body.includes('&lt;script&gt;'), 'the hole was escaped')
-  assert.ok(!r.body.includes('<script>alert'), 'and nothing got through')
+  const body = stringBody(r.body)
+  assert.match(body, /^<!doctype html><html lang="en">/)
+  assert.ok(body.includes('&lt;script&gt;'), 'the hole was escaped')
+  assert.ok(!body.includes('<script>alert'), 'and nothing got through')
 })
 
 test('respond: the lang attribute is a hole like any other', () => {
   const r = page({ body: document({ lang: 'vi"><script>x</script>', body: html`<p>hi</p>` }) })
-  assert.ok(!r.body.includes('<script>x'), 'an attribute hole is escaped, so it cannot close its own quote')
+  assert.ok(
+    !stringBody(r.body).includes('<script>x'),
+    'an attribute hole is escaped, so it cannot close its own quote',
+  )
 })
 
 test('respond: a title is optional, and absent means absent rather than empty', () => {
   const r = page({ body: document({ lang: 'en', body: html`<p>x</p>` }) })
-  assert.ok(!r.body.includes('<title>'))
+  assert.ok(!stringBody(r.body).includes('<title>'))
 })
 
 test('respond: head content is markup too', () => {
   const r = page({
     body: document({ lang: 'en', head: html`<link rel="stylesheet" href="/a.css">`, body: html`<p>x</p>` }),
   })
-  assert.match(r.body, /<link rel="stylesheet" href="\/a\.css">/)
+  assert.match(stringBody(r.body), /<link rel="stylesheet" href="\/a\.css">/)
 })
 
 test('respond: a fragment carries no doctype, so it can be swapped into a page', () => {

@@ -151,6 +151,23 @@ why the fetch index is partial across runnable states and ordered `(queue,
 priority, scheduled_at, id)` rather than putting the multi-valued `state` column
 before the requested order.
 
+## S3 storage across tenant databases
+
+The storage benchmark starts the full HTTP app, streams multipart uploads into a
+real MinIO server, writes Attachment metadata into separate physical databases,
+then downloads every object through the module route. It verifies the exact object
+count under each tenant namespace before cleanup.
+
+| metadata driver | databases | files | uploads/s | downloads/s | tenant namespaces |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 200 | 24 | 810 | complete |
+| PostgreSQL 17 | 4 | 100 | 21 | 61 | complete |
+
+These numbers include multipart parsing, SHA-256 content addressing, Attachment
+writes, tenant-pool leasing, SigV4 and actual S3 HTTP. They are development-machine
+figures, not object-store capacity claims. Reproduce with `npm run bench:storage`;
+select PostgreSQL with `KET_BENCH_DRIVER=postgres`.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so

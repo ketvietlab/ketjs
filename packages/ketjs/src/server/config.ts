@@ -41,6 +41,15 @@ export type RuntimeConfig = {
   secret: string | null
   /** LISTEN/NOTIFY is only an accelerator; polling remains the guarantee. */
   queueNotify: boolean
+  storageKind: 'local' | 's3'
+  storageDir: string
+  uploadMax: number
+  s3Endpoint: string | null
+  s3Region: string
+  s3Bucket: string | null
+  s3AccessKeyId: string | null
+  s3SecretAccessKey: string | null
+  s3PathStyle: boolean
 }
 
 const list = (v: string | undefined): string[] | null =>
@@ -55,6 +64,18 @@ export function readConfig(
   env: Record<string, string | undefined> = process.env,
   defaults: Partial<RuntimeConfig> = {},
 ): RuntimeConfig {
+  const storageKind = env.KET_STORAGE ?? defaults.storageKind ?? 'local'
+  if (storageKind !== 'local' && storageKind !== 's3')
+    throw new KetError({
+      code: 'E_STORAGE_CONFIG',
+      message: `KET_STORAGE must be local or s3, got "${storageKind}"`,
+    })
+  const uploadMax = Number(env.KET_UPLOAD_MAX ?? defaults.uploadMax ?? 25 * 1024 * 1024)
+  if (!Number.isSafeInteger(uploadMax) || uploadMax < 1)
+    throw new KetError({
+      code: 'E_STORAGE_CONFIG',
+      message: `KET_UPLOAD_MAX must be a positive integer, got "${env.KET_UPLOAD_MAX ?? uploadMax}"`,
+    })
   return {
     port: Number(env.PORT ?? defaults.port ?? 3000),
     host: env.HOST ?? defaults.host ?? '127.0.0.1',
@@ -70,6 +91,16 @@ export function readConfig(
     secret: env.KET_SECRET ?? defaults.secret ?? null,
     queueNotify:
       env.KET_QUEUE_NOTIFY === undefined ? (defaults.queueNotify ?? true) : env.KET_QUEUE_NOTIFY !== '0',
+    storageKind,
+    storageDir: env.KET_STORAGE_DIR ?? defaults.storageDir ?? '.ket/storage',
+    uploadMax,
+    s3Endpoint: env.KET_S3_ENDPOINT ?? defaults.s3Endpoint ?? null,
+    s3Region: env.KET_S3_REGION ?? defaults.s3Region ?? 'us-east-1',
+    s3Bucket: env.KET_S3_BUCKET ?? defaults.s3Bucket ?? null,
+    s3AccessKeyId: env.KET_S3_KEY ?? defaults.s3AccessKeyId ?? null,
+    s3SecretAccessKey: env.KET_S3_SECRET ?? defaults.s3SecretAccessKey ?? null,
+    s3PathStyle:
+      env.KET_S3_PATH_STYLE === undefined ? (defaults.s3PathStyle ?? false) : env.KET_S3_PATH_STYLE !== '0',
   }
 }
 

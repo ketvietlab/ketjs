@@ -23,10 +23,22 @@ export { bootWorker, serveWorker } from './server/worker.ts'
 export type { BootedWorker, WorkerLog } from './server/worker.ts'
 export { defineJob, registerJobs } from './server/jobs.ts'
 export type { RouteParams } from './kernel/routes.ts'
-export { page, fragment, json, text, raw, document, withHeaders } from './server/respond.ts'
-export type { Html, RouteResult } from './server/respond.ts'
+export { page, fragment, json, text, bytes, streamed, raw, document, withHeaders } from './server/respond.ts'
+export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
 export type { RuntimeConfig, OpenStore } from './server/config.ts'
+export {
+  storageFromConfig,
+  localStorage,
+  s3Storage,
+  namespacedStorage,
+  effectStorage,
+} from './server/storage/index.ts'
+export { signRequest, presignUrl, sha256 } from './server/storage/index.ts'
+export type { Storage, Stored, OpenStorage, S3StorageOptions, StorageEffect } from './server/storage/index.ts'
+export type { SigV4Credentials } from './server/storage/index.ts'
+export { multipart } from './server/multipart.ts'
+export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
 export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
 export {
   createSessions,
