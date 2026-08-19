@@ -27,13 +27,60 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
     islands: {},
     sections: {},
     relations: {},
-    tokens: {}, patches: [], messages: {},
+    tokens: {}, assets: {}, styles: [], routes: {}, patches: [], messages: {},
   }
 
   for (const m of order) {
     manifest.modules[m.name] = {
       version: m.version, kind: m.kind, depends: [...m.depends],
       app: m.app, title: m.title, summary: m.summary, category: m.category, install: m.install ?? 'manual', removable: m.removable !== false,
+    }
+  }
+
+  // --- the served surface -------------------------------------------------
+  //
+  // Assets, stylesheets and routes are composed for the same reason models are:
+  // otherwise the app hand-assembles them, which means knowing another module's
+  // file layout and going on serving it after that module is switched off.
+  //
+  // `order` is dependency order, so a module that extends another contributes its
+  // stylesheet after it and can override it. That ordering is the point.
+  for (const m of order) {
+    if (m.assets) manifest.assets[m.name] = typeof m.assets === 'string' ? m.assets : m.assets.pathname
+    for (const href of m.styles) {
+      if (!m.assets) {
+        diag.add({
+          code: 'E_STYLE_WITHOUT_ASSETS', module: m.name,
+          message: `"${m.name}" declares style "${href}" but no assets directory`,
+          hint: 'styles are resolved against the module assets directory, so a module with styles needs one',
+        })
+        continue
+      }
+      manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${href}` })
+    }
+    for (const [path, make] of Object.entries(m.routes)) {
+      if (!path.startsWith('/')) {
+        diag.add({ code: 'E_ROUTE_PATH', module: m.name, message: `route "${path}" must start with "/"` })
+        continue
+      }
+      if (path.startsWith('/_ket/')) {
+        diag.add({
+          code: 'E_ROUTE_RESERVED', module: m.name,
+          message: `"${m.name}" claims "${path}", which is reserved`,
+          hint: '/_ket/ belongs to the framework: health, the agent descriptor, streams and assets',
+        })
+        continue
+      }
+      const taken = manifest.routes[path]
+      if (taken) {
+        diag.add({
+          code: 'E_ROUTE_CLASH', module: m.name,
+          message: `both "${taken.by}" and "${m.name}" serve "${path}"`,
+          hint: 'two modules cannot own one path — rename one, or have one fill a joint in the other',
+        })
+        continue
+      }
+      manifest.routes[path] = { by: m.name, make }
     }
   }
 

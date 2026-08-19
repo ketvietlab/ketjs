@@ -135,6 +135,32 @@ export type ModuleSpec = AppMeta & {
   tokens?: Record<string, string>
   templates?: Record<string, string>
   provides?: string[]
+  /**
+   * Static files this module ships — stylesheets, icons, fonts. Served under
+   * /_ket/asset/<module>/, namespaced so two modules may both ship tokens.css,
+   * and only for as long as the module is installed.
+   */
+  assets?: URL | string
+  /**
+   * Stylesheets for the head of every page, relative to `assets`, in the order
+   * written. Across modules the order is dependency order, so a module that
+   * extends another loads after it and can override it.
+   *
+   * Declared rather than linked by hand: an app that names another module's
+   * stylesheet has to know that module's file layout, and goes on linking it long
+   * after the module is uninstalled.
+   */
+  styles?: string[]
+  /**
+   * Routes this module serves, one factory per path.
+   *
+   * The path is data so composition can settle ownership — two modules claiming
+   * one path is an error at build, not a race at boot. The handler is a factory
+   * because it needs the running server, which does not exist yet. Dispatch checks
+   * the live manifest, so a route belonging to an uninstalled module is 404 rather
+   * than quietly still answering.
+   */
+  routes?: Record<string, (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route>
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandView>
   sections?: Record<string, SectionDef>
@@ -158,6 +184,9 @@ export type KetModule = Readonly<AppMeta> & {
   readonly tokens: Record<string, string>
   readonly templates: Record<string, string>
   readonly provides: readonly string[]
+  readonly assets: string | URL | null
+  readonly styles: readonly string[]
+  readonly routes: Record<string, (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route>
   readonly islands: Record<string, import('ketjs-view').IslandView>
   readonly sections: Record<string, SectionDef>
   readonly relations: Record<string, Record<string, RelationDef>>
@@ -179,6 +208,12 @@ export type Manifest = {
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
+  /** Static file directories, per module, behind /_ket/asset/<module>/. */
+  assets: Record<string, string>
+  /** Stylesheets in dependency order. A disabled module's are dropped by restrictManifest. */
+  styles: Array<{ by: string; href: string }>
+  /** Path -> the module that owns it and the factory that builds its handler. */
+  routes: Record<string, { by: string; make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }>
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */
   disabledModules?: string[]

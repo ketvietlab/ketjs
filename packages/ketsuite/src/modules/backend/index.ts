@@ -11,6 +11,7 @@
 
 import { defineModule } from 'ketjs'
 import { messages } from './messages.ts'
+import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'backend',
@@ -22,6 +23,12 @@ export default defineModule({
   // The screen you would use to put something back. A deployment that let you
   // remove it would let you remove your way out of ever fixing it.
   removable: false,
+  // Its own files, its own stylesheets, its own routes. The app used to name all
+  // three by reaching into this directory, which meant it went on serving them
+  // after the module was switched off.
+  assets: new URL('./design/', import.meta.url),
+  styles: ['tokens.css', 'admin.css'],
+  routes,
   messages,
 })
 
@@ -29,3 +36,4 @@ export { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from 
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
+export { routes } from './routes.ts'
