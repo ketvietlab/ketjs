@@ -155,6 +155,17 @@ this change. An app can pass its own `sessions.store` to decide it now.
 single adapter, so resumable streams are not yet per tenant. Named here rather than
 discovered later.
 
+**What a deployment that never wants tenants pays.** Nothing to declare — `tenants`
+is absent by default, `ket new` does not mention it, and KetSuite itself has no
+such line. The runtime cost is the `singleTenant` wrapper, which is a Map lookup;
+measured end to end, a request is 0.368 ms. The restricted manifest was already
+rebuilt on every call before this change, and is now cached against the installed
+set — 0.0153 ms to 0.0003 ms — so a single-database app comes out of this slightly
+faster than it went in. The API cost is real but small: `ctx.live()` became
+`ctx.live(req)` and `ctx.apps` became `ctx.appsOf(req)`, four call sites in the
+whole repository. That is the price of there being one shape rather than two, and
+it is the shape that cannot answer for the wrong tenant.
+
 ## D36 — A role is a list of functions, enforced where every call already passes
 **Chosen:** the framework enforces an allow-list, the app decides what is on it —
 the same split as the datastore driver, and for the same reason. Roles are the

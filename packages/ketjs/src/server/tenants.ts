@@ -118,8 +118,16 @@ export function createTenants(o: {
     return key
   }
 
-  // Keyed by tenant AND by what is installed, so switching an app on rebuilds the
-  // theme rather than serving a stale one until restart.
+  /**
+   * Both caches are keyed by tenant AND by what is installed, so switching an app
+   * on rebuilds rather than serving a stale answer until restart.
+   *
+   * The restricted manifest is worth caching for the same reason the theme is,
+   * and it always was: 0.015 ms a call against KetSuite's manifest, which is
+   * nothing until it is every request, and 0.0003 ms once kept. A deployment with
+   * one database benefits most, because its installed set almost never changes.
+   */
+  const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const themeFor = (key: string, live: Manifest): ThemeRuntime | null => {
     if (!o.theme) return null
@@ -134,7 +142,9 @@ export function createTenants(o: {
       const apps = await registryFor(key, adapter)
       // Resolved per request. The whole reason this file exists: computing it once
       // would show one tenant the module set of another.
-      const live = restrictManifest(o.manifest, await apps.enabled())
+      const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
+      let live = lives.get(stamp)
+      if (!live) { live = restrictManifest(o.manifest, await apps.enabled()); lives.set(stamp, live) }
       return fn({ key, adapter, apps, live, theme: themeFor(key, live) })
     })
 
@@ -157,12 +167,14 @@ export function createTenants(o: {
  * adapter comes from.
  */
 export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime }): Tenants {
+  const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const run = async <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> => {
-    const live = restrictManifest(o.manifest, await o.apps.enabled())
+    const stamp = [...(await o.apps.enabled())].sort().join(',')
+    let live = lives.get(stamp)
+    if (!live) { live = restrictManifest(o.manifest, await o.apps.enabled()); lives.set(stamp, live) }
     let theme: ThemeRuntime | null = null
     if (o.theme) {
-      const stamp = live.order.join(',')
       theme = themes.get(stamp) ?? o.theme(live)
       themes.set(stamp, theme)
     }
