@@ -21,6 +21,10 @@ import { migrateOne } from '../data/fleet.ts'
 import { registerFunctions, callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
 import { createSessions, dbSessionStore } from './session.ts'
+import { createTenants, singleTenant } from './tenants.ts'
+import type { Tenants, TenantSpec } from './tenants.ts'
+import { createAdapterPool } from '../data/pool.ts'
+import type { AppInfo } from '../kernel/apps.ts'
 import type { Sessions, SessionOptions } from './session.ts'
 import { document, json, text } from './respond.ts'
 import { readFile } from 'node:fs/promises'
@@ -52,23 +56,30 @@ export type Route = (url: URL, req: IncomingMessage) => Promise<RouteResult> | R
 export type ServeContext = {
   /** Everything this deployment ships, installed or not. */
   manifest: Manifest
-  /** Restricted to what is switched on in this database, right now. */
-  live: () => Promise<Manifest>
-  adapter: Adapter
-  apps: AppRegistry
+  /**
+   * Restricted to what is switched on for THIS request's tenant.
+   *
+   * It takes the request because the answer depends on it. Computing it once at
+   * boot is what would show one tenant the module set of another — and that does
+   * not fail, it answers wrongly, which is worse.
+   */
+  live: (req: IncomingMessage) => Promise<Manifest>
+  /** The app list for this request's tenant. The registry itself stays leased. */
+  appsOf: (req: IncomingMessage) => Promise<AppInfo[]>
   config: RuntimeConfig
   scopeOf: (url: URL, req: IncomingMessage) => Promise<Scope>
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
-  /** A function call carrying this request's live manifest and scope. */
+  /** A function call carrying this request's tenant, live manifest and scope. */
   call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
-  /** Every installed module's stylesheets, in dependency order, as link tags. */
-  styles: () => Promise<Html>
+  /** Installed modules' stylesheets for this tenant, in dependency order. */
+  styles: (req: IncomingMessage) => Promise<Html>
   /** Null when the app has not turned sessions on. */
   sessions: Sessions | null
 }
+
 
 /**
  * How a path becomes a page. The resolver is named rather than passed, so the
@@ -99,6 +110,11 @@ export type ServeSpec = {
    */
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
   /**
+   * Serve several tenants, one database each — Odoo's model, and the one that
+   * makes per-tenant module sets work. Absent, the app has a single datastore.
+   */
+  tenants?: TenantSpec
+  /**
    * Which functions a signed-in user may call. Absent means no restriction, which
    * is what an app without roles is. Returning a list restricts every call the
    * request makes, including the ones a route makes on its behalf.
@@ -110,8 +126,12 @@ export type ServeSpec = {
 export type BootedApp = {
   name: string
   manifest: Manifest
-  adapter: Adapter
-  apps: AppRegistry
+  /** The datastore, when there is exactly one. Null when the app serves tenants. */
+  adapter: Adapter | null
+  /** Likewise: with tenants, "which apps" is a question about a tenant. */
+  apps: AppRegistry | null
+  /** Per-tenant access, and the only form that works in both modes. */
+  tenants: Tenants
   config: RuntimeConfig
   port: number
   banner: () => Promise<string>
@@ -135,31 +155,88 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const modules = spec.theme ? [...spec.modules, spec.theme] : [...spec.modules]
   const manifest = compose(modules, { appRequires: spec.requires ?? [], headless: spec.headless ?? false })
 
-  const adapter = await (serve.openStore ?? sqliteStore)(config)
-  if (config.migrateOnBoot) {
-    const ops = await migrateOne(adapter, manifest)
-    if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
-  }
-
   registerFunctions(modules)
-  const apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
 
-  // An empty database is not a useful one to look at, so a first run installs
-  // enough to see something. A database that has been used is left exactly as it is.
+  /**
+   * An empty database is not a useful one to look at, so a first run installs
+   * enough to see something. A database that has been used is left exactly as it
+   * is — and with tenants, "first run" is per tenant rather than per deployment.
+   */
   const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
-  if (bootstrap.length && (await apps.enabled()).size === 0) {
+  const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
+    if (!bootstrap.length || (await apps.enabled()).size !== 0) return
     for (const name of bootstrap) await apps.install(name)
-    console.log(`  first run, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
+    console.log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
   }
+
+  // Opened here only when there is one. With tenants there is no single datastore,
+  // and a nullable field says that more honestly than a default one would.
+  const adapter: Adapter | null = serve.tenants ? null : await (serve.openStore ?? sqliteStore)(config)
+  let apps: AppRegistry | null = null
+  if (adapter) {
+    if (config.migrateOnBoot) {
+      const ops = await migrateOne(adapter, manifest)
+      if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
+    }
+    apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
+    await bootstrapInto('', apps)
+  }
+
+  /**
+   * How a request finds its database. One datastore is the degenerate case of the
+   * same interface rather than a second code path — two paths through the thing
+   * that decides whose data a request sees is exactly how one of them rots.
+   */
+  // Built per tenant, because which templates exist depends on what is installed.
+  const themeFactory = spec.headless || !spec.theme
+    ? {}
+    : { theme: (live: Manifest) => createTheme(live, modules, { translate: translate(config.defaultLocale) }) }
+
+  const tenants: Tenants = serve.tenants
+    ? createTenants({
+        spec: serve.tenants,
+        pool: createAdapterPool({
+          create: (key) => {
+            const made = (serve.tenants as TenantSpec).open(key, config)
+            // The pool wants an Adapter now; opening is the adapter's own job.
+            return made as Adapter
+          },
+          ...(serve.tenants.max !== undefined ? { max: serve.tenants.max } : {}),
+          ...(serve.tenants.idleMs !== undefined ? { idleMs: serve.tenants.idleMs } : {}),
+        }),
+        manifest,
+        autoInstall: config.autoInstall,
+        ...(config.migrateOnBoot ? {
+          prepare: async (key, a) => {
+            const ops = await migrateOne(a, manifest)
+            if (ops.length) console.log(`  migrate [${key}]: ${ops.length} operation(s)`)
+          },
+        } : {}),
+        onFirstTouch: (key, made) => bootstrapInto(key, made),
+        ...themeFactory,
+      })
+    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, ...themeFactory })
 
   /**
    * Sessions, when the app asks for them. Absent, the header shim stays and the
    * banner keeps saying so — an app that has not wired auth yet should look like
    * one rather than quietly appear to have it.
    */
+  // Sessions and tenants both want to own where the session table lives, and the
+  // answer — one per tenant database, so a user in two tenants has two logins — is
+  // worth deciding on its own rather than as a side effect of this change. Until
+  // then the combination is refused rather than half-built.
+  if (serve.sessions && serve.tenants && !serve.sessions.store) {
+    throw new KetError({
+      code: 'E_SESSIONS_WITH_TENANTS',
+      module: spec.name,
+      message: `app "${spec.name}" turns on both sessions and tenants`,
+      hint: 'sessions live per datastore and per-tenant sessions are not built yet — pass serve.sessions.store to decide it yourself',
+    })
+  }
   const sessions: Sessions | null = serve.sessions
     ? await createSessions({
-        store: dbSessionStore(adapter),
+        store: serve.sessions.store ?? dbSessionStore(adapter as Adapter),
         ...(config.secret ? { secret: config.secret } : {}),
         secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
         ...serve.sessions,
@@ -204,7 +281,6 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     return asked.find(l => l && known.has(l)) ?? config.defaultLocale
   }
 
-  const live = async () => restrictManifest(manifest, await apps.enabled())
   const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
 
   /**
@@ -213,19 +289,25 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    * files belonging to another module by hand — which meant knowing that module's
    * file layout, and going on linking them after it was uninstalled.
    */
-  const styles = async (): Promise<Html> => {
-    const live = (await apps.enabled())
-    const hrefs = manifest.styles.filter(s => live.has(s.by)).map(s => s.href)
-    return html`${each(hrefs, h => h, h => html`<link rel="stylesheet" href=${h}>`)}`
-  }
+  const styles = async (req: IncomingMessage): Promise<Html> =>
+    tenants.ofRequest(new URL('http://x/'), req, async (t) => {
+      const on = await t.apps.enabled()
+      const hrefs = manifest.styles.filter(s => on.has(s.by)).map(s => s.href)
+      return html`${each(hrefs, h => h, h => html`<link rel="stylesheet" href=${h}>`)}`
+    })
 
   const ctx: ServeContext = {
-    manifest, live, adapter, apps, config, scopeOf, localeOf, translate, styles, sessions,
-    call: async (name, input, url, req) =>
-      (await callFn(name, input, {
-        adapter, manifest: await live(), scope: await scopeOf(url, req), allow: await allowFor(req),
-      })).value,
-    document,
+    manifest, config, scopeOf, localeOf, translate, styles, sessions, document,
+    live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
+    appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
+    call: async (name, input, url, req) => {
+      // One lease for the whole call: the scope and the allow-list are resolved
+      // outside it, so a session lookup never holds a pooled connection.
+      const scope = await scopeOf(url, req)
+      const allow = await allowFor(req)
+      return tenants.ofRequest(url, req, async (t) =>
+        (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value)
+    },
   }
 
   /**
@@ -242,7 +324,8 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   const moduleRoutes: Record<string, Route> = {}
   for (const [path, entry] of Object.entries(manifest.routes)) {
     moduleRoutes[path] = async (url, req) => {
-      if (!(await apps.enabled()).has(entry.by)) {
+      const on = await tenants.ofRequest(url, req, (t) => t.apps.enabled())
+      if (!on.has(entry.by)) {
         return text(`${path} belongs to "${entry.by}", which is not installed on this database`, { status: 404 })
       }
       return (routeHandlers.get(path) as Route)(url, req)
@@ -256,14 +339,14 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    */
   const assetMount = {
     prefix: '/_ket/asset/',
-    resolve: async (rest: string): Promise<string | null> => {
+    resolve: async (rest: string, url: URL, req: IncomingMessage): Promise<string | null> => {
       const slash = rest.indexOf('/')
       if (slash <= 0) return null
       const owner = rest.slice(0, slash)
       const file = rest.slice(slash + 1)
       const dir = manifest.assets[owner]
       if (!dir || !file || file.startsWith('..') || isAbsolute(file)) return null
-      if (!(await apps.enabled()).has(owner)) return null
+        if (!(await tenants.ofRequest(url, req, (t) => t.apps.enabled())).has(owner)) return null
       return join(dir, file)
     },
   }
@@ -301,12 +384,26 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
 
   const server = await createKetServer({
     manifest, adapter,
+    /**
+     * The HTTP layer gets a pool whose leases go through the tenant runtime, not
+     * the raw one.
+     *
+     * Handing it the raw pool looked equivalent and was not: /_ket/fn would lease
+     * a datastore that had never been migrated, because migration happens the
+     * first time the tenant runtime touches it. The first API call to a new tenant
+     * failed with "no such table" while a page request to the same tenant worked.
+     * One door, so there is one place preparation can be forgotten.
+     */
+    ...(tenants.pool ? {
+      pool: { ...tenants.pool, with: <T>(key: string, fn: (a: Adapter) => Promise<T>) => tenants.with(key, (t) => fn(t.adapter)) },
+      resolveDatastore: (url: URL, req: IncomingMessage) => tenants.keyOf(url, req),
+    } : {}),
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: (_url, req) => allowFor(req),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme ? {} : {
-      theme: createTheme(await live(), modules, { translate: translate(config.defaultLocale) }),
+      theme: (url: URL, req: IncomingMessage) => tenants.ofRequest(url, req, async (t) => t.theme),
     }),
     /**
      * The storefront: a path becomes a page, and a page becomes its sections.
@@ -341,20 +438,25 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       ...moduleRoutes,
       ...(serve.routes?.(ctx) ?? {}),
       // The framework's own two, mounted last so an app cannot shadow them by accident.
-      '/_ket/health': async () => json({
-        ok: true, app: spec.name, database: adapter.name,
-        apps: [...(await apps.enabled())].sort(),
-        orphans: await apps.orphans(),
+      // Both answer for the tenant that asked: "which apps are on" has no
+      // deployment-wide answer once there is more than one database.
+      '/_ket/health': async (url, req) => tenants.ofRequest(url, req, async (t) => json({
+        ok: true, app: spec.name, database: t.adapter.name,
+        ...(t.key ? { tenant: t.key } : {}),
+        apps: [...(await t.apps.enabled())].sort(),
+        orphans: await t.apps.orphans(),
         locales: Object.keys(manifest.messages ?? {}),
-      }),
-      '/_ket/agent': async () => json(agentDescriptor(await live())),
+      })),
+      '/_ket/agent': async (url, req) => tenants.ofRequest(url, req, async (t) => json(agentDescriptor(t.live))),
     },
   })
 
   const port = await server.listen(config.port)
 
   const banner = async () => {
-    const enabled = [...(await apps.enabled())].sort()
+    // With tenants there is no deployment-wide list of installed apps, and the
+    // banner says which mode it is in rather than inventing one.
+    const enabled = apps ? [...(await apps.enabled())].sort() : []
     const at = `http://${config.host}:${port}`
     // A "site" row only means something if a path can become a page; an app that
     // declares its own "/" route would otherwise be listed twice, once wrongly.
@@ -369,8 +471,8 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       ['health', `${at}/_ket/health`],
       ['agent descriptor', `${at}/_ket/agent`],
       ['', ''],
-      ['database', adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`)],
-      ['apps installed', enabled.join(', ') || '(none)'],
+      ['database', adapter ? adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`) : `${(await tenants.keys()).length} tenant(s), one database each`],
+      ['apps installed', apps ? (enabled.join(', ') || '(none)') : 'per tenant'],
       ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
       ['identity', sessions ? `sessions (${sessions.store.name})` : 'X-Ket-Company header'],
       // Silence here would be the wrong kind: a module that declared install:'auto'
@@ -390,8 +492,12 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       + `${note}\n`
   }
 
-  const close = async () => { await server.close(); await adapter.close() }
-  return { name: spec.name, manifest, adapter, apps, config, port, banner, close }
+  const close = async () => {
+    await server.close()
+    if (adapter) await adapter.close()
+    await tenants.close()
+  }
+  return { name: spec.name, manifest, adapter, apps, tenants, config, port, banner, close }
 }
 
 /** bootApp, plus the banner and the signal handling a long-running process wants. */
