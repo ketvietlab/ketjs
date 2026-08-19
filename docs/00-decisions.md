@@ -108,6 +108,55 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D33 — `output` becomes a projection, enforced when declared
+**Chosen:** enforce where it is declared; leave an undeclared output meaning "hands
+everything back", and let `ket permissions` count what is still open. Making it
+mandatory is a migration across every function at once, and a gap that is *visible*
+beats a migration nobody finishes. The count is the progress bar: 16 of 17
+unprojected when the report landed, 5 after this change.
+
+**What it was before:** a comment. `output` was composed into the manifest and read
+by nothing, so a function could declare three fields and return eight. Measured on
+a handler that preloads a relation to show a product's name:
+
+```
+output đã khai : {"id","qty","productName"}
+thực tế trả về : { companyId, id, productId, qty,
+                   product: { id, name, cost: 12000, price: 30000 } }
+```
+
+The cost of goods left the building, and so did the scope column, which is
+machinery and nobody's business.
+
+**Two properties, deliberately told apart.** *Nothing undeclared escapes* is
+picking, so it holds for every value and for an empty result — it cannot depend on
+the data, which is the mistake the preload check made and #10 fixed. *Everything
+declared is present* can only be checked where a row exists; an empty result proves
+nothing about it. That is a bug in the handler rather than a hole in the boundary,
+and it is reported as one, with the fix in the hint.
+
+**`?` means the same as it does everywhere else.** Enforcing the declaration
+immediately caught the only function that had one: `uom.convert` declared
+`{ qty: 'float' }` and actually answers `{ok:true, qty}` or `{ok:false, errors}`.
+A flat record cannot describe a union without optionality, and that union is the
+convention every write function here uses. The declaration was simply wrong, and
+nothing said so until something read it.
+
+**It is one level deep, and that is a limit rather than an oversight.** Naming a
+nested object hands it over whole; a narrower slice is what view models are, and
+they already exist. Asserted in a test so the limit is a fact rather than a
+surprise.
+
+**The report now answers the field-level question**, which was the half that was
+missing from D31:
+
+```
+product.listTemplates  reads
+                       returns active, categoryId, description, id, name, …
+website_menu.listMenu  reads
+                       returns WHOLE ROWS — output undeclared
+```
+
 ## D32 — Reads span a set of companies, writes go to exactly one
 **Chosen:** Odoo's split, deliberately. `scope.companies` is what a read may see;
 `scope.company` is what a new row is stamped with. The split is right because the

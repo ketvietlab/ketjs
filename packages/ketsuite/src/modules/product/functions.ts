@@ -5,6 +5,10 @@ import { PRODUCT_TYPES } from './types.ts'
 export const functions: Record<string, FnSpec> = {
   listTemplates: defineFn({
     input: { withVariants: 'bool?', type: 'text?' },
+    // Projection is one level deep: naming "variants" here says the caller gets
+    // the variant rows whole. That is a decision, and it is visible as one — the
+    // alternative for a narrower slice is a view model, which is a field list.
+    output: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?', active: 'bool?', variants: 'json?' },
     effects: ['read:product.Template', 'read:product.Product'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -17,6 +21,7 @@ export const functions: Record<string, FnSpec> = {
 
   getTemplate: defineFn({
     input: { id: 'id' },
+    output: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?', active: 'bool?', variants: 'json?', category: 'json?', uom: 'json?' },
     effects: ['read:product.Template', 'read:product.Product', 'read:product.Category', 'read:uom.Unit'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -27,6 +32,7 @@ export const functions: Record<string, FnSpec> = {
 
   saveTemplate: defineFn({
     input: { id: 'id', name: 'text', type: 'text', categoryId: 'id?', uomId: 'id?', description: 'text?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:product.Template', 'write:product.Template'],
     idempotent: true,
     agent: true,
@@ -48,6 +54,7 @@ export const functions: Record<string, FnSpec> = {
 
   saveVariant: defineFn({
     input: { id: 'id', templateId: 'id', sku: 'text', barcode: 'text?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:product.Product', 'read:product.Template', 'write:product.Product'],
     idempotent: true,
     agent: true,
@@ -72,6 +79,7 @@ export const functions: Record<string, FnSpec> = {
 
   archiveTemplate: defineFn({
     input: { id: 'id', active: 'bool' },
+    output: { id: 'id', active: 'bool' },
     effects: ['write:product.Template'],
     idempotent: true,
     agent: true,
@@ -85,6 +93,7 @@ export const functions: Record<string, FnSpec> = {
 
   listCategories: defineFn({
     input: {},
+    output: { id: 'id', name: 'text', parentId: 'id?', children: 'json?' },
     effects: ['read:product.Category'],
     agent: true,
     handler: async (ctx: Ctx) => {
@@ -95,6 +104,7 @@ export const functions: Record<string, FnSpec> = {
 
   saveCategory: defineFn({
     input: { id: 'id', name: 'text', parentId: 'id?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:product.Category', 'write:product.Category'],
     idempotent: true,
     agent: true,
