@@ -108,6 +108,37 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D25 — Product: template and variant, with the stock concern left to stock
+**Naming follows Odoo** — `product.Template` and `product.Product`, where Product is
+the variant — so the migration map stays one to one. The name reads oddly and a
+comment says so; a comment costs less than a translation table.
+
+**Where it deliberately does not follow Odoo:** `product.template.type` there takes
+three values, one of which — `product`, meaning storable — is a *stock* concept
+living in a module that must not know stock exists. Uninstall stock and the value
+means nothing while still sitting in the data.
+
+Here `product` says only `goods` or `service`, and `stock` extends the template with
+`tracked`. Odoo's three states still map one to one — service · goods+untracked ·
+goods+tracked — and a template keeps its meaning when stock is switched off. A test
+asserts both halves.
+
+**Attribute values reach a variant through an explicit join model**, not a hidden
+many-to-many. The framework has no magic for it, and a join you can see is one you
+can query, scope and migrate.
+
+**Master data is shared**, per the decision that products, partners and price lists
+are tenant-wide: no company column exists on these tables at all, and a second
+company sees the same catalogue.
+
+**Archived, never deleted** — the same reason a field is never dropped. Rows
+elsewhere point at this one.
+
+**Cut on purpose:** packaging, dynamic variant generation, attribute exclusions,
+and units of measure. UoM in particular is deferred until its rounding behaviour has
+been discussed on its own; getting a carton-to-piece conversion wrong is the kind of
+bug that quietly skews stock for months.
+
 ## D24 — Relations, with no lazy side at all
 **Deferred since D11, opened now** because product cannot be modelled without it:
 a template has variants, a variant belongs to a template.
