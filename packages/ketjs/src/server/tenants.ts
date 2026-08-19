@@ -20,6 +20,7 @@ import type { AdapterPool } from '../data/pool.ts'
 import type { AppRegistry } from '../kernel/apps.ts'
 import type { Adapter, Manifest } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
+import type { Sessions } from './session.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RuntimeConfig } from './config.ts'
 
@@ -50,6 +51,16 @@ export type Tenant = {
   live: Manifest
   /** Compiled against what this tenant has installed, and cached with it. */
   theme: ThemeRuntime | null
+  /**
+   * Whose logins these are.
+   *
+   * Per tenant when the tenant is known before the cookie is read — which it is
+   * when tenants arrive by subdomain, because the Host says so. An app on one
+   * domain for every tenant cannot do that (reading the session needs the
+   * database, knowing the database needs the session), and supplies one shared
+   * store instead. Both are expressible; neither is assumed.
+   */
+  sessions: Sessions | null
 }
 
 export type Tenants = {
@@ -86,6 +97,8 @@ export function createTenants(o: {
    * every template on every request would be the most expensive thing here.
    */
   theme?: (live: Manifest) => ThemeRuntime
+  /** Built once per tenant, against that tenant's own datastore. */
+  sessions?: (adapter: Adapter) => Promise<Sessions>
 }): Tenants {
   // One registry per datastore, kept: building it runs DDL, and doing that per
   // request would put a CREATE TABLE IF NOT EXISTS in front of every page.
@@ -129,6 +142,13 @@ export function createTenants(o: {
    */
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
+  const sessions = new Map<string, Promise<Sessions>>()
+  const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
+    if (!o.sessions) return null
+    let s = sessions.get(key)
+    if (!s) { s = o.sessions(adapter); sessions.set(key, s) }
+    return s
+  }
   const themeFor = (key: string, live: Manifest): ThemeRuntime | null => {
     if (!o.theme) return null
     const stamp = `${key}::${live.order.join(',')}`
@@ -145,7 +165,7 @@ export function createTenants(o: {
       const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
       let live = lives.get(stamp)
       if (!live) { live = restrictManifest(o.manifest, await apps.enabled()); lives.set(stamp, live) }
-      return fn({ key, adapter, apps, live, theme: themeFor(key, live) })
+      return fn({ key, adapter, apps, live, theme: themeFor(key, live), sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
     })
 
   return {
@@ -166,7 +186,7 @@ export function createTenants(o: {
  * exercises this implementation, and the pooled one differs only in where the
  * adapter comes from.
  */
-export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime }): Tenants {
+export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; sessions?: Sessions | null }): Tenants {
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const run = async <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> => {
@@ -178,7 +198,7 @@ export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest:
       theme = themes.get(stamp) ?? o.theme(live)
       themes.set(stamp, theme)
     }
-    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme })
+    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, sessions: o.sessions ?? null })
   }
   return {
     keyOf: () => '',

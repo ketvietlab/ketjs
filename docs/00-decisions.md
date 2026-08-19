@@ -146,10 +146,18 @@ app on rebuilds it rather than serving a stale one until restart.
 **A host this deployment does not serve is refused, not defaulted.** A default
 tenant is how one customer's request quietly reads another's data.
 
-**Refused for now, deliberately:** sessions together with tenants. Sessions live
-per datastore, so a user in two tenants would have two logins — which is probably
-right, and is a decision worth making on its own rather than as a side effect of
-this change. An app can pass its own `sessions.store` to decide it now.
+**Sessions follow the tenant, and which way depends on how the tenant is named.**
+With subdomains the Host says which tenant before any cookie is read, so each keeps
+its own sessions in its own database — and that *is* the isolation: a session id
+from one tenant is not a row in another's table, even though the signature is
+valid, because it is the same secret. An app serving every tenant from one domain
+cannot resolve a tenant that way at all — reading the session needs the database,
+knowing the database needs the session — so it passes one shared store and records
+the tenant on the session. Both are expressible; neither is assumed.
+
+**The cookie carries no `Domain`,** which is what makes the subdomain case safe:
+`Domain=.example.com` would hand `acme.example.com` the cookie set for
+`globex.example.com`. It was already absent; it is now deliberate and tested.
 
 **Also still single:** the stream store falls back to memory when there is no
 single adapter, so resumable streams are not yet per tenant. Named here rather than
