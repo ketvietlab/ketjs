@@ -18,6 +18,13 @@ import { dirname, join } from 'node:path'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DESIGN = join(HERE, '../../packages/ketsuite/src/modules/backend/design')
 
+/**
+ * The design harness is single-company by construction: it exists to show screens,
+ * not to prove isolation. Naming the company in one place is what keeps the seed
+ * and the requests looking at the same rows.
+ */
+const DEMO_SCOPE = { company: 'design', branches: null }
+
 const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme, backend]
 const manifest = compose(mods)
 
@@ -37,8 +44,8 @@ for (const [id, path, title, published] of [
   ['contact', '/lien-he', 'Liên hệ', true],
 ] as const) {
   await callFn('website.savePage', { id, path, title, layout: [{ type: 'website.rich_text', settings: { body: title } }] },
-    { adapter: db, manifest })
-  if (published) await callFn('website.publishPage', { id, published: true }, { adapter: db, manifest })
+    { adapter: db, manifest, scope: DEMO_SCOPE })
+  if (published) await callFn('website.publishPage', { id, published: true }, { adapter: db, manifest, scope: DEMO_SCOPE })
 }
 
 /**
@@ -67,6 +74,7 @@ const route = (build: (t: ReturnType<typeof translator>, url: URL) => Promise<Te
   }
 
 const app = await createKetServer({
+  resolveScope: () => DEMO_SCOPE,
   manifest, adapter: db,
   assets: { prefix: '/design/', dir: DESIGN },
   routes: {
@@ -76,7 +84,7 @@ const app = await createKetServer({
       <li><a href="/admin/pages">Pages (real data)</a></li>
       <li><a href="/admin/settings">Settings (real data)</a></li></ul>
       <p>Switch language with <code>?lang=</code>: ${LOCALES.map(l => `<a href="/catalogue?lang=${l}">${l}</a>`).join(' · ')}
-      <br><code>${PSEUDO_LOCALE}</code> trả về chuỗi dài hơn và có ngoặc — dùng để thử tràn chữ.</p>` }),
+      <br><code>${PSEUDO_LOCALE}</code> returns every string longer and bracketed — use it to test text overflow.</p>` }),
 
     '/catalogue': route(t => cataloguePage(t)),
 
@@ -84,7 +92,7 @@ const app = await createKetServer({
 
     '/admin/pages': route(async t => {
       const restricted = restrictManifest(manifest, await apps.enabled())
-      const rows = (await callFn('website.listPages', { includeDrafts: true }, { adapter: db, manifest: restricted })).value
+      const rows = (await callFn('website.listPages', { includeDrafts: true }, { adapter: db, manifest: restricted, scope: DEMO_SCOPE })).value
       return pagesScreen(t, (rows as Array<{ id: string; path: string; title: string; published: number }>)
         .map(r => ({ ...r, published: !!r.published })))
     }),
@@ -95,16 +103,14 @@ const app = await createKetServer({
 
 const port = await app.listen(Number(process.env.PORT ?? 4000))
 console.log(`
-  KetSuite backend — điểm vào cho đội design
+  KetSuite backend — the design entry point
 
-    danh mục trạng thái   http://127.0.0.1:${port}/catalogue
-    màn hình thật         http://127.0.0.1:${port}/admin/apps
-    tiếng Anh             http://127.0.0.1:${port}/catalogue?lang=en
-    thử tràn chữ          http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
-    tiếng Anh             http://127.0.0.1:${port}/catalogue?lang=en
-    thử tràn chữ          http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
+    state catalogue     http://127.0.0.1:${port}/catalogue
+    real screens        http://127.0.0.1:${port}/admin/apps
+    in English          http://127.0.0.1:${port}/catalogue?lang=en
+    text overflow       http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
 
-  CSS đang sửa trực tiếp, F5 là thấy:
+  Edit these directly; a refresh is enough:
     ${DESIGN}/tokens.css
     ${DESIGN}/admin.css
 `)

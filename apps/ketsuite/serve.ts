@@ -32,7 +32,7 @@ const config = readConfig()
 /** Every module KetSuite ships. Adding one here is what makes it installable. */
 const modules = [
   suite.website, suite.websiteMenu, suite.websiteSeo, suite.websiteSearch,
-  suite.product, suite.paperTheme, backend,
+  suite.uom, suite.product, suite.paperTheme, backend,
 ]
 const manifest: Manifest = compose(modules)
 
