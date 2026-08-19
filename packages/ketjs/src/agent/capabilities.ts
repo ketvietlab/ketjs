@@ -46,7 +46,7 @@ export function agentTools(manifest: Manifest): AgentTool[] {
       properties[name] = { type: JSON_TYPE[base.startsWith('ref:') ? 'ref' : base] ?? 'string' }
       if (!optional) required.push(name)
     }
-    const mutates = fn.effects.some((e) => e.startsWith('write:'))
+    const mutates = fn.effects.some((e) => e.startsWith('write:') || e.startsWith('enqueue:'))
     tools.push({
       name: key.replace('.', '__'),
       description:
