@@ -108,6 +108,46 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D39 — The screens that make the enforcement usable
+D38 closed the door. This gives it a handle: a browser arriving uninvited gets a
+sign-in page rather than a bare 401, and lands where it was going once it signs in.
+
+**A browser gets a page, anything else gets a status.** The signal is
+`Accept: text/html`, because a redirect to an HTML form is a useless answer to a
+`fetch()`, and a 401 with no body is a useless answer to a person. The same route
+serves both without either pretending to be the other — it accepts a form-encoded
+body and a JSON one, and answers in kind.
+
+**The sign-in page runs without JavaScript, and has to keep doing so.** A login
+that breaks when a script fails breaks in the one situation where getting in
+matters most. There is nothing on it a form element does not already do.
+
+**`next` is carried through and is only ever a path on this site.** Landing back
+where you were going is the difference between a guard and an obstacle; accepting
+`//attacker.example` as a destination would make the sign-in page an open redirect,
+so anything not starting with a single `/` becomes `/admin`.
+
+**A cross-site POST to /login is refused.** SameSite protects the session cookie
+once it exists, not the request that creates it — an attacker who can make your
+browser sign in as *their* account then watches what you do in it. Browsers send
+`Origin` on any cross-site POST and nothing else sends one at all, so absence is
+not suspicious and presence has to match.
+
+**Already signed in, the form is skipped.** Showing someone a login they do not
+need is how they sign in twice and cannot tell which one took.
+
+**The login screen belongs to `user`, not to `backend`.** It was written in the
+backend module first, which meant `user` importing `backend` without declaring a
+dependency on it — a module borrowing another's code and strings, and breaking
+quietly the day that other one is uninstalled. It moved, and its messages moved
+with it.
+
+**The topbar says who and offers the way out.** The company appears only when the
+account belongs to more than one, because a label that is always the same value
+teaches nobody anything. New `data-ui` selectors are in HANDOFF.md: the markup is
+here, the look is the design team's, and both the wrong-password and
+several-companies states need drawing rather than only the happy one.
+
 ## D38 — A stranger is not an unrestricted caller
 **The hole, as it was found.** With sessions on and no cookie at all:
 

@@ -156,3 +156,37 @@ preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
 
 Ảnh QA dùng trong PR được lưu tại `design/screenshots/`. Chúng là bằng chứng kiểm tra
 ở thời điểm bàn giao, không thay thế token, CSS hoặc `data-ui` contract làm đặc tả.
+
+
+## Màn hình đăng nhập và thanh danh tính (mới)
+
+Hai bề mặt vừa thêm, chưa có CSS. Markup đã xong, phần nhìn là của đội design.
+
+**Màn đăng nhập** — `/login`, do module `user` dựng:
+
+| Selector | Là gì |
+|---|---|
+| `[data-ui="login"]` | khung ngoài, chiếm cả trang |
+| `[data-ui="login-form"]` | form, `method="post"` |
+| `[data-ui="login-title"]` | tiêu đề |
+| `[data-ui="login-error"]` | thông báo sai mật khẩu, `role="alert"`, chỉ hiện khi có lỗi |
+| `[data-ui="field"]`, `[data-ui="field-label"]`, `[data-ui="field-input"]` | một ô nhập; dùng lại được ở form khác |
+| `[data-ui="login-submit"]` | nút gửi |
+| `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, chỉ hiện khi có nhiều hơn một |
+
+Trang này **chạy không cần JavaScript** và phải giữ như vậy: một trang đăng nhập
+hỏng khi script lỗi là trang hỏng đúng lúc người ta cần vào nhất.
+
+**Thanh danh tính** — nằm trong `[data-ui="topbar"]` đã có, bên cạnh
+`[data-ui="title"]`:
+
+| Selector | Là gì |
+|---|---|
+| `[data-ui="viewer"]` | cụm bên phải thanh trên |
+| `[data-ui="viewer-name"]` | tên người đang đăng nhập |
+| `[data-ui="viewer-company"]` | công ty đang chọn — **chỉ hiện khi tài khoản thuộc nhiều hơn một công ty** |
+| `[data-ui="signout"]` | form POST tới `/logout` |
+| `[data-ui="signout-button"]` | nút bên trong nó |
+
+Xem cả hai bằng `npm run design` rồi vào `/catalogue`; trạng thái sai mật khẩu
+và trạng thái nhiều công ty đều cần được vẽ, không chỉ trạng thái thành công.

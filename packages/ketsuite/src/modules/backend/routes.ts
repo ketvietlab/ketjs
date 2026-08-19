@@ -9,11 +9,24 @@ import { page } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
+import type { Viewer } from './screens.ts'
 
 type Build = (
   _: ReturnType<ServeContext['translate']>,
-  req: { url: URL; raw: Parameters<Route>[1] },
+  req: { url: URL; raw: Parameters<Route>[1]; viewer: Viewer | null },
 ) => Promise<TemplateResult> | TemplateResult
+
+/**
+ * Who is looking. The screens show it in the topbar, which is the difference
+ * between a page that happens to be behind a login and one that says so.
+ */
+const viewerOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Viewer | null> => {
+  const sessions = await ctx.sessionsOf(url, req)
+  const record = await sessions?.of(req)
+  if (!record) return null
+  const user = await ctx.callUnchecked('user.getUser', { id: record.userId }, url, req) as { name?: string } | null
+  return { name: user?.name ?? record.userId, company: record.company, companies: record.companies }
+}
 
 /**
  * The shell every backend screen sits in. The stylesheets come from ctx.styles(),
@@ -22,24 +35,25 @@ type Build = (
  */
 const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
   const lang = ctx.localeOf(url, req)
+  const viewer = await viewerOf(ctx, url, req)
   return page({
     body: ctx.document({
       lang,
       title: 'KetSuite',
       head: await ctx.styles(req),
-      body: await build(ctx.translate(lang), { url, raw: req }),
+      body: await build(ctx.translate(lang), { url, raw: req, viewer }),
     }),
   })
 }
 
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
-  '/admin': (ctx) => screen(ctx, async (_, { raw }) => appsScreen(_, await ctx.appsOf(raw))),
-  '/admin/apps': (ctx) => screen(ctx, async (_, { raw }) => appsScreen(_, await ctx.appsOf(raw))),
-  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw }) => {
+  '/admin': (ctx) => screen(ctx, async (_, { raw, viewer }) => appsScreen(_, await ctx.appsOf(raw), viewer)),
+  '/admin/apps': (ctx) => screen(ctx, async (_, { raw, viewer }) => appsScreen(_, await ctx.appsOf(raw), viewer)),
+  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw, viewer }) => {
     // The same call path as the API: this request's live manifest and company.
     const rows = await ctx.call('website.listPages', { includeDrafts: true }, url, raw) as
       Array<{ id: string; path: string; title: string; published: number }>
-    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })))
+    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), viewer)
   }),
-  '/admin/settings': (ctx) => screen(ctx, _ => settingsScreen(_, ctx.manifest.tokens)),
+  '/admin/settings': (ctx) => screen(ctx, (_, { viewer }) => settingsScreen(_, ctx.manifest.tokens, viewer)),
 }

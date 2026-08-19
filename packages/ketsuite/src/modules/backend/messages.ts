@@ -10,6 +10,7 @@ import type { Message } from 'ketjs'
  */
 export const messages: Record<string, Record<string, Message>> = {
   vi: {
+    'signOut': 'Đăng xuất',
     'app.title': 'Quản trị',
     'app.summary': 'Màn hình quản lý ứng dụng, trang và cài đặt.',
     'app.category': 'Hệ thống',
@@ -42,6 +43,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'settings.tokens': 'Design token đang áp dụng',
   },
   en: {
+    'signOut': 'Sign out',
     'app.title': 'Administration',
     'app.summary': 'Manage apps, pages and settings.',
     'app.category': 'System',
