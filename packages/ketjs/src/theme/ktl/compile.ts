@@ -19,6 +19,8 @@ export type SectionsRenderer = (scope: Scope) => string
 
 export type CompileOpts = {
   filters?: Record<string, Filter>
+  /** Bound translator. A theme writes {{ 'website.page.title' | _ }}. */
+  translate?: (key: string, params?: Record<string, unknown>) => string
   renderJoint?: JointRenderer
   renderRegion?: RegionRenderer
   renderIsland?: IslandRenderer
@@ -103,7 +105,17 @@ function compileExpr(e: Expr, o: Required<Pick<CompileOpts, 'filters' | 'name'>>
 
 export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const name = opts.name ?? '(anonymous)'
-  const filters = { ...BASE_FILTERS, ...(opts.filters ?? {}) }
+  // Translation arrives as a filter rather than a function in scope, because scope
+  // holds data only — a theme that could call functions would be a theme that could
+  // run code, which is the whole thing KTL exists to prevent.
+  //
+  // The filter is named _ , the way gettext and Odoo name it: it appears often
+  // enough in markup that a longer name would cost more than it explains.
+  const filters: Record<string, Filter> = {
+    ...BASE_FILTERS,
+    ...(opts.translate ? { _: (v: unknown, arg?: unknown) => opts.translate!(String(v), arg as Record<string, unknown> | undefined) } : {}),
+    ...(opts.filters ?? {}),
+  }
   const jointsUsed: string[] = []
   const regionsUsed: string[] = []
   const islandsUsed: string[] = []

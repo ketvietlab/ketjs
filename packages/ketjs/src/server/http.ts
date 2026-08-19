@@ -31,6 +31,11 @@ export type ServeOpts = {
   port?: number
   /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
+  /**
+   * Which language this request is in. Resolved in one place, like the datastore,
+   * so a handler cannot answer in the wrong one by forgetting to pass it along.
+   */
+  resolveLocale?: (url: URL, req: IncomingMessage) => string
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
   assets?: { prefix: string; dir: string }
   /** Extra routes, matched before the theme takes the request. */
