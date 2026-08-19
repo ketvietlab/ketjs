@@ -16,13 +16,30 @@ rmSync(DIR, { recursive: true, force: true })
 mkdirSync(DIR, { recursive: true })
 writeFileSync(`${DIR}/types.ts`, dts)
 writeFileSync(`${DIR}/tsconfig.json`, JSON.stringify({
-  compilerOptions: { strict: true, noEmit: true, target: 'esnext', module: 'preserve', moduleResolution: 'bundler', skipLibCheck: true },
+  compilerOptions: { strict: true, noEmit: true, target: 'esnext', module: 'preserve', moduleResolution: 'bundler', skipLibCheck: true, allowImportingTsExtensions: true, types: ['node'] },
   include: ['*.ts'],
 }, null, 2))
 
 type Case = { name: string; code: string; shouldCompile: boolean; expect?: RegExp }
 
 const cases: Case[] = [
+  {
+    // The claim the whole respond.ts change rests on. If this ever compiles, the
+    // document shell can be built by concatenation again and nothing will say so.
+    name: 'a route cannot hand back a string it built itself',
+    shouldCompile: false,
+    expect: /RESPONSE|not assignable/,
+    code: `import type { Route } from 'ketjs'
+export const r: Route = async () => ({ body: '<p>' + String(Math.random()) + '</p>' })`,
+  },
+  {
+    name: 'and the way through is a constructor, which escapes',
+    shouldCompile: true,
+    code: `import type { Route } from 'ketjs'
+import { page, document } from 'ketjs'
+import { html } from 'ketjs-view'
+export const r: Route = async () => page({ body: document({ lang: 'en', body: html\`<p>\${'x'}</p>\` }) })`,
+  },
   {
     name: 'module C reads the field module B added to module A model',
     shouldCompile: true,

@@ -20,6 +20,8 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { registerFunctions, callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
+import { document, json } from './respond.ts'
+import { html } from 'ketjs-view'
 import { readConfig, sqliteStore } from './config.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
@@ -28,7 +30,10 @@ import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 
-export type RouteResult = { status?: number; type?: string; body: string }
+export type { Html, RouteResult } from './respond.ts'
+export { page, fragment, text, raw } from './respond.ts'
+export { json } from './respond.ts'
+import type { Html, RouteResult } from './respond.ts'
 export type Route = (url: URL, req: IncomingMessage) => Promise<RouteResult> | RouteResult
 
 /**
@@ -48,7 +53,8 @@ export type ServeContext = {
   translate: (locale: string) => Translator
   /** A function call carrying this request's live manifest and scope. */
   call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
-  html: (o: { lang: string; title?: string; head?: string; body: string }) => string
+  /** The document every screen sits in. Markup, not a string — see respond.ts. */
+  document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
 }
 
 /**
@@ -88,11 +94,6 @@ export type BootedApp = {
   close: () => Promise<void>
 }
 
-const shell = ({ lang, title, head = '', body }: { lang: string; title?: string; head?: string; body: string }) =>
-  `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">`
-  + `<meta name="viewport" content="width=device-width, initial-scale=1">`
-  + (title ? `<title>${title}</title>` : '')
-  + `${head}</head><body>${body}</body></html>`
 
 /**
  * Opens, migrates, installs, serves. Returns before listening is announced so a
@@ -135,10 +136,25 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     company: (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany,
     branches: ((req.headers['x-ket-branch'] as string | undefined) ?? '').split(',').filter(Boolean) || null,
   })
-  const localeOf = (url: URL, req: IncomingMessage): string =>
-    url.searchParams.get('lang')
-    ?? (req.headers['accept-language'] as string | undefined)?.split(',')[0]?.split('-')[0]
-    ?? config.defaultLocale
+  /**
+   * A locale is only ever one the deployment ships a catalogue for.
+   *
+   * Anything else falls back rather than being passed on: `Accept-Language: *` —
+   * which Node's own fetch sends by default — used to reach Intl and throw, so any
+   * client that did not set the header got a 500. Restricting to a known set fixes
+   * that and closes the wider hole at the same time: the value reaches the `lang`
+   * attribute of every page, and a value drawn from a fixed set cannot carry
+   * anything into markup.
+   */
+  const known = new Set([...Object.keys(manifest.messages ?? {}), config.defaultLocale, config.fallbackLocale])
+  const localeOf = (url: URL, req: IncomingMessage): string => {
+    const asked = [
+      url.searchParams.get('lang'),
+      ...(req.headers['accept-language'] as string | undefined ?? '')
+        .split(',').map(part => part.split(';')[0]?.trim()).flatMap(tag => tag ? [tag, tag.split('-')[0] as string] : []),
+    ]
+    return asked.find(l => l && known.has(l)) ?? config.defaultLocale
+  }
 
   const live = async () => restrictManifest(manifest, await apps.enabled())
   const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
@@ -147,7 +163,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     manifest, live, adapter, apps, config, scopeOf, localeOf, translate,
     call: async (name, input, url, req) =>
       (await callFn(name, input, { adapter, manifest: await live(), scope: scopeOf(url, req) })).value,
-    html: shell,
+    document,
   }
 
   const pages = serve.pages
@@ -178,14 +194,19 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     ...(pages ? {
       pageScope: async (url: URL, req: IncomingMessage) => {
         const site = { title: pages.siteTitle ?? spec.name }
+        // The theme's layout writes <html lang>, so the locale has to reach it.
+        // It was hardcoded there, which made i18n untrue on the first tag of every
+        // storefront page.
+        const locale = localeOf(url, req)
         const row = await ctx.call(pages.resolve, { path: url.pathname }, url, req) as
           { id: string; title: string; layout: unknown } | null
         if (!row) {
-          const _ = translate(localeOf(url, req))
-          return { site, page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' }, sections: [] }
+          const _ = translate(locale)
+          return { site, locale, page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' }, sections: [] }
         }
         return {
           site,
+          locale,
           page: { id: row.id, path: url.pathname, title: row.title },
           meta: {},
           sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
@@ -195,19 +216,13 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     routes: {
       ...(serve.routes?.(ctx) ?? {}),
       // The framework's own two, mounted last so an app cannot shadow them by accident.
-      '/_ket/health': async () => ({
-        type: 'application/json',
-        body: JSON.stringify({
-          ok: true, app: spec.name, database: adapter.name,
-          apps: [...(await apps.enabled())].sort(),
-          orphans: await apps.orphans(),
-          locales: Object.keys(manifest.messages ?? {}),
-        }, null, 2),
+      '/_ket/health': async () => json({
+        ok: true, app: spec.name, database: adapter.name,
+        apps: [...(await apps.enabled())].sort(),
+        orphans: await apps.orphans(),
+        locales: Object.keys(manifest.messages ?? {}),
       }),
-      '/_ket/agent': async () => ({
-        type: 'application/json',
-        body: JSON.stringify(agentDescriptor(await live()), null, 2),
-      }),
+      '/_ket/agent': async () => json(agentDescriptor(await live())),
     },
   })
 

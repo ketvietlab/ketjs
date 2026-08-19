@@ -1,0 +1,4 @@
+<nav class="primary" data-ket-section="menu">
+  <ul>{% for item in menu %}{% render 'menu.item', item: item %}{% endfor %}</ul>
+  {% if showSearch %}{% island "website.search" %}{% endif %}
+</nav>

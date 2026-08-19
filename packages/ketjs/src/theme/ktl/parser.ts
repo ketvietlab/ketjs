@@ -13,6 +13,7 @@ export type Node =
   | { k: 'out'; expr: Expr; raw: boolean; line: number }
   | { k: 'if'; cond: Expr; then: Node[]; else: Node[]; line: number }
   | { k: 'for'; name: string; src: Expr; body: Node[]; line: number }
+  | { k: 'render'; template: string; args: Record<string, Expr>; line: number }
   | { k: 'joint'; joint: string; line: number }
   | { k: 'region'; name: string; line: number }
   | { k: 'island'; name: string; line: number }
@@ -72,6 +73,22 @@ function splitTop(s: string, op: string): number {
   return -1
 }
 
+// Every top-level part, for an argument list. splitTop finds the first operator;
+// this one keeps going, which is what a comma-separated list needs.
+function splitParts(s: string, sep: string): string[] {
+  const out: string[] = []
+  let q: string | null = null
+  let start = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i] as string
+    if (q) { if (c === q) q = null; continue }
+    if (c === "'" || c === '"') { q = c; continue }
+    if (c === sep) { out.push(s.slice(start, i)); start = i + 1 }
+  }
+  out.push(s.slice(start))
+  return out.map(p => p.trim()).filter(Boolean)
+}
+
 export function parse(src: string): Node[] {
   const tokens: Token[] = lex(src)
   let i = 0
@@ -113,6 +130,31 @@ export function parse(src: string): Node[] {
         const m = /^joint\s+["']([^"']+)["']$/.exec(t.value)
         if (!m) throw new KtlSyntaxError(`bad joint tag at line ${t.line}`, t.line)
         nodes.push({ k: 'joint', joint: m[1] as string, line: t.line })
+        i++
+        continue
+      }
+      // {% render 'card', item: product, compact: true %}
+      //
+      // The rendered template gets ONLY what is passed, never the caller's scope.
+      // Shopify made the same choice and it is the reason a partial there can be
+      // read on its own: with inheritance you cannot tell what a template needs
+      // without finding every caller. Ket has a stronger reason too — a theme is a
+      // stranger's code, and a partial that silently sees the whole page scope is
+      // a partial that leaks whatever the page happened to be carrying.
+      if (head === 'render') {
+        const m = /^render\s+["']([^"']+)["']\s*(?:,\s*(.+))?$/.exec(t.value)
+        if (!m) throw new KtlSyntaxError(`bad render tag at line ${t.line}: {% ${t.value} %}`, t.line)
+        const args: Record<string, Expr> = {}
+        if (m[2]) {
+          for (const pair of splitParts(m[2], ',')) {
+            const at = pair.indexOf(':')
+            if (at === -1) throw new KtlSyntaxError(`render argument needs "name: value" at line ${t.line}`, t.line)
+            const key = pair.slice(0, at).trim()
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) throw new KtlSyntaxError(`bad render argument "${key}" at line ${t.line}`, t.line)
+            args[key] = parseExpr(pair.slice(at + 1).trim(), t.line)
+          }
+        }
+        nodes.push({ k: 'render', template: m[1] as string, args, line: t.line })
         i++
         continue
       }

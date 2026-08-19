@@ -23,6 +23,8 @@
   },
   "include": [
     "packages/*/src/**/*",
+    "apps/**/*",
+    "ket.workspace.ts",
     "examples/**/*",
     "test/**/*",
     "tools/**/*",

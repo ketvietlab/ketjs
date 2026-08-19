@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title }}</title>
+  {% joint "website:page.head" %}
+</head>
+<body class="ket">
+  {% joint "website:page.body.start" %}
+  <main class="page">{% region "website.page" %}</main>
+  {% joint "website:page.body.end" %}
+</body>
+</html>

@@ -7,8 +7,8 @@
 // The database is in memory and seeded on boot, so this is disposable: install
 // things, break things, restart. Nothing here talks to a real deployment.
 
-import { createKetServer, compose, sqliteAdapter, migrateOne, registerFunctions, createAppRegistry, restrictManifest, callFn, translator, PSEUDO_LOCALE } from 'ketjs'
-import { renderToString } from 'ketjs-view'
+import { createKetServer, compose, sqliteAdapter, migrateOne, registerFunctions, createAppRegistry, restrictManifest, callFn, translator, PSEUDO_LOCALE, page, document } from 'ketjs'
+import { html, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
 import backend, { appsScreen, pagesScreen, settingsScreen, cataloguePage } from 'ketsuite/backend'
@@ -58,19 +58,13 @@ const localeOf = (url: URL) => url.searchParams.get('lang') ?? 'vi'
 const LOCALES = ['vi', 'en', PSEUDO_LOCALE]
 
 /** One wrapper for every page, so the stylesheets are loaded exactly once. */
-const page = (locale: string, body: TemplateResult): string => `<!doctype html>
-<html lang="${locale}"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KetSuite</title>
-<link rel="stylesheet" href="/design/tokens.css">
-<link rel="stylesheet" href="/design/admin.css">
-</head><body>${renderToString(body)}</body></html>`
+const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
 
 const route = (build: (t: ReturnType<typeof translator>, url: URL) => Promise<TemplateResult> | TemplateResult) =>
   async (url: URL) => {
     const locale = localeOf(url)
     const t = translator(manifest, locale, { fallback: 'vi' })
-    return { body: page(locale, await build(t, url)) }
+    return page({ body: document({ lang: locale, title: 'KetSuite', head: STYLES, body: await build(t, url) }) })
   }
 
 const app = await createKetServer({
@@ -78,13 +72,19 @@ const app = await createKetServer({
   manifest, adapter: db,
   assets: { prefix: '/design/', dir: DESIGN },
   routes: {
-    '/': async () => ({ body: `<!doctype html><meta charset="utf-8"><ul>
-      <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
-      <li><a href="/admin/apps">Apps (real data)</a></li>
-      <li><a href="/admin/pages">Pages (real data)</a></li>
-      <li><a href="/admin/settings">Settings (real data)</a></li></ul>
-      <p>Switch language with <code>?lang=</code>: ${LOCALES.map(l => `<a href="/catalogue?lang=${l}">${l}</a>`).join(' · ')}
-      <br><code>${PSEUDO_LOCALE}</code> returns every string longer and bracketed — use it to test text overflow.</p>` }),
+    // The index is markup like every other screen: the locale list is data going
+    // through holes, not a join() producing a string nobody escapes.
+    '/': async () => page({ body: document({ lang: 'en', title: 'KetSuite design', body: html`
+      <ul>
+        <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
+        <li><a href="/admin/apps">Apps (real data)</a></li>
+        <li><a href="/admin/pages">Pages (real data)</a></li>
+        <li><a href="/admin/settings">Settings (real data)</a></li>
+      </ul>
+      <p>Switch language with <code>?lang=</code>:
+        ${each(LOCALES, l => l, l => html` <a href=${`/catalogue?lang=${l}`}>${l}</a>`)}
+        <br><code>${PSEUDO_LOCALE}</code> returns every string longer and bracketed — use it to test text overflow.
+      </p>` }) }),
 
     '/catalogue': route(t => cataloguePage(t)),
 
