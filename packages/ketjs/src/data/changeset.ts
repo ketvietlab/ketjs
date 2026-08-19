@@ -29,6 +29,7 @@ const castValue = (base: FieldBase, v: unknown): { ok: true; value: unknown } | 
       if (!Number.isInteger(n)) return { ok: false, message: `expected an integer, got ${n}` }
       return { ok: true, value: n }
     }
+    case 'decimal':
     case 'float': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
       if (typeof n !== 'number' || !Number.isFinite(n)) return { ok: false, message: `expected a number, got ${JSON.stringify(v)}` }
