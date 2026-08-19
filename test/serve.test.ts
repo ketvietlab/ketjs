@@ -161,6 +161,23 @@ test('boot: a headless app cannot claim to resolve pages', () => {
   )
 })
 
+test('boot: an app route cannot silently shadow a module route', async () => {
+  const routed = defineModule({
+    name: 'routed',
+    routes: { '/things/{slug}': () => async () => json({ owner: 'module' }) },
+  })
+  const app = defineApp({
+    name: 'route_clash',
+    modules: [routed],
+    headless: true,
+    serve: { routes: () => ({ '/things/{slug}': async () => json({ owner: 'app' }) }) },
+  })
+  await assert.rejects(
+    () => bootApp(app, { env: memory, port: 0 }),
+    /module "routed" and app "route_clash" both serve "\/things\/\{slug\}"/,
+  )
+})
+
 // ── the install boundary ─────────────────────────────────────────────────────
 
 const machinery = defineModule({ name: 'machinery', app: true, install: 'never' })

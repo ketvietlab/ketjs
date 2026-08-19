@@ -166,3 +166,35 @@ test('declaration: an app with no sessions is unaffected, since there is no logi
   assert.equal((await fetch(`http://127.0.0.1:${b.port}/things`)).status, 200)
   await b.close()
 })
+
+test('routes: anonymous policy also applies to dynamic paths', async () => {
+  const route =
+    (label: string) =>
+    (_ctx: ServeContext): Route =>
+    async (_url, _req, params) =>
+      text(`${label}:${params.slug}`)
+  const catalog = defineModule({
+    name: 'catalog_routes',
+    app: true,
+    routes: {
+      '/private/{slug}': route('private'),
+      '/public/{slug}': { anonymous: true, handler: route('public') },
+    },
+  })
+  const app = defineApp({
+    name: 'route_access',
+    modules: [catalog],
+    headless: true,
+    serve: {
+      bootstrap: ['catalog_routes'],
+      sessions: { secret: 'test-only', anonymous: { company: 'public' } },
+    },
+  })
+  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${b.port}`
+  assert.equal((await fetch(`${at}/private/ao`)).status, 401)
+  const open = await fetch(`${at}/public/%C3%A1o`)
+  assert.equal(open.status, 200)
+  assert.equal(await open.text(), 'public:áo')
+  await b.close()
+})
