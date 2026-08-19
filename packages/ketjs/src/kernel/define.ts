@@ -7,7 +7,7 @@ import type { KetModule, ModuleSpec } from '../types.ts'
 
 const MODULE_KEYS = new Set([
   'name', 'version', 'depends', 'models', 'extend', 'joints', 'fills',
-  'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands',
+  'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands', 'sections',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -45,6 +45,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     templates: spec.templates ?? {},
     provides: Object.freeze([...(spec.provides ?? [])]),
     islands: spec.islands ?? {},
+    sections: spec.sections ?? {},
   })
 }
 

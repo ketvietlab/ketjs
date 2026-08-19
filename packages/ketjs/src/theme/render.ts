@@ -31,6 +31,30 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
   const renderJoint = (joint: string, scope: Scope): string =>
     (fills[joint] ?? []).map(c => c.render(scope)).join('')
 
+  /**
+   * A page's body is its layout: an ordered list of placements, each rendered by
+   * the template named after its section type. The theme decides how a section
+   * looks; the data decides which sections there are and in what order.
+   */
+  const renderSectionsAt = (scope: Scope): string => {
+    const layout = scope['sections']
+    if (!Array.isArray(layout)) return ''
+    const out: string[] = []
+    for (const raw of layout) {
+      const placement = raw as { type?: string; settings?: Record<string, unknown> }
+      if (!placement?.type) continue
+      if (!manifest.sections[placement.type]) {
+        throw new KetError({
+          code: 'E_UNKNOWN_SECTION',
+          message: `the page places section "${placement.type}", which no installed module provides`,
+          hint: `available sections: ${Object.keys(manifest.sections).join(', ') || '(none)'}`,
+        })
+      }
+      out.push(renderRegion(placement.type, { ...(placement.settings ?? {}), page: scope['page'] }))
+    }
+    return out.join('')
+  }
+
   const renderIslandAt = (name: string, scope: Scope): string => {
     const view = islands[name]
     if (!view) {
@@ -57,10 +81,10 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
   }
 
   for (const [joint, srcs] of Object.entries(fillSources)) {
-    fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, renderJoint, renderRegion, renderIsland: renderIslandAt }))
+    fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt }))
   }
   for (const [name, src] of Object.entries(sources)) {
-    templates[name] = compileKtl(src, { ...opts, name, renderJoint, renderRegion, renderIsland: renderIslandAt })
+    templates[name] = compileKtl(src, { ...opts, name, renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt })
   }
 
   // A theme that points at a joint nobody publishes is a build error, not a blank spot.

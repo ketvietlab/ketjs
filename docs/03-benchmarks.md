@@ -70,12 +70,15 @@ lit-html is the fair comparison: same architecture, same no-build-step constrain
 | create 1 000 rows | **1.80 ms** | 2.60 ms | Ket 1.45× |
 | update 1 row of 1 000 | **0.070 ms** | 0.100 ms | Ket 1.43× |
 | re-render, nothing changed | **0.060 ms** | 0.090 ms | Ket 1.50× |
-| swap 2 rows | 0.220 ms | **0.096 ms** | lit 2.3× |
-| remove + re-add a row | 0.226 ms | **0.096 ms** | lit 2.3× |
+| swap 2 rows | 0.100 ms | **0.092 ms** | lit 1.09× |
+| remove + re-add a row | 0.122 ms | **0.096 ms** | lit 1.27× |
 
-Ket wins three of five and loses the reordering cases. Honest reading: reordering
-still builds six N-sized structures (a Set, a Map, the LIS, the anchor walk) that
-the common paths now skip. That is the next thing to fix here.
+Reordering used to cost 0.220 ms — 2.3× lit — because the path rebuilt a Map of
+previous positions and a Set of wanted keys on every reorder of every list, to
+answer questions the pass already had the answers to. Position now rides on the
+instance, the removal scan runs only when the reused count says something actually
+disappeared, and the LIS returns a typed array instead of a hash. 0.220 → 0.100 ms.
+The remaining gap is small enough that closing it further would be chasing.
 
 **This benchmark found two bugs**, neither visible from the op-counting harness:
 

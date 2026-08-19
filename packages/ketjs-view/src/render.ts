@@ -131,30 +131,35 @@ class Part {
         sameOrder = false     // a template swapped shape; fall through to the full path
         break
       }
-      if (sameOrder) { this.keys = nextKeys; return }
+      if (sameOrder) {
+        for (let i = 0; i < n; i++) (keyed.get(nextKeys[i]) as Instance).pos = i
+        this.keys = nextKeys
+        return
+      }
     }
 
-    // 1. drop what disappeared, before anything is measured or moved
-    const wanted = new Set(nextKeys)
-    for (const [k, inst] of keyed) {
-      if (!wanted.has(k)) { inst.remove(); keyed.delete(k) }
+    // Where each surviving entry used to sit is carried on the instance itself, so
+    // this pass needs no Map — and counting the reused ones tells us whether
+    // anything was removed at all, so it needs no Set either. Both used to be built
+    // on every reorder of every list, to answer questions the pass already knew.
+    const oldIndex: number[] = new Array(n)
+    let reused = 0
+    for (let i = 0; i < n; i++) {
+      const inst = keyed.get(nextKeys[i])
+      if (inst && inst.strings === (results[i] as TemplateResult).strings) { oldIndex[i] = inst.pos; reused++ }
+      else oldIndex[i] = -1
     }
 
-    // 2. where each surviving entry used to sit
-    const prevPos = new Map<unknown, number>()
-    let live = 0
-    for (const k of prevKeys) if (keyed.has(k)) prevPos.set(k, live++)
+    // Every existing entry accounted for means nothing disappeared; only then is the
+    // removal scan worth its own walk over the map.
+    if (reused !== keyed.size) {
+      const wanted = new Set(nextKeys)
+      for (const [k, inst] of keyed) {
+        if (!wanted.has(k)) { inst.remove(); keyed.delete(k) }
+      }
+    }
 
-    // The index is already in hand here. Looking it up with indexOf made this
-    // quadratic — a million comparisons per render of a thousand rows, and the
-    // reason an unchanged re-render still cost half a millisecond.
-    const oldIndex: number[] = nextKeys.map((k, i) => {
-      const inst = keyed.get(k)
-      if (!inst) return -1
-      return inst.strings === (results[i] as TemplateResult).strings ? (prevPos.get(k) ?? -1) : -1
-    })
-
-    // 3. entries in the longest increasing subsequence are already in order
+    // Entries in the longest increasing subsequence are already in relative order.
     const stay = lisIndices(oldIndex)
 
     // 4. one back-to-front pass: only entries outside the subsequence touch the host
@@ -167,7 +172,7 @@ class Part {
 
       if (reusable && inst) {
         inst.update(result.values)
-        if (!stay.has(i)) inst.moveBefore(this.parent, nextAnchor)
+        if (stay[i] !== 1) inst.moveBefore(this.parent, nextAnchor)
       } else {
         if (inst) inst.remove()
         inst = new Instance(this.host, result.strings)
@@ -175,15 +180,17 @@ class Part {
         inst.update(result.values)
         keyed.set(key, inst)
       }
+      ;(inst as Instance).pos = i
       nextAnchor = (inst as Instance).firstNode() ?? nextAnchor
     }
     this.keys = nextKeys
   }
 }
 
-// Longest increasing subsequence over positions; -1 marks a brand new entry and
-// can never be part of it. Returns the set of *new-list* indices that may stay put.
-function lisIndices(arr: number[]): Set<number> {
+// Longest increasing subsequence over positions; -1 marks a brand new entry and can
+// never be part of it. Returns a flag per index rather than a Set: the caller reads
+// it once per entry, which a typed array does without allocating a hash.
+function lisIndices(arr: number[]): Uint8Array {
   const piles: number[] = []
   const parent: number[] = new Array(arr.length).fill(-1)
   const tails: number[] = []
@@ -200,9 +207,9 @@ function lisIndices(arr: number[]): Set<number> {
     piles[lo] = i
     tails[lo] = v
   }
-  const out = new Set<number>()
+  const out = new Uint8Array(arr.length)
   let k = piles.length ? (piles[piles.length - 1] as number) : -1
-  while (k >= 0) { out.add(k); k = parent[k] as number }
+  while (k >= 0) { out[k] = 1; k = parent[k] as number }
   return out
 }
 
@@ -213,6 +220,8 @@ class Instance {
   parts: Array<AnyPart | undefined> = []
   roots: HostNode[] = []
   values: unknown[] = []
+  /** Position among its siblings at the last render, for the reordering pass. */
+  pos = -1
 
   constructor(host: Host, strings: readonly string[]) {
     this.host = host; this.strings = strings; this.tpl = templateFor(strings)

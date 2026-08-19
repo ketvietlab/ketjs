@@ -11,6 +11,12 @@ export type ComposedModel = { owner: string; fields: Record<string, Field> }
 
 export type ModelDef = { fields: Record<string, string> }
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
+
+/**
+ * A section is a renderable a page composes by data. The settings schema is what
+ * makes that data checkable — and it is the same schema an agent is handed.
+ */
+export type SectionDef = { title?: string; settings?: Record<string, string> }
 export type ViewDef = { of: string; fields: string[] }
 
 export type FnSpec = {
@@ -50,6 +56,7 @@ export type ModuleSpec = {
   provides?: string[]
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandView>
+  sections?: Record<string, SectionDef>
 }
 
 export type KetModule = {
@@ -68,6 +75,7 @@ export type KetModule = {
   readonly templates: Record<string, string>
   readonly provides: readonly string[]
   readonly islands: Record<string, import('ketjs-view').IslandView>
+  readonly sections: Record<string, SectionDef>
 }
 
 export type Manifest = {
@@ -81,6 +89,7 @@ export type Manifest = {
   views: Record<string, ViewDef & { by: string }>
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<string, { by: string }>
+  sections: Record<string, SectionDef & { by: string }>
   tokens: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
   diagnostics?: Diagnostic[]
@@ -93,6 +102,8 @@ export type Row = Record<string, unknown>
 
 export type Ctx = {
   fnKey: string
+  /** The composed manifest, so a module can check data against what is installed. */
+  manifest: Manifest
   actor: string | null
   dryRun: boolean
   effects: string[]

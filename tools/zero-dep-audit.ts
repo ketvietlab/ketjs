@@ -35,7 +35,7 @@ const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
   'ketjs': { allow: ['ketjs-view'] },
   'ketjs-postgres': { allow: ['ketjs'], optionalPeers: ['postgres'] },
-  'ketsuite': { allow: ['ketjs'], publicOnly: true },
+  'ketsuite': { allow: ['ketjs', 'ketjs-view'], publicOnly: true },
 }
 const ALLOWED_DEV = new Set(['typescript', '@types/node', 'postgres'])
 

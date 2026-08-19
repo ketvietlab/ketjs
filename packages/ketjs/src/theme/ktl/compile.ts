@@ -15,12 +15,14 @@ export type Scope = Record<string, unknown>
 export type JointRenderer = (joint: string, scope: Scope) => string
 export type RegionRenderer = (name: string, scope: Scope) => string
 export type IslandRenderer = (name: string, scope: Scope) => string
+export type SectionsRenderer = (scope: Scope) => string
 
 export type CompileOpts = {
   filters?: Record<string, Filter>
   renderJoint?: JointRenderer
   renderRegion?: RegionRenderer
   renderIsland?: IslandRenderer
+  renderSections?: SectionsRenderer
   name?: string
 }
 
@@ -143,6 +145,9 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         jointsUsed.push(n.joint)
         const key = n.joint
         return (s, out) => { out.push(opts.renderJoint ? opts.renderJoint(key, s) : '') }
+      }
+      if (n.k === 'sections') {
+        return (s, out) => { out.push(opts.renderSections ? opts.renderSections(s) : '') }
       }
       if (n.k === 'island') {
         islandsUsed.push(n.name)
