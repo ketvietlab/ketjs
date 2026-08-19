@@ -36,15 +36,27 @@ function writeValue(value: unknown, out: string[]): void {
   out.push(escapeHtml(value))
 }
 
+/**
+ * Inside these, an HTML parser does not read `<!--` as a comment — the content is
+ * text, and a hydration marker written there arrives as literal characters. It is
+ * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab.
+ *
+ * Nothing is lost by leaving the markers out: the reason they exist is to keep
+ * adjacent text nodes apart so the hydration walk counts correctly, and neither of
+ * these elements has children to walk.
+ */
+const RCDATA = new Set(['title', 'textarea'])
+
 function writeResult(result: TemplateResult, out: string[]): void {
   const tpl = templateFor(result.strings)
-  const write = (node: TplNode): void => {
+  const write = (node: TplNode, raw = false): void => {
     if (node.type === 'text') { out.push(node.value); return }
     if (node.type === 'hole') {
       // A hole is fenced on both sides. The closing marker is the anchor the client
       // builds too; the opening one exists because an HTML parser merges adjacent
       // text, so "giá trị " and "5" would arrive as a single node and the walk would
       // be one node short. A comment cannot merge, so it keeps them apart.
+      if (raw) { writeValue(result.values[node.index], out); return }
       out.push(`<!--${HOLE_OPEN}-->`)
       writeValue(result.values[node.index], out)
       out.push(`<!--${HOLE_MARKER}-->`)
@@ -62,7 +74,8 @@ function writeResult(result: TemplateResult, out: string[]): void {
     }
     out.push('>')
     if (VOID.has(el.tag)) return
-    for (const c of el.children) write(c)
+    const rcdata = raw || RCDATA.has(el.tag)
+    for (const c of el.children) write(c, rcdata)
     out.push(`</${el.tag}>`)
   }
   for (const n of tpl.children) write(n)

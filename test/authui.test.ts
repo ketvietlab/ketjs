@@ -133,3 +133,23 @@ test('storefront: none of this touches the public site', async () => {
   assert.equal((await fetch(`${at}/`, { headers: HTML })).status, 200)
   await b.close()
 })
+
+test('login: the page carries the stylesheets, like every other screen', async () => {
+  // It did not. `head: undefined` shipped a sign-in page with no CSS at all — the
+  // markup was right and the page looked broken, which is the kind of bug a type
+  // checker cannot see and a screenshot can.
+  const { b, at } = await setup()
+  const html = await (await fetch(`${at}/login`, { headers: HTML })).text()
+  const links = html.match(/<link[^>]*rel="stylesheet"[^>]*>/g) ?? []
+  assert.ok(links.length > 0, 'no stylesheet on the sign-in page')
+  assert.ok(links.some(l => l.includes('/_ket/asset/backend/')), 'and they come from the installed modules')
+  await b.close()
+})
+
+test('catalogue: the new states are there for the design team to draw', async () => {
+  const { CASES } = await import('ketsuite/backend')
+  const ids = CASES.map(c => c.id)
+  for (const id of ['login', 'login-failed', 'login-next', 'viewer-one', 'viewer-many', 'viewer-long']) {
+    assert.ok(ids.includes(id), `missing catalogue case: ${id}`)
+  }
+})
