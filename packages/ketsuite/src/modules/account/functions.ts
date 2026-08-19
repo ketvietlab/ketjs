@@ -199,14 +199,20 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!ACCOUNT_TYPES.includes(args.accountType as never)) return invalid('accountType', 'unsupported Odoo 19 account type')
-      if (!/^[A-Za-z0-9.]+$/.test(String(args.code))) return invalid('code', 'account code may contain only letters, numbers, and dots')
+      if (!ACCOUNT_TYPES.includes(args.accountType as never))
+        return invalid('accountType', 'unsupported Odoo 19 account type')
+      if (!/^[A-Za-z0-9.]+$/.test(String(args.code)))
+        return invalid('code', 'account code may contain only letters, numbers, and dots')
       const forced = ['asset_receivable', 'liability_payable'].includes(String(args.accountType))
       const reconcile = forced || args.reconcile === true
-      if (args.accountType === 'off_balance' && reconcile) return invalid('reconcile', 'off-balance accounts cannot be reconciled')
+      if (args.accountType === 'off_balance' && reconcile)
+        return invalid('reconcile', 'off-balance accounts cannot be reconciled')
       const existing = (await ctx.db.select('account.Account', { id: args.id }))[0]
       const values = { ...args, reconcile, active: args.active ?? true }
-      const cs = ctx.change('account.Account', values, existing ?? null).cast(['id', 'code', 'name', 'accountType', 'reconcile', 'active']).required(['code', 'name', 'accountType'])
+      const cs = ctx
+        .change('account.Account', values, existing ?? null)
+        .cast(['id', 'code', 'name', 'accountType', 'reconcile', 'active'])
+        .required(['code', 'name', 'accountType'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
@@ -216,7 +222,8 @@ export const functions: Record<string, FnSpec> = {
     input: { type: 'text?' },
     effects: ['read:account.Journal'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('account.Journal', args.type ? { type: args.type, active: true } : { active: true }),
+    handler: (ctx, args) =>
+      ctx.db.select('account.Journal', args.type ? { type: args.type, active: true } : { active: true }),
   }),
   saveJournal: defineFn({
     input: { id: 'id', name: 'text', code: 'text', type: 'text', defaultAccountId: 'id?', active: 'bool?' },
@@ -225,12 +232,23 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!JOURNAL_TYPES.includes(args.type as never)) return invalid('type', 'unsupported Odoo 19 journal type')
-      if (!/^[A-Za-z0-9]+$/.test(String(args.code))) return invalid('code', 'journal code must be alphanumeric')
-      if (args.defaultAccountId && !(await accountOf(ctx, args.defaultAccountId))) return invalid('defaultAccountId', 'default account does not exist')
+      if (!JOURNAL_TYPES.includes(args.type as never))
+        return invalid('type', 'unsupported Odoo 19 journal type')
+      if (!/^[A-Za-z0-9]+$/.test(String(args.code)))
+        return invalid('code', 'journal code must be alphanumeric')
+      if (args.defaultAccountId && !(await accountOf(ctx, args.defaultAccountId)))
+        return invalid('defaultAccountId', 'default account does not exist')
       const existing = (await ctx.db.select('account.Journal', { id: args.id }))[0]
-      const values = { ...args, code: String(args.code).toUpperCase(), sequenceNumber: existing?.sequenceNumber ?? 0, active: args.active ?? true }
-      const cs = ctx.change('account.Journal', values, existing ?? null).cast(['id', 'name', 'code', 'type', 'defaultAccountId', 'sequenceNumber', 'active']).required(['name', 'code', 'type'])
+      const values = {
+        ...args,
+        code: String(args.code).toUpperCase(),
+        sequenceNumber: existing?.sequenceNumber ?? 0,
+        active: args.active ?? true,
+      }
+      const cs = ctx
+        .change('account.Journal', values, existing ?? null)
+        .cast(['id', 'name', 'code', 'type', 'defaultAccountId', 'sequenceNumber', 'active'])
+        .required(['name', 'code', 'type'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
@@ -240,64 +258,138 @@ export const functions: Record<string, FnSpec> = {
     input: { typeTaxUse: 'text?' },
     effects: ['read:account.Tax'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('account.Tax', args.typeTaxUse ? { typeTaxUse: args.typeTaxUse, active: true } : { active: true }),
+    handler: (ctx, args) =>
+      ctx.db.select(
+        'account.Tax',
+        args.typeTaxUse ? { typeTaxUse: args.typeTaxUse, active: true } : { active: true },
+      ),
   }),
   saveTax: defineFn({
-    input: { id: 'id', name: 'text', description: 'text?', typeTaxUse: 'text', taxScope: 'text?', amountType: 'text', amount: 'decimal', priceInclude: 'bool?', includeBaseAmount: 'bool?', sequence: 'int?', active: 'bool?' },
+    input: {
+      id: 'id',
+      name: 'text',
+      description: 'text?',
+      typeTaxUse: 'text',
+      taxScope: 'text?',
+      amountType: 'text',
+      amount: 'decimal',
+      priceInclude: 'bool?',
+      includeBaseAmount: 'bool?',
+      sequence: 'int?',
+      active: 'bool?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:account.Tax', 'write:account.Tax'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!TAX_USES.includes(args.typeTaxUse as never)) return invalid('typeTaxUse', 'unsupported Odoo 19 tax use')
-      if (!TAX_AMOUNT_TYPES.includes(args.amountType as never)) return invalid('amountType', 'unsupported Odoo 19 tax computation')
-      if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope))) return invalid('taxScope', 'tax scope must be service or consu')
+      if (!TAX_USES.includes(args.typeTaxUse as never))
+        return invalid('typeTaxUse', 'unsupported Odoo 19 tax use')
+      if (!TAX_AMOUNT_TYPES.includes(args.amountType as never))
+        return invalid('amountType', 'unsupported Odoo 19 tax computation')
+      if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope)))
+        return invalid('taxScope', 'tax scope must be service or consu')
       const existing = (await ctx.db.select('account.Tax', { id: args.id }))[0]
-      const values = { ...args, priceInclude: args.priceInclude === true, includeBaseAmount: args.includeBaseAmount === true, sequence: args.sequence ?? 10, active: args.active ?? true }
-      const cs = ctx.change('account.Tax', values, existing ?? null).cast(['id', 'name', 'description', 'typeTaxUse', 'taxScope', 'amountType', 'amount', 'priceInclude', 'includeBaseAmount', 'sequence', 'active']).required(['name', 'typeTaxUse', 'amountType', 'amount'])
+      const values = {
+        ...args,
+        priceInclude: args.priceInclude === true,
+        includeBaseAmount: args.includeBaseAmount === true,
+        sequence: args.sequence ?? 10,
+        active: args.active ?? true,
+      }
+      const cs = ctx
+        .change('account.Tax', values, existing ?? null)
+        .cast([
+          'id',
+          'name',
+          'description',
+          'typeTaxUse',
+          'taxScope',
+          'amountType',
+          'amount',
+          'priceInclude',
+          'includeBaseAmount',
+          'sequence',
+          'active',
+        ])
+        .required(['name', 'typeTaxUse', 'amountType', 'amount'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
     },
   }),
   listPaymentTerms: defineFn({
-    input: {}, effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine'], agent: true,
+    input: {},
+    effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine'],
+    agent: true,
     handler: async (ctx) => {
       const T = ctx.table('account.PaymentTerm')
       return ctx.db.all(from(T).where(eq(T.active, true)).orderBy(asc(T.name)).preload('lines'))
     },
   }),
   savePaymentTerm: defineFn({
-    input: { id: 'id', name: 'text', note: 'text?', active: 'bool?' }, output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:account.PaymentTerm', 'write:account.PaymentTerm'], idempotent: true, agent: true,
+    input: { id: 'id', name: 'text', note: 'text?', active: 'bool?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:account.PaymentTerm', 'write:account.PaymentTerm'],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
       const existing = (await ctx.db.select('account.PaymentTerm', { id: args.id }))[0]
       const values = { ...args, active: args.active ?? true }
-      const cs = ctx.change('account.PaymentTerm', values, existing ?? null).cast(['id', 'name', 'note', 'active']).required(['name'])
+      const cs = ctx
+        .change('account.PaymentTerm', values, existing ?? null)
+        .cast(['id', 'name', 'note', 'active'])
+        .required(['name'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
     },
   }),
   savePaymentTermLine: defineFn({
-    input: { id: 'id', paymentId: 'id', value: 'text', valueAmount: 'decimal', delayType: 'text', nbDays: 'int', daysNextMonth: 'int?', sequence: 'int?' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' }, effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine', 'write:account.PaymentTermLine'], idempotent: true, agent: true,
+    input: {
+      id: 'id',
+      paymentId: 'id',
+      value: 'text',
+      valueAmount: 'decimal',
+      delayType: 'text',
+      nbDays: 'int',
+      daysNextMonth: 'int?',
+      sequence: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine', 'write:account.PaymentTermLine'],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
-      if (!(await ctx.db.select('account.PaymentTerm', { id: args.paymentId }))[0]) return invalid('paymentId', 'payment term does not exist')
-      if (!PAYMENT_TERM_VALUES.includes(args.value as never)) return invalid('value', 'value must be percent or fixed')
-      if (!PAYMENT_TERM_DELAY_TYPES.includes(args.delayType as never)) return invalid('delayType', 'unsupported Odoo 19 delay type')
-      if (args.value === 'percent' && (n(args.valueAmount) < 0 || n(args.valueAmount) > 100)) return invalid('valueAmount', 'percentage must be between 0 and 100')
+      if (!(await ctx.db.select('account.PaymentTerm', { id: args.paymentId }))[0])
+        return invalid('paymentId', 'payment term does not exist')
+      if (!PAYMENT_TERM_VALUES.includes(args.value as never))
+        return invalid('value', 'value must be percent or fixed')
+      if (!PAYMENT_TERM_DELAY_TYPES.includes(args.delayType as never))
+        return invalid('delayType', 'unsupported Odoo 19 delay type')
+      if (args.value === 'percent' && (n(args.valueAmount) < 0 || n(args.valueAmount) > 100))
+        return invalid('valueAmount', 'percentage must be between 0 and 100')
       const existing = (await ctx.db.select('account.PaymentTermLine', { id: args.id }))[0]
       const values = { ...args, sequence: args.sequence ?? 10 }
-      const cs = ctx.change('account.PaymentTermLine', values, existing ?? null).cast(['id', 'paymentId', 'value', 'valueAmount', 'delayType', 'nbDays', 'daysNextMonth', 'sequence']).required(['paymentId', 'value', 'valueAmount', 'delayType'])
+      const cs = ctx
+        .change('account.PaymentTermLine', values, existing ?? null)
+        .cast(['id', 'paymentId', 'value', 'valueAmount', 'delayType', 'nbDays', 'daysNextMonth', 'sequence'])
+        .required(['paymentId', 'value', 'valueAmount', 'delayType'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
     },
   }),
   listMoves: defineFn({
-    input: { moveType: 'text?', state: 'text?', partnerId: 'id?' }, effects: ['read:account.Move'], agent: true,
-    handler: (ctx, args) => ctx.db.select('account.Move', { ...(args.moveType ? { moveType: args.moveType } : {}), ...(args.state ? { state: args.state } : {}), ...(args.partnerId ? { partnerId: args.partnerId } : {}) }),
+    input: { moveType: 'text?', state: 'text?', partnerId: 'id?' },
+    effects: ['read:account.Move'],
+    agent: true,
+    handler: (ctx, args) =>
+      ctx.db.select('account.Move', {
+        ...(args.moveType ? { moveType: args.moveType } : {}),
+        ...(args.state ? { state: args.state } : {}),
+        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
+      }),
   }),
   listOpenItems: defineFn({
     input: { partnerId: 'id?', accountId: 'id?' },
@@ -318,21 +410,40 @@ export const functions: Record<string, FnSpec> = {
         if (!account?.reconcile) continue
         rows.push({ ...line, move })
       }
-      return rows.sort((a, b) =>
-        String((a.move as Row).date).localeCompare(String((b.move as Row).date)),
-      )
+      return rows.sort((a, b) => String((a.move as Row).date).localeCompare(String((b.move as Row).date)))
     },
   }),
   getMove: defineFn({
-    input: { id: 'id' }, effects: ['read:account.Move', 'read:account.MoveLine'], agent: true,
+    input: { id: 'id' },
+    effects: ['read:account.Move', 'read:account.MoveLine'],
+    agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
       return move ? { ...move, lines: await ctx.db.select('account.MoveLine', { moveId: args.id }) } : null
     },
   }),
   createMove: defineFn({
-    input: { id: 'id', journalId: 'id', moveType: 'text?', date: 'datetime?', ref: 'text?', partnerId: 'id?', invoiceDate: 'datetime?', invoiceDateDue: 'datetime?', paymentTermId: 'id?' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' }, effects: ['read:account.Journal', 'read:account.Move', 'read:account.PaymentTermLine', 'read:company.Company', 'write:account.Move'], idempotent: true, agent: true,
+    input: {
+      id: 'id',
+      journalId: 'id',
+      moveType: 'text?',
+      date: 'datetime?',
+      ref: 'text?',
+      partnerId: 'id?',
+      invoiceDate: 'datetime?',
+      invoiceDateDue: 'datetime?',
+      paymentTermId: 'id?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:account.Journal',
+      'read:account.Move',
+      'read:account.PaymentTermLine',
+      'read:company.Company',
+      'write:account.Move',
+    ],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
       if (!journal) return invalid('journalId', 'journal does not exist')
@@ -342,57 +453,150 @@ export const functions: Record<string, FnSpec> = {
       if (existing) return { ok: true, id: args.id }
       const date = String(args.date ?? today())
       await ctx.db.insert('account.Move', {
-        id: args.id, name: String(args.id), ref: args.ref ?? null, date, moveType, state: 'draft', journalId: args.journalId,
-        partnerId: args.partnerId ?? null, invoiceDate: args.invoiceDate ?? null,
-        invoiceDateDue: args.invoiceDateDue ?? (args.invoiceDate ? await dueDate(ctx, args.paymentTermId, new Date(String(args.invoiceDate))) : null),
-        paymentTermId: args.paymentTermId ?? null, paymentState: moveType === 'entry' ? 'paid' : 'not_paid',
-        currency: await companyCurrency(ctx), amountUntaxed: '0', amountTax: '0', amountTotal: '0', postedAt: null,
+        id: args.id,
+        name: String(args.id),
+        ref: args.ref ?? null,
+        date,
+        moveType,
+        state: 'draft',
+        journalId: args.journalId,
+        partnerId: args.partnerId ?? null,
+        invoiceDate: args.invoiceDate ?? null,
+        invoiceDateDue:
+          args.invoiceDateDue ??
+          (args.invoiceDate
+            ? await dueDate(ctx, args.paymentTermId, new Date(String(args.invoiceDate)))
+            : null),
+        paymentTermId: args.paymentTermId ?? null,
+        paymentState: moveType === 'entry' ? 'paid' : 'not_paid',
+        currency: await companyCurrency(ctx),
+        amountUntaxed: '0',
+        amountTax: '0',
+        amountTotal: '0',
+        postedAt: null,
       })
       return { ok: true, id: args.id }
     },
   }),
   addMoveLine: defineFn({
-    input: { id: 'id', moveId: 'id', name: 'text', accountId: 'id', partnerId: 'id?', productId: 'id?', productUomId: 'id?', quantity: 'decimal?', priceUnit: 'decimal?', discount: 'decimal?', taxId: 'id?', debit: 'decimal?', credit: 'decimal?', dateMaturity: 'datetime?', displayType: 'text?', sequence: 'int?' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' }, effects: ['read:account.Move', 'read:account.Account', 'write:account.MoveLine'], idempotent: true, agent: true,
+    input: {
+      id: 'id',
+      moveId: 'id',
+      name: 'text',
+      accountId: 'id',
+      partnerId: 'id?',
+      productId: 'id?',
+      productUomId: 'id?',
+      quantity: 'decimal?',
+      priceUnit: 'decimal?',
+      discount: 'decimal?',
+      taxId: 'id?',
+      debit: 'decimal?',
+      credit: 'decimal?',
+      dateMaturity: 'datetime?',
+      displayType: 'text?',
+      sequence: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:account.Move', 'read:account.Account', 'write:account.MoveLine'],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.moveId }))[0]
-      if (!move || move.state !== 'draft') return invalid('moveId', 'lines can only be added to a draft entry')
+      if (move?.state !== 'draft') return invalid('moveId', 'lines can only be added to a draft entry')
       const account = await accountOf(ctx, args.accountId)
       if (!account) return invalid('accountId', 'account does not exist')
-      const debit = money(n(args.debit)), credit = money(n(args.credit))
-      if (debit < 0 || credit < 0 || (debit > 0 && credit > 0)) return invalid('debit', 'a line may have debit or credit, never both')
+      const debit = money(n(args.debit)),
+        credit = money(n(args.credit))
+      if (debit < 0 || credit < 0 || (debit > 0 && credit > 0))
+        return invalid('debit', 'a line may have debit or credit, never both')
       const inserted = await ctx.db.insertIfAbsent('account.MoveLine', {
-        id: args.id, moveId: args.moveId, name: args.name, accountId: args.accountId, partnerId: args.partnerId ?? move.partnerId ?? null,
-        productId: args.productId ?? null, productUomId: args.productUomId ?? null, quantity: args.quantity ?? '1', priceUnit: args.priceUnit ?? '0', discount: args.discount ?? '0', taxId: args.taxId ?? null,
-        debit: decimal(debit), credit: decimal(credit), balance: decimal(debit - credit), dateMaturity: args.dateMaturity ?? null,
-        displayType: args.displayType ?? null, reconciled: false, amountResidual: account.reconcile ? decimal(Math.abs(debit - credit)) : '0', sequence: args.sequence ?? 10,
+        id: args.id,
+        moveId: args.moveId,
+        name: args.name,
+        accountId: args.accountId,
+        partnerId: args.partnerId ?? move.partnerId ?? null,
+        productId: args.productId ?? null,
+        productUomId: args.productUomId ?? null,
+        quantity: args.quantity ?? '1',
+        priceUnit: args.priceUnit ?? '0',
+        discount: args.discount ?? '0',
+        taxId: args.taxId ?? null,
+        debit: decimal(debit),
+        credit: decimal(credit),
+        balance: decimal(debit - credit),
+        dateMaturity: args.dateMaturity ?? null,
+        displayType: args.displayType ?? null,
+        reconciled: false,
+        amountResidual: account.reconcile ? decimal(Math.abs(debit - credit)) : '0',
+        sequence: args.sequence ?? 10,
       })
       return { ok: true, id: args.id, existing: !('dryRun' in inserted) && !inserted.inserted }
     },
   }),
   createInvoice: defineFn({
-    input: { id: 'id', journalId: 'id', moveType: 'text', partnerId: 'id', invoiceDate: 'datetime?', paymentTermId: 'id?', ref: 'text?', description: 'text', productId: 'id?', productUomId: 'id?', quantity: 'decimal', priceUnit: 'decimal', discount: 'decimal?', lineAccountId: 'id', counterpartAccountId: 'id', taxId: 'id?', taxAccountId: 'id?' },
-    output: { ok: 'bool', id: 'id?', amountTotal: 'decimal?', errors: 'json?' }, effects: ['read:account.Journal', 'read:account.Account', 'read:account.Tax', 'read:account.Move', 'read:account.PaymentTermLine', 'read:company.Company', 'write:account.Move', 'write:account.MoveLine'], idempotent: true, agent: true,
+    input: {
+      id: 'id',
+      journalId: 'id',
+      moveType: 'text',
+      partnerId: 'id',
+      invoiceDate: 'datetime?',
+      paymentTermId: 'id?',
+      ref: 'text?',
+      description: 'text',
+      productId: 'id?',
+      productUomId: 'id?',
+      quantity: 'decimal',
+      priceUnit: 'decimal',
+      discount: 'decimal?',
+      lineAccountId: 'id',
+      counterpartAccountId: 'id',
+      taxId: 'id?',
+      taxAccountId: 'id?',
+    },
+    output: { ok: 'bool', id: 'id?', amountTotal: 'decimal?', errors: 'json?' },
+    effects: [
+      'read:account.Journal',
+      'read:account.Account',
+      'read:account.Tax',
+      'read:account.Move',
+      'read:account.PaymentTermLine',
+      'read:company.Company',
+      'write:account.Move',
+      'write:account.MoveLine',
+    ],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
-      if (!['out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt'].includes(String(args.moveType))) return invalid('moveType', 'createInvoice requires an invoice, refund, or receipt type')
+      if (
+        !['out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt'].includes(
+          String(args.moveType),
+        )
+      )
+        return invalid('moveType', 'createInvoice requires an invoice, refund, or receipt type')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
       if (!journal) return invalid('journalId', 'journal does not exist')
       const customerDocument = ['out_invoice', 'out_refund', 'out_receipt'].includes(String(args.moveType))
       const expectedJournal = customerDocument ? 'sale' : 'purchase'
       if (journal.type !== expectedJournal)
         return invalid('journalId', `${String(args.moveType)} requires a ${expectedJournal} journal`)
-      const lineAccount = await accountOf(ctx, args.lineAccountId), counterpart = await accountOf(ctx, args.counterpartAccountId)
+      const lineAccount = await accountOf(ctx, args.lineAccountId),
+        counterpart = await accountOf(ctx, args.counterpartAccountId)
       if (!lineAccount || !counterpart) return invalid('accountId', 'invoice accounts do not exist')
       const expectedCounterpart = customerDocument ? 'asset_receivable' : 'liability_payable'
       if (counterpart.accountType !== expectedCounterpart)
         return invalid('counterpartAccountId', `counterpart account must be ${expectedCounterpart}`)
-      const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] ?? null : null
+      const tax = args.taxId ? ((await ctx.db.select('account.Tax', { id: args.taxId }))[0] ?? null) : null
       if (tax && ![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
         return invalid('taxId', 'tax use does not match the invoice direction')
       let amounts: ReturnType<typeof taxAmounts>
-      try { amounts = taxAmounts(tax, n(args.quantity), n(args.priceUnit), n(args.discount)) }
-      catch (error) { return invalid('taxId', (error as Error).message) }
-      if (amounts.tax && (!args.taxAccountId || !(await accountOf(ctx, args.taxAccountId)))) return invalid('taxAccountId', 'a valid tax account is required when tax is non-zero')
+      try {
+        amounts = taxAmounts(tax, n(args.quantity), n(args.priceUnit), n(args.discount))
+      } catch (error) {
+        return invalid('taxId', (error as Error).message)
+      }
+      if (amounts.tax && (!args.taxAccountId || !(await accountOf(ctx, args.taxAccountId))))
+        return invalid('taxAccountId', 'a valid tax account is required when tax is non-zero')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
       const invoiceDate = String(args.invoiceDate ?? today())
@@ -400,46 +604,170 @@ export const functions: Record<string, FnSpec> = {
       const mainDebit = ['in_invoice', 'in_receipt', 'out_refund'].includes(String(args.moveType))
       await ctx.tx(async (tx) => {
         await tx.db.insert('account.Move', {
-          id: args.id, name: String(args.id), ref: args.ref ?? null, date: invoiceDate, moveType: args.moveType, state: 'draft', journalId: args.journalId,
-          partnerId: args.partnerId, invoiceDate, invoiceDateDue: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)), paymentTermId: args.paymentTermId ?? null,
-          paymentState: 'not_paid', currency, amountUntaxed: decimal(amounts.untaxed), amountTax: decimal(amounts.tax), amountTotal: decimal(amounts.total), postedAt: null,
+          id: args.id,
+          name: String(args.id),
+          ref: args.ref ?? null,
+          date: invoiceDate,
+          moveType: args.moveType,
+          state: 'draft',
+          journalId: args.journalId,
+          partnerId: args.partnerId,
+          invoiceDate,
+          invoiceDateDue: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)),
+          paymentTermId: args.paymentTermId ?? null,
+          paymentState: 'not_paid',
+          currency,
+          amountUntaxed: decimal(amounts.untaxed),
+          amountTax: decimal(amounts.tax),
+          amountTotal: decimal(amounts.total),
+          postedAt: null,
         })
-        const line = async (id: string, accountId: unknown, amount: number, debitSide: boolean, name: string, reconcilable: boolean, extra: Row = {}) => tx.db.insert('account.MoveLine', {
-          id, moveId: args.id, name, accountId, partnerId: args.partnerId, productId: null, productUomId: null, quantity: '1', priceUnit: decimal(amount), discount: '0', taxId: null,
-          debit: debitSide ? decimal(amount) : '0', credit: debitSide ? '0' : decimal(amount), balance: decimal(debitSide ? amount : -amount), dateMaturity: null, displayType: null, reconciled: false, amountResidual: reconcilable ? decimal(amount) : '0', sequence: 10, ...extra,
-        })
-        await line(`${String(args.id)}:base`, args.lineAccountId, amounts.untaxed, mainDebit, String(args.description), false, { productId: args.productId ?? null, productUomId: args.productUomId ?? null, quantity: String(args.quantity), priceUnit: String(args.priceUnit), discount: String(args.discount ?? 0), taxId: args.taxId ?? null })
-        if (amounts.tax) await line(`${String(args.id)}:tax`, args.taxAccountId, amounts.tax, mainDebit, String(tax?.name ?? 'Tax'), false, { sequence: 20 })
-        await line(`${String(args.id)}:counterpart`, args.counterpartAccountId, amounts.total, !mainDebit, String(args.ref ?? args.description), true, { dateMaturity: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)), sequence: 30 })
+        const line = async (
+          id: string,
+          accountId: unknown,
+          amount: number,
+          debitSide: boolean,
+          name: string,
+          reconcilable: boolean,
+          extra: Row = {},
+        ) =>
+          tx.db.insert('account.MoveLine', {
+            id,
+            moveId: args.id,
+            name,
+            accountId,
+            partnerId: args.partnerId,
+            productId: null,
+            productUomId: null,
+            quantity: '1',
+            priceUnit: decimal(amount),
+            discount: '0',
+            taxId: null,
+            debit: debitSide ? decimal(amount) : '0',
+            credit: debitSide ? '0' : decimal(amount),
+            balance: decimal(debitSide ? amount : -amount),
+            dateMaturity: null,
+            displayType: null,
+            reconciled: false,
+            amountResidual: reconcilable ? decimal(amount) : '0',
+            sequence: 10,
+            ...extra,
+          })
+        await line(
+          `${String(args.id)}:base`,
+          args.lineAccountId,
+          amounts.untaxed,
+          mainDebit,
+          String(args.description),
+          false,
+          {
+            productId: args.productId ?? null,
+            productUomId: args.productUomId ?? null,
+            quantity: String(args.quantity),
+            priceUnit: String(args.priceUnit),
+            discount: String(args.discount ?? 0),
+            taxId: args.taxId ?? null,
+          },
+        )
+        if (amounts.tax)
+          await line(
+            `${String(args.id)}:tax`,
+            args.taxAccountId,
+            amounts.tax,
+            mainDebit,
+            String(tax?.name ?? 'Tax'),
+            false,
+            { sequence: 20 },
+          )
+        await line(
+          `${String(args.id)}:counterpart`,
+          args.counterpartAccountId,
+          amounts.total,
+          !mainDebit,
+          String(args.ref ?? args.description),
+          true,
+          { dateMaturity: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)), sequence: 30 },
+        )
       })
       return { ok: true, id: args.id, amountTotal: decimal(amounts.total) }
     },
   }),
   postMove: defineFn({
-    input: { id: 'id' }, output: { ok: 'bool', id: 'id?', name: 'text?', errors: 'json?' },
-    effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Journal', 'write:account.Journal', 'write:account.Move'], idempotent: true, agent: true,
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', name: 'text?', errors: 'json?' },
+    effects: [
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.Journal',
+      'write:account.Journal',
+      'write:account.Move',
+    ],
+    idempotent: true,
+    agent: true,
     handler: (ctx, args) => post(ctx, args.id),
   }),
   cancelMove: defineFn({
-    input: { id: 'id' }, output: { ok: 'bool', id: 'id?', errors: 'json?' }, effects: ['read:account.Move', 'write:account.Move'], idempotent: true, agent: true,
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:account.Move', 'write:account.Move'],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'journal entry does not exist')
-      if (move.state === 'posted') return invalid('state', 'posted entries must be reversed; direct cancellation is unsupported')
+      if (move.state === 'posted')
+        return invalid('state', 'posted entries must be reversed; direct cancellation is unsupported')
       await ctx.db.update('account.Move', { id: args.id }, { state: 'cancel' })
       return { ok: true, id: args.id }
     },
   }),
-  listPayments: defineFn({ input: {}, effects: ['read:account.Payment'], agent: true, handler: (ctx) => ctx.db.select('account.Payment') }),
+  listPayments: defineFn({
+    input: {},
+    effects: ['read:account.Payment'],
+    agent: true,
+    handler: (ctx) => ctx.db.select('account.Payment'),
+  }),
   registerPayment: defineFn({
-    input: { id: 'id', name: 'text', paymentType: 'text', partnerType: 'text', partnerId: 'id?', journalId: 'id', destinationAccountId: 'id', amount: 'decimal', date: 'datetime?', memo: 'text?', paymentReference: 'text?', reconcileLineId: 'id?' },
-    output: { ok: 'bool', id: 'id?', moveId: 'id?', errors: 'json?' }, effects: ['read:account.Payment', 'read:account.Journal', 'read:account.Account', 'read:account.Move', 'read:account.MoveLine', 'read:account.PartialReconcile', 'read:company.Company', 'write:account.Payment', 'write:account.Journal', 'write:account.Move', 'write:account.MoveLine', 'write:account.PartialReconcile'], idempotent: true, agent: true,
+    input: {
+      id: 'id',
+      name: 'text',
+      paymentType: 'text',
+      partnerType: 'text',
+      partnerId: 'id?',
+      journalId: 'id',
+      destinationAccountId: 'id',
+      amount: 'decimal',
+      date: 'datetime?',
+      memo: 'text?',
+      paymentReference: 'text?',
+      reconcileLineId: 'id?',
+    },
+    output: { ok: 'bool', id: 'id?', moveId: 'id?', errors: 'json?' },
+    effects: [
+      'read:account.Payment',
+      'read:account.Journal',
+      'read:account.Account',
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.PartialReconcile',
+      'read:company.Company',
+      'write:account.Payment',
+      'write:account.Journal',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'write:account.PartialReconcile',
+    ],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
-      if (!PAYMENT_TYPES.includes(args.paymentType as never)) return invalid('paymentType', 'payment type must be inbound or outbound')
-      if (!PARTNER_TYPES.includes(args.partnerType as never)) return invalid('partnerType', 'partner type must be customer or supplier')
+      if (!PAYMENT_TYPES.includes(args.paymentType as never))
+        return invalid('paymentType', 'payment type must be inbound or outbound')
+      if (!PARTNER_TYPES.includes(args.partnerType as never))
+        return invalid('partnerType', 'partner type must be customer or supplier')
       if (!(n(args.amount) > 0)) return invalid('amount', 'payment amount must be positive')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
-      if (!journal?.defaultAccountId) return invalid('journalId', 'payment journal needs a default liquidity account')
+      if (!journal?.defaultAccountId)
+        return invalid('journalId', 'payment journal needs a default liquidity account')
       if (!['bank', 'cash'].includes(String(journal.type)))
         return invalid('journalId', 'payments require a bank or cash journal')
       const destination = await accountOf(ctx, args.destinationAccountId)
@@ -465,7 +793,10 @@ export const functions: Record<string, FnSpec> = {
         if (reconcileTarget.accountId !== args.destinationAccountId)
           return invalid('reconcileLineId', 'open item uses another destination account')
         const expectedDebit = args.paymentType === 'inbound'
-        if ((expectedDebit && n(reconcileTarget.balance) <= 0) || (!expectedDebit && n(reconcileTarget.balance) >= 0))
+        if (
+          (expectedDebit && n(reconcileTarget.balance) <= 0) ||
+          (!expectedDebit && n(reconcileTarget.balance) >= 0)
+        )
           return invalid('reconcileLineId', 'open item has the wrong debit or credit direction')
         if (n(args.amount) - n(reconcileTarget.amountResidual) > 0.000001)
           return invalid('amount', 'payment amount exceeds the selected open item')
@@ -486,13 +817,70 @@ export const functions: Record<string, FnSpec> = {
         const failed = await reconcilePayment(String(existing.moveId))
         return failed ?? { ok: true, id: args.id, moveId: existing.moveId }
       }
-      const moveId = `${String(args.id)}:move`, date = String(args.date ?? today()), currency = await companyCurrency(ctx), inbound = args.paymentType === 'inbound'
+      const moveId = `${String(args.id)}:move`,
+        date = String(args.date ?? today()),
+        currency = await companyCurrency(ctx),
+        inbound = args.paymentType === 'inbound'
       await ctx.tx(async (tx) => {
-        await tx.db.insert('account.Move', { id: moveId, name: moveId, ref: args.paymentReference ?? args.memo ?? null, date, moveType: 'entry', state: 'draft', journalId: args.journalId, partnerId: args.partnerId ?? null, invoiceDate: null, invoiceDateDue: null, paymentTermId: null, paymentState: 'paid', currency, amountUntaxed: '0', amountTax: '0', amountTotal: String(args.amount), postedAt: null })
-        const add = (id: string, accountId: unknown, debitSide: boolean, reconcilable: boolean) => tx.db.insert('account.MoveLine', { id, moveId, name: args.memo ?? args.name, accountId, partnerId: args.partnerId ?? null, productId: null, productUomId: null, quantity: '1', priceUnit: String(args.amount), discount: '0', taxId: null, debit: debitSide ? String(args.amount) : '0', credit: debitSide ? '0' : String(args.amount), balance: decimal(debitSide ? n(args.amount) : -n(args.amount)), dateMaturity: null, displayType: null, reconciled: false, amountResidual: reconcilable ? String(args.amount) : '0', sequence: debitSide ? 10 : 20 })
+        await tx.db.insert('account.Move', {
+          id: moveId,
+          name: moveId,
+          ref: args.paymentReference ?? args.memo ?? null,
+          date,
+          moveType: 'entry',
+          state: 'draft',
+          journalId: args.journalId,
+          partnerId: args.partnerId ?? null,
+          invoiceDate: null,
+          invoiceDateDue: null,
+          paymentTermId: null,
+          paymentState: 'paid',
+          currency,
+          amountUntaxed: '0',
+          amountTax: '0',
+          amountTotal: String(args.amount),
+          postedAt: null,
+        })
+        const add = (id: string, accountId: unknown, debitSide: boolean, reconcilable: boolean) =>
+          tx.db.insert('account.MoveLine', {
+            id,
+            moveId,
+            name: args.memo ?? args.name,
+            accountId,
+            partnerId: args.partnerId ?? null,
+            productId: null,
+            productUomId: null,
+            quantity: '1',
+            priceUnit: String(args.amount),
+            discount: '0',
+            taxId: null,
+            debit: debitSide ? String(args.amount) : '0',
+            credit: debitSide ? '0' : String(args.amount),
+            balance: decimal(debitSide ? n(args.amount) : -n(args.amount)),
+            dateMaturity: null,
+            displayType: null,
+            reconciled: false,
+            amountResidual: reconcilable ? String(args.amount) : '0',
+            sequence: debitSide ? 10 : 20,
+          })
         await add(`${moveId}:liquidity`, journal.defaultAccountId, inbound, false)
         await add(`${moveId}:counterpart`, args.destinationAccountId, !inbound, true)
-        await tx.db.insert('account.Payment', { id: args.id, name: args.name, paymentType: args.paymentType, partnerType: args.partnerType, partnerId: args.partnerId ?? null, journalId: args.journalId, destinationAccountId: args.destinationAccountId, amount: args.amount, date, memo: args.memo ?? null, paymentReference: args.paymentReference ?? null, state: 'in_process', currency, moveId })
+        await tx.db.insert('account.Payment', {
+          id: args.id,
+          name: args.name,
+          paymentType: args.paymentType,
+          partnerType: args.partnerType,
+          partnerId: args.partnerId ?? null,
+          journalId: args.journalId,
+          destinationAccountId: args.destinationAccountId,
+          amount: args.amount,
+          date,
+          memo: args.memo ?? null,
+          paymentReference: args.paymentReference ?? null,
+          state: 'in_process',
+          currency,
+          moveId,
+        })
       })
       const posted = await post(ctx, moveId)
       if (posted.ok !== true) return posted
@@ -503,7 +891,19 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   reconcile: defineFn({
-    input: { id: 'id', debitMoveId: 'id', creditMoveId: 'id', amount: 'decimal', date: 'datetime?' }, output: { ok: 'bool', id: 'id?', errors: 'json?' }, effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Account', 'read:account.PartialReconcile', 'write:account.Move', 'write:account.MoveLine', 'write:account.PartialReconcile'], idempotent: true, agent: true,
+    input: { id: 'id', debitMoveId: 'id', creditMoveId: 'id', amount: 'decimal', date: 'datetime?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.Account',
+      'read:account.PartialReconcile',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'write:account.PartialReconcile',
+    ],
+    idempotent: true,
+    agent: true,
     handler: async (ctx, args) => {
       const amount = money(n(args.amount))
       if (!(amount > 0)) return invalid('amount', 'reconciliation amount must be positive')
@@ -526,10 +926,7 @@ export const functions: Record<string, FnSpec> = {
             throw new Error('only posted journal items can be reconciled')
           const account = await accountOf(tx, debit.accountId)
           if (!account?.reconcile) throw new Error('account does not allow reconciliation')
-          if (
-            amount - n(debit.amountResidual) > 0.000001 ||
-            amount - n(credit.amountResidual) > 0.000001
-          )
+          if (amount - n(debit.amountResidual) > 0.000001 || amount - n(credit.amountResidual) > 0.000001)
             throw new Error('amount exceeds a residual balance')
           const held = await tx.db.insertIfAbsent('account.PartialReconcile', {
             id: args.id,
@@ -571,23 +968,50 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   trialBalance: defineFn({
-    input: { dateFrom: 'datetime?', dateTo: 'datetime?' }, effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine'], agent: true,
+    input: { dateFrom: 'datetime?', dateTo: 'datetime?' },
+    effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine'],
+    agent: true,
     handler: async (ctx, args) => {
-      const accounts = await ctx.db.select('account.Account'), moves = new Map((await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]))
+      const accounts = await ctx.db.select('account.Account'),
+        moves = new Map(
+          (await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]),
+        )
       const result = new Map<string, { debit: number; credit: number }>()
       for (const line of await ctx.db.select('account.MoveLine')) {
-        const move = moves.get(String(line.moveId)); if (!move) continue
-        const at = new Date(String(move.date)).getTime(), from = args.dateFrom ? new Date(String(args.dateFrom)).getTime() : -Infinity, to = args.dateTo ? new Date(String(args.dateTo)).getTime() : Infinity
+        const move = moves.get(String(line.moveId))
+        if (!move) continue
+        const at = new Date(String(move.date)).getTime(),
+          from = args.dateFrom ? new Date(String(args.dateFrom)).getTime() : -Infinity,
+          to = args.dateTo ? new Date(String(args.dateTo)).getTime() : Infinity
         if (at < from || at > to) continue
-        const held = result.get(String(line.accountId)) ?? { debit: 0, credit: 0 }; held.debit = money(held.debit + n(line.debit)); held.credit = money(held.credit + n(line.credit)); result.set(String(line.accountId), held)
+        const held = result.get(String(line.accountId)) ?? { debit: 0, credit: 0 }
+        held.debit = money(held.debit + n(line.debit))
+        held.credit = money(held.credit + n(line.credit))
+        result.set(String(line.accountId), held)
       }
-      return accounts.map((account) => { const held = result.get(String(account.id)) ?? { debit: 0, credit: 0 }; return { accountId: account.id, code: account.code, name: account.name, debit: decimal(held.debit), credit: decimal(held.credit), balance: decimal(held.debit - held.credit) } }).filter((row) => n(row.debit) || n(row.credit))
+      return accounts
+        .map((account) => {
+          const held = result.get(String(account.id)) ?? { debit: 0, credit: 0 }
+          return {
+            accountId: account.id,
+            code: account.code,
+            name: account.name,
+            debit: decimal(held.debit),
+            credit: decimal(held.credit),
+            balance: decimal(held.debit - held.credit),
+          }
+        })
+        .filter((row) => n(row.debit) || n(row.credit))
     },
   }),
   generalLedger: defineFn({
-    input: { accountId: 'id?', dateFrom: 'datetime?', dateTo: 'datetime?' }, effects: ['read:account.Move', 'read:account.MoveLine'], agent: true,
+    input: { accountId: 'id?', dateFrom: 'datetime?', dateTo: 'datetime?' },
+    effects: ['read:account.Move', 'read:account.MoveLine'],
+    agent: true,
     handler: async (ctx, args) => {
-      const moves = new Map((await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]))
+      const moves = new Map(
+        (await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]),
+      )
       const rows: Array<Row & { move: Row }> = []
       for (const line of await ctx.db.select(
         'account.MoveLine',
@@ -606,10 +1030,24 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   partnerStatement: defineFn({
-    input: { partnerId: 'id' }, effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Account'], agent: true,
+    input: { partnerId: 'id' },
+    effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Account'],
+    agent: true,
     handler: async (ctx, args) => {
-      const moves = new Map((await ctx.db.select('account.Move', { state: 'posted', partnerId: args.partnerId })).map((move) => [String(move.id), move])), rows: Row[] = []
-      for (const line of await ctx.db.select('account.MoveLine', { partnerId: args.partnerId })) { const account = await accountOf(ctx, line.accountId); if (moves.has(String(line.moveId)) && ['asset_receivable', 'liability_payable'].includes(String(account?.accountType))) rows.push({ ...line, move: moves.get(String(line.moveId)) }) }
+      const moves = new Map(
+          (await ctx.db.select('account.Move', { state: 'posted', partnerId: args.partnerId })).map(
+            (move) => [String(move.id), move],
+          ),
+        ),
+        rows: Row[] = []
+      for (const line of await ctx.db.select('account.MoveLine', { partnerId: args.partnerId })) {
+        const account = await accountOf(ctx, line.accountId)
+        if (
+          moves.has(String(line.moveId)) &&
+          ['asset_receivable', 'liability_payable'].includes(String(account?.accountType))
+        )
+          rows.push({ ...line, move: moves.get(String(line.moveId)) })
+      }
       return rows
     },
   }),

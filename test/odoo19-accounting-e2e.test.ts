@@ -8,8 +8,7 @@ async function bootAccounting(t: TestContext) {
   const e2e = await createTestApp(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
-  const fixture = (name: string, input: Record<string, unknown>) =>
-    e2e.fixture.call(name, input, { scope })
+  const fixture = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', {
     id: 'acme',
@@ -128,8 +127,14 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
   assert.deepEqual((await call<Row[]>('account.listOpenItems', { partnerId: 'customer' })).value, [])
 
   const trial = (await call<Row[]>('account.trialBalance')).value
-  assert.equal(trial.reduce((sum, row) => sum + Number(row.debit), 0), 440)
-  assert.equal(trial.reduce((sum, row) => sum + Number(row.credit), 0), 440)
+  assert.equal(
+    trial.reduce((sum, row) => sum + Number(row.debit), 0),
+    440,
+  )
+  assert.equal(
+    trial.reduce((sum, row) => sum + Number(row.credit), 0),
+    440,
+  )
   assert.ok((await call<Row[]>('account.generalLedger', { accountId: 'receivable' })).value.length >= 3)
 
   const pages: Array<[string, RegExp]> = [

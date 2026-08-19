@@ -519,11 +519,7 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
     registerFunctions(accountModules)
     const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
     await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
-    await callFn(
-      'company.saveCompany',
-      { id: 'c1', partnerId: 'company-party', currency: 'VND' },
-      options,
-    )
+    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
     await callFn(
       'account.saveAccount',
       { id: 'bank', code: '1121', name: 'Bank', accountType: 'asset_cash' },
