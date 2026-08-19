@@ -9,7 +9,8 @@ import type { AppSpec } from './kernel/workspace.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
-import { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
+import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
+import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
 import { serveApp } from './server/boot.ts'
@@ -69,6 +70,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket permissions           every function that exists to be granted
     --grant a,b,c           …or what a role granted exactly these can reach
     --module NAME           …or what granting one module's whole surface reaches
+    --role NAME             …or what a role in the database actually grants
   ket migrate [--app X]     plan migrations (add --allow-destructive to permit data loss)
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
@@ -128,7 +130,21 @@ try {
     const [, m] = pickApp(ws)
     const module = opt('module')
     const grant = opt('grant')
-    if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
+    const role = opt('role')
+    if (role) {
+      // The one form that reads the database: a role is data, and what it grants is
+      // a fact about a deployment rather than about the code.
+      const spec = pickSpec(specs)
+      const config = readConfig(process.env, spec.serve?.defaults ?? {})
+      const adapter = await (spec.serve?.openStore ?? sqliteStore)(config)
+      try {
+        const keys = await grantsOfRole(adapter, role)
+        console.log(`role "${role}" grants ${keys.length} function(s)\n`)
+        console.log(formatReach(reachOf(m, keys)))
+      } finally {
+        await adapter.close()
+      }
+    } else if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
     else if (grant) console.log(formatReach(reachOf(m, grant.split(',').map(s => s.trim()).filter(Boolean))))
     else console.log(formatInventory(m))
   } else if (cmd === 'agent') {
