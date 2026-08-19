@@ -1,6 +1,6 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import type { MenuNode, Translator } from 'ketjs'
 
 /**
  * The backend screens.
@@ -63,17 +63,71 @@ export type Extras = {
   'app-card.actions'?: Record<string, unknown>
 }
 
-export const shell = (_: Translator, active: string, title: string, body: TemplateResult, viewer?: Viewer | null, extras: Extras = {}): TemplateResult => html`
+/**
+ * The frame every backend screen sits in.
+ *
+ * Two levels, as an enterprise admin needs: the apps this deployment has, then the
+ * menu inside the one you are in. A single flat list stops working at about six
+ * entries, and a business system has forty.
+ *
+ * The tree arrives already filtered — installed, and permitted. The shell does not
+ * decide what you may see; it draws what you may see.
+ */
+/** Where an entry goes: its own path, or the first one under it. */
+const destination = (node: MenuNode): string => {
+  if (node.path) return node.path
+  for (const child of node.children) {
+    const found = destination(child)
+    if (found !== '#') return found
+  }
+  return '#'
+}
+
+const menuLink = (item: MenuNode): TemplateResult => html`
+  <a data-ui="menu-item" data-active=${String(item.active)} href=${destination(item)}>${item.label}</a>`
+
+// <details> rather than a button: a section collapses with no script at all, which
+// means it still collapses on the first paint and on a page with a broken bundle.
+const menuSection = (section: MenuNode): TemplateResult => html`
+  <details data-ui="menu-section" open=${true}>
+    <summary data-ui="menu-section-title">${section.label}</summary>
+    ${each(section.children, c => c.id, c => c.children.length ? menuSection(c) : menuLink(c))}
+  </details>`
+
+export const shell = (
+  _: Translator,
+  title: string,
+  body: TemplateResult,
+  viewer?: Viewer | null,
+  extras: Extras = {},
+  menu: MenuNode[] = [],
+): TemplateResult => {
+  const app = menu.find(a => a.active) ?? menu[0] ?? null
+  return html`
 <div data-ui="shell">
   <aside data-ui="sidebar">
-    <div data-ui="brand">${_('backend.brand')}</div>
-    <nav data-ui="nav">
-      <a data-ui="nav-item" data-active=${String(active === 'apps')} href="/admin/apps">${_('backend.nav.apps')}</a>
-      <a data-ui="nav-item" data-active=${String(active === 'pages')} href="/admin/pages">${_('backend.nav.pages')}</a>
-      <a data-ui="nav-item" data-active=${String(active === 'settings')} href="/admin/settings">${_('backend.nav.settings')}</a>
-      ${extras['nav.items'] ?? ''}
-    </nav>
+    <div data-ui="app-switch">
+      <span data-ui="app-current">${app ? app.label : _('backend.brand')}</span>
+    </div>
+
+    <div data-ui="app-list" role="navigation">
+      <div data-ui="app-list-title">${_('backend.nav.apps')}</div>
+      ${each(menu, a => a.id, a => html`
+        <a data-ui="app-entry" data-active=${String(a.active)} href=${destination(a)}>
+          <span data-ui="app-icon">${a.icon ?? a.label.slice(0, 1)}</span>
+          <span data-ui="app-name">${a.label}</span>
+        </a>`)}
+    </div>
+
+    ${when(!!app && app.children.length > 0, () => html`
+      <nav data-ui="menu" aria-label=${app!.label}>
+        <div data-ui="menu-app">${app!.label}</div>
+        ${each(app!.children, c => c.id, c => c.children.length ? menuSection(c) : menuLink(c))}
+      </nav>`)}
+
+    ${extras['nav.items'] ?? ''}
   </aside>
+
   <main data-ui="main">
     <header data-ui="topbar">
       <h1 data-ui="title">${title}</h1>
@@ -88,6 +142,8 @@ export const shell = (_: Translator, active: string, title: string, body: Templa
     <div data-ui="content">${body}</div>
   </main>
 </div>`
+}
+
 
 export const emptyState = (message: string, hint: string): TemplateResult => html`
 <div data-ui="empty">
@@ -119,23 +175,23 @@ const appCard = (_: Translator, app: AppRow, extras: Extras = {}): TemplateResul
   </div>
 </article>`
 
-export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null, extras: Extras = {}): TemplateResult => {
+export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult => {
   const categories = [...new Set(apps.map(a => a.category))].sort()
   const categoryLabel = (c: string): string => {
     const owner = apps.find(a => a.category === c)
     return owner ? label(_, owner.name, 'category', c) : c
   }
-  return shell(_, 'apps', _('backend.apps.title'), apps.length === 0
+  return shell(_, _('backend.apps.title'), apps.length === 0
     ? emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
     : html`<div data-ui="app-groups">${each(categories, c => c, category => html`
         <section data-ui="app-group" data-category=${category}>
           <h2 data-ui="group-title">${categoryLabel(category)}</h2>
           <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a, extras))}</div>
-        </section>`)}${extras['apps.footer'] ?? ''}</div>`, viewer, extras)
+        </section>`)}${extras['apps.footer'] ?? ''}</div>`, viewer, extras, menu)
 }
 
-export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null, extras: Extras = {}): TemplateResult =>
-  shell(_, 'pages', _('backend.pages.title'), pages.length === 0
+export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult =>
+  shell(_, _('backend.pages.title'), pages.length === 0
     ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
     : html`<table data-ui="table">
         <thead><tr><th>${_('backend.pages.col.path')}</th><th>${_('backend.pages.col.title')}</th><th>${_('backend.pages.col.state')}</th></tr></thead>
@@ -146,15 +202,15 @@ export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | n
             <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
           </tr>`)}
         </tbody>
-      </table>`, viewer, extras)
+      </table>`, viewer, extras, menu)
 
-export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null, extras: Extras = {}): TemplateResult =>
-  shell(_, 'settings', _('backend.settings.title'), html`
+export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult =>
+  shell(_, _('backend.settings.title'), html`
     <section data-ui="tokens">
       <h2 data-ui="group-title">${_('backend.settings.tokens')}</h2>
       <dl data-ui="token-list">${each(Object.entries(tokens), ([k]) => k, ([k, v]) => html`
         <div data-ui="token"><dt data-ui="token-name">--ket-${k}</dt><dd data-ui="token-value">${v}</dd></div>`)}
       </dl>
-    </section>`, null, extras)
+    </section>`, viewer, extras, menu)
 
 export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState, errorState }

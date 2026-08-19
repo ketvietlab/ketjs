@@ -25,6 +25,7 @@ export const routes: Record<string, RouteEntry> = {
       'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
     }
+    const menu = await ctx.menu(url, req)
     return page({
       body: ctx.document({
         lang,
@@ -33,7 +34,7 @@ export const routes: Record<string, RouteEntry> = {
         body: productsScreen(_, rows.map((r): TemplateRow => ({
           id: r.id, name: r.name, type: r.type, categoryId: r.categoryId, uomId: r.uomId,
           variants: Array.isArray(r.variants) ? r.variants.length : 0,
-        })), viewer, extras),
+        })), viewer, extras, menu),
       }),
     })
   },

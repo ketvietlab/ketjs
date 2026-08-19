@@ -1,6 +1,6 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import type { MenuNode, Translator } from 'ketjs'
 import { shell, emptyState } from '../backend/screens.ts'
 import type { Extras, Viewer } from '../backend/screens.ts'
 
@@ -21,8 +21,8 @@ export type TemplateRow = {
  * reinvent. Markup only, as everywhere in the backend — the look is the design
  * team's and the selectors are the data-ui attributes.
  */
-export const productsScreen = (_: Translator, rows: TemplateRow[], viewer?: Viewer | null, extras: Extras = {}): TemplateResult =>
-  shell(_, '/admin/products', _('product_backend.screen.title'), rows.length === 0
+export const productsScreen = (_: Translator, rows: TemplateRow[], viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult =>
+  shell(_, _('product_backend.screen.title'), rows.length === 0
     ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
     : html`<table data-ui="table">
         <thead><tr>
@@ -39,4 +39,4 @@ export const productsScreen = (_: Translator, rows: TemplateRow[], viewer?: View
             <td data-ui="cell-variants">${String(r.variants)}</td>
           </tr>`)}
         </tbody>
-      </table>`, viewer, extras)
+      </table>`, viewer, extras, menu)

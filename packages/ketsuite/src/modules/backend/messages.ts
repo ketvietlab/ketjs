@@ -20,6 +20,13 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.settings': 'Cài đặt',
     'brand': 'KetSuite',
 
+    'menu.admin': 'Quản trị',
+    'menu.apps': 'Ứng dụng',
+    'menu.content': 'Nội dung',
+    'menu.pages': 'Trang',
+    'menu.config': 'Cấu hình',
+    'menu.settings': 'Cài đặt',
+
     'apps.title': 'Ứng dụng',
     'apps.depends': 'Phụ thuộc',
     'apps.dependents': 'Đang được dùng bởi',
@@ -52,6 +59,13 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
     'brand': 'KetSuite',
+
+    'menu.admin': 'Administration',
+    'menu.apps': 'Apps',
+    'menu.content': 'Content',
+    'menu.pages': 'Pages',
+    'menu.config': 'Configuration',
+    'menu.settings': 'Settings',
 
     'apps.title': 'Apps',
     'apps.depends': 'Requires',

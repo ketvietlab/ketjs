@@ -50,6 +50,35 @@ export type ModelDef = { scope: ModelScope; fields: Record<string, string> }
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
 /**
+ * One entry in the navigation tree — an app, a section inside it, or a link.
+ *
+ * Declared by the module that owns the screen, not stored as rows. Odoo keeps
+ * `ir.ui.menu` in the database so a customer can rearrange it, and pays for that
+ * with a menu that can point at a module nobody installed. Here a menu entry is
+ * checked when the deployment is composed: an unknown parent is a build error, and
+ * a link to a function nobody ships cannot be saved because there is nothing to
+ * save it in.
+ *
+ * `needs` is what keeps the tree honest. A menu item whose function the viewer may
+ * not call does not render — a menu that offers what it cannot deliver is a menu
+ * that lies, and the 401 arrives after the click rather than instead of it.
+ */
+export type MenuDef = {
+  /** A message key, resolved against the owning module. Falls back to itself. */
+  label: string
+  /** The entry above this one. Absent means it is an app: a root of the tree. */
+  parent?: string
+  /** Where it goes. Absent means it is a heading rather than a link. */
+  path?: string
+  /** A function key the viewer must be permitted to call for this to appear. */
+  needs?: string
+  /** Lower sorts first. Ties fall back to the label. */
+  sequence?: number
+  /** For an app: the mark shown beside it. Two characters at most, by convention. */
+  icon?: string
+}
+
+/**
  * A section is a renderable a page composes by data. The settings schema is what
  * makes that data checkable — and it is the same schema an agent is handed.
  */
@@ -150,6 +179,8 @@ export type ModuleSpec = AppMeta & {
   depends?: string[]
   models?: Record<string, ModelDef>
   extend?: Record<string, Record<string, string>>
+  /** Navigation entries this module contributes. Keys are ids other menus parent onto. */
+  menus?: Record<string, MenuDef>
   joints?: Record<string, JointDef>
   fills?: Record<string, string>
   /**
@@ -211,6 +242,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly depends: readonly string[]
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string>>
+  readonly menus: Record<string, MenuDef>
   readonly joints: Record<string, JointDef>
   readonly omits: readonly string[]
   readonly fills: Record<string, string>
@@ -234,6 +266,7 @@ export type Manifest = {
   order: string[]
   modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta>
   models: Record<string, ComposedModel>
+  menus: Record<string, MenuDef & { by: string }>
   joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean; omittedBy: string[] }>
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>

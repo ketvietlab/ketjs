@@ -1224,3 +1224,51 @@ until the query shape has run against real data.
 ## D10 — Name
 `Ket`, from *kết* — to join. npm `ketjs` is free; `ket` is held by a dead 2022
 package. Flagged: `ket` is UK slang for ketamine and bra-ket notation in physics.
+
+## D42 — Menus are declared in the module, and hidden by permission
+**Where a menu lives.** Odoo keeps menus as rows: `ir.ui.menu`, created by XML data
+files, edited in the database, surviving the code that put them there. That is why
+an upgrade can leave an entry pointing at an action nobody ships any more, and why
+"who put this here" is answered by an XML id rather than by a file.
+
+Here a menu is `menus` on the module, beside `models`, `functions` and `joints` —
+data in the manifest, so it arrives and leaves with the code that serves it, and
+`ket check` can refuse a broken one at build time rather than at click time.
+
+```ts
+menus: {
+  product: { label: 'menu.app', icon: '📦', sequence: 20 },
+  'product.catalogue': { parent: 'product', label: 'menu.catalogue' },
+  'product.templates': { parent: 'product.catalogue', label: 'menu.templates',
+                         path: '/admin/products', needs: 'product.listTemplates' },
+}
+```
+
+**Ids are global, like joint keys.** Two modules claiming one is `E_MENU_DUPLICATE`
+naming both, not one of them quietly winning. Hanging an entry under somebody else's
+needs the same declared dependency filling their joint would
+(`E_MENU_NOT_DEPENDED`) — otherwise a module could rearrange a sidebar it never
+admitted to knowing about.
+
+**Three filters, in this order:** what the deployment shipped, what this database has
+switched on (`restrictManifest` drops the entries of an uninstalled module), and what
+this request may call. The last is `needs`, naming a function key. An entry the
+viewer cannot use does not appear — the 401 arrives *instead of* the click, not
+after it. A heading left with no children goes too: an empty section reads as
+"broken", not as "not for you".
+
+**`needs` on a module that is not in the build is a soft dependency, not an error.**
+If the named module is installed and the function is missing, somebody mistyped and
+hiding it would hide the mistake — `E_MENU_UNKNOWN_FUNCTION`. If the module is
+absent, the entry is gated on something this deployment simply does not ship, and it
+is dropped silently. That is what let `backend` gate its Pages entry on
+`website.listPages` without depending on `website`.
+
+**Cost and reversibility.** Menus can no longer be reordered by an administrator at
+runtime, which Odoo allows; `sequence` is the only lever and it is in code. Cheap to
+reverse — a database table read *after* the manifest would layer on top without
+changing any of this. Deferred until somebody actually asks.
+
+**What this replaced.** `product_backend` used to add its sidebar link by filling
+`backend:nav.items` with a KTL string that re-implemented the active check. The
+joint stays for genuinely arbitrary additions; a menu entry is no longer one.
