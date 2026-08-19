@@ -3,15 +3,17 @@
 Honest list of what is not settled or not built.
 
 ## Not built
-- **SSR + hydration for the islands runtime.** The renderer targets an abstract
-  host, so a string host and a DOM host both exist in principle — but walking a
-  server-rendered DOM and re-attaching the holes is not written. Predicted to be
-  the single most time-consuming remaining piece.
 - **Auth.** Decided to be core (session, identity, permission check) because the
   agent pillar needs a permission boundary. Not implemented.
 - **i18n and storage primitives.** Decided core, not implemented.
 - **Client-side bundling.** Deliberately optional; unbundled ESM is the dev path.
   No production bundler exists yet.
+
+## Not built
+- **Islands.** SSR and hydration work for a whole tree; splitting a page into
+  independently hydrated islands is not written.
+- **Streams under a database-per-tenant layout.** Whose database a stream belongs to
+  is unanswered, so the pooled server defaults to an in-memory store.
 
 ## Deferred on purpose
 - **Relations / preload.** Decided (D11) to defer until the query layer has run

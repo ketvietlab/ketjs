@@ -108,6 +108,44 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D15 — SSR marks only what it cannot describe
+**Chosen:** the server walks the same parsed template the client does and emits one
+comment marker per hole — nothing else. Everything but a hole has a length the
+template already knows, so the hydration walk can count nodes instead of reading
+markers for them.
+
+**Hydration adopts, it does not rebuild:** verified in a real browser, hydrating
+twenty server-rendered rows creates **zero** nodes and keeps the same node objects,
+and the first update afterwards also creates zero.
+
+**A mismatch throws.** A hydration that half-works is worse than one that fails,
+because the failure is then silent and permanent. `E_HYDRATION_MISMATCH` names the
+node it expected and the one it found, so the caller can fall back to a clean client
+render.
+
+## D16 — One manifest, many databases; never many manifests
+**Chosen:** a database per tenant, all migrating to the same target schema, each
+recording the schema it is actually on.
+
+**Why not Odoo's version:** Odoo lets every database install a different module set,
+so there is no single schema to reason about and a fleet upgrade is N unknown
+migrations. That is the root of the upgrade failures, not a detail of them. Giving
+up per-tenant module sets buys a fleet where the upgrade diff runs **once**.
+
+**The pool is the part that bites in production:** a database per tenant multiplies
+connections by tenant against a cluster with a hard ceiling. So the pool caps how
+many databases stay open, evicts least-recently-used, and refuses to evict one a
+request still holds — it fails loudly instead of quietly serving the wrong tenant.
+
+**Resolution happens in exactly one place.** `ctx` was already the only thing that
+touches data, so a request cannot reach the wrong tenant by forgetting to thread
+something through. Verified: two tenants, same product id, no bleed, and an
+unresolvable request gets `E_UNKNOWN_TENANT` rather than a default.
+
+**One failure does not stop the fleet.** `migrateFleet` reports which databases
+moved and which did not; a half-migrated fleet you cannot see is worse than one you
+can.
+
 ## D14 — One log was the wrong abstraction; split by heat, not by shape
 **Retracted:** the claim that folding streams, jobs, the outbox and idempotency into
 a single append-only table was somewhere fullstack "gives some back". They were

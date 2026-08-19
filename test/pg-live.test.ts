@@ -12,6 +12,8 @@ import { eq, gte } from '../src/data/expr.ts'
 import { registerFunctions, callFn } from '../src/server/fn.ts'
 import { createStreams, dbStreamStore } from '../src/server/stream.ts'
 import { createQueue } from '../src/server/queue.ts'
+import { createAdapterPool } from '../src/data/pool.ts'
+import { migrateFleet, formatFleet } from '../src/data/fleet.ts'
 import catalog from '../examples/modules/catalog/index.ts'
 import inventory from '../examples/modules/inventory/index.ts'
 import checkout from '../examples/modules/checkout/index.ts'
@@ -133,4 +135,38 @@ test('live pg: idempotency is settled by the primary key across concurrent calls
   assert.ok(ok.length >= 1)
   assert.equal((await a.all('SELECT id FROM checkout_order', [])).length, 1, 'five concurrent calls, one order')
   })
+})
+
+test('live pg: a database per tenant, migrated as a fleet', live, async () => {
+  const base = URL.replace(/\/[^/]*$/, '')
+  const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 4 })
+  try {
+    for (const db of ['ketjs_t1', 'ketjs_t2']) {
+      await pool.with(db, async (a) => {
+        for (const t of ['ket_migration', 'ket_stream', 'ket_job', 'ket_idem', 'checkout_order', 'catalog_product']) {
+          await a.exec(`DROP TABLE IF EXISTS "${t}" CASCADE`)
+        }
+      })
+    }
+    registerFunctions(mods)
+
+    const first = await migrateFleet(pool, ['ketjs_t1', 'ketjs_t2'], manifest)
+    assert.ok(first.every(r => r.applied && !r.error), formatFleet(first))
+
+    // real isolation: the same product id in both, different data, no bleed
+    await pool.with('ketjs_t1', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t1', priceCents: 1000, slug: 'p1' }, { adapter: a, manifest }))
+    await pool.with('ketjs_t2', a => callFn('catalog.createProduct', { id: 'p1', title: 'của t2', priceCents: 2000, slug: 'p1' }, { adapter: a, manifest }))
+
+    const t1 = await pool.with('ketjs_t1', a => a.all('SELECT title FROM catalog_product', []))
+    const t2 = await pool.with('ketjs_t2', a => a.all('SELECT title FROM catalog_product', []))
+    assert.deepEqual(t1.map(r => r.title), ['của t1'])
+    assert.deepEqual(t2.map(r => r.title), ['của t2'])
+
+    // running again moves nothing: each database knows the schema it is on
+    const second = await migrateFleet(pool, ['ketjs_t1', 'ketjs_t2'], manifest)
+    assert.ok(second.every(r => r.ops.length === 0), formatFleet(second))
+    assert.equal(pool.size, 2)
+  } finally {
+    await pool.close()
+  }
 })

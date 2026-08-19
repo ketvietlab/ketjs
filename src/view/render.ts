@@ -5,6 +5,7 @@
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
 import type { Host, HostNode } from './host.ts'
+import { HOLE_MARKER, HydrationMismatch } from './ssr.ts'
 
 const RESULT = Symbol('ket.result')
 const EACH = Symbol('ket.each')
@@ -281,6 +282,127 @@ export function createRoot(host: Host, container: HostNode): Root {
         instance.mount(container, null)
       }
       instance.update(result.values)
+    },
+  }
+}
+
+// --- hydration -------------------------------------------------------------
+//
+// Adopting server-rendered DOM rather than replacing it. The static structure is
+// already correct, so the walk only has to locate each hole, claim the marker the
+// server left as its anchor, and record what the hole currently holds — otherwise
+// the first client update would rebuild instead of patching.
+
+
+type DomNode = HostNode & {
+  nodeType: number
+  nodeName: string
+  data?: string
+  nextSibling: DomNode | null
+  firstChild: DomNode | null
+}
+
+const ELEMENT = 1, TEXT = 3, COMMENT = 8
+
+const describe = (n: DomNode | null): string =>
+  !n ? 'nothing'
+    : n.nodeType === COMMENT ? `comment "${n.data ?? ''}"`
+    : n.nodeType === TEXT ? `text "${(n.data ?? '').slice(0, 20)}"`
+    : `<${n.nodeName.toLowerCase()}>`
+
+function hydrateInstance(host: Host, strings: readonly string[], values: unknown[], parent: DomNode, cursor: DomNode | null): { instance: Instance; cursor: DomNode | null } {
+  const instance = new Instance(host, strings)
+  let c = cursor
+
+  const claimValue = (value: unknown, part: Part): void => {
+    if (isResult(value)) {
+      const r = hydrateInstance(host, value.strings, value.values, part.parent as DomNode, c)
+      part.kind = 'result'
+      part.child = r.instance
+      c = r.cursor
+      return
+    }
+    if (isEach(value)) {
+      part.kind = 'each'
+      part.keyed = new Map()
+      part.keys = []
+      for (let i = 0; i < value.items.length; i++) {
+        const item = value.items[i]
+        const res = value.render(item, i)
+        const r = hydrateInstance(host, res.strings, res.values, part.parent as DomNode, c)
+        part.keyed.set(value.keyOf(item, i), r.instance)
+        part.keys.push(value.keyOf(item, i))
+        c = r.cursor
+      }
+      return
+    }
+    if (value == null || value === false) { part.kind = null; return }
+    if (!c || c.nodeType !== TEXT) throw new HydrationMismatch('a text hole', 'a text node', describe(c))
+    part.kind = 'text'
+    part.node = c
+    c = c.nextSibling
+  }
+
+  const walk = (node: TplNode, target: DomNode): void => {
+    const atRoot = target === parent
+    if (node.type === 'text') {
+      if (!c || c.nodeType !== TEXT) throw new HydrationMismatch('static text', JSON.stringify(node.value.slice(0, 20)), describe(c))
+      if (atRoot) instance.roots.push(c)
+      c = c.nextSibling
+      return
+    }
+    if (node.type === 'hole') {
+      const part = new Part(host, target, null as unknown as HostNode)
+      const startedAt = c
+      claimValue(values[node.index], part)
+      if (atRoot && startedAt) {
+        for (let n: DomNode | null = startedAt; n && n !== c; n = n.nextSibling) instance.roots.push(n)
+      }
+      if (!c || c.nodeType !== COMMENT || c.data !== HOLE_MARKER) {
+        throw new HydrationMismatch('a hole', `a <!--${HOLE_MARKER}--> marker`, describe(c))
+      }
+      part.anchor = c
+      if (atRoot) instance.roots.push(c)
+      instance.parts[node.index] = part
+      c = c.nextSibling
+      return
+    }
+    const el = node as TplEl
+    if (!c || c.nodeType !== ELEMENT || c.nodeName.toLowerCase() !== el.tag) {
+      throw new HydrationMismatch('an element', `<${el.tag}>`, describe(c))
+    }
+    const element = c
+    if (atRoot) instance.roots.push(element)
+    for (const a of el.attrs) {
+      if (a.hole != null) instance.parts[a.hole] = { attr: true, node: element, name: a.name, last: values[a.hole] }
+    }
+    const after = element.nextSibling
+    c = element.firstChild
+    for (const child of el.children) walk(child, element)
+    c = after
+  }
+
+  for (const n of instance.tpl.children) walk(n, parent)
+  instance.values = values
+  return { instance, cursor: c }
+}
+
+/**
+ * Attach to server-rendered markup. On a mismatch it throws rather than silently
+ * patching over a difference, because a hydration that half-works is worse than one
+ * that fails loudly: the caller can fall back to a clean client render.
+ */
+export function hydrateRoot(host: Host, container: HostNode, result: TemplateResult): Root {
+  const { instance: hydrated } = hydrateInstance(host, result.strings, result.values, container as DomNode, (container as DomNode).firstChild)
+  let instance: Instance | null = hydrated
+  return {
+    render(next) {
+      if (!instance || instance.strings !== next.strings) {
+        instance?.remove()
+        instance = new Instance(host, next.strings)
+        instance.mount(container, null)
+      }
+      instance.update(next.values)
     },
   }
 }
