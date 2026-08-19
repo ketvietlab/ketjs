@@ -4,7 +4,8 @@ import { compose } from '../src/kernel/compose.ts'
 import { sqliteAdapter } from '../src/data/sqlite.ts'
 import { schemaFromManifest, planMigration, renderSql, DestructiveMigrationError } from '../src/data/migrate.ts'
 import { registerFunctions, callFn, _resetIdempotency } from '../src/server/fn.ts'
-import { createStreams, createQueue } from '../src/server/stream.ts'
+import { createStreams, dbStreamStore } from '../src/server/stream.ts'
+import { createQueue } from '../src/server/queue.ts'
 import { defineModule } from '../src/kernel/define.ts'
 import catalog from '../examples/modules/catalog/index.ts'
 import inventory from '../examples/modules/inventory/index.ts'
@@ -106,31 +107,73 @@ test('agent safety: an idempotency key on a non-idempotent function is refused',
 
 test('streams: a client that reloads mid-generation resumes exactly where it stopped', async () => {
   const adapter = sqliteAdapter(); await adapter.open()
-  const s = await createStreams(adapter)
-  await s.open('gen'); await s.write('gen', 'Xin'); await s.write('gen', ' chao')
+  const s = await createStreams(dbStreamStore(adapter))
+  const w = await s.open('gen')
+  w.write('Xin'); w.write(' chao')
+  await w.flush()
   const first = await s.since('gen', 0)
   assert.equal(first.chunks.map(c => c.data).join(''), 'Xin chao')
   assert.equal(first.done, false)
 
   // ... the browser reloads here; generation keeps running on the server
-  await s.write('gen', ' ban'); await s.end('gen', { tokens: 3 })
+  w.write(' ban')
+  await w.end({ tokens: 3 })
 
   const resumed = await s.since('gen', first.nextSeq)
-  assert.equal(resumed.chunks.map(c => c.data).join(''), ' ban', 'only the missed chunk, no duplicates')
+  assert.equal(resumed.chunks.map(c => c.data).join(''), ' ban', 'only what was missed, no duplicates')
   assert.equal(resumed.done, true)
   assert.deepEqual(resumed.summary, { tokens: 3 })
   await adapter.close()
 })
 
-test('streams: the job queue is the same log with a different state machine', async () => {
+test('streams: writes are batched, so a token is not a transaction', async () => {
+  const adapter = sqliteAdapter(); await adapter.open()
+  let inserts = 0
+  const counting = { ...adapter, run: (s: string, p?: unknown[]) => { if (s.startsWith('INSERT INTO ket_stream')) inserts++; return adapter.run(s, p) } }
+  const s = await createStreams(dbStreamStore(counting))
+  const w = await s.open('g')
+  for (let i = 0; i < 100; i++) w.write(`tok${i}`)
+  await w.end()
+  assert.ok(inserts <= 6, `100 chunks must not cost 100 inserts, got ${inserts}`)
+  assert.equal((await s.since('g', 0)).chunks.length, 100, 'every chunk still arrives')
+  await adapter.close()
+})
+
+test('streams: a finished stream is swept after its grace period', async () => {
+  const adapter = sqliteAdapter(); await adapter.open()
+  const s = await createStreams(dbStreamStore(adapter))
+  const w = await s.open('old'); w.write('x'); await w.end()
+  assert.equal(await s.sweep(10 * 60_000), 0, 'still inside the grace period')
+  assert.equal(await s.sweep(0) > 0, true, 'past it, the rows go')
+  assert.equal((await s.since('old', 0)).chunks.length, 0)
+  await adapter.close()
+})
+
+test('streams: a reader on the same instance is woken, not polled', async () => {
+  const s = await createStreams()
+  const w = await s.open('live')
+  const seen: unknown[] = []
+  const reader = (async () => { for await (const c of s.tail('live', 0, { pollMs: 60_000 })) seen.push(c.data) })()
+  w.write('a'); await w.flush()
+  await new Promise(r => setTimeout(r, 20))
+  await w.end()
+  await reader
+  assert.deepEqual(seen, ['a'], 'with a 60s poll interval this only works if the writer woke the reader')
+})
+
+test('queue: jobs live in their own table, claimed one at a time', async () => {
   const adapter = sqliteAdapter(); await adapter.open()
   const q = await createQueue(adapter)
   await q.enqueue('mail', { to: 'a@b.c' })
   await q.enqueue('mail', { to: 'd@e.f' })
   assert.equal(await q.pending('mail'), 2)
   const job = (await q.claim('mail'))!
-  assert.deepEqual(job.data, { to: 'a@b.c' })
-  await q.complete('mail', job.seq)
+  assert.deepEqual(job.payload, { to: 'a@b.c' })
+  assert.equal(job.attempts, 1)
+  await q.complete(job.id)
   assert.equal(await q.pending('mail'), 1)
+  const second = (await q.claim('mail'))!
+  assert.deepEqual(second.payload, { to: 'd@e.f' })
+  assert.equal(await q.claim('mail'), null, 'nothing left to claim')
   await adapter.close()
 })

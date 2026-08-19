@@ -43,8 +43,11 @@ dependency sits behind an interface the rest of the framework never sees. This i
 decision paying for itself.
 
 **The fence — an exception without a boundary becomes the new default:**
-1. `dependencies` stays **empty**. The driver is an `optionalDependency`, so
-   `npm i ketjs` still installs nothing.
+1. `dependencies` stays **empty**, and the driver is an **optional peer
+   dependency** — not an `optionalDependency`. Measured: npm installs
+   `optionalDependencies` by default and only skips them when installation *fails*,
+   so the first attempt at this fence silently shipped the driver to everyone.
+   `peerDependenciesMeta.optional` is the one form npm will not pull in on its own.
 2. Exactly one file may import it: `src/data/postgres.ts`. Enforced by
    `tools/zero-dep-audit.ts`, not by good intentions.
 3. The allowlist is a literal set in the audit. Adding a second name is a visible

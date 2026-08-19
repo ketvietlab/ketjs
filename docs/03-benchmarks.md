@@ -1,0 +1,104 @@
+# Benchmarks
+
+Numbers measured on 2026-08-19, Node 26.7.0, Apple Silicon. Every one of these was
+run against the real competitor, not against a description of it. Three of them
+found bugs in Ket, which is the main reason to run them at all.
+
+## Install footprint
+
+`npm i <framework>` into an empty project, counting what actually lands on disk.
+
+| | packages | disk | install |
+|---|---|---|---|
+| **ketjs** | **1** | **0.4 MB** | <1s |
+| @sveltejs/kit + svelte + vite | 53 | 28 MB | 2s |
+| astro | 209 | 141 MB | 6s |
+| nuxt | 528 | 211 MB | 12s |
+| next + react + react-dom | 26 | 318 MB | 4s |
+
+**This benchmark found a bug.** The first attempt measured 2 packages for ketjs:
+npm installs `optionalDependencies` by default and only skips them when
+installation *fails*. The Postgres driver was being shipped to everyone. Fixed by
+moving it to an optional **peer** dependency, which npm does not auto-install.
+
+## Template rendering — the theming pillar
+
+50 products, 20 000 renders, templates pre-compiled, **the same money-filter
+implementation registered in all three engines**, and output verified byte-identical
+before timing.
+
+| | renders/s | |
+|---|---|---|
+| **KetJS (KTL)** | **10 652** | sandboxed, no `eval` |
+| EJS | 10 311 | compiles via `new Function` |
+| LiquidJS (Shopify) | 824 | 12.9× slower |
+
+Matching EJS matters more than beating Liquid: EJS compiles templates to native
+JavaScript, which Ket deliberately cannot do, and the closure-tree interpreter
+still keeps up.
+
+**This benchmark found a bug.** The first run had Ket at 1 489 renders/s, *slower
+than Liquid*. Isolating each construct showed the loop and the interpreter were
+fine (13–38 ms) while a template using `| money` cost 4 521 ms: the filter
+constructed a new `Intl.NumberFormat` on every interpolation. Cached, it dropped to
+137 ms. The first comparison was also unfair — the Liquid template had no filter at
+all — which is why the table above pins the filter implementation for everyone.
+
+## Query building
+
+Same query (two conditions, order, limit), SQL text and parameters generated
+200 000 times.
+
+| | queries/s |
+|---|---|
+| **KetJS** | **598 582** |
+| Knex | 411 966 |
+| Drizzle | 21 586 |
+
+**Read this one narrowly.** It measures string generation only. All three are far
+faster than any database round trip, so the honest conclusion is "the builder is
+not a bottleneck", not "Ket is 27× faster at queries".
+
+## DOM updates — real browser, real DOM
+
+1 000 rows, median of 15 runs, 50 operations per timed sample to clear the clock's
+resolution. Both libraries' rendered HTML compared and confirmed identical.
+lit-html is the fair comparison: same architecture, same no-build-step constraint.
+
+| | KetJS | lit-html 3.3.3 | |
+|---|---|---|---|
+| create 1 000 rows | **1.80 ms** | 2.60 ms | Ket 1.45× |
+| update 1 row of 1 000 | **0.070 ms** | 0.100 ms | Ket 1.43× |
+| re-render, nothing changed | **0.060 ms** | 0.090 ms | Ket 1.50× |
+| swap 2 rows | 0.220 ms | **0.096 ms** | lit 2.3× |
+| remove + re-add a row | 0.226 ms | **0.096 ms** | lit 2.3× |
+
+Ket wins three of five and loses the reordering cases. Honest reading: reordering
+still builds six N-sized structures (a Set, a Map, the LIS, the anchor walk) that
+the common paths now skip. That is the next thing to fix here.
+
+**This benchmark found two bugs**, neither visible from the op-counting harness:
+
+1. There was **no real-DOM host at all** — the renderer had only ever run against
+   the counting mock. Writing one also exposed `nextSibling()` walking a mock-only
+   children array.
+2. Keyed reconciliation was **O(n²)**: an `indexOf` inside a `map` over the same
+   array, a million comparisons per render of a thousand rows. The op counter could
+   never have seen it, because it counts DOM operations and this cost none.
+   An unchanged re-render was costing 0.55 ms; it now costs 0.060 ms.
+
+## What the op counter is still good for
+
+`bench/view.bench.ts` counts host operations rather than time, and those numbers
+are unchanged: 1 operation to update one row of a thousand, 0 for an unchanged
+re-render, 2 moves for a swap. It proves the algorithm touches the right nodes.
+It cannot prove the work *around* those touches is cheap — which is exactly the
+gap the browser benchmark closed.
+
+## Not measured
+
+- SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
+  a whole-framework comparison would not be like-for-like yet.
+- Cold start and build time, for the same reason.
+- Postgres throughput under load. The adapter is correct against a live server
+  (`test/pg-live.test.ts`) but has never been put under concurrency.

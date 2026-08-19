@@ -15,8 +15,16 @@ export type Host = {
   remove(node: HostNode): void
 }
 
-export const escapeHtml = (s: unknown): string =>
-  String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const NEEDS_ESCAPE = /[&<>"']/
+const ESCAPE_ALL = /[&<>"']/g
+
+export const escapeHtml = (s: unknown): string => {
+  const str = String(s)
+  // Most interpolated values contain nothing to escape, and testing is far cheaper
+  // than replacing. The lookup table is hoisted; it used to be rebuilt per character.
+  return NEEDS_ESCAPE.test(str) ? str.replace(ESCAPE_ALL, c => ESCAPES[c] as string) : str
+}
 
 export type CountingHost = Host & {
   ops: Record<string, number>
@@ -70,4 +78,35 @@ export function countingHost(): CountingHost {
     },
   }
   return host
+}
+
+// The real-DOM host. Everything above is proven against the counting mock, which
+// verifies the algorithm; this is what actually runs in a browser.
+type DomLike = {
+  createElement(tag: string): unknown
+  createTextNode(data: string): unknown
+}
+
+export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).document as DomLike): Host {
+  type El = {
+    setAttribute(n: string, v: string): void
+    removeAttribute(n: string): void
+    insertBefore(n: unknown, before: unknown): void
+    remove(): void
+    data: string
+  }
+  const el = (n: HostNode) => n as unknown as El
+  return {
+    ops: null,
+    createElement: (tag) => doc.createElement(tag) as unknown as HostNode,
+    createText: (value) => doc.createTextNode(String(value)) as unknown as HostNode,
+    setText: (node, value) => { el(node).data = String(value) },
+    setAttribute: (node, name, value) => {
+      if (value == null || value === false) el(node).removeAttribute(name)
+      else el(node).setAttribute(name, String(value))
+    },
+    insert: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
+    move: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
+    remove: (node) => { el(node).remove() },
+  }
 }

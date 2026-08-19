@@ -32,9 +32,9 @@ Honest list of what is not settled or not built.
   completion or type errors inside templates. This is the DX cost of D3 and it is real.
 
 ## Known weak spots in what *is* built
-- `Instance.nextSibling()` walks the parent's children array; on a real DOM host this
-  must use `node.nextSibling` instead. The counting host is exercised by tests, the
-  DOM host is not.
+- Keyed reordering is 2.3× slower than lit-html: it still builds six N-sized
+  structures the common update paths now skip. Measured, not guessed — see
+  [03-benchmarks.md](03-benchmarks.md).
 - The Postgres adapter is proven against a recording stand-in for the driver, not
   against a live server. Running it against a real cluster is the next real test.
 - The KTL parser accepts a small expression grammar with no operator precedence

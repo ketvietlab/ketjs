@@ -6,7 +6,10 @@ export { KetError, Diagnostics } from './kernel/errors.ts'
 
 export { defineFn, callFn, registerFunctions } from './server/fn.ts'
 export { createKetServer } from './server/http.ts'
-export { createStreams, createQueue } from './server/stream.ts'
+export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
+export type { StreamStore, Writer } from './server/stream.ts'
+export { createQueue } from './server/queue.ts'
+export { createIdempotency } from './server/idem.ts'
 
 export { sqliteAdapter } from './data/sqlite.ts'
 export { postgresAdapter } from './data/postgres.ts'

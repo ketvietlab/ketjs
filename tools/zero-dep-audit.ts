@@ -12,6 +12,8 @@ type Pkg = {
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
 }
 
 const ALLOWED_DEV = new Set(['typescript', '@types/node'])
@@ -27,10 +29,20 @@ const problems: string[] = []
 const runtimeDeps = Object.keys(pkg.dependencies ?? {})
 if (runtimeDeps.length) problems.push(`package.json declares REQUIRED runtime dependencies: ${runtimeDeps.join(', ')} — these must be optionalDependencies or removed`)
 
-const optionalDeps = Object.keys(pkg.optionalDependencies ?? {})
-for (const d of optionalDeps) {
-  if (!ALLOWED_OPTIONAL.has(d)) problems.push(`optionalDependency "${d}" is not in the fenced set (${[...ALLOWED_OPTIONAL].join(', ')}) — see decision D4a`)
+// npm installs optionalDependencies by default — they are only skipped when
+// installation fails. An *optional peer* dependency is the one kind npm will not
+// pull in on its own, which is what "install ketjs and get nothing" requires.
+const stillOptional = Object.keys(pkg.optionalDependencies ?? {})
+if (stillOptional.length) {
+  problems.push(`optionalDependencies are installed by default by npm: ${stillOptional.join(', ')} — move them to peerDependencies with peerDependenciesMeta.optional`)
 }
+
+const peerDeps = Object.keys(pkg.peerDependencies ?? {})
+for (const d of peerDeps) {
+  if (!ALLOWED_OPTIONAL.has(d)) problems.push(`peerDependency "${d}" is not in the fenced set (${[...ALLOWED_OPTIONAL].join(', ')}) — see decision D4a`)
+  if (!pkg.peerDependenciesMeta?.[d]?.optional) problems.push(`peerDependency "${d}" is not marked optional, so npm will install it for every consumer`)
+}
+const optionalDeps = peerDeps
 
 const devDeps = Object.keys(pkg.devDependencies ?? {})
 for (const d of devDeps) if (!ALLOWED_DEV.has(d)) problems.push(`devDependency "${d}" is not in the allowed set (${[...ALLOWED_DEV].join(', ')})`)
