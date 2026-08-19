@@ -13,6 +13,11 @@ export { default as websiteSearch } from './modules/website_search/index.ts'
 export { default as paperTheme } from './themes/paper/index.ts'
 export type { SectionPlacement } from './modules/website/types.ts'
 
+// product vertical
+export { default as product } from './modules/product/index.ts'
+export { PRODUCT_TYPES } from './modules/product/types.ts'
+export type { ProductType } from './modules/product/types.ts'
+
 // commerce — demo-grade scaffolding, kept until the vertical is written for real
 export { default as catalog } from './modules/catalog/index.ts'
 export { default as inventory } from './modules/inventory/index.ts'
