@@ -19,7 +19,10 @@
  */
 export type RouteEntry =
   | ((ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route)
-  | { anonymous?: boolean; handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }
+  | {
+      anonymous?: boolean
+      handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
+    }
 
 export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'datetime'
 export type FieldBase = Scalar | 'ref'
@@ -96,11 +99,14 @@ export type ViewDef = { of: string; fields: string[] }
  * ORMs slow in ways nobody can see is not expressible: a caller either asks for the
  * related rows with preload(), or does not get them.
  */
-export type RelationDef =
-  | { belongsTo: string; by: string }
-  | { hasMany: string; by: string }
+export type RelationDef = { belongsTo: string; by: string } | { hasMany: string; by: string }
 
-export type ComposedRelation = { kind: 'belongsTo' | 'hasMany'; target: string; by: string; declaredBy: string }
+export type ComposedRelation = {
+  kind: 'belongsTo' | 'hasMany'
+  target: string
+  by: string
+  declaredBy: string
+}
 
 export type FnSpec = {
   /**
@@ -268,10 +274,16 @@ export type KetModule = Readonly<AppMeta> & {
 export type Manifest = {
   ket: string
   order: string[]
-  modules: Record<string, { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta>
+  modules: Record<
+    string,
+    { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta
+  >
   models: Record<string, ComposedModel>
   menus: Record<string, MenuDef & { by: string }>
-  joints: Record<string, { owner: string; props: Record<string, string>; multiple: boolean; omittedBy: string[] }>
+  joints: Record<
+    string,
+    { owner: string; props: Record<string, string>; multiple: boolean; omittedBy: string[] }
+  >
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>
   views: Record<string, ViewDef & { by: string }>
@@ -286,7 +298,14 @@ export type Manifest = {
   /** Stylesheets in dependency order. A disabled module's are dropped by restrictManifest. */
   styles: Array<{ by: string; href: string }>
   /** Path -> the module that owns it and the factory that builds its handler. */
-  routes: Record<string, { by: string; anonymous: boolean; make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route }>
+  routes: Record<
+    string,
+    {
+      by: string
+      anonymous: boolean
+      make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
+    }
+  >
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */
   disabledModules?: string[]
@@ -295,7 +314,13 @@ export type Manifest = {
   diagnostics?: Diagnostic[]
 }
 
-export type Diagnostic = { code: string; message: string; module?: string | null; hint?: string | null; at?: string | null }
+export type Diagnostic = {
+  code: string
+  message: string
+  module?: string | null
+  hint?: string | null
+  at?: string | null
+}
 
 export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
 export type Row = Record<string, unknown>
@@ -339,7 +364,10 @@ export type Ctx = {
     count(q: import('./data/query.ts').Query): Promise<number>
     del(q: import('./data/query.ts').Query): Promise<{ changes: number }>
     /** Write a changeset. An invalid one is refused with its structured errors. */
-    commit(cs: import('./data/changeset.ts').Changeset, where?: Row): Promise<{ changes: number } | { dryRun: true }>
+    commit(
+      cs: import('./data/changeset.ts').Changeset,
+      where?: Row,
+    ): Promise<{ changes: number } | { dryRun: true }>
     select(model: string, where?: Row): Promise<Row[]>
     insert(model: string, row: Row): Promise<unknown>
     update(model: string, where: Row, patch: Row): Promise<unknown>

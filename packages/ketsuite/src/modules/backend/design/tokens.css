@@ -104,7 +104,7 @@
     --admin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18);
     --admin-shadow-float: 0 8px 24px rgba(0, 0, 0, 0.28);
 
-  /* Status colours, which never had a dark value and so kept their light one.
+    /* Status colours, which never had a dark value and so kept their light one.
      --admin-warning was #24262a: in dark that is *exactly* --admin-bg, so
      [data-ui="app-dependents"] rendered invisible text on its own background.
      The others were legible enough to miss and still failed contrast — success
@@ -112,22 +112,21 @@
 
      Same shape as the accent trio above: -soft is a tinted ground, the bare name
      is the text on it, -icon is the saturated mark. */
-  --admin-neutral-soft: #3a3d42;
-  --admin-neutral: #b6babe;
+    --admin-neutral-soft: #3a3d42;
+    --admin-neutral: #b6babe;
 
-  --admin-success-soft: #16301f;
-  --admin-success: #7fd4a4;
-  --admin-success-icon: #4fb37c;
+    --admin-success-soft: #16301f;
+    --admin-success: #7fd4a4;
+    --admin-success-icon: #4fb37c;
 
-  --admin-warning-soft: #33291a;
-  --admin-warning: #f0c58a;
-  --admin-warning-icon: #e0a057;
+    --admin-warning-soft: #33291a;
+    --admin-warning: #f0c58a;
+    --admin-warning-icon: #e0a057;
 
-  --admin-danger-soft: #3a1f1d;
-  --admin-danger-line: #6b2b25;
-  --admin-danger: #f0a49c;
-  --admin-danger-strong: #f5b8b1;
-
+    --admin-danger-soft: #3a1f1d;
+    --admin-danger-line: #6b2b25;
+    --admin-danger: #f0a49c;
+    --admin-danger-strong: #f5b8b1;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -150,7 +149,7 @@
       --admin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.18);
       --admin-shadow-float: 0 8px 24px rgba(0, 0, 0, 0.28);
 
-  /* Status colours, which never had a dark value and so kept their light one.
+      /* Status colours, which never had a dark value and so kept their light one.
      --admin-warning was #24262a: in dark that is *exactly* --admin-bg, so
      [data-ui="app-dependents"] rendered invisible text on its own background.
      The others were legible enough to miss and still failed contrast — success
@@ -158,22 +157,21 @@
 
      Same shape as the accent trio above: -soft is a tinted ground, the bare name
      is the text on it, -icon is the saturated mark. */
-  --admin-neutral-soft: #3a3d42;
-  --admin-neutral: #b6babe;
+      --admin-neutral-soft: #3a3d42;
+      --admin-neutral: #b6babe;
 
-  --admin-success-soft: #16301f;
-  --admin-success: #7fd4a4;
-  --admin-success-icon: #4fb37c;
+      --admin-success-soft: #16301f;
+      --admin-success: #7fd4a4;
+      --admin-success-icon: #4fb37c;
 
-  --admin-warning-soft: #33291a;
-  --admin-warning: #f0c58a;
-  --admin-warning-icon: #e0a057;
+      --admin-warning-soft: #33291a;
+      --admin-warning: #f0c58a;
+      --admin-warning-icon: #e0a057;
 
-  --admin-danger-soft: #3a1f1d;
-  --admin-danger-line: #6b2b25;
-  --admin-danger: #f0a49c;
-  --admin-danger-strong: #f5b8b1;
-
+      --admin-danger-soft: #3a1f1d;
+      --admin-danger-line: #6b2b25;
+      --admin-danger: #f0a49c;
+      --admin-danger-strong: #f5b8b1;
     }
   }
 }

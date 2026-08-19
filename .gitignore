@@ -1,6 +1,33 @@
+# Dependencies
 node_modules/
+
+# Build and type artifacts
+.build/
+.types/
+.ket-build.lock/
+.ket-build-stage-*/
+packages/*/dist/
+coverage/
+*.tsbuildinfo
+
+# Ket runtime state
 .ket/
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
+*.sqlite-journal
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
 .DS_Store

@@ -4,12 +4,16 @@ import { compileKtl } from 'ketjs/theme'
 import { compose, createTheme, makeDrop, sealScope, tokensToCss } from 'ketjs'
 import { catalog, defaultTheme as theme, inventory } from 'ketsuite'
 
-const render = (src: string, scope: Record<string, unknown> = {}) => compileKtl(src, { name: 't' }).render(scope)
+const render = (src: string, scope: Record<string, unknown> = {}) =>
+  compileKtl(src, { name: 't' }).render(scope)
 
 test('ktl: interpolation, filters, loops and conditionals', () => {
   assert.equal(render('{{ p.title }}', { p: { title: 'Áo' } }), 'Áo')
   assert.equal(render('{{ p.cents | money }}', { p: { cents: 150000 } }).replace(/ /g, ' '), '1.500 ₫')
-  assert.equal(render('{% for x in xs %}[{{ loop.index }}:{{ x }}]{% endfor %}', { xs: ['a', 'b'] }), '[0:a][1:b]')
+  assert.equal(
+    render('{% for x in xs %}[{{ loop.index }}:{{ x }}]{% endfor %}', { xs: ['a', 'b'] }),
+    '[0:a][1:b]',
+  )
   assert.equal(render('{% if n > 2 %}nhiều{% else %}ít{% endif %}', { n: 5 }), 'nhiều')
   assert.equal(render('{{ missing | default: "-" }}', {}), '-')
 })
@@ -37,12 +41,22 @@ test('sandbox: a theme cannot reach globals, and unknown filters are refused at 
 
 test('view model: a drop exposes exactly the declared fields and nothing else', () => {
   const manifest = compose([catalog, inventory, theme])
-  const row = { id: 'p1', title: 'Áo', priceCents: 5000, slug: 'ao', active: true, leadTimeDays: 3, warehouse: 'HN' }
+  const row = {
+    id: 'p1',
+    title: 'Áo',
+    priceCents: 5000,
+    slug: 'ao',
+    active: true,
+    leadTimeDays: 3,
+    warehouse: 'HN',
+  }
   const drop = makeDrop(manifest, 'catalog.product', row)
   assert.deepEqual(Object.keys(drop), ['id', 'title', 'priceCents', 'slug'])
   assert.equal('active' in drop, false, 'a field the module did not expose must not leak')
   assert.equal(Object.getPrototypeOf(drop), null)
-  assert.throws(() => { (drop as Record<string, unknown>).title = 'hack' })
+  assert.throws(() => {
+    ;(drop as Record<string, unknown>).title = 'hack'
+  })
 })
 
 test('theme: renders regions and fills joints from other modules', () => {
@@ -59,8 +73,14 @@ test('theme: renders regions and fills joints from other modules', () => {
 })
 
 test('theme: a template pointing at an unpublished joint fails at build time', () => {
-  const mods = [catalog, { ...theme, templates: { ...theme.templates, layout: '{% joint "catalog:nope" %}' } }]
-  assert.throws(() => createTheme(compose(mods as never), mods as never), /E_TEMPLATE_UNKNOWN_JOINT|no installed module publishes/)
+  const mods = [
+    catalog,
+    { ...theme, templates: { ...theme.templates, layout: '{% joint "catalog:nope" %}' } },
+  ]
+  assert.throws(
+    () => createTheme(compose(mods as never), mods as never),
+    /E_TEMPLATE_UNKNOWN_JOINT|no installed module publishes/,
+  )
 })
 
 test('tokens: become CSS custom properties inside a declared cascade layer', () => {

@@ -51,10 +51,11 @@ export default defineModule({
       agent: true,
       handler: async (ctx, args) => {
         // Casting is an explicit allow-list: anything else in args never reaches the row.
-        const cs = ctx.change('catalog.Product', args)
+        const cs = ctx
+          .change('catalog.Product', args)
           .cast(['id', 'title', 'priceCents', 'slug'])
           .required(['id', 'title'])
-          .validate('priceCents', v => (v as number) > 0 || 'phải lớn hơn 0')
+          .validate('priceCents', (v) => (v as number) > 0 || 'phải lớn hơn 0')
           .put('active', true)
         await ctx.db.commit(cs)
         return { id: args.id }
@@ -67,6 +68,6 @@ export default defineModule({
     'color-accent': 'oklch(0.55 0.18 275)',
     'font-sans': '"Inter", system-ui, sans-serif',
     'space-1': '0.5rem',
-    'radius': '0.5rem',
+    radius: '0.5rem',
   },
 })

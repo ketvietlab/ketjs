@@ -17,7 +17,11 @@ export default defineModule({
   category: 'Hệ thống',
   // Removing the accounts would remove every way back in.
   removable: false,
-  models, relations, functions, messages, routes,
+  models,
+  relations,
+  functions,
+  messages,
+  routes,
 })
 
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'

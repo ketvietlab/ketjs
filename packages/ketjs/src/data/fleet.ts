@@ -40,9 +40,15 @@ async function writeApplied(adapter: Adapter, schema: Schema, now: string): Prom
   const pg = adapter.name === 'postgres'
   const p = (n: number) => (pg ? `$${n}` : '?')
   const json = JSON.stringify(schema)
-  const upd = await adapter.run(`UPDATE ket_migration SET schema = ${p(1)}, applied_at = ${p(2)} WHERE id = 1`, [json, now])
+  const upd = await adapter.run(
+    `UPDATE ket_migration SET schema = ${p(1)}, applied_at = ${p(2)} WHERE id = 1`,
+    [json, now],
+  )
   if (upd.changes === 0) {
-    await adapter.run(`INSERT INTO ket_migration (id, schema, applied_at) VALUES (1, ${p(1)}, ${p(2)})`, [json, now])
+    await adapter.run(`INSERT INTO ket_migration (id, schema, applied_at) VALUES (1, ${p(1)}, ${p(2)})`, [
+      json,
+      now,
+    ])
   }
 }
 
@@ -74,7 +80,7 @@ export async function migrateFleet(
   const out: MigrationResult[] = []
   for (const datastore of datastores) {
     try {
-      const ops = await pool.with(datastore, adapter => migrateOne(adapter, manifest, o))
+      const ops = await pool.with(datastore, (adapter) => migrateOne(adapter, manifest, o))
       out.push({ datastore, ops, applied: !o.dryRun })
     } catch (e) {
       out.push({ datastore, ops: [], applied: false, error: (e as Error).message })
@@ -84,9 +90,11 @@ export async function migrateFleet(
 }
 
 export function formatFleet(results: MigrationResult[]): string {
-  return results.map(r => {
-    if (r.error) return `FAIL  ${r.datastore.padEnd(24)} ${r.error.split('\n')[0]}`
-    if (!r.ops.length) return `ok    ${r.datastore.padEnd(24)} already up to date`
-    return `ok    ${r.datastore.padEnd(24)} ${r.ops.length} operation(s): ${r.ops.map(op => op.op).join(', ')}`
-  }).join('\n')
+  return results
+    .map((r) => {
+      if (r.error) return `FAIL  ${r.datastore.padEnd(24)} ${r.error.split('\n')[0]}`
+      if (!r.ops.length) return `ok    ${r.datastore.padEnd(24)} already up to date`
+      return `ok    ${r.datastore.padEnd(24)} ${r.ops.length} operation(s): ${r.ops.map((op) => op.op).join(', ')}`
+    })
+    .join('\n')
 }

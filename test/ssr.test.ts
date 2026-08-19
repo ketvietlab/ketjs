@@ -1,22 +1,44 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { document, parseFragment, TEXT, ELEMENT } from './helpers/dom.ts'
+import { document, parseFragment } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
-import { HydrationMismatch, createRoot, domHost, each, html, hydrateRoot, renderToString, when } from 'ketjs-view'
+import {
+  HydrationMismatch,
+  createRoot,
+  domHost,
+  each,
+  html,
+  hydrateRoot,
+  renderToString,
+  when,
+} from 'ketjs-view'
 import type { HostNode } from 'ketjs-view'
 
 type Item = { id: number; name: string }
 const list = (items: Item[]) =>
-  html`<ul class="l">${each(items, i => (i as Item).id, i => html`<li data-id=${(i as Item).id}>${(i as Item).name}</li>`)}</ul>`
+  html`<ul class="l">${each(
+    items,
+    (i) => (i as Item).id,
+    (i) => html`<li data-id=${(i as Item).id}>${(i as Item).name}</li>`,
+  )}</ul>`
 
 // Counts DOM construction so "hydration adopts rather than rebuilds" is a number.
 function tracingDoc() {
   const counts = { createElement: 0, createTextNode: 0, createComment: 0 }
   return {
     counts,
-    createElement: (t: string) => { counts.createElement++; return document.createElement(t) },
-    createTextNode: (d: string) => { counts.createTextNode++; return document.createTextNode(d) },
-    createComment: (d: string) => { counts.createComment++; return document.createComment(d) },
+    createElement: (t: string) => {
+      counts.createElement++
+      return document.createElement(t)
+    },
+    createTextNode: (d: string) => {
+      counts.createTextNode++
+      return document.createTextNode(d)
+    },
+    createComment: (d: string) => {
+      counts.createComment++
+      return document.createComment(d)
+    },
   }
 }
 
@@ -33,24 +55,42 @@ test('ssr: escapes interpolated values, in text and in attributes', () => {
 })
 
 test('ssr: nested templates and lists render in document order', () => {
-  const out = renderToString(list([{ id: 1, name: 'a' }, { id: 2, name: 'b' }]))
-  assert.equal(out, '<ul class="l"><!--k[--><li data-id="1"><!--k[-->a<!--k--></li><li data-id="2"><!--k[-->b<!--k--></li><!--k--></ul>')
+  const out = renderToString(
+    list([
+      { id: 1, name: 'a' },
+      { id: 2, name: 'b' },
+    ]),
+  )
+  assert.equal(
+    out,
+    '<ul class="l"><!--k[--><li data-id="1"><!--k[-->a<!--k--></li><li data-id="2"><!--k[-->b<!--k--></li><!--k--></ul>',
+  )
 })
 
 test('ssr: an absent value renders nothing but still leaves its marker', () => {
-  assert.equal(renderToString(html`<p>${null}${when(false, () => html`<b>x</b>`)}</p>`), '<p><!--k[--><!--k--><!--k[--><!--k--></p>')
+  assert.equal(
+    renderToString(html`<p>${null}${when(false, () => html`<b>x</b>`)}</p>`),
+    '<p><!--k[--><!--k--><!--k[--><!--k--></p>',
+  )
 })
 
 test('hydration: adopts the server DOM instead of rebuilding it', () => {
-  const items: Item[] = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }, { id: 3, name: 'c' }]
+  const items: Item[] = [
+    { id: 1, name: 'a' },
+    { id: 2, name: 'b' },
+    { id: 3, name: 'c' },
+  ]
   const container = parseFragment(renderToString(list(items)))
   const before = container.querySelectorAll('li')
   assert.equal(before.length, 3)
 
   const doc = tracingDoc()
   hydrateRoot(domHost(doc), container as unknown as HostNode, list(items))
-  assert.deepEqual(doc.counts, { createElement: 0, createTextNode: 0, createComment: 0 },
-    'hydration must not construct a single node')
+  assert.deepEqual(
+    doc.counts,
+    { createElement: 0, createTextNode: 0, createComment: 0 },
+    'hydration must not construct a single node',
+  )
 
   const after = container.querySelectorAll('li')
   assert.equal(after.length, 3)
@@ -64,10 +104,13 @@ test('hydration: the first update after it is surgical, not a rebuild', () => {
   const root = hydrateRoot(domHost(doc), container as unknown as HostNode, list(items))
 
   const targetNode = container.querySelectorAll('li')[7] as TNode
-  root.render(list(items.map(i => (i.id === 7 ? { ...i, name: 'ĐỔI' } : i))))
+  root.render(list(items.map((i) => (i.id === 7 ? { ...i, name: 'ĐỔI' } : i))))
 
-  assert.deepEqual(doc.counts, { createElement: 0, createTextNode: 0, createComment: 0 },
-    'patching one row must not create nodes')
+  assert.deepEqual(
+    doc.counts,
+    { createElement: 0, createTextNode: 0, createComment: 0 },
+    'patching one row must not create nodes',
+  )
   assert.equal(container.querySelectorAll('li')[7], targetNode, 'the row element itself is untouched')
   assert.match(targetNode.innerHTML, /ĐỔI/)
 })
@@ -90,15 +133,24 @@ test('hydration: attributes are adopted, and the element is never replaced', () 
 })
 
 test('hydration: growing and shrinking the list after hydration still works', () => {
-  const items: Item[] = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }]
+  const items: Item[] = [
+    { id: 1, name: 'a' },
+    { id: 2, name: 'b' },
+  ]
   const container = parseFragment(renderToString(list(items)))
   const root = hydrateRoot(domHost(document), container as unknown as HostNode, list(items))
 
   root.render(list([{ id: 0, name: 'z' }, ...items]))
-  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k\[?-->/g, '')), ['z', 'a', 'b'])
+  assert.deepEqual(
+    container.querySelectorAll('li').map((n) => n.innerHTML.replace(/<!--k\[?-->/g, '')),
+    ['z', 'a', 'b'],
+  )
 
   root.render(list([{ id: 2, name: 'b' }]))
-  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k\[?-->/g, '')), ['b'])
+  assert.deepEqual(
+    container.querySelectorAll('li').map((n) => n.innerHTML.replace(/<!--k\[?-->/g, '')),
+    ['b'],
+  )
 })
 
 test('hydration: a mismatch fails loudly rather than patching over it', () => {
@@ -109,11 +161,15 @@ test('hydration: a mismatch fails loudly rather than patching over it', () => {
       assert.ok(e instanceof HydrationMismatch)
       assert.equal((e as { code: string }).code, 'E_HYDRATION_MISMATCH')
       return true
-    })
+    },
+  )
 })
 
 test('ssr and client render agree on the markup they produce', () => {
-  const items: Item[] = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }]
+  const items: Item[] = [
+    { id: 1, name: 'a' },
+    { id: 2, name: 'b' },
+  ]
   const server = renderToString(list(items))
 
   const container = document.createElement('div')
@@ -130,8 +186,16 @@ test('hydration: an implied element is diagnosed, not just reported', () => {
   const server = renderToString(view())
   assert.ok(!server.includes('tbody'), 'the server wrote exactly what the template said')
 
-  const asParsed = parseFragment(server.replace('<table>', '<table><tbody>').replace('</table>', '</tbody></table>'))
-  const e = (() => { try { hydrateRoot(domHost(document), asParsed as unknown as HostNode, view()) } catch (err) { return err as HydrationMismatch & { hint: string } } })()!
+  const asParsed = parseFragment(
+    server.replace('<table>', '<table><tbody>').replace('</table>', '</tbody></table>'),
+  )
+  const e = (() => {
+    try {
+      hydrateRoot(domHost(document), asParsed as unknown as HostNode, view())
+    } catch (err) {
+      return err as HydrationMismatch & { hint: string }
+    }
+  })()!
   assert.match(e.message, /expected <tr>, found <tbody>/)
   assert.match(e.hint, /parser inserted <tbody> on its own — write it in the template/)
 })
@@ -146,7 +210,8 @@ test('ssr: a hole inside <title> gets no hydration markers, because they are not
 test('ssr: and the value is still escaped there', () => {
   assert.equal(
     renderToString(html`<title>${'<script>x</script>'}</title>`),
-    '<title>&lt;script&gt;x&lt;/script&gt;</title>')
+    '<title>&lt;script&gt;x&lt;/script&gt;</title>',
+  )
 })
 
 test('ssr: everywhere else the markers stay, because the hydration walk counts on them', () => {

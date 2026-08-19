@@ -60,7 +60,9 @@ export type AppRegistry = {
 }
 
 const dependentsOf = (manifest: Manifest, name: string): string[] =>
-  Object.entries(manifest.modules).filter(([, m]) => m.depends.includes(name)).map(([n]) => n)
+  Object.entries(manifest.modules)
+    .filter(([, m]) => m.depends.includes(name))
+    .map(([n]) => n)
 
 export async function createAppRegistry(
   manifest: Manifest,
@@ -89,17 +91,25 @@ export async function createAppRegistry(
   }
 
   const enabled = async (): Promise<Set<string>> =>
-    new Set((await adapter.all(`SELECT name FROM ket_app WHERE state = 'installed'`)).map(r => String(r.name)))
+    new Set(
+      (await adapter.all(`SELECT name FROM ket_app WHERE state = 'installed'`)).map((r) => String(r.name)),
+    )
 
   /** Every name this database has an opinion about, installed or explicitly removed. */
   const decided = async (): Promise<Set<string>> =>
-    new Set((await adapter.all(`SELECT name FROM ket_app`)).map(r => String(r.name)))
+    new Set((await adapter.all(`SELECT name FROM ket_app`)).map((r) => String(r.name)))
 
   const setState = async (names: string[], state: 'installed' | 'removed'): Promise<void> => {
     for (const n of names) {
-      const upd = await adapter.run(`UPDATE ket_app SET state = ${p(1)}, changed_at = ${p(2)} WHERE name = ${p(3)}`, [state, now(), n])
+      const upd = await adapter.run(
+        `UPDATE ket_app SET state = ${p(1)}, changed_at = ${p(2)} WHERE name = ${p(3)}`,
+        [state, now(), n],
+      )
       if (upd.changes === 0) {
-        await adapter.run(`INSERT INTO ket_app (name, state, changed_at) VALUES (${p(1)}, ${p(2)}, ${p(3)}) ON CONFLICT DO NOTHING`, [n, state, now()])
+        await adapter.run(
+          `INSERT INTO ket_app (name, state, changed_at) VALUES (${p(1)}, ${p(2)}, ${p(3)}) ON CONFLICT DO NOTHING`,
+          [n, state, now()],
+        )
       }
     }
   }
@@ -114,7 +124,7 @@ export async function createAppRegistry(
       const next = Object.entries(manifest.modules)
         // `!seen.has(n)` is the fix: an app the user removed is not a candidate
         // again, however many times its dependencies are reinstalled.
-        .filter(([n, m]) => m.install === 'auto' && !seen.has(n) && m.depends.every(d => on.has(d)))
+        .filter(([n, m]) => m.install === 'auto' && !seen.has(n) && m.depends.every((d) => on.has(d)))
         .map(([n]) => n)
       if (!next.length) return added
       await setState(next, 'installed')
@@ -127,7 +137,7 @@ export async function createAppRegistry(
 
     async orphans() {
       const shipped = new Set(Object.keys(manifest.modules))
-      return [...(await decided())].filter(n => !shipped.has(n)).sort()
+      return [...(await decided())].filter((n) => !shipped.has(n)).sort()
     },
 
     async list() {
@@ -142,7 +152,7 @@ export async function createAppRegistry(
           version: m.version,
           state: (on.has(name) ? 'installed' : 'available') as AppState,
           depends: [...m.depends],
-          dependents: dependentsOf(manifest, name).filter(d => on.has(d)),
+          dependents: dependentsOf(manifest, name).filter((d) => on.has(d)),
           install: m.install,
           removable: m.removable,
         }))
@@ -189,7 +199,7 @@ export async function createAppRegistry(
         })
       }
 
-      const blocking = dependentsOf(manifest, name).filter(d => on.has(d))
+      const blocking = dependentsOf(manifest, name).filter((d) => on.has(d))
       if (blocking.length) {
         throw new KetError({
           code: 'E_APP_IN_USE',
@@ -219,9 +229,11 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
 
   // An omission by a module that is switched off is not an omission: the joint
   // comes back, exactly as its fills would.
-  const joints = Object.fromEntries(Object.entries(manifest.joints)
-    .filter(([, j]) => keep(j.owner))
-    .map(([k, j]) => [k, { ...j, omittedBy: j.omittedBy.filter(keep) }]))
+  const joints = Object.fromEntries(
+    Object.entries(manifest.joints)
+      .filter(([, j]) => keep(j.owner))
+      .map(([k, j]) => [k, { ...j, omittedBy: j.omittedBy.filter(keep) }]),
+  )
   const provided: Record<string, string[]> = {}
   for (const [region, by] of Object.entries(manifest.regions.provided)) {
     const live = by.filter(keep)
@@ -230,11 +242,15 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
 
   return {
     ...manifest,
-    disabledModules: Object.keys(manifest.modules).filter(n => !enabled.has(n)),
+    disabledModules: Object.keys(manifest.modules).filter((n) => !enabled.has(n)),
     // What was removed by the restriction, so a renderer can skip a section from a
     // switched-off app quietly while still complaining about one that never existed.
-    disabledSections: Object.entries(manifest.sections).filter(([, s]) => !keep(s.by)).map(([n]) => n),
-    disabledIslands: Object.entries(manifest.islands).filter(([, s]) => !keep(s.by)).map(([n]) => n),
+    disabledSections: Object.entries(manifest.sections)
+      .filter(([, s]) => !keep(s.by))
+      .map(([n]) => n),
+    disabledIslands: Object.entries(manifest.islands)
+      .filter(([, s]) => !keep(s.by))
+      .map(([n]) => n),
     order: manifest.order.filter(keep),
     // A menu entry of a switched-off module goes with it, and so does anything
     // hanging under it — buildMenu drops a heading left with no children.
@@ -243,14 +259,14 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     // must stop answering and its stylesheet must stop being linked — otherwise
     // "enable at run" stops at the database and never reaches what anyone can see.
     assets: Object.fromEntries(Object.entries(manifest.assets).filter(([by]) => keep(by))),
-    styles: manifest.styles.filter(s => keep(s.by)),
+    styles: manifest.styles.filter((s) => keep(s.by)),
     routes: pick(manifest.routes),
     functions: pick(manifest.functions),
     sections: pick(manifest.sections),
     islands: pick(manifest.islands),
     views: pick(manifest.views),
     joints,
-    fills: manifest.fills.filter(f => keep(f.by) && joints[f.joint] !== undefined),
+    fills: manifest.fills.filter((f) => keep(f.by) && joints[f.joint] !== undefined),
     regions: { required: manifest.regions.required, provided },
   }
 }

@@ -17,5 +17,8 @@ export default defineModule({
   // Removing the register of legal entities would leave every company-scoped row
   // pointing at nothing nameable.
   removable: false,
-  models, relations, functions, messages,
+  models,
+  relations,
+  functions,
+  messages,
 })

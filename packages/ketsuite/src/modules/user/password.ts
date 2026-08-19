@@ -15,7 +15,14 @@ const PARAMS = { N: 2 ** 15, r: 8, p: 1, keylen: 64 }
 /** Node's default cap is 32MB, which 2^15 exceeds — so it is passed, not assumed. */
 const maxmem = 256 * PARAMS.N * PARAMS.r
 
-const scrypt = (password: string, salt: Buffer, N: number, r: number, p: number, keylen: number): Promise<Buffer> =>
+const scrypt = (
+  password: string,
+  salt: Buffer,
+  N: number,
+  r: number,
+  p: number,
+  keylen: number,
+): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     scryptCb(password.normalize('NFKC'), salt, keylen, { N, r, p, maxmem: 256 * N * r }, (err, key) => {
       if (err) reject(err)
@@ -40,7 +47,9 @@ export async function verifyPassword(password: string, encoded: string): Promise
   const parts = encoded.split('$')
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false
   const [, sN, sr, sp, salt64, hash64] = parts as [string, string, string, string, string, string]
-  const N = Number(sN), r = Number(sr), p = Number(sp)
+  const N = Number(sN),
+    r = Number(sr),
+    p = Number(sp)
   if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false
   let expected: Buffer
   try {

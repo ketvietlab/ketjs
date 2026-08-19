@@ -19,7 +19,9 @@ export type Mounted = {
 }
 
 function drive(root: Root, view: () => TemplateResult): Mounted {
-  const stop = effect(() => { root.render(view()) })
+  const stop = effect(() => {
+    root.render(view())
+  })
   return { dispose: stop, refresh: () => root.render(view()) }
 }
 

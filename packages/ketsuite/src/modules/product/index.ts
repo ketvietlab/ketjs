@@ -15,7 +15,11 @@ export default defineModule({
   title: 'Sản phẩm',
   summary: 'Danh mục, mẫu sản phẩm và biến thể.',
   category: 'Bán hàng',
-  models, relations, views, functions, messages,
+  models,
+  relations,
+  views,
+  functions,
+  messages,
 })
 
 export { PRODUCT_TYPES } from './types.ts'

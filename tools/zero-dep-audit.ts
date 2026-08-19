@@ -33,18 +33,20 @@ type Rule = {
 
 const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
-  'ketjs': { allow: ['ketjs-view'] },
+  ketjs: { allow: ['ketjs-view'] },
   'ketjs-postgres': { allow: ['ketjs'], optionalPeers: ['postgres'] },
-  'ketsuite': { allow: ['ketjs', 'ketjs-view'], publicOnly: true },
+  ketsuite: { allow: ['ketjs', 'ketjs-view'], publicOnly: true },
 }
-const ALLOWED_DEV = new Set(['typescript', '@types/node', 'postgres'])
+const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres'])
 
 const problems: string[] = []
-const IMPORT_RE = /(?:^|\s)(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g
+const IMPORT_RE =
+  /(?:^|\s)(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g
 
 const root = JSON.parse(readFileSync('package.json', 'utf8')) as Pkg
 if (!root.private) problems.push('the workspace root must be private so it is never published')
-if (Object.keys(root.dependencies ?? {}).length) problems.push(`the workspace root declares dependencies: ${Object.keys(root.dependencies!).join(', ')}`)
+if (Object.keys(root.dependencies ?? {}).length)
+  problems.push(`the workspace root declares dependencies: ${Object.keys(root.dependencies!).join(', ')}`)
 
 const summary: string[] = []
 
@@ -53,15 +55,31 @@ for (const [name, rule] of Object.entries(RULES)) {
   const pkg = JSON.parse(readFileSync(`${dir}/package.json`, 'utf8')) as Pkg
 
   const deps = Object.keys(pkg.dependencies ?? {})
-  for (const d of deps) if (!rule.allow.includes(d)) problems.push(`${name}: depends on "${d}", which is outside its allowance (${rule.allow.join(', ') || 'nothing'})`)
+  for (const d of deps)
+    if (!rule.allow.includes(d))
+      problems.push(
+        `${name}: depends on "${d}", which is outside its allowance (${rule.allow.join(', ') || 'nothing'})`,
+      )
 
   const stillOptional = Object.keys(pkg.optionalDependencies ?? {})
-  if (stillOptional.length) problems.push(`${name}: optionalDependencies are installed by npm anyway — use peerDependenciesMeta.optional (${stillOptional.join(', ')})`)
+  if (stillOptional.length)
+    problems.push(
+      `${name}: optionalDependencies are installed by npm anyway — use peerDependenciesMeta.optional (${stillOptional.join(', ')})`,
+    )
 
   const peers = Object.keys(pkg.peerDependencies ?? {})
   for (const p of peers) {
-    if (!(rule.optionalPeers ?? []).includes(p)) problems.push(`${name}: declares peer "${p}", which only ${Object.entries(RULES).filter(([, r]) => r.optionalPeers?.includes(p)).map(([n]) => n).join('/') || 'no package'} may`)
-    if (!pkg.peerDependenciesMeta?.[p]?.optional) problems.push(`${name}: peer "${p}" is not optional, so npm installs it for every consumer`)
+    if (!(rule.optionalPeers ?? []).includes(p))
+      problems.push(
+        `${name}: declares peer "${p}", which only ${
+          Object.entries(RULES)
+            .filter(([, r]) => r.optionalPeers?.includes(p))
+            .map(([n]) => n)
+            .join('/') || 'no package'
+        } may`,
+      )
+    if (!pkg.peerDependenciesMeta?.[p]?.optional)
+      problems.push(`${name}: peer "${p}" is not optional, so npm installs it for every consumer`)
   }
   for (const d of Object.keys(pkg.devDependencies ?? {})) {
     if (!ALLOWED_DEV.has(d)) problems.push(`${name}: devDependency "${d}" is outside the allowed set`)
@@ -69,31 +87,41 @@ for (const [name, rule] of Object.entries(RULES)) {
 
   let files = 0
   let external = 0
-  for await (const file of glob(`${dir}/src/**/*.ts`)) {
-    files++
-    const src = readFileSync(file, 'utf8')
-    for (const m of src.matchAll(IMPORT_RE)) {
-      const spec = (m[1] ?? m[2] ?? m[3]) as string
-      if (spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../')) continue
+  for (const pattern of [`${dir}/src/**/*.ts`, `${dir}/src/**/*.tsx`]) {
+    for await (const file of glob(pattern)) {
+      files++
+      const src = readFileSync(file, 'utf8')
+      for (const m of src.matchAll(IMPORT_RE)) {
+        const spec = (m[1] ?? m[2] ?? m[3]) as string
+        if (spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../')) continue
 
-      const target = spec.split('/')[0] as string
-      const isSibling = rule.allow.includes(target)
-      const isPeer = (rule.optionalPeers ?? []).includes(target)
-      if (!isSibling && !isPeer) {
-        problems.push(`${file} imports "${spec}" — ${name} may only reach ${[...rule.allow, ...(rule.optionalPeers ?? [])].join(', ') || 'node: builtins'}`)
-        continue
+        const target = spec.split('/')[0] as string
+        const isSibling = rule.allow.includes(target)
+        const isPeer = (rule.optionalPeers ?? []).includes(target)
+        if (!isSibling && !isPeer) {
+          problems.push(
+            `${file} imports "${spec}" — ${name} may only reach ${[...rule.allow, ...(rule.optionalPeers ?? [])].join(', ') || 'node: builtins'}`,
+          )
+          continue
+        }
+        if (isSibling && rule.publicOnly && spec !== target) {
+          problems.push(
+            `${file} imports "${spec}" — ${name} must use the public entry "${target}" alone. If the suite needs it, export it; do not reach past the contract everyone else has.`,
+          )
+          continue
+        }
+        external++
       }
-      if (isSibling && rule.publicOnly && spec !== target) {
-        problems.push(`${file} imports "${spec}" — ${name} must use the public entry "${target}" alone. If the suite needs it, export it; do not reach past the contract everyone else has.`)
-        continue
+      if (/\bnew Function\s*\(/.test(src) || /(?<![\w.])eval\s*\(/.test(src)) {
+        problems.push(
+          `${file} uses eval/new Function — the theme sandbox argument depends on this staying absent`,
+        )
       }
-      external++
-    }
-    if (/\bnew Function\s*\(/.test(src) || /(?<![\w.])eval\s*\(/.test(src)) {
-      problems.push(`${file} uses eval/new Function — the theme sandbox argument depends on this staying absent`)
     }
   }
-  summary.push(`  ${name.padEnd(16)} ${String(files).padStart(2)} files  deps: ${deps.join(', ') || 'none'}${peers.length ? `  optional peer: ${peers.join(', ')}` : ''}  cross-package imports: ${external}`)
+  summary.push(
+    `  ${name.padEnd(16)} ${String(files).padStart(2)} files  deps: ${deps.join(', ') || 'none'}${peers.length ? `  optional peer: ${peers.join(', ')}` : ''}  cross-package imports: ${external}`,
+  )
 }
 
 console.log('dependency audit, per package:')
@@ -104,6 +132,10 @@ if (problems.length) {
   process.exit(1)
 }
 console.log('')
-console.log('  the only package that may touch a driver is ketjs-postgres, and it does so as an optional peer')
-console.log('  ketsuite reaches the framework only through its public entry, exactly as a third-party module would')
+console.log(
+  '  the only package that may touch a driver is ketjs-postgres, and it does so as an optional peer',
+)
+console.log(
+  '  ketsuite reaches the framework only through its public entry, exactly as a third-party module would',
+)
 console.log('  eval / new Function: absent')

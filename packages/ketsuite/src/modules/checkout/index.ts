@@ -8,7 +8,14 @@ export default defineModule({
   models: {
     Order: {
       scope: 'company+branch',
-      fields: { id: 'id', productId: 'ref:catalog.Product', qty: 'int', totalCents: 'int', placedAt: 'datetime' } },
+      fields: {
+        id: 'id',
+        productId: 'ref:catalog.Product',
+        qty: 'int',
+        totalCents: 'int',
+        placedAt: 'datetime',
+      },
+    },
   },
 
   // Only the narrowing direction is declared. The other way — a shared product
@@ -33,8 +40,11 @@ export default defineModule({
         if (!product) throw new Error(`unknown product ${String(args.productId)}`)
         const total = Number(product.priceCents) * Number(args.qty)
         await ctx.db.insert('checkout.Order', {
-          id: args.id, productId: args.productId, qty: args.qty,
-          totalCents: total, placedAt: '2026-08-19T00:00:00.000Z',
+          id: args.id,
+          productId: args.productId,
+          qty: args.qty,
+          totalCents: total,
+          placedAt: '2026-08-19T00:00:00.000Z',
         })
         return { id: args.id, totalCents: total }
       },

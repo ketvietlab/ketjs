@@ -29,17 +29,25 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       if (a.parentId === a.id) {
-        return { ok: false, errors: [{ field: 'parentId', message: 'một công ty không thể là công ty mẹ của chính nó' }] }
+        return {
+          ok: false,
+          errors: [{ field: 'parentId', message: 'một công ty không thể là công ty mẹ của chính nó' }],
+        }
       }
       const P = ctx.table('partner.Partner')
       const party = await ctx.db.one(from(P).where(eq(P.id, a.partnerId)))
-      if (!party) return { ok: false, errors: [{ field: 'partnerId', message: 'không có đối tác nào mang id này' }] }
+      if (!party)
+        return { ok: false, errors: [{ field: 'partnerId', message: 'không có đối tác nào mang id này' }] }
       if (party.kind !== 'company') {
-        return { ok: false, errors: [{ field: 'partnerId', message: 'pháp nhân phải là đối tác loại "company"' }] }
+        return {
+          ok: false,
+          errors: [{ field: 'partnerId', message: 'pháp nhân phải là đối tác loại "company"' }],
+        }
       }
       const C = ctx.table('company.Company')
       const existing = await ctx.db.one(from(C).where(eq(C.id, a.id)))
-      let cs = ctx.change('company.Company', a, existing)
+      let cs = ctx
+        .change('company.Company', a, existing)
         .cast(['id', 'partnerId', 'parentId', 'currency'])
         .required(['partnerId', 'currency'])
       if (!existing) cs = cs.put('active', true)

@@ -11,7 +11,10 @@ export const menus: Record<string, MenuDef> = {
   product: { label: 'menu.app', icon: 'package', sequence: 20 },
   'product.catalogue': { parent: 'product', label: 'menu.catalogue', sequence: 10 },
   'product.templates': {
-    parent: 'product.catalogue', label: 'menu.templates',
-    path: '/admin/products', needs: 'product.listTemplates', sequence: 10,
+    parent: 'product.catalogue',
+    label: 'menu.templates',
+    path: '/admin/products',
+    needs: 'product.listTemplates',
+    sequence: 10,
   },
 }

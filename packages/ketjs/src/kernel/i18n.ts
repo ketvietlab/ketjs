@@ -53,7 +53,7 @@ const PLACEHOLDER = /\{(\w+)\}/g
  * breaks on the longer.
  */
 export const PSEUDO_LOCALE = 'qps'
-const pseudo = (s: string): string => `⟦${s.replace(/[aeiouAEIOU]/g, c => c + c.toLowerCase())}⟧`
+const pseudo = (s: string): string => `⟦${s.replace(/[aeiouAEIOU]/g, (c) => c + c.toLowerCase())}⟧`
 
 export function translator(manifest: Manifest, locale: string, o: TranslateOptions = {}): Translator {
   const fallback = o.fallback ?? 'vi'
@@ -73,7 +73,8 @@ export function translator(manifest: Manifest, locale: string, o: TranslateOptio
     if (!exact) o.onMissing?.(key, locale)
 
     let text: string
-    if (message === undefined) text = key                       // visible, not blank
+    if (message === undefined)
+      text = key // visible, not blank
     else if (typeof message === 'string') text = message
     else {
       const count = Number(params.count ?? 0)
@@ -100,7 +101,7 @@ export function missingMessages(manifest: Manifest, locales?: string[]): Record<
   const out: Record<string, string[]> = {}
   for (const locale of wanted) {
     const have = catalogs[locale] ?? {}
-    const gaps = [...every].filter(k => !(k in have)).sort()
+    const gaps = [...every].filter((k) => !(k in have)).sort()
     if (gaps.length) out[locale] = gaps
   }
   return out
@@ -109,6 +110,7 @@ export function missingMessages(manifest: Manifest, locales?: string[]): Record<
 export function formatMissing(missing: Record<string, string[]>): string {
   const entries = Object.entries(missing)
   if (!entries.length) return 'every locale has every key'
-  return entries.map(([locale, keys]) =>
-    `${locale}: ${keys.length} missing\n${keys.map(k => `  ${k}`).join('\n')}`).join('\n')
+  return entries
+    .map(([locale, keys]) => `${locale}: ${keys.length} missing\n${keys.map((k) => `  ${k}`).join('\n')}`)
+    .join('\n')
 }

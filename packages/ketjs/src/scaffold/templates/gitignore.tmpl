@@ -1,2 +1,24 @@
-.ket/
+# Dependencies
 node_modules/
+
+# Build artifacts
+dist/
+
+# Ket runtime state
+.ket/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store

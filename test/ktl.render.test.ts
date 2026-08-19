@@ -22,9 +22,14 @@ const theme = (templates: Record<string, string>) => {
     if (!t) throw new Error(`${from} renders "${name}", which does not exist`)
     if (depth >= 16) throw new Error(`${from} renders "${name}" too deep`)
     depth++
-    try { return t.render(scope) } finally { depth-- }
+    try {
+      return t.render(scope)
+    } finally {
+      depth--
+    }
   }
-  for (const [name, src] of Object.entries(templates)) compiled[name] = compileKtl(src, { name, renderTemplate })
+  for (const [name, src] of Object.entries(templates))
+    compiled[name] = compileKtl(src, { name, renderTemplate })
   return (name: string, scope: Record<string, unknown>) => compiled[name]!.render(scope)
 }
 
@@ -41,8 +46,11 @@ test('render: and nothing else — the caller scope is not visible', () => {
     page: `{% render 'leak' %}`,
     leak: `[{{ secret }}]`,
   })
-  assert.equal(r('page', { secret: 'do-not-leak' }), '[]',
-    'a partial that could read its caller would be a partial you cannot read on its own')
+  assert.equal(
+    r('page', { secret: 'do-not-leak' }),
+    '[]',
+    'a partial that could read its caller would be a partial you cannot read on its own',
+  )
 })
 
 test('render: values are escaped in the partial exactly as in the caller', () => {
@@ -66,7 +74,10 @@ test('render: a template that renders itself is stopped, not left to overflow th
 })
 
 test('render: a malformed argument list is a syntax error naming the line', () => {
-  assert.throws(() => compileKtl(`\n{% render 'x', bad %}`, { name: 't' }), /render argument needs "name: value" at line 2/)
+  assert.throws(
+    () => compileKtl(`\n{% render 'x', bad %}`, { name: 't' }),
+    /render argument needs "name: value" at line 2/,
+  )
 })
 
 // ── comments and files ───────────────────────────────────────────────────────
@@ -80,7 +91,10 @@ test('ktl: an unterminated comment says so', () => {
 })
 
 test('ktl: an unknown filter names the template and the line', () => {
-  assert.throws(() => compileKtl(`x\ny\n{{ v | nope }}`, { name: 'card' }), /template "card" line 3 uses unknown filter "nope"/)
+  assert.throws(
+    () => compileKtl(`x\ny\n{{ v | nope }}`, { name: 'card' }),
+    /template "card" line 3 uses unknown filter "nope"/,
+  )
 })
 
 test('loadTemplates: the file name is the template name', () => {

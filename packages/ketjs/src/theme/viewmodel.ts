@@ -13,7 +13,8 @@ export function makeDrop(manifest: Manifest, viewKey: string, row: Row): Drop {
   const view = manifest.views[viewKey]
   if (!view) {
     throw new KetError({
-      code: 'E_UNKNOWN_VIEW', message: `no view model "${viewKey}"`,
+      code: 'E_UNKNOWN_VIEW',
+      message: `no view model "${viewKey}"`,
       hint: `declared views: ${Object.keys(manifest.views).join(', ') || '(none)'}`,
     })
   }
@@ -23,7 +24,7 @@ export function makeDrop(manifest: Manifest, viewKey: string, row: Row): Drop {
 }
 
 export function makeDrops(manifest: Manifest, viewKey: string, rows: Row[]): Drop[] {
-  return rows.map(r => makeDrop(manifest, viewKey, r))
+  return rows.map((r) => makeDrop(manifest, viewKey, r))
 }
 
 // Any value handed to a theme passes through here. Anything that is not plain data
@@ -32,7 +33,11 @@ export function sealScope(scope: Record<string, unknown>): Record<string, unknow
   const out = Object.create(null) as Record<string, unknown>
   for (const [k, v] of Object.entries(scope)) {
     if (typeof v === 'function') {
-      throw new KetError({ code: 'E_SCOPE_CALLABLE', message: `scope key "${k}" is a function`, hint: 'themes receive data only; move behaviour into a server function' })
+      throw new KetError({
+        code: 'E_SCOPE_CALLABLE',
+        message: `scope key "${k}" is a function`,
+        hint: 'themes receive data only; move behaviour into a server function',
+      })
     }
     out[k] = v
   }

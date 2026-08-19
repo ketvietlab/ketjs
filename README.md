@@ -20,10 +20,13 @@ npm run design                              # the backend UI catalogue, for desi
 npm run verify                              # audit + typecheck + tests + type proof
 ```
 
-Those are `ket serve` and `ket dev` reading `ket.workspace.ts`. A first run
-migrates, installs the app's bootstrap set, and serves. Every knob has a default
-that works; `KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules
-that would otherwise install themselves, which is what you want mid-change.
+Production, tests and release commands build first, then run emitted JavaScript.
+`npm run dev` is deliberately diskless: `tsx` transforms TypeScript/TSX in memory
+after a clean typecheck and watches the dependency graph. Node never receives
+untransformed source. A first run migrates, installs the app's bootstrap set, and
+serves. Every knob has a default that works;
+`KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules that would
+otherwise install themselves, which is what you want mid-change.
 
 ```bash
 npx ket new shop && cd shop && npm install && npm run dev
@@ -74,8 +77,8 @@ found bugs in Ket, which is the point of running them.
 
 | Claim | Evidence |
 |---|---|
-| Cross-module field extension is *typed* | `node tools/type-proof.ts` — 7/7 assertions checked by tsc |
-| Updating 1 row of 1000 is surgical | `node bench/view.bench.ts` — **1** host operation |
+| Cross-module field extension is *typed* | `npm run type-proof` — 7/7 assertions checked by tsc |
+| Updating 1 row of 1000 is surgical | `npm run bench` — **1** host operation |
 | Re-render with no change | **0** operations |
 | Swap 2 rows of 1000 | **2** moves (LIS reconciliation, no cascade) |
 | A theme cannot run code | no `eval`/`new Function` anywhere; prototype access rejected at parse time |
@@ -90,7 +93,7 @@ found bugs in Ket, which is the point of running them.
 | A query is checked before it runs | `q.touches` vs declared effects — a query reading an undeclared model is blocked |
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
-| Zero required dependencies | `node tools/zero-dep-audit.ts` — enforces that only `src/data/postgres.ts` may import the one allowlisted driver |
+| Zero required dependencies | `npm run audit:zero-dep` — enforces that only `ketjs-postgres` may import the one allowlisted driver |
 
 ## Layout
 
@@ -111,9 +114,17 @@ are now facts about which package declares what.
 
 ## Static typing
 
-Node **runs** TypeScript but does **not** check it — it is a type stripper.
-Ket therefore keeps `typescript` and `@types/node` as the only devDependencies,
-used by `tsc --noEmit` and never loaded at runtime. `erasableSyntaxOnly` is on so
-every source file stays runnable by Node with no build step.
+TypeScript and TSX are authored formats, never runtime inputs. `npm run build`
+emits workspace JavaScript into `.build` and publishable package artifacts into
+each package's `dist`; declarations are emitted separately. Production, tests and
+publishing run only those artifacts. `npm run dev` instead uses `tsx watch` to
+transform modules in memory and runs `tsc --noEmit --watch` beside it, so editing
+never writes or deletes `.build`/`dist`. The custom JSX runtime still produces
+Ket's existing hole-based templates, with no React, VDOM, or required runtime
+dependency.
+
+Biome is the repository-wide formatter and linter. `npm run format` normalises all
+supported source/config files; `npm run verify` refuses unformatted or lint-invalid
+changes before building and testing.
 
 See [docs/00-decisions.md](docs/00-decisions.md) for the reasoning behind each choice.

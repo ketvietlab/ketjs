@@ -9,9 +9,23 @@ export type TplEl = { type: 'el'; tag: string; attrs: TplAttr[]; children: TplNo
 export type TplNode = TplText | TplHole | TplEl
 export type TplRoot = { type: 'root'; children: TplNode[] }
 
-const MARK = '￼'  // OBJECT REPLACEMENT CHARACTER: never appears in real markup
+const MARK = '￼' // OBJECT REPLACEMENT CHARACTER: never appears in real markup
 const holeRe = new RegExp(MARK + '(\\d+)' + MARK)
-const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+const VOID = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+])
 
 export function parseTemplate(strings: readonly string[]): TplRoot {
   const src = strings.reduce((acc, s, i) => acc + s + (i < strings.length - 1 ? MARK + i + MARK : ''), '')
@@ -25,7 +39,10 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
     for (;;) {
       if (!rest) return
       const m = holeRe.exec(rest)
-      if (!m) { top().children.push({ type: 'text', value: rest }); return }
+      if (!m) {
+        top().children.push({ type: 'text', value: rest })
+        return
+      }
       if (m.index > 0) top().children.push({ type: 'text', value: rest.slice(0, m.index) })
       top().children.push({ type: 'hole', index: Number(m[1]) })
       rest = rest.slice(m.index + m[0].length)
@@ -34,10 +51,16 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
 
   while (i < src.length) {
     const lt = src.indexOf('<', i)
-    if (lt === -1) { pushText(src.slice(i)); break }
+    if (lt === -1) {
+      pushText(src.slice(i))
+      break
+    }
     pushText(src.slice(i, lt))
 
-    if (src.startsWith('<!--', lt)) { i = src.indexOf('-->', lt) + 3; continue }
+    if (src.startsWith('<!--', lt)) {
+      i = src.indexOf('-->', lt) + 3
+      continue
+    }
 
     if (src[lt + 1] === '/') {
       const gt = src.indexOf('>', lt)
@@ -56,9 +79,16 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
       let k = j
       while (k < src.length && /[^\s=/>]/.test(src[k] as string)) k++
       const name = src.slice(j, k)
-      if (!name) { j = k + 1; continue }
+      if (!name) {
+        j = k + 1
+        continue
+      }
       while (k < src.length && /\s/.test(src[k] as string)) k++
-      if (src[k] !== '=') { attrs.push({ name, value: '' }); j = k; continue }
+      if (src[k] !== '=') {
+        attrs.push({ name, value: '' })
+        j = k
+        continue
+      }
       k++
       while (k < src.length && /\s/.test(src[k] as string)) k++
       let raw: string
@@ -91,6 +121,9 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
 const cache = new WeakMap<readonly string[], TplRoot>()
 export function templateFor(strings: readonly string[]): TplRoot {
   let t = cache.get(strings)
-  if (!t) { t = parseTemplate(strings); cache.set(strings, t) }
+  if (!t) {
+    t = parseTemplate(strings)
+    cache.set(strings, t)
+  }
   return t
 }

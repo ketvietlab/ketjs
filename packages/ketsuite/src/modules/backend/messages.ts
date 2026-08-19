@@ -10,7 +10,7 @@ import type { Message } from 'ketjs'
  */
 export const messages: Record<string, Record<string, Message>> = {
   vi: {
-    'signOut': 'Đăng xuất',
+    signOut: 'Đăng xuất',
     'app.title': 'Quản trị',
     'app.summary': 'Màn hình quản lý ứng dụng, trang và cài đặt.',
     'app.category': 'Hệ thống',
@@ -20,7 +20,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
     'nav.pages': 'Trang',
     'nav.settings': 'Cài đặt',
-    'brand': 'KetSuite',
+    brand: 'KetSuite',
 
     'table.columns': 'Chọn cột',
     'table.id': 'Mã',
@@ -65,7 +65,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'settings.tokens': 'Design token đang áp dụng',
   },
   en: {
-    'signOut': 'Sign out',
+    signOut: 'Sign out',
     'app.title': 'Administration',
     'app.summary': 'Manage apps, pages and settings.',
     'app.category': 'System',
@@ -75,7 +75,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.noMatch': 'No app or menu matches.',
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
-    'brand': 'KetSuite',
+    brand: 'KetSuite',
 
     'table.columns': 'Columns',
     'table.id': 'Id',

@@ -5,7 +5,7 @@
 // remembers. That is what makes the back button, a bookmark and a link somebody
 // pastes into chat all work with no code written for any of them.
 
-import type { Pager } from './screens.ts'
+import type { Pager } from '../../ui/index.ts'
 
 /** Odoo's default, and about as many rows as fit a laptop screen. */
 export const PAGE_SIZE = 30
@@ -22,11 +22,16 @@ export const searchOf = (url: URL): string | undefined => {
 
 /** Which optional columns this viewer asked for: ?cols=id,category. */
 export const colsOf = (url: URL): string[] =>
-  (url.searchParams.get('cols') ?? '').split(',').map(s => s.trim()).filter(Boolean)
+  (url.searchParams.get('cols') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 
 /** Where a column-menu entry points: the same list showing a different set. */
-export const colsHref = (url: URL) => (keys: readonly string[]): string =>
-  withParam(url, 'cols', keys.length ? [...keys].join(',') : null, false)
+export const colsHref =
+  (url: URL) =>
+  (keys: readonly string[]): string =>
+    withParam(url, 'cols', keys.length ? [...keys].join(',') : null, false)
 
 /**
  * The same URL with one parameter changed.
@@ -50,7 +55,9 @@ export const pager = (url: URL, page: number, shown: number, total: number): Pag
   if (total <= PAGE_SIZE) return null
   const from = (page - 1) * PAGE_SIZE + 1
   return {
-    from, to: from + shown - 1, total,
+    from,
+    to: from + shown - 1,
+    total,
     prev: page > 1 ? withParam(url, 'page', String(page - 1)) : null,
     next: from + shown - 1 < total ? withParam(url, 'page', String(page + 1)) : null,
   }

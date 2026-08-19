@@ -10,7 +10,11 @@ import type { Manifest } from '../types.ts'
 export type AgentTool = {
   name: string
   description: string
-  inputSchema: { type: 'object'; properties: Record<string, { type: string; description?: string }>; required: string[] }
+  inputSchema: {
+    type: 'object'
+    properties: Record<string, { type: string; description?: string }>
+    required: string[]
+  }
   effects: string[]
   idempotent: boolean
   dryRunnable: boolean
@@ -19,7 +23,16 @@ export type AgentTool = {
   crossCompany: boolean
 }
 
-const JSON_TYPE: Record<string, string> = { id: 'string', text: 'string', ref: 'string', int: 'integer', float: 'number', bool: 'boolean', datetime: 'string', json: 'object' }
+const JSON_TYPE: Record<string, string> = {
+  id: 'string',
+  text: 'string',
+  ref: 'string',
+  int: 'integer',
+  float: 'number',
+  bool: 'boolean',
+  datetime: 'string',
+  json: 'object',
+}
 
 export function agentTools(manifest: Manifest): AgentTool[] {
   const tools: AgentTool[] = []
@@ -33,10 +46,12 @@ export function agentTools(manifest: Manifest): AgentTool[] {
       properties[name] = { type: JSON_TYPE[base.startsWith('ref:') ? 'ref' : base] ?? 'string' }
       if (!optional) required.push(name)
     }
-    const mutates = fn.effects.some(e => e.startsWith('write:'))
+    const mutates = fn.effects.some((e) => e.startsWith('write:'))
     tools.push({
       name: key.replace('.', '__'),
-      description: `${key} — declared effects: ${fn.effects.join(', ') || 'none'}` + (fn.crossCompany ? ' · reads across companies' : ''),
+      description:
+        `${key} — declared effects: ${fn.effects.join(', ') || 'none'}` +
+        (fn.crossCompany ? ' · reads across companies' : ''),
       inputSchema: { type: 'object', properties, required },
       effects: fn.effects,
       idempotent: fn.idempotent,
@@ -60,7 +75,11 @@ export type CompositionSchema = {
 export function compositionSchema(manifest: Manifest): CompositionSchema {
   const joints: CompositionSchema['joints'] = {}
   for (const [key, j] of Object.entries(manifest.joints)) {
-    joints[key] = { owner: j.owner, props: j.props, filledBy: manifest.fills.filter(f => f.joint === key).map(f => f.by) }
+    joints[key] = {
+      owner: j.owner,
+      props: j.props,
+      filledBy: manifest.fills.filter((f) => f.joint === key).map((f) => f.by),
+    }
   }
   const sections: CompositionSchema['sections'] = {}
   for (const [name, s] of Object.entries(manifest.sections)) {
@@ -78,7 +97,14 @@ export function agentDescriptor(manifest: Manifest) {
     modules: manifest.modules,
     tools: agentTools(manifest),
     composition: compositionSchema(manifest),
-    models: Object.fromEntries(Object.entries(manifest.models).map(([k, m]) => [k, Object.fromEntries(Object.entries(m.fields).map(([f, d]) => [f, `${d.base}${d.optional ? '?' : ''} (by ${d.by})`]))])),
+    models: Object.fromEntries(
+      Object.entries(manifest.models).map(([k, m]) => [
+        k,
+        Object.fromEntries(
+          Object.entries(m.fields).map(([f, d]) => [f, `${d.base}${d.optional ? '?' : ''} (by ${d.by})`]),
+        ),
+      ]),
+    ),
     views: manifest.views,
   }
 }

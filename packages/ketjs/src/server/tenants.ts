@@ -158,14 +158,20 @@ export function createTenants(o: {
   const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
     if (!o.sessions) return null
     let s = sessions.get(key)
-    if (!s) { s = o.sessions(adapter); sessions.set(key, s) }
+    if (!s) {
+      s = o.sessions(adapter)
+      sessions.set(key, s)
+    }
     return s
   }
   const themeFor = (key: string, live: Manifest): ThemeRuntime | null => {
     if (!o.theme) return null
     const stamp = `${key}::${live.order.join(',')}`
     let t = themes.get(stamp)
-    if (!t) { t = o.theme(live); themes.set(stamp, t) }
+    if (!t) {
+      t = o.theme(live)
+      themes.set(stamp, t)
+    }
     return t
   }
 
@@ -176,14 +182,28 @@ export function createTenants(o: {
       // would show one tenant the module set of another.
       const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
       let live = lives.get(stamp)
-      if (!live) { live = restrictManifest(o.manifest, await apps.enabled()); lives.set(stamp, live) }
+      if (!live) {
+        live = restrictManifest(o.manifest, await apps.enabled())
+        lives.set(stamp, live)
+      }
       const jointsFor = (locale: string): Joints => {
         const k = `${stamp}::${locale}`
         let made = jointsBy.get(k)
-        if (!made) { made = o.joints(live, locale); jointsBy.set(k, made) }
+        if (!made) {
+          made = o.joints(live, locale)
+          jointsBy.set(k, made)
+        }
         return made
       }
-      return fn({ key, adapter, apps, live, theme: themeFor(key, live), joints: jointsFor, sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
+      return fn({
+        key,
+        adapter,
+        apps,
+        live,
+        theme: themeFor(key, live),
+        joints: jointsFor,
+        sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)),
+      })
     })
 
   return {
@@ -204,14 +224,24 @@ export function createTenants(o: {
  * exercises this implementation, and the pooled one differs only in where the
  * adapter comes from.
  */
-export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; joints: (live: Manifest, locale: string) => Joints; sessions?: Sessions | null }): Tenants {
+export function singleTenant(o: {
+  adapter: Adapter
+  apps: AppRegistry
+  manifest: Manifest
+  theme?: (live: Manifest) => ThemeRuntime
+  joints: (live: Manifest, locale: string) => Joints
+  sessions?: Sessions | null
+}): Tenants {
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const jointsBy = new Map<string, Joints>()
   const run = async <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> => {
     const stamp = [...(await o.apps.enabled())].sort().join(',')
     let live = lives.get(stamp)
-    if (!live) { live = restrictManifest(o.manifest, await o.apps.enabled()); lives.set(stamp, live) }
+    if (!live) {
+      live = restrictManifest(o.manifest, await o.apps.enabled())
+      lives.set(stamp, live)
+    }
     let theme: ThemeRuntime | null = null
     if (o.theme) {
       theme = themes.get(stamp) ?? o.theme(live)
@@ -220,10 +250,21 @@ export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest:
     const jointsFor = (locale: string): Joints => {
       const k = `${stamp}::${locale}`
       let made = jointsBy.get(k)
-      if (!made) { made = o.joints(live, locale); jointsBy.set(k, made) }
+      if (!made) {
+        made = o.joints(live, locale)
+        jointsBy.set(k, made)
+      }
       return made
     }
-    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, joints: jointsFor, sessions: o.sessions ?? null })
+    return fn({
+      key,
+      adapter: o.adapter,
+      apps: o.apps,
+      live,
+      theme,
+      joints: jointsFor,
+      sessions: o.sessions ?? null,
+    })
   }
   return {
     keyOf: () => '',

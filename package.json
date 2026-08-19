@@ -11,21 +11,29 @@
     "packages/*"
   ],
   "scripts": {
-    "check": "tsc --noEmit",
-    "test": "node --test \"test/*.test.ts\"",
-    "bench": "node bench/view.bench.ts",
-    "type-proof": "node tools/type-proof.ts",
-    "audit:zero-dep": "node tools/zero-dep-audit.ts",
-    "verify": "npm run audit:zero-dep && npm run check && npm test && npm run type-proof",
-    "design": "node apps/admin/serve.ts",
-    "start": "node packages/ketjs/src/cli.ts serve",
-    "start:pg": "DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/src/cli.ts serve",
-    "ket": "node packages/ketjs/src/cli.ts",
-    "dev": "node packages/ketjs/src/cli.ts dev",
-    "test:one": "node --test"
+    "build": "node tools/build.mjs",
+    "check": "tsc -p tsconfig.json",
+    "test": "npm run build --silent && node --test \".build/test/*.test.js\"",
+    "test:built": "node --test \".build/test/*.test.js\"",
+    "bench": "npm run build --silent && node .build/bench/view.bench.js",
+    "type-proof": "npm run build --silent && node .build/tools/type-proof.js",
+    "audit:zero-dep": "npm run build --silent && node .build/tools/zero-dep-audit.js",
+    "audit:ui": "npm run build --silent && node .build/tools/ui-audit.js",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "lint": "biome lint",
+    "verify": "npm run format:check && npm run lint && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run check && npm run test:built && node .build/tools/type-proof.js",
+    "design": "npm run build --silent && node .build/apps/admin/serve.js",
+    "start": "npm run build --silent && node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
+    "start:pg": "npm run build --silent && DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
+    "ket": "npm run build --silent && node packages/ketjs/dist/cli.js --workspace .build/ket.workspace.js",
+    "dev": "tsx watch --clear-screen=false --exclude \"packages/*/dist/**/*\" --include \"packages/*/src/**/*.css\" --include \"packages/*/src/**/*.ktl\" --include \"packages/*/src/**/*.tmpl\" tools/dev.mjs serve --workspace ket.workspace.ts",
+    "test:one": "npm run build --silent && node tools/test-one.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.9",
     "@types/node": "^26.2.0",
+    "tsx": "4.23.12",
     "typescript": "^7.0.2"
   }
 }

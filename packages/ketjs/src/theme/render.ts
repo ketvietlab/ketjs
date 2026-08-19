@@ -15,7 +15,14 @@ export type ThemeRuntime = {
   islands: IslandRegistry
 }
 
-export function createTheme(manifest: Manifest, modules: KetModule[], opts: { filters?: Record<string, Filter>; translate?: (key: string, params?: Record<string, unknown>) => string } = {}): ThemeRuntime {
+export function createTheme(
+  manifest: Manifest,
+  modules: KetModule[],
+  opts: {
+    filters?: Record<string, Filter>
+    translate?: (key: string, params?: Record<string, unknown>) => string
+  } = {},
+): ThemeRuntime {
   // A theme is written against what the DEPLOYMENT ships, not against what a
   // particular database has switched on. So the strict check belongs to the full
   // manifest — where a typo is a build error — while a restricted manifest, which
@@ -32,7 +39,7 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
   }
   const sources: Record<string, string> = {}
   for (const m of modules) {
-    if (off.has(m.name)) continue      // a removed theme contributes no templates
+    if (off.has(m.name)) continue // a removed theme contributes no templates
     for (const [name, src] of Object.entries(m.templates)) sources[name] = src
   }
 
@@ -43,7 +50,7 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
   const fills: Record<string, Compiled[]> = {}
 
   const renderJoint = (joint: string, scope: Scope): string =>
-    (fills[joint] ?? []).map(c => c.render(scope)).join('')
+    (fills[joint] ?? []).map((c) => c.render(scope)).join('')
 
   /**
    * A page's body is its layout: an ordered list of placements, each rendered by
@@ -128,10 +135,20 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
       })
     }
     depth++
-    try { return t.render(scope) } finally { depth-- }
+    try {
+      return t.render(scope)
+    } finally {
+      depth--
+    }
   }
 
-  const wiring = { renderJoint, renderRegion, renderIsland: renderIslandAt, renderSections: renderSectionsAt, renderTemplate }
+  const wiring = {
+    renderJoint,
+    renderRegion,
+    renderIsland: renderIslandAt,
+    renderSections: renderSectionsAt,
+    renderTemplate,
+  }
 
   for (const [joint, srcs] of Object.entries(fillSources)) {
     fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, ...wiring }))

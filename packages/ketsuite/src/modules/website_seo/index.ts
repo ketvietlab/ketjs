@@ -11,10 +11,20 @@ export default defineModule({
   summary: 'Thẻ mô tả, canonical và noindex cho từng trang.',
   category: 'Website',
   messages: {
-    vi: { 'app.title': "SEO", 'app.summary': "Thẻ mô tả, canonical và noindex cho từng trang.", 'app.category': "Website" },
-    en: { 'app.title': "SEO", 'app.summary': "Description, canonical and noindex tags per page.", 'app.category': "Website" },
+    vi: {
+      'app.title': 'SEO',
+      'app.summary': 'Thẻ mô tả, canonical và noindex cho từng trang.',
+      'app.category': 'Website',
+    },
+    en: {
+      'app.title': 'SEO',
+      'app.summary': 'Description, canonical and noindex tags per page.',
+      'app.category': 'Website',
+    },
   },
   autoInstall: true,
   depends: ['website'],
-  extend, fills, views,
+  extend,
+  fills,
+  views,
 })

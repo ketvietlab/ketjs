@@ -6,14 +6,41 @@ import { KetError } from './errors.ts'
 import type { KetModule, ModuleSpec } from '../types.ts'
 
 const MODULE_KEYS = new Set([
-  'name', 'version', 'depends', 'models', 'extend', 'joints', 'fills',
-  'functions', 'views', 'requires', 'tokens', 'templates', 'provides', 'kind', 'islands', 'sections', 'relations',
-  'app', 'title', 'summary', 'category', 'install', 'autoInstall', 'removable', 'messages', 'omits', 'menus',
-  'assets', 'styles', 'routes',
+  'name',
+  'version',
+  'depends',
+  'models',
+  'extend',
+  'joints',
+  'fills',
+  'functions',
+  'views',
+  'requires',
+  'tokens',
+  'templates',
+  'provides',
+  'kind',
+  'islands',
+  'sections',
+  'relations',
+  'app',
+  'title',
+  'summary',
+  'category',
+  'install',
+  'autoInstall',
+  'removable',
+  'messages',
+  'omits',
+  'menus',
+  'assets',
+  'styles',
+  'routes',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
-  if (!spec || typeof spec !== 'object') throw new KetError({ code: 'E_MODULE_SHAPE', message: 'defineModule() expects an object' })
+  if (!spec || typeof spec !== 'object')
+    throw new KetError({ code: 'E_MODULE_SHAPE', message: 'defineModule() expects an object' })
   if (typeof spec.name !== 'string' || !/^[a-z][a-z0-9_]*$/.test(spec.name)) {
     throw new KetError({
       code: 'E_MODULE_NAME',
@@ -94,9 +121,10 @@ export function defineTheme(spec: ModuleSpec): KetModule {
         code: 'E_THEME_OVERREACH',
         module: spec.name,
         message: `theme "${spec.name}" declares "${k}", which themes are not allowed to do`,
-        hint: k === 'islands'
-          ? 'a theme places an island with {% island "name" %} but never defines one — move it into a module'
-          : `themes may only declare: templates, provides, fills, tokens, requires. Move "${k}" into a module.`,
+        hint:
+          k === 'islands'
+            ? 'a theme places an island with {% island "name" %} but never defines one — move it into a module'
+            : `themes may only declare: templates, provides, fills, tokens, requires. Move "${k}" into a module.`,
       })
     }
   }

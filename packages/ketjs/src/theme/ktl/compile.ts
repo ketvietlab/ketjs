@@ -30,7 +30,12 @@ export type CompileOpts = {
   name?: string
 }
 
-export type Compiled = { render(scope: Scope): string; jointsUsed: string[]; regionsUsed: string[]; islandsUsed: string[] }
+export type Compiled = {
+  render(scope: Scope): string
+  jointsUsed: string[]
+  regionsUsed: string[]
+  islandsUsed: string[]
+}
 
 // Intl formatters are expensive to construct and cheap to reuse. Building one per
 // interpolation made the money filter cost more than the entire rest of the
@@ -39,19 +44,27 @@ const formatters = new Map<string, Intl.NumberFormat>()
 const formatter = (locale: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat => {
   const key = locale + '|' + (opts.style ?? '') + (opts.currency ?? '')
   let f = formatters.get(key)
-  if (!f) { f = new Intl.NumberFormat(locale, opts); formatters.set(key, f) }
+  if (!f) {
+    f = new Intl.NumberFormat(locale, opts)
+    formatters.set(key, f)
+  }
   return f
 }
 
 const BASE_FILTERS: Record<string, Filter> = {
-  upper: v => String(v ?? '').toUpperCase(),
-  lower: v => String(v ?? '').toLowerCase(),
-  money: (v, arg) => formatter(String(arg ?? 'vi-VN'), { style: 'currency', currency: 'VND' }).format(Number(v ?? 0) / 100),
-  number: v => formatter('vi-VN', {}).format(Number(v ?? 0)),
+  upper: (v) => String(v ?? '').toUpperCase(),
+  lower: (v) => String(v ?? '').toLowerCase(),
+  money: (v, arg) =>
+    formatter(String(arg ?? 'vi-VN'), { style: 'currency', currency: 'VND' }).format(Number(v ?? 0) / 100),
+  number: (v) => formatter('vi-VN', {}).format(Number(v ?? 0)),
   default: (v, arg) => (v == null || v === '' ? arg : v),
-  length: v => (Array.isArray(v) ? v.length : String(v ?? '').length),
-  truncate: (v, arg) => { const n = Number(arg ?? 80); const s = String(v ?? ''); return s.length > n ? s.slice(0, n) + '…' : s },
-  json: v => JSON.stringify(v),
+  length: (v) => (Array.isArray(v) ? v.length : String(v ?? '').length),
+  truncate: (v, arg) => {
+    const n = Number(arg ?? 80)
+    const s = String(v ?? '')
+    return s.length > n ? s.slice(0, n) + '…' : s
+  },
+  json: (v) => JSON.stringify(v),
 }
 
 // Reads one own-property at a time. A drop is a null-prototype object, so there is
@@ -69,7 +82,11 @@ function readPath(scope: Scope, parts: string[], where: string): unknown {
     cur = (cur as Record<string, unknown>)[p]
   }
   if (typeof cur === 'function') {
-    throw new KetError({ code: 'E_KTL_CALLABLE', message: `${where} reached a function via "${parts.join('.')}"`, hint: 'view models must expose data only' })
+    throw new KetError({
+      code: 'E_KTL_CALLABLE',
+      message: `${where} reached a function via "${parts.join('.')}"`,
+      hint: 'view models must expose data only',
+    })
   }
   return cur
 }
@@ -77,13 +94,26 @@ function readPath(scope: Scope, parts: string[], where: string): unknown {
 type Thunk = (scope: Scope) => unknown
 
 function compileExpr(e: Expr, o: Required<Pick<CompileOpts, 'filters' | 'name'>> & { line?: number }): Thunk {
-  if (e.k === 'lit') { const v = e.value; return () => v }
-  if (e.k === 'path') { const parts = e.parts, where = at(o); return (s) => readPath(s, parts, where) }
-  if (e.k === 'not') { const inner = compileExpr(e.src, o); return (s) => !inner(s) }
+  if (e.k === 'lit') {
+    const v = e.value
+    return () => v
+  }
+  if (e.k === 'path') {
+    const parts = e.parts,
+      where = at(o)
+    return (s) => readPath(s, parts, where)
+  }
+  if (e.k === 'not') {
+    const inner = compileExpr(e.src, o)
+    return (s) => !inner(s)
+  }
   if (e.k === 'cmp') {
-    const l = compileExpr(e.left, o), r = compileExpr(e.right, o), op = e.op
+    const l = compileExpr(e.left, o),
+      r = compileExpr(e.right, o),
+      op = e.op
     return (s) => {
-      const a = l(s), b = r(s)
+      const a = l(s),
+        b = r(s)
       if (op === '==') return a === b
       if (op === '!=') return a !== b
       if (op === '>') return (a as number) > (b as number)
@@ -119,7 +149,12 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   // enough in markup that a longer name would cost more than it explains.
   const filters: Record<string, Filter> = {
     ...BASE_FILTERS,
-    ...(opts.translate ? { _: (v: unknown, arg?: unknown) => opts.translate!(String(v), arg as Record<string, unknown> | undefined) } : {}),
+    ...(opts.translate
+      ? {
+          _: (v: unknown, arg?: unknown) =>
+            opts.translate!(String(v), arg as Record<string, unknown> | undefined),
+        }
+      : {}),
     ...(opts.filters ?? {}),
   }
   const jointsUsed: string[] = []
@@ -127,17 +162,28 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const islandsUsed: string[] = []
 
   const compileNodes = (nodes: Node[]): Array<(s: Scope, out: string[]) => void> =>
-    nodes.map(n => {
-      if (n.k === 'text') { const v = n.value; return (_s, out) => { out.push(v) } }
+    nodes.map((n) => {
+      if (n.k === 'text') {
+        const v = n.value
+        return (_s, out) => {
+          out.push(v)
+        }
+      }
       if (n.k === 'out') {
         const t = compileExpr(n.expr, { filters, name, line: n.line })
         const raw = n.raw
-        return (s, out) => { const v = t(s); out.push(v == null ? '' : raw ? String(v) : escapeHtml(v)) }
+        return (s, out) => {
+          const v = t(s)
+          out.push(v == null ? '' : raw ? String(v) : escapeHtml(v))
+        }
       }
       if (n.k === 'if') {
         const cond = compileExpr(n.cond, { filters, name, line: n.line })
-        const a = compileNodes(n.then), b = compileNodes(n.else)
-        return (s, out) => { for (const f of (cond(s) ? a : b)) f(s, out) }
+        const a = compileNodes(n.then),
+          b = compileNodes(n.else)
+        return (s, out) => {
+          for (const f of cond(s) ? a : b) f(s, out)
+        }
       }
       if (n.k === 'for') {
         const src = compileExpr(n.src, { filters, name, line: n.line })
@@ -154,7 +200,9 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
           inner['loop'] = loop
           for (let i = 0; i < n; i++) {
             inner[varName] = list[i]
-            loop.index = i; loop.first = i === 0; loop.last = i === n - 1
+            loop.index = i
+            loop.first = i === 0
+            loop.last = i === n - 1
             for (const f of body) f(inner, out)
           }
         }
@@ -162,14 +210,20 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
       if (n.k === 'joint') {
         jointsUsed.push(n.joint)
         const key = n.joint
-        return (s, out) => { out.push(opts.renderJoint ? opts.renderJoint(key, s) : '') }
+        return (s, out) => {
+          out.push(opts.renderJoint ? opts.renderJoint(key, s) : '')
+        }
       }
       if (n.k === 'sections') {
-        return (s, out) => { out.push(opts.renderSections ? opts.renderSections(s) : '') }
+        return (s, out) => {
+          out.push(opts.renderSections ? opts.renderSections(s) : '')
+        }
       }
       if (n.k === 'render') {
         const target = n.template
-        const args = Object.entries(n.args).map(([k, e]) => [k, compileExpr(e, { filters, name, line: n.line })] as const)
+        const args = Object.entries(n.args).map(
+          ([k, e]) => [k, compileExpr(e, { filters, name, line: n.line })] as const,
+        )
         const where = at({ name, line: n.line })
         return (s, out) => {
           // A null-prototype object with only what was passed. Not Object.create(s):
@@ -182,11 +236,15 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
       if (n.k === 'island') {
         islandsUsed.push(n.name)
         const iname = n.name
-        return (s, out) => { out.push(opts.renderIsland ? opts.renderIsland(iname, s) : '') }
+        return (s, out) => {
+          out.push(opts.renderIsland ? opts.renderIsland(iname, s) : '')
+        }
       }
       regionsUsed.push(n.name)
       const rname = n.name
-      return (s, out) => { out.push(opts.renderRegion ? opts.renderRegion(rname, s) : '') }
+      return (s, out) => {
+        out.push(opts.renderRegion ? opts.renderRegion(rname, s) : '')
+      }
     })
 
   const program = compileNodes(parse(source))
@@ -199,9 +257,8 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
       const out: string[] = []
       // sealScope() already hands over a null-prototype object; copying it again
       // on every render was pure waste.
-      const safe: Scope = Object.getPrototypeOf(scope) === null
-        ? scope
-        : Object.assign(Object.create(null) as Scope, scope)
+      const safe: Scope =
+        Object.getPrototypeOf(scope) === null ? scope : Object.assign(Object.create(null) as Scope, scope)
       for (const f of program) f(safe, out)
       return out.join('')
     },

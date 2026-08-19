@@ -13,7 +13,16 @@ export const functions: Record<string, FnSpec> = {
 
   listUsers: defineFn({
     input: { includeArchived: 'bool?' },
-    output: { id: 'id', login: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool', superuser: 'bool' },
+    output: {
+      id: 'id',
+      login: 'text',
+      name: 'text',
+      email: 'text?',
+      partnerId: 'id?',
+      defaultCompanyId: 'id?',
+      active: 'bool',
+      superuser: 'bool',
+    },
     effects: ['read:user.User'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -25,7 +34,18 @@ export const functions: Record<string, FnSpec> = {
 
   getUser: defineFn({
     input: { id: 'id' },
-    output: { id: 'id', login: 'text', name: 'text', email: 'text?', lang: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', active: 'bool', superuser: 'bool', memberships: 'json?' },
+    output: {
+      id: 'id',
+      login: 'text',
+      name: 'text',
+      email: 'text?',
+      lang: 'text?',
+      partnerId: 'id?',
+      defaultCompanyId: 'id?',
+      active: 'bool',
+      superuser: 'bool',
+      memberships: 'json?',
+    },
     effects: ['read:user.User', 'read:user.Membership'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -35,7 +55,16 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   createUser: defineFn({
-    input: { id: 'id', login: 'text', password: 'text', name: 'text', email: 'text?', partnerId: 'id?', defaultCompanyId: 'id?', superuser: 'bool?' },
+    input: {
+      id: 'id',
+      login: 'text',
+      password: 'text',
+      name: 'text',
+      email: 'text?',
+      partnerId: 'id?',
+      defaultCompanyId: 'id?',
+      superuser: 'bool?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:user.User', 'write:user.User'],
     idempotent: true,
@@ -49,7 +78,8 @@ export const functions: Record<string, FnSpec> = {
       if (String(a.password).length < 8) {
         return { ok: false, errors: [{ field: 'password', message: 'mật khẩu phải dài ít nhất 8 ký tự' }] }
       }
-      const cs = ctx.change('user.User', { ...a, password: await hashPassword(String(a.password)) }, null)
+      const cs = ctx
+        .change('user.User', { ...a, password: await hashPassword(String(a.password)) }, null)
         .cast(['id', 'login', 'password', 'name', 'email', 'partnerId', 'defaultCompanyId'])
         .required(['login', 'password', 'name'])
         .put('active', true)
@@ -77,7 +107,9 @@ export const functions: Record<string, FnSpec> = {
       if (String(a.newPassword).length < 8) {
         return { ok: false, errors: [{ field: 'newPassword', message: 'mật khẩu phải dài ít nhất 8 ký tự' }] }
       }
-      await ctx.db.update('user.User', { id: a.id }, { password: await hashPassword(String(a.newPassword)) } as Row)
+      await ctx.db.update('user.User', { id: a.id }, {
+        password: await hashPassword(String(a.newPassword)),
+      } as Row)
       return { ok: true }
     },
   }),
@@ -105,7 +137,9 @@ export const functions: Record<string, FnSpec> = {
       if (!(await verifyPassword(String(a.password), String(row.password)))) return { ok: false }
 
       const M = ctx.table('user.Membership')
-      const companies = (await ctx.db.all(from(M).select(M.companyId).where(eq(M.userId, row.id)))).map(r => String(r.companyId))
+      const companies = (await ctx.db.all(from(M).select(M.companyId).where(eq(M.userId, row.id)))).map((r) =>
+        String(r.companyId),
+      )
       return {
         ok: true,
         userId: row.id,
@@ -145,7 +179,9 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const M = ctx.table('user.Membership')
-      const { changes } = await ctx.db.del(deleteFrom(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)))
+      const { changes } = await ctx.db.del(
+        deleteFrom(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)),
+      )
       return { ok: true, removed: changes }
     },
   }),

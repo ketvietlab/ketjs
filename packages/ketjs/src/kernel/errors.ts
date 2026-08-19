@@ -25,13 +25,24 @@ export class KetError extends Error {
 
 export class Diagnostics {
   items: Diagnostic[] = []
-  add(d: Diagnostic): this { this.items.push(d); return this }
-  get ok(): boolean { return this.items.length === 0 }
+  add(d: Diagnostic): this {
+    this.items.push(d)
+    return this
+  }
+  get ok(): boolean {
+    return this.items.length === 0
+  }
   throwIfAny(): void {
     if (this.ok) return
-    const lines = this.items.map(d =>
-      `  [${d.code}] ${d.module ? d.module + ': ' : ''}${d.message}` + (d.hint ? `\n      -> ${d.hint}` : ''))
-    const err = new KetError({ code: 'CONTRACT_FAILED', message: `${this.items.length} contract violation(s):\n${lines.join('\n')}` })
+    const lines = this.items.map(
+      (d) =>
+        `  [${d.code}] ${d.module ? d.module + ': ' : ''}${d.message}` +
+        (d.hint ? `\n      -> ${d.hint}` : ''),
+    )
+    const err = new KetError({
+      code: 'CONTRACT_FAILED',
+      message: `${this.items.length} contract violation(s):\n${lines.join('\n')}`,
+    })
     err.items = this.items
     throw err
   }

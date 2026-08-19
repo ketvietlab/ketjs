@@ -27,17 +27,28 @@ export const functions: Record<string, FnSpec> = {
       // Filtering by role is a second query rather than a join, because the query
       // value has no join and adding one for this would be the wrong first reason.
       const R = ctx.table('partner.Role')
-      const holders = new Set((await ctx.db.all(from(R).select(R.partnerId).where(eq(R.role, a.role)))).map(r => r.partnerId))
-      return rows.filter(r => holders.has(r.id))
+      const holders = new Set(
+        (await ctx.db.all(from(R).select(R.partnerId).where(eq(R.role, a.role)))).map((r) => r.partnerId),
+      )
+      return rows.filter((r) => holders.has(r.id))
     },
   }),
 
   getPartner: defineFn({
     input: { id: 'id' },
     output: {
-      id: 'id', kind: 'text', name: 'text', parentId: 'id?', vat: 'text?', ref: 'text?',
-      email: 'text?', phone: 'text?', lang: 'text?', active: 'bool',
-      addresses: 'json?', roles: 'json?',
+      id: 'id',
+      kind: 'text',
+      name: 'text',
+      parentId: 'id?',
+      vat: 'text?',
+      ref: 'text?',
+      email: 'text?',
+      phone: 'text?',
+      lang: 'text?',
+      active: 'bool',
+      addresses: 'json?',
+      roles: 'json?',
     },
     effects: ['read:partner.Partner', 'read:partner.Address', 'read:partner.Role'],
     agent: true,
@@ -48,18 +59,32 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   savePartner: defineFn({
-    input: { id: 'id', kind: 'text', name: 'text', parentId: 'id?', vat: 'text?', ref: 'text?', email: 'text?', phone: 'text?', lang: 'text?' },
+    input: {
+      id: 'id',
+      kind: 'text',
+      name: 'text',
+      parentId: 'id?',
+      vat: 'text?',
+      ref: 'text?',
+      email: 'text?',
+      phone: 'text?',
+      lang: 'text?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:partner.Partner', 'write:partner.Partner'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, a) => {
       if (a.parentId === a.id) {
-        return { ok: false, errors: [{ field: 'parentId', message: 'một đối tác không thể là cha của chính nó' }] }
+        return {
+          ok: false,
+          errors: [{ field: 'parentId', message: 'một đối tác không thể là cha của chính nó' }],
+        }
       }
       const P = ctx.table('partner.Partner')
       const existing = await ctx.db.one(from(P).where(eq(P.id, a.id)))
-      let cs = ctx.change('partner.Partner', a, existing)
+      let cs = ctx
+        .change('partner.Partner', a, existing)
         .cast(['id', 'kind', 'name', 'parentId', 'vat', 'ref', 'email', 'phone', 'lang'])
         .required(['kind', 'name'])
         .validate('kind', oneOf(PARTNER_KINDS, 'loại đối tác'))
@@ -83,7 +108,18 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   saveAddress: defineFn({
-    input: { id: 'id', partnerId: 'id', use: 'text', street: 'text', street2: 'text?', city: 'text', zip: 'text?', state: 'text?', country: 'text', isDefault: 'bool?' },
+    input: {
+      id: 'id',
+      partnerId: 'id',
+      use: 'text',
+      street: 'text',
+      street2: 'text?',
+      city: 'text',
+      zip: 'text?',
+      state: 'text?',
+      country: 'text',
+      isDefault: 'bool?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:partner.Partner', 'read:partner.Address', 'write:partner.Address'],
     idempotent: true,
@@ -95,7 +131,8 @@ export const functions: Record<string, FnSpec> = {
       }
       const A = ctx.table('partner.Address')
       const existing = await ctx.db.one(from(A).where(eq(A.id, a.id)))
-      let cs = ctx.change('partner.Address', a, existing)
+      let cs = ctx
+        .change('partner.Address', a, existing)
         .cast(['id', 'partnerId', 'use', 'street', 'street2', 'city', 'zip', 'state', 'country'])
         .required(['partnerId', 'use', 'street', 'city', 'country'])
         .validate('use', oneOf(ADDRESS_USES, 'loại địa chỉ'))
@@ -118,7 +155,10 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       if (!PARTNER_ROLES.includes(a.role as never)) {
-        return { ok: false, errors: [{ field: 'role', message: `vai trò phải là một trong: ${PARTNER_ROLES.join(', ')}` }] }
+        return {
+          ok: false,
+          errors: [{ field: 'role', message: `vai trò phải là một trong: ${PARTNER_ROLES.join(', ')}` }],
+        }
       }
       const P = ctx.table('partner.Partner')
       if (!(await ctx.db.one(from(P).where(eq(P.id, a.partnerId))))) {
@@ -141,7 +181,9 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const R = ctx.table('partner.Role')
-      const { changes } = await ctx.db.del(deleteFrom(R).where(eq(R.partnerId, a.partnerId), eq(R.role, a.role)))
+      const { changes } = await ctx.db.del(
+        deleteFrom(R).where(eq(R.partnerId, a.partnerId), eq(R.role, a.role)),
+      )
       return { ok: true, removed: changes }
     },
   }),
@@ -152,7 +194,15 @@ export const functions: Record<string, FnSpec> = {
    * whole point of the segment being a model rather than an EAV side table.
    */
   saveTerms: defineFn({
-    input: { id: 'id', partnerId: 'id', paymentTermDays: 'int?', creditLimit: 'decimal?', receivableAccount: 'text?', payableAccount: 'text?', note: 'text?' },
+    input: {
+      id: 'id',
+      partnerId: 'id',
+      paymentTermDays: 'int?',
+      creditLimit: 'decimal?',
+      receivableAccount: 'text?',
+      payableAccount: 'text?',
+      note: 'text?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:partner.Partner', 'read:partner.CompanyTerms', 'write:partner.CompanyTerms'],
     idempotent: true,
@@ -164,8 +214,17 @@ export const functions: Record<string, FnSpec> = {
       }
       const T = ctx.table('partner.CompanyTerms')
       const existing = await ctx.db.one(from(T).where(eq(T.id, a.id)))
-      const cs = ctx.change('partner.CompanyTerms', a, existing)
-        .cast(['id', 'partnerId', 'paymentTermDays', 'creditLimit', 'receivableAccount', 'payableAccount', 'note'])
+      const cs = ctx
+        .change('partner.CompanyTerms', a, existing)
+        .cast([
+          'id',
+          'partnerId',
+          'paymentTermDays',
+          'creditLimit',
+          'receivableAccount',
+          'payableAccount',
+          'note',
+        ])
         .required(['partnerId'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
@@ -175,7 +234,15 @@ export const functions: Record<string, FnSpec> = {
 
   getTerms: defineFn({
     input: { partnerId: 'id' },
-    output: { id: 'id', partnerId: 'id', paymentTermDays: 'int?', creditLimit: 'decimal?', receivableAccount: 'text?', payableAccount: 'text?', note: 'text?' },
+    output: {
+      id: 'id',
+      partnerId: 'id',
+      paymentTermDays: 'int?',
+      creditLimit: 'decimal?',
+      receivableAccount: 'text?',
+      payableAccount: 'text?',
+      note: 'text?',
+    },
     effects: ['read:partner.CompanyTerms'],
     agent: true,
     handler: async (ctx: Ctx, a) => {

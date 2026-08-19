@@ -10,3 +10,4 @@ export { renderToString, HydrationMismatch, HOLE_MARKER, trustedMarkup, isMarkup
 export type { Markup } from './ssr.ts'
 export { renderIsland, hydrateIslands, ISLAND_TAG } from './island.ts'
 export type { IslandView, IslandRegistry, IslandProps, HydratedIsland } from './island.ts'
+export type { JSXChild, JSXComponent, IntrinsicProps } from './jsx-runtime.ts'

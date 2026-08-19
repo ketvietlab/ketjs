@@ -8,14 +8,24 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./backend": "./src/modules/backend/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "default": "./dist/ui/index.js"
+    },
+    "./backend": {
+      "types": "./dist/modules/backend/index.d.ts",
+      "default": "./dist/modules/backend/index.js"
+    }
   },
   "dependencies": {
     "ketjs": "0.0.0",
     "ketjs-view": "0.0.0"
   },
   "files": [
-    "src"
+    "dist"
   ]
 }

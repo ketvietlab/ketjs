@@ -6,14 +6,21 @@
 // rather than merely discouraged.
 
 import { tableNameFor } from '../data/migrate.ts'
-import { table, Query } from '../data/query.ts'
+import { table, type Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { Changeset, changeset } from '../data/changeset.ts'
+import { type Changeset, changeset } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
-export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: string; dryRun?: boolean; actor?: string | null; scope?: Scope }): Ctx {
+export function createContext(o: {
+  adapter: Adapter
+  manifest: Manifest
+  fnKey: string
+  dryRun?: boolean
+  actor?: string | null
+  scope?: Scope
+}): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
@@ -95,7 +102,9 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   // Odoo — the conversion is here, in the one place that knows both the model and
   // the row, rather than in the adapter, which sees only untyped columns.
   const decimalsOf = (model: string): string[] =>
-    Object.entries(manifest.models[model]?.fields ?? {}).filter(([, f]) => f.base === 'decimal').map(([n]) => n)
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'decimal')
+      .map(([n]) => n)
 
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
@@ -149,7 +158,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   const scoped = (q: Query): Query => {
     const kind = scopeOf(q.model)
     if (kind === 'shared') return q
-    if (fn.crossCompany) return q       // declared, and visible in the manifest
+    if (fn.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
     const col = { model: q.model, name: 'companyId' }
@@ -181,8 +190,13 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   // Placeholders are dialect-specific. The query builder already knew this; these
   // direct helpers did not, which is a bug only a second dialect could reveal.
   let n = 0
-  const ph = () => (dialect === 'postgres' ? `$${++n}` : (n++, '?'))
-  const fresh = () => { n = 0 }
+  const ph = () => {
+    n++
+    return dialect === 'postgres' ? `$${n}` : '?'
+  }
+  const fresh = () => {
+    n = 0
+  }
 
   /**
    * Fill in what a query asked to preload: one extra query per relation, never one
@@ -196,15 +210,25 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       const rel = relationOf(q.model, name)
 
       if (rel.kind === 'belongsTo') {
-        const ids = [...new Set(rows.map(r => r[rel.by]).filter(v => v != null))]
-        if (!ids.length) { for (const r of rows) r[name] = null; continue }
-        const parents = await db.all(from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: 'id' }, ids)))
-        const byId = new Map(parents.map(p => [p.id, p]))
+        const ids = [...new Set(rows.map((r) => r[rel.by]).filter((v) => v != null))]
+        if (!ids.length) {
+          for (const r of rows) r[name] = null
+          continue
+        }
+        const parents = await db.all(
+          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: 'id' }, ids)),
+        )
+        const byId = new Map(parents.map((p) => [p.id, p]))
         for (const r of rows) r[name] = byId.get(r[rel.by]) ?? null
       } else {
-        const ids = rows.map(r => r.id).filter(v => v != null)
-        if (!ids.length) { for (const r of rows) r[name] = []; continue }
-        const children = await db.all(from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: rel.by }, ids)))
+        const ids = rows.map((r) => r.id).filter((v) => v != null)
+        if (!ids.length) {
+          for (const r of rows) r[name] = []
+          continue
+        }
+        const children = await db.all(
+          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: rel.by }, ids)),
+        )
         const grouped = new Map<unknown, Row[]>()
         for (const child of children) {
           const key = child[rel.by]
@@ -261,22 +285,26 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
         throw new KetError({
           code: 'E_INVALID_CHANGESET',
           module: fn.by,
-          message: `${cs.model}: ${cs.errors.map(e => `${e.field} ${e.message}`).join('; ')}`,
+          message: `${cs.model}: ${cs.errors.map((e) => `${e.field} ${e.message}`).join('; ')}`,
           hint: 'inspect changeset.errors for the structured form',
         })
       }
-      if (cs.action === 'insert') return await db.insert(cs.model, cs.changes) as { changes: number }
-      if (!where) throw new KetError({ code: 'E_UPDATE_NEEDS_WHERE', message: `updating ${cs.model} requires a where clause` })
+      if (cs.action === 'insert') return (await db.insert(cs.model, cs.changes)) as { changes: number }
+      if (!where)
+        throw new KetError({
+          code: 'E_UPDATE_NEEDS_WHERE',
+          message: `updating ${cs.model} requires a where clause`,
+        })
       if (!Object.keys(cs.changes).length) return { changes: 0 }
-      return await db.update(cs.model, where, cs.changes) as { changes: number }
+      return (await db.update(cs.model, where, cs.changes)) as { changes: number }
     },
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
       const open = scopeOf(model) === 'shared' || fn.crossCompany
       const keys = Object.keys(where)
-      const conds = keys.map(k => `${adapter.quoteIdent(k)} = ${ph()}`)
-      const params: unknown[] = keys.map(k => where[k])
+      const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
+      const params: unknown[] = keys.map((k) => where[k])
       if (!open) {
         // A set, not a value: this is the one place the convenience path has to
         // part company with a plain `column = ?` map.
@@ -291,42 +319,62 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     async insert(model, row) {
       need('write', model)
       const known = Object.keys(manifest.models[model]?.fields ?? {})
-      const unknown = Object.keys(row).filter(k => !known.includes(k))
+      const unknown = Object.keys(row).filter((k) => !known.includes(k))
       if (unknown.length) {
-        throw new KetError({ code: 'E_UNKNOWN_FIELD', message: `${model} has no field(s): ${unknown.join(', ')}`, hint: `fields: ${known.join(', ')}` })
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          message: `${model} has no field(s): ${unknown.join(', ')}`,
+          hint: `fields: ${known.join(', ')}`,
+        })
       }
       const stamped = encodeRow(model, stamp(model, row))
       writes.push({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
       fresh()
-      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map(k => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')})`
-      return adapter.run(sql, ks.map(k => stamped[k]))
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map((k) => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')})`
+      return adapter.run(
+        sql,
+        ks.map((k) => stamped[k]),
+      )
     },
     async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 = scopeOf(model) === 'shared' || fn.crossCompany ? where : { ...where, companyId: requireCompany(model) }
+      const where3 =
+        scopeOf(model) === 'shared' || fn.crossCompany
+          ? where
+          : { ...where, companyId: requireCompany(model) }
       const patch2 = encodeRow(model, patch)
-      const pk = Object.keys(patch2), wk = Object.keys(where3)
+      const pk = Object.keys(patch2),
+        wk = Object.keys(where3)
       fresh()
-      const sets = pk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
-      const conds = wk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
-      const sql = `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map(k => patch2[k]), ...wk.map(k => where3[k])])
+      const sets = pk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
+      const conds = wk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
+      const sql =
+        `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
+      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...wk.map((k) => where3[k])])
     },
   }
 
   const ctx: Ctx = {
-    fnKey, manifest, scope, actor: o.actor ?? null, dryRun, db, writes, effects: [...effects],
+    fnKey,
+    manifest,
+    scope,
+    actor: o.actor ?? null,
+    dryRun,
+    db,
+    writes,
+    effects: [...effects],
     // A transaction hands the body a ctx bound to the transaction's connection —
     // the same reason tx() takes a scoped adapter rather than assuming the pool
     // will hand back the session that issued BEGIN.
-    tx: <T,>(body: (inner: Ctx) => Promise<T>): Promise<T> =>
-      adapter.tx(txAdapter => body(createContext({ ...o, adapter: txAdapter }))),
+    tx: <T>(body: (inner: Ctx) => Promise<T>): Promise<T> =>
+      adapter.tx((txAdapter) => body(createContext({ ...o, adapter: txAdapter }))),
     table: (model: string) => table(manifest, model),
-    change: (model: string, params: Row, base: Row | null = null): Changeset => changeset(manifest, model, params, base),
+    change: (model: string, params: Row, base: Row | null = null): Changeset =>
+      changeset(manifest, model, params, base),
   }
   return ctx
 }

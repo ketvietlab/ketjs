@@ -8,7 +8,10 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "dependencies": {
     "ketjs": "0.0.0"
@@ -22,7 +25,7 @@
     }
   },
   "files": [
-    "src"
+    "dist"
   ],
   "devDependencies": {
     "postgres": "^3.4.9"

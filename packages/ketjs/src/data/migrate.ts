@@ -20,14 +20,23 @@ export type MigrationOp =
   | { op: 'DROP_TABLE'; table: string; destructive: true }
 
 export const tableNameFor = (modelKey: string): string =>
-  modelKey.replace('.', '_').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+  modelKey
+    .replace('.', '_')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
 
 export function schemaFromManifest(manifest: Manifest): Schema {
   const tables: Record<string, Table> = {}
   for (const [modelKey, model] of Object.entries(manifest.models)) {
     const columns: Record<string, Column> = {}
     for (const [fname, f] of Object.entries(model.fields)) {
-      columns[fname] = { sql: sqlTypeOf(f), base: f.base, optional: !!f.optional, by: f.by, target: f.target ?? null }
+      columns[fname] = {
+        sql: sqlTypeOf(f),
+        base: f.base,
+        optional: !!f.optional,
+        by: f.by,
+        target: f.target ?? null,
+      }
     }
     tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns }
   }
@@ -37,20 +46,41 @@ export function schemaFromManifest(manifest: Manifest): Schema {
 export class DestructiveMigrationError extends Error {
   code = 'E_DESTRUCTIVE_MIGRATION'
   ops: MigrationOp[]
-  constructor(message: string, ops: MigrationOp[]) { super(message); this.ops = ops }
+  constructor(message: string, ops: MigrationOp[]) {
+    super(message)
+    this.ops = ops
+  }
 }
 
-export function planMigration(prev: Schema | null, next: Schema, opts: { allowDestructive?: boolean } = {}): MigrationOp[] {
+export function planMigration(
+  prev: Schema | null,
+  next: Schema,
+  opts: { allowDestructive?: boolean } = {},
+): MigrationOp[] {
   const ops: MigrationOp[] = []
   const prevTables = prev?.tables ?? {}
 
   for (const [t, def] of Object.entries(next.tables)) {
     const before = prevTables[t]
-    if (!before) { ops.push({ op: 'CREATE_TABLE', table: t, columns: def.columns, destructive: false }); continue }
+    if (!before) {
+      ops.push({ op: 'CREATE_TABLE', table: t, columns: def.columns, destructive: false })
+      continue
+    }
     for (const [c, cd] of Object.entries(def.columns)) {
       const bc = before.columns[c]
-      if (!bc) { ops.push({ op: 'ADD_COLUMN', table: t, column: c, def: cd, destructive: false }); continue }
-      if (bc.base !== cd.base) ops.push({ op: 'ALTER_COLUMN_TYPE', table: t, column: c, from: bc.base, to: cd.base, destructive: true })
+      if (!bc) {
+        ops.push({ op: 'ADD_COLUMN', table: t, column: c, def: cd, destructive: false })
+        continue
+      }
+      if (bc.base !== cd.base)
+        ops.push({
+          op: 'ALTER_COLUMN_TYPE',
+          table: t,
+          column: c,
+          from: bc.base,
+          to: cd.base,
+          destructive: true,
+        })
     }
     for (const [c, bc] of Object.entries(before.columns)) {
       if (!def.columns[c]) ops.push({ op: 'DROP_COLUMN', table: t, column: c, by: bc.by, destructive: true })
@@ -60,16 +90,20 @@ export function planMigration(prev: Schema | null, next: Schema, opts: { allowDe
     if (!next.tables[t]) ops.push({ op: 'DROP_TABLE', table: t, destructive: true })
   }
 
-  const destructive = ops.filter(o => o.destructive)
+  const destructive = ops.filter((o) => o.destructive)
   if (destructive.length && !opts.allowDestructive) {
-    const list = destructive.map(o => {
-      const col = 'column' in o ? '.' + o.column : ''
-      const by = 'by' in o ? ` (contributed by ${o.by})` : ''
-      return `  - ${o.op} ${o.table}${col}${by}`
-    }).join('\n')
+    const list = destructive
+      .map((o) => {
+        const col = 'column' in o ? '.' + o.column : ''
+        const by = 'by' in o ? ` (contributed by ${o.by})` : ''
+        return `  - ${o.op} ${o.table}${col}${by}`
+      })
+      .join('\n')
     throw new DestructiveMigrationError(
       `migration contains ${destructive.length} destructive operation(s):\n${list}\n\n` +
-      `Re-run with --allow-destructive if this is intended. Data in these columns is lost.`, destructive)
+        `Re-run with --allow-destructive if this is intended. Data in these columns is lost.`,
+      destructive,
+    )
   }
   return ops
 }
@@ -79,15 +113,18 @@ export function renderSql(ops: MigrationOp[], adapter: Adapter): string[] {
   const out: string[] = []
   for (const o of ops) {
     if (o.op === 'CREATE_TABLE') {
-      const cols = Object.entries(o.columns).map(([n, c]) =>
-        `${q(n)} ${adapter.columnSql(c)}${c.optional || c.base === 'id' ? '' : ' NOT NULL'}`)
+      const cols = Object.entries(o.columns).map(
+        ([n, c]) => `${q(n)} ${adapter.columnSql(c)}${c.optional || c.base === 'id' ? '' : ' NOT NULL'}`,
+      )
       out.push(`CREATE TABLE ${q(o.table)} (\n  ${cols.join(',\n  ')}\n)`)
     } else if (o.op === 'ADD_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} ADD COLUMN ${q(o.column)} ${adapter.columnSql(o.def)}`)
     } else if (o.op === 'DROP_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} DROP COLUMN ${q(o.column)}`)
     } else if (o.op === 'ALTER_COLUMN_TYPE') {
-      out.push(`-- type change ${o.table}.${o.column}: ${o.from} -> ${o.to} needs a hand-written data migration`)
+      out.push(
+        `-- type change ${o.table}.${o.column}: ${o.from} -> ${o.to} needs a hand-written data migration`,
+      )
     } else {
       out.push(`DROP TABLE ${q(o.table)}`)
     }

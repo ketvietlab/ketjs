@@ -7,7 +7,6 @@
 // that module was switched off.
 
 import { defineApp } from 'ketjs'
-import { permittedFor } from 'ketsuite'
 import * as suite from 'ketsuite'
 import backend from 'ketsuite/backend'
 import { openStore } from './config.ts'
@@ -16,9 +15,17 @@ export const ketsuite = defineApp({
   name: 'ketsuite',
   /** Every module KetSuite ships. Adding one here is what makes it installable. */
   modules: [
-    suite.website, suite.websiteMenu, suite.websiteSeo, suite.websiteSearch,
-    suite.partner, suite.company, suite.user,
-    suite.uom, suite.product, suite.productBackend, backend,
+    suite.website,
+    suite.websiteMenu,
+    suite.websiteSeo,
+    suite.websiteSearch,
+    suite.partner,
+    suite.company,
+    suite.user,
+    suite.uom,
+    suite.product,
+    suite.productBackend,
+    backend,
   ],
   theme: suite.paperTheme,
   datastore: 'main',
@@ -37,8 +44,14 @@ export const ketsuite = defineApp({
      * request, so revoking a role takes effect on the next call rather than on the
      * next login — one query is a better trade than "why can they still do that".
      */
-    permissions: (ctx, userId) => ctx.callUnchecked('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
-      .then(r => (r as { superuser: boolean; functions?: string[] }).superuser ? null : (r as { functions: string[] }).functions),
+    permissions: (ctx, userId) =>
+      ctx
+        .callUnchecked('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
+        .then((r) =>
+          (r as { superuser: boolean; functions?: string[] }).superuser
+            ? null
+            : (r as { functions: string[] }).functions,
+        ),
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
   },
 })

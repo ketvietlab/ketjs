@@ -23,10 +23,21 @@ test('paging: the URL is the state, so a page is a link somebody can send', () =
 })
 
 test('paging: changing a filter goes back to page one', () => {
-  assert.equal(withParam(at('/admin/products?view=list&page=3'), 'q', 'xoai'), '/admin/products?view=list&q=xoai',
-    'a new search on page three would otherwise show an empty page three')
-  assert.equal(withParam(at('/admin/products?page=3'), 'page', '4'), '/admin/products?page=4', 'paging keeps paging')
-  assert.equal(withParam(at('/admin/products?q=x&page=2'), 'q', null), '/admin/products', 'removing the last one leaves a clean URL')
+  assert.equal(
+    withParam(at('/admin/products?view=list&page=3'), 'q', 'xoai'),
+    '/admin/products?view=list&q=xoai',
+    'a new search on page three would otherwise show an empty page three',
+  )
+  assert.equal(
+    withParam(at('/admin/products?page=3'), 'page', '4'),
+    '/admin/products?page=4',
+    'paging keeps paging',
+  )
+  assert.equal(
+    withParam(at('/admin/products?q=x&page=2'), 'q', null),
+    '/admin/products',
+    'removing the last one leaves a clean URL',
+  )
 })
 
 test('paging: a list that fits on one page has no pager at all', () => {
@@ -55,7 +66,10 @@ test('chrome: a control with nothing to say is not rendered', () => {
 })
 
 test('chrome: a single view is not a choice, so no switcher appears', () => {
-  const one = render({ ...base, views: [{ id: 'list', label: 'Danh sách', icon: '☰', path: '?view=list', active: true }] })
+  const one = render({
+    ...base,
+    views: [{ id: 'list', label: 'Danh sách', icon: '☰', path: '?view=list', active: true }],
+  })
   assert.ok(!one.includes('data-ui="view-switch"'))
 })
 
@@ -66,7 +80,15 @@ test('chrome: the title is the title — no breadcrumb repeating the sidebar', (
 })
 
 test('chrome: a facet shows what was filtered and where the × undoes it', () => {
-  const html = render({ ...base, search: { name: 'q', value: 'xoai', placeholder: 'Tìm', facets: [{ label: 'Tìm: xoai', without: '/admin/products' }] } })
+  const html = render({
+    ...base,
+    search: {
+      name: 'q',
+      value: 'xoai',
+      placeholder: 'Tìm',
+      facets: [{ label: 'Tìm: xoai', without: '/admin/products' }],
+    },
+  })
   assert.match(html, /data-ui="facet-label">[\s\S]*Tìm: xoai/)
   assert.match(html, /<a data-ui="facet-remove" href="\/admin\/products"/)
   assert.match(html, /value="xoai"/, 'the box still holds what was typed')
@@ -100,7 +122,13 @@ test('chrome: every control is a link or a form, so the back button needs no hel
 })
 
 test('chrome: searching keeps the rest of the URL, because a GET form replaces all of it', () => {
-  const html = render({ ...base, search: { name: 'q', value: '', placeholder: 'Tìm', keep: { view: 'kanban' } } })
-  assert.match(html, /<input type="hidden" name="view" value="kanban">/,
-    'without this, searching while looking at the cards throws you back to the list')
+  const html = render({
+    ...base,
+    search: { name: 'q', value: '', placeholder: 'Tìm', keep: { view: 'kanban' } },
+  })
+  assert.match(
+    html,
+    /<input type="hidden" name="view" value="kanban">/,
+    'without this, searching while looking at the cards throws you back to the list',
+  )
 })

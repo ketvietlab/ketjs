@@ -30,7 +30,7 @@ export type Writer = {
 }
 
 const expand = (r: SinceResult): Since => ({
-  chunks: r.batches.flatMap(b => b.chunks.map((data, i) => ({ seq: b.seq + i / 1000, data }))),
+  chunks: r.batches.flatMap((b) => b.chunks.map((data, i) => ({ seq: b.seq + i / 1000, data }))),
   done: r.done,
   summary: r.summary,
   nextSeq: r.nextSeq,
@@ -58,7 +58,10 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       let chain: Promise<void> = Promise.resolve()
 
       const flushNow = (): Promise<void> => {
-        if (timer) { clearTimeout(timer); timer = null }
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
         if (!buffer.length) return chain
         const batch = buffer
         const at = seq++
@@ -71,8 +74,13 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
         id,
         write(chunk) {
           buffer.push(chunk)
-          if (buffer.length >= flushEvery) { void flushNow(); return }
-          timer ??= setTimeout(() => { void flushNow() }, flushMs)
+          if (buffer.length >= flushEvery) {
+            void flushNow()
+            return
+          }
+          timer ??= setTimeout(() => {
+            void flushNow()
+          }, flushMs)
         },
         flush: flushNow,
         async end(summary = null) {
@@ -91,7 +99,11 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
      * Live tail. A reader on the same instance is woken by the writer and never
      * polls; the slow poll is only a fallback for a writer on another instance.
      */
-    async *tail(id: string, fromSeq = 0, opt: { pollMs?: number; timeoutMs?: number } = {}): AsyncGenerator<Chunk> {
+    async *tail(
+      id: string,
+      fromSeq = 0,
+      opt: { pollMs?: number; timeoutMs?: number } = {},
+    ): AsyncGenerator<Chunk> {
       const pollMs = opt.pollMs ?? 250
       const timeoutMs = opt.timeoutMs ?? 30_000
       await ensure()
@@ -99,17 +111,24 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       const started = Date.now()
 
       let wake: (() => void) | null = null
-      const unsubscribe = store.subscribe(id, () => { wake?.() })
+      const unsubscribe = store.subscribe(id, () => {
+        wake?.()
+      })
       try {
         for (;;) {
           const s = expand(await store.since(id, cursor))
           if (s.chunks.length) cursor = Math.floor(s.chunks[s.chunks.length - 1]!.seq) + 1
           for (const c of s.chunks) yield c
           if (s.done) return
-          if (Date.now() - started > timeoutMs) throw new Error(`stream "${id}" timed out after ${timeoutMs}ms`)
-          await new Promise<void>(resolve => {
+          if (Date.now() - started > timeoutMs)
+            throw new Error(`stream "${id}" timed out after ${timeoutMs}ms`)
+          await new Promise<void>((resolve) => {
             const t = setTimeout(resolve, pollMs)
-            wake = () => { clearTimeout(t); wake = null; resolve() }
+            wake = () => {
+              clearTimeout(t)
+              wake = null
+              resolve()
+            }
           })
         }
       } finally {
@@ -118,7 +137,10 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     },
 
     /** Drop finished streams past their grace period. Nothing else expires them. */
-    async sweep(olderThanMs = 10 * 60_000): Promise<number> { await ensure(); return store.sweep(olderThanMs) },
+    async sweep(olderThanMs = 10 * 60_000): Promise<number> {
+      await ensure()
+      return store.sweep(olderThanMs)
+    },
   }
 }
 

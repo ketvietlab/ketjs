@@ -16,23 +16,32 @@ import type { Manifest, Row, FieldBase } from '../types.ts'
 export type FieldError = { field: string; message: string }
 export type Validator = (value: unknown, changes: Row) => true | string
 
-const castValue = (base: FieldBase, v: unknown): { ok: true; value: unknown } | { ok: false; message: string } => {
+const castValue = (
+  base: FieldBase,
+  v: unknown,
+): { ok: true; value: unknown } | { ok: false; message: string } => {
   if (v === null) return { ok: true, value: null }
   switch (base) {
-    case 'id': case 'text': case 'ref':
-      return typeof v === 'string' ? { ok: true, value: v }
-        : typeof v === 'number' ? { ok: true, value: String(v) }
-        : { ok: false, message: `expected text, got ${typeof v}` }
+    case 'id':
+    case 'text':
+    case 'ref':
+      return typeof v === 'string'
+        ? { ok: true, value: v }
+        : typeof v === 'number'
+          ? { ok: true, value: String(v) }
+          : { ok: false, message: `expected text, got ${typeof v}` }
     case 'int': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
-      if (typeof n !== 'number' || !Number.isFinite(n)) return { ok: false, message: `expected an integer, got ${JSON.stringify(v)}` }
+      if (typeof n !== 'number' || !Number.isFinite(n))
+        return { ok: false, message: `expected an integer, got ${JSON.stringify(v)}` }
       if (!Number.isInteger(n)) return { ok: false, message: `expected an integer, got ${n}` }
       return { ok: true, value: n }
     }
     case 'decimal':
     case 'float': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
-      if (typeof n !== 'number' || !Number.isFinite(n)) return { ok: false, message: `expected a number, got ${JSON.stringify(v)}` }
+      if (typeof n !== 'number' || !Number.isFinite(n))
+        return { ok: false, message: `expected a number, got ${JSON.stringify(v)}` }
       return { ok: true, value: n }
     }
     case 'bool':
@@ -45,7 +54,9 @@ const castValue = (base: FieldBase, v: unknown): { ok: true; value: unknown } | 
       if (typeof v === 'string' && !Number.isNaN(Date.parse(v))) return { ok: true, value: v }
       return { ok: false, message: `expected a date, got ${JSON.stringify(v)}` }
     case 'json':
-      return typeof v === 'object' ? { ok: true, value: v } : { ok: false, message: `expected an object, got ${typeof v}` }
+      return typeof v === 'object'
+        ? { ok: true, value: v }
+        : { ok: false, message: `expected an object, got ${typeof v}` }
   }
 }
 
@@ -58,18 +69,42 @@ export class Changeset {
   readonly errors: FieldError[]
   readonly casted: string[]
 
-  constructor(manifest: Manifest, model: string, params: Row, base: Row | null = null, changes: Row = {}, errors: FieldError[] = [], casted: string[] = []) {
+  constructor(
+    manifest: Manifest,
+    model: string,
+    params: Row,
+    base: Row | null = null,
+    changes: Row = {},
+    errors: FieldError[] = [],
+    casted: string[] = [],
+  ) {
     if (!manifest.models[model]) {
-      throw new KetError({ code: 'E_UNKNOWN_MODEL', message: `no model "${model}"`, hint: `known models: ${Object.keys(manifest.models).join(', ')}` })
+      throw new KetError({
+        code: 'E_UNKNOWN_MODEL',
+        message: `no model "${model}"`,
+        hint: `known models: ${Object.keys(manifest.models).join(', ')}`,
+      })
     }
-    this.manifest = manifest; this.model = model; this.params = params; this.base = base
-    this.changes = changes; this.errors = errors; this.casted = casted
+    this.manifest = manifest
+    this.model = model
+    this.params = params
+    this.base = base
+    this.changes = changes
+    this.errors = errors
+    this.casted = casted
     Object.freeze(this)
   }
 
   private next(patch: { changes?: Row; errors?: FieldError[]; casted?: string[] }): Changeset {
-    return new Changeset(this.manifest, this.model, this.params, this.base,
-      patch.changes ?? this.changes, patch.errors ?? this.errors, patch.casted ?? this.casted)
+    return new Changeset(
+      this.manifest,
+      this.model,
+      this.params,
+      this.base,
+      patch.changes ?? this.changes,
+      patch.errors ?? this.errors,
+      patch.casted ?? this.casted,
+    )
   }
 
   /**
@@ -85,12 +120,18 @@ export class Changeset {
     for (const f of fields) {
       const def = model.fields[f]
       if (!def) {
-        errors.push({ field: f, message: `no such field on ${this.model} (have: ${Object.keys(model.fields).join(', ')})` })
+        errors.push({
+          field: f,
+          message: `no such field on ${this.model} (have: ${Object.keys(model.fields).join(', ')})`,
+        })
         continue
       }
       if (!(f in this.params)) continue
       const cast = castValue(def.base, this.params[f])
-      if (!cast.ok) { errors.push({ field: f, message: cast.message }); continue }
+      if (!cast.ok) {
+        errors.push({ field: f, message: cast.message })
+        continue
+      }
       // Only a real difference from the existing row counts as a change.
       if (this.base && Object.is(this.base[f], cast.value)) continue
       changes[f] = cast.value
@@ -116,21 +157,39 @@ export class Changeset {
   /** Force a value regardless of params — for server-set fields the client must not control. */
   put(field: string, value: unknown): Changeset {
     const def = this.manifest.models[this.model]!.fields[field]
-    if (!def) return this.next({ errors: [...this.errors, { field, message: `no such field on ${this.model}` }] })
+    if (!def)
+      return this.next({ errors: [...this.errors, { field, message: `no such field on ${this.model}` }] })
     const cast = castValue(def.base, value)
     if (!cast.ok) return this.next({ errors: [...this.errors, { field, message: cast.message }] })
     return this.next({ changes: { ...this.changes, [field]: cast.value } })
   }
 
-  get valid(): boolean { return this.errors.length === 0 }
-  get action(): 'insert' | 'update' { return this.base ? 'update' : 'insert' }
+  get valid(): boolean {
+    return this.errors.length === 0
+  }
+  get action(): 'insert' | 'update' {
+    return this.base ? 'update' : 'insert'
+  }
   /** Fields present in params but never cast — dropped on purpose, reported for debugging. */
-  get dropped(): string[] { return Object.keys(this.params).filter(k => !this.casted.includes(k)) }
+  get dropped(): string[] {
+    return Object.keys(this.params).filter((k) => !this.casted.includes(k))
+  }
 
   toJSON() {
-    return { model: this.model, action: this.action, valid: this.valid, changes: this.changes, errors: this.errors, dropped: this.dropped }
+    return {
+      model: this.model,
+      action: this.action,
+      valid: this.valid,
+      changes: this.changes,
+      errors: this.errors,
+      dropped: this.dropped,
+    }
   }
 }
 
-export const changeset = (manifest: Manifest, model: string, params: Row, base: Row | null = null): Changeset =>
-  new Changeset(manifest, model, params, base)
+export const changeset = (
+  manifest: Manifest,
+  model: string,
+  params: Row,
+  base: Row | null = null,
+): Changeset => new Changeset(manifest, model, params, base)

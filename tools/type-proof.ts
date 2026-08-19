@@ -15,10 +15,26 @@ const DIR = '.ket/typeproof'
 rmSync(DIR, { recursive: true, force: true })
 mkdirSync(DIR, { recursive: true })
 writeFileSync(`${DIR}/types.ts`, dts)
-writeFileSync(`${DIR}/tsconfig.json`, JSON.stringify({
-  compilerOptions: { strict: true, noEmit: true, target: 'esnext', module: 'preserve', moduleResolution: 'bundler', skipLibCheck: true, allowImportingTsExtensions: true, types: ['node'] },
-  include: ['*.ts'],
-}, null, 2))
+writeFileSync(
+  `${DIR}/tsconfig.json`,
+  JSON.stringify(
+    {
+      compilerOptions: {
+        strict: true,
+        noEmit: true,
+        target: 'esnext',
+        module: 'preserve',
+        moduleResolution: 'bundler',
+        skipLibCheck: true,
+        allowImportingTsExtensions: true,
+        types: ['node'],
+      },
+      include: ['*.ts'],
+    },
+    null,
+    2,
+  ),
+)
 
 type Case = { name: string; code: string; shouldCompile: boolean; expect?: RegExp }
 
@@ -113,7 +129,10 @@ for (const c of cases) {
   let compiled = true
   let output = ''
   try {
-    execFileSync('./node_modules/.bin/tsc', ['-p', `${DIR}/tsconfig.json`], { encoding: 'utf8', stdio: 'pipe' })
+    execFileSync('./node_modules/.bin/tsc', ['-p', `${DIR}/tsconfig.json`], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    })
   } catch (e) {
     compiled = false
     output = String((e as { stdout?: string }).stdout ?? '')
@@ -121,11 +140,13 @@ for (const c of cases) {
   const okCompile = compiled === c.shouldCompile
   const okMessage = c.expect ? c.expect.test(output) : true
   const ok = okCompile && okMessage
-  if (ok) pass++; else fail++
+  if (ok) pass++
+  else fail++
   const verdict = ok ? 'PASS' : 'FAIL'
   const what = c.shouldCompile ? 'compiles' : 'rejected'
   console.log(`${verdict}  [${what.padEnd(8)}] ${c.name}`)
-  if (!ok) console.log(`      got compiled=${compiled}\n      ${output.split('\n').slice(0, 3).join('\n      ')}`)
+  if (!ok)
+    console.log(`      got compiled=${compiled}\n      ${output.split('\n').slice(0, 3).join('\n      ')}`)
 }
 
 rmSync(DIR, { recursive: true, force: true })

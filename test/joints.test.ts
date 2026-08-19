@@ -36,9 +36,16 @@ test('fill: nobody filling it renders nothing, not a hole', () => {
 
 test('fill: several are concatenated in dependency order', () => {
   const first = filler('first', `<i>1</i>`)
-  const second = defineModule({ name: 'second', depends: ['screen', 'first'], fills: { 'screen:card.actions': `<i>2</i>` } })
-  assert.equal(render([owner, first, second]), '<i>1</i><i>2</i>',
-    'a module extending another appears after it')
+  const second = defineModule({
+    name: 'second',
+    depends: ['screen', 'first'],
+    fills: { 'screen:card.actions': `<i>2</i>` },
+  })
+  assert.equal(
+    render([owner, first, second]),
+    '<i>1</i><i>2</i>',
+    'a module extending another appears after it',
+  )
 })
 
 test('fill: values are escaped by the compiler, once', () => {
@@ -54,54 +61,87 @@ test('fill: it receives the declared props and nothing else', () => {
 })
 
 test('fill: a function cannot be smuggled in through props', () => {
-  assert.throws(() => render([owner, filler('a', `x`)], { evil: () => 'boom' }),
-    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_SCOPE_CALLABLE'); return true })
+  assert.throws(
+    () => render([owner, filler('a', `x`)], { evil: () => 'boom' }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_SCOPE_CALLABLE')
+      return true
+    },
+  )
 })
 
 test('fill: naming a joint nobody publishes is a build error, with a suggestion', () => {
-  assert.throws(() => compose([owner, defineModule({ name: 'b', depends: ['screen'], fills: { 'screen:card.action': `x` } })]),
-    /no installed module publishes/)
+  assert.throws(
+    () =>
+      compose([
+        owner,
+        defineModule({ name: 'b', depends: ['screen'], fills: { 'screen:card.action': `x` } }),
+      ]),
+    /no installed module publishes/,
+  )
 })
 
 test('fill: filling without depending on the owner is refused', () => {
-  assert.throws(() => compose([owner, defineModule({ name: 'b', fills: { 'screen:card.actions': `x` } })]),
-    /does not depend on "screen"/)
+  assert.throws(
+    () => compose([owner, defineModule({ name: 'b', fills: { 'screen:card.actions': `x` } })]),
+    /does not depend on "screen"/,
+  )
 })
 
 // ── omit ─────────────────────────────────────────────────────────────────────
 
 test('omit: removes the joint, so nothing renders there at all', () => {
   const hider = defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] })
-  assert.equal(render([owner, filler('a', `<i>x</i>`), hider]), '',
-    'removed at the server: the markup never travels and the tab order never walks through it')
+  assert.equal(
+    render([owner, filler('a', `<i>x</i>`), hider]),
+    '',
+    'removed at the server: the markup never travels and the tab order never walks through it',
+  )
 })
 
 test('omit: shows() is how a screen knows to skip its own default too', () => {
-  const j = createJoints(compose([owner, defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] })]))
+  const j = createJoints(
+    compose([owner, defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] })]),
+  )
   assert.equal(j.shows('screen:card.actions'), false)
   assert.equal(createJoints(compose([owner])).shows('screen:card.actions'), true)
 })
 
 test('omit: an omission by a module that is switched off is not an omission', () => {
-  const full = compose([owner, filler('a', `<i>x</i>`), defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] })])
+  const full = compose([
+    owner,
+    filler('a', `<i>x</i>`),
+    defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] }),
+  ])
   const live = restrictManifest(full, new Set(['screen', 'a']))
-  assert.equal(createJoints(live).render('screen:card.actions').html, '<i>x</i>',
-    'the joint comes back, exactly as its fills would')
+  assert.equal(
+    createJoints(live).render('screen:card.actions').html,
+    '<i>x</i>',
+    'the joint comes back, exactly as its fills would',
+  )
 })
 
 test('omit: omitting a joint nobody publishes is a build error', () => {
-  assert.throws(() => compose([owner, defineModule({ name: 'b', depends: ['screen'], omits: ['screen:nope'] })]),
-    /no installed module publishes/)
+  assert.throws(
+    () => compose([owner, defineModule({ name: 'b', depends: ['screen'], omits: ['screen:nope'] })]),
+    /no installed module publishes/,
+  )
 })
 
 test('omit: omitting without depending on the owner is refused', () => {
-  assert.throws(() => compose([owner, defineModule({ name: 'b', omits: ['screen:card.actions'] })]),
-    /does not depend on "screen"/)
+  assert.throws(
+    () => compose([owner, defineModule({ name: 'b', omits: ['screen:card.actions'] })]),
+    /does not depend on "screen"/,
+  )
 })
 
 test('omit: a fill that will never render is recorded rather than left to be discovered', () => {
-  const m = compose([owner, filler('a', `<i>x</i>`), defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] })])
-  const note = m.patches.find(p => p.target === 'screen:card.actions')
+  const m = compose([
+    owner,
+    filler('a', `<i>x</i>`),
+    defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] }),
+  ])
+  const note = m.patches.find((p) => p.target === 'screen:card.actions')
   assert.ok(note, 'nothing recorded')
   assert.match(note!.reason, /fills from a will not render/)
 })
@@ -109,7 +149,9 @@ test('omit: a fill that will never render is recorded rather than left to be dis
 // ── in a screen ──────────────────────────────────────────────────────────────
 
 test('screen: the fill lands verbatim between the hydration markers', () => {
-  const markup = createJoints(compose([owner, filler('a', `<a href="/x">Kho</a>`)])).render('screen:card.actions')
+  const markup = createJoints(compose([owner, filler('a', `<a href="/x">Kho</a>`)])).render(
+    'screen:card.actions',
+  )
   const out = renderToString(html`<div data-ui="app-actions">${markup}</div>`)
   assert.equal(out, '<div data-ui="app-actions"><!--k[--><a href="/x">Kho</a><!--k--></div>')
 })
@@ -129,7 +171,10 @@ test('bridge: a module does not depend on the admin just to add a button to it',
   assert.ok(catalogueOnly.modules['product'], 'a catalogue composes with no admin at all')
 
   const both = compose([uom, product, backend, productBackend])
-  assert.equal(both.modules['product_backend']!.install, 'auto',
-    'so it appears when the admin does, and not before')
-  assert.equal(both.fills.filter(f => f.joint === 'backend:app-card.actions').length, 1)
+  assert.equal(
+    both.modules['product_backend']!.install,
+    'auto',
+    'so it appears when the admin does, and not before',
+  )
+  assert.equal(both.fills.filter((f) => f.joint === 'backend:app-card.actions').length, 1)
 })

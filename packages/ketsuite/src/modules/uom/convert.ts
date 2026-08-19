@@ -37,7 +37,11 @@ export class UomError extends Error {
  *    value that was not a multiple of its own precision.
  */
 export function roundTo(value: number, precision: number): number {
-  if (!(precision > 0)) throw new UomError({ code: 'E_UOM_BAD_PRECISION', message: `rounding precision must be positive, got ${precision}` })
+  if (!(precision > 0))
+    throw new UomError({
+      code: 'E_UOM_BAD_PRECISION',
+      message: `rounding precision must be positive, got ${precision}`,
+    })
   const scaled = Number((value / precision).toPrecision(12))
   const rounded = Math.sign(scaled) * Math.round(Math.abs(scaled))
   return Number((rounded * precision).toPrecision(15))

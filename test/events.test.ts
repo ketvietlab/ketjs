@@ -1,7 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { document, parseFragment } from './helpers/dom.ts'
-import { countingHost, createRoot, domHost, each, html, hydrateRoot, mount, mountHydrated, renderToString, signal } from 'ketjs-view'
+import {
+  countingHost,
+  createRoot,
+  domHost,
+  each,
+  html,
+  hydrateRoot,
+  mount,
+  mountHydrated,
+  renderToString,
+  signal,
+} from 'ketjs-view'
 import type { HostNode } from 'ketjs-view'
 
 test('events: on:click attaches a listener, not an attribute', () => {
@@ -38,7 +49,12 @@ test('events: a removed element detaches its listener', () => {
   const host = countingHost()
   const container = host.root()
   let fired = 0
-  const view = (ids: number[]) => html`<ul>${each(ids, i => i, i => html`<li on:click=${() => fired++}>${i}</li>`)}</ul>`
+  const view = (ids: number[]) =>
+    html`<ul>${each(
+      ids,
+      (i) => i,
+      (i) => html`<li on:click=${() => fired++}>${i}</li>`,
+    )}</ul>`
   const root = createRoot(host, container)
   root.render(view([1, 2]))
   const ul = container.children![0]!
@@ -57,7 +73,10 @@ test('events: the server renders no handler at all', () => {
 
 test('events: hydration is where a handler first attaches', () => {
   let clicks = 0
-  const view = () => html`<button on:click=${() => { clicks++ }}>đã bấm</button>`
+  const view = () =>
+    html`<button on:click=${() => {
+      clicks++
+    }}>đã bấm</button>`
   const server = renderToString(view())
   assert.ok(!server.includes('on:'), 'the server sent no handler')
 
@@ -82,8 +101,20 @@ test('mount: reading a signal in the view subscribes the view to it', () => {
 
   count.set(1)
   assert.equal(host.text(container), 'đếm: 1')
-  assert.deepEqual(host.ops, { createElement: 0, createText: 0, setText: 1, setAttribute: 0, insert: 0, remove: 0, move: 0, listen: 0 },
-    'a signal change costs exactly the one write it implies')
+  assert.deepEqual(
+    host.ops,
+    {
+      createElement: 0,
+      createText: 0,
+      setText: 1,
+      setAttribute: 0,
+      insert: 0,
+      remove: 0,
+      move: 0,
+      listen: 0,
+    },
+    'a signal change costs exactly the one write it implies',
+  )
 
   other.set('still unused')
   assert.equal(host.ops.setText, 1, 'an untracked signal triggers nothing')
@@ -100,7 +131,7 @@ test('mount: a click drives a signal drives the DOM, end to end', () => {
   const host = countingHost()
   const container = host.root()
   const n = signal(0)
-  mount(host, container, () => html`<button on:click=${() => n.set(v => v + 1)}>Đã bấm ${n()} lần</button>`)
+  mount(host, container, () => html`<button on:click=${() => n.set((v) => v + 1)}>Đã bấm ${n()} lần</button>`)
 
   assert.equal(host.text(container), 'Đã bấm 0 lần')
   const button = container.children![0]!

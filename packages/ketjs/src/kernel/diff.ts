@@ -11,56 +11,116 @@ export type DiffItem = { severity: Severity; code: string; message: string; hint
 
 export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
   const out: DiffItem[] = []
-  const push = (severity: Severity, code: string, message: string, hint?: string) => out.push({ severity, code, message, hint })
+  const push = (severity: Severity, code: string, message: string, hint?: string) =>
+    out.push({ severity, code, message, hint })
 
   for (const key of Object.keys(before.joints)) {
     if (after.joints[key]) continue
-    const users = after.fills.filter(f => f.joint === key).map(f => f.by)
-    push('breaking', 'JOINT_REMOVED', `joint "${key}" was removed`,
-      users.length ? `still filled by: ${users.join(', ')}` : 'no installed module fills it - safe to proceed')
+    const users = after.fills.filter((f) => f.joint === key).map((f) => f.by)
+    push(
+      'breaking',
+      'JOINT_REMOVED',
+      `joint "${key}" was removed`,
+      users.length
+        ? `still filled by: ${users.join(', ')}`
+        : 'no installed module fills it - safe to proceed',
+    )
   }
 
   for (const [mkey, bmodel] of Object.entries(before.models)) {
     const amodel = after.models[mkey]
     if (amodel && amodel.scope !== bmodel.scope) {
-      push('breaking', 'MODEL_SCOPE_CHANGED', `model "${mkey}" moved from ${bmodel.scope} to ${amodel.scope}`,
-        'existing rows carry the old shape; widening leaks and narrowing hides data')
+      push(
+        'breaking',
+        'MODEL_SCOPE_CHANGED',
+        `model "${mkey}" moved from ${bmodel.scope} to ${amodel.scope}`,
+        'existing rows carry the old shape; widening leaks and narrowing hides data',
+      )
     }
     if (!amodel) {
-      const extenders = new Set(Object.values(bmodel.fields).filter(f => f.by !== bmodel.owner).map(f => f.by))
-      push('breaking', 'MODEL_REMOVED', `model "${mkey}" was removed`,
-        extenders.size ? `extended by: ${[...extenders].join(', ')}` : 'no module extends it')
+      const extenders = new Set(
+        Object.values(bmodel.fields)
+          .filter((f) => f.by !== bmodel.owner)
+          .map((f) => f.by),
+      )
+      push(
+        'breaking',
+        'MODEL_REMOVED',
+        `model "${mkey}" was removed`,
+        extenders.size ? `extended by: ${[...extenders].join(', ')}` : 'no module extends it',
+      )
       continue
     }
     for (const [fname, f] of Object.entries(bmodel.fields)) {
       const af = amodel.fields[fname]
       if (!af) {
-        const readers = Object.entries(after.views).filter(([, v]) => v.of === mkey && v.fields.includes(fname)).map(([k]) => k)
-        push('breaking', 'FIELD_REMOVED', `field "${mkey}.${fname}" (contributed by ${f.by}) was removed`,
-          readers.length ? `read by view(s): ${readers.join(', ')} - data loss on migrate` : 'no view reads it, but existing rows lose the column')
+        const readers = Object.entries(after.views)
+          .filter(([, v]) => v.of === mkey && v.fields.includes(fname))
+          .map(([k]) => k)
+        push(
+          'breaking',
+          'FIELD_REMOVED',
+          `field "${mkey}.${fname}" (contributed by ${f.by}) was removed`,
+          readers.length
+            ? `read by view(s): ${readers.join(', ')} - data loss on migrate`
+            : 'no view reads it, but existing rows lose the column',
+        )
       } else if (af.base !== f.base || af.target !== f.target) {
-        push('breaking', 'FIELD_TYPE_CHANGED', `field "${mkey}.${fname}" changed ${f.base} -> ${af.base}`, 'write an explicit data migration')
+        push(
+          'breaking',
+          'FIELD_TYPE_CHANGED',
+          `field "${mkey}.${fname}" changed ${f.base} -> ${af.base}`,
+          'write an explicit data migration',
+        )
       } else if (f.optional && !af.optional) {
-        push('risky', 'FIELD_NOW_REQUIRED', `field "${mkey}.${fname}" became required`, 'existing NULL rows violate it - backfill first')
+        push(
+          'risky',
+          'FIELD_NOW_REQUIRED',
+          `field "${mkey}.${fname}" became required`,
+          'existing NULL rows violate it - backfill first',
+        )
       }
     }
   }
 
   for (const [fkey, bfn] of Object.entries(before.functions)) {
     const afn = after.functions[fkey]
-    if (!afn) { push('breaking', 'FUNCTION_REMOVED', `server function "${fkey}" was removed`, 'callers and agent tools break'); continue }
+    if (!afn) {
+      push(
+        'breaking',
+        'FUNCTION_REMOVED',
+        `server function "${fkey}" was removed`,
+        'callers and agent tools break',
+      )
+      continue
+    }
     for (const arg of Object.keys(bfn.input)) {
       if (!(arg in afn.input)) push('breaking', 'INPUT_REMOVED', `"${fkey}" no longer accepts input "${arg}"`)
     }
     for (const [arg, t] of Object.entries(afn.input)) {
       if (!(arg in bfn.input) && !t.endsWith('?')) {
-        push('breaking', 'INPUT_ADDED_REQUIRED', `"${fkey}" gained required input "${arg}"`, `make it optional ("${t}?") to stay compatible`)
+        push(
+          'breaking',
+          'INPUT_ADDED_REQUIRED',
+          `"${fkey}" gained required input "${arg}"`,
+          `make it optional ("${t}?") to stay compatible`,
+        )
       }
     }
-    if (bfn.idempotent && !afn.idempotent) push('risky', 'IDEMPOTENCY_LOST', `"${fkey}" is no longer idempotent`, 'agent retries may double-apply it')
+    if (bfn.idempotent && !afn.idempotent)
+      push(
+        'risky',
+        'IDEMPOTENCY_LOST',
+        `"${fkey}" is no longer idempotent`,
+        'agent retries may double-apply it',
+      )
     if (!bfn.crossCompany && afn.crossCompany) {
-      push('risky', 'CROSS_COMPANY_GAINED', `"${fkey}" now reads across legal entities`,
-        'the company filter no longer applies to it — confirm that is intended')
+      push(
+        'risky',
+        'CROSS_COMPANY_GAINED',
+        `"${fkey}" now reads across legal entities`,
+        'the company filter no longer applies to it — confirm that is intended',
+      )
     }
   }
 
@@ -71,7 +131,12 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
   }
 
   for (const p of after.patches) {
-    push('risky', 'UNSAFE_PATCH', `module "${p.by}" unsafe-patches "${p.target}"`, `declared reason: ${p.reason}. The escape hatch is visible here on purpose.`)
+    push(
+      'risky',
+      'UNSAFE_PATCH',
+      `module "${p.by}" unsafe-patches "${p.target}"`,
+      `declared reason: ${p.reason}. The escape hatch is visible here on purpose.`,
+    )
   }
 
   const rank: Record<Severity, number> = { breaking: 0, risky: 1, safe: 2 }
@@ -80,5 +145,11 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
 
 export function formatDiff(items: DiffItem[]): string {
   if (!items.length) return 'no breaking changes'
-  return items.map(i => `${i.severity.toUpperCase().padEnd(8)} ${i.code.padEnd(22)} ${i.message}` + (i.hint ? `\n${' '.repeat(32)}-> ${i.hint}` : '')).join('\n')
+  return items
+    .map(
+      (i) =>
+        `${i.severity.toUpperCase().padEnd(8)} ${i.code.padEnd(22)} ${i.message}` +
+        (i.hint ? `\n${' '.repeat(32)}-> ${i.hint}` : ''),
+    )
+    .join('\n')
 }

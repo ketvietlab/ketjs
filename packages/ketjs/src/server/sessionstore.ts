@@ -49,13 +49,18 @@ export function memorySessionStore(o: { now?: () => number } = {}): SessionStore
   return {
     name: 'memory',
     async init() {},
-    async create(r) { rows.set(r.id, { ...r }) },
+    async create(r) {
+      rows.set(r.id, { ...r })
+    },
     async read(id) {
       const r = rows.get(id)
       if (!r) return null
       // Expired is gone, not merely stale: reading it back would be a session
       // that outlived its own expiry for as long as nothing swept.
-      if (!alive(r, now())) { rows.delete(id); return null }
+      if (!alive(r, now())) {
+        rows.delete(id)
+        return null
+      }
       return { ...r }
     },
     async touch(id, expiresAt) {
@@ -64,15 +69,25 @@ export function memorySessionStore(o: { now?: () => number } = {}): SessionStore
       r.expiresAt = expiresAt
       return expiresAt
     },
-    async destroy(id) { rows.delete(id) },
+    async destroy(id) {
+      rows.delete(id)
+    },
     async destroyUser(userId) {
       let n = 0
-      for (const [id, r] of rows) if (r.userId === userId) { rows.delete(id); n++ }
+      for (const [id, r] of rows)
+        if (r.userId === userId) {
+          rows.delete(id)
+          n++
+        }
       return n
     },
     async sweep(at) {
       let n = 0
-      for (const [id, r] of rows) if (r.expiresAt <= at) { rows.delete(id); n++ }
+      for (const [id, r] of rows)
+        if (r.expiresAt <= at) {
+          rows.delete(id)
+          n++
+        }
       return n
     },
   }
@@ -110,20 +125,33 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
     userId: String(row.user_id),
     companies: JSON.parse(String(row.companies)) as string[],
     company: row.company === null || row.company === undefined ? null : String(row.company),
-    branches: row.branches === null || row.branches === undefined ? null : JSON.parse(String(row.branches)) as string[],
+    branches:
+      row.branches === null || row.branches === undefined
+        ? null
+        : (JSON.parse(String(row.branches)) as string[]),
     createdAt: Number(row.created_at),
     expiresAt: Number(row.expires_at),
   })
 
   return {
     name: adapter.name,
-    async init() { await adapter.exec(DDL) },
+    async init() {
+      await adapter.exec(DDL)
+    },
 
     async create(r) {
       await adapter.run(
         `INSERT INTO ket_session (id, user_id, companies, company, branches, created_at, expires_at)
          VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)})`,
-        [r.id, r.userId, JSON.stringify(r.companies), r.company, r.branches ? JSON.stringify(r.branches) : null, r.createdAt, r.expiresAt],
+        [
+          r.id,
+          r.userId,
+          JSON.stringify(r.companies),
+          r.company,
+          r.branches ? JSON.stringify(r.branches) : null,
+          r.createdAt,
+          r.expiresAt,
+        ],
       )
     },
 
@@ -141,22 +169,28 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
     async touch(id, expiresAt) {
       // The expiry guard is in the statement, so a session that lapsed between the
       // read and the write is not quietly revived by the refresh.
-      const res = await adapter.run(
+      const res = (await adapter.run(
         `UPDATE ket_session SET expires_at = ${p(1)} WHERE id = ${p(2)} AND expires_at > ${p(3)}`,
         [expiresAt, id, now()],
-      ) as { changes?: number }
+      )) as { changes?: number }
       return res.changes ? expiresAt : null
     },
 
-    async destroy(id) { await adapter.run(`DELETE FROM ket_session WHERE id = ${p(1)}`, [id]) },
+    async destroy(id) {
+      await adapter.run(`DELETE FROM ket_session WHERE id = ${p(1)}`, [id])
+    },
 
     async destroyUser(userId) {
-      const res = await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)}`, [userId]) as { changes?: number }
+      const res = (await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)}`, [userId])) as {
+        changes?: number
+      }
       return res.changes ?? 0
     },
 
     async sweep(at) {
-      const res = await adapter.run(`DELETE FROM ket_session WHERE expires_at <= ${p(1)}`, [at]) as { changes?: number }
+      const res = (await adapter.run(`DELETE FROM ket_session WHERE expires_at <= ${p(1)}`, [at])) as {
+        changes?: number
+      }
       return res.changes ?? 0
     },
   }

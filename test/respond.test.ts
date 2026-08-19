@@ -14,7 +14,9 @@ import { html } from 'ketjs-view'
  */
 
 test('respond: a document is markup, so a hole cannot become markup', () => {
-  const r = page({ body: document({ lang: 'en', title: 'Home', body: html`<p>${'<script>alert(1)</script>'}</p>` }) })
+  const r = page({
+    body: document({ lang: 'en', title: 'Home', body: html`<p>${'<script>alert(1)</script>'}</p>` }),
+  })
   assert.match(r.body, /^<!doctype html><html lang="en">/)
   assert.ok(r.body.includes('&lt;script&gt;'), 'the hole was escaped')
   assert.ok(!r.body.includes('<script>alert'), 'and nothing got through')
@@ -31,7 +33,9 @@ test('respond: a title is optional, and absent means absent rather than empty', 
 })
 
 test('respond: head content is markup too', () => {
-  const r = page({ body: document({ lang: 'en', head: html`<link rel="stylesheet" href="/a.css">`, body: html`<p>x</p>` }) })
+  const r = page({
+    body: document({ lang: 'en', head: html`<link rel="stylesheet" href="/a.css">`, body: html`<p>x</p>` }),
+  })
   assert.match(r.body, /<link rel="stylesheet" href="\/a\.css">/)
 })
 
@@ -61,7 +65,9 @@ test('respond: raw is the one way past the escaper, and it is one word to grep f
 const notes = defineModule({ name: 'notes', app: true, messages: { en: { hi: 'Hi' } } })
 
 const app = defineApp({
-  name: 'localeapp', modules: [notes], headless: true,
+  name: 'localeapp',
+  modules: [notes],
+  headless: true,
   serve: { bootstrap: ['notes'], defaults: { defaultLocale: 'vi', fallbackLocale: 'vi' } },
 })
 

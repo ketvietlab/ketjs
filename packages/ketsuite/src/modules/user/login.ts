@@ -22,8 +22,11 @@ export const loginScreen = (
 <div data-ui="login">
   <form data-ui="login-form" method="post" action="/login">
     <h1 data-ui="login-title">${_('user.login.title')}</h1>
-    ${when(o.failed === true, () => html`
-      <p data-ui="login-error" role="alert">${_('user.login.failed')}</p>`)}
+    ${when(
+      o.failed === true,
+      () => html`
+      <p data-ui="login-error" role="alert">${_('user.login.failed')}</p>`,
+    )}
     <label data-ui="field">
       <span data-ui="field-label">${_('user.login.login')}</span>
       <input data-ui="field-input" name="login" autocomplete="username" autofocus required>
@@ -34,8 +37,15 @@ export const loginScreen = (
     </label>
     ${when(o.next !== undefined, () => html`<input type="hidden" name="next" value=${o.next}>`)}
     <button data-ui="login-submit" type="submit">${_('user.login.submit')}</button>
-    ${when((o.locales?.length ?? 0) > 1, () => html`
-      <p data-ui="login-locales">${each(o.locales ?? [], l => l, l => html`
-        <a data-ui="login-locale" data-active=${String(l === o.locale)} href=${`/login?lang=${l}`}>${l}</a>`)}</p>`)}
+    ${when(
+      (o.locales?.length ?? 0) > 1,
+      () => html`
+      <p data-ui="login-locales">${each(
+        o.locales ?? [],
+        (l) => l,
+        (l) => html`
+        <a data-ui="login-locale" data-active=${String(l === o.locale)} href=${`/login?lang=${l}`}>${l}</a>`,
+      )}</p>`,
+    )}
   </form>
 </div>`

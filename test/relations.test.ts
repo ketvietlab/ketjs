@@ -1,8 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  callFn, compose, defineFn, defineModule, eq, from, migrateOne,
-  registerFunctions, sqliteAdapter,
+  callFn,
+  compose,
+  defineFn,
+  defineModule,
+  from,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
 } from 'ketjs'
 import type { Adapter, Ctx, KetError, Row } from 'ketjs'
 
@@ -60,27 +66,42 @@ async function boot(): Promise<Adapter> {
   registerFunctions([product])
   await db.run('INSERT INTO product_template (id, name) VALUES (?, ?)', ['t1', 'Áo thun'])
   await db.run('INSERT INTO product_template (id, name) VALUES (?, ?)', ['t2', 'Quần'])
-  for (const [id, t, sku] of [['p1', 't1', 'AO-S'], ['p2', 't1', 'AO-M'], ['p3', 't2', 'QU-32']]) {
+  for (const [id, t, sku] of [
+    ['p1', 't1', 'AO-S'],
+    ['p2', 't1', 'AO-M'],
+    ['p3', 't2', 'QU-32'],
+  ]) {
     await db.run('INSERT INTO product_product (id, "templateId", sku) VALUES (?, ?, ?)', [id, t, sku])
   }
   return db
 }
 
 const fails = (fn: () => unknown): KetError => {
-  try { fn() } catch (e) { return e as KetError }
+  try {
+    fn()
+  } catch (e) {
+    return e as KetError
+  }
   throw new Error('expected a contract violation')
 }
 
 test('relations: declared, and composed with the module that declared them', () => {
-  assert.deepEqual(manifest.relations['product.Template']!.variants,
-    { kind: 'hasMany', target: 'product.Product', by: 'templateId', declaredBy: 'product' })
+  assert.deepEqual(manifest.relations['product.Template']!.variants, {
+    kind: 'hasMany',
+    target: 'product.Product',
+    by: 'templateId',
+    declaredBy: 'product',
+  })
   assert.equal(manifest.relations['product.Product']!.template!.kind, 'belongsTo')
 })
 
 test('relations: a key that does not exist is a build error, not an empty result', () => {
   const typo = defineModule({
     name: 'typo',
-    models: { A: { scope: 'shared', fields: { id: 'id' } }, B: { scope: 'shared', fields: { id: 'id', aId: 'ref:typo.A' } } },
+    models: {
+      A: { scope: 'shared', fields: { id: 'id' } },
+      B: { scope: 'shared', fields: { id: 'id', aId: 'ref:typo.A' } },
+    },
     relations: { 'typo.A': { bs: { hasMany: 'typo.B', by: 'a_id' } } },
   })
   const e = fails(() => compose([typo], { headless: true }))
@@ -94,7 +115,10 @@ test('relations: reaching a module you do not depend on is refused', () => {
     models: { X: { scope: 'shared', fields: { id: 'id', templateId: 'text' } } },
     relations: { 'outsider.X': { t: { belongsTo: 'product.Template', by: 'templateId' } } },
   })
-  assert.match(fails(() => compose([product, outsider], { headless: true })).message, /E_RELATION_NOT_DEPENDED/)
+  assert.match(
+    fails(() => compose([product, outsider], { headless: true })).message,
+    /E_RELATION_NOT_DEPENDED/,
+  )
 })
 
 test('relations: a shared model may not reach a company-scoped one', () => {
@@ -114,30 +138,43 @@ test('relations: a shared model may not reach a company-scoped one', () => {
 test('preload: hasMany costs two queries, never one per row', async () => {
   const db = await boot()
   let queries = 0
-  const counting = { ...db, all: (s: string, p?: unknown[]) => { if (s.startsWith('SELECT')) queries++; return db.all(s, p) } }
+  const counting = {
+    ...db,
+    all: (s: string, p?: unknown[]) => {
+      if (s.startsWith('SELECT')) queries++
+      return db.all(s, p)
+    },
+  }
 
-  const rows = (await callFn('product.templates', { withVariants: true }, { adapter: counting, manifest, scope: SCOPE })).value as Row[]
+  const rows = (
+    await callFn('product.templates', { withVariants: true }, { adapter: counting, manifest, scope: SCOPE })
+  ).value as Row[]
   assert.equal(queries, 2, 'the parents, then the children by id — not one query per template')
 
-  const t1 = rows.find(r => r.id === 't1')!
-  assert.deepEqual((t1.variants as Row[]).map(v => v.sku).sort(), ['AO-M', 'AO-S'])
-  assert.deepEqual((rows.find(r => r.id === 't2')!.variants as Row[]).map(v => v.sku), ['QU-32'])
+  const t1 = rows.find((r) => r.id === 't1')!
+  assert.deepEqual((t1.variants as Row[]).map((v) => v.sku).sort(), ['AO-M', 'AO-S'])
+  assert.deepEqual(
+    (rows.find((r) => r.id === 't2')!.variants as Row[]).map((v) => v.sku),
+    ['QU-32'],
+  )
   await db.close()
 })
 
 test('preload: belongsTo attaches the parent to each child', async () => {
   const db = await boot()
   const rows = (await callFn('product.variants', {}, { adapter: db, manifest, scope: SCOPE })).value as Row[]
-  assert.equal((rows.find(r => r.id === 'p1')!.template as Row).name, 'Áo thun')
-  assert.equal((rows.find(r => r.id === 'p3')!.template as Row).name, 'Quần')
+  assert.equal((rows.find((r) => r.id === 'p1')!.template as Row).name, 'Áo thun')
+  assert.equal((rows.find((r) => r.id === 'p3')!.template as Row).name, 'Quần')
   await db.close()
 })
 
 test('preload: a parent with no children gets an empty list, not undefined', async () => {
   const db = await boot()
   await db.run('INSERT INTO product_template (id, name) VALUES (?, ?)', ['t3', 'Mũ'])
-  const rows = (await callFn('product.templates', { withVariants: true }, { adapter: db, manifest, scope: SCOPE })).value as Row[]
-  assert.deepEqual(rows.find(r => r.id === 't3')!.variants, [])
+  const rows = (
+    await callFn('product.templates', { withVariants: true }, { adapter: db, manifest, scope: SCOPE })
+  ).value as Row[]
+  assert.deepEqual(rows.find((r) => r.id === 't3')!.variants, [])
   await db.close()
 })
 
@@ -149,7 +186,8 @@ test('preload: reading the far side needs a declared effect, like any other read
       assert.equal((e as { code: string }).code, 'E_EFFECT_NOT_DECLARED')
       assert.match((e as Error).message, /read on product\.Product/)
       return true
-    })
+    },
+  )
   await db.close()
 })
 
@@ -161,7 +199,8 @@ test('preload: asking for a relation nobody declared says which exist', async ()
       assert.equal((e as { code: string }).code, 'E_UNKNOWN_RELATION')
       assert.match((e as { hint: string }).hint, /declared: variants/)
       return true
-    })
+    },
+  )
   await db.close()
 })
 
@@ -190,17 +229,32 @@ test('preload: children go through the scope, so a relation is not a way around 
     },
   })
   const m = compose([scoped], { headless: true })
-  const db = sqliteAdapter(); await db.open(); await migrateOne(db, m); registerFunctions([scoped])
+  const db = sqliteAdapter()
+  await db.open()
+  await migrateOne(db, m)
+  registerFunctions([scoped])
 
-  await callFn('shop.seed', { order: 'o-a', line: 'l-a' }, { adapter: db, manifest: m, scope: { company: 'acme' } })
-  await callFn('shop.seed', { order: 'o-b', line: 'l-b' }, { adapter: db, manifest: m, scope: { company: 'globex' } })
+  await callFn(
+    'shop.seed',
+    { order: 'o-a', line: 'l-a' },
+    { adapter: db, manifest: m, scope: { company: 'acme' } },
+  )
+  await callFn(
+    'shop.seed',
+    { order: 'o-b', line: 'l-b' },
+    { adapter: db, manifest: m, scope: { company: 'globex' } },
+  )
 
   // Hand-place a line of globex under an order of acme: the relation would carry it
   // across if the child query were not scoped too.
   await db.run('UPDATE shop_line SET "orderId" = ? WHERE id = ?', ['o-a', 'l-b'])
 
-  const acme = (await callFn('shop.orders', {}, { adapter: db, manifest: m, scope: { company: 'acme' } })).value as Row[]
-  assert.deepEqual((acme[0]!.lines as Row[]).map(l => l.id), ['l-a'],
-    'the other company\'s row does not arrive through the relation')
+  const acme = (await callFn('shop.orders', {}, { adapter: db, manifest: m, scope: { company: 'acme' } }))
+    .value as Row[]
+  assert.deepEqual(
+    (acme[0]!.lines as Row[]).map((l) => l.id),
+    ['l-a'],
+    "the other company's row does not arrive through the relation",
+  )
   await db.close()
 })

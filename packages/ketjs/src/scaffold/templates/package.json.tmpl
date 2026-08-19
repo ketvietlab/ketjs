@@ -4,11 +4,20 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "ket dev",
-    "start": "ket serve",
-    "check": "ket check"
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch --clear-screen=false tools/dev.mjs serve --workspace ket.workspace.ts",
+    "start": "npm run build && ket serve --workspace dist/ket.workspace.js",
+    "check": "tsc -p tsconfig.json --noEmit && biome check . && npm run build && ket check --workspace dist/ket.workspace.js",
+    "format": "biome format --write .",
+    "lint": "biome lint ."
   },
   "dependencies": {
     "ketjs": "^__VERSION__"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@types/node": "^26.2.0",
+    "tsx": "4.23.12",
+    "typescript": "^7.0.2"
   }
 }

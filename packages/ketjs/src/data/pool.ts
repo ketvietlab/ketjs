@@ -60,7 +60,10 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
       entries.set(key, e)
       e.opening = adapter.open()
     }
-    if (e.opening) { await e.opening; e.opening = null }
+    if (e.opening) {
+      await e.opening
+      e.opening = null
+    }
     e.leases++
     e.lastUsed = now()
     return e.adapter
@@ -78,7 +81,11 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
     release,
     async with(key, fn) {
       const adapter = await acquire(key)
-      try { return await fn(adapter) } finally { release(key) }
+      try {
+        return await fn(adapter)
+      } finally {
+        release(key)
+      }
     },
     async evictIdle() {
       const cutoff = now() - idleMs
@@ -95,7 +102,11 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
       for (const [, e] of entries) await e.adapter.close()
       entries.clear()
     },
-    get open() { return [...entries.keys()] },
-    get size() { return entries.size },
+    get open() {
+      return [...entries.keys()]
+    },
+    get size() {
+      return entries.size
+    },
   }
 }

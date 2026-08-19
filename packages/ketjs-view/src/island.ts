@@ -12,7 +12,6 @@ import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
 import { mountHydrated } from './mount.ts'
 
-
 export const ISLAND_TAG = 'ket-island'
 
 // The view layer carries its own errors rather than reaching into the kernel for
@@ -40,9 +39,11 @@ export type IslandRegistry = Record<string, IslandView>
  * mean a different tree, and hydration would rightly refuse it.
  */
 export function renderIsland(name: string, view: IslandView, props: IslandProps): string {
-  return `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(JSON.stringify(props))}">`
-    + renderToString(view(props))
-    + `</${ISLAND_TAG}>`
+  return (
+    `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(JSON.stringify(props))}">` +
+    renderToString(view(props)) +
+    `</${ISLAND_TAG}>`
+  )
 }
 
 type IslandElement = HostNode & {
@@ -63,11 +64,7 @@ export type HydratedIsland = { name: string; element: IslandElement; dispose(): 
  * island quietly rendered a second copy of itself beside the server's. An API that
  * makes the wrong choice expressible will eventually have it chosen.
  */
-export function hydrateIslands(
-  host: Host,
-  root: IslandElement,
-  registry: IslandRegistry,
-): HydratedIsland[] {
+export function hydrateIslands(host: Host, root: IslandElement, registry: IslandRegistry): HydratedIsland[] {
   const out: HydratedIsland[] = []
   for (const element of root.querySelectorAll(ISLAND_TAG)) {
     const name = element.getAttribute('data-island')
@@ -83,7 +80,9 @@ export function hydrateIslands(
     let props: IslandProps = {}
     const raw = element.getAttribute('data-props')
     if (raw) {
-      try { props = JSON.parse(raw) as IslandProps } catch {
+      try {
+        props = JSON.parse(raw) as IslandProps
+      } catch {
         throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
       }
     }

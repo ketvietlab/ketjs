@@ -42,7 +42,12 @@ export type RuntimeConfig = {
 }
 
 const list = (v: string | undefined): string[] | null =>
-  v === undefined ? null : v.split(',').map(s => s.trim()).filter(Boolean)
+  v === undefined
+    ? null
+    : v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
 
 export function readConfig(
   env: Record<string, string | undefined> = process.env,
@@ -54,7 +59,8 @@ export function readConfig(
     databaseUrl: env.DATABASE_URL ?? defaults.databaseUrl ?? null,
     sqliteFile: env.KET_SQLITE ?? defaults.sqliteFile ?? '.ket/app.db',
     migrateOnBoot: env.KET_MIGRATE !== '0',
-    autoInstall: env.KET_AUTO_INSTALL === undefined ? (defaults.autoInstall ?? true) : env.KET_AUTO_INSTALL !== '0',
+    autoInstall:
+      env.KET_AUTO_INSTALL === undefined ? (defaults.autoInstall ?? true) : env.KET_AUTO_INSTALL !== '0',
     bootstrapApps: list(env.KET_APPS) ?? defaults.bootstrapApps ?? null,
     defaultLocale: env.KET_LOCALE ?? defaults.defaultLocale ?? 'en',
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
@@ -72,8 +78,9 @@ export const sqliteStore: OpenStore = async (config) => {
       code: 'E_NO_DATASTORE_DRIVER',
       module: 'ketjs',
       message: `DATABASE_URL is set, but this app only knows how to open SQLite`,
-      hint: 'give the app a serve.openStore that imports a driver package (ketjs-postgres, say); '
-        + 'the framework cannot depend on one without becoming a cycle',
+      hint:
+        'give the app a serve.openStore that imports a driver package (ketjs-postgres, say); ' +
+        'the framework cannot depend on one without becoming a cycle',
     })
   }
   const adapter = sqliteAdapter(config.sqliteFile)

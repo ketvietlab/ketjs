@@ -27,7 +27,10 @@ const shop = defineModule({
       handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('shop.Order')).preload('product')),
     },
     // Browsing the catalogue is a different action, and stays a different grant.
-    listProducts: { effects: ['read:shop.Product'], handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('shop.Product'))) },
+    listProducts: {
+      effects: ['read:shop.Product'],
+      handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('shop.Product'))),
+    },
     placeOrder: { effects: ['read:shop.Product', 'write:shop.Order'], handler: () => ({ ok: true }) },
     salesByCompany: { effects: ['read:shop.Order'], crossCompany: true, handler: () => [] },
   },
@@ -37,21 +40,30 @@ const manifest = compose([shop])
 
 test('reach: granting the order list reaches product, and says which function did it', () => {
   const r = reachOf(manifest, ['shop.listOrders'])
-  assert.deepEqual(r.models.map(m => m.model), ['shop.Order', 'shop.Product'])
-  assert.deepEqual(r.models.find(m => m.model === 'shop.Product')!.via, ['shop.listOrders'],
-    'a surprise has to be traceable to its cause')
+  assert.deepEqual(
+    r.models.map((m) => m.model),
+    ['shop.Order', 'shop.Product'],
+  )
+  assert.deepEqual(
+    r.models.find((m) => m.model === 'shop.Product')!.via,
+    ['shop.listOrders'],
+    'a surprise has to be traceable to its cause',
+  )
 })
 
 test('reach: but it does NOT grant the catalogue — permission is on the action, not the table', () => {
   const r = reachOf(manifest, ['shop.listOrders'])
-  assert.deepEqual(r.functions.map(f => f.key), ['shop.listOrders'],
-    'reading product names inside one function is not a licence to call another')
+  assert.deepEqual(
+    r.functions.map((f) => f.key),
+    ['shop.listOrders'],
+    'reading product names inside one function is not a licence to call another',
+  )
 })
 
 test('reach: read and write are told apart, because they are not the same risk', () => {
   const r = reachOf(manifest, ['shop.listOrders', 'shop.placeOrder'])
-  const order = r.models.find(m => m.model === 'shop.Order')!
-  const product = r.models.find(m => m.model === 'shop.Product')!
+  const order = r.models.find((m) => m.model === 'shop.Order')!
+  const product = r.models.find((m) => m.model === 'shop.Product')!
   assert.equal(order.write, true)
   assert.equal(product.write, false, 'placing an order reads a product; it does not edit one')
 })
@@ -63,8 +75,11 @@ test('reach: a function that reads across legal entities is listed on its own', 
 
 test('reach: a function with no declared output is flagged, because its field reach is unknown', () => {
   const r = reachOf(manifest, ['shop.listOrders', 'shop.listProducts'])
-  assert.deepEqual(r.unprojected, ['shop.listProducts'],
-    'listOrders declares what it returns; listProducts hands back whole rows including cost')
+  assert.deepEqual(
+    r.unprojected,
+    ['shop.listProducts'],
+    'listOrders declares what it returns; listProducts hands back whole rows including cost',
+  )
 })
 
 test('reach: an unknown function is reported rather than silently ignored', () => {
@@ -75,8 +90,10 @@ test('reach: granting a whole module is just the union of its functions', () => 
   const all = functionsOf(manifest, 'shop')
   assert.deepEqual(all, ['shop.listOrders', 'shop.listProducts', 'shop.placeOrder', 'shop.salesByCompany'])
   const r = reachOf(manifest, all)
-  assert.deepEqual(r.models.map(m => `${m.model}:${[m.read && 'r', m.write && 'w'].filter(Boolean).join('')}`),
-    ['shop.Order:rw', 'shop.Product:r'])
+  assert.deepEqual(
+    r.models.map((m) => `${m.model}:${[m.read && 'r', m.write && 'w'].filter(Boolean).join('')}`),
+    ['shop.Order:rw', 'shop.Product:r'],
+  )
 })
 
 test('reach: asking about a module nobody ships names what is shipped', () => {

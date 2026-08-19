@@ -13,14 +13,23 @@ export type Placement = { type: string; settings?: Record<string, unknown> }
 export type LayoutError = { at: number; type: string; field?: string; message: string }
 
 const JS_OF: Record<string, string> = {
-  id: 'string', text: 'string', ref: 'string', int: 'number',
-  float: 'number', bool: 'boolean', datetime: 'string', json: 'object',
+  id: 'string',
+  text: 'string',
+  ref: 'string',
+  int: 'number',
+  float: 'number',
+  bool: 'boolean',
+  datetime: 'string',
+  json: 'object',
 }
 
 export function validateLayout(manifest: Manifest, layout: unknown): { ok: boolean; errors: LayoutError[] } {
   const errors: LayoutError[] = []
   if (!Array.isArray(layout)) {
-    return { ok: false, errors: [{ at: -1, type: '(layout)', message: 'a layout must be an array of section placements' }] }
+    return {
+      ok: false,
+      errors: [{ at: -1, type: '(layout)', message: 'a layout must be an array of section placements' }],
+    }
   }
 
   layout.forEach((raw, at) => {
@@ -32,7 +41,8 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
     const section = manifest.sections[placement.type]
     if (!section) {
       errors.push({
-        at, type: placement.type,
+        at,
+        type: placement.type,
         message: `no installed module provides this section (available: ${Object.keys(manifest.sections).join(', ') || 'none'})`,
       })
       return
@@ -44,7 +54,8 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
       const t = parseType(spec)
       const value = settings[field]
       if (value == null) {
-        if (t.ok && !t.optional) errors.push({ at, type: placement.type, field, message: `is required (${spec})` })
+        if (t.ok && !t.optional)
+          errors.push({ at, type: placement.type, field, message: `is required (${spec})` })
         continue
       }
       if (!t.ok) continue
@@ -56,7 +67,9 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
     for (const field of Object.keys(settings)) {
       if (!(field in schema)) {
         errors.push({
-          at, type: placement.type, field,
+          at,
+          type: placement.type,
+          field,
           message: `is not a setting of this section (accepted: ${Object.keys(schema).join(', ') || 'none'})`,
         })
       }
@@ -67,4 +80,4 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
 }
 
 export const formatLayoutErrors = (errors: LayoutError[]): string =>
-  errors.map(e => `  [${e.at}] ${e.type}${e.field ? '.' + e.field : ''} ${e.message}`).join('\n')
+  errors.map((e) => `  [${e.at}] ${e.type}${e.field ? '.' + e.field : ''} ${e.message}`).join('\n')

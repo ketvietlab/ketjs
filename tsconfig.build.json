@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": ".build",
+    "declaration": false,
+    "sourceMap": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "apps/**/*",
+    "ket.workspace.ts",
+    "examples/**/*",
+    "test/**/*",
+    "tools/**/*.ts",
+    "bench/**/*"
+  ],
+  "exclude": [".build", "packages/*/dist", "node_modules"]
+}

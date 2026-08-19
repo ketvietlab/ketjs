@@ -69,10 +69,11 @@ export const functions: Record<string, FnSpec> = {
 
       const P = ctx.table('website.Page')
       const existing = await ctx.db.one(from(P).where(eq(P.id, args.id)))
-      let cs = ctx.change('website.Page', args, existing)
+      let cs = ctx
+        .change('website.Page', args, existing)
         .cast(['id', 'path', 'title', 'layout'])
         .required(['path', 'title'])
-        .validate('path', v => String(v).startsWith('/') || 'đường dẫn phải bắt đầu bằng /')
+        .validate('path', (v) => String(v).startsWith('/') || 'đường dẫn phải bắt đầu bằng /')
         .put('updatedAt', new Date(0).toISOString())
       if (!existing) cs = cs.put('published', false)
       if (!cs.valid) return { ok: false, errors: cs.errors }

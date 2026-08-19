@@ -1,6 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, defineApp, defineModule, json, migrateOne, compose, sqliteAdapter, memorySessionStore } from 'ketjs'
+import {
+  bootApp,
+  defineApp,
+  defineModule,
+  json,
+  migrateOne,
+  compose,
+  sqliteAdapter,
+  memorySessionStore,
+} from 'ketjs'
 import type { Adapter, ServeContext, Route } from 'ketjs'
 
 /**
@@ -14,26 +23,49 @@ import type { Adapter, ServeContext, Route } from 'ketjs'
  */
 
 const core = defineModule({
-  name: 'core', app: true,
+  name: 'core',
+  app: true,
   models: { Note: { scope: 'company', fields: { id: 'id', memo: 'text' } } },
   functions: {
-    add: { input: { id: 'id', memo: 'text' }, output: { ok: 'bool' }, effects: ['write:core.Note'], handler: async (ctx, a) => { await ctx.db.insert('core.Note', a); return { ok: true } } },
-    list: { output: { id: 'id', memo: 'text' }, effects: ['read:core.Note'], handler: (ctx) => ctx.db.select('core.Note') },
+    add: {
+      input: { id: 'id', memo: 'text' },
+      output: { ok: 'bool' },
+      effects: ['write:core.Note'],
+      handler: async (ctx, a) => {
+        await ctx.db.insert('core.Note', a)
+        return { ok: true }
+      },
+    },
+    list: {
+      output: { id: 'id', memo: 'text' },
+      effects: ['read:core.Note'],
+      handler: (ctx) => ctx.db.select('core.Note'),
+    },
   },
 })
 const extra = defineModule({
-  name: 'extra', app: true, depends: ['core'],
-  routes: { '/extra': (ctx: ServeContext): Route => async () => json({ from: 'extra' }) },
+  name: 'extra',
+  app: true,
+  depends: ['core'],
+  routes: {
+    '/extra':
+      (_ctx: ServeContext): Route =>
+      async () =>
+        json({ from: 'extra' }),
+  },
 })
 
 const dbs = new Map<string, Adapter>()
 const app = defineApp({
-  name: 'multi', modules: [core, extra], headless: true,
+  name: 'multi',
+  modules: [core, extra],
+  headless: true,
   serve: {
     bootstrap: ['core'],
     routes: (ctx) => ({
       '/notes': async (url, req) => json(await ctx.call('core.list', {}, url, req)),
-      '/apps': async (_url, req) => json((await ctx.appsOf(req)).filter(a => a.state === 'installed').map(a => a.name)),
+      '/apps': async (_url, req) =>
+        json((await ctx.appsOf(req)).filter((a) => a.state === 'installed').map((a) => a.name)),
     }),
     tenants: {
       /**
@@ -47,7 +79,10 @@ const app = defineApp({
       },
       open: (key) => {
         let a = dbs.get(key)
-        if (!a) { a = sqliteAdapter(); dbs.set(key, a) }
+        if (!a) {
+          a = sqliteAdapter()
+          dbs.set(key, a)
+        }
         return a
       },
       list: async () => ['t1', 't2'],
@@ -56,18 +91,30 @@ const app = defineApp({
 })
 
 const get = (port: number, tenant: string, path: string, init: RequestInit = {}) =>
-  fetch(`http://127.0.0.1:${port}${path}`, { ...init, headers: { 'x-tenant': tenant, 'x-ket-company': 'c1', ...(init.headers ?? {}) } })
+  fetch(`http://127.0.0.1:${port}${path}`, {
+    ...init,
+    headers: { 'x-tenant': tenant, 'x-ket-company': 'c1', ...(init.headers ?? {}) },
+  })
 
 test('tenants: each request lands in its own database', async () => {
   dbs.clear()
   const b = await bootApp(app, { port: 0 })
-  const post = (host: string, id: string) => get(b.port, host, '/_ket/fn/core.add', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, memo: host }),
-  })
+  const post = (host: string, id: string) =>
+    get(b.port, host, '/_ket/fn/core.add', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, memo: host }),
+    })
   await post('t1', 'a')
   await post('t2', 'b')
-  assert.deepEqual((await get(b.port, 't1', '/notes').then(r => r.json()) as Array<{ id: string }>).map(r => r.id), ['a'])
-  assert.deepEqual((await get(b.port, 't2', '/notes').then(r => r.json()) as Array<{ id: string }>).map(r => r.id), ['b'])
+  assert.deepEqual(
+    ((await get(b.port, 't1', '/notes').then((r) => r.json())) as Array<{ id: string }>).map((r) => r.id),
+    ['a'],
+  )
+  assert.deepEqual(
+    ((await get(b.port, 't2', '/notes').then((r) => r.json())) as Array<{ id: string }>).map((r) => r.id),
+    ['b'],
+  )
   await b.close()
 })
 
@@ -77,8 +124,11 @@ test('tenants: module sets differ, which is the whole point', async () => {
   // Both bootstrap `core`. Only t2 installs `extra`.
   await b.tenants.with('t2', (t) => t.apps.install('extra'))
 
-  assert.deepEqual(await get(b.port, 't1', '/apps').then(r => r.json()), ['core'])
-  assert.deepEqual((await get(b.port, 't2', '/apps').then(r => r.json()) as string[]).sort(), ['core', 'extra'])
+  assert.deepEqual(await get(b.port, 't1', '/apps').then((r) => r.json()), ['core'])
+  assert.deepEqual(((await get(b.port, 't2', '/apps').then((r) => r.json())) as string[]).sort(), [
+    'core',
+    'extra',
+  ])
 
   // And the route that belongs to `extra` follows the installed set, per tenant.
   assert.equal((await get(b.port, 't1', '/extra')).status, 404)
@@ -90,8 +140,14 @@ test('tenants: health answers for the tenant that asked, not for the deployment'
   dbs.clear()
   const b = await bootApp(app, { port: 0 })
   await b.tenants.with('t2', (t) => t.apps.install('extra'))
-  const h1 = await get(b.port, 't1', '/_ket/health').then(r => r.json()) as { tenant: string; apps: string[] }
-  const h2 = await get(b.port, 't2', '/_ket/health').then(r => r.json()) as { tenant: string; apps: string[] }
+  const h1 = (await get(b.port, 't1', '/_ket/health').then((r) => r.json())) as {
+    tenant: string
+    apps: string[]
+  }
+  const h2 = (await get(b.port, 't2', '/_ket/health').then((r) => r.json())) as {
+    tenant: string
+    apps: string[]
+  }
   assert.equal(h1.tenant, 't1')
   assert.deepEqual(h1.apps, ['core'])
   assert.deepEqual(h2.apps.sort(), ['core', 'extra'])
@@ -103,8 +159,11 @@ test('tenants: a host this deployment does not serve is refused, not defaulted',
   const b = await bootApp(app, { port: 0 })
   const r = await get(b.port, 'nobody', '/notes')
   assert.equal(r.status, 400)
-  assert.match(JSON.stringify(await r.json()), /E_UNKNOWN_TENANT/,
-    'a default tenant is how one customer quietly reads another customer data')
+  assert.match(
+    JSON.stringify(await r.json()),
+    /E_UNKNOWN_TENANT/,
+    'a default tenant is how one customer quietly reads another customer data',
+  )
   await b.close()
 })
 
@@ -160,7 +219,9 @@ test('migrate: every tenant is migrated, and one failure does not stop the fleet
  * deployments someone will have.
  */
 const authed = defineApp({
-  name: 'authed', modules: [core], headless: true,
+  name: 'authed',
+  modules: [core],
+  headless: true,
   serve: {
     bootstrap: ['core'],
     sessions: {},
@@ -171,7 +232,10 @@ const authed = defineApp({
       },
       open: (key) => {
         let a = dbs.get(key)
-        if (!a) { a = sqliteAdapter(); dbs.set(key, a) }
+        if (!a) {
+          a = sqliteAdapter()
+          dbs.set(key, a)
+        }
         return a
       },
       list: async () => ['t1', 't2'],
@@ -197,8 +261,11 @@ test('sessions: each tenant keeps its own, so a cookie does not travel between t
   assert.equal(seenAtHome?.userId, 'u1')
 
   const seenNextDoor = await b.tenants.with('t2', async (t) => t.sessions!.of(req))
-  assert.equal(seenNextDoor, null,
-    'the signature is valid — it is the same secret — but the row is in the other database')
+  assert.equal(
+    seenNextDoor,
+    null,
+    'the signature is valid — it is the same secret — but the row is in the other database',
+  )
   await b.close()
   void loginAs
 })
@@ -206,9 +273,13 @@ test('sessions: each tenant keeps its own, so a cookie does not travel between t
 test('sessions: the cookie carries no Domain, so the browser scopes it to one subdomain', async () => {
   dbs.clear()
   const b = await bootApp(authed, { env: { KET_SECRET: 'x' }, port: 0 })
-  const { cookie } = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
-  assert.ok(!/Domain=/i.test(cookie),
-    'Domain=.example.com would hand acme.example.com the cookie set for globex.example.com')
+  const { cookie } = await b.tenants.with('t1', async (t) =>
+    t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
+  )
+  assert.ok(
+    !/Domain=/i.test(cookie),
+    'Domain=.example.com would hand acme.example.com the cookie set for globex.example.com',
+  )
   assert.match(cookie, /HttpOnly/)
   await b.close()
 })
@@ -217,7 +288,9 @@ test('sessions: a shared store is the escape hatch for one domain serving every 
   dbs.clear()
   const control = memorySessionStore()
   const oneDomain = defineApp({
-    name: 'onedomain', modules: [core], headless: true,
+    name: 'onedomain',
+    modules: [core],
+    headless: true,
     serve: {
       bootstrap: ['core'],
       // Reading the session needs the database and knowing the database needs the
@@ -225,13 +298,22 @@ test('sessions: a shared store is the escape hatch for one domain serving every 
       sessions: { store: control },
       tenants: {
         resolve: (_url, req) => (String(req.headers['x-tenant'] ?? '') === 't1' ? 't1' : 't2'),
-        open: (key) => { let a = dbs.get(key); if (!a) { a = sqliteAdapter(); dbs.set(key, a) } return a },
+        open: (key) => {
+          let a = dbs.get(key)
+          if (!a) {
+            a = sqliteAdapter()
+            dbs.set(key, a)
+          }
+          return a
+        },
         list: async () => ['t1', 't2'],
       },
     },
   })
   const b = await bootApp(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
-  const { cookie } = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
+  const { cookie } = await b.tenants.with('t1', async (t) =>
+    t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
+  )
   const req = { headers: { cookie: cookie.split(';')[0]! } } as never
   // One store, so every tenant sees the same session — which is the point, and
   // also why such a deployment has to record the tenant on the session itself.

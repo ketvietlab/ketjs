@@ -22,22 +22,34 @@ import type { Manifest } from './types.ts'
 
 const [, , cmd = 'help', ...rest] = process.argv
 const flag = (name: string) => rest.includes(`--${name}`)
-const opt = (name: string) => { const i = rest.indexOf(`--${name}`); return i >= 0 ? rest[i + 1] : undefined }
+const opt = (name: string) => {
+  const i = rest.indexOf(`--${name}`)
+  return i >= 0 ? rest[i + 1] : undefined
+}
 
-const CANDIDATES = ['ket.workspace.ts', 'workspace.ts', 'examples/workspace.ts']
+const CANDIDATES = ['dist/ket.workspace.js', 'ket.workspace.js', 'workspace.js', 'examples/workspace.js']
 
 /** Where the apps are declared. Named explicitly, or the first conventional path. */
 const workspacePath = () => {
   const given = opt('workspace')
-  if (given) return given
-  const found = CANDIDATES.find(p => existsSync(p))
-  if (!found) throw new Error(`no workspace file found (looked for ${CANDIDATES.join(', ')}); pass --workspace FILE`)
+  if (given) {
+    if (/\.[cm]?tsx?$/.test(given) && process.env.KET_DEV_SOURCE !== '1') {
+      throw new Error(
+        `refusing to execute source workspace "${given}" — build it and pass the emitted .js artifact`,
+      )
+    }
+    return given
+  }
+  const found = CANDIDATES.find((p) => existsSync(p))
+  if (!found)
+    throw new Error(`no workspace file found (looked for ${CANDIDATES.join(', ')}); pass --workspace FILE`)
   return found
 }
 
 const loadWorkspace = async () => {
-  const mod = await import(`${process.cwd()}/${workspacePath()}`) as { apps: AppSpec[] }
-  if (!Array.isArray(mod.apps)) throw new Error(`${workspacePath()} must export \`apps\`, an array of defineApp(...)`)
+  const mod = (await import(`${process.cwd()}/${workspacePath()}`)) as { apps: AppSpec[] }
+  if (!Array.isArray(mod.apps))
+    throw new Error(`${workspacePath()} must export \`apps\`, an array of defineApp(...)`)
   return { ws: composeWorkspace(mod.apps), apps: mod.apps }
 }
 
@@ -45,18 +57,18 @@ const loadWorkspace = async () => {
 const pickSpec = (specs: AppSpec[]): AppSpec => {
   const name = opt('app')
   if (!name) {
-    const servable = specs.filter(s => s.serve)
+    const servable = specs.filter((s) => s.serve)
     const one = servable[0] ?? specs[0]
     if (!one) throw new Error('the workspace declares no apps')
     return one
   }
-  const found = specs.find(s => s.name === name)
-  if (!found) throw new Error(`unknown app "${name}" (have: ${specs.map(s => s.name).join(', ')})`)
+  const found = specs.find((s) => s.name === name)
+  if (!found) throw new Error(`unknown app "${name}" (have: ${specs.map((s) => s.name).join(', ')})`)
   return found
 }
 
 const pickApp = (ws: { apps: Record<string, Manifest> }): [string, Manifest] => {
-  const name = opt('app') ?? Object.keys(ws.apps)[0] as string
+  const name = opt('app') ?? (Object.keys(ws.apps)[0] as string)
   const m = ws.apps[name]
   if (!m) throw new Error(`unknown app "${name}" (have: ${Object.keys(ws.apps).join(', ')})`)
   return [name, m]
@@ -79,30 +91,33 @@ const HELP = `ket — zero-dependency fullstack framework
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
 
   ket serve [--app X]       boot the app and serve it
-  ket dev [--app X]         serve, and restart when a file changes
+  ket dev [--app X]         serve compiled output, restarting when an artifact changes
                             (--no-auto-install holds back modules that install themselves)
   ket new NAME [--dir D]    scaffold an app that runs
 
-Options: --workspace FILE (default: ket.workspace.ts, workspace.ts, examples/workspace.ts)
+Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
          --app NAME, --port N
 `
 
 try {
-  if (cmd === 'help' || cmd === '--help') { console.log(HELP); process.exit(0) }
+  if (cmd === 'help' || cmd === '--help') {
+    console.log(HELP)
+    process.exit(0)
+  }
 
   if (cmd === 'new') {
-    const name = rest.find(a => !a.startsWith('--'))
+    const name = rest.find((a) => !a.startsWith('--'))
     if (!name) throw new Error('usage: ket new NAME [--dir DIR]')
     for (const line of scaffold(name, opt('dir') ?? name)) console.log(line)
     process.exit(0)
   }
 
   if (cmd === 'dev') {
-    // Node watches and restarts; the framework does not need its own file watcher,
-    // and one that disagreed with the runtime's would be worse than none.
+    // This watches emitted JavaScript only. The project owns the compiler watcher;
+    // `ket new` wires both sides together without handing source files to Node.
     const argv = ['--watch', new URL(import.meta.url).pathname, 'serve', ...rest]
     const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...process.env, KET_DEV: '1' } })
-    child.on('exit', code => process.exit(code ?? 0))
+    child.on('exit', (code) => process.exit(code ?? 0))
     for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => child.kill(sig))
     await new Promise(() => {})
   }
@@ -148,7 +163,18 @@ try {
         await adapter.close()
       }
     } else if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
-    else if (grant) console.log(formatReach(reachOf(m, grant.split(',').map(s => s.trim()).filter(Boolean))))
+    else if (grant)
+      console.log(
+        formatReach(
+          reachOf(
+            m,
+            grant
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        ),
+      )
     else console.log(formatInventory(m))
   } else if (cmd === 'agent') {
     const [, m] = pickApp(ws)
@@ -160,12 +186,13 @@ try {
     console.log(`wrote ${out}`)
   } else if (cmd === 'diff') {
     const against = opt('against')
-    if (!against || !existsSync(against)) throw new Error('pass --against <manifest.json> (make one with `ket snapshot`)')
+    if (!against || !existsSync(against))
+      throw new Error('pass --against <manifest.json> (make one with `ket snapshot`)')
     const [, m] = pickApp(ws)
     const before = JSON.parse(readFileSync(against, 'utf8')) as Manifest
     const items = diffManifests(before, m)
     console.log(formatDiff(items))
-    process.exit(items.some(i => i.severity === 'breaking') ? 1 : 0)
+    process.exit(items.some((i) => i.severity === 'breaking') ? 1 : 0)
   } else if (cmd === 'migrate') {
     const spec = pickSpec(specs)
     if (flag('all')) {
@@ -179,9 +206,12 @@ try {
       try {
         const keys = await tenants.list()
         const m = ws.apps[spec.name] as Manifest
-        const results = await migrateFleet(pool, keys, m, { allowDestructive: flag('allow-destructive'), dryRun: flag('dry-run') })
+        const results = await migrateFleet(pool, keys, m, {
+          allowDestructive: flag('allow-destructive'),
+          dryRun: flag('dry-run'),
+        })
         console.log(formatFleet(results))
-        process.exit(results.some(r => r.error) ? 1 : 0)
+        process.exit(results.some((r) => r.error) ? 1 : 0)
       } finally {
         await pool.close()
       }
@@ -202,7 +232,10 @@ try {
     process.exit(1)
   }
 } catch (e) {
-  if (e instanceof KetError) { console.error(JSON.stringify(e.toJSON(), null, 2)); process.exit(1) }
+  if (e instanceof KetError) {
+    console.error(JSON.stringify(e.toJSON(), null, 2))
+    process.exit(1)
+  }
   console.error((e as Error).message)
   process.exit(1)
 }

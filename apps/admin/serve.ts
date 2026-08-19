@@ -7,7 +7,20 @@
 // The database is in memory and seeded on boot, so this is disposable: install
 // things, break things, restart. Nothing here talks to a real deployment.
 
-import { createKetServer, compose, sqliteAdapter, migrateOne, registerFunctions, createAppRegistry, restrictManifest, callFn, translator, PSEUDO_LOCALE, page, document } from 'ketjs'
+import {
+  createKetServer,
+  compose,
+  sqliteAdapter,
+  migrateOne,
+  registerFunctions,
+  createAppRegistry,
+  restrictManifest,
+  callFn,
+  translator,
+  PSEUDO_LOCALE,
+  page,
+  document,
+} from 'ketjs'
 import { html, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
@@ -43,9 +56,13 @@ for (const [id, path, title, published] of [
   ['about', '/gioi-thieu', 'Giới thiệu', false],
   ['contact', '/lien-he', 'Liên hệ', true],
 ] as const) {
-  await callFn('website.savePage', { id, path, title, layout: [{ type: 'website.rich_text', settings: { body: title } }] },
-    { adapter: db, manifest, scope: DEMO_SCOPE })
-  if (published) await callFn('website.publishPage', { id, published: true }, { adapter: db, manifest, scope: DEMO_SCOPE })
+  await callFn(
+    'website.savePage',
+    { id, path, title, layout: [{ type: 'website.rich_text', settings: { body: title } }] },
+    { adapter: db, manifest, scope: DEMO_SCOPE },
+  )
+  if (published)
+    await callFn('website.publishPage', { id, published: true }, { adapter: db, manifest, scope: DEMO_SCOPE })
 }
 
 /**
@@ -60,21 +77,30 @@ const LOCALES = ['vi', 'en', PSEUDO_LOCALE]
 /** One wrapper for every page, so the stylesheets are loaded exactly once. */
 const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
 
-const route = (build: (t: ReturnType<typeof translator>, url: URL) => Promise<TemplateResult> | TemplateResult) =>
+const route =
+  (build: (t: ReturnType<typeof translator>, url: URL) => Promise<TemplateResult> | TemplateResult) =>
   async (url: URL) => {
     const locale = localeOf(url)
     const t = translator(manifest, locale, { fallback: 'vi' })
-    return page({ body: document({ lang: locale, title: 'KetSuite', head: STYLES, body: await build(t, url) }) })
+    return page({
+      body: document({ lang: locale, title: 'KetSuite', head: STYLES, body: await build(t, url) }),
+    })
   }
 
 const app = await createKetServer({
   resolveScope: () => DEMO_SCOPE,
-  manifest, adapter: db,
+  manifest,
+  adapter: db,
   assets: { prefix: '/design/', dir: DESIGN },
   routes: {
     // The index is markup like every other screen: the locale list is data going
     // through holes, not a join() producing a string nobody escapes.
-    '/': async () => page({ body: document({ lang: 'en', title: 'KetSuite design', body: html`
+    '/': async () =>
+      page({
+        body: document({
+          lang: 'en',
+          title: 'KetSuite design',
+          body: html`
       <ul>
         <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
         <li><a href="/admin/apps">Apps (real data)</a></li>
@@ -82,22 +108,39 @@ const app = await createKetServer({
         <li><a href="/admin/settings">Settings (real data)</a></li>
       </ul>
       <p>Switch language with <code>?lang=</code>:
-        ${each(LOCALES, l => l, l => html` <a href=${`/catalogue?lang=${l}`}>${l}</a>`)}
+        ${each(
+          LOCALES,
+          (l) => l,
+          (l) => html` <a href=${`/catalogue?lang=${l}`}>${l}</a>`,
+        )}
         <br><code>${PSEUDO_LOCALE}</code> returns every string longer and bracketed — use it to test text overflow.
-      </p>` }) }),
+      </p>`,
+        }),
+      }),
 
-    '/catalogue': route(t => cataloguePage(t)),
+    '/catalogue': route((t) => cataloguePage(t)),
 
-    '/admin/apps': route(async t => appsScreen(t, await apps.list())),
+    '/admin/apps': route(async (t) => appsScreen(t, await apps.list())),
 
-    '/admin/pages': route(async t => {
+    '/admin/pages': route(async (t) => {
       const restricted = restrictManifest(manifest, await apps.enabled())
-      const rows = (await callFn('website.listPages', { includeDrafts: true }, { adapter: db, manifest: restricted, scope: DEMO_SCOPE })).value
-      return pagesScreen(t, (rows as Array<{ id: string; path: string; title: string; published: number }>)
-        .map(r => ({ ...r, published: !!r.published })))
+      const rows = (
+        await callFn(
+          'website.listPages',
+          { includeDrafts: true },
+          { adapter: db, manifest: restricted, scope: DEMO_SCOPE },
+        )
+      ).value
+      return pagesScreen(
+        t,
+        (rows as Array<{ id: string; path: string; title: string; published: number }>).map((r) => ({
+          ...r,
+          published: !!r.published,
+        })),
+      )
     }),
 
-    '/admin/settings': route(t => settingsScreen(t, manifest.tokens)),
+    '/admin/settings': route((t) => settingsScreen(t, manifest.tokens)),
   },
 })
 

@@ -8,17 +8,22 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./theme": "./src/theme/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "default": "./dist/theme/index.js"
+    }
   },
   "bin": {
-    "ket": "./src/cli.ts"
+    "ket": "./dist/cli.js"
   },
   "dependencies": {
     "ketjs-view": "0.0.0"
   },
   "files": [
-    "src",
-    "src/scaffold/templates"
+    "dist"
   ]
 }
