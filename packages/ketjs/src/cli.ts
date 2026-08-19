@@ -9,6 +9,7 @@ import type { AppSpec } from './kernel/workspace.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
+import { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
 import { serveApp } from './server/boot.ts'
@@ -65,6 +66,9 @@ const HELP = `ket — zero-dependency fullstack framework
   ket workspace             show apps, datastores and shared modules
   ket types [--app X]       generate .ket/types.d.ts from the manifest
   ket agent [--app X]       print the agent capability descriptor
+  ket permissions           every function that exists to be granted
+    --grant a,b,c           …or what a role granted exactly these can reach
+    --module NAME           …or what granting one module's whole surface reaches
   ket migrate [--app X]     plan migrations (add --allow-destructive to permit data loss)
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
@@ -120,6 +124,13 @@ try {
     const out = `.ket/types.${name}.d.ts`
     writeFileSync(out, generateDts(m))
     console.log(`wrote ${out}`)
+  } else if (cmd === 'permissions') {
+    const [, m] = pickApp(ws)
+    const module = opt('module')
+    const grant = opt('grant')
+    if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
+    else if (grant) console.log(formatReach(reachOf(m, grant.split(',').map(s => s.trim()).filter(Boolean))))
+    else console.log(formatInventory(m))
   } else if (cmd === 'agent') {
     const [, m] = pickApp(ws)
     console.log(JSON.stringify(agentDescriptor(m), null, 2))

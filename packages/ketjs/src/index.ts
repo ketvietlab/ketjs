@@ -41,6 +41,8 @@ export { schemaFromManifest, planMigration, renderSql, tableNameFor, Destructive
 // installed alone by a client that never touches the server half.
 export { renderToString, hydrateRoot, mount, mountHydrated, renderIsland, hydrateIslands, ISLAND_TAG } from 'ketjs-view'
 export { createTheme } from './theme/render.ts'
+export { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
+export type { Reach, GrantedFn, ModelReach } from './agent/permissions.ts'
 export { compileKtl } from './theme/ktl/compile.ts'
 export { loadTemplates } from './theme/templates.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
