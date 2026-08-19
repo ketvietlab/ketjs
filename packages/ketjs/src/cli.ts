@@ -2,8 +2,9 @@
 // The CLI is deliberately thin: everything it prints is read off the manifest,
 // so there is no second source of truth about what an app contains.
 
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { extname, join, normalize } from 'node:path'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 import type { AppSpec } from './kernel/workspace.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
@@ -20,16 +21,50 @@ import { bootWorker, serveWorker } from './server/worker.ts'
 import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
 import { KetError } from './kernel/errors.ts'
+import { CookieJar, createTestApp, TestClient, TestHttpError } from './testing.ts'
 import type { Manifest } from './types.ts'
 
 const [, , cmd = 'help', ...rest] = process.argv
 const flag = (name: string) => rest.includes(`--${name}`)
 const opt = (name: string) => {
   const i = rest.indexOf(`--${name}`)
-  return i >= 0 ? rest[i + 1] : undefined
+  if (i >= 0) return rest[i + 1]
+  const inline = rest.find((item) => item.startsWith(`--${name}=`))
+  return inline?.slice(name.length + 3)
+}
+const opts = (name: string): string[] => {
+  const out: string[] = []
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === `--${name}` && rest[i + 1] !== undefined) out.push(rest[++i] as string)
+    else if (rest[i]?.startsWith(`--${name}=`)) out.push((rest[i] as string).slice(name.length + 3))
+  }
+  return out
 }
 
-const CANDIDATES = ['dist/ket.workspace.js', 'ket.workspace.js', 'workspace.js', 'examples/workspace.js']
+const positionals = (valueOptions: readonly string[]): string[] => {
+  const values = new Set(valueOptions)
+  const end = rest.indexOf('--')
+  const args = end < 0 ? rest : rest.slice(0, end)
+  const out: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const item = args[i] as string
+    if (!item.startsWith('--')) {
+      out.push(item)
+      continue
+    }
+    const name = item.slice(2).split('=')[0] as string
+    if (!item.includes('=') && values.has(name)) i++
+  }
+  return out
+}
+
+const CANDIDATES = [
+  'dist/ket.workspace.js',
+  '.build/ket.workspace.js',
+  'ket.workspace.js',
+  'workspace.js',
+  'examples/workspace.js',
+]
 
 /** Where the apps are declared. Named explicitly, or the first conventional path. */
 const workspacePath = () => {
@@ -94,6 +129,20 @@ const HELP = `ket — zero-dependency fullstack framework
 
   ket serve [--app X]       boot the app and serve it
   ket worker [--app X]      run declared queues for the same app and manifest
+  ket call FUNCTION         exercise a function through its real HTTP endpoint
+    --against URL           call an already-running development server
+    --input JSON|@FILE|-    function input (default: {})
+    --company ID            request company; also --companies and --branches
+    --tenant KEY            conventional x-tenant header (or use --header)
+    --cookie-file FILE      load and update an isolated JSON cookie jar
+    --login JSON|@FILE      POST credentials before the call (default: /login)
+    --login-path PATH       override the application's login route
+    --dry-run               report declared writes without applying them
+    --idempotency-key KEY   exercise idempotent retry handling
+    --isolated              boot a temporary app/database for this call
+  ket test [FILES...]       run emitted headless tests with Node's test runner
+    --watch                 rerun when the selected JavaScript artifacts change
+    --test-name-pattern P   select tests by name; --coverage enables coverage
   ket jobs list             inspect durable jobs (--tenant is required for tenant apps)
   ket jobs retry ID         make a retryable/discarded job available now
   ket jobs cancel ID        cancel a pending or executing job
@@ -104,8 +153,152 @@ const HELP = `ket — zero-dependency fullstack framework
   ket new NAME [--dir D]    scaffold an app that runs
 
 Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
-         --app NAME, --port N
+         --app NAME, --port N, --header "Name: value" (repeatable)
 `
+
+const TEST_VALUE_OPTIONS = ['test-name-pattern', 'test-concurrency', 'reporter', 'out-dir'] as const
+
+const collectTests = (path: string): string[] => {
+  if (!existsSync(path)) throw new Error(`test path does not exist: ${path}`)
+  if (!statSync(path).isDirectory()) return [path]
+  const files: string[] = []
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name)
+      if (entry.isDirectory()) visit(child)
+      else if (/\.(?:test|spec)\.[cm]?js$/.test(entry.name)) files.push(child)
+    }
+  }
+  visit(path)
+  return files.sort()
+}
+
+const emittedTestPath = (input: string): string => {
+  const source = normalize(input).replace(/^\.\//, '')
+  const extension = extname(source)
+  if (extension !== '.ts' && extension !== '.tsx') return source
+  const emitted = source.slice(0, -extension.length) + '.js'
+  const candidates = [...(opt('out-dir') ? [opt('out-dir') as string] : []), '.build', 'dist'].map((dir) =>
+    join(dir, emitted),
+  )
+  const found = candidates.find((candidate) => existsSync(candidate))
+  if (!found)
+    throw new Error(`no emitted test for ${input}; build first (looked for ${candidates.join(', ')})`)
+  return found
+}
+
+const runTests = async (): Promise<never> => {
+  const selected = positionals(TEST_VALUE_OPTIONS).flatMap((path) => collectTests(emittedTestPath(path)))
+  const defaultDir = [opt('out-dir'), '.build/test', 'dist/test'].find((candidate): candidate is string =>
+    Boolean(candidate && existsSync(candidate)),
+  )
+  const defaults = selected.length ? selected : defaultDir ? collectTests(defaultDir) : []
+  const nodeArgs = ['--test']
+  if (flag('watch')) nodeArgs.push('--watch')
+  if (flag('coverage')) nodeArgs.push('--experimental-test-coverage')
+  if (flag('test-only')) nodeArgs.push('--test-only')
+  for (const [option, nodeOption] of [
+    ['test-name-pattern', '--test-name-pattern'],
+    ['test-concurrency', '--test-concurrency'],
+    ['reporter', '--test-reporter'],
+  ] as const) {
+    const value = opt(option)
+    if (value) nodeArgs.push(`${nodeOption}=${value}`)
+  }
+  const separator = rest.indexOf('--')
+  if (separator >= 0) nodeArgs.push(...rest.slice(separator + 1))
+  nodeArgs.push(...defaults)
+  const child = spawn(process.execPath, nodeArgs, { stdio: 'inherit', env: process.env })
+  const code = await new Promise<number>((resolve, reject) => {
+    child.on('error', reject)
+    child.on('exit', (status, signal) => resolve(status ?? (signal ? 1 : 0)))
+  })
+  process.exit(code)
+}
+
+const callHeaders = (): Headers => {
+  const headers = new Headers()
+  for (const raw of opts('header')) {
+    const separator = raw.indexOf(':')
+    if (separator <= 0) throw new Error(`invalid --header "${raw}" (expected "Name: value")`)
+    headers.append(raw.slice(0, separator).trim(), raw.slice(separator + 1).trim())
+  }
+  const cookie = opt('cookie')
+  if (cookie) headers.set('cookie', cookie)
+  return headers
+}
+
+const jsonObject = (value: string | undefined, label: string): Record<string, unknown> => {
+  const raw =
+    value === undefined
+      ? '{}'
+      : value === '-'
+        ? readFileSync(0, 'utf8')
+        : value.startsWith('@')
+          ? readFileSync(value.slice(1), 'utf8')
+          : value
+  const parsed = JSON.parse(raw) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new Error(`${label} must be a JSON object`)
+  return parsed as Record<string, unknown>
+}
+
+const callInput = (): Record<string, unknown> => jsonObject(opt('input'), '--input')
+
+const callWithClient = async (baseUrl: string): Promise<number> => {
+  const fnKey = positionals([
+    'against',
+    'input',
+    'company',
+    'companies',
+    'branches',
+    'tenant',
+    'tenant-header',
+    'locale',
+    'cookie',
+    'cookie-file',
+    'login',
+    'login-path',
+    'idempotency-key',
+    'header',
+    'app',
+    'workspace',
+  ])[0]
+  if (!fnKey) throw new Error('usage: ket call FUNCTION [--against URL] [--input JSON|@FILE|-]')
+  const cookieFile = opt('cookie-file')
+  const jar = cookieFile ? await CookieJar.load(cookieFile) : new CookieJar()
+  const list = (name: string) =>
+    opt(name)
+      ?.split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  const client = new TestClient(baseUrl, {
+    jar,
+    company: opt('company'),
+    companies: list('companies'),
+    branches: list('branches'),
+    tenant: opt('tenant'),
+    tenantHeader: opt('tenant-header'),
+    locale: opt('locale'),
+    headers: callHeaders(),
+  })
+  try {
+    if (opt('login')) await client.login(jsonObject(opt('login'), '--login'), opt('login-path') ?? '/login')
+    const result = await client.call(fnKey, callInput(), {
+      dryRun: flag('dry-run'),
+      ...(opt('idempotency-key') ? { idempotencyKey: opt('idempotency-key') as string } : {}),
+    })
+    if (cookieFile) await jar.save(cookieFile)
+    const output = flag('value') ? result.value : result
+    console.log(JSON.stringify(output, null, flag('compact') ? 0 : 2))
+    return 0
+  } catch (error) {
+    if (cookieFile) await jar.save(cookieFile)
+    if (!(error instanceof TestHttpError)) throw error
+    console.error(JSON.stringify(error.body, null, 2))
+    return 1
+  }
+}
 
 try {
   if (cmd === 'help' || cmd === '--help') {
@@ -118,6 +311,16 @@ try {
     if (!name) throw new Error('usage: ket new NAME [--dir DIR]')
     for (const line of scaffold(name, opt('dir') ?? name)) console.log(line)
     process.exit(0)
+  }
+
+  if (cmd === 'test') await runTests()
+
+  // Remote smoke calls need no workspace and do not boot a second app.
+  if (cmd === 'call' && opt('against')) {
+    const against = new URL(opt('against') as string)
+    if (against.protocol !== 'http:' && against.protocol !== 'https:')
+      throw new Error('--against must be an http(s) URL')
+    process.exit(await callWithClient(against.toString()))
   }
 
   if (cmd === 'dev') {
@@ -149,6 +352,33 @@ try {
     const spec = pickSpec(specs)
     const worker = await serveWorker(spec, { env: process.env })
     console.log(`worker ${worker.workerId} is running (${Object.keys(spec.worker?.queues ?? {}).join(', ')})`)
+  } else if (cmd === 'call') {
+    const spec = pickSpec(specs)
+    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
+    if (flag('isolated')) {
+      const testApp = await createTestApp(spec, { worker: false })
+      try {
+        process.exitCode = await callWithClient(testApp.baseUrl)
+      } finally {
+        await testApp.close()
+      }
+    } else {
+      const env = {
+        ...process.env,
+        ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}),
+        ...(flag('no-auto-install') ? { KET_AUTO_INSTALL: '0' } : {}),
+      }
+      const app = await bootApp(spec, {
+        env,
+        port: 0,
+        log: flag('verbose') ? (line) => console.error(line) : () => {},
+      })
+      try {
+        process.exitCode = await callWithClient(`http://127.0.0.1:${app.port}`)
+      } finally {
+        await app.close()
+      }
+    }
   } else if (cmd === 'all') {
     const spec = pickSpec(specs)
     if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)

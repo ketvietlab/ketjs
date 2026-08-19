@@ -7,6 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch --clear-screen=false tools/dev.mjs serve --workspace ket.workspace.ts",
     "start": "npm run build && ket serve --workspace dist/ket.workspace.js",
+    "test": "npm run build && ket test dist/test",
+    "test:watch": "ket test dist/test --watch",
     "check": "tsc -p tsconfig.json --noEmit && biome check . && npm run build && ket check --workspace dist/ket.workspace.js",
     "format": "biome format --write .",
     "lint": "biome lint ."

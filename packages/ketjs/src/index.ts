@@ -16,7 +16,7 @@ export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server
 export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
 export { bootApp, serveApp } from './server/boot.ts'
-export type { ServeSpec, ServeContext, PagesSpec, BootedApp, Route } from './server/boot.ts'
+export type { ServeSpec, ServeContext, PagesSpec, BootedApp, BootAppOptions, Route } from './server/boot.ts'
 export { bootRuntime } from './server/runtime.ts'
 export type { BootedRuntime } from './server/runtime.ts'
 export { bootWorker, serveWorker } from './server/worker.ts'

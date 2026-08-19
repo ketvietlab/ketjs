@@ -1,4 +1,4 @@
-import { defineApp } from 'ketjs'
+import { defineApp, json } from 'ketjs'
 import __NAME__ from './modules/__NAME__.ts'
 
 // One codebase, many apps. `ket serve` runs the first one that declares `serve`.
@@ -10,10 +10,7 @@ export const app = defineApp({
     // Installed on an empty database so a first run has something to look at.
     bootstrap: ['__NAME__'],
     routes: (ctx) => ({
-      '/': async (url, req) => ({
-        type: 'application/json',
-        body: JSON.stringify(await ctx.call('__NAME__.list', {}, url, req), null, 2),
-      }),
+      '/': async (url, req) => json(await ctx.call('__NAME__.list', {}, url, req)),
     }),
   },
 })

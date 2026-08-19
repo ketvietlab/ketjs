@@ -19,6 +19,7 @@ npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
+npm run test:one -- test/e2e.test.ts        # one emitted test file
 npm run bench:queue                         # queue across many physical databases
 npm run bench:storage                       # S3 storage across tenant databases
 ```
@@ -52,6 +53,30 @@ npx ket new shop && cd shop && npm install && npm run dev
 ```
 
 writes an app that runs unedited: a module, a model, a function and a route.
+
+## Headless end-to-end tests
+
+`ketjs/testing` boots the real app on an ephemeral port with an isolated SQLite
+database and storage directory. `TestClient` crosses HTTP, retains login cookies,
+models company/tenant identity and can drain the app's durable worker without ever
+opening a browser. Fixture calls are named separately so test setup cannot be
+mistaken for the public action being exercised.
+
+```ts
+const e2e = await createTestApp(app)
+try {
+  await e2e.fixture.call('catalog.seed', fixture)
+  const result = await e2e.client.call('catalog.list', {})
+  assert.equal(result.value.length, 1)
+} finally {
+  await e2e.close()
+}
+```
+
+Use `ket call FUNCTION --against http://localhost:3000` for a manual smoke call,
+and `ket test dist/test --watch` to run emitted headless tests. Full API, isolation,
+authentication, multi-tenant and worker examples are in
+[the headless E2E guide](docs/05-headless-e2e.md).
 
 **No authentication yet.** The company a request acts as comes from the
 `X-Ket-Company` header. Fine for development, not for production; the resolver is

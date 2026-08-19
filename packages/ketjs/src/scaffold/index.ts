@@ -24,6 +24,7 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['tsconfig.json.tmpl', () => 'tsconfig.json'],
   ['biome.json.tmpl', () => 'biome.json'],
   ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
+  ['app.test.ts.tmpl', () => 'test/app.test.ts'],
   ['gitignore.tmpl', () => '.gitignore'],
 ]
 
