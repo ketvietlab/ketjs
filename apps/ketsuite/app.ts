@@ -25,6 +25,12 @@ export const ketsuite = defineApp({
     openStore,
     defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },
     bootstrap: ['website', 'theme_paper', 'backend', 'product', 'user'],
+    /**
+     * Identity comes from a signed cookie now, not from X-Ket-Company. The store
+     * is the database, so several pods share sessions without extra infrastructure;
+     * anonymous requests still get a company, because a public storefront needs one.
+     */
+    sessions: { anonymous: { company: 'default' } },
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
   },
 })
