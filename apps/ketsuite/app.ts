@@ -16,6 +16,7 @@ export const ketsuite = defineApp({
   /** Every module KetSuite ships. Adding one here is what makes it installable. */
   modules: [
     suite.website, suite.websiteMenu, suite.websiteSeo, suite.websiteSearch,
+    suite.partner, suite.company, suite.user,
     suite.uom, suite.product, backend,
   ],
   theme: suite.paperTheme,
@@ -23,7 +24,7 @@ export const ketsuite = defineApp({
   serve: {
     openStore,
     defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },
-    bootstrap: ['website', 'theme_paper', 'backend', 'product'],
+    bootstrap: ['website', 'theme_paper', 'backend', 'product', 'user'],
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
   },
 })

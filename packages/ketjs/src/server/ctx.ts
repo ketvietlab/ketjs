@@ -238,6 +238,18 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       return Number((rows[0] as { count: number }).count)
     },
     async del(q) {
+      // A select passed to del renders as a select and deletes nothing — and the
+      // effect check sees 'read', so a function that correctly declared 'write'
+      // is refused for an effect it never wanted. website_menu.removeMenuItem was
+      // written that way and had therefore never once worked.
+      if (q.kind !== 'delete') {
+        throw new KetError({
+          code: 'E_NOT_A_DELETE',
+          module: fn.by,
+          message: `"${fnKey}" passed a ${q.kind} query to db.del`,
+          hint: 'build it with deleteFrom(table), not from(table)',
+        })
+      }
       checkQuery(q)
       writes.push({ op: 'update', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
