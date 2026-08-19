@@ -1305,3 +1305,100 @@ deliberate: a pager that changes width as you page is a pager you cannot aim at.
 **Deferred:** the "Mới" button. `ListChrome` carries `create` and the catalogue shows
 it, but no live screen sets it, because no create screen exists yet. A button that
 404s is worse than no button.
+
+## D44 — Columns are data, and one bar holds the chrome
+**A module says what its columns ARE.** Key, label, how to read one out of a row,
+whether it is on by default. It does not write a `<table>`. Three things follow at
+once: every list in the product has the same row height, the same sticky header and
+the same overflow behaviour; a column can be turned off without touching markup; and
+a module extending another module's list has something to name.
+
+```ts
+export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
+  { key: 'name', label: _('…col.name'), cell: (r) => r.name },
+  { key: 'variants', label: _('…col.variants'), cell: (r) => String(r.variants), align: 'end' },
+  { key: 'id', label: _('backend.table.id'), cell: (r) => html`<code>${r.id}</code>`, optional: true },
+]
+```
+
+**An optional column that is off is absent from the HTML.** Not hidden by CSS —
+hiding it would still ship the data to the browser, and a column a viewer cannot see
+but can read in view-source is a column that leaked. Which ones are on lives in the
+URL, like everything else about a list (D43), so a colleague can be sent the list
+*with the id column showing*.
+
+**The column menu is links, not checkboxes.** A checkbox needs a handler to mean
+anything, and a handler is client state. Each entry is the same list with one column
+more, or one fewer. Toggling one keeps the page you are on — showing another column
+is not a new filter, so `withParam` grew a `resetPage` argument to say so.
+
+**One bar, and no breadcrumb in it.** The chrome was a breadcrumb row under the
+topbar at first, the way a lot of admin UIs do it. Two bars cost 3rem of every screen
+to say what fits in one, and the title above and the breadcrumb below were the same
+sentence twice — so they became one bar: title, then the search in the middle, then
+the pager and view switcher.
+
+Then the breadcrumb went entirely. The sidebar already says which app you are in and
+which entry is open, in two places you are looking at anyway; a trail across the top
+repeats both, and earns its line back only on screens nested deeper than this product
+goes. Both corrections came from looking at the thing, not from planning it.
+
+**Who you are moved to the foot of the sidebar,** with the counters for what is
+waiting. In the topbar it competed with the title and the search for the one line
+that changes on every screen; at the foot of the sidebar it sits with the one thing
+that never changes. The counters are `Indicator` data plus a `sidebar.foot` joint —
+the shell does not know what an activity is, so a module with a queue of anything
+says so and it appears. A count of zero renders the icon with no number: a badge that
+says nothing is a badge people stop reading.
+
+**Three labels came out of the sidebar.** The active app was named at the top, again
+as the highlighted row in the app list, and a third time above its menu; "ỨNG DỤNG"
+labelled a column of application icons. Each cost a line of the one column that has
+to hold forty menu entries, and the highlighting had already said it.
+
+**A list runs to both edges of the pane.** The border, the radius and the drop
+shadow were drawing a card around something that is not a card, and the reading
+measure that suits prose is wrong for a table: the eye follows a row to a column that
+is not there, and the space it was centred in was the space the row needed. Screens
+that are read rather than scanned — the app grid, the settings list — keep the
+measure, which is what `:has()` selects on.
+
+**Tone, not colour.** `badge(label, 'positive')` rather than `data-published="true"`.
+A design team that wants "draft" amber changes one rule and every draft in the product
+follows. `data-value` carries the raw state as well, so a stylesheet can still be more
+specific where it must be.
+
+**Initials, not photographs.** Nothing stores an avatar image yet, and a broken image
+in every row is worse than none. When images arrive this stays as the fallback, which
+it would have had to be anyway. Vietnamese puts the given name last, so that is the
+letter that comes first.
+
+## D45 — The shell is ported from vidoo_backend_theme, icons included
+**Why port rather than design.** KétViệt already runs an Odoo backend with a theme
+the team built and uses daily — `vidoo_backend_theme`, 228px sidebar, no desktop
+application bar, systray at the foot. A framework that ships a *different* good admin
+gives the company two products to learn. So the sidebar here is that sidebar: the
+same widths, the same 13px/500 rows, the same `--kv-*` palette the tokens were
+already derived from, the same brand row, menu search, app list, section tree with a
+rule down its left and a dot on each leaf, and the same footer.
+
+**Icons are vendored, not installed.** Twelve Lucide glyphs (ISC) as strings in
+`icons.ts`, which is what the Odoo theme does too. An icon set is data — a few
+hundred bytes of path each — and taking a package for it would put a dependency, a
+build step and a supply chain between this repo and twelve strings. `audit:zero-dep`
+is not a slogan to work around; it is the reason a Ket app is one `node` away from
+running.
+
+`MenuDef.icon` therefore became a *name*, not a glyph. The theme decides what a name
+draws, and a name this build does not carry falls back to a monogram — a module
+naming an icon we never vendored loses its icon, not its row.
+
+**A glyph with no size is the size of its container,** which the search icon
+demonstrated at about 300px tall. `[data-ui="icon"]` now defaults to `1em`, and the
+fixed boxes opt into filling.
+
+**Two searches, and they are different things.** The one in the sidebar narrows the
+menu; the one in the control panel narrows the list. Both are GET forms with their
+state in the URL (D43), so a filtered sidebar is also a link. A filter that matches
+nothing says so — the label and silence under it read as broken rather than as
+"nothing here".

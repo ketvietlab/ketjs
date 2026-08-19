@@ -359,8 +359,11 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     menu: async (url, req) => {
       const allow = await allowFor(url, req)
       const _ = translate(localeOf(url, req))
+      // The sidebar's search is in the URL like every other list's, so a filtered
+      // menu is a link and the back button walks out of it.
+      const q = url.searchParams.get('menu')?.trim() || undefined
       return tenants.ofRequest(url, req, async (t) =>
-        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname }))
+        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }))
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),

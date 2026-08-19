@@ -3,6 +3,8 @@ import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 import type { AppRow, PageRow, Viewer } from './screens.ts'
 import { loginScreen } from '../user/login.ts'
+import { person } from './table.ts'
+import type { ListChrome } from './screens.ts'
 import type { MenuNode, Translator } from 'ketjs'
 
 /**
@@ -35,20 +37,40 @@ const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode
   ({ id, label, path: null, icon: null, active: false, children: [], ...over })
 
 const MENU: MenuNode[] = [
-  node('sales', 'Bán hàng', { icon: 'B', children: [
+  node('sales', 'Bán hàng', { icon: 'shopping-cart', children: [
     node('sales.orders', 'Đơn hàng', { children: [
       node('sales.quotes', 'Báo giá', { path: '/quotes' }),
       node('sales.list', 'Đơn hàng', { path: '/orders' }),
     ] }),
   ] }),
-  node('product', 'Sản phẩm', { icon: '📦', children: [
+  node('product', 'Sản phẩm', { icon: 'package', children: [
     node('product.catalogue', 'Danh mục', { children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/products' })] }),
   ] }),
-  node('admin', 'Quản trị', { icon: '⚙', active: true, children: [
+  node('admin', 'Quản trị', { icon: 'settings', active: true, children: [
     node('admin.apps', 'Ứng dụng', { path: '/admin', active: true }),
     node('admin.content', 'Nội dung', { children: [node('admin.pages', 'Trang', { path: '/admin/pages' })] }),
     node('admin.config', 'Cấu hình', { children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })] }),
   ] }),
+]
+
+/** A bar with every control on, so the design team sees the crowded case. */
+const CHROME: ListChrome = {
+  search: { name: 'q', value: 'gioi', placeholder: 'Tìm trang…', facets: [{ label: 'Tìm: gioi', without: '/admin/pages' }] },
+  pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
+  views: [
+    { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: true },
+    { id: 'kanban', label: 'Thẻ', icon: 'layout-grid', path: '?view=kanban', active: false },
+  ],
+}
+
+/**
+ * Counters at the foot of the sidebar. No live screen sets these yet — nothing in
+ * the product has a queue to count — so this is where the design for them lives
+ * until something does.
+ */
+const INDICATORS = [
+  { id: 'activity', icon: 'bell', label: 'Việc cần làm', count: 3, path: '/admin/activities' },
+  { id: 'message', icon: 'mail', label: 'Thông báo', count: 12, path: '/admin/messages' },
 ]
 
 export const CASES: Array<{ id: string; label: string; note: string; render: (t: Translator) => TemplateResult }> = [
@@ -66,7 +88,7 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
   },
   {
     id: 'viewer-one', label: 'Thanh trên — một công ty', note: 'Chỉ tên và nút đăng xuất. Tên công ty cố tình ẩn khi tài khoản chỉ thuộc một.',
-    render: (_) => appsScreen(_, [app({ state: 'installed' })], { viewer: viewer(), menu: MENU }),
+    render: (_) => appsScreen(_, [app({ state: 'installed' })], { viewer: viewer(), menu: MENU, indicators: INDICATORS }),
   },
   {
     id: 'viewer-many', label: 'Thanh trên — nhiều công ty', note: 'Có tên công ty đang chọn. Chưa có cách đổi công ty — chỗ này sẽ cần một điều khiển.',
@@ -104,7 +126,7 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
     render: (_) => pagesScreen(_, [
       page(), page({ id: 'p2', path: '/gioi-thieu', title: 'Giới thiệu', published: false }),
       page({ id: 'p3', path: '/lien-he', title: 'Liên hệ' }),
-    ], { menu: MENU }),
+    ], { menu: MENU, chrome: CHROME }),
   },
   {
     id: 'pages-long', label: 'Trang — danh sách dài', note: 'Đường dẫn dài, tiêu đề dài, 40 dòng.',
@@ -115,6 +137,20 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
     })), { menu: MENU }),
   },
   { id: 'pages-empty', label: 'Trang — trống', note: 'Chưa có trang nào.', render: (_) => pagesScreen(_, [], { menu: MENU }) },
+  {
+    id: 'pages-columns', label: 'Bảng — chọn cột',
+    note: 'Menu chọn cột đang mở. Cột tuỳ chọn không có trong HTML khi tắt, không phải ẩn bằng CSS.',
+    render: (_) => pagesScreen(_, [page(), page({ id: 'p2', path: '/gioi-thieu', title: 'Giới thiệu', published: false })],
+      { menu: MENU, chrome: { ...CHROME, pager: null } },
+      { shown: ['id'], colsHref: (keys) => `?cols=${keys.join(',')}` }),
+  },
+  {
+    id: 'people', label: 'Người — tên và chữ đầu',
+    note: 'Chữ đầu lấy từ tên gọi (tiếng Việt đặt ở cuối). Chưa có ảnh thật, và đây vẫn là bản dự phòng khi có.',
+    render: () => html`<div data-ui="tokens">
+      ${each(['Nguyễn Quản Trị', 'Trần Thị Hoàng Yến Vy', 'Admin'], n => n, n => html`<div data-ui="token">${person(n)}</div>`)}
+    </div>`,
+  },
   {
     id: 'settings', label: 'Cài đặt — token', note: 'Danh sách token đang áp dụng.',
     render: (_) => settingsScreen(_, { 'color-accent': 'oklch(0.55 0.18 268)', 'radius': '0.75rem', 'page-max-width': '68rem', 'section-gap': '4rem' }, { menu: MENU }),

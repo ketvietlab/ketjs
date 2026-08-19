@@ -107,13 +107,15 @@ test('backend: a fetch() gets a status, because a redirect to HTML answers nothi
   await b.close()
 })
 
-test('backend: signed in, the topbar says who and offers the way out', async () => {
+test('backend: signed in, the sidebar says who and offers the way out', async () => {
   const { b, at } = await setup()
   const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers.get('set-cookie')!.split(';')[0]!
   const html = await (await fetch(`${at}/admin`, { headers: { ...HTML, cookie: jar } })).text()
-  const bar = html.slice(html.indexOf('data-ui="topbar"'), html.indexOf('data-ui="content"')).replace(/<!--[^>]*-->/g, '')
-  assert.match(bar, /data-ui="viewer-name">Nguyễn Quản Trị/)
-  assert.match(bar, /data-ui="signout"[^>]*action="\/logout"/)
+  // At the foot of the sidebar, not in the topbar: it competed there with the
+  // title and the search for the one line that changes on every screen.
+  const foot = html.slice(html.indexOf('data-ui="sidebar-foot"'), html.indexOf('</aside>')).replace(/<!--[^>]*-->/g, '')
+  assert.match(foot, /data-ui="viewer-name">Nguyễn Quản Trị/)
+  assert.match(foot, /data-ui="signout"[^>]*action="\/logout"/)
   await b.close()
 })
 

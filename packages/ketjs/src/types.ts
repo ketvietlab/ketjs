@@ -74,7 +74,11 @@ export type MenuDef = {
   needs?: string
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
-  /** For an app: the mark shown beside it. Two characters at most, by convention. */
+  /**
+   * For an app: the glyph shown beside it, by name. The theme decides what a
+   * name draws and what an unknown one falls back to — a module naming an icon
+   * this build does not carry loses its icon, not its row.
+   */
   icon?: string
 }
 

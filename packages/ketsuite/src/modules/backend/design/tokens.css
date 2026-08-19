@@ -77,7 +77,7 @@
     --admin-shadow-float: 0 2px 4px rgba(24, 24, 27, 0.05), 0 6px 16px -4px rgba(24, 24, 27, 0.1);
 
     /* Shell and controls */
-    --admin-sidebar-width: 15.5rem;
+    --admin-sidebar-width: 14.25rem;
     --admin-topbar-height: 3.25rem;
     --admin-control-height: 2rem;
     --admin-row-height: 2.75rem;
