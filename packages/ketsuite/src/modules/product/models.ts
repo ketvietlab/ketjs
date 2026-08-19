@@ -29,6 +29,7 @@ export const models: Record<string, ModelDef> = {
       // the column, because the type vocabulary is deliberately small.
       type: 'text',
       categoryId: 'ref:product.Category?',
+      uomId: 'ref:uom.Unit?',
       description: 'text?',
       listPrice: 'decimal',
       saleOk: 'bool',
@@ -59,25 +60,35 @@ export const models: Record<string, ModelDef> = {
 
   Cost: {
     scope: 'company',
-    fields: { id: 'id', productId: 'ref:product.Product', amount: 'decimal' },
+    fields: { id: 'id', productId: 'ref:product.Product', standardPrice: 'decimal' },
     indexes: { product_company: { fields: ['companyId', 'productId'], unique: true } },
   },
 
   TemplateUom: {
     scope: 'shared',
-    fields: { id: 'id', templateId: 'ref:product.Template', uomId: 'ref:uom.Unit', primary: 'bool' },
+    fields: { id: 'id', templateId: 'ref:product.Template', uomId: 'ref:uom.Unit' },
     indexes: { template_uom: { fields: ['templateId', 'uomId'], unique: true } },
   },
 
   ProductUom: {
-    scope: 'shared',
-    fields: { id: 'id', productId: 'ref:product.Product', uomId: 'ref:uom.Unit' },
-    indexes: { product_uom: { fields: ['productId', 'uomId'], unique: true } },
+    scope: 'company',
+    fields: { id: 'id', productId: 'ref:product.Product', uomId: 'ref:uom.Unit', barcode: 'text?' },
+    indexes: {
+      product_uom: { fields: ['companyId', 'productId', 'uomId'], unique: true },
+      barcode_company: { fields: ['companyId', 'barcode'], unique: true },
+    },
   },
 
   Attribute: {
     scope: 'shared',
-    fields: { id: 'id', name: 'text', sequence: 'int' },
+    fields: {
+      id: 'id',
+      name: 'text',
+      sequence: 'int',
+      displayType: 'text',
+      createVariant: 'text',
+      active: 'bool',
+    },
   },
 
   AttributeValue: {

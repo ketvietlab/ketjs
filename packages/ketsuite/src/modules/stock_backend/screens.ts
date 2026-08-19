@@ -1,6 +1,6 @@
 import type { Translator } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
-import { badge, code, dataTable, emptyState, framed } from '../../ui/index.ts'
+import { badge, code, dataTable, emptyState, framed, linkButton, stack } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 
 export type StockRow = {
@@ -9,10 +9,17 @@ export type StockRow = {
   kind: string
   state?: string | null
   detail?: string | null
+  href?: string | null
 }
 
 const columns = (_: Translator): Array<Column<StockRow>> => [
-  { key: 'name', label: _('stock_backend.col.name'), cell: (row) => row.name, priority: 'primary' },
+  {
+    key: 'name',
+    label: _('stock_backend.col.name'),
+    cell: (row) =>
+      row.href ? linkButton({ label: row.name, href: row.href, variant: 'tertiary' }) : row.name,
+    priority: 'primary',
+  },
   { key: 'kind', label: _('stock_backend.col.kind'), cell: (row) => badge(row.kind), priority: 'secondary' },
   {
     key: 'state',
@@ -24,12 +31,21 @@ const columns = (_: Translator): Array<Column<StockRow>> => [
   { key: 'id', label: _('backend.table.id'), cell: (row) => code(row.id, 'identifier'), optional: true },
 ]
 
-export const stockScreen = (_: Translator, title: string, rows: StockRow[], frame: Frame): TemplateResult =>
+export const stockScreen = (
+  _: Translator,
+  title: string,
+  rows: StockRow[],
+  frame: Frame,
+  additions: readonly unknown[] = [],
+): TemplateResult =>
   framed(
     _,
     title,
     frame,
-    rows.length
-      ? dataTable(_, { columns: columns(_), rows, id: (row) => row.id })
-      : emptyState(_('stock_backend.empty'), _('stock_backend.emptyHint')),
+    stack([
+      ...additions,
+      rows.length
+        ? dataTable(_, { columns: columns(_), rows, id: (row) => row.id })
+        : emptyState(_('stock_backend.empty'), _('stock_backend.emptyHint')),
+    ]),
   )

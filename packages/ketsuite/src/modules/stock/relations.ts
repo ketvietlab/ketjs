@@ -31,4 +31,11 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     origin: { belongsTo: 'stock.Move', by: 'originMoveId' },
     destination: { belongsTo: 'stock.Move', by: 'destinationMoveId' },
   },
+  'stock.Orderpoint': {
+    product: { belongsTo: 'product.Product', by: 'productId' },
+    warehouse: { belongsTo: 'stock.Warehouse', by: 'warehouseId' },
+    location: { belongsTo: 'stock.Location', by: 'locationId' },
+    replenishmentUom: { belongsTo: 'uom.Unit', by: 'replenishmentUomId' },
+    route: { belongsTo: 'stock.Route', by: 'routeId' },
+  },
 }

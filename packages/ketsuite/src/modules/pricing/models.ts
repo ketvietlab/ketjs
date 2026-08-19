@@ -3,7 +3,7 @@ import type { ModelDef } from 'ketjs'
 export const models: Record<string, ModelDef> = {
   Pricelist: {
     scope: 'company',
-    fields: { id: 'id', name: 'text', sequence: 'int', active: 'bool' },
+    fields: { id: 'id', name: 'text', currency: 'text', sequence: 'int', active: 'bool' },
   },
   PricelistItem: {
     scope: 'company',

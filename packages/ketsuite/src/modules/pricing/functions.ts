@@ -1,6 +1,6 @@
 import { defineFn } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
-import { roundTo } from '../uom/convert.ts'
+import { convertQty, roundTo, type Unit } from '../uom/convert.ts'
 
 export const APPLIED_ON = ['3_global', '2_product_category', '1_product', '0_product_variant'] as const
 export const COMPUTE_PRICE = ['percentage', 'formula', 'fixed'] as const
@@ -61,7 +61,9 @@ async function priceFor(
   qty: number,
   date: string,
   seen: Set<string>,
+  depth = 0,
 ): Promise<{ price: number; ruleId: string | null }> {
+  if (depth >= 32) throw new Error('pricelist recursion exceeds 32 levels')
   if (seen.has(pricelistId)) throw new Error(`recursive pricelist: ${[...seen, pricelistId].join(' -> ')}`)
   const nextSeen = new Set(seen).add(pricelistId)
   const categories = await categoryAncestors(ctx, template.categoryId)
@@ -81,10 +83,16 @@ async function priceFor(
   let base: number
   if (rule.base === 'standard_price') {
     const cost = (await ctx.db.select('product.Cost', { productId: product.id }))[0]
-    base = Number(cost?.amount ?? 0)
+    base = Number(cost?.standardPrice ?? 0)
   } else if (rule.base === 'pricelist') {
     if (!rule.basePricelistId) throw new Error(`rule ${String(rule.id)} has no base pricelist`)
-    base = (await priceFor(ctx, String(rule.basePricelistId), product, template, qty, date, nextSeen)).price
+    const nested = (await ctx.db.select('pricing.Pricelist', { id: rule.basePricelistId }))[0]
+    const current = (await ctx.db.select('pricing.Pricelist', { id: pricelistId }))[0]
+    if (!nested || nested.currency !== current?.currency)
+      throw new Error(`base pricelist ${String(rule.basePricelistId)} must use company currency`)
+    base = (
+      await priceFor(ctx, String(rule.basePricelistId), product, template, qty, date, nextSeen, depth + 1)
+    ).price
   } else base = Number(template.listPrice)
 
   let price = base
@@ -115,18 +123,24 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   savePricelist: defineFn({
-    input: { id: 'id', name: 'text', sequence: 'int?', active: 'bool?' },
+    input: { id: 'id', name: 'text', currency: 'text?', sequence: 'int?', active: 'bool?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:pricing.Pricelist', 'write:pricing.Pricelist'],
+    effects: ['read:pricing.Pricelist', 'write:pricing.Pricelist', 'read:company.Company'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
+      if (!ctx.scope.company) return invalid('company', 'cần chọn company')
+      const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
+      if (!company) return invalid('company', 'company không tồn tại')
+      const currency = String(args.currency ?? company.currency)
+      if (currency !== company.currency)
+        return invalid('currency', `phải dùng currency ${String(company.currency)} của company`)
       const existing = (await ctx.db.select('pricing.Pricelist', { id: args.id }))[0]
-      const values = { ...args, sequence: args.sequence ?? 16, active: args.active ?? true }
+      const values = { ...args, currency, sequence: args.sequence ?? 16, active: args.active ?? true }
       const cs = ctx
         .change('pricing.Pricelist', values, existing ?? null)
-        .cast(['id', 'name', 'sequence', 'active'])
-        .required(['name'])
+        .cast(['id', 'name', 'currency', 'sequence', 'active'])
+        .required(['name', 'currency'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
@@ -175,6 +189,12 @@ export const functions: Record<string, FnSpec> = {
         return invalid('basePricelistId', 'bắt buộc khi base là pricelist')
       if (args.basePricelistId === args.pricelistId)
         return invalid('basePricelistId', 'bảng giá không thể dựa trên chính nó')
+      if (args.basePricelistId) {
+        const current = (await ctx.db.select('pricing.Pricelist', { id: args.pricelistId }))[0]!
+        const nested = (await ctx.db.select('pricing.Pricelist', { id: args.basePricelistId }))[0]
+        if (!nested || nested.currency !== current.currency)
+          return invalid('basePricelistId', 'bảng giá gốc phải cùng company và currency')
+      }
       const target =
         args.appliedOn === '0_product_variant'
           ? args.productId
@@ -228,8 +248,8 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   priceFor: defineFn({
-    input: { pricelistId: 'id', productId: 'id', quantity: 'decimal', date: 'datetime?' },
-    output: { ok: 'bool', price: 'decimal?', ruleId: 'id?', errors: 'json?' },
+    input: { pricelistId: 'id', productId: 'id', quantity: 'decimal', uomId: 'id?', date: 'datetime?' },
+    output: { ok: 'bool', price: 'decimal?', currency: 'text?', ruleId: 'id?', errors: 'json?' },
     effects: [
       'read:pricing.Pricelist',
       'read:pricing.PricelistItem',
@@ -237,25 +257,38 @@ export const functions: Record<string, FnSpec> = {
       'read:product.Template',
       'read:product.Category',
       'read:product.Cost',
+      'read:uom.Unit',
     ],
     agent: true,
     handler: async (ctx, args) => {
-      if (!(await ctx.db.select('pricing.Pricelist', { id: args.pricelistId }))[0])
-        return invalid('pricelistId', 'bảng giá không tồn tại')
+      const pricelist = (await ctx.db.select('pricing.Pricelist', { id: args.pricelistId }))[0]
+      if (!pricelist) return invalid('pricelistId', 'bảng giá không tồn tại')
       const product = (await ctx.db.select('product.Product', { id: args.productId }))[0]
       if (!product) return invalid('productId', 'biến thể không tồn tại')
       const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]!
+      let quantity = Number(args.quantity)
+      if (args.uomId) {
+        if (!template.uomId) return invalid('uomId', 'template chưa có UoM mặc định')
+        const from = (await ctx.db.select('uom.Unit', { id: args.uomId }))[0]
+        const to = (await ctx.db.select('uom.Unit', { id: template.uomId }))[0]
+        if (!from || !to) return invalid('uomId', 'đơn vị không tồn tại')
+        try {
+          quantity = convertQty(quantity, from as unknown as Unit, to as unknown as Unit)
+        } catch (error) {
+          return invalid('uomId', (error as Error).message)
+        }
+      }
       try {
         const result = await priceFor(
           ctx,
           String(args.pricelistId),
           product,
           template,
-          Number(args.quantity),
+          quantity,
           String(args.date ?? new Date().toISOString()),
           new Set(),
         )
-        return { ok: true, price: String(result.price), ruleId: result.ruleId }
+        return { ok: true, price: String(result.price), currency: pricelist.currency, ruleId: result.ruleId }
       } catch (error) {
         return { ok: false, errors: [{ field: 'pricelistId', message: (error as Error).message }] }
       }

@@ -4,16 +4,14 @@ import { models } from './models.ts'
 import { relations } from './relations.ts'
 
 export default defineModule({
-  name: 'pricing',
+  name: 'product_media',
   version: '0.1.0',
-  depends: ['product', 'company', 'uom'],
+  depends: ['product', 'storage'],
   app: true,
-  title: 'Bảng giá',
-  summary: 'Quy tắc giá theo Odoo 19 trong tiền tệ của company.',
+  title: 'Hình ảnh sản phẩm',
+  summary: 'Ảnh chính và thư viện ảnh của mẫu sản phẩm và biến thể.',
   category: 'Bán hàng',
   models,
   relations,
   functions,
 })
-
-export { APPLIED_ON, COMPUTE_PRICE, PRICE_BASES } from './functions.ts'

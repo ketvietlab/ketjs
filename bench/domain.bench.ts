@@ -3,9 +3,9 @@
 import { performance } from 'node:perf_hooks'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter } from 'ketjs'
-import { pricing, product, stock, uom } from 'ketsuite'
+import { company, partner, pricing, product, stock, uom } from 'ketsuite'
 
-const modules = [uom, product, pricing, stock]
+const modules = [partner, company, uom, product, pricing, stock]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'bench', branches: null }
 
@@ -27,6 +27,8 @@ await adapter.open()
 try {
   await migrateOne(adapter, manifest)
   registerFunctions(modules)
+  await call('partner.savePartner', { id: 'bench-party', kind: 'company', name: 'Benchmark' }, adapter)
+  await call('company.saveCompany', { id: 'bench', partnerId: 'bench-party', currency: 'VND' }, adapter)
   await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' }, adapter)
   await call(
     'product.saveTemplate',

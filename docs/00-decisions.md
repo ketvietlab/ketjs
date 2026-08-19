@@ -1540,9 +1540,12 @@ reservation operate on a requested location, while replenishment selects product
 category, then warehouse routes. Stock in one warehouse therefore cannot silently
 satisfy another warehouse's move.
 
-**Images stop at a named seam.** Product screens publish template and variant media
-joints and render unavailable, loading, ready and error states. Until an image
-adapter fills that seam, actions stay disabled and no request is emitted. Product
-and stock own no image table, upload route, URL column or storage convention; the
-image team's backend can arrive without a schema invented here becoming accidental
-public API.
+**Product media is metadata over storage, not a second blob system.** Product
+screens retain the named template and variant media joints and the unavailable,
+loading, ready and error states. The installed `product_media` bridge adds only
+company-scoped ordering, alt text and primary-image metadata; bytes, checksums,
+delivery and garbage collection stay with `storage.Attachment` and the `Storage`
+contract from D48. Upload, primary selection, reordering and removal use native
+forms, and the neutral UI component receives URLs and action endpoints instead of
+depending on a schema or object-store convention. Product and stock still own no
+blob column, resize pipeline, CDN rule or file-processing implementation.

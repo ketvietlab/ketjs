@@ -2,7 +2,7 @@ import { asc, defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { compareQty, convertQty, roundTo, type Unit, type UomError } from './convert.ts'
 
-const PRECISION_ID = 'product_unit'
+const PRECISION_ID = 'product'
 
 const asUnit = (row: Row): Unit => ({
   id: String(row.id),
@@ -21,6 +21,7 @@ type UnitRow = {
   rounding: number
   parentPath: string
   active: boolean
+  locked: boolean
 }
 
 function deriveTree(rows: UnitRow[]): { ok: true; rows: UnitRow[] } | { ok: false; errors: object[] } {
@@ -106,6 +107,7 @@ export const functions: Record<string, FnSpec> = {
       relativeUomId: 'id?',
       relativeFactor: 'decimal',
       sequence: 'int?',
+      active: 'bool?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:uom.Unit', 'write:uom.Unit', 'read:uom.Precision', 'write:uom.Precision'],
@@ -122,6 +124,17 @@ export const functions: Record<string, FnSpec> = {
       const precision = (await ctx.db.select('uom.Precision', { id: PRECISION_ID }))[0]
       const digits = precision ? Number(precision.digits) : 2
       const rounding = 10 ** -digits
+      if (
+        current?.locked &&
+        (String(current.relativeUomId ?? '') !== String(args.relativeUomId ?? '') ||
+          Number(current.relativeFactor) !== Number(args.relativeFactor))
+      )
+        return {
+          ok: false,
+          errors: [
+            { field: 'relativeFactor', message: 'conversion identity đã được sử dụng và không thể đổi' },
+          ],
+        }
       const candidate: UnitRow = {
         id: String(args.id),
         name: String(args.name),
@@ -134,7 +147,8 @@ export const functions: Record<string, FnSpec> = {
         absoluteFactor: 1,
         rounding,
         parentPath: '',
-        active: current ? Boolean(current.active) : true,
+        active: args.active == null ? (current ? Boolean(current.active) : true) : Boolean(args.active),
+        locked: current ? Boolean(current.locked) : false,
       }
       const rows = stored
         .filter((row) => row.id !== args.id)
@@ -148,6 +162,7 @@ export const functions: Record<string, FnSpec> = {
           rounding,
           parentPath: String(row.parentPath),
           active: Boolean(row.active),
+          locked: Boolean(row.locked),
         }))
       rows.push(candidate)
       const derived = deriveTree(rows)
@@ -164,12 +179,26 @@ export const functions: Record<string, FnSpec> = {
             absoluteFactor: String(row.absoluteFactor),
             rounding: String(row.rounding),
             parentPath: row.parentPath,
+            locked: row.locked,
             active: row.active,
           }
           if (stored.some((old) => old.id === row.id)) await tx.db.update('uom.Unit', { id: row.id }, values)
           else await tx.db.insert('uom.Unit', { id: row.id, ...values })
         }
       })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  lockUnit: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:uom.Unit', 'write:uom.Unit'],
+    idempotent: true,
+    handler: async (ctx, args) => {
+      const unit = (await ctx.db.select('uom.Unit', { id: args.id }))[0]
+      if (!unit) return { ok: false, errors: [{ field: 'id', message: 'đơn vị không tồn tại' }] }
+      await ctx.db.update('uom.Unit', { id: args.id }, { locked: true })
       return { ok: true, id: args.id }
     },
   }),

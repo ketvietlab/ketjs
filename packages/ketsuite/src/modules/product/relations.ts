@@ -9,13 +9,13 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'product.Template': {
     variants: { hasMany: 'product.Product', by: 'templateId' },
     category: { belongsTo: 'product.Category', by: 'categoryId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
     uoms: { hasMany: 'product.TemplateUom', by: 'templateId' },
     attributeLines: { hasMany: 'product.TemplateAttributeLine', by: 'templateId' },
   },
   'product.Product': {
     template: { belongsTo: 'product.Template', by: 'templateId' },
     values: { hasMany: 'product.ProductValue', by: 'productId' },
-    uoms: { hasMany: 'product.ProductUom', by: 'productId' },
   },
   'product.Category': {
     children: { hasMany: 'product.Category', by: 'parentId' },

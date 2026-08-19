@@ -24,6 +24,7 @@ export const models: Record<string, ModelDef> = {
       absoluteFactor: 'decimal',
       rounding: 'decimal',
       parentPath: 'text',
+      locked: 'bool',
       active: 'bool',
     },
     indexes: {

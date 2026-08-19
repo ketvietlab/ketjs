@@ -33,6 +33,7 @@ import {
   pagesScreen,
   person,
   recordList,
+  recordForm,
   section,
   settingsScreen,
   stack,
@@ -162,11 +163,27 @@ const componentContract = [
     card: () => contentCard({ title: 'Grid card' }),
   }),
   metric({ label: 'Orders', value: '42', detail: 'Today' }),
+  recordForm({
+    action: '/records',
+    submit: 'Save',
+    errors: ['Invalid value'],
+    fields: [
+      { name: 'name', label: 'Name', required: true, help: 'Required' },
+      { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+    ],
+  }),
   mediaPanel({ status: 'unavailable' }),
   mediaPanel({
     status: 'ready',
+    uploadAction: '/media',
     images: [
-      { id: 'main', src: '/fixture-main.png', alt: 'Main', primary: true },
+      {
+        id: 'main',
+        src: '/fixture-main.png',
+        alt: 'Main',
+        primary: true,
+        actions: { remove: '/media/main/remove' },
+      },
       { id: 'other', src: '/fixture-other.png', alt: 'Other' },
     ],
     extension: 'Adapter slot',

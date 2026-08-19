@@ -2,9 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
-import { pricing, product, stock, uom } from 'ketsuite'
+import { company, partner, pricing, product, stock, uom } from 'ketsuite'
 
-const modules = [uom, product, pricing, stock]
+const modules = [partner, company, uom, product, pricing, stock]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 
@@ -17,6 +17,8 @@ async function boot() {
   await adapter.open()
   await migrateOne(adapter, manifest)
   registerFunctions(modules)
+  await call('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' }, adapter)
+  await call('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' }, adapter)
   await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' }, adapter)
   await call(
     'product.saveTemplate',
@@ -34,8 +36,9 @@ async function boot() {
 test('product 19: company cost, UoM links and concurrent-safe variant generation', async () => {
   const adapter = await boot()
   try {
-    await call('product.setCost', { productId: 'p1', amount: '60.25' }, adapter)
-    assert.equal((await adapter.all('SELECT amount FROM product_cost'))[0]!.amount, '60.25')
+    await call('product.setCost', { productId: 'p1', standardPrice: '60.25' }, adapter)
+    assert.equal((await adapter.all('SELECT "standardPrice" FROM product_cost'))[0]!.standardPrice, '60.25')
+    await call('product.addTemplateUom', { templateId: 'tpl', uomId: 'unit' }, adapter)
     assert.equal((await adapter.all('SELECT "uomId" FROM product_template_uom'))[0]!.uomId, 'unit')
 
     await call('product.saveAttribute', { id: 'color', name: 'Màu' }, adapter)
@@ -354,8 +357,13 @@ test('replenishment 19: orderpoint forecasts its location and uses replenishment
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+    await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, adapter)
     await call('stock.saveLocation', { id: 'supplier', name: 'Supplier', usage: 'supplier' }, adapter)
-    await call('stock.saveLocation', { id: 'stock', name: 'Stock', usage: 'internal' }, adapter)
+    await call(
+      'stock.saveLocation',
+      { id: 'stock', name: 'Stock', usage: 'internal', warehouseId: 'wh' },
+      adapter,
+    )
     await call('stock.savePickingType', { id: 'incoming', name: 'Receipt', code: 'incoming' }, adapter)
     await call('stock.saveRoute', { id: 'buy', name: 'Buy' }, adapter)
     await call(
@@ -377,10 +385,11 @@ test('replenishment 19: orderpoint forecasts its location and uses replenishment
       {
         id: 'op',
         productId: 'p1',
+        warehouseId: 'wh',
         locationId: 'stock',
+        trigger: 'auto',
         minQuantity: '3',
         maxQuantity: '10',
-        quantityMultiple: '2',
         replenishmentUomId: 'unit',
         routeId: 'buy',
       },

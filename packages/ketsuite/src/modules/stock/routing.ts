@@ -1,5 +1,6 @@
 import { defineFn } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
+import { convertQty, type Unit } from '../uom/convert.ts'
 
 export const RULE_ACTIONS = ['pull', 'push', 'pull_push'] as const
 export const PROCUREMENT_METHODS = ['make_to_stock', 'make_to_order', 'mts_else_mto'] as const
@@ -21,47 +22,47 @@ const company = (ctx: Ctx): string => {
   return ctx.scope.company
 }
 
-/**
- * The winning route among the links at one level of precedence.
- *
- * `select` emits no ORDER BY, so taking `[0]` let the database decide which route a
- * product replenishes through. stock.Route carries a `sequence` for exactly this;
- * ties break on id so the answer is the same on both adapters.
- */
-async function pickRoute(ctx: Ctx, links: Row[]): Promise<string | null> {
-  const ids = links.map((link) => String(link.routeId))
-  if (ids.length < 2) return ids[0] ?? null
-  const routes = await ctx.db.select('stock.Route')
-  const sequenceOf = (id: string) => {
-    const route = routes.find((candidate) => String(candidate.id) === id)
-    return route ? Number(route.sequence) : Number.MAX_SAFE_INTEGER
-  }
-  return [...ids].sort((a, b) => sequenceOf(a) - sequenceOf(b) || a.localeCompare(b))[0] ?? null
+async function orderedRouteIds(ctx: Ctx, ids: string[]): Promise<string[]> {
+  const routes = new Map((await ctx.db.select('stock.Route')).map((route) => [String(route.id), route]))
+  return [...new Set(ids)].sort(
+    (a, b) =>
+      Number(routes.get(a)?.sequence ?? 10) - Number(routes.get(b)?.sequence ?? 10) || a.localeCompare(b),
+  )
 }
 
-async function routeFor(ctx: Ctx, product: Row, location: Row, explicit?: unknown): Promise<string | null> {
-  if (explicit) return String(explicit)
-  const productRoute = await pickRoute(
-    ctx,
-    await ctx.db.select('stock.ProductRoute', { productId: product.id }),
-  )
-  if (productRoute) return productRoute
-  const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]
-  if (template?.categoryId) {
-    const categoryRoute = await pickRoute(
+async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unknown): Promise<string[]> {
+  if (explicit) return [String(explicit)]
+  const productRoutes = await ctx.db.select('stock.ProductRoute', { productId: product.id })
+  if (productRoutes.length)
+    return orderedRouteIds(
       ctx,
-      await ctx.db.select('stock.CategoryRoute', { categoryId: template.categoryId }),
+      productRoutes.map((route) => String(route.routeId)),
     )
-    if (categoryRoute) return categoryRoute
+  const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+  let categoryId = template?.categoryId == null ? null : String(template.categoryId)
+  const seenCategories = new Set<string>()
+  while (categoryId && !seenCategories.has(categoryId)) {
+    seenCategories.add(categoryId)
+    const categoryRoutes = await ctx.db.select('stock.CategoryRoute', { categoryId })
+    if (categoryRoutes.length)
+      return orderedRouteIds(
+        ctx,
+        categoryRoutes.map((route) => String(route.routeId)),
+      )
+    const category = (await ctx.db.select('product.Category', { id: categoryId }))[0]
+    categoryId = category?.parentId == null ? null : String(category.parentId)
   }
   if (location.warehouseId) {
-    const warehouseRoute = await pickRoute(
-      ctx,
-      await ctx.db.select('stock.WarehouseRoute', { warehouseId: location.warehouseId }),
-    )
-    if (warehouseRoute) return warehouseRoute
+    const warehouseRoutes = await ctx.db.select('stock.WarehouseRoute', {
+      warehouseId: location.warehouseId,
+    })
+    if (warehouseRoutes.length)
+      return orderedRouteIds(
+        ctx,
+        warehouseRoutes.map((route) => String(route.routeId)),
+      )
   }
-  return null
+  return []
 }
 
 async function available(ctx: Ctx, productId: unknown, locationId: unknown): Promise<number> {
@@ -85,75 +86,88 @@ async function procure(
   if (!product) return invalid('productId', 'biến thể không tồn tại')
   const destination = (await ctx.db.select('stock.Location', { id: args.locationId }))[0]
   if (!destination) return invalid('locationId', 'location đích không tồn tại')
-  const routeId = await routeFor(ctx, product, destination, args.routeId)
-  if (!routeId) return invalid('routeId', 'không tìm thấy route cho sản phẩm và location')
-  // Procurement pulls, so a push rule is not a candidate however low its sequence.
-  const rules = (
-    await ctx.db.select('stock.Rule', { routeId, locationDestId: args.locationId, active: true })
-  )
-    .filter((candidate) => candidate.action !== 'push')
-    .sort((a, b) => Number(a.sequence) - Number(b.sequence))
-  const rule = rules[0]
-  if (!rule?.locationSrcId) return invalid('routeId', 'route không có pull/push rule phù hợp')
-  let method = String(rule.procureMethod)
-  if (method === 'mts_else_mto')
-    method =
-      (await available(ctx, args.productId, rule.locationSrcId)) >= args.quantity
-        ? 'make_to_stock'
-        : 'make_to_order'
-  const moveIds: string[] = []
-  await ctx.db.insertIfAbsent('stock.Move', {
-    id: args.moveId,
-    name: String(rule.name),
-    pickingId: null,
-    productId: args.productId,
-    productUomId: args.productUomId,
-    productUomQty: String(args.quantity),
-    quantity: '0',
-    locationId: rule.locationSrcId,
-    locationDestId: args.locationId,
-    state: 'confirmed',
-    picked: false,
-    procureMethod: method,
-    ruleId: rule.id,
-    origin: args.origin ?? 'procurement',
-  })
-  moveIds.push(args.moveId)
-
-  if (method === 'make_to_order') {
-    const upstream = (
-      await ctx.db.select('stock.Rule', { routeId, locationDestId: rule.locationSrcId, active: true })
+  const routeIds = await routesFor(ctx, product, destination, args.routeId)
+  if (!routeIds.length) return invalid('routeId', 'không tìm thấy route cho sản phẩm và location')
+  const routeRank = new Map(routeIds.map((routeId, index) => [routeId, index]))
+  const ruleFor = async (locationId: unknown): Promise<Row | null> => {
+    const candidates: Row[] = []
+    for (const routeId of routeIds)
+      candidates.push(
+        ...(await ctx.db.select('stock.Rule', { routeId, locationDestId: locationId, active: true })),
+      )
+    return (
+      candidates
+        .filter((rule) => rule.locationSrcId && rule.action !== 'push')
+        .sort(
+          (a, b) =>
+            Number(routeRank.get(String(a.routeId))) - Number(routeRank.get(String(b.routeId))) ||
+            Number(a.sequence) - Number(b.sequence) ||
+            String(a.id).localeCompare(String(b.id)),
+        )[0] ?? null
     )
-      .filter((candidate) => candidate.id !== rule.id && candidate.locationSrcId)
-      .filter((candidate) => candidate.action !== 'push')
-      .sort((a, b) => Number(a.sequence) - Number(b.sequence))[0]
-    if (upstream) {
-      const upstreamId = `${args.moveId}:upstream`
-      await ctx.db.insertIfAbsent('stock.Move', {
-        id: upstreamId,
-        name: String(upstream.name),
-        pickingId: null,
-        productId: args.productId,
-        productUomId: args.productUomId,
-        productUomQty: String(args.quantity),
-        quantity: '0',
-        locationId: upstream.locationSrcId,
-        locationDestId: rule.locationSrcId,
-        state: 'confirmed',
-        picked: false,
-        procureMethod: upstream.procureMethod === 'mts_else_mto' ? 'make_to_order' : upstream.procureMethod,
-        ruleId: upstream.id,
-        origin: args.origin ?? 'procurement',
-      })
-      await ctx.db.insertIfAbsent('stock.MoveLink', {
-        id: `${upstreamId}:${args.moveId}`,
-        originMoveId: upstreamId,
-        destinationMoveId: args.moveId,
-      })
-      moveIds.unshift(upstreamId)
-    }
   }
-  return { ok: true, moveIds, method }
+  const moveIds: string[] = []
+  const chain: string[] = []
+  let firstMethod = 'make_to_stock'
+  const build = async (
+    destinationId: unknown,
+    moveId: string,
+    downstreamId: string | null,
+    depth: number,
+  ): Promise<boolean> => {
+    if (depth >= 32) throw new Error(`stock rule depth exceeds 32: ${chain.join(' -> ')}`)
+    const rule = await ruleFor(destinationId)
+    if (!rule) return false
+    const ruleId = String(rule.id)
+    if (chain.includes(ruleId)) throw new Error(`stock rule cycle: ${[...chain, ruleId].join(' -> ')}`)
+    chain.push(ruleId)
+    let method = String(rule.procureMethod)
+    if (method === 'mts_else_mto')
+      method =
+        (await available(ctx, args.productId, rule.locationSrcId)) >= args.quantity
+          ? 'make_to_stock'
+          : 'make_to_order'
+    if (depth === 0) firstMethod = method
+    await ctx.db.insertIfAbsent('stock.Move', {
+      id: moveId,
+      name: String(rule.name),
+      pickingId: null,
+      productId: args.productId,
+      productUomId: args.productUomId,
+      productUomQty: String(args.quantity),
+      quantity: '0',
+      locationId: rule.locationSrcId,
+      locationDestId: destinationId,
+      state: 'confirmed',
+      picked: false,
+      procureMethod: method,
+      ruleId: rule.id,
+      origin: args.origin ?? 'procurement',
+    })
+    if (downstreamId)
+      await ctx.db.insertIfAbsent('stock.MoveLink', {
+        id: `${moveId}:${downstreamId}`,
+        originMoveId: moveId,
+        destinationMoveId: downstreamId,
+      })
+    moveIds.unshift(moveId)
+    if (method === 'make_to_order')
+      await build(
+        rule.locationSrcId,
+        depth === 0 ? `${args.moveId}:upstream` : `${args.moveId}:upstream:${depth + 1}`,
+        moveId,
+        depth + 1,
+      )
+    chain.pop()
+    return true
+  }
+  try {
+    if (!(await build(args.locationId, args.moveId, null, 0)))
+      return invalid('routeId', 'route không có pull/push rule phù hợp')
+  } catch (error) {
+    return invalid('routeId', (error as Error).message)
+  }
+  return { ok: true, moveIds, method: firstMethod }
 }
 
 export const routingFunctions: Record<string, FnSpec> = {
@@ -162,6 +176,12 @@ export const routingFunctions: Record<string, FnSpec> = {
     effects: ['read:stock.Route'],
     agent: true,
     handler: (ctx) => ctx.db.select('stock.Route', { active: true }),
+  }),
+  listRules: defineFn({
+    input: { routeId: 'id?' },
+    effects: ['read:stock.Rule'],
+    agent: true,
+    handler: (ctx, args) => ctx.db.select('stock.Rule', args.routeId ? { routeId: args.routeId } : {}),
   }),
   listOrderpoints: defineFn({
     input: {},
@@ -295,7 +315,9 @@ export const routingFunctions: Record<string, FnSpec> = {
     effects: [
       'read:product.Product',
       'read:product.Template',
+      'read:product.Category',
       'read:stock.Location',
+      'read:stock.Route',
       'read:stock.Quant',
       'read:stock.Route',
       'read:stock.ProductRoute',
@@ -322,36 +344,64 @@ export const routingFunctions: Record<string, FnSpec> = {
     input: {
       id: 'id',
       productId: 'id',
+      warehouseId: 'id',
       locationId: 'id',
+      trigger: 'text?',
       minQuantity: 'decimal',
       maxQuantity: 'decimal',
-      quantityMultiple: 'decimal?',
-      replenishmentUomId: 'id',
+      replenishmentUomId: 'id?',
       routeId: 'id?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:stock.Orderpoint', 'write:stock.Orderpoint'],
+    effects: [
+      'read:stock.Orderpoint',
+      'write:stock.Orderpoint',
+      'read:stock.Warehouse',
+      'read:stock.Location',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       if (Number(args.maxQuantity) < Number(args.minQuantity))
         return invalid('maxQuantity', 'phải lớn hơn hoặc bằng minQuantity')
+      const trigger = String(args.trigger ?? 'auto')
+      if (!['auto', 'manual'].includes(trigger)) return invalid('trigger', 'phải là auto hoặc manual')
+      if (!(await ctx.db.select('stock.Warehouse', { id: args.warehouseId }))[0])
+        return invalid('warehouseId', 'warehouse không tồn tại')
+      const location = (await ctx.db.select('stock.Location', { id: args.locationId }))[0]
+      if (!location || location.warehouseId !== args.warehouseId)
+        return invalid('locationId', 'location không thuộc warehouse')
+      const product = (await ctx.db.select('product.Product', { id: args.productId }))[0]
+      const template = product
+        ? (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+        : null
+      if (!product || !template?.uomId) return invalid('productId', 'sản phẩm chưa có UoM mặc định')
+      const replenishmentUomId = args.replenishmentUomId ?? template.uomId
+      const baseUom = (await ctx.db.select('uom.Unit', { id: template.uomId }))[0]
+      const replenishmentUom = (await ctx.db.select('uom.Unit', { id: replenishmentUomId }))[0]
+      const root = (unit: Row) => String(unit.parentPath).split('/').filter(Boolean)[0]
+      if (!baseUom || !replenishmentUom || root(baseUom) !== root(replenishmentUom))
+        return invalid('replenishmentUomId', 'đơn vị bổ sung phải cùng cây với UoM mặc định')
       const existing = (await ctx.db.select('stock.Orderpoint', { id: args.id }))[0]
-      const values = { ...args, quantityMultiple: args.quantityMultiple ?? '1', active: true }
+      const values = { ...args, trigger, replenishmentUomId, active: true }
       const cs = ctx
         .change('stock.Orderpoint', values, existing ?? null)
         .cast([
           'id',
           'productId',
+          'warehouseId',
           'locationId',
+          'trigger',
           'minQuantity',
           'maxQuantity',
-          'quantityMultiple',
           'replenishmentUomId',
           'routeId',
           'active',
         ])
-        .required(['productId', 'locationId', 'minQuantity', 'maxQuantity', 'replenishmentUomId'])
+        .required(['productId', 'warehouseId', 'locationId', 'trigger', 'minQuantity', 'maxQuantity'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
@@ -367,6 +417,8 @@ export const routingFunctions: Record<string, FnSpec> = {
       'read:stock.Location',
       'read:product.Product',
       'read:product.Template',
+      'read:product.Category',
+      'read:uom.Unit',
       'read:stock.Route',
       'read:stock.ProductRoute',
       'read:stock.CategoryRoute',
@@ -397,8 +449,25 @@ export const routingFunctions: Record<string, FnSpec> = {
       const forecast = onHand + incoming - outgoing
       if (forecast >= Number(point.minQuantity))
         return { ok: true, quantity: '0', moveIds: [], method: 'none' }
-      const multiple = Math.max(Number(point.quantityMultiple), 1e-12)
-      const quantity = Math.ceil((Number(point.maxQuantity) - forecast) / multiple) * multiple
+      const product = (await ctx.db.select('product.Product', { id: point.productId }))[0]!
+      const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]!
+      const baseUom = (await ctx.db.select('uom.Unit', { id: template.uomId }))[0]!
+      const replenishmentUom = (
+        await ctx.db.select('uom.Unit', {
+          id: point.replenishmentUomId ?? template.uomId,
+        })
+      )[0]!
+      let raw: number
+      try {
+        raw =
+          ((Number(point.maxQuantity) - forecast) * Number((baseUom as unknown as Unit).absoluteFactor)) /
+          Number((replenishmentUom as unknown as Unit).absoluteFactor)
+        convertQty(1, baseUom as unknown as Unit, replenishmentUom as unknown as Unit)
+      } catch (error) {
+        return invalid('replenishmentUomId', (error as Error).message)
+      }
+      const rounding = Math.max(Number(replenishmentUom.rounding), 1e-12)
+      const quantity = Math.ceil(raw / rounding - 1e-12) * rounding
       const result = await procure(ctx, {
         moveId: String(args.moveId),
         productId: point.productId,
@@ -412,3 +481,24 @@ export const routingFunctions: Record<string, FnSpec> = {
     },
   }),
 }
+
+routingFunctions.runOrderpoints = defineFn({
+  input: { warehouseId: 'id?' },
+  output: { ok: 'bool', results: 'json' },
+  effects: routingFunctions.runOrderpoint!.effects,
+  agent: true,
+  handler: async (ctx, args) => {
+    const points = (await ctx.db.select('stock.Orderpoint', { active: true })).filter(
+      (point) => point.trigger === 'auto' && (!args.warehouseId || point.warehouseId === args.warehouseId),
+    )
+    const results: Row[] = []
+    for (const point of points) {
+      const result = (await routingFunctions.runOrderpoint!.handler(ctx, {
+        id: point.id,
+        moveId: `${String(point.id)}:auto:${Date.now()}:${results.length}`,
+      })) as Row
+      results.push({ id: point.id, ...result })
+    }
+    return { ok: true, results }
+  },
+})

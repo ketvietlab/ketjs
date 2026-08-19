@@ -511,6 +511,35 @@ export const CASES: Array<{
     render: () => mediaPanel({ status: 'unavailable' }),
   },
   {
+    id: 'product-media-ready',
+    label: 'Sản phẩm — thư viện hình ảnh',
+    note: 'Upload, chọn ảnh chính, sắp xếp và xóa dùng form native; adapter storage vẫn nằm ngoài component.',
+    render: () =>
+      mediaPanel({
+        status: 'ready',
+        uploadAction: '/fixture/media',
+        images: [
+          {
+            id: 'front',
+            src: '/fixture-main.png',
+            alt: 'Mặt trước',
+            primary: true,
+            actions: { remove: '/fixture/media/front/remove', moveDown: '/fixture/media/front/down' },
+          },
+          {
+            id: 'back',
+            src: '/fixture-other.png',
+            alt: 'Mặt sau',
+            actions: {
+              primary: '/fixture/media/back/primary',
+              remove: '/fixture/media/back/remove',
+              moveUp: '/fixture/media/back/up',
+            },
+          },
+        ],
+      }),
+  },
+  {
     id: 'settings',
     label: 'Cài đặt — token',
     note: 'Danh sách token đang áp dụng.',

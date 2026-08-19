@@ -113,6 +113,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'decimal')
       .map(([n]) => n)
 
+  const booleansOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'bool')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     if (!cols.length) return row
@@ -125,8 +130,9 @@ export function createContext(o: {
 
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const cols = decimalsOf(model)
-    if (!cols.length) return rows
+    const bools = booleansOf(model)
     for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
+    for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
     return rows
   }
 
@@ -374,10 +380,12 @@ export function createContext(o: {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 =
+      const where3 = encodeRow(
+        model,
         scopeOf(model) === 'shared' || operation.crossCompany
           ? where
-          : { ...where, companyId: requireCompany(model) }
+          : { ...where, companyId: requireCompany(model) },
+      )
       const patch2 = encodeRow(model, patch)
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
