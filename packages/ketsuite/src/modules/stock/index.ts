@@ -18,6 +18,18 @@ export default defineModule({
   },
   relations,
   functions: { ...functions, ...routingFunctions },
+  messages: {
+    vi: {
+      'app.title': 'Kho',
+      'app.summary': 'Tồn kho, dịch chuyển và bổ sung hàng theo Odoo 19.',
+      'app.category': 'Kho vận',
+    },
+    en: {
+      'app.title': 'Inventory',
+      'app.summary': 'Odoo 19 stock, transfers, and replenishment.',
+      'app.category': 'Inventory',
+    },
+  },
 })
 
 export {

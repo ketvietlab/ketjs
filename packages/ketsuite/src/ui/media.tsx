@@ -11,6 +11,8 @@ export const HOOKS = [
   'media-item',
   'media-actions',
   'media-upload',
+  'media-file-label',
+  'media-file-input',
   'media-item-actions',
   'media-extension',
 ] as const
@@ -131,9 +133,9 @@ export const mediaPanel = (props: MediaPanelProps): TemplateResult => {
             action={props.uploadAction}
             enctype="multipart/form-data"
           >
-            <label>
+            <label data-ui="media-file-label">
               <span>{labels.choose}</span>
-              <input type="file" name="file" accept="image/*" required />
+              <input data-ui="media-file-input" type="file" name="file" accept="image/*" required />
             </label>
             {button({ label: labels.add, type: 'submit', disabled: props.status === 'unavailable' })}
           </form>

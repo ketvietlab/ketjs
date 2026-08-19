@@ -1985,6 +1985,36 @@
     align-items: end;
     gap: var(--admin-gap-sm);
   }
+  [data-ui="media-file-label"] {
+    display: inline-flex;
+    min-block-size: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--admin-gap-md);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: var(--admin-size-base);
+    font-weight: 600;
+    line-height: 1;
+  }
+  [data-ui="media-file-label"]:focus-within {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+  }
+  [data-ui="media-file-input"] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
   [data-ui="media-extension"] {
     min-inline-size: 0;
   }

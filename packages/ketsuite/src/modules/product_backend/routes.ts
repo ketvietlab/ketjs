@@ -55,6 +55,27 @@ const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]
 const invalidErrors = (url: URL, _: ReturnType<ServeContext['translate']>) =>
   url.searchParams.has('invalid') ? [_('product_backend.error.invalid')] : undefined
 
+const stockEnabled = async (ctx: ServeContext, req: Parameters<Route>[1]) =>
+  Boolean((await ctx.live(req)).functions['stock.configureProduct'])
+
+const configureStock = (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  templateId: string,
+  form: Record<string, string>,
+) =>
+  ctx.call(
+    'stock.configureProduct',
+    {
+      templateId,
+      isStorable: form.isStorable === '1',
+      tracking: form.tracking || 'none',
+    },
+    url,
+    req,
+  )
+
 const mediaFor = (ctx: ServeContext, url: URL, req: Parameters<Route>[1], templateId: string) =>
   ctx.call('product_media.listMedia', { templateId }, url, req) as Promise<MediaRow[]>
 
@@ -183,6 +204,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
+      const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
         const form = await readForm(req)
         const id = randomUUID()
@@ -202,9 +224,14 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return (result as { ok?: boolean }).ok
-          ? seeProduct(id)
-          : seeOther(`/admin/products/new?invalid=1&count=${errorsOf(result).length}`)
+        if (!(result as { ok?: boolean }).ok)
+          return seeOther(`/admin/products/new?invalid=1&count=${errorsOf(result).length}`)
+        if (hasStock) {
+          const stockResult = await configureStock(ctx, url, req, id, form)
+          if (!(stockResult as { ok?: boolean }).ok)
+            return seeOther(`/admin/products/${id}?invalid=1&count=${errorsOf(stockResult).length}`)
+        }
+        return seeProduct(id)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
@@ -215,7 +242,7 @@ export const routes: Record<string, RouteEntry> = {
           head: await ctx.styles(req),
           body: newProductScreen(
             _,
-            { ...options, errors: invalidErrors(url, _) },
+            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
             await frameFor(ctx, url, req),
           ),
         }),
@@ -281,6 +308,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
+      const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
         const form = await readForm(req)
         const result = await ctx.call(
@@ -299,9 +327,14 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return (result as { ok?: boolean }).ok
-          ? seeProduct(params.id)
-          : seeOther(`/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`)
+        if (!(result as { ok?: boolean }).ok)
+          return seeOther(`/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`)
+        if (hasStock) {
+          const stockResult = await configureStock(ctx, url, req, params.id, form)
+          if (!(stockResult as { ok?: boolean }).ok)
+            return seeOther(`/admin/products/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`)
+        }
+        return seeProduct(params.id)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const row = (await ctx.call('product.getTemplate', { id: params.id }, url, req)) as {
@@ -316,12 +349,15 @@ export const routes: Record<string, RouteEntry> = {
         purchaseOk?: boolean
       } | null
       if (!row) return text('Product not found', { status: 404 })
-      const [mediaRows, variants, options] = await Promise.all([
+      const [mediaRows, variants, options, stockConfig] = await Promise.all([
         mediaFor(ctx, url, req, row.id),
         ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
           Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
         >,
         optionsFor(ctx, url, req),
+        hasStock
+          ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
+          : Promise.resolve(null),
       ])
       return page({
         body: ctx.document({
@@ -330,7 +366,7 @@ export const routes: Record<string, RouteEntry> = {
           head: await ctx.styles(req),
           body: productDetailScreen(
             _,
-            row,
+            { ...row, ...(stockConfig as Record<string, unknown> | null) },
             {
               status: 'ready',
               uploadAction: `/admin/products/${row.id}/media`,
@@ -352,7 +388,7 @@ export const routes: Record<string, RouteEntry> = {
                 templateId: row.id,
               }),
             },
-            { ...options, variants, errors: invalidErrors(url, _) },
+            { ...options, variants, stockEnabled: hasStock, errors: invalidErrors(url, _) },
             await frameFor(ctx, url, req),
           ),
         }),

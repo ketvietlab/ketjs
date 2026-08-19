@@ -14,6 +14,18 @@ export default defineModule({
   models,
   relations,
   functions,
+  messages: {
+    vi: {
+      'app.title': 'Bảng giá',
+      'app.summary': 'Quy tắc giá theo Odoo 19 dùng tiền tệ của công ty.',
+      'app.category': 'Bán hàng',
+    },
+    en: {
+      'app.title': 'Pricing',
+      'app.summary': 'Odoo 19 pricing rules in the company currency.',
+      'app.category': 'Sales',
+    },
+  },
 })
 
 export { APPLIED_ON, COMPUTE_PRICE, PRICE_BASES } from './functions.ts'

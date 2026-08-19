@@ -141,6 +141,22 @@ async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
 }
 
 export const functions: Record<string, FnSpec> = {
+  getProductConfig: defineFn({
+    input: { templateId: 'id' },
+    output: { templateId: 'id', isStorable: 'bool', tracking: 'text' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const template = (await ctx.db.select('product.Template', { id: args.templateId }))[0]
+      return template
+        ? {
+            templateId: args.templateId,
+            isStorable: Boolean(template.isStorable),
+            tracking: String(template.tracking ?? 'none'),
+          }
+        : null
+    },
+  }),
   configureProduct: defineFn({
     input: { templateId: 'id', isStorable: 'bool', tracking: 'text?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },

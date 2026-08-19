@@ -16,6 +16,12 @@ import type { Column, Frame } from '../../ui/index.ts'
 
 export type PricelistRow = { id: string; name: string; currency: string; state: string; sequence: string }
 
+const selectionLabel = (_: Translator, group: string, value: unknown): string => {
+  const raw = String(value)
+  const key = `pricing_backend.${group}.${raw}`
+  return _.resolves(key) ? _(key) : raw
+}
+
 export const pricelistsScreen = (_: Translator, rows: PricelistRow[], frame: Frame): TemplateResult => {
   const columns: Array<Column<PricelistRow>> = [
     {
@@ -26,7 +32,11 @@ export const pricelistsScreen = (_: Translator, rows: PricelistRow[], frame: Fra
       priority: 'primary',
     },
     { key: 'currency', label: _('pricing_backend.col.currency'), cell: (row) => row.currency },
-    { key: 'state', label: _('pricing_backend.col.state'), cell: (row) => badge(row.state) },
+    {
+      key: 'state',
+      label: _('pricing_backend.col.state'),
+      cell: (row) => badge(selectionLabel(_, 'state', row.state), 'neutral', row.state),
+    },
     { key: 'sequence', label: _('pricing_backend.col.sequence'), cell: (row) => row.sequence },
     { key: 'id', label: _('backend.table.id'), cell: (row) => code(row.id), optional: true },
   ]
@@ -106,19 +116,26 @@ export const pricelistDetailScreen = (
                   {
                     key: 'appliedOn',
                     label: _('pricing_backend.field.appliedOn'),
-                    cell: (item) => code(String(item.appliedOn)),
+                    cell: (item) => selectionLabel(_, 'appliedOn', item.appliedOn),
                   },
                   {
                     key: 'compute',
                     label: _('pricing_backend.field.computePrice'),
-                    cell: (item) => badge(String(item.computePrice)),
+                    cell: (item) => {
+                      const value = String(item.computePrice)
+                      return badge(selectionLabel(_, 'compute', value), 'neutral', value)
+                    },
                   },
                   {
                     key: 'quantity',
                     label: _('pricing_backend.field.minQuantity'),
                     cell: (item) => String(item.minQuantity),
                   },
-                  { key: 'base', label: _('pricing_backend.field.base'), cell: (item) => String(item.base) },
+                  {
+                    key: 'base',
+                    label: _('pricing_backend.field.base'),
+                    cell: (item) => selectionLabel(_, 'base', item.base),
+                  },
                 ],
               }),
       }),
@@ -138,7 +155,7 @@ export const pricelistDetailScreen = (
                 options: ['3_global', '2_product_category', '1_product', '0_product_variant'].map(
                   (value) => ({
                     value,
-                    label: value,
+                    label: selectionLabel(_, 'appliedOn', value),
                   }),
                 ),
               },
@@ -159,7 +176,7 @@ export const pricelistDetailScreen = (
                 type: 'select',
                 options: ['list_price', 'standard_price', 'pricelist'].map((value) => ({
                   value,
-                  label: value,
+                  label: selectionLabel(_, 'base', value),
                 })),
               },
               { name: 'basePricelistId', label: _('pricing_backend.field.basePricelistId') },
@@ -167,7 +184,10 @@ export const pricelistDetailScreen = (
                 name: 'computePrice',
                 label: _('pricing_backend.field.computePrice'),
                 type: 'select',
-                options: ['fixed', 'percentage', 'formula'].map((value) => ({ value, label: value })),
+                options: ['fixed', 'percentage', 'formula'].map((value) => ({
+                  value,
+                  label: selectionLabel(_, 'compute', value),
+                })),
               },
               { name: 'fixedPrice', label: _('pricing_backend.field.fixedPrice'), type: 'decimal', value: 0 },
               {

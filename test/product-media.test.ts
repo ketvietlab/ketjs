@@ -28,6 +28,8 @@ test('product media: ready gallery exposes native, storage-neutral actions', () 
     }),
   )
   assert.match(html, /enctype="multipart\/form-data"/)
+  assert.match(html, /data-ui="media-file-label"/)
+  assert.match(html, /data-ui="media-file-input"/)
   assert.match(html, /src="\/files\/a1"/)
   assert.match(html, /action="\/products\/t\/media\/m1\/remove"/)
 })

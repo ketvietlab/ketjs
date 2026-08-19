@@ -33,6 +33,12 @@ const mediaLabels = (_: Translator) => ({
   add: _('product_backend.media.add'),
 })
 
+const selectionLabel = (_: Translator, group: string, value: unknown): string => {
+  const raw = String(value)
+  const key = `product_backend.${group}.${raw}`
+  return _.resolves(key) ? _(key) : raw
+}
+
 export type TemplateRow = {
   id: string
   name: string
@@ -159,6 +165,8 @@ export const productDetailScreen = (
     categoryId?: string | null
     saleOk?: boolean
     purchaseOk?: boolean
+    isStorable?: boolean
+    tracking?: string
   },
   media: Parameters<typeof mediaPanel>[0],
   management: {
@@ -166,6 +174,7 @@ export const productDetailScreen = (
     categories: FormOption[]
     attributes: FormOption[]
     variants: Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
+    stockEnabled?: boolean
     errors?: string[]
   },
   frame: Frame = {},
@@ -234,6 +243,26 @@ export const productDetailScreen = (
                 type: 'checkbox',
                 value: row.purchaseOk,
               },
+              ...(management.stockEnabled
+                ? [
+                    {
+                      name: 'isStorable',
+                      label: _('product_backend.field.isStorable'),
+                      type: 'checkbox' as const,
+                      value: row.isStorable,
+                    },
+                    {
+                      name: 'tracking',
+                      label: _('product_backend.field.tracking'),
+                      type: 'select' as const,
+                      value: row.tracking ?? 'none',
+                      options: ['none', 'lot', 'serial'].map((value) => ({
+                        value,
+                        label: selectionLabel(_, 'tracking', value),
+                      })),
+                    },
+                  ]
+                : []),
               {
                 name: 'description',
                 label: _('product_backend.field.description'),
@@ -277,7 +306,10 @@ export const productDetailScreen = (
                   {
                     key: 'active',
                     label: _('product_backend.col.state'),
-                    cell: (variant) => badge(variant.active === false ? 'archived' : 'active'),
+                    cell: (variant) => {
+                      const state = variant.active === false ? 'archived' : 'active'
+                      return badge(selectionLabel(_, 'state', state), 'neutral', state)
+                    },
                   },
                 ],
               }),
@@ -310,7 +342,7 @@ export const productDetailScreen = (
 
 export const newProductScreen = (
   _: Translator,
-  options: { uoms: FormOption[]; categories: FormOption[]; errors?: string[] },
+  options: { uoms: FormOption[]; categories: FormOption[]; stockEnabled?: boolean; errors?: string[] },
   frame: Frame,
 ): TemplateResult =>
   framed(
@@ -345,6 +377,26 @@ export const newProductScreen = (
           { name: 'listPrice', label: _('product_backend.field.listPrice'), type: 'decimal', value: 0 },
           { name: 'saleOk', label: _('product_backend.field.saleOk'), type: 'checkbox', value: true },
           { name: 'purchaseOk', label: _('product_backend.field.purchaseOk'), type: 'checkbox', value: true },
+          ...(options.stockEnabled
+            ? [
+                {
+                  name: 'isStorable',
+                  label: _('product_backend.field.isStorable'),
+                  type: 'checkbox' as const,
+                  value: true,
+                },
+                {
+                  name: 'tracking',
+                  label: _('product_backend.field.tracking'),
+                  type: 'select' as const,
+                  value: 'none',
+                  options: ['none', 'lot', 'serial'].map((value) => ({
+                    value,
+                    label: selectionLabel(_, 'tracking', value),
+                  })),
+                },
+              ]
+            : []),
           {
             name: 'description',
             label: _('product_backend.field.description'),
@@ -443,7 +495,7 @@ export const attributesScreen = (
               type: 'select',
               options: ['radio', 'pills', 'select', 'color', 'multi'].map((value) => ({
                 value,
-                label: value,
+                label: selectionLabel(_, 'displayType', value),
               })),
             },
             {
@@ -462,7 +514,7 @@ export const attributesScreen = (
         const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
         return contentCard({
           title: String(row.name),
-          summary: `${String(row.displayType)} · ${String(row.createVariant)}`,
+          summary: `${selectionLabel(_, 'displayType', row.displayType)} · ${selectionLabel(_, 'createVariant', row.createVariant)}`,
           meta: values.length
             ? values.map((value) => String(value.name)).join(', ')
             : _('product_backend.attributes.noValues'),

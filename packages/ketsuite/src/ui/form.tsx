@@ -90,16 +90,19 @@ const control = (field: FormField, id: string): TemplateResult => {
 }
 
 /** A native, server-rendered form. Domain modules provide data, never markup. */
-export const recordForm = (o: {
+type RecordFormOptions = {
   action: string
   fields: readonly FormField[]
   submit: string
   method?: 'get' | 'post'
-  cancelHref?: string | null
-  cancelLabel?: string | null
   errors?: readonly string[]
   hidden?: Record<string, string>
-}): TemplateResult => (
+} & (
+  | { cancelHref: string; cancelLabel: string }
+  | { cancelHref?: null | undefined; cancelLabel?: null | undefined }
+)
+
+export const recordForm = (o: RecordFormOptions): TemplateResult => (
   <form data-ui="record-form" method={o.method ?? 'post'} action={o.action}>
     {Object.entries(o.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} />
@@ -136,7 +139,7 @@ export const recordForm = (o: {
         actions: [
           button({ label: o.submit, type: 'submit', variant: 'primary' }),
           ...(o.cancelHref
-            ? [linkButton({ label: o.cancelLabel ?? 'Cancel', href: o.cancelHref, variant: 'tertiary' })]
+            ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
             : []),
         ],
       })}

@@ -28,6 +28,7 @@ const render = async (
   titleKey: string,
   rows: StockRow[],
   additions: readonly unknown[] = [],
+  showEmpty = true,
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
@@ -36,18 +37,56 @@ const render = async (
       lang,
       title: _(titleKey),
       head: await ctx.styles(req),
-      body: stockScreen(_, _(titleKey), rows, await frame(ctx, url, req), additions),
+      body: stockScreen(_, _(titleKey), rows, await frame(ctx, url, req), additions, showEmpty),
     }),
   })
 }
 
 const options = (rows: AnyRow[]) => rows.map((row) => ({ value: String(row.id), label: String(row.name) }))
+const selectionLabel = (_: Translator, group: string, value: unknown): string => {
+  const raw = String(value)
+  const key = `stock_backend.${group}.${raw}`
+  return _.resolves(key) ? _(key) : raw
+}
+const selectionOptions = (_: Translator, group: string, values: readonly string[]) =>
+  values.map((value) => ({ value, label: selectionLabel(_, group, value) }))
+
+const generatedNames: Record<string, string> = {
+  stock: 'Stock',
+  input: 'Input',
+  quality: 'Quality',
+  output: 'Output',
+  pick: 'Pick',
+  pack: 'Pack',
+  supplier: 'Supplier',
+  customer: 'Customer',
+}
+
+const localizeGeneratedRecords = (_: Translator, rows: AnyRow[], group: 'location' | 'pickingType') =>
+  rows.map((row) => {
+    if (group === 'pickingType') {
+      const code = String(row.code ?? '')
+      const defaults: Record<string, string> = {
+        incoming: 'Receipts',
+        outgoing: 'Delivery Orders',
+        internal: 'Internal Transfers',
+      }
+      return defaults[code] === row.name
+        ? { ...row, name: selectionLabel(_, 'record.pickingType', code) }
+        : row
+    }
+    const suffix = String(row.id).split(':').at(-1) ?? ''
+    return generatedNames[suffix] === row.name
+      ? { ...row, name: selectionLabel(_, 'record.location', suffix) }
+      : row
+  })
 const invalid = (url: URL, _: Translator) =>
   url.searchParams.has('invalid') ? [_('stock_backend.error.invalid')] : undefined
 const resultRedirect = (result: unknown, success: string) =>
   (result as { ok?: boolean }).ok ? seeOther(success) : seeOther(`${success}?invalid=1`)
 
 const common = async (ctx: ServeContext, url: URL, req: Req) => {
+  const _ = ctx.translate(ctx.localeOf(url, req))
   const [warehouses, locations, pickingTypes, lots, routes, units] = (await Promise.all([
     ctx.call('stock.listWarehouses', {}, url, req),
     ctx.call('stock.listLocations', {}, url, req),
@@ -56,7 +95,14 @@ const common = async (ctx: ServeContext, url: URL, req: Req) => {
     ctx.call('stock.listRoutes', {}, url, req),
     ctx.call('uom.listUnits', {}, url, req),
   ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
-  return { warehouses, locations, pickingTypes, lots, routes, units }
+  return {
+    warehouses,
+    locations: localizeGeneratedRecords(_, locations, 'location'),
+    pickingTypes: localizeGeneratedRecords(_, pickingTypes, 'pickingType'),
+    lots,
+    routes,
+    units,
+  }
 }
 
 export const routes: Record<string, RouteEntry> = {
@@ -274,7 +320,10 @@ export const routes: Record<string, RouteEntry> = {
         [
           stack([
             metric({ label: _('stock_backend.field.reference'), value: String(current.name) }),
-            metric({ label: _('stock_backend.col.state'), value: String(current.state) }),
+            metric({
+              label: _('stock_backend.col.state'),
+              value: selectionLabel(_, 'state', current.state),
+            }),
           ]),
           surface({
             body: recordForm({
@@ -343,7 +392,7 @@ export const routes: Record<string, RouteEntry> = {
           id: String(row.id),
           name: String(row.name),
           kind: 'warehouse',
-          detail: `${String(row.code)} · ${String(row.receptionSteps)} / ${String(row.deliverySteps)}`,
+          detail: `${String(row.code)} · ${selectionLabel(_, 'receptionSteps', row.receptionSteps)} / ${selectionLabel(_, 'deliverySteps', row.deliverySteps)}`,
         })),
         [
           surface({
@@ -358,16 +407,13 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'receptionSteps',
                   label: _('stock_backend.field.receptionSteps'),
                   type: 'select',
-                  options: ['one_step', 'two_steps', 'three_steps'].map((value) => ({ value, label: value })),
+                  options: selectionOptions(_, 'receptionSteps', ['one_step', 'two_steps', 'three_steps']),
                 },
                 {
                   name: 'deliverySteps',
                   label: _('stock_backend.field.deliverySteps'),
                   type: 'select',
-                  options: ['ship_only', 'pick_ship', 'pick_pack_ship'].map((value) => ({
-                    value,
-                    label: value,
-                  })),
+                  options: selectionOptions(_, 'deliverySteps', ['ship_only', 'pick_ship', 'pick_pack_ship']),
                 },
               ],
             }),
@@ -422,7 +468,7 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'usage',
                   label: _('stock_backend.field.usage'),
                   type: 'select',
-                  options: [
+                  options: selectionOptions(_, 'usage', [
                     'internal',
                     'view',
                     'supplier',
@@ -430,7 +476,7 @@ export const routes: Record<string, RouteEntry> = {
                     'inventory',
                     'production',
                     'transit',
-                  ].map((value) => ({ value, label: value })),
+                  ]),
                 },
                 {
                   name: 'warehouseId',
@@ -498,7 +544,7 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'code',
                   label: _('stock_backend.field.code'),
                   type: 'select',
-                  options: ['incoming', 'outgoing', 'internal'].map((value) => ({ value, label: value })),
+                  options: selectionOptions(_, 'pickingType', ['incoming', 'outgoing', 'internal']),
                 },
                 {
                   name: 'warehouseId',
@@ -522,7 +568,7 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'createBackorder',
                   label: _('stock_backend.field.backorder'),
                   type: 'select',
-                  options: ['ask', 'always', 'never'].map((value) => ({ value, label: value })),
+                  options: selectionOptions(_, 'backorder', ['ask', 'always', 'never']),
                 },
               ],
             }),
@@ -672,7 +718,7 @@ export const routes: Record<string, RouteEntry> = {
           id: String(row.id),
           name: String(row.name),
           kind: String(row.action),
-          detail: `${String(row.locationSrcId ?? '—')} → ${String(row.locationDestId)} · ${String(row.procureMethod)}`,
+          detail: `${String(row.locationSrcId ?? '—')} → ${String(row.locationDestId)} · ${selectionLabel(_, 'procureMethod', row.procureMethod)}`,
         })),
         [
           surface({
@@ -686,7 +732,7 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'action',
                   label: _('stock_backend.field.ruleAction'),
                   type: 'select',
-                  options: ['pull', 'push', 'pull_push'].map((value) => ({ value, label: value })),
+                  options: selectionOptions(_, 'ruleAction', ['pull', 'push', 'pull_push']),
                 },
                 { name: 'sequence', label: _('stock_backend.field.sequence'), type: 'number', value: 20 },
                 {
@@ -713,10 +759,11 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'procureMethod',
                   label: _('stock_backend.field.procureMethod'),
                   type: 'select',
-                  options: ['make_to_stock', 'make_to_order', 'mts_else_mto'].map((value) => ({
-                    value,
-                    label: value,
-                  })),
+                  options: selectionOptions(_, 'procureMethod', [
+                    'make_to_stock',
+                    'make_to_order',
+                    'mts_else_mto',
+                  ]),
                 },
               ],
             }),
@@ -792,7 +839,7 @@ export const routes: Record<string, RouteEntry> = {
                   name: 'trigger',
                   label: _('stock_backend.field.trigger'),
                   type: 'select',
-                  options: ['auto', 'manual'].map((value) => ({ value, label: value })),
+                  options: selectionOptions(_, 'trigger', ['auto', 'manual']),
                 },
                 {
                   name: 'minQuantity',
@@ -910,6 +957,7 @@ export const routes: Record<string, RouteEntry> = {
               ]
             : []),
         ],
+        false,
       )
     },
 }

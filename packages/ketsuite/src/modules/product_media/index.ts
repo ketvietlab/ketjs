@@ -14,4 +14,16 @@ export default defineModule({
   models,
   relations,
   functions,
+  messages: {
+    vi: {
+      'app.title': 'Hình ảnh sản phẩm',
+      'app.summary': 'Ảnh chính và thư viện ảnh của mẫu sản phẩm và biến thể.',
+      'app.category': 'Bán hàng',
+    },
+    en: {
+      'app.title': 'Product images',
+      'app.summary': 'Primary images and galleries for product templates and variants.',
+      'app.category': 'Sales',
+    },
+  },
 })
