@@ -61,7 +61,14 @@ async function withPg(body: (a: Adapter) => Promise<void>): Promise<void> {
 async function fresh(): Promise<Adapter> {
   const a = postgresAdapter(URL)
   await a.open()
-  for (const t of ['ket_stream', 'ket_job', 'ket_idem', 'checkout_order', 'catalog_product']) {
+  for (const t of [
+    'ket_stream',
+    'ket_job',
+    'ket_job_legacy',
+    'ket_idem',
+    'checkout_order',
+    'catalog_product',
+  ]) {
     await a.exec(`DROP TABLE IF EXISTS "${t}" CASCADE`)
   }
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), a)) await a.exec(sql)
@@ -157,6 +164,23 @@ test('live pg: resumable stream survives on a real table', live, async () => {
 test('live pg: SKIP LOCKED hands each job to exactly one worker', live, async () => {
   await withPg(async (a) => {
     const q = await createQueue(a)
+    const cols = (await a.introspect()).ket_job!
+    for (const column of [
+      'scheduled_at',
+      'attempted_at',
+      'completed_at',
+      'lease_until',
+      'inserted_at',
+      'updated_at',
+    ])
+      assert.equal(cols[column], 'timestamp with time zone', `${column} must not degrade to TEXT`)
+    const indexes = await a.all(
+      `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'ket_job'`,
+    )
+    assert.match(
+      String(indexes.find((row) => row.indexname === 'ket_job_fetch_active')?.indexdef),
+      /\(queue, priority, scheduled_at, id\).*WHERE \(state = ANY/,
+    )
     for (let i = 0; i < 20; i++) await q.enqueue('mail', { n: i })
 
     // Twenty workers claiming at once: with SELECT-then-UPDATE they would collide.
@@ -179,6 +203,41 @@ test('live pg: concurrent unique enqueue creates one durable row', live, async (
     assert.equal(new Set(results.map((result) => result.id)).size, 1)
     assert.equal(results.filter((result) => !result.existing).length, 1)
     assert.equal((await q.list()).length, 1)
+
+    const claimed = await q.claimBatch('default', { workerId: 'unique-worker', limit: 1 })
+    assert.equal(await q.complete(claimed[0]!.id, 'unique-worker'), true)
+    const again = await q.enqueue('mail.once', { orderId: 'o1-again' }, { queue: 'default', uniqueKey: 'o1' })
+    assert.equal(again.existing, false)
+    assert.notEqual(again.id, claimed[0]!.id)
+  })
+})
+
+test('live pg: concurrent replicas serialize the legacy queue migration', live, async () => {
+  await withPg(async (a) => {
+    await a.exec(`CREATE TABLE ket_job (
+      id BIGSERIAL PRIMARY KEY,
+      queue TEXT NOT NULL,
+      payload TEXT,
+      state TEXT NOT NULL DEFAULT 'ready',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL
+    )`)
+    await a.run(
+      `INSERT INTO ket_job (queue, payload, state, attempts, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      ['mail.legacy', JSON.stringify({ id: 'old' }), 'ready', 1, '2026-01-01T00:00:00.000Z'],
+    )
+    const peers = [postgresAdapter(URL), postgresAdapter(URL)]
+    await Promise.all(peers.map((peer) => peer.open()))
+    try {
+      const queues = await Promise.all([createQueue(a), ...peers.map((peer) => createQueue(peer))])
+      const migrated = await queues[0]!.list()
+      assert.equal(migrated.length, 1)
+      assert.equal(migrated[0]?.id, 'legacy-1')
+      assert.equal(migrated[0]?.state, 'available')
+    } finally {
+      await Promise.all(peers.map((peer) => peer.close()))
+    }
   })
 })
 

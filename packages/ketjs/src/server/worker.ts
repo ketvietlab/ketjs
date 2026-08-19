@@ -17,7 +17,7 @@ import type { Adapter, JobContext, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
 export type WorkerLog = {
-  event: 'started' | 'completed' | 'retrying' | 'discarded' | 'cancelled'
+  event: 'started' | 'completed' | 'retrying' | 'discarded' | 'cancelled' | 'handler_ignored_abort'
   workerId: string
   tenant: string
   jobId: string
@@ -247,7 +247,20 @@ export async function bootWorker(
         signal: controller.signal,
       }) as JobContext
       await definition.handler(context, job.args)
-      if (timedOut || controller.signal.aborted) throw controller.signal.reason ?? new Error('job aborted')
+      if (timedOut || controller.signal.aborted) {
+        log({
+          event: 'handler_ignored_abort',
+          workerId,
+          tenant: tenant.key,
+          jobId: job.id,
+          job: job.job,
+          queue: job.queue,
+          attempt: job.attempt,
+          durationMs: now().getTime() - started,
+          error: String(controller.signal.reason ?? 'job aborted'),
+        })
+        throw controller.signal.reason ?? new Error('job aborted')
+      }
       if (!(await queue.complete(job.id, workerId))) {
         log({
           event: 'cancelled',

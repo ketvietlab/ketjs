@@ -1437,7 +1437,26 @@ outside it, and completion is another short transaction. A process can therefore
 die after a business write and before completion; every job must explicitly state
 `idempotent: true`. Leases, heartbeat and exponential full-jitter retry recover the
 other crash positions. A handler receives an `AbortSignal`, but Node cannot
-forcibly stop a Promise that ignores it.
+forcibly stop a Promise that ignores it. Heartbeat continues while that handler is
+alive to avoid manufacturing an overlapping retry; if it eventually returns after
+abort, the worker records a structured `handler_ignored_abort` warning.
+
+**Scheduling is itself an effect.** A function or another job may enqueue only a
+qualified job named by an `enqueue:module.job` effect. Composition checks that the
+target exists and that the producer depends on its module; runtime checks the same
+effect before a durable row is inserted. Otherwise asynchronous work would be a
+way to bypass the model effects enforced on the request.
+
+**Queue uniqueness coalesces active delivery, not business history.** A
+`(job, unique_key)` constraint covers available, scheduled, executing and retryable
+rows. Terminal rows release the key immediately, so whether the prune command ran
+cannot decide whether new work executes. A handler that must apply a business
+operation only once still enforces that invariant in business data.
+
+Expired leases are rescued in bounded batches. Queue DDL uses explicit PostgreSQL
+timestamp types, and legacy table migration is serialized by a transaction-scoped
+PostgreSQL advisory lock so replicas may start concurrently without racing a
+rename.
 
 **Tenant fairness is scheduler state, not central queue state.** Jobs stay in each
 tenant database so enqueue and business writes share one transaction. The worker

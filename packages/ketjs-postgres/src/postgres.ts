@@ -53,8 +53,19 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     return sql
   }
 
+  const introspect = async (handle: Sql): Promise<Record<string, Record<string, string>>> => {
+    const rows = (await handle.unsafe(
+      `SELECT table_name, column_name, data_type FROM information_schema.columns
+       WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`,
+    )) as Array<{ table_name: string; column_name: string; data_type: string }>
+    const tables: Record<string, Record<string, string>> = {}
+    for (const r of rows) (tables[r.table_name] ??= {})[r.column_name] = r.data_type
+    return tables
+  }
+
   const fromHandle = (handle: Sql): Adapter => ({
     ...a,
+    transaction: true,
     notifications: {
       // pg_notify participates in the transaction on this reserved connection;
       // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
@@ -74,6 +85,9 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     },
     async tx() {
       throw new Error('nested transactions are not supported')
+    },
+    async introspect() {
+      return introspect(handle)
     },
   })
 
@@ -154,13 +168,7 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     },
 
     async introspect() {
-      const rows = (await need().unsafe(
-        `SELECT table_name, column_name, data_type FROM information_schema.columns
-         WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`,
-      )) as Array<{ table_name: string; column_name: string; data_type: string }>
-      const tables: Record<string, Record<string, string>> = {}
-      for (const r of rows) (tables[r.table_name] ??= {})[r.column_name] = r.data_type
-      return tables
+      return introspect(need())
     },
   }
 

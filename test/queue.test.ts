@@ -23,6 +23,7 @@ const tasks = defineModule({
   functions: {
     schedule: {
       input: { id: 'id' },
+      effects: ['enqueue:tasks.deliver'],
       handler: (ctx: Ctx, args) =>
         ctx.tx((tx) =>
           tx.jobs.enqueue('tasks.deliver', { id: args.id as string }, { uniqueKey: String(args.id) }),
@@ -30,6 +31,7 @@ const tasks = defineModule({
     },
     scheduleThenFail: {
       input: { id: 'id' },
+      effects: ['enqueue:tasks.deliver'],
       handler: (ctx: Ctx, args) =>
         ctx.tx(async (tx) => {
           await tx.jobs.enqueue('tasks.deliver', { id: args.id as string })
@@ -83,6 +85,64 @@ test('queue contracts are namespaced and carry operational defaults', () => {
     () => composeWorkspace([defineApp({ name: 'missing_worker', modules: [tasks], headless: true })]),
     /does not configure that worker queue/,
   )
+
+  const consumer = defineModule({
+    name: 'effect_consumer',
+    jobs: { run: { idempotent: true, handler: async () => {} } },
+  })
+  const producer = defineModule({
+    name: 'effect_producer',
+    functions: {
+      schedule: {
+        effects: ['enqueue:effect_consumer.run'],
+        handler: () => null,
+      },
+    },
+  })
+  assert.throws(
+    () => compose([consumer, producer], { headless: true }),
+    /does not depend on "effect_consumer"/,
+  )
+  assert.throws(
+    () =>
+      compose(
+        [
+          defineModule({
+            name: 'unknown_job_effect',
+            functions: {
+              schedule: { effects: ['enqueue:no_such.job'], handler: () => null },
+            },
+          }),
+        ],
+        { headless: true },
+      ),
+    /unknown effect "enqueue:no_such.job"/,
+  )
+})
+
+test('enqueue is refused unless the producer declares the exact job effect', async () => {
+  const module = defineModule({
+    name: 'guarded_enqueue',
+    functions: {
+      schedule: {
+        effects: [],
+        handler: (ctx: Ctx) => ctx.jobs.enqueue('guarded_enqueue.run', {}),
+      },
+    },
+    jobs: { run: { idempotent: true, handler: async () => {} } },
+  })
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  registerFunctions([module])
+  await assert.rejects(
+    () =>
+      callFn('guarded_enqueue.schedule', {}, { adapter, manifest: compose([module], { headless: true }) }),
+    (error: unknown) =>
+      (error as { code?: string }).code === 'E_EFFECT_NOT_DECLARED' &&
+      /enqueue on guarded_enqueue\.run/.test(String(error)),
+  )
+  assert.equal((await (await createQueue(adapter)).list()).length, 0)
+  await adapter.close()
 })
 
 test('queue schema migrates v1 rows instead of abandoning pending work', async () => {
@@ -181,6 +241,38 @@ test('unique enqueue, priority ordering and due time are enforced by the durable
     ['same', 'low'],
     'a future high-priority job is still not due',
   )
+  const completed = first.find((job) => job.args.id === 'same')!
+  assert.equal(await queue.complete(completed.id, 'w1'), true)
+  const again = await queue.enqueue(
+    'tasks.deliver',
+    { id: 'same-again' },
+    { queue: 'default', uniqueKey: 'same' },
+  )
+  assert.equal(again.existing, false, 'a terminal job releases its queue uniqueness key')
+  assert.notEqual(again.id, completed.id)
+  await adapter.close()
+})
+
+test('terminal jobs cannot be overwritten by discard and rescue is bounded', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  let time = Date.parse('2026-01-01T00:00:00.000Z')
+  const queue = await createQueue(adapter, { now: () => new Date(time) })
+  for (let n = 0; n < 5; n++)
+    await queue.enqueue('tasks.deliver', { id: String(n) }, { queue: 'default', maxAttempts: 2 })
+  const claimed = await queue.claimBatch('default', { workerId: 'bounded', leaseMs: 1_000, limit: 5 })
+  assert.equal(await queue.complete(claimed[0]!.id, 'bounded'), true)
+  assert.equal(await queue.discard(claimed[0]!.id, new Error('late discard')), false)
+  assert.equal((await queue.get(claimed[0]!.id))?.state, 'completed')
+  assert.equal(await queue.cancel(claimed[1]!.id), true)
+  assert.equal(await queue.discard(claimed[1]!.id, new Error('late discard'), 'bounded'), false)
+  assert.equal((await queue.get(claimed[1]!.id))?.state, 'cancelled')
+
+  time += 1_001
+  assert.deepEqual(await queue.rescue({ limit: 2 }), { retried: 2, discarded: 0 })
+  assert.equal((await queue.list({ state: 'executing' })).length, 1)
+  assert.deepEqual(await queue.rescue({ limit: 2 }), { retried: 1, discarded: 0 })
+  assert.equal((await queue.list({ state: 'executing' })).length, 0)
   await adapter.close()
 })
 
@@ -247,6 +339,14 @@ test('worker executes with captured context and discards an exhausted handler', 
           })
         },
       },
+      ignoresAbort: {
+        idempotent: true,
+        maxAttempts: 1,
+        timeoutMs: 5,
+        handler: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        },
+      },
     },
   })
   const app = defineApp({
@@ -272,16 +372,18 @@ test('worker executes with captured context and discards an exhausted handler', 
   const failed = await queue.enqueue('worker_tasks.alwaysFails', {}, { queue: 'default', maxAttempts: 2 })
   const removed = await queue.enqueue('removed.oldHandler', {}, { queue: 'default' })
   const timeout = await queue.enqueue('worker_tasks.timesOut', {}, { queue: 'default', maxAttempts: 1 })
+  const ignored = await queue.enqueue('worker_tasks.ignoresAbort', {}, { queue: 'default', maxAttempts: 1 })
   await producer.close()
 
   const fixed = new Date('2026-01-01T00:00:00.000Z')
+  const logs: WorkerLog[] = []
   const worker = await bootWorker(app, {
     env: { KET_SQLITE: file, KET_QUEUE_NOTIFY: '0' },
     now: () => fixed,
     random: () => 0,
-    log: () => {},
+    log: (entry) => logs.push(entry),
   })
-  assert.equal(await worker.drain(), 5, 'success, unknown, timeout, and two failed attempts')
+  assert.equal(await worker.drain(), 6, 'success, unknown, two timeout cases, and two failed attempts')
   await worker.close()
 
   assert.deepEqual(seen, [{ actor: 'u1', company: 'acme', id: 'j1' }])
@@ -293,7 +395,9 @@ test('worker executes with captured context and discards an exhausted handler', 
   assert.equal((await after.get(failed.id))?.errors.length, 2)
   assert.equal((await after.get(removed.id))?.state, 'discarded', 'removed code is never executed')
   assert.equal((await after.get(timeout.id))?.state, 'discarded')
+  assert.equal((await after.get(ignored.id))?.state, 'discarded')
   assert.equal(timedOut, true)
+  assert.ok(logs.some((entry) => entry.event === 'handler_ignored_abort' && entry.jobId === ignored.id))
   await inspector.close()
   rmSync(dir, { recursive: true, force: true })
 })

@@ -149,8 +149,8 @@ export type FnMeta = {
 
 /**
  * A durable background operation. Jobs deliberately reuse the function effect
- * vocabulary: moving work out of an HTTP request must not become a way around
- * the model boundary that request had.
+ * vocabulary, including enqueue: moving work out of an HTTP request or chaining
+ * it to another job must not become a way around the operation boundary.
  */
 export type JobSpec = {
   queue?: string
@@ -440,6 +440,8 @@ export type JobContext = Ctx & {
 // Only quoteIdent and columnSql stay synchronous: they are pure string functions.
 export type Adapter = {
   name: string
+  /** True when this adapter is already bound to an open transaction. */
+  readonly transaction?: boolean
   open(): Promise<void>
   close(): Promise<void>
   exec(sql: string): Promise<void>

@@ -503,6 +503,9 @@ export function compose(
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key} input ${input}: ${parsed.reason}` })
       }
       for (const effect of def.effects ?? []) {
+        // Enqueue targets are validated after every job has been collected, so a
+        // producer may refer to a job contributed later in dependency order.
+        if (effect.startsWith('enqueue')) continue
         const match = /^(read|write):(.+)$/.exec(effect)
         const model = match ? manifest.models[match[2] as string] : null
         if (!match || !model) {
@@ -530,6 +533,46 @@ export function compose(
         idempotent: true,
         maxAttempts,
         timeoutMs,
+      }
+    }
+  }
+
+  // Enqueue is a first-class effect. Moving a write to another process must not
+  // let the producer bypass the operation boundary: both functions and jobs must
+  // name the exact background operation they are allowed to schedule.
+  for (const m of order) {
+    const producers: Array<{ kind: 'function' | 'job'; key: string; effects: string[] }> = [
+      ...Object.entries(m.functions).map(([name, def]) => ({
+        kind: 'function' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+      ...Object.entries(m.jobs).map(([name, def]) => ({
+        kind: 'job' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+    ]
+    for (const producer of producers) {
+      for (const effect of producer.effects) {
+        if (!effect.startsWith('enqueue')) continue
+        const match = /^enqueue:(.+)$/.exec(effect)
+        const target = match ? manifest.jobs[match[1] as string] : null
+        if (!match || !target) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" declares unknown effect "${effect}"`,
+          })
+          continue
+        }
+        if (!canSee(m, target.by)) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT_NOT_DEPENDED' : 'E_FN_EFFECT_NOT_DEPENDED',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" enqueues ${match[1]} but does not depend on "${target.by}"`,
+          })
+        }
       }
     }
   }

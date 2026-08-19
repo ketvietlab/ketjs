@@ -37,13 +37,13 @@ export function createContext(o: {
   const effects = new Set(operation.effects)
   const writes: WriteRecord[] = []
 
-  const need = (effect: 'read' | 'write', model: string): void => {
-    if (effects.has(`${effect}:${model}`)) return
+  const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
+    if (effects.has(`${effect}:${target}`)) return
     throw new KetError({
       code: 'E_EFFECT_NOT_DECLARED',
       module: operation.by,
-      message: `"${fnKey}" attempted ${effect} on ${model} but declares effects [${[...effects].join(', ') || 'none'}]`,
-      hint: `add "${effect}:${model}" to the function's effects, or stop touching that model`,
+      message: `"${fnKey}" attempted ${effect} on ${target} but declares effects [${[...effects].join(', ') || 'none'}]`,
+      hint: `add "${effect}:${target}" to the ${o.kind === 'job' ? 'job' : 'function'}'s effects, or stop performing that operation`,
     })
   }
 
@@ -378,6 +378,7 @@ export function createContext(o: {
       async enqueue(name, args, options) {
         const meta = manifest.jobs[name]
         if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
+        need('enqueue', name)
         if (manifest.disabledModules?.includes(meta.by)) {
           throw new KetError({
             code: 'E_APP_NOT_INSTALLED',

@@ -66,7 +66,7 @@ export type Queue = {
   cancel(id: string): Promise<boolean>
   /** Operator retry for retryable/discarded jobs; preserves attempt history. */
   retryNow(id: string): Promise<boolean>
-  rescue(): Promise<{ retried: number; discarded: number }>
+  rescue(options?: { limit?: number }): Promise<{ retried: number; discarded: number }>
   get(id: string): Promise<DurableJob | null>
   list(options?: QueueListOptions): Promise<DurableJob[]>
   prune(options?: { completedBefore?: Date; discardedBefore?: Date }): Promise<number>
@@ -75,7 +75,7 @@ export type Queue = {
   release(id: string): Promise<void>
 }
 
-const DDL = `
+const DDL_SQLITE = `
 CREATE TABLE IF NOT EXISTS ket_job (
   id            TEXT PRIMARY KEY,
   job           TEXT NOT NULL,
@@ -99,20 +99,50 @@ CREATE TABLE IF NOT EXISTS ket_job (
   inserted_at   TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS ket_job_fetch
-  ON ket_job (queue, state, scheduled_at, priority, id);
-CREATE INDEX IF NOT EXISTS ket_job_rescue
-  ON ket_job (state, lease_until);
-CREATE UNIQUE INDEX IF NOT EXISTS ket_job_unique
-  ON ket_job (job, unique_key) WHERE unique_key IS NOT NULL;
 `
 
-const DDL_PG = DDL.replaceAll('scheduled_at  TEXT', 'scheduled_at  TIMESTAMPTZ')
-  .replaceAll('attempted_at  TEXT', 'attempted_at  TIMESTAMPTZ')
-  .replaceAll('completed_at  TEXT', 'completed_at  TIMESTAMPTZ')
-  .replaceAll('lease_until   TEXT', 'lease_until   TIMESTAMPTZ')
-  .replaceAll('inserted_at   TEXT', 'inserted_at   TIMESTAMPTZ')
-  .replaceAll('updated_at    TEXT', 'updated_at    TIMESTAMPTZ')
+const DDL_POSTGRES = `
+CREATE TABLE IF NOT EXISTS ket_job (
+  id            TEXT PRIMARY KEY,
+  job           TEXT NOT NULL,
+  queue         TEXT NOT NULL,
+  args          TEXT NOT NULL,
+  state         TEXT NOT NULL,
+  priority      INTEGER NOT NULL DEFAULT 0,
+  attempt       INTEGER NOT NULL DEFAULT 0,
+  max_attempts  INTEGER NOT NULL,
+  scheduled_at  TIMESTAMPTZ NOT NULL,
+  attempted_at  TIMESTAMPTZ,
+  completed_at  TIMESTAMPTZ,
+  worker_id     TEXT,
+  lease_until   TIMESTAMPTZ,
+  actor         TEXT,
+  company_id    TEXT,
+  companies     TEXT,
+  branches      TEXT,
+  unique_key    TEXT,
+  errors        TEXT NOT NULL DEFAULT '[]',
+  inserted_at   TIMESTAMPTZ NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL
+);
+`
+
+// Only runnable states belong in the fetch and uniqueness indexes. This both
+// gives claim a single ordering path across states and releases a unique key as
+// soon as its job reaches a terminal state. Business idempotency remains the
+// handler's responsibility; queue uniqueness only coalesces active delivery.
+const INDEX_DDL = `
+DROP INDEX IF EXISTS ket_job_fetch;
+DROP INDEX IF EXISTS ket_job_unique;
+CREATE INDEX IF NOT EXISTS ket_job_fetch_active
+  ON ket_job (queue, priority, scheduled_at, id)
+  WHERE state IN ('available', 'scheduled', 'retryable');
+CREATE INDEX IF NOT EXISTS ket_job_rescue
+  ON ket_job (state, lease_until);
+CREATE UNIQUE INDEX IF NOT EXISTS ket_job_unique_active
+  ON ket_job (job, unique_key)
+  WHERE unique_key IS NOT NULL AND state IN ('available', 'scheduled', 'executing', 'retryable');
+`
 
 const encode = (value: unknown): string => JSON.stringify(value ?? null)
 let lastIdMs = -1
@@ -219,20 +249,28 @@ async function ensureSchema(adapter: Adapter): Promise<void> {
   let ready = initialized.get(adapter)
   if (!ready) {
     ready = (async () => {
-      const before = await adapter.introspect()
-      let migrateLegacy = false
-      if (before.ket_job && !before.ket_job.job) {
-        if (before.ket_job_legacy)
-          throw new Error('legacy ket_job and ket_job_legacy both exist; finish the queue migration manually')
-        await adapter.exec('ALTER TABLE ket_job RENAME TO ket_job_legacy')
-        migrateLegacy = true
-      }
-      await adapter.exec(adapter.name === 'postgres' ? DDL_PG : DDL)
-      if (migrateLegacy) {
-        // V1 used queue as both routing key and operation name. Preserve its rows
-        // under stable string ids; workers will execute a still-declared qualified
-        // name or safely discard one whose code no longer exists.
-        await adapter.exec(`INSERT INTO ket_job
+      const initialize = async (target: Adapter): Promise<void> => {
+        // Every PostgreSQL replica takes the same transaction-scoped lock before it
+        // inspects or renames the legacy table. The lock and DDL share one reserved
+        // connection, so two pods cannot both decide they own the migration.
+        if (target.name === 'postgres') await target.all('SELECT pg_advisory_xact_lock(1262835793)')
+        const before = await target.introspect()
+        let migrateLegacy = false
+        if (before.ket_job && !before.ket_job.job) {
+          if (before.ket_job_legacy)
+            throw new Error(
+              'legacy ket_job and ket_job_legacy both exist; finish the queue migration manually',
+            )
+          await target.exec('ALTER TABLE ket_job RENAME TO ket_job_legacy')
+          migrateLegacy = true
+        }
+        await target.exec(target.name === 'postgres' ? DDL_POSTGRES : DDL_SQLITE)
+        await target.exec(INDEX_DDL)
+        if (migrateLegacy) {
+          // V1 used queue as both routing key and operation name. Preserve its rows
+          // under stable string ids; workers will execute a still-declared qualified
+          // name or safely discard one whose code no longer exists.
+          await target.exec(`INSERT INTO ket_job
           (id, job, queue, args, state, priority, attempt, max_attempts, scheduled_at,
            completed_at, errors, inserted_at, updated_at)
           SELECT 'legacy-' || CAST(id AS TEXT), queue, queue, COALESCE(payload, '{}'),
@@ -247,7 +285,10 @@ async function ensureSchema(adapter: Adapter): Promise<void> {
             '[]', created_at, created_at
           FROM ket_job_legacy WHERE true
           ON CONFLICT DO NOTHING`)
+        }
       }
+      if (adapter.transaction) await initialize(adapter)
+      else await adapter.tx(initialize)
     })()
     initialized.set(adapter, ready)
     ready.catch(() => initialized.delete(adapter))
@@ -255,10 +296,11 @@ async function ensureSchema(adapter: Adapter): Promise<void> {
   return ready
 }
 
-const workerGuard = (pg: boolean, parameter: number, workerId?: string) =>
-  workerId
-    ? { sql: ` AND worker_id = ${pg ? `$${parameter}` : '?'}`, params: [workerId] }
-    : { sql: '', params: [] }
+const workerGuard = (pg: boolean, parameter: number, workerId?: string | null) => {
+  if (workerId === undefined) return { sql: '', params: [] }
+  if (workerId === null) return { sql: ' AND worker_id IS NULL', params: [] }
+  return { sql: ` AND worker_id = ${pg ? `$${parameter}` : '?'}`, params: [workerId] }
+}
 
 export async function createQueue(
   adapter: Adapter,
@@ -274,8 +316,8 @@ export async function createQueue(
     return rows[0] ? toJob(rows[0]) : null
   }
 
-  const errorHistory = async (id: string, error: unknown): Promise<string> => {
-    const current = await get(id)
+  const errorHistory = async (id: string, error: unknown, known?: DurableJob): Promise<string> => {
+    const current = known ?? (await get(id))
     const message = error instanceof Error ? error.message : String(error)
     return encode(
       [
@@ -283,6 +325,43 @@ export async function createQueue(
         { at: now().toISOString(), attempt: current?.attempt ?? 0, message },
       ].slice(-20),
     )
+  }
+
+  const retryExecuting = async (
+    id: string,
+    error: unknown,
+    runAt: Date,
+    workerId?: string | null,
+    known?: DurableJob,
+  ): Promise<boolean> => {
+    const at = now().toISOString()
+    const errors = await errorHistory(id, error, known)
+    const guard = workerGuard(pg, 5, workerId)
+    const result = await adapter.run(
+      `UPDATE ket_job SET state = 'retryable', scheduled_at = ${p(1)}, errors = ${p(2)},
+       lease_until = NULL, worker_id = NULL, updated_at = ${p(3)}
+       WHERE id = ${p(4)} AND state = 'executing'${guard.sql}`,
+      [runAt.toISOString(), errors, at, id, ...guard.params],
+    )
+    return result.changes === 1
+  }
+
+  const discardExecuting = async (
+    id: string,
+    error: unknown,
+    workerId?: string | null,
+    known?: DurableJob,
+  ): Promise<boolean> => {
+    const at = now().toISOString()
+    const errors = await errorHistory(id, error, known)
+    const guard = workerGuard(pg, 5, workerId)
+    const result = await adapter.run(
+      `UPDATE ket_job SET state = 'discarded', errors = ${p(1)}, completed_at = ${p(2)},
+       lease_until = NULL, worker_id = NULL, updated_at = ${p(3)}
+       WHERE id = ${p(4)} AND state = 'executing'${guard.sql}`,
+      [errors, at, at, id, ...guard.params],
+    )
+    return result.changes === 1
   }
 
   const queue: Queue = {
@@ -315,23 +394,38 @@ export async function createQueue(
         at.toISOString(),
       ]
       const placeholders = values.map((_, index) => p(index + 1)).join(', ')
-      const inserted = await adapter.run(
-        `INSERT INTO ket_job
-         (id, job, queue, args, state, priority, max_attempts, scheduled_at, actor,
-          company_id, companies, branches, unique_key, inserted_at, updated_at)
-         VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
-        values,
-      )
+      const insert = () =>
+        adapter.run(
+          `INSERT INTO ket_job
+           (id, job, queue, args, state, priority, max_attempts, scheduled_at, actor,
+            company_id, companies, branches, unique_key, inserted_at, updated_at)
+           VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
+          values,
+        )
+      let inserted = await insert()
       let existing = false
       let actualId: string = id
-      if (inserted.changes === 0 && o.uniqueKey) {
-        const rows = await adapter.all(
-          `SELECT id FROM ket_job WHERE job = ${p(1)} AND unique_key = ${p(2)} LIMIT 1`,
-          [job, o.uniqueKey],
-        )
-        if (!rows[0]) throw new Error(`could not resolve unique job ${job}:${o.uniqueKey}`)
-        existing = true
-        actualId = String(rows[0].id)
+      if (o.uniqueKey) {
+        // The conflicting job may reach a terminal state between INSERT and
+        // SELECT, releasing the partial unique key. Retry the insert in that
+        // window instead of returning no job (or throwing) for valid work.
+        for (let attempt = 0; inserted.changes === 0 && attempt < 3; attempt++) {
+          const rows = await adapter.all(
+            `SELECT id FROM ket_job
+             WHERE job = ${p(1)} AND unique_key = ${p(2)}
+               AND state IN ('available', 'scheduled', 'executing', 'retryable')
+             LIMIT 1`,
+            [job, o.uniqueKey],
+          )
+          if (rows[0]) {
+            existing = true
+            actualId = String(rows[0].id)
+            break
+          }
+          inserted = await insert()
+        }
+        if (inserted.changes === 0 && !existing)
+          throw new Error(`could not resolve unique job ${job}:${o.uniqueKey}`)
       }
       if (inserted.changes === 0 && !o.uniqueKey)
         throw new Error(`job id collision while enqueueing "${job}"`)
@@ -371,7 +465,6 @@ export async function createQueue(
         return rows.map(toJob)
       }
       return adapter.tx(async (tx) => {
-        await ensureSchema(tx)
         const ids = await tx.all(
           `SELECT id FROM ket_job
            WHERE queue = ? AND state IN ('available', 'scheduled', 'retryable') AND scheduled_at <= ?
@@ -416,29 +509,11 @@ export async function createQueue(
     },
 
     async retry(id, error, runAt, workerId) {
-      const at = now().toISOString()
-      const errors = await errorHistory(id, error)
-      const guard = workerGuard(pg, 5, workerId)
-      const result = await adapter.run(
-        `UPDATE ket_job SET state = 'retryable', scheduled_at = ${p(1)}, errors = ${p(2)},
-         lease_until = NULL, worker_id = NULL, updated_at = ${p(3)}
-         WHERE id = ${p(4)} AND state = 'executing'${guard.sql}`,
-        [runAt.toISOString(), errors, at, id, ...guard.params],
-      )
-      return result.changes === 1
+      return retryExecuting(id, error, runAt, workerId)
     },
 
     async discard(id, error, workerId) {
-      const at = now().toISOString()
-      const errors = await errorHistory(id, error)
-      const guard = workerGuard(pg, 5, workerId)
-      const result = await adapter.run(
-        `UPDATE ket_job SET state = 'discarded', errors = ${p(1)}, completed_at = ${p(2)},
-         lease_until = NULL, worker_id = NULL, updated_at = ${p(3)}
-         WHERE id = ${p(4)}${guard.sql}`,
-        [errors, at, at, id, ...guard.params],
-      )
-      return result.changes === 1
+      return discardExecuting(id, error, workerId)
     },
 
     async cancel(id) {
@@ -466,11 +541,14 @@ export async function createQueue(
       return result.changes === 1
     },
 
-    async rescue() {
+    async rescue(o = {}) {
       const at = now()
+      const limit = Math.max(1, Math.min(1_000, o.limit ?? 100))
       const rows = await adapter.all(
-        `SELECT * FROM ket_job WHERE state = 'executing' AND lease_until < ${p(1)}`,
-        [at.toISOString()],
+        `SELECT * FROM ket_job
+         WHERE state = 'executing' AND lease_until < ${p(1)}
+         ORDER BY lease_until, id LIMIT ${p(2)}`,
+        [at.toISOString(), limit],
       )
       let retried = 0
       let discarded = 0
@@ -478,10 +556,10 @@ export async function createQueue(
         // The observed worker id acts as the lease token. Concurrent rescuers can
         // both see this row, but only one guarded transition can still own it.
         if (job.attempt >= job.maxAttempts) {
-          if (await queue.discard(job.id, new Error('worker lease expired'), job.workerId ?? undefined))
+          if (await discardExecuting(job.id, new Error('worker lease expired'), job.workerId, job))
             discarded++
         } else {
-          if (await queue.retry(job.id, new Error('worker lease expired'), at, job.workerId ?? undefined))
+          if (await retryExecuting(job.id, new Error('worker lease expired'), at, job.workerId, job))
             retried++
         }
       }

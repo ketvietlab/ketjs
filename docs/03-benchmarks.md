@@ -135,14 +135,21 @@ the polling and round-robin correctness path rather than a local wake-up shortcu
 
 | driver | databases | jobs | concurrency | enqueue/s | execute/s | first-job spread |
 |---|---:|---:|---:|---:|---:|---:|
-| SQLite | 16 | 800 | 8 | 635 | 658 | 210.4 ms |
-| PostgreSQL 17 | 8 | 400 | 8 | 474 | 377 | 465.1 ms |
+| SQLite | 32 | 3,200 | 8 | 2,636 | 1,115 | 294.1 ms |
+| PostgreSQL 17 | 8 | 800 | 8 | 250 | 284 | 365.6 ms |
 
 These are development-machine numbers, not capacity promises. The PostgreSQL run
 uses eight real databases on the local cluster, `FOR UPDATE SKIP LOCKED`, a bounded
 tenant pool and no Redis. Reproduce with `npm run bench:queue`; select PostgreSQL
 with `KET_BENCH_DRIVER=postgres` and tune database/job counts through the benchmark
 environment variables.
+
+With 100,000 runnable PostgreSQL rows, `EXPLAIN (ANALYZE, BUFFERS)` selected
+`ket_job_fetch_active` directly with no Sort node: 0.893 ms total execution and 23
+shared-buffer hits to lock the first 10 rows on the development cluster. This is
+why the fetch index is partial across runnable states and ordered `(queue,
+priority, scheduled_at, id)` rather than putting the multi-valued `state` column
+before the requested order.
 
 ## Not measured
 

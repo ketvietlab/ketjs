@@ -35,7 +35,9 @@ The production worker is a separate process role of the same app artifact:
 through `tx.jobs.enqueue(...)` in the same transaction as business data. PostgreSQL
 `LISTEN/NOTIFY` wakes a single-database worker quickly; polling and leases remain the
 guarantee, so Redis is not required. Operators can inspect and control durable rows
-with `ket jobs list|retry|cancel|prune`.
+with `ket jobs list|retry|cancel|prune`. Every producer must declare the exact
+`enqueue:module.job` effect; moving a write into a worker does not widen what a
+server function is allowed to cause.
 
 ```bash
 npx ket new shop && cd shop && npm install && npm run dev
