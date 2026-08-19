@@ -1,5 +1,5 @@
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import { button } from './actions.tsx'
 import { errorState, loadingState } from './state.tsx'
 
@@ -52,7 +52,7 @@ export type MediaPanelProps = {
   status: 'unavailable' | 'loading' | 'ready' | 'error'
   images?: readonly MediaItem[]
   error?: string | null
-  extension?: unknown
+  extension?: JSXChild
   uploadAction?: string | null
   labels?: Partial<MediaLabels>
 }

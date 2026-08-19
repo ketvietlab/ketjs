@@ -70,6 +70,68 @@ test('fill: a function cannot be smuggled in through props', () => {
   )
 })
 
+test('fill: declared prop types are checked at the extension boundary', () => {
+  assert.throws(
+    () => render([owner, filler('a', `x`)], { app: 'not an object' }),
+    /joint "screen:card.actions" prop "app" expects json/,
+  )
+})
+
+test('fill: a singleton joint refuses ambiguous contributors at compose time', () => {
+  const singleton = defineModule({
+    name: 'single',
+    joints: { slot: { multiple: false } },
+  })
+  assert.throws(
+    () =>
+      compose([
+        singleton,
+        defineModule({ name: 'left', depends: ['single'], fills: { 'single:slot': 'left' } }),
+        defineModule({ name: 'right', depends: ['single'], fills: { 'single:slot': 'right' } }),
+      ]),
+    /accepts one fill but 2 modules fill it/,
+  )
+})
+
+test('fill: recursive joints fail with the chain instead of overflowing the stack', () => {
+  const recursive = filler('recursive', `{% joint "screen:card.actions" %}`)
+  assert.throws(
+    () => render([owner, recursive]),
+    /joint recursion: screen:card.actions -> screen:card.actions/,
+  )
+})
+
+test('fill: an island can render inside a first-party screen joint', () => {
+  const extension = defineModule({
+    name: 'interactive',
+    depends: ['screen'],
+    islands: {
+      panel: {
+        props: { app: 'json' },
+        view: (props) => {
+          const app = props.app as { name: string }
+          return () => html`<button>${app.name}</button>`
+        },
+      },
+    },
+    fills: { 'screen:card.actions': `{% island "panel" %}` },
+  })
+  const manifest = compose([owner, extension])
+  const markup = createJoints(manifest, { islands: { panel: extension.islands.panel!.view } }).render(
+    'screen:card.actions',
+    { app: { name: 'Kho' }, secret: 'no' },
+  ).html
+  assert.match(markup, /data-island="panel"/)
+  assert.match(markup, /><!--k\[-->Kho<!--k--><\/button>/)
+  assert.ok(!markup.includes('secret'))
+})
+
+test('fill: unknown joints fail consistently for render() and shows()', () => {
+  const joints = createJoints(compose([owner]))
+  assert.throws(() => joints.render('screen:nope'), /no installed module publishes/)
+  assert.throws(() => joints.shows('screen:nope'), /no installed module publishes/)
+})
+
 test('fill: naming a joint nobody publishes is a build error, with a suggestion', () => {
   assert.throws(
     () =>
@@ -119,6 +181,7 @@ test('omit: an omission by a module that is switched off is not an omission', ()
     '<i>x</i>',
     'the joint comes back, exactly as its fills would',
   )
+  assert.deepEqual(live.patches, [], 'the live diagnostics do not report an omission that is switched off')
 })
 
 test('omit: omitting a joint nobody publishes is a build error', () => {

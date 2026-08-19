@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
+import type { JSXChild } from 'ketjs-view'
 import { metric, recordForm, section, stack, surface } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
@@ -27,7 +28,7 @@ const render = async (
   req: Req,
   titleKey: string,
   rows: StockRow[],
-  additions: readonly unknown[] = [],
+  additions: readonly JSXChild[] = [],
   showEmpty = true,
 ) => {
   const lang = ctx.localeOf(url, req)
