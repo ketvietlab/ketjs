@@ -225,3 +225,27 @@ Không cần CSS ẩn gì cả.
 
 `[data-ui="nav-item"]` vẫn còn, nhưng chỉ dành cho module khác chèn thêm qua joint
 `backend:nav.items`. Màn hình không tự sinh ra nó nữa.
+
+## Khung danh sách
+
+Hàng điều khiển phía trên một danh sách. **Mọi thứ trong đây là link hoặc form
+`method="get"`** — không có `<button>`, và có test giữ điều đó. Nghĩa là nút back,
+bookmark và link dán vào chat đều chạy mà không ai phải viết code.
+
+Điều khiển nào không có gì để nói thì **không được render**: hết trang thì không có
+pager, chỉ một kiểu xem thì không có nút đổi kiểu. Đừng viết CSS để ẩn — nó không có
+trong HTML.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="list-chrome"]` | cả hàng; `chrome-lead` bên trái, `chrome-tail` bên phải |
+| `[data-ui="chrome-create"]` | nút chính (“Mới”) — hiện tại chưa màn hình nào bật |
+| `[data-ui="crumbs"]`, `[data-ui="crumb"]` | đường dẫn; mục cuối có `aria-current="page"` và **không** phải link |
+| `[data-ui="chrome-search"]` | form tìm kiếm; style trạng thái gõ bằng `:focus-within` |
+| `[data-ui="chrome-search-input"]` | ô nhập bên trong nó |
+| `[data-ui="facet"]`, `[data-ui="facet-label"]`, `[data-ui="facet-remove"]` | một bộ lọc đang bật, và dấu × để bỏ |
+| `[data-ui="pager"]`, `[data-ui="pager-range"]` | “1-30 / 84” |
+| `[data-ui="pager-step"][data-dir][aria-disabled]` | mũi tên; hết đường thì **vẫn nằm đó**, chỉ mờ đi — nếu biến mất thì thanh công cụ đổi chiều rộng |
+| `[data-ui="view-switch"]`, `[data-ui="view-kind"][data-active]` | đổi kiểu xem |
+| `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
+| `[data-ui="table"] [data-align="end"]` | cột số — canh phải, `tabular-nums` |

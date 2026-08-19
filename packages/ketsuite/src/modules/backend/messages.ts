@@ -20,6 +20,16 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.settings': 'Cài đặt',
     'brand': 'KetSuite',
 
+    'chrome.breadcrumb': 'Đường dẫn',
+    'chrome.removeFilter': 'Bỏ bộ lọc',
+    'chrome.previous': 'Trang trước',
+    'chrome.next': 'Trang sau',
+    'chrome.views': 'Kiểu xem',
+    'chrome.view.list': 'Danh sách',
+    'chrome.view.kanban': 'Thẻ',
+    'chrome.searchFacet': 'Tìm',
+    'chrome.searchPages': 'Tìm trang…',
+
     'menu.admin': 'Quản trị',
     'menu.apps': 'Ứng dụng',
     'menu.content': 'Nội dung',
@@ -59,6 +69,16 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
     'brand': 'KetSuite',
+
+    'chrome.breadcrumb': 'Breadcrumb',
+    'chrome.removeFilter': 'Remove filter',
+    'chrome.previous': 'Previous page',
+    'chrome.next': 'Next page',
+    'chrome.views': 'Views',
+    'chrome.view.list': 'List',
+    'chrome.view.kanban': 'Cards',
+    'chrome.searchFacet': 'Search',
+    'chrome.searchPages': 'Search pages…',
 
     'menu.admin': 'Administration',
     'menu.apps': 'Apps',

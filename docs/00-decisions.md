@@ -1272,3 +1272,36 @@ changing any of this. Deferred until somebody actually asks.
 **What this replaced.** `product_backend` used to add its sidebar link by filling
 `backend:nav.items` with a KTL string that re-implemented the active check. The
 joint stays for genuinely arbitrary additions; a menu entry is no longer one.
+
+## D43 — The URL is the list's state
+**Which page, which search, which view — all in the query string.** No store, no
+hook, no component that has to be told what page it is on. The consequences are the
+point: the back button works, a bookmark works, and a link somebody pastes into chat
+opens the same list they were looking at. None of that needed code.
+
+Every control in the chrome is a link or a `method="get"` form. There is no
+`<button>` in it and a test asserts there is none, because the moment one appears
+the state has moved into the client and all three of those properties are gone.
+
+**What that cost, and where it bit.** A GET form replaces the whole query string, so
+searching while looking at the cards threw you back to the list. The fix is
+`keep` — the rest of the URL as hidden fields. Found by clicking, not by a test;
+the test came after.
+
+**Paging is on the function, not on a generic list endpoint.** `listTemplates` grew
+`limit`, `offset` and `search`, and `countTemplates` appeared beside it — Odoo's
+`search_read` / `search_count` pair, for the same reason: a page needs a total it
+cannot compute from the page. Both are built from one shared query expression,
+because a count that filters differently from the list it counts is the bug you find
+on page four, not on page one.
+
+**Controls that have nothing to say are not rendered.** No pager when everything fits
+on one page. No view switcher when there is one view. No search box unless the list
+can search. A toolbar full of dead controls teaches people to stop reading it.
+
+**But an exhausted arrow stays, disabled.** That is the exception, and it is
+deliberate: a pager that changes width as you page is a pager you cannot aim at.
+
+**Deferred:** the "Mới" button. `ListChrome` carries `create` and the catalogue shows
+it, but no live screen sets it, because no create screen exists yet. A button that
+404s is worse than no button.
