@@ -1,0 +1,26 @@
+export const messages = {
+  vi: {
+    'app.title': 'Kho',
+    'app.summary': 'Địa điểm, tồn kho và luân chuyển — bút toán kép như Odoo.',
+    'app.category': 'Kho vận',
+    'usage.view': 'Thư mục',
+    'usage.internal': 'Trong kho',
+    'usage.supplier': 'Nhà cung cấp',
+    'usage.customer': 'Khách hàng',
+    'usage.inventory': 'Kiểm kê',
+    'usage.production': 'Sản xuất',
+    'usage.transit': 'Đang chuyển',
+  },
+  en: {
+    'app.title': 'Inventory',
+    'app.summary': 'Locations, stock and movements — double entry, as in Odoo.',
+    'app.category': 'Logistics',
+    'usage.view': 'View',
+    'usage.internal': 'Internal',
+    'usage.supplier': 'Vendor',
+    'usage.customer': 'Customer',
+    'usage.inventory': 'Inventory loss',
+    'usage.production': 'Production',
+    'usage.transit': 'Transit',
+  },
+}

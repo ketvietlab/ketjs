@@ -198,3 +198,23 @@ test('decimal: a conversion built from stored factors matches one built in memor
   assert.equal(viaDb.qty, convertQty(2500, KG, TONNE), 'the database is not a second source of drift')
   await db.close()
 })
+
+test('uom: a category can be created, which until now it could not', async () => {
+  // saveUnit refuses an unknown categoryId, and nothing created one — so the only
+  // way to seed the first category was to reach past the module and write the row,
+  // which is what the effect system exists to stop. Found by the stock module,
+  // which could not seed a single unit without it.
+  const manifest = compose([uom])
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions([uom])
+  const o = { adapter, manifest, scope: { company: 'c1' } }
+  const run = (fn: string, args: Record<string, unknown> = {}) => callFn(fn, args, o).then(r => r.value as Record<string, unknown>)
+
+  assert.equal((await run('uom.saveUnit', { id: 'kg', categoryId: 'khong-co', name: 'Kg', type: 'reference', factor: 1, rounding: 0.001 })).ok, false)
+  assert.equal((await run('uom.saveCategory', { id: 'canh', name: 'Khối lượng' })).ok, true)
+  assert.equal((await run('uom.saveUnit', { id: 'kg', categoryId: 'canh', name: 'Kg', type: 'reference', factor: 1, rounding: 0.001 })).ok, true)
+  assert.deepEqual((await callFn('uom.listCategories', {}, o)).value, [{ id: 'canh', name: 'Khối lượng' }])
+  await adapter.close()
+})

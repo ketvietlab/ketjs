@@ -20,6 +20,8 @@ export type { Unit } from './modules/uom/convert.ts'
 
 // product vertical
 export { default as product } from './modules/product/index.ts'
+export { default as stock } from './modules/stock/index.ts'
+export { LOCATION_USAGES, REAL_USAGES, MOVE_STATES } from './modules/stock/types.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as user } from './modules/user/index.ts'

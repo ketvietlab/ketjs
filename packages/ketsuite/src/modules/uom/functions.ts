@@ -11,6 +11,38 @@ const asUnit = (r: Row): Unit => ({
 })
 
 export const functions: Record<string, FnSpec> = {
+  /**
+   * Categories had no way in.
+   *
+   * A unit must name one and saveUnit refuses an unknown id, so the only way to
+   * create the first category was to reach past the module and write the row —
+   * which is exactly what the effect system exists to stop. Found by the stock
+   * module, which could not seed a single unit without it.
+   */
+  saveCategory: defineFn({
+    input: { id: 'id', name: 'text' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:uom.Category', 'write:uom.Category'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, a) => {
+      const C = ctx.table('uom.Category')
+      const existing = await ctx.db.one(from(C).where(eq(C.id, a.id)))
+      const cs = ctx.change('uom.Category', a, existing).cast(['id', 'name']).required(['name'])
+      if (!cs.valid) return { ok: false, errors: cs.errors }
+      await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
+      return { ok: true, id: a.id }
+    },
+  }),
+
+  listCategories: defineFn({
+    input: {},
+    output: { id: 'id', name: 'text' },
+    effects: ['read:uom.Category'],
+    agent: true,
+    handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('uom.Category')).orderBy(asc(ctx.table('uom.Category').name))),
+  }),
+
   listUnits: defineFn({
     input: { categoryId: 'id?' },
     effects: ['read:uom.Unit'],

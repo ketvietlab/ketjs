@@ -108,6 +108,54 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D40 — Stock, on Odoo's model, because that model is right
+**Two ideas carry the whole thing, and both are Odoo's.**
+
+*Everything is a location, suppliers and customers included.* Receiving is
+supplier → internal; delivering is internal → customer. Nothing is ever created or
+destroyed, only moved, so the books balance by construction and "where did those
+forty go" always has an answer. A supplier location sitting at −40 is not a bug: it
+is the record that forty came in from outside. `onHand` sums only the real usages,
+so the virtual ones stay out of the total while still keeping it honest.
+
+*One place answers how much is where.* The quant. Moves change it and nothing else
+does, so "what do we have" is a sum and "why" is a list of moves.
+
+**Reservation is what stops two orders promising the same unit**, and it is
+answered rather than thrown: a shortfall comes back as `{ ok: false, shortBy }`,
+because running out of stock is an ordinary outcome that a screen or an agent can
+act on, not a broken call. Applying a move *spends* its reservation rather than
+releasing it — otherwise stock promised to something that has already happened
+stays promised.
+
+**Everything a quant holds is in the product's own unit.** A move may be written in
+any unit of the same category and is converted on the way in (D26); one from
+another category is refused rather than guessed. A quant that mixed units would be
+a quant nobody can add up.
+
+**Both sides of a move change inside one transaction**, and applying more than is
+there rolls the whole thing back rather than leaving one side moved. Tested by
+checking the total is unchanged after a refusal.
+
+**A `view` location holds nothing**, and moving into or out of one is refused: it
+is a folder, and stock in a folder is how a tree stops adding up. Parent cycles are
+refused at write, because every later walk would hang on one.
+
+**Warehouses and locations are company-scoped; products are shared.** That was
+decided when products were, and this is where it becomes visible: two companies
+looking at the same product see different stock.
+
+**Found while building: `uom` had no way to create a category.** `saveUnit` refuses
+an unknown `categoryId` and nothing created one, so seeding the first unit meant
+reaching past the module and writing the row — exactly what the effect system
+exists to prevent. `uom.saveCategory` and `uom.listCategories` exist now. A module
+that cannot be set up through its own functions is a module with a hole in it, and
+the hole is invisible until something else tries to use it.
+
+**Cut for now, deliberately:** pickings and operation types, lots and serials,
+packages, and the routes/rules engine. Each is its own change and each needs its
+own edge-case probing. What is here is the ledger everything else writes into.
+
 ## D39 — The screens that make the enforcement usable
 D38 closed the door. This gives it a handle: a browser arriving uninvited gets a
 sign-in page rather than a bare 401, and lands where it was going once it signs in.
