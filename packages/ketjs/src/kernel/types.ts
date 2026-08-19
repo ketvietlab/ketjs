@@ -1,6 +1,6 @@
 import type { FieldBase, ParsedType, TypeParse } from '../types.ts'
 
-export const SCALARS = new Set(['id', 'text', 'int', 'float', 'bool', 'json', 'datetime'])
+export const SCALARS = new Set(['id', 'text', 'int', 'float', 'decimal', 'bool', 'json', 'datetime'])
 
 export function parseType(spec: string): TypeParse {
   if (typeof spec !== 'string') return { ok: false, reason: 'type must be a string' }
@@ -17,8 +17,12 @@ export function parseType(spec: string): TypeParse {
   return { ok: true, base: s as FieldBase, optional }
 }
 
-const TS: Record<FieldBase, string> = { id: 'string', text: 'string', int: 'number', float: 'number', bool: 'boolean', json: 'unknown', datetime: 'Date', ref: 'string' }
+// decimal is a number in TypeScript because it is a number in arithmetic; only
+// its storage is exact.
+const TS: Record<FieldBase, string> = { id: 'string', text: 'string', int: 'number', float: 'number', decimal: 'number', bool: 'boolean', json: 'unknown', datetime: 'Date', ref: 'string' }
 export const tsTypeOf = (t: ParsedType): string => TS[t.base] + (t.optional ? ' | null' : '')
 
-const SQL: Record<FieldBase, string> = { id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL', bool: 'INTEGER', json: 'TEXT', datetime: 'TEXT', ref: 'TEXT' }
+// SQLite has no exact decimal at all: NUMERIC affinity silently becomes REAL.
+// TEXT is the only storage that gives it back unchanged.
+const SQL: Record<FieldBase, string> = { id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL', decimal: 'TEXT', bool: 'INTEGER', json: 'TEXT', datetime: 'TEXT', ref: 'TEXT' }
 export const sqlTypeOf = (t: ParsedType): string => SQL[t.base]

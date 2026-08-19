@@ -53,6 +53,30 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
   // ordinary, so an empty branch list means "all of them" rather than "none".
   const scopeOf = (model: string) => manifest.models[model]?.scope ?? 'shared'
 
+  // ── decimal columns ────────────────────────────────────────────────────────
+  //
+  // Both adapters store and return a decimal as a string, which is what keeps it
+  // exact across the round trip. Arithmetic still happens on numbers, as it does in
+  // Odoo — the conversion is here, in the one place that knows both the model and
+  // the row, rather than in the adapter, which sees only untyped columns.
+  const decimalsOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {}).filter(([, f]) => f.base === 'decimal').map(([n]) => n)
+
+  const encodeRow = (model: string, row: Row): Row => {
+    const cols = decimalsOf(model)
+    if (!cols.length) return row
+    const out: Row = { ...row }
+    for (const c of cols) if (out[c] != null) out[c] = String(out[c])
+    return out
+  }
+
+  const decodeRows = (model: string, rows: Row[]): Row[] => {
+    const cols = decimalsOf(model)
+    if (!cols.length) return rows
+    for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
+    return rows
+  }
+
   const requireCompany = (model: string): string => {
     if (scope.company) return scope.company
     throw new KetError({
@@ -147,12 +171,12 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
     async all(q) {
       checkQuery(q)
       const { text, params } = scoped(q).toSQL(dialect)
-      return fillPreloads(q, await adapter.all(text, params))
+      return fillPreloads(q, decodeRows(q.model, await adapter.all(text, params)))
     },
     async one(q) {
       checkQuery(q)
       const { text, params } = scoped(q).limit(1).toSQL(dialect)
-      const rows = await fillPreloads(q, await adapter.all(text, params))
+      const rows = await fillPreloads(q, decodeRows(q.model, await adapter.all(text, params)))
       return rows[0] ?? null
     },
     async count(q) {
@@ -190,7 +214,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       const keys = Object.keys(where2)
       fresh()
       const sql = `SELECT * FROM ${t}` + (keys.length ? ` WHERE ${keys.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')}` : '')
-      return adapter.all(sql, keys.map(k => where2[k]))
+      return decodeRows(model, await adapter.all(sql, keys.map(k => where2[k])))
     },
     async insert(model, row) {
       need('write', model)
@@ -199,7 +223,7 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       if (unknown.length) {
         throw new KetError({ code: 'E_UNKNOWN_FIELD', message: `${model} has no field(s): ${unknown.join(', ')}`, hint: `fields: ${known.join(', ')}` })
       }
-      const stamped = stamp(model, row)
+      const stamped = encodeRow(model, stamp(model, row))
       writes.push({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -212,12 +236,13 @@ export function createContext(o: { adapter: Adapter; manifest: Manifest; fnKey: 
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const where3 = scopeOf(model) === 'shared' || fn.crossCompany ? where : { ...where, companyId: requireCompany(model) }
-      const pk = Object.keys(patch), wk = Object.keys(where3)
+      const patch2 = encodeRow(model, patch)
+      const pk = Object.keys(patch2), wk = Object.keys(where3)
       fresh()
       const sets = pk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
       const conds = wk.map(k => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
       const sql = `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map(k => patch[k]), ...wk.map(k => where3[k])])
+      return adapter.run(sql, [...pk.map(k => patch2[k]), ...wk.map(k => where3[k])])
     },
   }
 

@@ -1,6 +1,15 @@
 // The vocabulary of the whole framework. Everything else is derived from these.
 
-export type Scalar = 'id' | 'text' | 'int' | 'float' | 'bool' | 'json' | 'datetime'
+/**
+ * `decimal` and `float` differ in storage, not in arithmetic.
+ *
+ * Odoo takes this split and it is the right one: a quantity or a price is stored
+ * as exact decimal and computed as a binary float, with explicit rounding helpers
+ * standing between the two. Storing it as a float instead means every trip through
+ * the database can put back the error the rounding just took out — 0.1 written to
+ * a double comes back as 0.1000000000000000055.
+ */
+export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'datetime'
 export type FieldBase = Scalar | 'ref'
 
 export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
