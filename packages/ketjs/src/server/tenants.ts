@@ -52,8 +52,15 @@ export type Tenant = {
   live: Manifest
   /** Compiled against what this tenant has installed, and cached with it. */
   theme: ThemeRuntime | null
-  /** Extension points, compiled against the same installed set. */
-  joints: Joints
+  /**
+   * Extension points for one locale.
+   *
+   * KTL binds its `_` filter when it compiles, so a runtime is per language as
+   * well as per installed set — one bound to the deployment default made every
+   * fill answer in that language while the page around it answered in the
+   * reader's, which is what a sidebar entry in the wrong language looks like.
+   */
+  joints: (locale: string) => Joints
   /**
    * Whose logins these are.
    *
@@ -100,7 +107,7 @@ export function createTenants(o: {
    * every template on every request would be the most expensive thing here.
    */
   theme?: (live: Manifest) => ThemeRuntime
-  joints: (live: Manifest) => Joints
+  joints: (live: Manifest, locale: string) => Joints
   /** Built once per tenant, against that tenant's own datastore. */
   sessions?: (adapter: Adapter) => Promise<Sessions>
 }): Tenants {
@@ -170,9 +177,13 @@ export function createTenants(o: {
       const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
       let live = lives.get(stamp)
       if (!live) { live = restrictManifest(o.manifest, await apps.enabled()); lives.set(stamp, live) }
-      let joints = jointsBy.get(stamp)
-      if (!joints) { joints = o.joints(live); jointsBy.set(stamp, joints) }
-      return fn({ key, adapter, apps, live, theme: themeFor(key, live), joints, sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
+      const jointsFor = (locale: string): Joints => {
+        const k = `${stamp}::${locale}`
+        let made = jointsBy.get(k)
+        if (!made) { made = o.joints(live, locale); jointsBy.set(k, made) }
+        return made
+      }
+      return fn({ key, adapter, apps, live, theme: themeFor(key, live), joints: jointsFor, sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
     })
 
   return {
@@ -193,7 +204,7 @@ export function createTenants(o: {
  * exercises this implementation, and the pooled one differs only in where the
  * adapter comes from.
  */
-export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; joints: (live: Manifest) => Joints; sessions?: Sessions | null }): Tenants {
+export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; joints: (live: Manifest, locale: string) => Joints; sessions?: Sessions | null }): Tenants {
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const jointsBy = new Map<string, Joints>()
@@ -206,9 +217,13 @@ export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest:
       theme = themes.get(stamp) ?? o.theme(live)
       themes.set(stamp, theme)
     }
-    let joints = jointsBy.get(stamp)
-    if (!joints) { joints = o.joints(live); jointsBy.set(stamp, joints) }
-    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, joints, sessions: o.sessions ?? null })
+    const jointsFor = (locale: string): Joints => {
+      const k = `${stamp}::${locale}`
+      let made = jointsBy.get(k)
+      if (!made) { made = o.joints(live, locale); jointsBy.set(k, made) }
+      return made
+    }
+    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, joints: jointsFor, sessions: o.sessions ?? null })
   }
   return {
     keyOf: () => '',

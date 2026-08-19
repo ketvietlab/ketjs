@@ -93,9 +93,9 @@ export type ServeContext = {
    *
    * Empty when nobody fills it, and empty when an installed module omitted it.
    */
-  joint: (req: IncomingMessage, key: string, props?: Record<string, unknown>) => Promise<Markup>
+  joint: (url: URL, req: IncomingMessage, key: string, props?: Record<string, unknown>) => Promise<Markup>
   /** False when an installed module omitted this joint — see jointShows in screens. */
-  jointShows: (req: IncomingMessage, key: string) => Promise<boolean>
+  jointShows: (url: URL, req: IncomingMessage, key: string) => Promise<boolean>
   /**
    * This request's sessions. A function because with subdomain tenants they live
    * in that tenant's database — one per tenant, not one per deployment.
@@ -246,7 +246,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     : { theme: (live: Manifest) => createTheme(live, modules, { translate: translate(config.defaultLocale) }) }
 
   // Fills are KTL, so they translate the way templates do.
-  const jointFactory = (live: Manifest) => createJoints(live, { translate: translate(config.defaultLocale) })
+  const jointFactory = (live: Manifest, locale: string) => createJoints(live, { translate: translate(locale) })
 
   const tenants: Tenants = serve.tenants
     ? createTenants({
@@ -346,8 +346,8 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
 
   const ctx: ServeContext = {
     manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
-    joint: (req, key, props) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.joints.render(key, props)),
-    jointShows: (req, key) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.joints.shows(key)),
+    joint: (url, req, key, props) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),
+    jointShows: (url, req, key) => tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).shows(key)),
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {

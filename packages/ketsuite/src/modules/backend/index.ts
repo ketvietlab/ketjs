@@ -34,10 +34,10 @@ export default defineModule({
   messages,
 })
 
-export { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
+export { shell, appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export type { Viewer } from './screens.ts'
 export { joints } from './joints.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
-export { routes } from './routes.ts'
+export { routes, viewerOf } from './routes.ts'
