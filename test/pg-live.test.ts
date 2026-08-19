@@ -582,15 +582,31 @@ test('live pg: concurrent RFQs assign one gapless purchase sequence', live, asyn
     await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
     await callFn('stock.saveLocation', { id: 'supplier', name: 'Vendors', usage: 'supplier' }, options)
     await callFn('stock.saveLocation', { id: 'stock', name: 'Stock', usage: 'internal' }, options)
-    await callFn('stock.savePickingType', { id: 'incoming', name: 'Receipts', code: 'incoming', defaultLocationSrcId: 'supplier', defaultLocationDestId: 'stock' }, options)
+    await callFn(
+      'stock.savePickingType',
+      {
+        id: 'incoming',
+        name: 'Receipts',
+        code: 'incoming',
+        defaultLocationSrcId: 'supplier',
+        defaultLocationDestId: 'stock',
+      },
+      options,
+    )
 
     const created = await Promise.all(
-      Array.from({ length: 8 }, (_, index) => callFn('purchase.createOrder', {
-        id: `po-${index + 1}`,
-        partnerId: 'vendor',
-        partnerRef: `V-${index + 1}`,
-        pickingTypeId: 'incoming',
-      }, options)),
+      Array.from({ length: 8 }, (_, index) =>
+        callFn(
+          'purchase.createOrder',
+          {
+            id: `po-${index + 1}`,
+            partnerId: 'vendor',
+            partnerRef: `V-${index + 1}`,
+            pickingTypeId: 'incoming',
+          },
+          options,
+        ),
+      ),
     )
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),

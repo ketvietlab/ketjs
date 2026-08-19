@@ -20,8 +20,16 @@ export default defineModule({
   relations,
   functions,
   messages: {
-    vi: { 'app.title': 'Mua hàng', 'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp theo Odoo 19.', 'app.category': 'Mua hàng' },
-    en: { 'app.title': 'Purchase', 'app.summary': 'Odoo 19 RFQs, purchase orders, receipts, and vendor bills.', 'app.category': 'Purchase' },
+    vi: {
+      'app.title': 'Mua hàng',
+      'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp theo Odoo 19.',
+      'app.category': 'Mua hàng',
+    },
+    en: {
+      'app.title': 'Purchase',
+      'app.summary': 'Odoo 19 RFQs, purchase orders, receipts, and vendor bills.',
+      'app.category': 'Purchase',
+    },
   },
 })
 
