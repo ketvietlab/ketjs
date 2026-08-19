@@ -125,10 +125,36 @@ re-render, 2 moves for a swap. It proves the algorithm touches the right nodes.
 It cannot prove the work *around* those touches is cheap — which is exactly the
 gap the browser benchmark closed.
 
+## Queue across tenant databases
+
+The queue benchmark uses the public worker and tenant-pool APIs, warms migrations
+and app registries, then enqueues equal work into separate physical databases. It
+asserts every database completes and reports the spread between the first job seen
+from the first and last tenant. Notifications are disabled, so the result measures
+the polling and round-robin correctness path rather than a local wake-up shortcut.
+
+| driver | databases | jobs | concurrency | enqueue/s | execute/s | first-job spread |
+|---|---:|---:|---:|---:|---:|---:|
+| SQLite | 32 | 3,200 | 8 | 2,636 | 1,115 | 294.1 ms |
+| PostgreSQL 17 | 8 | 800 | 8 | 250 | 284 | 365.6 ms |
+
+These are development-machine numbers, not capacity promises. The PostgreSQL run
+uses eight real databases on the local cluster, `FOR UPDATE SKIP LOCKED`, a bounded
+tenant pool and no Redis. Reproduce with `npm run bench:queue`; select PostgreSQL
+with `KET_BENCH_DRIVER=postgres` and tune database/job counts through the benchmark
+environment variables.
+
+With 100,000 runnable PostgreSQL rows, `EXPLAIN (ANALYZE, BUFFERS)` selected
+`ket_job_fetch_active` directly with no Sort node: 0.893 ms total execution and 23
+shared-buffer hits to lock the first 10 rows on the development cluster. This is
+why the fetch index is partial across runnable states and ordered `(queue,
+priority, scheduled_at, id)` rather than putting the multi-valued `state` column
+before the requested order.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
   a whole-framework comparison would not be like-for-like yet.
 - Cold start and build time, for the same reason.
-- Postgres throughput under load. The adapter is correct against a live server
-  (`test/pg-live.test.ts`) but has never been put under concurrency.
+- Cross-host throughput and latency under network or replication delay; the queue
+  measurement above uses a local PostgreSQL cluster.

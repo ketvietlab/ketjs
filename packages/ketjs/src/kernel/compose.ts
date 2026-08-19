@@ -32,6 +32,7 @@ export function compose(
     joints: {},
     fills: [],
     functions: {},
+    jobs: {},
     views: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
@@ -470,6 +471,127 @@ export function compose(
         idempotent: def.idempotent === true,
         dryRun: def.dryRun !== false,
         agent: def.agent === true,
+      }
+    }
+  }
+
+  // --- background jobs -----------------------------------------------------
+  //
+  // Jobs run later and often on another process, but they touch the same data.
+  // Their contract is therefore composed and checked as strictly as a function's
+  // rather than being left as an import-time registry only the worker can see.
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.jobs)) {
+      const key = qualify(m.name, name)
+      if (!/^[a-z][a-zA-Z0-9_]*$/.test(name)) {
+        diag.add({ code: 'E_JOB_NAME', module: m.name, message: `invalid job name "${name}"` })
+        continue
+      }
+      const queue = def.queue ?? 'default'
+      if (!/^[a-z][a-z0-9_-]*$/.test(queue)) {
+        diag.add({
+          code: 'E_JOB_QUEUE',
+          module: m.name,
+          message: `job "${key}" has invalid queue "${queue}"`,
+          hint: 'use lowercase letters, digits, underscore or dash',
+        })
+        continue
+      }
+      if (def.idempotent !== true) {
+        diag.add({
+          code: 'E_JOB_NOT_IDEMPOTENT',
+          module: m.name,
+          message: `job "${key}" must declare idempotent: true`,
+          hint: 'workers provide at-least-once delivery, so a crashed job may run again',
+        })
+        continue
+      }
+      const maxAttempts = def.maxAttempts ?? 20
+      const timeoutMs = def.timeoutMs ?? 300_000
+      if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+        diag.add({ code: 'E_JOB_ATTEMPTS', module: m.name, message: `job "${key}" needs maxAttempts >= 1` })
+        continue
+      }
+      if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+        diag.add({ code: 'E_JOB_TIMEOUT', module: m.name, message: `job "${key}" needs timeoutMs >= 1` })
+        continue
+      }
+      for (const [input, spec] of Object.entries(def.input ?? {})) {
+        const parsed = parseType(spec)
+        if (!parsed.ok)
+          diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key} input ${input}: ${parsed.reason}` })
+      }
+      for (const effect of def.effects ?? []) {
+        // Enqueue targets are validated after every job has been collected, so a
+        // producer may refer to a job contributed later in dependency order.
+        if (effect.startsWith('enqueue')) continue
+        const match = /^(read|write):(.+)$/.exec(effect)
+        const model = match ? manifest.models[match[2] as string] : null
+        if (!match || !model) {
+          diag.add({
+            code: 'E_JOB_EFFECT',
+            module: m.name,
+            message: `job "${key}" declares unknown effect "${effect}"`,
+          })
+          continue
+        }
+        if (!canSee(m, model.owner)) {
+          diag.add({
+            code: 'E_JOB_EFFECT_NOT_DEPENDED',
+            module: m.name,
+            message: `job "${key}" touches ${match[2]} but does not depend on "${model.owner}"`,
+          })
+        }
+      }
+      manifest.jobs[key] = {
+        by: m.name,
+        queue,
+        input: { ...(def.input ?? {}) },
+        effects: [...(def.effects ?? [])],
+        crossCompany: def.crossCompany === true,
+        idempotent: true,
+        maxAttempts,
+        timeoutMs,
+      }
+    }
+  }
+
+  // Enqueue is a first-class effect. Moving a write to another process must not
+  // let the producer bypass the operation boundary: both functions and jobs must
+  // name the exact background operation they are allowed to schedule.
+  for (const m of order) {
+    const producers: Array<{ kind: 'function' | 'job'; key: string; effects: string[] }> = [
+      ...Object.entries(m.functions).map(([name, def]) => ({
+        kind: 'function' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+      ...Object.entries(m.jobs).map(([name, def]) => ({
+        kind: 'job' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+    ]
+    for (const producer of producers) {
+      for (const effect of producer.effects) {
+        if (!effect.startsWith('enqueue')) continue
+        const match = /^enqueue:(.+)$/.exec(effect)
+        const target = match ? manifest.jobs[match[1] as string] : null
+        if (!match || !target) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" declares unknown effect "${effect}"`,
+          })
+          continue
+        }
+        if (!canSee(m, target.by)) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT_NOT_DEPENDED' : 'E_FN_EFFECT_NOT_DEPENDED',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" enqueues ${match[1]} but does not depend on "${target.by}"`,
+          })
+        }
       }
     }
   }

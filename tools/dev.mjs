@@ -12,5 +12,13 @@ if (check.status !== 0) {
 } else {
   process.env.KET_DEV = '1'
   process.env.KET_DEV_SOURCE = '1'
+  // `npm run dev -- --all` keeps this single tsx watcher and changes only the
+  // process role the CLI boots; it must not start a second compiler/build loop.
+  const all = process.argv.indexOf('--all')
+  if (all >= 0) {
+    process.argv.splice(all, 1)
+    const serve = process.argv.indexOf('serve')
+    if (serve >= 0) process.argv[serve] = 'all'
+  }
   await import('../packages/ketjs/src/cli.ts')
 }

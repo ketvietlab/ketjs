@@ -7,6 +7,7 @@ import { createIdempotency } from './idem.ts'
 import { KetError } from '../kernel/errors.ts'
 import { project } from './project.ts'
 import { parseType } from '../kernel/types.ts'
+import { queueFor } from './queue.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
 export type CallResult = {
@@ -109,6 +110,8 @@ export async function callFn(
      * same split as the datastore driver.
      */
     allow?: readonly string[] | null
+    /** Runtime override for the optional queue wake-up signal. */
+    queueNotify?: boolean
   },
 ): Promise<CallResult> {
   const def = registry.get(fnKey)
@@ -143,6 +146,11 @@ export async function callFn(
 
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false
+
+  // Create system queue tables on the root adapter before user code can enter a
+  // transaction. Lazy DDL inside a rolled-back transaction would otherwise leave
+  // an in-memory "initialized" marker pointing at a table that no longer exists.
+  if (Object.keys(o.manifest.jobs).length) await queueFor(o.adapter)
 
   const idemKey = o.idempotencyKey ? `${fnKey}:${o.idempotencyKey}` : null
   let idem: Idem | null = null
@@ -179,6 +187,7 @@ export async function callFn(
     dryRun,
     actor: o.actor ?? null,
     scope: o.scope,
+    queueNotify: o.queueNotify,
   })
 
   let result: CallResult

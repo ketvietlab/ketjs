@@ -27,6 +27,7 @@ const SQL: Record<FieldBase, string> = {
 
 export function sqliteAdapter(path = ':memory:'): Adapter {
   let db: DatabaseSync | null = null
+  let inTransaction = false
   const need = (): DatabaseSync => {
     if (!db) throw new Error('adapter is not open()')
     return db
@@ -34,6 +35,9 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
 
   const a: Adapter = {
     name: 'sqlite',
+    get transaction() {
+      return inTransaction
+    },
     async open() {
       db = new DatabaseSync(path)
       db.exec('PRAGMA journal_mode = WAL')
@@ -60,6 +64,7 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
     async tx(fn) {
       const d = need()
       d.exec('BEGIN')
+      inTransaction = true
       try {
         const r = await fn(a)
         d.exec('COMMIT')
@@ -67,6 +72,8 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
       } catch (e) {
         d.exec('ROLLBACK')
         throw e
+      } finally {
+        inTransaction = false
       }
     },
     quoteIdent(n) {

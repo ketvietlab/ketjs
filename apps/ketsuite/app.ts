@@ -29,6 +29,9 @@ export const ketsuite = defineApp({
   ],
   theme: suite.paperTheme,
   datastore: 'main',
+  worker: {
+    queues: { default: 10, maintenance: 2 },
+  },
   serve: {
     openStore,
     defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },

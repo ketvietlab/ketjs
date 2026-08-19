@@ -124,6 +124,39 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
     }
   }
 
+  for (const [key, job] of Object.entries(before.jobs ?? {})) {
+    const next = after.jobs?.[key]
+    if (!next) {
+      push(
+        'breaking',
+        'JOB_REMOVED',
+        `background job "${key}" was removed`,
+        'pending records will be discarded instead of running stale code',
+      )
+      continue
+    }
+    for (const arg of Object.keys(job.input)) {
+      if (!(arg in next.input))
+        push('breaking', 'JOB_INPUT_REMOVED', `"${key}" no longer accepts input "${arg}"`)
+    }
+    for (const [arg, type] of Object.entries(next.input)) {
+      if (!(arg in job.input) && !type.endsWith('?'))
+        push(
+          'breaking',
+          'JOB_INPUT_ADDED_REQUIRED',
+          `"${key}" gained required input "${arg}"`,
+          'already-enqueued records do not carry it',
+        )
+    }
+    if (job.queue !== next.queue)
+      push(
+        'risky',
+        'JOB_QUEUE_CHANGED',
+        `"${key}" moved from queue "${job.queue}" to "${next.queue}"`,
+        `existing records remain in "${job.queue}" until drained or retried`,
+      )
+  }
+
   for (const r of Object.keys(before.regions.provided)) {
     if (!after.regions.provided[r] && after.regions.required.includes(r)) {
       push('breaking', 'REGION_LOST', `region "${r}" is no longer provided by any theme`)

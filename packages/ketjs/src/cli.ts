@@ -15,7 +15,9 @@ import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { migrateFleet, formatFleet } from './data/fleet.ts'
 import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
-import { serveApp } from './server/boot.ts'
+import { bootApp, serveApp } from './server/boot.ts'
+import { bootWorker, serveWorker } from './server/worker.ts'
+import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
 import { KetError } from './kernel/errors.ts'
 import type { Manifest } from './types.ts'
@@ -91,7 +93,13 @@ const HELP = `ket — zero-dependency fullstack framework
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
 
   ket serve [--app X]       boot the app and serve it
+  ket worker [--app X]      run declared queues for the same app and manifest
+  ket jobs list             inspect durable jobs (--tenant is required for tenant apps)
+  ket jobs retry ID         make a retryable/discarded job available now
+  ket jobs cancel ID        cancel a pending or executing job
+  ket jobs prune            apply the 7/30-day retention policy
   ket dev [--app X]         serve compiled output, restarting when an artifact changes
+    --all                   run HTTP and worker together under this one watcher
                             (--no-auto-install holds back modules that install themselves)
   ket new NAME [--dir D]    scaffold an app that runs
 
@@ -115,7 +123,13 @@ try {
   if (cmd === 'dev') {
     // This watches emitted JavaScript only. The project owns the compiler watcher;
     // `ket new` wires both sides together without handing source files to Node.
-    const argv = ['--watch', new URL(import.meta.url).pathname, 'serve', ...rest]
+    const childCommand = flag('all') ? 'all' : 'serve'
+    const argv = [
+      '--watch',
+      new URL(import.meta.url).pathname,
+      childCommand,
+      ...rest.filter((item) => item !== '--all'),
+    ]
     const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...process.env, KET_DEV: '1' } })
     child.on('exit', (code) => process.exit(code ?? 0))
     for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => child.kill(sig))
@@ -131,6 +145,91 @@ try {
     const port = opt('port')
     const env = flag('no-auto-install') ? { ...process.env, KET_AUTO_INSTALL: '0' } : process.env
     await serveApp(spec, { env, ...(port ? { port: Number(port) } : {}) })
+  } else if (cmd === 'worker') {
+    const spec = pickSpec(specs)
+    const worker = await serveWorker(spec, { env: process.env })
+    console.log(`worker ${worker.workerId} is running (${Object.keys(spec.worker?.queues ?? {}).join(', ')})`)
+  } else if (cmd === 'all') {
+    const spec = pickSpec(specs)
+    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
+    if (!spec.worker) throw new Error(`app "${spec.name}" declares no worker block`)
+    const app = await bootApp(spec, {
+      env: process.env,
+      ...(opt('port') ? { port: Number(opt('port')) } : {}),
+    })
+    const worker = await bootWorker(spec, { env: process.env })
+    worker.start()
+    console.log(await app.banner())
+    console.log(`  worker ${worker.workerId} is running in this development process\n`)
+    const close = async () => {
+      await worker.close()
+      await app.close()
+      process.exit(0)
+    }
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => void close())
+    await new Promise(() => {})
+  } else if (cmd === 'jobs') {
+    const action = rest.find((item) => !item.startsWith('--'))
+    const positional = rest.filter((item, index) => {
+      if (item.startsWith('--')) return false
+      const previous = rest[index - 1]
+      return !previous?.startsWith('--')
+    })
+    const id = positional[1]
+    const spec = pickSpec(specs)
+    const config = readConfig(process.env, {
+      sqliteFile: `.ket/${spec.name}.db`,
+      ...spec.serve?.defaults,
+    })
+    const tenant = opt('tenant')
+    if (spec.serve?.tenants && !tenant)
+      throw new Error(`app "${spec.name}" has tenant databases; pass --tenant NAME`)
+    const adapter = spec.serve?.tenants
+      ? await spec.serve.tenants.open(tenant as string, config)
+      : await (spec.serve?.openStore ?? sqliteStore)(config)
+    if (spec.serve?.tenants) await adapter.open()
+    try {
+      const queue = await createQueue(adapter)
+      if (action === 'list') {
+        const state = opt('state') as import('./server/queue.ts').JobState | undefined
+        if (
+          state &&
+          ![
+            'available',
+            'scheduled',
+            'executing',
+            'retryable',
+            'completed',
+            'discarded',
+            'cancelled',
+          ].includes(state)
+        )
+          throw new Error(`unknown job state "${state}"`)
+        const limit = opt('limit') === undefined ? undefined : Number(opt('limit'))
+        if (limit !== undefined && (!Number.isInteger(limit) || limit < 1))
+          throw new Error('--limit must be a positive integer')
+        const rows = await queue.list({
+          ...(state ? { state } : {}),
+          ...(opt('queue') ? { queue: opt('queue') as string } : {}),
+          ...(limit === undefined ? {} : { limit }),
+        })
+        console.log(JSON.stringify(rows, null, 2))
+      } else if (action === 'retry') {
+        if (!id) throw new Error('usage: ket jobs retry ID [--tenant NAME]')
+        if (!(await queue.retryNow(id))) throw new Error(`job "${id}" is not retryable or discarded`)
+        console.log(`job ${id} is available`)
+      } else if (action === 'cancel') {
+        if (!id) throw new Error('usage: ket jobs cancel ID [--tenant NAME]')
+        if (!(await queue.cancel(id))) throw new Error(`job "${id}" cannot be cancelled`)
+        console.log(`job ${id} is cancelled`)
+      } else if (action === 'prune') {
+        console.log(`pruned ${await queue.prune()} job(s)`)
+      } else {
+        throw new Error('usage: ket jobs list|retry ID|cancel ID|prune [--tenant NAME]')
+      }
+    } finally {
+      await adapter.close()
+    }
   } else if (cmd === 'check') {
     console.log(explainWorkspace(ws))
     console.log('\nall contracts hold')

@@ -11,14 +11,13 @@
 // a datastore that is not SQLite. Those arrive through `AppSpec.serve` as data
 // rather than as a closure the framework has to trust.
 
-import { compose } from '../kernel/compose.ts'
 import { createAppRegistry } from '../kernel/apps.ts'
 import { translator } from '../kernel/i18n.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createTheme } from '../theme/render.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
-import { registerFunctions, callFn } from './fn.ts'
+import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
 import { createSessions, dbSessionStore } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
@@ -29,11 +28,12 @@ import type { Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
-import type { Sessions, SessionOptions } from './session.ts'
+import type { Sessions, SessionOptions, SessionRecord } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
 import { html, each } from 'ketjs-view'
-import { readConfig, sqliteStore } from './config.ts'
+import { sqliteStore } from './config.ts'
+import { bootRuntime } from './runtime.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
 import type { AppRegistry } from '../kernel/apps.ts'
@@ -181,17 +181,7 @@ export async function bootApp(
   o: { env?: Record<string, string | undefined>; port?: number } = {},
 ): Promise<BootedApp> {
   const serve = spec.serve ?? {}
-  const config = readConfig(o.env ?? process.env, {
-    sqliteFile: `.ket/${spec.name}.db`,
-    ...serve.defaults,
-    ...(o.port !== undefined ? { port: o.port } : {}),
-  })
-  if (o.port !== undefined) config.port = o.port
-
-  const modules = spec.theme ? [...spec.modules, spec.theme] : [...spec.modules]
-  const manifest = compose(modules, { appRequires: spec.requires ?? [], headless: spec.headless ?? false })
-
-  registerFunctions(modules)
+  const { config, modules, manifest } = await bootRuntime(spec, o)
 
   /**
    * An empty database is not a useful one to look at, so a first run installs
@@ -313,6 +303,22 @@ export async function bootApp(
   const sessionsOf = (url: URL, req: IncomingMessage): Promise<Sessions | null> =>
     sessions ? Promise.resolve(sessions) : tenants.ofRequest(url, req, async (t) => t.sessions)
 
+  // One cookie lookup per request even though scope, permissions and actor all
+  // depend on it. With tenant databases this also avoids three separate leases.
+  const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
+  const sessionRecordOf = (url: URL, req: IncomingMessage): Promise<SessionRecord | null> => {
+    if (!makeSessions) return Promise.resolve(null)
+    let record = sessionRecords.get(req)
+    if (!record) {
+      record = sessionsOf(url, req).then((manager) => manager?.of(req) ?? null)
+      sessionRecords.set(req, record)
+    }
+    return record
+  }
+
+  const actorOf = async (url: URL, req: IncomingMessage): Promise<string | null> =>
+    (await sessionRecordOf(url, req))?.userId ?? null
+
   /**
    * The one place a request's identity is decided — one function since D27,
    * precisely so that replacing headers with a login would be one change.
@@ -340,7 +346,7 @@ export async function bootApp(
       }
     }
     const s = await sessionsOf(url, req)
-    return s?.scopeOf(await s.of(req)) ?? { company: null }
+    return s?.scopeOf(await sessionRecordOf(url, req)) ?? { company: null }
   }
 
   /**
@@ -414,10 +420,20 @@ export async function bootApp(
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {
       const scope = await scopeOf(url, req)
+      const actor = await actorOf(url, req)
       return tenants.ofRequest(
         url,
         req,
-        async (t) => (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope })).value,
+        async (t) =>
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope,
+              actor,
+              queueNotify: config.queueNotify,
+            })
+          ).value,
       )
     },
     call: async (name, input, url, req) => {
@@ -425,11 +441,21 @@ export async function bootApp(
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
+      const actor = await actorOf(url, req)
       return tenants.ofRequest(
         url,
         req,
         async (t) =>
-          (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value,
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope,
+              allow,
+              actor,
+              queueNotify: config.queueNotify,
+            })
+          ).value,
       )
     },
   }
@@ -505,8 +531,7 @@ export async function bootApp(
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
     if (!makeSessions) return null // no login exists yet; the shim is the identity
-    const s = await sessionsOf(url, req)
-    const record = await s?.of(req)
+    const record = await sessionRecordOf(url, req)
     if (!record) return anonymousFns // a stranger, not an administrator
     if (!serve.permissions) return null
     return serve.permissions(ctx, record.userId)
@@ -568,6 +593,8 @@ export async function bootApp(
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: allowFor,
+    resolveActor: actorOf,
+    queueNotify: config.queueNotify,
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme
       ? {}

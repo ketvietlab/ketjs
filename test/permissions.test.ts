@@ -19,6 +19,7 @@ const shop = defineModule({
     Order: { scope: 'company', fields: { id: 'id', productId: 'text', total: 'decimal' } },
   },
   relations: { 'shop.Order': { product: { belongsTo: 'shop.Product', by: 'productId' } } },
+  jobs: { confirmOrder: { idempotent: true, handler: async () => {} } },
   functions: {
     // Shows product names in the order list, so it must say so.
     listOrders: {
@@ -31,7 +32,10 @@ const shop = defineModule({
       effects: ['read:shop.Product'],
       handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('shop.Product'))),
     },
-    placeOrder: { effects: ['read:shop.Product', 'write:shop.Order'], handler: () => ({ ok: true }) },
+    placeOrder: {
+      effects: ['read:shop.Product', 'write:shop.Order', 'enqueue:shop.confirmOrder'],
+      handler: () => ({ ok: true }),
+    },
     salesByCompany: { effects: ['read:shop.Order'], crossCompany: true, handler: () => [] },
   },
 })
@@ -66,6 +70,12 @@ test('reach: read and write are told apart, because they are not the same risk',
   const product = r.models.find((m) => m.model === 'shop.Product')!
   assert.equal(order.write, true)
   assert.equal(product.write, false, 'placing an order reads a product; it does not edit one')
+  assert.deepEqual(r.functions.find((fn) => fn.key === 'shop.placeOrder')?.enqueues, ['shop.confirmOrder'])
+  assert.equal(
+    r.models.some((model) => model.model === 'shop.confirmOrder'),
+    false,
+    'an enqueue target is an operation, not a model',
+  )
 })
 
 test('reach: a function that reads across legal entities is listed on its own', () => {

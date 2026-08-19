@@ -11,6 +11,7 @@ import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
 import { type Changeset, changeset } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
+import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
 export function createContext(o: {
@@ -20,23 +21,29 @@ export function createContext(o: {
   dryRun?: boolean
   actor?: string | null
   scope?: Scope
+  kind?: 'function' | 'job'
+  queueNotify?: boolean
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
-  const fn = manifest.functions[fnKey]
-  if (!fn) throw new KetError({ code: 'E_UNKNOWN_FUNCTION', message: `no server function "${fnKey}"` })
+  const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
+  if (!operation)
+    throw new KetError({
+      code: o.kind === 'job' ? 'E_UNKNOWN_JOB' : 'E_UNKNOWN_FUNCTION',
+      message: `no ${o.kind === 'job' ? 'background job' : 'server function'} "${fnKey}"`,
+    })
 
-  const effects = new Set(fn.effects)
+  const effects = new Set(operation.effects)
   const writes: WriteRecord[] = []
 
-  const need = (effect: 'read' | 'write', model: string): void => {
-    if (effects.has(`${effect}:${model}`)) return
+  const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
+    if (effects.has(`${effect}:${target}`)) return
     throw new KetError({
       code: 'E_EFFECT_NOT_DECLARED',
-      module: fn.by,
-      message: `"${fnKey}" attempted ${effect} on ${model} but declares effects [${[...effects].join(', ') || 'none'}]`,
-      hint: `add "${effect}:${model}" to the function's effects, or stop touching that model`,
+      module: operation.by,
+      message: `"${fnKey}" attempted ${effect} on ${target} but declares effects [${[...effects].join(', ') || 'none'}]`,
+      hint: `add "${effect}:${target}" to the ${o.kind === 'job' ? 'job' : 'function'}'s effects, or stop performing that operation`,
     })
   }
 
@@ -48,7 +55,7 @@ export function createContext(o: {
     if (!rel) {
       throw new KetError({
         code: 'E_UNKNOWN_RELATION',
-        module: fn.by,
+        module: operation.by,
         message: `"${model}" has no relation "${name}"`,
         hint: `declared: ${Object.keys(manifest.relations[model] ?? {}).join(', ') || '(none)'}`,
       })
@@ -87,7 +94,7 @@ export function createContext(o: {
   if (scope.company && scope.companies && !scope.companies.includes(scope.company)) {
     throw new KetError({
       code: 'E_WRITE_COMPANY_NOT_READABLE',
-      module: fn.by,
+      module: operation.by,
       message: `the request writes to "${scope.company}" but may only read ${scope.companies.join(', ')}`,
       hint: 'scope.company must be one of scope.companies — otherwise a row is written and then invisible',
     })
@@ -133,7 +140,7 @@ export function createContext(o: {
     if (set.length) return set
     throw new KetError({
       code: 'E_NO_COMPANY_IN_SCOPE',
-      module: fn.by,
+      module: operation.by,
       message: `"${fnKey}" touches ${model}, which is company-scoped, but the request carries no company`,
       hint: 'resolve a company for the request, or declare crossCompany: true if this really reads across legal entities',
     })
@@ -144,7 +151,7 @@ export function createContext(o: {
     const readable = scope.companies ?? []
     throw new KetError({
       code: 'E_NO_COMPANY_IN_SCOPE',
-      module: fn.by,
+      module: operation.by,
       message: readable.length
         ? `"${fnKey}" writes ${model}, but the request names ${readable.length} readable compan${readable.length > 1 ? 'ies' : 'y'} and none to write to`
         : `"${fnKey}" touches ${model}, which is company-scoped, but the request carries no company`,
@@ -158,7 +165,7 @@ export function createContext(o: {
   const scoped = (q: Query): Query => {
     const kind = scopeOf(q.model)
     if (kind === 'shared') return q
-    if (fn.crossCompany) return q // declared, and visible in the manifest
+    if (operation.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
     const col = { model: q.model, name: 'companyId' }
@@ -177,7 +184,7 @@ export function createContext(o: {
       if (key in row) {
         throw new KetError({
           code: 'E_SCOPE_FIELD_WRITTEN',
-          module: fn.by,
+          module: operation.by,
           message: `"${fnKey}" set ${model}.${key} itself`,
           hint: 'the scope columns come from the request, not from the caller — otherwise a write could be aimed at another company',
         })
@@ -269,7 +276,7 @@ export function createContext(o: {
       if (q.kind !== 'delete') {
         throw new KetError({
           code: 'E_NOT_A_DELETE',
-          module: fn.by,
+          module: operation.by,
           message: `"${fnKey}" passed a ${q.kind} query to db.del`,
           hint: 'build it with deleteFrom(table), not from(table)',
         })
@@ -284,7 +291,7 @@ export function createContext(o: {
       if (!cs.valid) {
         throw new KetError({
           code: 'E_INVALID_CHANGESET',
-          module: fn.by,
+          module: operation.by,
           message: `${cs.model}: ${cs.errors.map((e) => `${e.field} ${e.message}`).join('; ')}`,
           hint: 'inspect changeset.errors for the structured form',
         })
@@ -301,7 +308,7 @@ export function createContext(o: {
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
-      const open = scopeOf(model) === 'shared' || fn.crossCompany
+      const open = scopeOf(model) === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
       const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
       const params: unknown[] = keys.map((k) => where[k])
@@ -343,7 +350,7 @@ export function createContext(o: {
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const where3 =
-        scopeOf(model) === 'shared' || fn.crossCompany
+        scopeOf(model) === 'shared' || operation.crossCompany
           ? where
           : { ...where, companyId: requireCompany(model) }
       const patch2 = encodeRow(model, patch)
@@ -367,6 +374,32 @@ export function createContext(o: {
     db,
     writes,
     effects: [...effects],
+    jobs: {
+      async enqueue(name, args, options) {
+        const meta = manifest.jobs[name]
+        if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
+        need('enqueue', name)
+        if (manifest.disabledModules?.includes(meta.by)) {
+          throw new KetError({
+            code: 'E_APP_NOT_INSTALLED',
+            module: meta.by,
+            message: `job "${name}" belongs to a module that is not installed`,
+          })
+        }
+        validateJobInput(name, manifest, args)
+        const queue =
+          o.queueNotify === undefined
+            ? await queueFor(adapter)
+            : await createQueue(adapter, { notify: o.queueNotify })
+        return queue.enqueue(name, args, {
+          ...options,
+          queue: meta.queue,
+          maxAttempts: meta.maxAttempts,
+          actor: o.actor ?? null,
+          scope,
+        })
+      },
+    },
     // A transaction hands the body a ctx bound to the transaction's connection —
     // the same reason tx() takes a scoped adapter rather than assuming the pool
     // will hand back the session that issued BEGIN.

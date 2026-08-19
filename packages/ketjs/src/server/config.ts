@@ -39,6 +39,8 @@ export type RuntimeConfig = {
    * balancer sends you elsewhere.
    */
   secret: string | null
+  /** LISTEN/NOTIFY is only an accelerator; polling remains the guarantee. */
+  queueNotify: boolean
 }
 
 const list = (v: string | undefined): string[] | null =>
@@ -66,6 +68,8 @@ export function readConfig(
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultCompany: env.KET_COMPANY ?? defaults.defaultCompany ?? 'default',
     secret: env.KET_SECRET ?? defaults.secret ?? null,
+    queueNotify:
+      env.KET_QUEUE_NOTIFY === undefined ? (defaults.queueNotify ?? true) : env.KET_QUEUE_NOTIFY !== '0',
   }
 }
 
