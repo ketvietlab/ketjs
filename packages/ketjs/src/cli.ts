@@ -12,6 +12,8 @@ import { agentDescriptor } from './agent/capabilities.ts'
 import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
+import { migrateFleet, formatFleet } from './data/fleet.ts'
+import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
 import { serveApp } from './server/boot.ts'
 import { scaffold } from './scaffold/index.ts'
@@ -72,6 +74,7 @@ const HELP = `ket — zero-dependency fullstack framework
     --module NAME           …or what granting one module's whole surface reaches
     --role NAME             …or what a role in the database actually grants
   ket migrate [--app X]     plan migrations (add --allow-destructive to permit data loss)
+    --all                   …or apply them to every tenant database (add --dry-run)
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
 
@@ -164,6 +167,25 @@ try {
     console.log(formatDiff(items))
     process.exit(items.some(i => i.severity === 'breaking') ? 1 : 0)
   } else if (cmd === 'migrate') {
+    const spec = pickSpec(specs)
+    if (flag('all')) {
+      // The fleet. A deployment that ships a new module has to reach every tenant
+      // database, and one that cannot be opened must not stop the others — a
+      // half-migrated fleet you cannot see is worse than one you can.
+      const tenants = spec.serve?.tenants
+      if (!tenants) throw new Error(`app "${spec.name}" serves a single datastore; drop --all`)
+      const config = readConfig(process.env, spec.serve?.defaults ?? {})
+      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) as never })
+      try {
+        const keys = await tenants.list()
+        const m = ws.apps[spec.name] as Manifest
+        const results = await migrateFleet(pool, keys, m, { allowDestructive: flag('allow-destructive'), dryRun: flag('dry-run') })
+        console.log(formatFleet(results))
+        process.exit(results.some(r => r.error) ? 1 : 0)
+      } finally {
+        await pool.close()
+      }
+    }
     const [name, m] = pickApp(ws)
     const adapter = sqliteAdapter()
     adapter.open()
