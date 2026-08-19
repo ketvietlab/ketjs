@@ -1,9 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defineModule, defineTheme } from '../src/kernel/define.ts'
-import { compose } from '../src/kernel/compose.ts'
-import { diffManifests } from '../src/kernel/diff.ts'
-import { KetError } from '../src/kernel/errors.ts'
+import { KetError, compose, defineModule, defineTheme, diffManifests } from 'ketjs'
 
 const base = defineModule({
   name: 'base',

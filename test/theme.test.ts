@@ -1,13 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compileKtl } from '../src/theme/ktl/compile.ts'
-import { makeDrop, sealScope } from '../src/theme/viewmodel.ts'
-import { tokensToCss } from '../src/theme/tokens.ts'
-import { createTheme } from '../src/theme/render.ts'
-import { compose } from '../src/kernel/compose.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import theme from '../examples/themes/default/index.ts'
+import { compileKtl } from 'ketjs/theme'
+import { compose, createTheme, makeDrop, sealScope, tokensToCss } from 'ketjs'
+import { catalog, defaultTheme as theme, inventory } from 'ketsuite'
 
 const render = (src: string, scope: Record<string, unknown> = {}) => compileKtl(src, { name: 't' }).render(scope)
 

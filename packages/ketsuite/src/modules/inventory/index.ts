@@ -1,5 +1,4 @@
-import { defineModule } from '../../../src/kernel/define.ts'
-import { defineFn } from '../../../src/server/fn.ts'
+import { defineFn, defineModule } from 'ketjs'
 
 // The lego pillar in one file: this module adds a typed field to a model it does
 // not own, and fills an extension point the owner published — without importing,

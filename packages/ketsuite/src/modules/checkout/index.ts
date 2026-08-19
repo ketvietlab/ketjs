@@ -1,5 +1,4 @@
-import { defineModule } from '../../../src/kernel/define.ts'
-import { defineFn } from '../../../src/server/fn.ts'
+import { defineFn, defineModule } from 'ketjs'
 
 export default defineModule({
   name: 'checkout',

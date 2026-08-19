@@ -1,11 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderToString, HydrationMismatch } from '../src/view/ssr.ts'
-import { html, each, when, hydrateRoot, createRoot } from '../src/view/render.ts'
-import { domHost } from '../src/view/host.ts'
 import { document, parseFragment, TEXT, ELEMENT } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
-import type { HostNode } from '../src/view/host.ts'
+import { HydrationMismatch, createRoot, domHost, each, html, hydrateRoot, renderToString, when } from 'ketjs-view'
+import type { HostNode } from 'ketjs-view'
 
 type Item = { id: number; name: string }
 const list = (items: Item[]) =>

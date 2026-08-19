@@ -7,7 +7,7 @@
 
 import { parse } from './parser.ts'
 import type { Expr, Node } from './parser.ts'
-import { escapeHtml } from '../../view/host.ts'
+import { escapeHtml } from 'ketjs-view'
 import { KetError } from '../../kernel/errors.ts'
 
 export type Filter = (value: unknown, arg?: unknown) => unknown

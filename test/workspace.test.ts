@@ -1,13 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defineApp, composeWorkspace } from '../src/kernel/workspace.ts'
-import { defineModule } from '../src/kernel/define.ts'
-import { agentTools, agentDescriptor, compositionSchema } from '../src/agent/capabilities.ts'
-import { compose } from '../src/kernel/compose.ts'
 import { storefront, admin, workspace } from '../examples/workspace.ts'
-import catalog from '../examples/modules/catalog/index.ts'
-import inventory from '../examples/modules/inventory/index.ts'
-import theme from '../examples/themes/default/index.ts'
+import { agentDescriptor, agentTools, compose, composeWorkspace, compositionSchema, defineApp, defineModule } from 'ketjs'
+import { catalog, defaultTheme as theme, inventory } from 'ketsuite'
 
 test('umbrella: one codebase composes several apps from overlapping modules', () => {
   const ws = workspace()

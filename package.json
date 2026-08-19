@@ -1,20 +1,15 @@
 {
-  "name": "ketjs",
+  "name": "ketjs-monorepo",
+  "private": true,
   "version": "0.0.0",
-  "description": "Ket — a zero-dependency, module-composable, theme-driven fullstack framework for Node.",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=24.0.0"
   },
-  "exports": {
-    ".": "./src/index.ts",
-    "./view": "./src/view/index.ts",
-    "./theme": "./src/theme/index.ts"
-  },
-  "bin": {
-    "ket": "./src/cli.ts"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "check": "tsc --noEmit",
     "test": "node --test \"test/*.test.ts\"",
@@ -26,13 +21,5 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2"
-  },
-  "peerDependencies": {
-    "postgres": "^3.4.9"
-  },
-  "peerDependenciesMeta": {
-    "postgres": {
-      "optional": true
-    }
   }
 }

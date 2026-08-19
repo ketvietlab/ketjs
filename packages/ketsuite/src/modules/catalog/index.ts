@@ -1,7 +1,4 @@
-import { defineModule } from '../../../src/kernel/define.ts'
-import { defineFn } from '../../../src/server/fn.ts'
-import { from, desc } from '../../../src/data/query.ts'
-import { eq, gte } from '../../../src/data/expr.ts'
+import { defineFn, defineModule, desc, eq, from, gte } from 'ketjs'
 
 export default defineModule({
   name: 'catalog',

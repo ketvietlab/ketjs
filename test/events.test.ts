@@ -1,12 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { html, each, createRoot, hydrateRoot } from '../src/view/render.ts'
-import { renderToString } from '../src/view/ssr.ts'
-import { countingHost, domHost } from '../src/view/host.ts'
-import { mount, mountHydrated } from '../src/view/mount.ts'
-import { signal } from '../src/view/signal.ts'
 import { document, parseFragment } from './helpers/dom.ts'
-import type { HostNode } from '../src/view/host.ts'
+import { countingHost, createRoot, domHost, each, html, hydrateRoot, mount, mountHydrated, renderToString, signal } from 'ketjs-view'
+import type { HostNode } from 'ketjs-view'
 
 test('events: on:click attaches a listener, not an attribute', () => {
   const host = countingHost()

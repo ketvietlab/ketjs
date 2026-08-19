@@ -3,8 +3,8 @@
 
 import { compileKtl } from './ktl/compile.ts'
 import type { Compiled, Filter, Scope } from './ktl/compile.ts'
-import { renderIsland } from '../view/island.ts'
-import type { IslandRegistry } from '../view/island.ts'
+import { renderIsland } from 'ketjs-view'
+import type { IslandRegistry } from 'ketjs-view'
 import { sealScope } from './viewmodel.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { KetModule, Manifest } from '../types.ts'
