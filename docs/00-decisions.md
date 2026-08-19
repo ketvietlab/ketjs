@@ -108,6 +108,24 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D17 — A framework table appears only when something uses it
+Asked why the framework owns tables at all, the honest audit found that
+`createKetServer` created `ket_stream` at boot — so an app that never streamed still
+found a stream table in its database. Now every framework table is created on first
+use: migrating an app yields `ket_migration` and the app's own tables and nothing
+else, `ket_stream` appears on the first stream, `ket_idem` on the first idempotency
+key, `ket_job` on the first enqueue.
+
+The same audit found two gaps in idempotency, both the kind that only bite during an
+incident:
+- A caller that died between claiming a key and finishing it blocked that key
+  **forever**. A claim older than `staleMs` (default 5 minutes) is now treated as
+  abandoned and taken over. The trade is stated rather than hidden: too short and a
+  slow call runs twice, too long and a stuck key blocks retries.
+- Records never expired, so the table grew without bound — the quiet way a
+  correctness feature turns into an operational problem. `sweep()` drops records
+  past the window in which a client could still retry.
+
 ## D15 — SSR marks only what it cannot describe
 **Chosen:** the server walks the same parsed template the client does and emits one
 comment marker per hole — nothing else. Everything but a hole has a length the
