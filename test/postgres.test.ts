@@ -24,6 +24,7 @@ const manifest = compose(mods)
 // socket is replaced, so no live server is needed to prove the SQL it emits.
 function fakeDriver() {
   const calls: Array<{ text: string; params: unknown[] }> = []
+  const listeners = new Map<string, (payload: string) => void>()
   const handle = (tag: string) => {
     const h = {
       unsafe(text: string, params: unknown[] = []) {
@@ -39,10 +40,25 @@ function fakeDriver() {
           }),
         ),
       end: () => Promise.resolve(),
+      async listen(channel: string, onMessage: (payload: string) => void, onReady?: () => void) {
+        calls.push({ text: `${tag}LISTEN ${channel}`, params: [] })
+        listeners.set(channel, onMessage)
+        onReady?.()
+        return {
+          async unlisten() {
+            calls.push({ text: `${tag}UNLISTEN ${channel}`, params: [] })
+            listeners.delete(channel)
+          },
+        }
+      },
     }
     return h
   }
-  return { calls, connect: () => handle('') as never }
+  return {
+    calls,
+    connect: () => handle('') as never,
+    notify: (channel: string, payload: string) => listeners.get(channel)?.(payload),
+  }
 }
 
 async function pg(): Promise<{ adapter: Adapter; calls: Array<{ text: string; params: unknown[] }> }> {
@@ -117,6 +133,37 @@ test('postgres: a failing transaction rolls back and still releases', async () =
   assert.deepEqual(
     calls.map((c) => c.text),
     ['[tx] BEGIN', '[tx] X', '[tx] ROLLBACK', '[tx] RELEASE'],
+  )
+  await adapter.close()
+})
+
+test('postgres: notifications publish on the transaction connection and LISTEN can unsubscribe', async () => {
+  const driver = fakeDriver()
+  const adapter = postgresAdapter('postgres://x/y', { connect: driver.connect })
+  await adapter.open()
+  const received: string[] = []
+  let ready = 0
+  const unsubscribe = await adapter.notifications?.subscribe?.(
+    'ket_job_ready',
+    (payload) => received.push(payload),
+    () => ready++,
+  )
+  driver.notify('ket_job_ready', 'default')
+  await adapter.tx((tx) => tx.notifications!.publish('ket_job_ready', 'maintenance'))
+  await unsubscribe?.()
+
+  assert.equal(ready, 1)
+  assert.deepEqual(received, ['default'])
+  assert.deepEqual(
+    driver.calls.map((call) => call.text),
+    [
+      'LISTEN ket_job_ready',
+      '[tx] BEGIN',
+      '[tx] SELECT pg_notify($1, $2)',
+      '[tx] COMMIT',
+      '[tx] RELEASE',
+      'UNLISTEN ket_job_ready',
+    ],
   )
   await adapter.close()
 })

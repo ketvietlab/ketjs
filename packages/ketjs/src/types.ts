@@ -147,6 +147,51 @@ export type FnMeta = {
   agent: boolean
 }
 
+/**
+ * A durable background operation. Jobs deliberately reuse the function effect
+ * vocabulary, including enqueue: moving work out of an HTTP request or chaining
+ * it to another job must not become a way around the operation boundary.
+ */
+export type JobSpec = {
+  queue?: string
+  input?: Record<string, string>
+  effects?: string[]
+  crossCompany?: boolean
+  /** At-least-once delivery makes acknowledging idempotency mandatory. */
+  idempotent: true
+  maxAttempts?: number
+  timeoutMs?: number
+  handler: (ctx: JobContext, args: Record<string, unknown>) => Promise<void>
+}
+
+export type JobMeta = {
+  by: string
+  queue: string
+  input: Record<string, string>
+  effects: string[]
+  crossCompany: boolean
+  idempotent: true
+  maxAttempts: number
+  timeoutMs: number
+}
+
+export type JobEnqueueOptions = {
+  runAt?: Date
+  uniqueKey?: string
+  /** Zero is highest priority. */
+  priority?: number
+}
+
+export type JobEnqueueResult = { id: string; existing: boolean }
+
+export type JobExecution = {
+  id: string
+  key: string
+  queue: string
+  attempt: number
+  maxAttempts: number
+}
+
 export type AppMeta = {
   /** Shown in the app list. A module without this is machinery, not an app. */
   app?: boolean
@@ -206,6 +251,7 @@ export type ModuleSpec = AppMeta & {
    */
   omits?: string[]
   functions?: Record<string, FnSpec>
+  jobs?: Record<string, JobSpec>
   views?: Record<string, ViewDef>
   requires?: string[]
   tokens?: Record<string, string>
@@ -258,6 +304,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly omits: readonly string[]
   readonly fills: Record<string, string>
   readonly functions: Record<string, FnSpec>
+  readonly jobs: Record<string, JobSpec>
   readonly views: Record<string, ViewDef>
   readonly requires: readonly string[]
   readonly tokens: Record<string, string>
@@ -287,6 +334,7 @@ export type Manifest = {
   >
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>
+  jobs: Record<string, JobMeta>
   views: Record<string, ViewDef & { by: string }>
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<string, { by: string }>
@@ -353,6 +401,13 @@ export type Ctx = {
   dryRun: boolean
   effects: string[]
   writes: WriteRecord[]
+  jobs: {
+    enqueue(
+      name: string,
+      args: Record<string, unknown>,
+      options?: JobEnqueueOptions,
+    ): Promise<JobEnqueueResult>
+  }
   /** Column handles for a model, for building queries. */
   table(model: string): import('./data/query.ts').Table
   /** A changeset bound to this app's manifest. */
@@ -375,12 +430,19 @@ export type Ctx = {
   }
 }
 
+export type JobContext = Ctx & {
+  job: JobExecution
+  signal: AbortSignal
+}
+
 // The adapter contract is asynchronous because a network database has no other
 // option. SQLite is synchronous underneath and simply resolves immediately; making
 // the shared contract match the harder case is cheaper than having two contracts.
 // Only quoteIdent and columnSql stay synchronous: they are pure string functions.
 export type Adapter = {
   name: string
+  /** True when this adapter is already bound to an open transaction. */
+  readonly transaction?: boolean
   open(): Promise<void>
   close(): Promise<void>
   exec(sql: string): Promise<void>
@@ -395,4 +457,17 @@ export type Adapter = {
   quoteIdent(name: string): string
   columnSql(c: { base: FieldBase }): string
   introspect(): Promise<Record<string, Record<string, string>>>
+  /** Optional because SQLite and third-party adapters may rely on polling. */
+  notifications?: DatabaseNotifications
+}
+
+export type DatabaseNotifications = {
+  /** Publish on this adapter's current connection, and therefore its transaction. */
+  publish(channel: string, payload: string): Promise<void>
+  /** Root adapters may keep a dedicated listener connection. */
+  subscribe?(
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady: () => void,
+  ): Promise<() => Promise<void>>
 }

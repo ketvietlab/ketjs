@@ -19,6 +19,7 @@ export type GrantedFn = {
   effects: string[]
   reads: string[]
   writes: string[]
+  enqueues: string[]
   crossCompany: boolean
   mutates: boolean
   /**
@@ -81,8 +82,13 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
     }
     const reads: string[] = []
     const writes: string[] = []
+    const enqueues: string[] = []
     for (const e of fn.effects) {
       const [verb, model] = splitEffect(e)
+      if (verb === 'enqueue') {
+        enqueues.push(model)
+        continue
+      }
       const slot = models.get(model) ?? {
         model,
         read: false,
@@ -106,8 +112,9 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
       effects: [...fn.effects],
       reads: [...new Set(reads)].sort(),
       writes: [...new Set(writes)].sort(),
+      enqueues: [...new Set(enqueues)].sort(),
       crossCompany: fn.crossCompany,
-      mutates: writes.length > 0,
+      mutates: writes.length > 0 || enqueues.length > 0,
       projected: Object.keys(fn.output).length > 0,
       returns: Object.keys(fn.output).sort(),
     })
