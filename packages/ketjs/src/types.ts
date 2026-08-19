@@ -104,6 +104,8 @@ export type Manifest = {
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */
   disabledModules?: string[]
+  disabledSections?: string[]
+  disabledIslands?: string[]
   diagnostics?: Diagnostic[]
 }
 

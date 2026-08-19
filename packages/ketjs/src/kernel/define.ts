@@ -61,6 +61,11 @@ export function defineModule(spec: ModuleSpec): KetModule {
 // restriction is enforced here rather than left to convention.
 const THEME_FORBIDDEN = ['models', 'extend', 'functions', 'islands'] as const
 
+/**
+ * A theme is installable like anything else — it has to be, since its templates are
+ * what a page renders through. So it defaults to appearing in the app list under its
+ * own category: a theme nobody can switch on is a theme nobody can use.
+ */
 export function defineTheme(spec: ModuleSpec): KetModule {
   for (const k of THEME_FORBIDDEN) {
     const v = spec[k]
@@ -75,5 +80,5 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       })
     }
   }
-  return defineModule({ ...spec, kind: 'theme' })
+  return defineModule({ app: true, category: 'Giao diện', ...spec, kind: 'theme' })
 }

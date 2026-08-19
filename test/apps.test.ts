@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  callFn, compose, createAppRegistry, createTheme, migrateOne, registerFunctions,
+  callFn, compose, createAppRegistry, createTheme, defineModule, migrateOne, registerFunctions,
   restrictManifest, sqliteAdapter, validateLayout,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
@@ -22,7 +22,7 @@ async function boot(): Promise<{ db: Adapter; apps: Awaited<ReturnType<typeof cr
 test('apps: the list shows what this deployment ships, and what is on', async () => {
   const { db, apps } = await boot()
   const list = await apps.list()
-  assert.deepEqual(list.map(a => a.name).sort(), ['website', 'website_menu', 'website_search', 'website_seo'])
+  assert.deepEqual(list.map(a => a.name).sort(), ['theme_paper', 'website', 'website_menu', 'website_search', 'website_seo'])
   assert.ok(list.every(a => a.state === 'available'), 'nothing is installed on a fresh database')
   const site = list.find(a => a.name === 'website')!
   assert.equal(site.title, 'Website')
@@ -106,6 +106,7 @@ test('restrict: a disabled app answers nothing, and says why', async () => {
 test('restrict: a disabled app contributes no sections and no fills', async () => {
   const { db, apps } = await boot()
   await apps.install('website')
+  await apps.install('theme_paper')
   await apps.uninstall('website_seo')
   const restricted = restrictManifest(manifest, await apps.enabled())
 
@@ -142,6 +143,7 @@ test('apps: installing something this deployment does not ship says so', async (
 test('theme: a page keeps rendering when the app behind one of its sections is removed', async () => {
   const { db, apps } = await boot()
   await apps.install('website_menu')
+  await apps.install('theme_paper')
   const layout = [
     { type: 'website.hero', settings: { heading: 'Xin chào' } },
     { type: 'menu.primary', settings: { showSearch: false } },
@@ -165,4 +167,99 @@ test('theme: a typo in a template is still a build error against the full manife
   const bad = { ...paperTheme, templates: { ...paperTheme.templates, p: '{% island "website.ghost" %}' } }
   assert.throws(() => createTheme(compose([website, websiteSearch, bad as never]), [website, websiteSearch, bad as never]),
     /places island "website.ghost", which no installed module provides/)
+})
+
+test('edge: an explicit removal outlasts the next auto-install sweep', async () => {
+  const { db, apps } = await boot()
+  await apps.install('website')
+  assert.equal((await apps.enabled()).has('website_seo'), true, 'it came along on its own')
+
+  await apps.uninstall('website_seo')
+  await apps.install('website_menu')      // any later install runs the sweep again
+  assert.equal((await apps.enabled()).has('website_seo'), false,
+    'an app the user removed must not walk back in the next time anything is installed')
+  await db.close()
+})
+
+test('edge: two auto-install apps depending on each other settle instead of looping', async () => {
+  const a = defineModule({ name: 'aa', app: true, autoInstall: true })
+  const b = defineModule({ name: 'bb', app: true, autoInstall: true, depends: ['aa'] })
+  const m = compose([a, b], { headless: true })
+  const db = sqliteAdapter(); await db.open(); await migrateOne(db, m)
+  const apps = await createAppRegistry(m, db)
+  assert.deepEqual((await apps.install('aa')).sort(), ['aa', 'bb'])
+  await db.close()
+})
+
+test('edge: a removed theme stops handing over its templates', async () => {
+  const { db, apps } = await boot()
+  await apps.install('website')
+  await apps.install('theme_paper')
+  const live = createTheme(restrictManifest(manifest, await apps.enabled()), mods)
+  assert.match(live.renderRegion('website.page', { page: { path: '/' }, sections: [] }), /data-ket-section="page"/)
+
+  await apps.uninstall('theme_paper')
+  const gone = createTheme(restrictManifest(manifest, await apps.enabled()), mods)
+  assert.throws(() => gone.renderRegion('website.page', { page: {}, sections: [] }), /has no template/)
+  await db.close()
+})
+
+test('edge: a theme is manageable like any other app', async () => {
+  const { db, apps } = await boot()
+  const theme = (await apps.list()).find(a => a.name === 'theme_paper')
+  assert.ok(theme, 'a theme nobody can switch on is a theme nobody can use')
+  assert.equal(theme!.category, 'Giao diện')
+  await db.close()
+})
+
+test('edge: a switched-off section is skipped, an unknown one is marked', async () => {
+  const { db, apps } = await boot()
+  await apps.install('website')
+  await apps.install('theme_paper')
+  const rt = createTheme(restrictManifest(manifest, await apps.enabled()), mods)
+  const html = rt.renderRegion('website.page', {
+    page: { path: '/' },
+    sections: [
+      { type: 'website.hero', settings: { heading: 'Còn đây' } },
+      { type: 'menu.primary', settings: {} },              // shipped, switched off
+      { type: 'accounting.invoice', settings: {} },        // never shipped at all
+    ],
+  })
+  assert.match(html, /Còn đây/)
+  assert.ok(!html.includes('<nav'), 'a switched-off app goes quietly')
+  assert.match(html, /<!-- ket: unknown section "accounting.invoice" -->/,
+    'but data naming something that never existed is not silently swallowed')
+  await db.close()
+})
+
+test('edge: a record for an app the deployment stopped shipping is reported', async () => {
+  const { db, apps } = await boot()
+  await apps.install('website_menu')
+  const shrunk = await createAppRegistry(compose([website, websiteSeo, paperTheme]), db)
+  assert.deepEqual(await shrunk.orphans(), ['website_menu'])
+  assert.ok(!(await shrunk.list()).some(a => a.name === 'website_menu'))
+  await db.close()
+})
+
+test('edge: two databases on one deployment keep their own install state', async () => {
+  const a = sqliteAdapter(); await a.open(); await migrateOne(a, manifest)
+  const b = sqliteAdapter(); await b.open(); await migrateOne(b, manifest)
+  const ra = await createAppRegistry(manifest, a)
+  const rb = await createAppRegistry(manifest, b)
+  await ra.install('website_menu')
+  assert.ok((await ra.enabled()).has('website_menu'))
+  assert.equal((await rb.enabled()).size, 0, 'install state belongs to the database, not the deployment')
+  await a.close(); await b.close()
+})
+
+test('edge: rows of a removed app survive, and nothing can read them until it returns', async () => {
+  const { db, apps } = await boot()
+  await apps.install('website_menu')
+  await callFn('website_menu.addMenuItem', { id: 'm1', label: 'A', href: '/', position: 0 }, { adapter: db, manifest })
+  await apps.uninstall('website_menu')
+
+  const restricted = restrictManifest(manifest, await apps.enabled())
+  await assert.rejects(() => callFn('website_menu.listMenu', {}, { adapter: db, manifest: restricted }), /E_APP_NOT_INSTALLED|not installed/)
+  assert.equal((await db.all('SELECT * FROM website_menu_menu_item', [])).length, 1, 'the rows are simply unreachable, not gone')
+  await db.close()
 })

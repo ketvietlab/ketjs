@@ -19,13 +19,18 @@
 import { KetError } from './errors.ts'
 import type { Adapter, Manifest } from '../types.ts'
 
+// The row records a DECISION, not a fact: 'removed' is how an explicit uninstall
+// survives the next auto-install sweep. Deleting the row instead would let an
+// autoInstall app walk straight back in the moment anything else was installed —
+// which it did, until a probe caught it.
 export const APP_DDL = `
 CREATE TABLE IF NOT EXISTS ket_app (
-  name         TEXT PRIMARY KEY,
-  installed_at TEXT NOT NULL
+  name       TEXT PRIMARY KEY,
+  state      TEXT NOT NULL,
+  changed_at TEXT NOT NULL
 );
 `
-export const APP_DDL_PG = APP_DDL.replace('installed_at TEXT NOT NULL', 'installed_at TIMESTAMPTZ NOT NULL')
+export const APP_DDL_PG = APP_DDL.replace('changed_at TEXT NOT NULL', 'changed_at TIMESTAMPTZ NOT NULL')
 
 export type AppState = 'installed' | 'available'
 export type AppInfo = {
@@ -44,6 +49,8 @@ export type AppInfo = {
 export type AppRegistry = {
   enabled(): Promise<Set<string>>
   list(): Promise<AppInfo[]>
+  /** Names this database has a record for that the deployment no longer ships. */
+  orphans(): Promise<string[]>
   /** Installs the app and everything it needs. Returns what actually changed. */
   install(name: string): Promise<string[]>
   /** Removes the app. Refuses if an installed app depends on it. Deletes no data. */
@@ -76,11 +83,18 @@ export async function createAppRegistry(
   }
 
   const enabled = async (): Promise<Set<string>> =>
+    new Set((await adapter.all(`SELECT name FROM ket_app WHERE state = 'installed'`)).map(r => String(r.name)))
+
+  /** Every name this database has an opinion about, installed or explicitly removed. */
+  const decided = async (): Promise<Set<string>> =>
     new Set((await adapter.all(`SELECT name FROM ket_app`)).map(r => String(r.name)))
 
-  const write = async (names: string[]): Promise<void> => {
+  const setState = async (names: string[], state: 'installed' | 'removed'): Promise<void> => {
     for (const n of names) {
-      await adapter.run(`INSERT INTO ket_app (name, installed_at) VALUES (${p(1)}, ${p(2)}) ON CONFLICT DO NOTHING`, [n, now()])
+      const upd = await adapter.run(`UPDATE ket_app SET state = ${p(1)}, changed_at = ${p(2)} WHERE name = ${p(3)}`, [state, now(), n])
+      if (upd.changes === 0) {
+        await adapter.run(`INSERT INTO ket_app (name, state, changed_at) VALUES (${p(1)}, ${p(2)}, ${p(3)}) ON CONFLICT DO NOTHING`, [n, state, now()])
+      }
     }
   }
 
@@ -89,17 +103,25 @@ export async function createAppRegistry(
     const added: string[] = []
     for (;;) {
       const on = await enabled()
+      const seen = await decided()
       const next = Object.entries(manifest.modules)
-        .filter(([n, m]) => m.autoInstall && !on.has(n) && m.depends.every(d => on.has(d)))
+        // `!seen.has(n)` is the fix: an app the user removed is not a candidate
+        // again, however many times its dependencies are reinstalled.
+        .filter(([n, m]) => m.autoInstall && !seen.has(n) && m.depends.every(d => on.has(d)))
         .map(([n]) => n)
       if (!next.length) return added
-      await write(next)
+      await setState(next, 'installed')
       added.push(...next)
     }
   }
 
   return {
     enabled,
+
+    async orphans() {
+      const shipped = new Set(Object.keys(manifest.modules))
+      return [...(await decided())].filter(n => !shipped.has(n)).sort()
+    },
 
     async list() {
       const on = await enabled()
@@ -130,7 +152,7 @@ export async function createAppRegistry(
         wanted.push(n)
       }
       visit(name)
-      await write(wanted)
+      await setState(wanted, 'installed')
       return [...wanted, ...(await settle())]
     },
 
@@ -147,7 +169,7 @@ export async function createAppRegistry(
           hint: `remove ${blocking.join(', ')} first, or leave "${name}" installed`,
         })
       }
-      await adapter.run(`DELETE FROM ket_app WHERE name = ${p(1)}`, [name])
+      await setState([name], 'removed')
       return [name]
     },
   }
@@ -176,6 +198,10 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
   return {
     ...manifest,
     disabledModules: Object.keys(manifest.modules).filter(n => !enabled.has(n)),
+    // What was removed by the restriction, so a renderer can skip a section from a
+    // switched-off app quietly while still complaining about one that never existed.
+    disabledSections: Object.entries(manifest.sections).filter(([, s]) => !keep(s.by)).map(([n]) => n),
+    disabledIslands: Object.entries(manifest.islands).filter(([, s]) => !keep(s.by)).map(([n]) => n),
     order: manifest.order.filter(keep),
     functions: pick(manifest.functions),
     sections: pick(manifest.sections),

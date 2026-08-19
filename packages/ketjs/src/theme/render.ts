@@ -22,11 +22,19 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
   // is a runtime view, degrades to rendering nothing. Uninstalling an app must not
   // take the whole theme down with it.
   const atRuntime = manifest.disabledModules !== undefined
+  const off = new Set(manifest.disabledModules ?? [])
+  const disabledSections = new Set(manifest.disabledSections ?? [])
   // Islands come from modules; the theme only names them.
   const islands: IslandRegistry = {}
-  for (const m of modules) for (const [name, view] of Object.entries(m.islands)) islands[name] = view
+  for (const m of modules) {
+    if (off.has(m.name)) continue
+    for (const [name, view] of Object.entries(m.islands)) islands[name] = view
+  }
   const sources: Record<string, string> = {}
-  for (const m of modules) for (const [name, src] of Object.entries(m.templates)) sources[name] = src
+  for (const m of modules) {
+    if (off.has(m.name)) continue      // a removed theme contributes no templates
+    for (const [name, src] of Object.entries(m.templates)) sources[name] = src
+  }
 
   const fillSources: Record<string, string[]> = {}
   for (const fill of manifest.fills) (fillSources[fill.joint] ??= []).push(fill.template)
@@ -51,8 +59,14 @@ export function createTheme(manifest: Manifest, modules: KetModule[], opts: { fi
       if (!placement?.type) continue
       if (!manifest.sections[placement.type]) {
         // A page saved while an app was installed still names its sections after it
-        // is removed. Skip them; re-installing brings the section back with its data.
-        if (atRuntime) continue
+        // is removed. Skip those; re-installing brings them back with their data.
+        if (atRuntime && disabledSections.has(placement.type)) continue
+        if (atRuntime) {
+          // Named by no app this deployment has ever shipped: leave a mark rather
+          // than pretend the page was always this length.
+          out.push(`<!-- ket: unknown section "${placement.type}" -->`)
+          continue
+        }
         throw new KetError({
           code: 'E_UNKNOWN_SECTION',
           message: `the page places section "${placement.type}", which no installed module provides`,
