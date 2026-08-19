@@ -1437,3 +1437,45 @@ Declared routes run before the theme page resolver, exactly as static routes alr
 did; the resolver is the fallback for paths no route owns. Website modules therefore
 declare the public URL they own rather than teaching their own handlers to parse a
 path the engine claimed not to understand.
+
+## D47 — A row id is one number, and the clock is its high bits
+```
+id = millisecondsSinceEpoch * 2048 + counter        epoch 2026-01-01T00:00:00Z
+```
+
+**What was wrong.** `id` and `ref` were `TEXT PRIMARY KEY`, and the framework generated
+none of them — all 19 `save*` functions took an id from the caller. So every module
+invented a convention (`'p1'`, `'t-goods'`, `'acme'`), nothing sorted, and a public API
+would have had to let a client choose its own primary key.
+
+**Why not a sequence.** A sequence must be asked, and a handler that round-trips to the
+database to learn an id cannot build a graph of rows in one pass.
+
+**Why 53 bits and not 64.** `Number.MAX_SAFE_INTEGER` is 2^53−1. Past it JavaScript
+rounds silently and two different ids compare equal — the worst failure available. A
+`bigint` avoids that and brings its own: `JSON.stringify` throws on one. So the scheme
+is built to fit a plain `number`, and asserts on every mint rather than trusting that it
+always will. 42 bits of milliseconds is 139 years; 11 bits is 2048 ids per millisecond
+per database, which is two million rows a second.
+
+**Uniqueness is per database, and that is what makes it fit.** No node identifier has to
+be carved out of the number, so none can be misconfigured. Two writers in one millisecond
+are separated by starting the counter at a random slot; a collision then fails on the
+primary key and the id is minted again. The database is the arbiter because it is the
+only participant that cannot be configured into agreeing with itself.
+
+**A clock that steps backwards** inside five seconds is treated as monotonic by fiat —
+ids keep issuing from the high-water mark, so none repeats. Beyond five seconds it
+refuses: that is a broken host, and ids minted across it could never be ordered
+afterwards.
+
+**Do not write `ms << 11`.** JavaScript's bitwise operators truncate to 32 bits, so the
+shift is wrong from the first id. `decodeId` exists so the division is written once.
+
+**An id is not a secret.** It carries the millisecond it was made, and rows written in
+the same millisecond are adjacent. Anything reachable by a stranger needs its own
+unguessable handle; this decision does not provide one.
+
+**Cost:** ids are 14–16 digit numbers. That is affordable only because the number a
+person reads is not this one — a document code (`SO00042`) is a separate field with its
+own sequence, exactly as Odoo separates `id` from `name`.

@@ -36,6 +36,8 @@ export { createQueue } from './server/queue.ts'
 export { createIdempotency } from './server/idem.ts'
 
 export { sqliteAdapter } from './data/sqlite.ts'
+export { createIdGenerator, decodeId, ID_EPOCH_MS, ID_COUNTER_BITS, ID_COUNTER_RANGE } from './data/id.ts'
+export type { IdGenerator, IdGeneratorOptions } from './data/id.ts'
 export { assertAdapter, ADAPTER_METHODS } from './data/adapter.ts'
 export { createAdapterPool } from './data/pool.ts'
 export type { AdapterPool, PoolOptions } from './data/pool.ts'
