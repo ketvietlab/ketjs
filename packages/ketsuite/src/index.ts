@@ -20,6 +20,12 @@ export type { Unit } from './modules/uom/convert.ts'
 
 // product vertical
 export { default as product } from './modules/product/index.ts'
+export { default as partner } from './modules/partner/index.ts'
+export { default as company } from './modules/company/index.ts'
+export { default as user } from './modules/user/index.ts'
+export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
+export { PARTNER_KINDS, PARTNER_ROLES, ADDRESS_USES } from './modules/partner/types.ts'
+export type { PartnerKind, PartnerRole, AddressUse } from './modules/partner/types.ts'
 export { PRODUCT_TYPES } from './modules/product/types.ts'
 export type { ProductType } from './modules/product/types.ts'
 
