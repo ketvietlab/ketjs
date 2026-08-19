@@ -12,6 +12,7 @@
 import { defineModule } from 'ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
+import { joints } from './joints.ts'
 
 export default defineModule({
   name: 'backend',
@@ -29,12 +30,14 @@ export default defineModule({
   assets: new URL('./design/', import.meta.url),
   styles: ['tokens.css', 'admin.css'],
   routes,
+  joints,
   messages,
 })
 
 export { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export type { Viewer } from './screens.ts'
+export { joints } from './joints.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes } from './routes.ts'

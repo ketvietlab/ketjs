@@ -21,6 +21,7 @@ import type { AppRegistry } from '../kernel/apps.ts'
 import type { Adapter, Manifest } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import type { Sessions } from './session.ts'
+import type { Joints } from '../theme/joints.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RuntimeConfig } from './config.ts'
 
@@ -51,6 +52,8 @@ export type Tenant = {
   live: Manifest
   /** Compiled against what this tenant has installed, and cached with it. */
   theme: ThemeRuntime | null
+  /** Extension points, compiled against the same installed set. */
+  joints: Joints
   /**
    * Whose logins these are.
    *
@@ -97,6 +100,7 @@ export function createTenants(o: {
    * every template on every request would be the most expensive thing here.
    */
   theme?: (live: Manifest) => ThemeRuntime
+  joints: (live: Manifest) => Joints
   /** Built once per tenant, against that tenant's own datastore. */
   sessions?: (adapter: Adapter) => Promise<Sessions>
 }): Tenants {
@@ -142,6 +146,7 @@ export function createTenants(o: {
    */
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
+  const jointsBy = new Map<string, Joints>()
   const sessions = new Map<string, Promise<Sessions>>()
   const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
     if (!o.sessions) return null
@@ -165,7 +170,9 @@ export function createTenants(o: {
       const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
       let live = lives.get(stamp)
       if (!live) { live = restrictManifest(o.manifest, await apps.enabled()); lives.set(stamp, live) }
-      return fn({ key, adapter, apps, live, theme: themeFor(key, live), sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
+      let joints = jointsBy.get(stamp)
+      if (!joints) { joints = o.joints(live); jointsBy.set(stamp, joints) }
+      return fn({ key, adapter, apps, live, theme: themeFor(key, live), joints, sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)) })
     })
 
   return {
@@ -186,9 +193,10 @@ export function createTenants(o: {
  * exercises this implementation, and the pooled one differs only in where the
  * adapter comes from.
  */
-export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; sessions?: Sessions | null }): Tenants {
+export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest: Manifest; theme?: (live: Manifest) => ThemeRuntime; joints: (live: Manifest) => Joints; sessions?: Sessions | null }): Tenants {
   const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
+  const jointsBy = new Map<string, Joints>()
   const run = async <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> => {
     const stamp = [...(await o.apps.enabled())].sort().join(',')
     let live = lives.get(stamp)
@@ -198,7 +206,9 @@ export function singleTenant(o: { adapter: Adapter; apps: AppRegistry; manifest:
       theme = themes.get(stamp) ?? o.theme(live)
       themes.set(stamp, theme)
     }
-    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, sessions: o.sessions ?? null })
+    let joints = jointsBy.get(stamp)
+    if (!joints) { joints = o.joints(live); jointsBy.set(stamp, joints) }
+    return fn({ key, adapter: o.adapter, apps: o.apps, live, theme, joints, sessions: o.sessions ?? null })
   }
   return {
     keyOf: () => '',

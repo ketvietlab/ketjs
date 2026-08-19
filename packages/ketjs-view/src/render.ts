@@ -5,7 +5,7 @@
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
 import type { Host, HostNode } from './host.ts'
-import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch } from './ssr.ts'
+import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
 
 const RESULT = Symbol('ket.result')
 const EACH = Symbol('ket.each')
@@ -50,7 +50,7 @@ class Part {
   host: Host
   parent: HostNode
   anchor: HostNode
-  kind: 'text' | 'result' | 'each' | null = null
+  kind: 'text' | 'result' | 'each' | 'markup' | null = null
   node: HostNode | null = null
   child: Instance | null = null
   keyed: Map<unknown, Instance> | null = null
@@ -346,6 +346,14 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
   let c = cursor
 
   const claimValue = (value: unknown, part: Part): void => {
+      // Pre-rendered markup: an unknown number of nodes, so the walk cannot
+      // count them. It runs to the marker the server left instead — which is
+      // why a hole is fenced on both sides rather than only anchored at the end.
+      if (isMarkup(value)) {
+        part.kind = 'markup'
+        while (c && !(c.nodeType === COMMENT && c.data === HOLE_MARKER)) c = c.nextSibling
+        return
+      }
     if (isResult(value)) {
       const r = hydrateInstance(host, value.strings, value.values, part.parent as DomNode, c)
       part.kind = 'result'
