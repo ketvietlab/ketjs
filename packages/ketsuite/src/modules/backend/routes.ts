@@ -9,11 +9,11 @@ import { page } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
-import type { Viewer } from './screens.ts'
+import type { Extras, Viewer } from './screens.ts'
 
 type Build = (
   _: ReturnType<ServeContext['translate']>,
-  req: { url: URL; raw: Parameters<Route>[1]; viewer: Viewer | null },
+  req: { url: URL; raw: Parameters<Route>[1]; viewer: Viewer | null; extras: Extras },
 ) => Promise<TemplateResult> | TemplateResult
 
 /**
@@ -36,24 +36,44 @@ const viewerOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]):
 const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
   const lang = ctx.localeOf(url, req)
   const viewer = await viewerOf(ctx, url, req)
+  // Rendered once per request, so a screen stays a pure function of its data and
+  // the catalogue can render the same screens with no server at all.
+  const extras: Extras = {
+    'topbar.end': await ctx.joint(req, 'backend:topbar.end'),
+    'apps.footer': await ctx.joint(req, 'backend:apps.footer'),
+  }
   return page({
     body: ctx.document({
       lang,
       title: 'KetSuite',
       head: await ctx.styles(req),
-      body: await build(ctx.translate(lang), { url, raw: req, viewer }),
+      body: await build(ctx.translate(lang), { url, raw: req, viewer, extras }),
     }),
   })
 }
 
+/**
+ * The card joint takes the app as a prop, so it is rendered once per card here
+ * rather than by the screen. Handing the screen a function instead would have been
+ * shorter and would have made it depend on a runtime — and the catalogue renders
+ * these same screens with no server at all.
+ */
+const appsWith = (ctx: ServeContext): Build => async (_, r) => {
+  const apps = await ctx.appsOf(r.raw)
+  const perApp = Object.fromEntries(await Promise.all(
+    apps.map(async (app) => [app.name, await ctx.joint(r.raw, 'backend:app-card.actions', { app })] as const),
+  ))
+  return appsScreen(_, apps, r.viewer, { ...r.extras, 'app-card.actions': perApp })
+}
+
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
-  '/admin': (ctx) => screen(ctx, async (_, { raw, viewer }) => appsScreen(_, await ctx.appsOf(raw), viewer)),
-  '/admin/apps': (ctx) => screen(ctx, async (_, { raw, viewer }) => appsScreen(_, await ctx.appsOf(raw), viewer)),
-  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw, viewer }) => {
+  '/admin': (ctx) => screen(ctx, appsWith(ctx)),
+  '/admin/apps': (ctx) => screen(ctx, appsWith(ctx)),
+  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw, viewer, extras }) => {
     // The same call path as the API: this request's live manifest and company.
     const rows = await ctx.call('website.listPages', { includeDrafts: true }, url, raw) as
       Array<{ id: string; path: string; title: string; published: number }>
-    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), viewer)
+    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), viewer, extras)
   }),
-  '/admin/settings': (ctx) => screen(ctx, (_, { viewer }) => settingsScreen(_, ctx.manifest.tokens, viewer)),
+  '/admin/settings': (ctx) => screen(ctx, (_, { viewer, extras }) => settingsScreen(_, ctx.manifest.tokens, viewer, extras)),
 }

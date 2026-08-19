@@ -22,6 +22,8 @@ import { registerFunctions, callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
 import { createSessions, dbSessionStore } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
+import { createJoints } from '../theme/joints.ts'
+import type { Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
@@ -85,6 +87,15 @@ export type ServeContext = {
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Installed modules' stylesheets for this tenant, in dependency order. */
   styles: (req: IncomingMessage) => Promise<Html>
+  /**
+   * Render an extension point: every installed module's fills, in dependency
+   * order, as markup a template inserts verbatim.
+   *
+   * Empty when nobody fills it, and empty when an installed module omitted it.
+   */
+  joint: (req: IncomingMessage, key: string, props?: Record<string, unknown>) => Promise<Markup>
+  /** False when an installed module omitted this joint — see jointShows in screens. */
+  jointShows: (req: IncomingMessage, key: string) => Promise<boolean>
   /**
    * This request's sessions. A function because with subdomain tenants they live
    * in that tenant's database — one per tenant, not one per deployment.
@@ -234,6 +245,9 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     ? {}
     : { theme: (live: Manifest) => createTheme(live, modules, { translate: translate(config.defaultLocale) }) }
 
+  // Fills are KTL, so they translate the way templates do.
+  const jointFactory = (live: Manifest) => createJoints(live, { translate: translate(config.defaultLocale) })
+
   const tenants: Tenants = serve.tenants
     ? createTenants({
         spec: serve.tenants,
@@ -256,9 +270,10 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
         } : {}),
         onFirstTouch: (key, made) => bootstrapInto(key, made),
         ...(makeSessions ? { sessions: makeSessions } : {}),
+        joints: jointFactory,
         ...themeFactory,
       })
-    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, ...themeFactory, sessions })
+    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, joints: jointFactory, ...themeFactory, sessions })
 
   /**
    * Sessions, when the app asks for them. Absent, the header shim stays and the
@@ -331,6 +346,8 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
 
   const ctx: ServeContext = {
     manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
+    joint: (req, key, props) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.joints.render(key, props)),
+    jointShows: (req, key) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.joints.shows(key)),
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {
