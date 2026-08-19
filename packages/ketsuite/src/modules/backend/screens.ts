@@ -94,14 +94,27 @@ const menuSection = (section: MenuNode): TemplateResult => html`
     ${each(section.children, c => c.id, c => c.children.length ? menuSection(c) : menuLink(c))}
   </details>`
 
+/**
+ * Everything around the data, in one argument.
+ *
+ * These grew one positional parameter at a time — viewer, then extras, then the
+ * menu, then the chrome — and `f(_, rows, null, {}, MENU)` is a call nobody can
+ * read. A screen takes its data, and then its frame.
+ */
+export type Frame = {
+  viewer?: Viewer | null
+  extras?: Extras
+  menu?: MenuNode[]
+  chrome?: ListChrome | null
+}
+
 export const shell = (
   _: Translator,
   title: string,
   body: TemplateResult,
-  viewer?: Viewer | null,
-  extras: Extras = {},
-  menu: MenuNode[] = [],
+  frame: Frame = {},
 ): TemplateResult => {
+  const { viewer = null, extras = {}, menu = [] } = frame
   const app = menu.find(a => a.active) ?? menu[0] ?? null
   return html`
 <div data-ui="shell">
@@ -175,7 +188,112 @@ const appCard = (_: Translator, app: AppRow, extras: Extras = {}): TemplateResul
   </div>
 </article>`
 
-export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult => {
+/**
+ * The chrome above a list.
+ *
+ * Every control here is a link or a form — no client state, no fetch, no view
+ * layer that has to be told what the server already knows. Page four is a URL you
+ * can send someone; so is a search, and so is a filter. That is not nostalgia: it
+ * is what makes the back button, a bookmark and a shared link all work without
+ * anyone writing code for them.
+ *
+ * It is data, not markup, so a module hands over what its list can actually do
+ * rather than re-implementing a toolbar. A field left out is a control that does
+ * not appear — a screen with no second page has no pager at all.
+ */
+export type Crumb = { label: string; path?: string }
+
+export type Facet = {
+  /** What it says: "Loại: Hàng hoá". */
+  label: string
+  /** Where the × goes — the same list without this filter. */
+  without: string
+}
+
+export type Pager = {
+  /** 1-based, inclusive, as shown: "1-30 / 84". */
+  from: number
+  to: number
+  total: number
+  /** Absent means the arrow is there but dead, which is the honest state. */
+  prev?: string | null
+  next?: string | null
+}
+
+export type ViewKind = { id: string; label: string; icon: string; path: string; active: boolean }
+
+export type ListChrome = {
+  crumbs: Crumb[]
+  /** The primary action. Absent when this list cannot be added to. */
+  create?: { label: string; path: string } | null
+  search?: {
+    name: string
+    value?: string
+    placeholder: string
+    facets?: Facet[]
+    /**
+     * The rest of the URL's state, as hidden fields. A GET form replaces the whole
+     * query string, so without this, searching while looking at the cards throws
+     * you back to the list — which is exactly the bug this found.
+     */
+    keep?: Record<string, string>
+  } | null
+  pager?: Pager | null
+  views?: ViewKind[]
+}
+
+const pagerLabel = (p: Pager): string => (p.total === 0 ? '0' : `${p.from}-${p.to} / ${p.total}`)
+
+export const listChrome = (_: Translator, c: ListChrome): TemplateResult => html`
+<div data-ui="list-chrome">
+  <div data-ui="chrome-lead">
+    ${when(!!c.create, () => html`<a data-ui="chrome-create" href=${c.create!.path}>${c.create!.label}</a>`)}
+    <nav data-ui="crumbs" aria-label=${_('backend.chrome.breadcrumb')}>
+      ${each(c.crumbs, (b, i) => `${i}:${b.label}`, (b) => b.path
+        ? html`<a data-ui="crumb" href=${b.path}>${b.label}</a>`
+        : html`<span data-ui="crumb" aria-current="page">${b.label}</span>`)}
+    </nav>
+  </div>
+
+  <div data-ui="chrome-tail">
+    ${when(!!c.search, () => html`
+    <form data-ui="chrome-search" method="get" role="search">
+      ${each(Object.entries(c.search!.keep ?? {}), ([k]) => k, ([k, v]) => html`<input type="hidden" name=${k} value=${v}>`)}
+      ${each(c.search!.facets ?? [], f => f.label, f => html`
+        <span data-ui="facet">
+          <span data-ui="facet-label">${f.label}</span>
+          <a data-ui="facet-remove" href=${f.without} aria-label=${_('backend.chrome.removeFilter')}>×</a>
+        </span>`)}
+      <input data-ui="chrome-search-input" type="search" name=${c.search!.name}
+             value=${c.search!.value ?? ''} placeholder=${c.search!.placeholder}
+             aria-label=${c.search!.placeholder}>
+    </form>`)}
+
+    ${when(!!c.pager, () => html`
+    <div data-ui="pager">
+      <span data-ui="pager-range">${pagerLabel(c.pager!)}</span>
+      ${c.pager!.prev
+        ? html`<a data-ui="pager-step" data-dir="prev" href=${c.pager!.prev} aria-label=${_('backend.chrome.previous')}>‹</a>`
+        : html`<span data-ui="pager-step" data-dir="prev" aria-disabled="true">‹</span>`}
+      ${c.pager!.next
+        ? html`<a data-ui="pager-step" data-dir="next" href=${c.pager!.next} aria-label=${_('backend.chrome.next')}>›</a>`
+        : html`<span data-ui="pager-step" data-dir="next" aria-disabled="true">›</span>`}
+    </div>`)}
+
+    ${when((c.views ?? []).length > 1, () => html`
+    <div data-ui="view-switch" role="group" aria-label=${_('backend.chrome.views')}>
+      ${each(c.views!, v => v.id, v => html`
+        <a data-ui="view-kind" data-kind=${v.id} data-active=${String(v.active)} href=${v.path} title=${v.label} aria-label=${v.label}>${v.icon}</a>`)}
+    </div>`)}
+  </div>
+</div>`
+
+/** The shell, plus the chrome if the screen declared any. */
+export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
+  shell(_, title, frame.chrome ? html`${listChrome(_, frame.chrome)}${body}` : body, frame)
+
+export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): TemplateResult => {
+  const extras = frame.extras ?? {}
   const categories = [...new Set(apps.map(a => a.category))].sort()
   const categoryLabel = (c: string): string => {
     const owner = apps.find(a => a.category === c)
@@ -187,11 +305,11 @@ export const appsScreen = (_: Translator, apps: AppRow[], viewer?: Viewer | null
         <section data-ui="app-group" data-category=${category}>
           <h2 data-ui="group-title">${categoryLabel(category)}</h2>
           <div data-ui="app-grid">${each(apps.filter(a => a.category === category), a => a.name, a => appCard(_, a, extras))}</div>
-        </section>`)}${extras['apps.footer'] ?? ''}</div>`, viewer, extras, menu)
+        </section>`)}${extras['apps.footer'] ?? ''}</div>`, frame)
 }
 
-export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult =>
-  shell(_, _('backend.pages.title'), pages.length === 0
+export const pagesScreen = (_: Translator, pages: PageRow[], frame: Frame = {}): TemplateResult =>
+  framed(_, _('backend.pages.title'), frame, pages.length === 0
     ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
     : html`<table data-ui="table">
         <thead><tr><th>${_('backend.pages.col.path')}</th><th>${_('backend.pages.col.title')}</th><th>${_('backend.pages.col.state')}</th></tr></thead>
@@ -202,15 +320,15 @@ export const pagesScreen = (_: Translator, pages: PageRow[], viewer?: Viewer | n
             <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
           </tr>`)}
         </tbody>
-      </table>`, viewer, extras, menu)
+      </table>`)
 
-export const settingsScreen = (_: Translator, tokens: Record<string, string>, viewer?: Viewer | null, extras: Extras = {}, menu: MenuNode[] = []): TemplateResult =>
-  shell(_, _('backend.settings.title'), html`
+export const settingsScreen = (_: Translator, tokens: Record<string, string>, frame: Frame = {}): TemplateResult =>
+  framed(_, _('backend.settings.title'), frame, html`
     <section data-ui="tokens">
       <h2 data-ui="group-title">${_('backend.settings.tokens')}</h2>
       <dl data-ui="token-list">${each(Object.entries(tokens), ([k]) => k, ([k, v]) => html`
         <div data-ui="token"><dt data-ui="token-name">--ket-${k}</dt><dd data-ui="token-value">${v}</dd></div>`)}
       </dl>
-    </section>`, viewer, extras, menu)
+    </section>`)
 
 export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState, errorState }

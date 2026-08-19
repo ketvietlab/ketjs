@@ -9,11 +9,12 @@ import { page } from 'ketjs'
 import type { MenuNode, ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
-import type { Extras, Viewer } from './screens.ts'
+import type { Extras, Frame, Viewer } from './screens.ts'
+import { pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 type Build = (
   _: ReturnType<ServeContext['translate']>,
-  req: { url: URL; raw: Parameters<Route>[1]; viewer: Viewer | null; extras: Extras; menu: MenuNode[] },
+  req: { url: URL; raw: Parameters<Route>[1]; frame: Frame },
 ) => Promise<TemplateResult> | TemplateResult
 
 /**
@@ -50,7 +51,7 @@ const screen = (ctx: ServeContext, build: Build): Route => async (url, req) => {
       lang,
       title: 'KetSuite',
       head: await ctx.styles(req),
-      body: await build(ctx.translate(lang), { url, raw: req, viewer, extras, menu }),
+      body: await build(ctx.translate(lang), { url, raw: req, frame: { viewer, extras, menu } }),
     }),
   })
 }
@@ -66,17 +67,33 @@ const appsWith = (ctx: ServeContext): Build => async (_, r) => {
   const perApp = Object.fromEntries(await Promise.all(
     apps.map(async (app) => [app.name, await ctx.joint(r.url, r.raw, 'backend:app-card.actions', { app })] as const),
   ))
-  return appsScreen(_, apps, r.viewer, { ...r.extras, 'app-card.actions': perApp }, r.menu)
+  return appsScreen(_, apps, { ...r.frame, extras: { ...r.frame.extras, 'app-card.actions': perApp } })
 }
 
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
   '/admin': (ctx) => screen(ctx, appsWith(ctx)),
   '/admin/apps': (ctx) => screen(ctx, appsWith(ctx)),
-  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw, viewer, extras, menu }) => {
+  '/admin/pages': (ctx) => screen(ctx, async (_, { url, raw, frame }) => {
+    // Paging and searching are in the URL, so page four is a link you can send
+    // someone and the back button needs no help from us.
+    const search = searchOf(url)
+    const page = pageOf(url)
+    const filter = { includeDrafts: true, search }
     // The same call path as the API: this request's live manifest and company.
-    const rows = await ctx.call('website.listPages', { includeDrafts: true }, url, raw) as
+    const rows = await ctx.call('website.listPages', { ...filter, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }, url, raw) as
       Array<{ id: string; path: string; title: string; published: number }>
-    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), viewer, extras, menu)
+    const { count } = await ctx.call('website.countPages', filter, url, raw) as { count: number }
+    return pagesScreen(_, rows.map(r => ({ ...r, published: !!r.published })), {
+      ...frame,
+      chrome: {
+        crumbs: [{ label: _('backend.menu.admin'), path: '/admin' }, { label: _('backend.pages.title') }],
+        search: {
+          name: 'q', value: search ?? '', placeholder: _('backend.chrome.searchPages'),
+          facets: search ? [{ label: `${_('backend.chrome.searchFacet')}: ${search}`, without: url.pathname }] : [],
+        },
+        pager: pager(url, page, rows.length, count),
+      },
+    })
   }),
-  '/admin/settings': (ctx) => screen(ctx, (_, { viewer, extras, menu }) => settingsScreen(_, ctx.manifest.tokens, viewer, extras, menu)),
+  '/admin/settings': (ctx) => screen(ctx, (_, { frame }) => settingsScreen(_, ctx.manifest.tokens, frame)),
 }

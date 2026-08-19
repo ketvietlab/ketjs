@@ -15,6 +15,14 @@
    [data-ui="app-name"] [data-ui="menu"] [data-ui="menu-app"]
    [data-ui="menu-item"][data-active] [data-ui="menu-section"][open]
    [data-ui="menu-section-title"]
+   [data-ui="list-chrome"] [data-ui="chrome-lead"] [data-ui="chrome-tail"]
+   [data-ui="chrome-create"] [data-ui="crumbs"] [data-ui="crumb"][aria-current]
+   [data-ui="chrome-search"] [data-ui="chrome-search-input"]
+   [data-ui="facet"] [data-ui="facet-label"] [data-ui="facet-remove"]
+   [data-ui="pager"] [data-ui="pager-range"] [data-ui="pager-step"][aria-disabled]
+   [data-ui="view-switch"] [data-ui="view-kind"][data-active]
+   [data-ui="kanban"] [data-ui="kanban-card"] [data-ui="kanban-title"]
+   [data-ui="kanban-meta"] [data-ui="kanban-uom"] [data-ui="kanban-variants"]
    [data-ui="topbar"] [data-ui="title"] [data-ui="content"]
 
    Apps
@@ -304,6 +312,226 @@
 
   [data-ui="menu-section"][open] > [data-ui="menu-section-title"]::after {
     transform: rotate(-90deg);
+  }
+
+
+  /* ── List chrome ───────────────────────────────────────────────────────────
+     The row above a list: what you can add, where you are, what you filtered on,
+     which slice you are looking at, and how you want to look at it. Every one of
+     them is a link or a form — no client state, so the back button works. */
+
+  [data-ui="list-chrome"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
+    padding-block-end: var(--admin-gap-sm);
+    margin-block-end: var(--admin-gap);
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="chrome-lead"],
+  [data-ui="chrome-tail"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chrome-create"] {
+    display: inline-flex;
+    min-block-size: var(--admin-control-height);
+    align-items: center;
+    padding-inline: 0.75rem;
+    border: 1px solid transparent;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  [data-ui="crumbs"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="crumb"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  [data-ui="crumb"][aria-current="page"] {
+    color: var(--admin-ink);
+    font-weight: 600;
+  }
+
+  /* The separator is CSS, so the markup stays a plain list of names. */
+  [data-ui="crumb"] + [data-ui="crumb"]::before {
+    margin-inline-end: var(--admin-gap-xs);
+    color: var(--admin-ink-muted);
+    content: "/";
+  }
+
+  [data-ui="chrome-search"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    min-block-size: var(--admin-control-height);
+    padding-inline: 0.5rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+  }
+
+  [data-ui="chrome-search"]:focus-within {
+    border-color: var(--admin-accent);
+    box-shadow: 0 0 0 3px var(--admin-accent-soft);
+  }
+
+  [data-ui="chrome-search-input"] {
+    min-inline-size: 10rem;
+    border: 0;
+    background: none;
+    color: var(--admin-ink);
+    font: inherit;
+    font-size: 0.8125rem;
+    outline: none;
+  }
+
+  /* A facet is what you filtered on, and the × is how you undo it. Both visible:
+     a filter you cannot see is a list that is lying about how much it has. */
+  [data-ui="facet"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  [data-ui="facet-remove"] {
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    color: inherit;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  [data-ui="pager"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-ui="pager-step"] {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    place-items: center;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    font-size: 0.875rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  /* An arrow with nowhere to go stays put and says so, rather than disappearing —
+     a toolbar that changes width as you page is a toolbar you cannot aim at. */
+  [data-ui="pager-step"][aria-disabled="true"] {
+    border-color: var(--admin-line);
+    color: var(--admin-ink-muted);
+    cursor: default;
+  }
+
+  [data-ui="view-switch"] {
+    display: inline-flex;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    overflow: hidden;
+  }
+
+  [data-ui="view-kind"] {
+    display: grid;
+    inline-size: 1.75rem;
+    block-size: 1.5rem;
+    place-items: center;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  [data-ui="view-kind"] + [data-ui="view-kind"] {
+    border-inline-start: 1px solid var(--admin-line-strong);
+  }
+
+  [data-ui="view-kind"][data-active="true"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+
+  /* ── Kanban ───────────────────────────────────────────────────────────────── */
+
+  [data-ui="kanban"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+
+  [data-ui="kanban-card"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap-sm);
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+  }
+
+  [data-ui="kanban-title"] {
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  [data-ui="kanban-meta"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="kanban-variants"] {
+    margin: 0;
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+  }
+
+  /* Numbers line up on the right, everywhere, so a column can be read down. */
+  [data-ui="table"] [data-align="end"] {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
   }
 
   [data-ui="main"] {

@@ -169,3 +169,24 @@ test('product: a required self-reference would have been refused', () => {
   // which is why product.Category declares its parent optional
   assert.equal(manifest.models['product.Category']!.fields.parentId!.optional, true)
 })
+
+test('product: a page of templates, and a count that filters the same way', async () => {
+  const db = await boot()
+  for (let i = 0; i < 7; i++) {
+    await call('product.saveTemplate', { id: `t${i}`, name: `${i % 2 ? 'Xoài' : 'Nhãn'} ${String(i).padStart(2, '0')}`, type: 'goods' }, db)
+  }
+  const page = async (o: Record<string, unknown>) =>
+    ((await call('product.listTemplates', o, db)).value as Array<{ name: string }>).map(r => r.name)
+
+  assert.deepEqual(await page({ limit: 3 }), ['Nhãn 00', 'Nhãn 02', 'Nhãn 04'], 'ordered by name, first page')
+  assert.deepEqual(await page({ limit: 3, offset: 3 }), ['Nhãn 06', 'Xoài 01', 'Xoài 03'],
+    'the second page starts where the first stopped — no row shown twice, none skipped')
+  assert.deepEqual(await page({ limit: 3, offset: 6 }), ['Xoài 05'], 'the last page is short')
+
+  const total = ((await call('product.countTemplates', {}, db)).value as { count: number }).count
+  assert.equal(total, 7, 'the count ignores the limit')
+
+  // The bug this guards: a count that filters differently from the list it counts.
+  assert.deepEqual(await page({ search: 'Xoài' }), ['Xoài 01', 'Xoài 03', 'Xoài 05'])
+  assert.equal(((await call('product.countTemplates', { search: 'Xoài' }, db)).value as { count: number }).count, 3)
+})

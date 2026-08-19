@@ -1,5 +1,17 @@
-import { asc, defineFn, eq, from, validateLayout } from 'ketjs'
+import { asc, defineFn, eq, from, like, validateLayout } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
+
+/**
+ * The one query both the page and its total are built from — a count that filters
+ * differently from the list it counts is the bug you find on page four.
+ */
+const pageQuery = (ctx: Ctx, a: { includeDrafts?: boolean | null; search?: string | null }) => {
+  const P = ctx.table('website.Page')
+  let q = from(P).orderBy(asc(P.path))
+  if (a.includeDrafts !== true) q = q.where(eq(P.published, true))
+  if (a.search != null && a.search !== '') q = q.where(like(P.title, `%${a.search}%`))
+  return q
+}
 
 export const functions: Record<string, FnSpec> = {
   getPageByPath: defineFn({
@@ -16,15 +28,27 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listPages: defineFn({
-    input: { includeDrafts: 'bool?' },
+    input: { includeDrafts: 'bool?', search: 'text?', limit: 'int?', offset: 'int?' },
     output: { id: 'id', path: 'text', title: 'text', published: 'bool' },
     effects: ['read:website.Page'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const P = ctx.table('website.Page')
-      const q = from(P).select(P.id, P.path, P.title, P.published).orderBy(asc(P.path))
-      return ctx.db.all(args.includeDrafts === true ? q : q.where(eq(P.published, true)))
+      let q = pageQuery(ctx, args).select(P.id, P.path, P.title, P.published)
+      // Already checked as int by the signature; Number is the narrowing, not a parse.
+      if (args.limit != null) q = q.limit(Number(args.limit))
+      if (args.offset != null) q = q.offset(Number(args.offset))
+      return ctx.db.all(q)
     },
+  }),
+
+  /** How many the list would return without its limit — the "/ 30" in "1-30 / 30". */
+  countPages: defineFn({
+    input: { includeDrafts: 'bool?', search: 'text?' },
+    output: { count: 'int' },
+    effects: ['read:website.Page'],
+    agent: true,
+    handler: async (ctx: Ctx, args) => ({ count: await ctx.db.count(pageQuery(ctx, args)) }),
   }),
 
   /**

@@ -1,10 +1,27 @@
-import { asc, defineFn, eq, from } from 'ketjs'
+import { asc, defineFn, eq, from, like } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { PRODUCT_TYPES } from './types.ts'
 
+/**
+ * The one query both the page and its total are built from.
+ *
+ * Written once because a count that filters differently from the list it counts
+ * is the bug you find on page four, not on page one.
+ */
+const templateQuery = (ctx: Ctx, a: { type?: string | null; search?: string | null }) => {
+  const T = ctx.table('product.Template')
+  let q = from(T).where(eq(T.active, true)).orderBy(asc(T.name))
+  if (a.type != null) q = q.where(eq(T.type, a.type))
+  if (a.search != null && a.search !== '') q = q.where(like(T.name, `%${a.search}%`))
+  return q
+}
+
 export const functions: Record<string, FnSpec> = {
   listTemplates: defineFn({
-    input: { withVariants: 'bool?', type: 'text?' },
+    // limit/offset/search go on the function rather than on a generic list
+    // endpoint: the filter is part of what the function promises, so an agent
+    // reading the signature sees it, and the effect check still applies.
+    input: { withVariants: 'bool?', type: 'text?', search: 'text?', limit: 'int?', offset: 'int?' },
     // Projection is one level deep: naming "variants" here says the caller gets
     // the variant rows whole. That is a decision, and it is visible as one — the
     // alternative for a narrower slice is a view model, which is a field list.
@@ -12,11 +29,21 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:product.Template', 'read:product.Product'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
-      const T = ctx.table('product.Template')
-      let q = from(T).where(eq(T.active, true)).orderBy(asc(T.name))
-      if (a.type != null) q = q.where(eq(T.type, a.type))
+      let q = templateQuery(ctx, a)
+      // Already checked as int by the signature; Number is the narrowing, not a parse.
+      if (a.limit != null) q = q.limit(Number(a.limit))
+      if (a.offset != null) q = q.offset(Number(a.offset))
       return ctx.db.all(a.withVariants === true ? q.preload('variants') : q)
     },
+  }),
+
+  /** How many the list would return without its limit — the "/ 30" in "1-30 / 30". */
+  countTemplates: defineFn({
+    input: { type: 'text?', search: 'text?' },
+    output: { count: 'int' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx: Ctx, a) => ({ count: await ctx.db.count(templateQuery(ctx, a)) }),
   }),
 
   getTemplate: defineFn({
