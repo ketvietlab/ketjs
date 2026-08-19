@@ -866,3 +866,181 @@
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Sign-in, and the identity strip in the topbar.
+
+   Written against the same tokens as everything above, because the sign-in page
+   is the first screen anyone sees and a first screen that does not look like the
+   rest teaches the wrong thing about the rest.
+
+   The form is centred rather than full-width: at 1600px a login stretched across
+   the viewport reads as an error state.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+[data-ui="login"] {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: var(--admin-gap-lg);
+  background: var(--admin-bg);
+}
+
+[data-ui="login-form"] {
+  display: grid;
+  inline-size: min(24rem, 100%);
+  gap: var(--admin-gap-md);
+  padding: var(--admin-gap-xl);
+  border: 1px solid var(--admin-line);
+  border-block-start: 2px solid var(--admin-accent);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-float);
+}
+
+[data-ui="login-title"] {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: var(--admin-size-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+/* role="alert", so it is announced as well as seen. */
+[data-ui="login-error"] {
+  margin: 0;
+  padding: var(--admin-gap-sm) var(--admin-gap-md);
+  border: 1px solid var(--admin-danger-line);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger-strong);
+  font-size: var(--admin-size-sm);
+  line-height: 1.4;
+}
+
+/* A field is a label wrapping its input, so the whole thing is a click target. */
+[data-ui="field"] {
+  display: grid;
+  gap: var(--admin-gap-xs);
+}
+
+[data-ui="field-label"] {
+  color: var(--admin-ink-secondary);
+  font-size: var(--admin-size-sm);
+  font-weight: 500;
+}
+
+[data-ui="field-input"] {
+  min-block-size: var(--admin-control-height);
+  padding-inline: 0.625rem;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  font: inherit;
+  font-size: var(--admin-size-base);
+  transition: border-color var(--admin-motion-fast), box-shadow var(--admin-motion-fast);
+}
+
+[data-ui="field-input"]:focus-visible {
+  border-color: var(--admin-accent);
+  box-shadow: var(--admin-focus-ring);
+  outline: none;
+}
+
+[data-ui="login-submit"] {
+  min-block-size: var(--admin-control-height);
+  border: 1px solid var(--admin-accent);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-accent);
+  color: var(--admin-accent-ink);
+  font: inherit;
+  font-size: var(--admin-size-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--admin-motion-fast);
+}
+
+[data-ui="login-submit"]:hover { background: var(--admin-accent-hover); }
+
+[data-ui="login-locales"] {
+  display: flex;
+  margin: 0;
+  gap: var(--admin-gap-sm);
+  justify-content: center;
+  font-size: var(--admin-size-xs);
+}
+
+[data-ui="login-locale"] {
+  color: var(--admin-ink-muted);
+  text-decoration: none;
+}
+
+[data-ui="login-locale"][data-active="true"] {
+  color: var(--admin-accent-text);
+  font-weight: 600;
+}
+
+/* ── the identity strip ───────────────────────────────────────────────────── */
+
+/* Pushed to the far end of the topbar; the title keeps the near end. */
+[data-ui="viewer"] {
+  display: flex;
+  margin-inline-start: auto;
+  align-items: center;
+  gap: var(--admin-gap-sm);
+  min-inline-size: 0;
+}
+
+[data-ui="viewer-name"] {
+  overflow: hidden;
+  color: var(--admin-ink-secondary);
+  font-size: var(--admin-size-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Only rendered when the account belongs to more than one company, so it is
+   always meaningful when it is there. */
+[data-ui="viewer-company"] {
+  overflow: hidden;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--admin-accent-line);
+  border-radius: var(--admin-radius-xs);
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-text);
+  font-size: var(--admin-size-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui="signout"] { display: contents; }
+
+[data-ui="signout-button"] {
+  min-block-size: var(--admin-control-height);
+  padding-inline: 0.625rem;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-ink-secondary);
+  font: inherit;
+  font-size: var(--admin-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--admin-motion-fast), color var(--admin-motion-fast);
+}
+
+[data-ui="signout-button"]:hover {
+  background: var(--admin-surface-hover);
+  color: var(--admin-ink);
+}
+
+/* Named in the screen contract but never given a rule, so it inherited nothing
+   and sat flush against its sibling. */
+[data-ui="app-depends"] {
+  color: var(--admin-ink-muted);
+  font-size: var(--admin-size-xs);
+}

@@ -74,13 +74,17 @@ export const routes: Record<string, RouteEntry> = {
       const locale = ctx.localeOf(url, req)
       const _ = ctx.translate(locale)
       const locales = Object.keys(ctx.manifest.messages ?? {})
+      const styles = await ctx.styles(req)
 
       const form = (o: { next?: string; failed?: boolean }) => page({
         status: o.failed ? 401 : 200,
         body: ctx.document({
           lang: locale,
           title: _('user.login.title'),
-          head: undefined,
+          // Every installed module's stylesheets, exactly as the backend screens
+          // get them. Passing nothing here shipped a sign-in page with no CSS at
+          // all: the markup was right and the page looked broken.
+          head: styles,
           body: loginScreen(_, { ...o, locales, locale }),
         }),
       })
