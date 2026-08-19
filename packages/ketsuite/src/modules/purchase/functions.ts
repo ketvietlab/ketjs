@@ -120,7 +120,7 @@ async function totals(ctx: Ctx, orderId: unknown) {
 
 async function invoiceStatus(ctx: Ctx, orderId: unknown): Promise<string> {
   const order = (await ctx.db.select('purchase.Order', { id: orderId }))[0]
-  if (!order || order.state !== 'purchase') return 'no'
+  if (order?.state !== 'purchase') return 'no'
   let billable = 0
   let invoiced = 0
   for (const line of await ctx.db.select('purchase.OrderLine', { orderId })) {
@@ -441,7 +441,7 @@ export const functions: Record<string, FnSpec> = {
         return invalid('orderId', 'lines can only be added to an unlocked RFQ')
       if (!(n(args.productQty) > 0)) return invalid('productQty', 'ordered quantity must be positive')
       const context = await productContext(ctx, args.productId)
-      if (!context || !context.template.purchaseOk) return invalid('productId', 'product is not purchasable')
+      if (!context?.template.purchaseOk) return invalid('productId', 'product is not purchasable')
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
         return invalid('productUomId', 'unit of measure does not exist')
       const price = await supplierPrice(
@@ -523,7 +523,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
-      if (!order || order.state !== 'to approve') return invalid('state', 'order is not waiting for approval')
+      if (order?.state !== 'to approve') return invalid('state', 'order is not waiting for approval')
       return confirm(ctx, args.id, false)
     },
   }),
@@ -587,7 +587,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.orderId }))[0]
-      if (!order || order.state !== 'purchase')
+      if (order?.state !== 'purchase')
         return invalid('orderId', 'only a confirmed purchase order can be billed')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
@@ -746,7 +746,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
-      if (!order || order.state !== 'purchase') return invalid('state', 'only a purchase order can be locked')
+      if (order?.state !== 'purchase') return invalid('state', 'only a purchase order can be locked')
       await ctx.db.update('purchase.Order', { id: args.id }, { locked: args.locked })
       return { ok: true, id: args.id }
     },

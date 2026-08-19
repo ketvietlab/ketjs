@@ -15,7 +15,7 @@ import {
   stack,
   surface,
 } from '../../ui/index.ts'
-import type { Column, FormField, Frame } from '../../ui/index.ts'
+import type { FormField, Frame } from '../../ui/index.ts'
 
 type AnyRow = Record<string, unknown>
 
