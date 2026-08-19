@@ -1305,3 +1305,52 @@ deliberate: a pager that changes width as you page is a pager you cannot aim at.
 **Deferred:** the "Mới" button. `ListChrome` carries `create` and the catalogue shows
 it, but no live screen sets it, because no create screen exists yet. A button that
 404s is worse than no button.
+
+## D44 — Columns are data, and one bar holds the chrome
+**A module says what its columns ARE.** Key, label, how to read one out of a row,
+whether it is on by default. It does not write a `<table>`. Three things follow at
+once: every list in the product has the same row height, the same sticky header and
+the same overflow behaviour; a column can be turned off without touching markup; and
+a module extending another module's list has something to name.
+
+```ts
+export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
+  { key: 'name', label: _('…col.name'), cell: (r) => r.name },
+  { key: 'variants', label: _('…col.variants'), cell: (r) => String(r.variants), align: 'end' },
+  { key: 'id', label: _('backend.table.id'), cell: (r) => html`<code>${r.id}</code>`, optional: true },
+]
+```
+
+**An optional column that is off is absent from the HTML.** Not hidden by CSS —
+hiding it would still ship the data to the browser, and a column a viewer cannot see
+but can read in view-source is a column that leaked. Which ones are on lives in the
+URL, like everything else about a list (D43), so a colleague can be sent the list
+*with the id column showing*.
+
+**The column menu is links, not checkboxes.** A checkbox needs a handler to mean
+anything, and a handler is client state. Each entry is the same list with one column
+more, or one fewer. Toggling one keeps the page you are on — showing another column
+is not a new filter, so `withParam` grew a `resetPage` argument to say so.
+
+**One bar, not two.** The chrome was a breadcrumb row under the topbar at first, the
+way a lot of admin UIs do it. Two bars cost 3rem of every screen to say what fits in
+one, and the title above and the breadcrumb below were the same sentence twice. So
+the breadcrumb *is* the title, the search takes the middle, and the pager and view
+switcher sit at the end. Corrected after looking at it, not before.
+
+**A list runs to both edges of the pane.** The border, the radius and the drop
+shadow were drawing a card around something that is not a card, and the reading
+measure that suits prose is wrong for a table: the eye follows a row to a column that
+is not there, and the space it was centred in was the space the row needed. Screens
+that are read rather than scanned — the app grid, the settings list — keep the
+measure, which is what `:has()` selects on.
+
+**Tone, not colour.** `badge(label, 'positive')` rather than `data-published="true"`.
+A design team that wants "draft" amber changes one rule and every draft in the product
+follows. `data-value` carries the raw state as well, so a stylesheet can still be more
+specific where it must be.
+
+**Initials, not photographs.** Nothing stores an avatar image yet, and a broken image
+in every row is worse than none. When images arrive this stays as the fallback, which
+it would have had to be anyway. Vietnamese puts the given name last, so that is the
+letter that comes first.

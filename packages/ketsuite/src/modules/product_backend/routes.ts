@@ -3,7 +3,7 @@ import type { RouteEntry, Route, ServeContext } from 'ketjs'
 import { productsScreen, VIEWS } from './screens.ts'
 import type { TemplateRow, View } from './screens.ts'
 import { viewerOf } from '../backend/routes.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import type { Extras } from '../backend/screens.ts'
 
 /**
@@ -67,7 +67,7 @@ export const routes: Record<string, RouteEntry> = {
               path: withParam(url, 'view', v), active: v === view,
             })),
           },
-        }),
+        }, { shown: colsOf(url), colsHref: colsHref(url) }),
       }),
     })
   },

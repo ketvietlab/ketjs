@@ -249,3 +249,33 @@ trong HTML.
 | `[data-ui="view-switch"]`, `[data-ui="view-kind"][data-active]` | đổi kiểu xem |
 | `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
 | `[data-ui="table"] [data-align="end"]` | cột số — canh phải, `tabular-nums` |
+
+## Bảng dữ liệu
+
+Cột là **dữ liệu** do module khai báo, không phải markup. Nên mọi danh sách trong sản
+phẩm có cùng chiều cao dòng, cùng header dính, cùng cách tràn ngang.
+
+Cột tuỳ chọn khi tắt thì **không có trong HTML** — đừng viết CSS để ẩn. Menu chọn cột
+là danh sách link (checkbox sẽ cần handler, mà handler là state phía client).
+
+Danh sách **chạy hết chiều ngang của khung**: không viền hai bên, không bo góc, không
+đổ bóng. Màn hình để *đọc* (lưới ứng dụng, danh sách token) thì vẫn giữ bề rộng đọc —
+chọn bằng `:has()`, không phải bằng class.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="table-scroll"]` | hộp cuộn ngang; trang **không** được cuộn ngang theo |
+| `[data-ui="table"]`, `[data-ui="col"][data-align]` | bảng và ô tiêu đề cột |
+| `[data-ui="row"][data-row]`, `[data-ui="cell"][data-col][data-align]` | dòng và ô; `data-col` là khoá cột |
+| `[data-ui="col-actions"]`, `[data-ui="cell-actions"]` | cột cuối chứa nút chọn cột |
+| `[data-ui="col-config"]`, `[data-ui="col-config-open"]`, `[data-ui="col-config-menu"]` | `<details>` chọn cột |
+| `[data-ui="col-toggle"][data-on]`, `[data-ui="col-toggle-mark"]` | một cột trong menu đó |
+| `[data-ui="badge"][data-tone][data-value]` | trạng thái; tone là `neutral` `info` `positive` `warning` `danger` |
+| `[data-ui="person"]`, `[data-ui="person-name"]`, `[data-ui="avatar"]` | tên người kèm chữ đầu |
+
+**Đổi hợp đồng:** `[data-ui="badge"][data-published]` đã bỏ, thay bằng `[data-tone]`.
+`[data-ui="cell-path"]`, `[data-ui="cell-title"]`, `[data-ui="cell-state"]` cũng bỏ —
+giờ là `[data-ui="cell"][data-col="path"]` và tương tự.
+
+Thanh công cụ **chỉ có một**: breadcrumb thay cho tiêu đề, ô tìm ở giữa, pager và nút
+đổi kiểu xem ở cuối. Không còn hàng breadcrumb riêng bên dưới topbar.

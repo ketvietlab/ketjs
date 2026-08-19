@@ -1,6 +1,10 @@
 import { each, html, when } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
+import { badge, dataTable } from './table.ts'
+import type { Column, DataTable } from './table.ts'
+export { badge, dataTable, visibleColumns, avatar, person, initials } from './table.ts'
+export type { Cell, Column, DataTable, Tone } from './table.ts'
 
 /**
  * The backend screens.
@@ -143,7 +147,9 @@ export const shell = (
 
   <main data-ui="main">
     <header data-ui="topbar">
-      <h1 data-ui="title">${title}</h1>
+      ${frame.chrome
+        ? listChrome(_, frame.chrome)
+        : html`<h1 data-ui="title">${title}</h1>`}
       ${extras['topbar.end'] ?? ''}
       ${when(!!viewer, () => html`
       <div data-ui="viewer">
@@ -244,8 +250,40 @@ export type ListChrome = {
 
 const pagerLabel = (p: Pager): string => (p.total === 0 ? '0' : `${p.from}-${p.to} / ${p.total}`)
 
+/**
+ * The search, in the middle of the topbar.
+ *
+ * Not in the row above the table: it searches the screen, and putting it with the
+ * breadcrumb makes it look like it searches the breadcrumb. The facets live with
+ * it, because a filter you cannot see next to the box that set it is a list lying
+ * about how much it has.
+ */
+export const topbarSearch = (_: Translator, c: ListChrome): TemplateResult => html`
+  <form data-ui="chrome-search" method="get" role="search">
+    ${each(Object.entries(c.search!.keep ?? {}), ([k]) => k, ([k, v]) => html`<input type="hidden" name=${k} value=${v}>`)}
+    ${each(c.search!.facets ?? [], f => f.label, f => html`
+      <span data-ui="facet">
+        <span data-ui="facet-label">${f.label}</span>
+        <a data-ui="facet-remove" href=${f.without} aria-label=${_('backend.chrome.removeFilter')}>×</a>
+      </span>`)}
+    <input data-ui="chrome-search-input" type="search" name=${c.search!.name}
+           value=${c.search!.value ?? ''} placeholder=${c.search!.placeholder}
+           aria-label=${c.search!.placeholder}>
+  </form>`
+
+/**
+ * The chrome, and it lives in the topbar — there is no second bar.
+ *
+ * It was one at first: a breadcrumb row under the topbar, the way a lot of admin
+ * UIs do it. Two bars cost 3rem of every screen to say what fits in one, and the
+ * title in the upper bar and the breadcrumb in the lower one were the same
+ * sentence twice. So the breadcrumb IS the title, the search takes the middle,
+ * and the pager and view switcher sit at the end beside the identity strip.
+ */
 export const listChrome = (_: Translator, c: ListChrome): TemplateResult => html`
-<div data-ui="list-chrome">
+  ${chromeLead(_, c)}${when(!!c.search, () => topbarSearch(_, c))}${chromeTail(_, c)}`
+
+const chromeLead = (_: Translator, c: ListChrome): TemplateResult => html`
   <div data-ui="chrome-lead">
     ${when(!!c.create, () => html`<a data-ui="chrome-create" href=${c.create!.path}>${c.create!.label}</a>`)}
     <nav data-ui="crumbs" aria-label=${_('backend.chrome.breadcrumb')}>
@@ -253,22 +291,10 @@ export const listChrome = (_: Translator, c: ListChrome): TemplateResult => html
         ? html`<a data-ui="crumb" href=${b.path}>${b.label}</a>`
         : html`<span data-ui="crumb" aria-current="page">${b.label}</span>`)}
     </nav>
-  </div>
+  </div>`
 
+const chromeTail = (_: Translator, c: ListChrome): TemplateResult => html`
   <div data-ui="chrome-tail">
-    ${when(!!c.search, () => html`
-    <form data-ui="chrome-search" method="get" role="search">
-      ${each(Object.entries(c.search!.keep ?? {}), ([k]) => k, ([k, v]) => html`<input type="hidden" name=${k} value=${v}>`)}
-      ${each(c.search!.facets ?? [], f => f.label, f => html`
-        <span data-ui="facet">
-          <span data-ui="facet-label">${f.label}</span>
-          <a data-ui="facet-remove" href=${f.without} aria-label=${_('backend.chrome.removeFilter')}>×</a>
-        </span>`)}
-      <input data-ui="chrome-search-input" type="search" name=${c.search!.name}
-             value=${c.search!.value ?? ''} placeholder=${c.search!.placeholder}
-             aria-label=${c.search!.placeholder}>
-    </form>`)}
-
     ${when(!!c.pager, () => html`
     <div data-ui="pager">
       <span data-ui="pager-range">${pagerLabel(c.pager!)}</span>
@@ -285,12 +311,11 @@ export const listChrome = (_: Translator, c: ListChrome): TemplateResult => html
       ${each(c.views!, v => v.id, v => html`
         <a data-ui="view-kind" data-kind=${v.id} data-active=${String(v.active)} href=${v.path} title=${v.label} aria-label=${v.label}>${v.icon}</a>`)}
     </div>`)}
-  </div>
-</div>`
+  </div>`
 
-/** The shell, plus the chrome if the screen declared any. */
+/** The shell. The chrome is drawn by the topbar, so the body is only the data. */
 export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
-  shell(_, title, frame.chrome ? html`${listChrome(_, frame.chrome)}${body}` : body, frame)
+  shell(_, title, body, frame)
 
 export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): TemplateResult => {
   const extras = frame.extras ?? {}
@@ -308,19 +333,33 @@ export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): Te
         </section>`)}${extras['apps.footer'] ?? ''}</div>`, frame)
 }
 
-export const pagesScreen = (_: Translator, pages: PageRow[], frame: Frame = {}): TemplateResult =>
+/**
+ * The columns of the pages list, as data.
+ *
+ * Exported because a module that extends this list needs something to name. The
+ * id is optional: useful when you are debugging a route, noise the rest of the time.
+ */
+export const pageColumns = (_: Translator): Array<Column<PageRow>> => [
+  { key: 'path', label: _('backend.pages.col.path'), cell: (p) => html`<code>${p.path}</code>` },
+  { key: 'title', label: _('backend.pages.col.title'), cell: (p) => p.title },
+  {
+    key: 'state', label: _('backend.pages.col.state'),
+    cell: (p) => p.published
+      ? badge(_('backend.pages.published'), 'positive', 'published')
+      : badge(_('backend.pages.draft'), 'neutral', 'draft'),
+  },
+  { key: 'id', label: _('backend.table.id'), cell: (p) => html`<code>${p.id}</code>`, optional: true },
+]
+
+export const pagesScreen = (
+  _: Translator,
+  pages: PageRow[],
+  frame: Frame = {},
+  table: Partial<DataTable<PageRow>> = {},
+): TemplateResult =>
   framed(_, _('backend.pages.title'), frame, pages.length === 0
     ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
-    : html`<table data-ui="table">
-        <thead><tr><th>${_('backend.pages.col.path')}</th><th>${_('backend.pages.col.title')}</th><th>${_('backend.pages.col.state')}</th></tr></thead>
-        <tbody>${each(pages, p => p.id, p => html`
-          <tr data-ui="row" data-page=${p.id}>
-            <td data-ui="cell-path"><code>${p.path}</code></td>
-            <td data-ui="cell-title">${p.title}</td>
-            <td data-ui="cell-state"><span data-ui="badge" data-published=${String(p.published)}>${p.published ? _('backend.pages.published') : _('backend.pages.draft')}</span></td>
-          </tr>`)}
-        </tbody>
-      </table>`)
+    : dataTable(_, { columns: pageColumns(_), rows: pages, id: (p) => p.id, ...table }))
 
 export const settingsScreen = (_: Translator, tokens: Record<string, string>, frame: Frame = {}): TemplateResult =>
   framed(_, _('backend.settings.title'), frame, html`

@@ -4,7 +4,7 @@ import { renderToString } from 'ketjs-view'
 import { compose, translator } from 'ketjs'
 import type { MenuNode } from 'ketjs'
 import backend from 'ketsuite/backend'
-import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState, CASES, cataloguePage } from 'ketsuite/backend'
+import { appsScreen, pagesScreen, person, settingsScreen, emptyState, errorState, CASES, cataloguePage } from 'ketsuite/backend'
 import type { AppRow, ListChrome, PageRow } from 'ketsuite/backend'
 
 /**
@@ -21,10 +21,12 @@ const CONTRACT = [
   'menu', 'menu-app', 'menu-item', 'menu-section', 'menu-section-title',
   'app-groups', 'app-group', 'group-title', 'app-grid', 'app-card', 'app-title',
   'app-summary', 'app-meta', 'app-depends', 'app-dependents', 'app-actions', 'app-action',
-  'list-chrome', 'chrome-lead', 'chrome-tail', 'chrome-create', 'crumbs', 'crumb',
+  'chrome-lead', 'chrome-tail', 'chrome-create', 'crumbs', 'crumb',
   'chrome-search', 'chrome-search-input', 'facet', 'facet-label', 'facet-remove',
   'pager', 'pager-range', 'pager-step', 'view-switch', 'view-kind',
-  'table', 'row', 'cell-path', 'cell-title', 'cell-state', 'badge',
+  'table-scroll', 'table', 'col', 'row', 'cell', 'col-actions', 'cell-actions',
+  'col-config', 'col-config-open', 'col-config-menu', 'col-toggle', 'col-toggle-mark',
+  'badge', 'person', 'person-name', 'avatar',
   'tokens', 'token-list', 'token', 'token-name', 'token-value',
   'empty', 'empty-message', 'empty-hint', 'error', 'error-code', 'error-message', 'error-hint',
 ]
@@ -62,7 +64,10 @@ const _ = translator(compose([backend], { headless: true }), 'vi')
 
 const everything = [
   appsScreen(_, [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })], { menu: MENU }),
-  pagesScreen(_, [page(), page({ id: 'q', published: false })], { menu: MENU, chrome: CHROME }),
+  pagesScreen(_, [page(), page({ id: 'q', published: false })], { menu: MENU, chrome: CHROME },
+    // With the column menu open: the hooks inside it only exist when it can be used.
+    { shown: ['id'], colsHref: (keys) => `/admin/pages?cols=${keys.join(',')}` }),
+  person('Nguyễn Quản Trị'),
   settingsScreen(_, { 'color-accent': 'x' }, { menu: MENU }),
   emptyState('a', 'b'),
   errorState('E_X', 'msg', 'hint'),
@@ -82,8 +87,8 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
 test('ui contract: the states a stylesheet branches on are present', () => {
   assert.match(everything, /data-state="installed"/)
   assert.match(everything, /data-state="available"/)
-  assert.match(everything, /data-published="true"/)
-  assert.match(everything, /data-published="false"/)
+  assert.match(everything, /data-tone="positive"/)
+  assert.match(everything, /data-tone="neutral"/)
   assert.match(everything, /data-active="true"/)
   assert.match(everything, /data-action="install"/)
   assert.match(everything, /data-action="uninstall"/)

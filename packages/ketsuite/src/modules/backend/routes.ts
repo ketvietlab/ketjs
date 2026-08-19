@@ -10,7 +10,7 @@ import type { MenuNode, ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
 import type { Extras, Frame, Viewer } from './screens.ts'
-import { pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
+import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 type Build = (
   _: ReturnType<ServeContext['translate']>,
@@ -93,7 +93,7 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
         },
         pager: pager(url, page, rows.length, count),
       },
-    })
+    }, { shown: colsOf(url), colsHref: colsHref(url) })
   }),
   '/admin/settings': (ctx) => screen(ctx, (_, { frame }) => settingsScreen(_, ctx.manifest.tokens, frame)),
 }

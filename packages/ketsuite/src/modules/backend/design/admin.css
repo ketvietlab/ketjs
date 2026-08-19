@@ -15,7 +15,7 @@
    [data-ui="app-name"] [data-ui="menu"] [data-ui="menu-app"]
    [data-ui="menu-item"][data-active] [data-ui="menu-section"][open]
    [data-ui="menu-section-title"]
-   [data-ui="list-chrome"] [data-ui="chrome-lead"] [data-ui="chrome-tail"]
+   [data-ui="chrome-lead"] [data-ui="chrome-tail"]
    [data-ui="chrome-create"] [data-ui="crumbs"] [data-ui="crumb"][aria-current]
    [data-ui="chrome-search"] [data-ui="chrome-search-input"]
    [data-ui="facet"] [data-ui="facet-label"] [data-ui="facet-remove"]
@@ -34,9 +34,13 @@
    [data-ui="app-action"][data-action="install|uninstall"] (may be disabled)
 
    Pages / List View
-   [data-ui="table"] [data-ui="row"][data-page] [data-ui="cell-path"]
-   [data-ui="cell-title"] [data-ui="cell-state"]
-   [data-ui="badge"][data-published="true|false"]
+   [data-ui="table-scroll"] [data-ui="table"] [data-ui="col"][data-align]
+   [data-ui="row"][data-row] [data-ui="cell"][data-col][data-align]
+   [data-ui="col-actions"] [data-ui="cell-actions"]
+   [data-ui="col-config"] [data-ui="col-config-open"] [data-ui="col-config-menu"]
+   [data-ui="col-toggle"][data-on] [data-ui="col-toggle-mark"]
+   [data-ui="badge"][data-tone][data-value]
+   [data-ui="person"] [data-ui="person-name"] [data-ui="avatar"]
 
    Settings
    [data-ui="tokens"] [data-ui="token-list"] [data-ui="token"]
@@ -320,24 +324,20 @@
      which slice you are looking at, and how you want to look at it. Every one of
      them is a link or a form — no client state, so the back button works. */
 
-  [data-ui="list-chrome"] {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--admin-gap-sm);
-    padding-block-end: var(--admin-gap-sm);
-    margin-block-end: var(--admin-gap);
-    border-block-end: 1px solid var(--admin-line);
-  }
-
   [data-ui="chrome-lead"],
   [data-ui="chrome-tail"] {
     display: flex;
     min-inline-size: 0;
-    flex-wrap: wrap;
     align-items: center;
     gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chrome-lead"] {
+    flex: 0 1 auto;
+  }
+
+  [data-ui="chrome-tail"] {
+    flex: 0 0 auto;
   }
 
   [data-ui="chrome-create"] {
@@ -382,6 +382,8 @@
 
   [data-ui="chrome-search"] {
     display: flex;
+    inline-size: min(100%, 32rem);
+    margin-inline: auto;
     min-inline-size: 0;
     flex-wrap: wrap;
     align-items: center;
@@ -399,7 +401,8 @@
   }
 
   [data-ui="chrome-search-input"] {
-    min-inline-size: 10rem;
+    flex: 1 1 8rem;
+    min-inline-size: 6rem;
     border: 0;
     background: none;
     color: var(--admin-ink);
@@ -528,12 +531,6 @@
     font-size: 0.75rem;
   }
 
-  /* Numbers line up on the right, everywhere, so a column can be read down. */
-  [data-ui="table"] [data-align="end"] {
-    text-align: end;
-    font-variant-numeric: tabular-nums;
-  }
-
   [data-ui="main"] {
     min-inline-size: 0;
   }
@@ -543,7 +540,8 @@
     display: flex;
     min-block-size: var(--admin-topbar-height);
     align-items: center;
-    padding-inline: var(--admin-gap-lg);
+    gap: var(--admin-gap);
+    padding-inline: var(--admin-gap);
     background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
     border-block-end: 1px solid var(--admin-line);
     backdrop-filter: blur(10px);
@@ -556,6 +554,8 @@
 
   [data-ui="title"] {
     margin: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
     color: var(--admin-ink);
     font-size: var(--admin-size-lg);
     font-weight: 700;
@@ -564,11 +564,31 @@
   }
 
   [data-ui="content"] {
-    inline-size: min(100%, var(--admin-page-max));
+    inline-size: 100%;
     min-inline-size: 0;
-    margin-inline: auto;
-    padding: 1.125rem var(--admin-gap-lg) var(--admin-gap-xl);
+    padding: var(--admin-gap) var(--admin-gap) var(--admin-gap-lg);
     overflow-x: auto;
+  }
+
+  /* Screens that are reading rather than scanning keep their measure. */
+  [data-ui="content"]:has([data-ui="app-groups"]),
+  [data-ui="content"]:has([data-ui="tokens"]) {
+    inline-size: min(100%, var(--admin-page-max));
+    margin-inline: auto;
+  }
+
+  /* A list runs to both edges of the pane and starts directly under the bar:
+     the border, the radius and the drop shadow were drawing a card around
+     something that is not a card. */
+  [data-ui="content"]:has([data-ui="table-scroll"]) {
+    padding: 0;
+  }
+
+  [data-ui="content"]:has([data-ui="table-scroll"]) [data-ui="table-scroll"] {
+    border-radius: 0;
+    border-block-start: 0;
+    border-inline: 0;
+    box-shadow: none;
   }
 
   /* ── App registry ──────────────────────────────────────────────────────── */
@@ -718,18 +738,35 @@
 
   /* ── Data list ────────────────────────────────────────────────────────── */
 
-  [data-ui="table"] {
-    inline-size: 100%;
-    min-inline-size: 38rem;
+  /* ── Data table ────────────────────────────────────────────────────────────
+     One table, drawn the same way everywhere: columns arrive as data, so the row
+     height, the header and the overflow behaviour are decided here once and no
+     module gets to disagree.
+
+     The scroll box is the important part. A wide list must scroll inside itself,
+     because a page that scrolls sideways takes the sidebar with it. */
+
+  [data-ui="table-scroll"] {
+    overflow-x: auto;
     border: 1px solid var(--admin-line);
-    border-spacing: 0;
     border-radius: var(--admin-radius);
     background: var(--admin-surface);
     box-shadow: var(--admin-shadow-card);
-    table-layout: fixed;
+  }
+
+  [data-ui="table"] {
+    inline-size: 100%;
+    border-spacing: 0;
+    background: var(--admin-surface);
+    /* auto, not fixed: a name column and a status column do not want the same
+       share of the width, and nothing here knows which is which. */
+    table-layout: auto;
   }
 
   [data-ui="table"] th {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
     block-size: 2.375rem;
     padding: 0 var(--admin-gap);
     background: var(--admin-surface-subtle);
@@ -741,16 +778,7 @@
     line-height: 1.2;
     text-align: start;
     text-transform: uppercase;
-  }
-
-  [data-ui="table"] th:first-child,
-  [data-ui="cell-path"] {
-    inline-size: 36%;
-  }
-
-  [data-ui="table"] th:last-child,
-  [data-ui="cell-state"] {
-    inline-size: 8.5rem;
+    white-space: nowrap;
   }
 
   [data-ui="row"] {
@@ -772,7 +800,13 @@
     transition: background-color var(--admin-motion-fast);
   }
 
-  [data-ui="cell-path"] code {
+  /* The first column is what you are looking for; everything else qualifies it. */
+  [data-ui="row"] td:first-child {
+    color: var(--admin-ink);
+    font-weight: 500;
+  }
+
+  [data-ui="cell"] code {
     color: var(--admin-ink);
     font-family: var(--admin-font-mono);
     font-size: var(--admin-size-sm);
@@ -780,11 +814,85 @@
     overflow-wrap: anywhere;
   }
 
-  [data-ui="row"] [data-ui="cell-title"] {
-    color: var(--admin-ink);
-    font-weight: 500;
-    overflow-wrap: anywhere;
+  /* Numbers line up on the right, everywhere, so a column can be read down. */
+  [data-ui="table"] [data-align="end"] {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
   }
+
+  [data-ui="col-actions"],
+  [data-ui="cell-actions"] {
+    inline-size: 2.5rem;
+  }
+
+  /* ── Choosing columns ──────────────────────────────────────────────────────
+     A <details> and a list of links. Not checkboxes in a form: a checkbox needs
+     a handler to mean anything, and a handler is client state (D43). Each entry
+     is the same list with one more column, or one fewer. */
+
+  [data-ui="col-config"] {
+    position: relative;
+  }
+
+  [data-ui="col-config-open"] {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    list-style: none;
+  }
+
+  [data-ui="col-config-open"]::-webkit-details-marker { display: none; }
+
+  [data-ui="col-config-menu"] {
+    position: absolute;
+    z-index: 30;
+    inset-block-start: calc(100% + 0.25rem);
+    inset-inline-end: 0;
+    display: flex;
+    min-inline-size: 10rem;
+    flex-direction: column;
+    padding: 0.25rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="col-toggle"] {
+    display: flex;
+    min-block-size: 1.75rem;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding-inline: 0.375rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+  }
+
+  [data-ui="col-toggle"][data-on="true"] {
+    color: var(--admin-ink);
+    font-weight: 600;
+  }
+
+  [data-ui="col-toggle-mark"] {
+    inline-size: 0.75rem;
+    flex: 0 0 auto;
+    color: var(--admin-accent-text);
+  }
+
+  /* ── Status ────────────────────────────────────────────────────────────────
+     The tone is named for what it means, not for what it looks like. A design
+     team that wants "draft" amber changes one rule and every draft follows. */
 
   [data-ui="badge"] {
     display: inline-flex;
@@ -808,14 +916,61 @@
     content: "";
   }
 
-  [data-ui="badge"][data-published="true"] {
+  [data-ui="badge"][data-tone="neutral"] {
+    background: var(--admin-neutral-soft);
+    color: var(--admin-neutral);
+  }
+
+  [data-ui="badge"][data-tone="info"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+
+  [data-ui="badge"][data-tone="positive"] {
     background: var(--admin-success-soft);
     color: var(--admin-success);
   }
 
-  [data-ui="badge"][data-published="false"] {
-    background: var(--admin-neutral-soft);
-    color: var(--admin-neutral);
+  [data-ui="badge"][data-tone="warning"] {
+    background: var(--admin-warning-soft);
+    color: var(--admin-warning);
+  }
+
+  [data-ui="badge"][data-tone="danger"] {
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+
+  /* ── People ────────────────────────────────────────────────────────────────
+     Initials, not a photograph: nothing stores one yet, and a broken image in
+     every row is worse than no image. This stays as the fallback either way. */
+
+  [data-ui="person"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="person-name"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui="avatar"] {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
   }
 
   /* ── Settings token list ──────────────────────────────────────────────── */
@@ -1068,16 +1223,6 @@
 
     [data-ui="table"] {
       min-inline-size: 100%;
-    }
-
-    [data-ui="table"] th:first-child,
-    [data-ui="cell-path"] {
-      inline-size: 42%;
-    }
-
-    [data-ui="table"] th:last-child,
-    [data-ui="cell-state"] {
-      inline-size: 5.75rem;
     }
   }
 

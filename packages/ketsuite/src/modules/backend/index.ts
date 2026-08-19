@@ -36,9 +36,11 @@ export default defineModule({
   messages,
 })
 
-export { shell, framed, listChrome, appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
+export { shell, framed, listChrome, appsScreen, pagesScreen, pageColumns, settingsScreen, emptyState, errorState } from './screens.ts'
 export type { Frame, ListChrome, Crumb, Facet, Pager, ViewKind } from './screens.ts'
-export { PAGE_SIZE, pageOf, pager, searchOf, withParam } from './paging.ts'
+export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
+export { dataTable, visibleColumns, badge, avatar, person, initials } from './table.ts'
+export type { Cell, Column, DataTable, Tone } from './table.ts'
 export type { AppRow, PageRow, Screen } from './screens.ts'
 export type { Viewer } from './screens.ts'
 export { joints } from './joints.ts'
