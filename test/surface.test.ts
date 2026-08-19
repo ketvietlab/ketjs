@@ -27,7 +27,7 @@ const skin = defineModule({
   name: 'skin', app: true, depends: ['core'], assets: extra, styles: ['extra.css'],
   routes: {
     '/skin': (ctx: ServeContext): Route => async (url, req) =>
-      page({ body: ctx.document({ lang: ctx.localeOf(url, req), head: await ctx.styles(), body: html`<h1>skin</h1>` }) }),
+      page({ body: ctx.document({ lang: ctx.localeOf(url, req), head: await ctx.styles(req), body: html`<h1>skin</h1>` }) }),
   },
 })
 
@@ -107,12 +107,12 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
 test('serving: uninstalling stops the route answering and the asset being served', async () => {
   const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
-  await b.apps.uninstall('skin')
+  await b.apps!.uninstall('skin')
   assert.equal((await fetch(`${at}/skin`)).status, 404, 'enable-at-run has to reach what people can see')
   assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 404)
   // core is still on, so it is unaffected
   assert.equal((await fetch(`${at}/_ket/asset/core/base.css`)).status, 200)
-  await b.apps.install('skin')
+  await b.apps!.install('skin')
   assert.equal((await fetch(`${at}/skin`)).status, 200, 'and putting it back needs no restart')
   await b.close()
 })
