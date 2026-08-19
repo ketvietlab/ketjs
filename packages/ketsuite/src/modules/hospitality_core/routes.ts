@@ -4,8 +4,10 @@ import type { TemplateResult } from 'ketjs-view'
 import { viewerOf } from '../backend/routes.ts'
 import {
   amenitiesScreen,
+  cleaningTasksScreen,
   foliosScreen,
   frontDeskScreen,
+  housekeepingRoomsScreen,
   policiesScreen,
   propertiesScreen,
   reservationsScreen,
@@ -16,6 +18,7 @@ import {
 } from './screens.ts'
 import type {
   AmenityRow,
+  CleaningTaskRow,
   FolioRow,
   PolicyRow,
   PropertyRow,
@@ -259,6 +262,43 @@ export const routes: Record<string, RouteEntry> = {
         req,
         _('hospitality_core.screen.roomTypes.title'),
         roomTypesScreen(_, rows, await frame(ctx, url, req)),
+      )
+    },
+
+  '/admin/hospitality/housekeeping':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const propertyId = await selectedProperty(ctx, url, req)
+      const rows = (await ctx.call(
+        'hospitality_core.listCleaningTasks',
+        { propertyId, state: url.searchParams.get('state') || undefined },
+        url,
+        req,
+      )) as CleaningTaskRow[]
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.cleaningTasks.title'),
+        cleaningTasksScreen(_, rows, lang, await frame(ctx, url, req)),
+      )
+    },
+
+  '/admin/hospitality/housekeeping/rooms':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const propertyId = await selectedProperty(ctx, url, req)
+      const rows = (await ctx.call('hospitality_core.listRooms', { propertyId }, url, req)) as RoomRow[]
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.housekeepingRooms.title'),
+        housekeepingRoomsScreen(_, rows, await frame(ctx, url, req)),
       )
     },
 

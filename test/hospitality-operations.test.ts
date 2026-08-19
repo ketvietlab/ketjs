@@ -337,3 +337,130 @@ test('hospitality operations: nightly quantity follows the property calendar, no
     await adapter.close()
   }
 })
+
+test('hospitality housekeeping: checkout creates one urgent task and cleaning restores the room', async () => {
+  const adapter = await boot()
+  try {
+    await call('hospitality_core.createReservation', reservation('clean'), adapter)
+    await call(
+      'hospitality_core.checkIn',
+      {
+        stayId: 'clean:stay',
+        roomId: '101',
+        assignmentId: 'clean:assignment',
+        at: '2026-09-01T14:05:00.000Z',
+      },
+      adapter,
+    )
+    await call('hospitality_core.checkOut', { stayId: 'clean:stay', at: '2026-09-03T12:00:00.000Z' }, adapter)
+    await call('hospitality_core.checkOut', { stayId: 'clean:stay', at: '2026-09-03T12:00:00.000Z' }, adapter)
+
+    const tasks = await adapter.all(
+      'SELECT id, state, priority, "taskType", "roomId" FROM hospitality_core_cleaning_task',
+    )
+    assert.deepEqual(
+      tasks.map((row) => ({ ...row })),
+      [
+        {
+          id: 'checkout:clean:stay',
+          state: 'todo',
+          priority: 'urgent',
+          taskType: 'checkout_clean',
+          roomId: '101',
+        },
+      ],
+    )
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'dirty',
+    )
+
+    const started = await call(
+      'hospitality_core.startCleaningTask',
+      { id: 'checkout:clean:stay', assigneeId: 'housekeeper', at: '2026-09-03T12:05:00.000Z' },
+      adapter,
+    )
+    assert.equal((started.value as Row).state, 'in_progress')
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'cleaning',
+    )
+
+    const completed = await call(
+      'hospitality_core.completeCleaningTask',
+      { id: 'checkout:clean:stay', at: '2026-09-03T12:30:00.000Z' },
+      adapter,
+    )
+    assert.equal((completed.value as Row).state, 'done')
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'available',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality housekeeping: stayover cleaning never makes an occupied room available', async () => {
+  const adapter = await boot()
+  try {
+    await call('hospitality_core.createReservation', reservation('stayover'), adapter)
+    await call(
+      'hospitality_core.checkIn',
+      {
+        stayId: 'stayover:stay',
+        roomId: '101',
+        assignmentId: 'stayover:assignment',
+        at: '2026-09-01T14:05:00.000Z',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.createCleaningTask',
+      {
+        id: 'stayover-clean',
+        code: 'HK-STAYOVER',
+        roomId: '101',
+        stayId: 'stayover:stay',
+        taskType: 'daily_clean',
+      },
+      adapter,
+    )
+    await call('hospitality_core.startCleaningTask', { id: 'stayover-clean' }, adapter)
+    await call('hospitality_core.completeCleaningTask', { id: 'stayover-clean' }, adapter)
+
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'occupied',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality housekeeping: a room stays cleaning until its last active task finishes', async () => {
+  const adapter = await boot()
+  try {
+    await call('hospitality_core.setRoomStatus', { id: '101', status: 'dirty' }, adapter)
+    for (const id of ['clean-a', 'clean-b']) {
+      await call(
+        'hospitality_core.createCleaningTask',
+        { id, code: id.toUpperCase(), roomId: '101', taskType: 'daily_clean' },
+        adapter,
+      )
+      await call('hospitality_core.startCleaningTask', { id }, adapter)
+    }
+    await call('hospitality_core.completeCleaningTask', { id: 'clean-a' }, adapter)
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'cleaning',
+    )
+    await call('hospitality_core.completeCleaningTask', { id: 'clean-b' }, adapter)
+    assert.equal(
+      (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
+      'available',
+    )
+  } finally {
+    await adapter.close()
+  }
+})

@@ -1,5 +1,6 @@
 import { defineModule } from 'ketjs'
 import { functions } from './functions.ts'
+import { housekeeping } from './housekeeping.ts'
 import { operations } from './operations.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
@@ -17,7 +18,7 @@ export default defineModule({
   category: 'Khách sạn',
   models,
   relations,
-  functions: { ...functions, ...operations },
+  functions: { ...functions, ...operations, ...housekeeping },
   routes,
   menus,
   messages,
@@ -41,6 +42,9 @@ export {
   OCR_STATES,
   RESERVATION_STATES,
   STAY_STATES,
+  CLEANING_TASK_PRIORITIES,
+  CLEANING_TASK_STATES,
+  CLEANING_TASK_TYPES,
 } from './types.ts'
 export type {
   AccommodationType,
@@ -60,4 +64,7 @@ export type {
   OcrState,
   ReservationState,
   StayState,
+  CleaningTaskPriority,
+  CleaningTaskState,
+  CleaningTaskType,
 } from './types.ts'
