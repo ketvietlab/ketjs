@@ -5,7 +5,10 @@
 
 export const LAYER_ORDER = ['ket.reset', 'ket.theme', 'ket.app', 'ket.user'] as const
 
-export function tokensToCss(tokens: Record<string, string>, layer: (typeof LAYER_ORDER)[number] = 'ket.theme'): string {
+export function tokensToCss(
+  tokens: Record<string, string>,
+  layer: (typeof LAYER_ORDER)[number] = 'ket.theme',
+): string {
   const decls = Object.entries(tokens)
     .map(([k, v]) => `  --ket-${k.replace(/[^a-zA-Z0-9-]/g, '-')}: ${v};`)
     .join('\n')

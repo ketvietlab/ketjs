@@ -11,10 +11,15 @@ const host = countingHost()
 const container = host.root()
 const root = createRoot(host, container)
 
-const view = (items: Item[]) => html`<ul class="list">${each(items, (it) => (it as Item).id, (it) => {
-  const item = it as Item
-  return html`<li data-id=${item.id}><span>${item.name}</span><b>${item.qty}</b></li>`
-})}</ul>`
+const view = (items: Item[]) =>
+  html`<ul class="list">${each(
+    items,
+    (it) => (it as Item).id,
+    (it) => {
+      const item = it as Item
+      return html`<li data-id=${item.id}><span>${item.name}</span><b>${item.qty}</b></li>`
+    },
+  )}</ul>`
 
 const report = (label: string) => {
   const o = host.ops
@@ -28,7 +33,8 @@ const report = (label: string) => {
     `setAttr=${String(o.setAttribute).padStart(4)}`,
     `insert=${String(o.insert).padStart(5)}`,
     `move=${String(o.move).padStart(4)}`,
-    `remove=${String(o.remove).padStart(4)}`)
+    `remove=${String(o.remove).padStart(4)}`,
+  )
   host.reset()
 }
 
@@ -39,7 +45,7 @@ const mountMs = Number(process.hrtime.bigint() - t) / 1e6
 report(`mount ${N} rows`)
 
 // 1. change one field of one row
-items = items.map(i => (i.id === 500 ? { ...i, name: 'ĐÃ ĐỔI' } : i))
+items = items.map((i) => (i.id === 500 ? { ...i, name: 'ĐÃ ĐỔI' } : i))
 t = process.hrtime.bigint()
 root.render(view(items))
 const updateMs = Number(process.hrtime.bigint() - t) / 1e6
@@ -55,14 +61,16 @@ root.render(view(items))
 report('prepend 1 row')
 
 // 4. remove one row from the middle
-items = items.filter(i => i.id !== 500)
+items = items.filter((i) => i.id !== 500)
 root.render(view(items))
 report('remove 1 row from middle')
 
 // 5. swap two rows
 const swapped = [...items]
-const a = swapped[10] as Item, b = swapped[900] as Item
-swapped[10] = b; swapped[900] = a
+const a = swapped[10] as Item,
+  b = swapped[900] as Item
+swapped[10] = b
+swapped[900] = a
 root.render(view(swapped))
 report('swap 2 rows')
 

@@ -36,23 +36,31 @@ export async function createIdempotency(adapter: Adapter, o: { now?: () => strin
     async claim(key: string, fn: string, staleMs = 5 * 60_000): Promise<boolean> {
       const r = await adapter.run(
         `INSERT INTO ket_idem (key, fn, state, created_at) VALUES (${p(1)}, ${p(2)}, 'pending', ${p(3)}) ON CONFLICT DO NOTHING`,
-        [key, fn, now()])
+        [key, fn, now()],
+      )
       if (r.changes === 1) return true
 
       const cutoff = new Date(Date.parse(now()) - staleMs).toISOString()
       const taken = await adapter.run(
         `UPDATE ket_idem SET created_at = ${p(1)} WHERE key = ${p(2)} AND state = 'pending' AND created_at < ${p(3)}`,
-        [now(), key, cutoff])
+        [now(), key, cutoff],
+      )
       return taken.changes === 1
     },
     async read(key: string): Promise<IdemRecord | null> {
       const rows = await adapter.all(`SELECT state, result FROM ket_idem WHERE key = ${p(1)}`, [key])
       const r = rows[0]
       if (!r) return null
-      return { state: String(r.state) as IdemRecord['state'], result: r.result == null ? null : JSON.parse(String(r.result)) }
+      return {
+        state: String(r.state) as IdemRecord['state'],
+        result: r.result == null ? null : JSON.parse(String(r.result)),
+      }
     },
     async complete(key: string, result: unknown): Promise<void> {
-      await adapter.run(`UPDATE ket_idem SET state = 'done', result = ${p(1)} WHERE key = ${p(2)}`, [JSON.stringify(result), key])
+      await adapter.run(`UPDATE ket_idem SET state = 'done', result = ${p(1)} WHERE key = ${p(2)}`, [
+        JSON.stringify(result),
+        key,
+      ])
     },
     /** Drop a claim whose call then failed, so a retry is not locked out. */
     async release(key: string): Promise<void> {

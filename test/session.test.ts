@@ -1,6 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, callFn, createSessions, dbSessionStore, memorySessionStore, migrateOne, parseCookies, sqliteAdapter, SESSION_COOKIE } from 'ketjs'
+import {
+  bootApp,
+  callFn,
+  createSessions,
+  dbSessionStore,
+  memorySessionStore,
+  migrateOne,
+  parseCookies,
+  sqliteAdapter,
+  SESSION_COOKIE,
+} from 'ketjs'
 import type { SessionStore } from 'ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
@@ -15,11 +25,14 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 type Make = (now?: () => number) => Promise<{ store: SessionStore; close: () => Promise<void> }>
 const stores: Array<[string, Make]> = [
   ['memory', async (now) => ({ store: memorySessionStore(now ? { now } : {}), close: async () => {} })],
-  ['database', async (now) => {
-    const adapter = sqliteAdapter()
-    await adapter.open()
-    return { store: dbSessionStore(adapter, now ? { now } : {}), close: () => adapter.close() }
-  }],
+  [
+    'database',
+    async (now) => {
+      const adapter = sqliteAdapter()
+      await adapter.open()
+      return { store: dbSessionStore(adapter, now ? { now } : {}), close: () => adapter.close() }
+    },
+  ],
 ]
 
 for (const [name, make] of stores) {
@@ -78,7 +91,13 @@ const req = (cookie?: string) => ({ headers: cookie ? { cookie } : {} }) as neve
 test('cookie: a forged id is rejected without touching the store', async () => {
   const store = memorySessionStore()
   let reads = 0
-  const counting: SessionStore = { ...store, read: (id) => { reads++; return store.read(id) } }
+  const counting: SessionStore = {
+    ...store,
+    read: (id) => {
+      reads++
+      return store.read(id)
+    },
+  }
   const s = await createSessions({ store: counting, secret: 'k' })
   assert.equal(await s.of(req('ket_session=made-up.aaaa')), null)
   assert.equal(reads, 0, 'the signature is what makes a forged id cheap to reject')
@@ -91,8 +110,11 @@ test('cookie: a signature from another secret does not travel', async () => {
   const { cookie } = await podA.start({ userId: 'u1', companies: ['c1'] })
   const jar = cookie.split(';')[0]!
   assert.notEqual(await podA.of(req(jar)), null)
-  assert.equal(await podB.of(req(jar)), null,
-    'which is why KET_SECRET has to be the same on every pod, and why the banner says so')
+  assert.equal(
+    await podB.of(req(jar)),
+    null,
+    'which is why KET_SECRET has to be the same on every pod, and why the banner says so',
+  )
 })
 
 test('cookie: HttpOnly and SameSite are on, and the id is not the raw record id', async () => {
@@ -107,7 +129,13 @@ test('cookie: HttpOnly and SameSite are on, and the id is not the raw record id'
 
 test('cookie: a session refreshes while in use but never past its absolute limit', async () => {
   let clock = 1_000_000
-  const s = await createSessions({ store: memorySessionStore({ now: () => clock }), secret: 'k', idleTtlMs: 1000, absoluteTtlMs: 2500, now: () => clock })
+  const s = await createSessions({
+    store: memorySessionStore({ now: () => clock }),
+    secret: 'k',
+    idleTtlMs: 1000,
+    absoluteTtlMs: 2500,
+    now: () => clock,
+  })
   const { record, cookie } = await s.start({ userId: 'u1', companies: ['c1'] })
   const jar = cookie.split(';')[0]!
   clock += 900
@@ -128,18 +156,32 @@ test('session: the scope is exactly the shape D32 defined', async () => {
 
 test('session: writing to a company the user is not a member of is refused at login', async () => {
   const s = await createSessions({ store: memorySessionStore(), secret: 'k' })
-  await assert.rejects(() => s.start({ userId: 'u1', companies: ['c1'], company: 'c9' }),
-    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_WRITE_COMPANY_NOT_READABLE'); return true })
+  await assert.rejects(
+    () => s.start({ userId: 'u1', companies: ['c1'], company: 'c9' }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_WRITE_COMPANY_NOT_READABLE')
+      return true
+    },
+  )
 })
 
 test('session: a user with no company cannot start one at all', async () => {
   const s = await createSessions({ store: memorySessionStore(), secret: 'k' })
-  await assert.rejects(() => s.start({ userId: 'u1', companies: [] }),
-    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_SESSION_NO_COMPANY'); return true })
+  await assert.rejects(
+    () => s.start({ userId: 'u1', companies: [] }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_SESSION_NO_COMPANY')
+      return true
+    },
+  )
 })
 
 test('session: with no session, anonymous decides — a public storefront still needs a company', async () => {
-  const withAnon = await createSessions({ store: memorySessionStore(), secret: 'k', anonymous: { company: 'public' } })
+  const withAnon = await createSessions({
+    store: memorySessionStore(),
+    secret: 'k',
+    anonymous: { company: 'public' },
+  })
   assert.deepEqual(withAnon.scopeOf(null), { company: 'public' })
   const without = await createSessions({ store: memorySessionStore(), secret: 'k' })
   assert.equal(without.scopeOf(null), null)
@@ -158,13 +200,19 @@ test('login: the whole flow, and the header shim is gone rather than kept as a f
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
-  await callFn('user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin', defaultCompanyId: 'acme' }, o)
+  await callFn(
+    'user.createUser',
+    { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin', defaultCompanyId: 'acme' },
+    o,
+  )
   await callFn('user.grantCompany', { id: 'm1', userId: 'u1', companyId: 'acme' }, o)
 
-  const login = (password: string) => fetch(`${at}/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ login: 'admin', password }),
-  })
+  const login = (password: string) =>
+    fetch(`${at}/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'admin', password }),
+    })
 
   assert.equal((await fetch(`${at}/whoami`)).status, 401)
   assert.equal((await login('wrong')).status, 401)
@@ -174,7 +222,10 @@ test('login: the whole flow, and the header shim is gone rather than kept as a f
   const jar = (ok.headers.get('set-cookie') ?? '').split(';')[0]!
   assert.ok(jar.startsWith(`${SESSION_COOKIE}=`))
 
-  const me = await fetch(`${at}/whoami`, { headers: { cookie: jar } }).then(r => r.json()) as { userId: string; companies: string[] }
+  const me = (await fetch(`${at}/whoami`, { headers: { cookie: jar } }).then((r) => r.json())) as {
+    userId: string
+    companies: string[]
+  }
   assert.equal(me.userId, 'u1')
   assert.deepEqual(me.companies, ['acme'])
 
@@ -207,8 +258,26 @@ test('login: a session survives a restart when the store and the secret are shar
 test('store: the database store creates its own table, like every other store here', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
-  await migrateOne(adapter, { ket: '1', order: [], modules: {}, models: {}, joints: {}, fills: [], functions: {}, views: {}, regions: { required: [], provided: {} }, islands: {}, sections: {}, relations: {}, tokens: {}, assets: {}, styles: [], routes: {}, patches: [] } as never)
+  await migrateOne(adapter, {
+    ket: '1',
+    order: [],
+    modules: {},
+    models: {},
+    joints: {},
+    fills: [],
+    functions: {},
+    views: {},
+    regions: { required: [], provided: {} },
+    islands: {},
+    sections: {},
+    relations: {},
+    tokens: {},
+    assets: {},
+    styles: [],
+    routes: {},
+    patches: [],
+  } as never)
   await dbSessionStore(adapter).init()
-  assert.ok('ket_session' in await adapter.introspect())
+  assert.ok('ket_session' in (await adapter.introspect()))
   await adapter.close()
 })

@@ -51,9 +51,16 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
   for (const app of apps) {
     const mods = app.theme ? [...app.modules, app.theme] : [...app.modules]
     try {
-      manifests[app.name] = compose(mods, { appRequires: app.requires ?? [], headless: app.headless ?? false })
+      manifests[app.name] = compose(mods, {
+        appRequires: app.requires ?? [],
+        headless: app.headless ?? false,
+      })
     } catch (e) {
-      diag.add({ code: 'E_APP_COMPOSE_FAILED', module: app.name, message: `app "${app.name}" failed to compose: ${(e as Error).message}` })
+      diag.add({
+        code: 'E_APP_COMPOSE_FAILED',
+        module: app.name,
+        message: `app "${app.name}" failed to compose: ${(e as Error).message}`,
+      })
       continue
     }
     for (const m of mods) {
@@ -76,10 +83,14 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
 
     for (const [tname, table] of Object.entries(schema.tables)) {
       const existing = slot.schema.tables[tname]
-      if (!existing) { slot.schema.tables[tname] = structuredClone(table); continue }
+      if (!existing) {
+        slot.schema.tables[tname] = structuredClone(table)
+        continue
+      }
       if (existing.model !== table.model) {
         diag.add({
-          code: 'E_DATASTORE_MODEL_CLASH', module: app.name,
+          code: 'E_DATASTORE_MODEL_CLASH',
+          module: app.name,
           message: `datastore "${store}": table "${tname}" is "${existing.model}" in another app but "${table.model}" in "${app.name}"`,
           hint: 'rename one of the models, or bind the apps to different datastores',
         })
@@ -87,10 +98,14 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
       }
       for (const [cname, col] of Object.entries(table.columns)) {
         const before = existing.columns[cname]
-        if (!before) { existing.columns[cname] = { ...col }; continue }
+        if (!before) {
+          existing.columns[cname] = { ...col }
+          continue
+        }
         if (before.base !== col.base || before.by !== col.by) {
           diag.add({
-            code: 'E_DATASTORE_COLUMN_CLASH', module: app.name,
+            code: 'E_DATASTORE_COLUMN_CLASH',
+            module: app.name,
             message: `datastore "${store}": column "${tname}.${cname}" is ${before.base} (from ${before.by}) elsewhere but ${col.base} (from ${col.by}) in "${app.name}"`,
             hint: 'both apps must install the same version of the contributing module',
           })
@@ -114,11 +129,15 @@ export function explainWorkspace(ws: Workspace): string {
   const lines: string[] = []
   lines.push('apps:')
   for (const [name, m] of Object.entries(ws.apps)) {
-    lines.push(`  ${name.padEnd(14)} modules=${m.order.length}  fns=${Object.keys(m.functions).length}  regions=${m.regions.required.length}`)
+    lines.push(
+      `  ${name.padEnd(14)} modules=${m.order.length}  fns=${Object.keys(m.functions).length}  regions=${m.regions.required.length}`,
+    )
   }
   lines.push('datastores:')
   for (const [name, ds] of Object.entries(ws.datastores)) {
-    lines.push(`  ${name.padEnd(14)} tables=${Object.keys(ds.schema.tables).length}  shared by: ${ds.apps.join(', ')}`)
+    lines.push(
+      `  ${name.padEnd(14)} tables=${Object.keys(ds.schema.tables).length}  shared by: ${ds.apps.join(', ')}`,
+    )
   }
   lines.push(`shared modules: ${ws.shared.join(', ') || '(none)'}`)
   for (const [app, mods] of Object.entries(ws.soloed)) lines.push(`  only in ${app}: ${mods.join(', ')}`)

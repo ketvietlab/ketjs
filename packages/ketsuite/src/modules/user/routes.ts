@@ -34,7 +34,9 @@ const body = async (req: Req): Promise<Record<string, string>> => {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
     return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, String(v ?? '')]))
-  } catch { return {} }
+  } catch {
+    return {}
+  }
 }
 
 const wantsHtml = (req: Req): boolean => String(req.headers.accept ?? '').includes('text/html')
@@ -51,12 +53,16 @@ const wantsHtml = (req: Req): boolean => String(req.headers.accept ?? '').includ
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
   if (!origin) return false
-  try { return new URL(origin).host !== String(req.headers.host ?? '') } catch { return true }
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
 }
 
 /** Where to land after signing in. Only ever a path on this site. */
 const safeNext = (value: string | undefined): string =>
-  value && value.startsWith('/') && !value.startsWith('//') ? value : '/admin'
+  value?.startsWith('/') && !value.startsWith('//') ? value : '/admin'
 
 const seeOther = (to: string, cookie?: string) =>
   withHeaders(text('', { status: 303 }), { location: to, ...(cookie ? { 'set-cookie': cookie } : {}) })
@@ -76,18 +82,19 @@ export const routes: Record<string, RouteEntry> = {
       const locales = Object.keys(ctx.manifest.messages ?? {})
       const styles = await ctx.styles(req)
 
-      const form = (o: { next?: string; failed?: boolean }) => page({
-        status: o.failed ? 401 : 200,
-        body: ctx.document({
-          lang: locale,
-          title: _('user.login.title'),
-          // Every installed module's stylesheets, exactly as the backend screens
-          // get them. Passing nothing here shipped a sign-in page with no CSS at
-          // all: the markup was right and the page looked broken.
-          head: styles,
-          body: loginScreen(_, { ...o, locales, locale }),
-        }),
-      })
+      const form = (o: { next?: string; failed?: boolean }) =>
+        page({
+          status: o.failed ? 401 : 200,
+          body: ctx.document({
+            lang: locale,
+            title: _('user.login.title'),
+            // Every installed module's stylesheets, exactly as the backend screens
+            // get them. Passing nothing here shipped a sign-in page with no CSS at
+            // all: the markup was right and the page looked broken.
+            head: styles,
+            body: loginScreen(_, { ...o, locales, locale }),
+          }),
+        })
 
       if (req.method === 'GET') {
         // Already signed in: sending someone to a login form they do not need is
@@ -103,8 +110,12 @@ export const routes: Record<string, RouteEntry> = {
       const { login, password, next } = await body(req)
       const html = wantsHtml(req)
 
-      const verdict = await ctx.call('user.authenticate', { login: login ?? '', password: password ?? '' },
-        url, req) as Verdict
+      const verdict = (await ctx.call(
+        'user.authenticate',
+        { login: login ?? '', password: password ?? '' },
+        url,
+        req,
+      )) as Verdict
 
       // One answer for a wrong password, an unknown login and an account with no
       // company: three different reasons, and telling them apart is how someone

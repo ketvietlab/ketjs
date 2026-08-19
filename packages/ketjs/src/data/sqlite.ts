@@ -14,35 +14,77 @@ const bind = (v: unknown): unknown => {
 }
 
 const SQL: Record<FieldBase, string> = {
-  id: 'TEXT PRIMARY KEY', text: 'TEXT', int: 'INTEGER', float: 'REAL', decimal: 'TEXT',
-  bool: 'INTEGER', json: 'TEXT', datetime: 'TEXT', ref: 'TEXT',
+  id: 'TEXT PRIMARY KEY',
+  text: 'TEXT',
+  int: 'INTEGER',
+  float: 'REAL',
+  decimal: 'TEXT',
+  bool: 'INTEGER',
+  json: 'TEXT',
+  datetime: 'TEXT',
+  ref: 'TEXT',
 }
 
 export function sqliteAdapter(path = ':memory:'): Adapter {
   let db: DatabaseSync | null = null
-  const need = (): DatabaseSync => { if (!db) throw new Error('adapter is not open()'); return db }
+  const need = (): DatabaseSync => {
+    if (!db) throw new Error('adapter is not open()')
+    return db
+  }
 
   const a: Adapter = {
     name: 'sqlite',
-    async open() { db = new DatabaseSync(path); db.exec('PRAGMA journal_mode = WAL'); db.exec('PRAGMA foreign_keys = ON') },
-    async close() { db?.close(); db = null },
-    async exec(sql) { need().exec(sql) },
-    async all(sql, params = []) { return need().prepare(sql).all(...(params.map(bind) as never[])) as Row[] },
-    async run(sql, params = []) { const r = need().prepare(sql).run(...(params.map(bind) as never[])); return { changes: Number(r.changes) } },
+    async open() {
+      db = new DatabaseSync(path)
+      db.exec('PRAGMA journal_mode = WAL')
+      db.exec('PRAGMA foreign_keys = ON')
+    },
+    async close() {
+      db?.close()
+      db = null
+    },
+    async exec(sql) {
+      need().exec(sql)
+    },
+    async all(sql, params = []) {
+      return need()
+        .prepare(sql)
+        .all(...(params.map(bind) as never[])) as Row[]
+    },
+    async run(sql, params = []) {
+      const r = need()
+        .prepare(sql)
+        .run(...(params.map(bind) as never[]))
+      return { changes: Number(r.changes) }
+    },
     async tx(fn) {
       const d = need()
       d.exec('BEGIN')
-      try { const r = await fn(a); d.exec('COMMIT'); return r }
-      catch (e) { d.exec('ROLLBACK'); throw e }
+      try {
+        const r = await fn(a)
+        d.exec('COMMIT')
+        return r
+      } catch (e) {
+        d.exec('ROLLBACK')
+        throw e
+      }
     },
-    quoteIdent(n) { return `"${String(n).replace(/"/g, '""')}"` },
-    columnSql(c) { return SQL[c.base] ?? 'TEXT' },
+    quoteIdent(n) {
+      return `"${String(n).replace(/"/g, '""')}"`
+    },
+    columnSql(c) {
+      return SQL[c.base] ?? 'TEXT'
+    },
     async introspect() {
       const tables: Record<string, Record<string, string>> = {}
-      const names = need().prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`).all() as Array<{ name: string }>
+      const names = need()
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+        .all() as Array<{ name: string }>
       for (const t of names) {
         tables[t.name] = {}
-        const cols = need().prepare(`PRAGMA table_info(${a.quoteIdent(t.name)})`).all() as Array<{ name: string; type: string }>
+        const cols = need()
+          .prepare(`PRAGMA table_info(${a.quoteIdent(t.name)})`)
+          .all() as Array<{ name: string; type: string }>
         for (const c of cols) tables[t.name]![c.name] = c.type
       }
       return tables

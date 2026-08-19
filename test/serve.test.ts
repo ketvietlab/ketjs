@@ -1,6 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, defineApp, defineModule, readConfig, sqliteAdapter, createAppRegistry, compose, from, eq, json } from 'ketjs'
+import {
+  bootApp,
+  defineApp,
+  defineModule,
+  readConfig,
+  sqliteAdapter,
+  createAppRegistry,
+  compose,
+  from,
+  eq,
+  json,
+} from 'ketjs'
 import type { Ctx } from 'ketjs'
 import backend from 'ketsuite/backend'
 import { scaffold } from '../packages/ketjs/src/scaffold/index.ts'
@@ -24,8 +35,13 @@ test('config: sensible defaults, so a bare `ket serve` works with nothing set', 
 
 test('config: every knob is settable, and DATABASE_URL is what switches the engine', () => {
   const c = readConfig({
-    PORT: '8080', DATABASE_URL: 'postgres://x/y', KET_MIGRATE: '0', KET_AUTO_INSTALL: '0',
-    KET_APPS: 'website, product', KET_LOCALE: 'en', KET_COMPANY: 'acme',
+    PORT: '8080',
+    DATABASE_URL: 'postgres://x/y',
+    KET_MIGRATE: '0',
+    KET_AUTO_INSTALL: '0',
+    KET_APPS: 'website, product',
+    KET_LOCALE: 'en',
+    KET_COMPANY: 'acme',
   })
   assert.equal(c.port, 8080)
   assert.equal(c.databaseUrl, 'postgres://x/y')
@@ -44,10 +60,16 @@ test("config: an app's defaults lose to the environment, and win over the framew
 // ── the boot sequence itself ─────────────────────────────────────────────────
 
 const notes = defineModule({
-  name: 'notes', app: true, title: 'Notes',
+  name: 'notes',
+  app: true,
+  title: 'Notes',
   models: { Note: { scope: 'company', fields: { id: 'id', title: 'text' } } },
   functions: {
-    list: { agent: true, effects: ['read:notes.Note'], handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('notes.Note'))) },
+    list: {
+      agent: true,
+      effects: ['read:notes.Note'],
+      handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('notes.Note'))),
+    },
     byPath: {
       input: { path: 'text' },
       effects: ['read:notes.Note'],
@@ -65,7 +87,9 @@ const memory = { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }
 
 test('boot: one declaration produces a running server, framework routes included', async () => {
   const app = defineApp({
-    name: 'notesapp', modules: [notes], headless: true,
+    name: 'notesapp',
+    modules: [notes],
+    headless: true,
     serve: {
       bootstrap: ['notes'],
       routes: (ctx) => ({ '/notes': async (url, req) => json(await ctx.call('notes.list', {}, url, req)) }),
@@ -74,15 +98,26 @@ test('boot: one declaration produces a running server, framework routes included
   const booted = await bootApp(app, { env: memory, port: 0 })
   const at = `http://127.0.0.1:${booted.port}`
 
-  const health = await fetch(`${at}/_ket/health`).then(r => r.json()) as { ok: boolean; app: string; apps: string[] }
+  const health = (await fetch(`${at}/_ket/health`).then((r) => r.json())) as {
+    ok: boolean
+    app: string
+    apps: string[]
+  }
   assert.equal(health.ok, true)
   assert.equal(health.app, 'notesapp')
   assert.deepEqual(health.apps, ['notes'], 'the bootstrap set was installed on an empty database')
 
-  const agent = await fetch(`${at}/_ket/agent`).then(r => r.json()) as { tools: Array<{ name: string }> }
-  assert.ok(agent.tools.some(t => t.name.startsWith('notes__')), 'the agent surface is mounted without the app asking')
+  const agent = (await fetch(`${at}/_ket/agent`).then((r) => r.json())) as { tools: Array<{ name: string }> }
+  assert.ok(
+    agent.tools.some((t) => t.name.startsWith('notes__')),
+    'the agent surface is mounted without the app asking',
+  )
 
-  assert.deepEqual(await fetch(`${at}/notes`).then(r => r.json()), [], "the app's own route is served alongside")
+  assert.deepEqual(
+    await fetch(`${at}/notes`).then((r) => r.json()),
+    [],
+    "the app's own route is served alongside",
+  )
 
   const banner = await booted.banner()
   assert.match(banner, /notesapp is running/)
@@ -99,20 +134,31 @@ test('boot: the banner says when auto-install was held back, rather than looking
 
 test('boot: a page resolver naming a function nobody declares is refused at boot, not at the first request', async () => {
   const app = defineApp({
-    name: 'broken', modules: [notes], theme: undefined,
+    name: 'broken',
+    modules: [notes],
+    theme: undefined,
     serve: { pages: { resolve: 'website.getPageByPath' } },
   })
-  await assert.rejects(() => bootApp(app, { env: memory, port: 0 }), (e: unknown) => {
-    assert.equal((e as { code: string }).code, 'E_PAGE_RESOLVER_MISSING')
-    return true
-  })
+  await assert.rejects(
+    () => bootApp(app, { env: memory, port: 0 }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_PAGE_RESOLVER_MISSING')
+      return true
+    },
+  )
 })
 
 test('boot: a headless app cannot claim to resolve pages', () => {
-  assert.throws(() => defineApp({
-    name: 'contradiction', modules: [notes], headless: true,
-    serve: { pages: { resolve: 'notes.byPath' } },
-  }), /headless but resolves pages/)
+  assert.throws(
+    () =>
+      defineApp({
+        name: 'contradiction',
+        modules: [notes],
+        headless: true,
+        serve: { pages: { resolve: 'notes.byPath' } },
+      }),
+    /headless but resolves pages/,
+  )
 })
 
 // ── the install boundary ─────────────────────────────────────────────────────
@@ -129,11 +175,14 @@ const registry = async (mods: Parameters<typeof compose>[0], o: { autoInstall?: 
 
 test("install: 'never' is a boundary the module drew — it cannot be installed on its own", async () => {
   const { db, apps } = await registry([notes, machinery])
-  await assert.rejects(() => apps.install('machinery'), (e: unknown) => {
-    assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLABLE')
-    assert.match((e as Error).message, /install: 'never'/)
-    return true
-  })
+  await assert.rejects(
+    () => apps.install('machinery'),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLABLE')
+      assert.match((e as Error).message, /install: 'never'/)
+      return true
+    },
+  )
   await db.close()
 })
 
@@ -181,7 +230,13 @@ test('ket new: writes an app whose workspace composes', async () => {
   scaffold('shop', dir)
   assert.ok(existsSync(join(dir, 'ket.workspace.ts')))
   assert.ok(existsSync(join(dir, 'modules/shop.ts')))
-  assert.match(readFileSync(join(dir, 'package.json'), 'utf8'), /"start": "ket serve"/)
+  assert.ok(existsSync(join(dir, 'tsconfig.json')))
+  assert.ok(existsSync(join(dir, 'biome.json')))
+  assert.ok(existsSync(join(dir, 'tools/dev.mjs')))
+  assert.match(
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    /ket serve --workspace dist\/ket\.workspace\.js/,
+  )
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
@@ -201,10 +256,13 @@ const core = defineModule({ name: 'core', app: true, removable: false })
 test('uninstall: a module that declares removable: false is refused, not merely discouraged', async () => {
   const { db, apps } = await registry([core])
   await apps.install('core')
-  await assert.rejects(() => apps.uninstall('core'), (e: unknown) => {
-    assert.equal((e as { code: string }).code, 'E_APP_NOT_REMOVABLE')
-    return true
-  })
+  await assert.rejects(
+    () => apps.uninstall('core'),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_APP_NOT_REMOVABLE')
+      return true
+    },
+  )
   assert.ok((await apps.enabled()).has('core'))
   await db.close()
 })

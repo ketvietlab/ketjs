@@ -14,7 +14,11 @@ export default defineModule({
   title: 'Đối tác',
   summary: 'Khách hàng, nhà cung cấp, liên hệ và địa chỉ — dùng chung toàn hệ thống.',
   category: 'Bán hàng',
-  models, relations, views, functions, messages,
+  models,
+  relations,
+  views,
+  functions,
+  messages,
 })
 
 export { PARTNER_KINDS, PARTNER_ROLES, ADDRESS_USES } from './types.ts'

@@ -11,7 +11,10 @@ export default defineModule({
   title: 'Đơn vị tính',
   summary: 'Nhóm đơn vị và quy đổi giữa chúng.',
   category: 'Bán hàng',
-  models, relations, functions, messages,
+  models,
+  relations,
+  functions,
+  messages,
 })
 
 export { convertQty, roundTo, compareQty, isZero, UomError } from './convert.ts'

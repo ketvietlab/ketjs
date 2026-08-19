@@ -1,8 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  callFn, compose, defineModule, eq, from, migrateOne, registerFunctions,
-  restrictManifest, sqliteAdapter, translator,
+  callFn,
+  compose,
+  defineModule,
+  migrateOne,
+  registerFunctions,
+  restrictManifest,
+  sqliteAdapter,
+  translator,
 } from 'ketjs'
 import type { Adapter, KetError, Row } from 'ketjs'
 import { product, uom } from 'ketsuite'
@@ -62,7 +68,7 @@ test('product: a template carries its variants, on request', async () => {
   assert.equal(bare[0]!.variants, undefined, 'nothing arrives unless it was asked for')
 
   const full = (await call('product.listTemplates', { withVariants: true }, db)).value as Row[]
-  assert.deepEqual((full[0]!.variants as Row[]).map(v => v.sku).sort(), ['AO-M', 'AO-S'])
+  assert.deepEqual((full[0]!.variants as Row[]).map((v) => v.sku).sort(), ['AO-M', 'AO-S'])
   await db.close()
 })
 
@@ -80,7 +86,10 @@ test('product: master data is shared, so another company sees the same catalogue
   const db = await boot()
   await call('product.saveTemplate', { id: 'tpl', name: 'Cà phê', type: 'goods' }, db, SCOPE)
   const seenByOther = (await call('product.listTemplates', {}, db, OTHER)).value as Row[]
-  assert.deepEqual(seenByOther.map(t => t.name), ['Cà phê'])
+  assert.deepEqual(
+    seenByOther.map((t) => t.name),
+    ['Cà phê'],
+  )
 
   const cols = (await db.introspect())['product_template']!
   assert.equal('companyId' in cols, false, 'shared data carries no company column at all')
@@ -94,8 +103,8 @@ test('product: categories nest, and a category cannot parent itself', async () =
   await call('product.saveCategory', { id: 'cold', name: 'Lạnh', parentId: 'root' }, db)
 
   const cats = (await call('product.listCategories', {}, db)).value as Row[]
-  const root = cats.find(c => c.id === 'root')!
-  assert.deepEqual((root.children as Row[]).map(c => c.name).sort(), ['Lạnh', 'Nóng'])
+  const root = cats.find((c) => c.id === 'root')!
+  assert.deepEqual((root.children as Row[]).map((c) => c.name).sort(), ['Lạnh', 'Nóng'])
 
   const loop = await call('product.saveCategory', { id: 'root', name: 'Đồ uống', parentId: 'root' }, db)
   assert.equal((loop.value as { ok: boolean }).ok, false)
@@ -130,18 +139,33 @@ test('product: a variant is defined by attribute values through an explicit join
   await call('product.saveTemplate', { id: 'tpl', name: 'Áo', type: 'goods' }, db)
   await call('product.saveVariant', { id: 'v1', templateId: 'tpl', sku: 'AO-DO-M' }, db)
   await db.run('INSERT INTO product_attribute (id, name) VALUES (?, ?)', ['a-color', 'Màu'])
-  await db.run('INSERT INTO product_attribute_value (id, "attributeId", name) VALUES (?, ?, ?)', ['av-red', 'a-color', 'Đỏ'])
-  await db.run('INSERT INTO product_product_value (id, "productId", "attributeValueId") VALUES (?, ?, ?)', ['pv1', 'v1', 'av-red'])
+  await db.run('INSERT INTO product_attribute_value (id, "attributeId", name) VALUES (?, ?, ?)', [
+    'av-red',
+    'a-color',
+    'Đỏ',
+  ])
+  await db.run('INSERT INTO product_product_value (id, "productId", "attributeValueId") VALUES (?, ?, ?)', [
+    'pv1',
+    'v1',
+    'av-red',
+  ])
 
-  assert.deepEqual(manifest.relations['product.Product']!.values,
-    { kind: 'hasMany', target: 'product.ProductValue', by: 'productId', declaredBy: 'product' })
+  assert.deepEqual(manifest.relations['product.Product']!.values, {
+    kind: 'hasMany',
+    target: 'product.ProductValue',
+    by: 'productId',
+    declaredBy: 'product',
+  })
   const rows = await db.all('SELECT * FROM product_product_value', [])
   assert.equal(rows.length, 1, 'the join is a model you can see, query and migrate')
   await db.close()
 })
 
 test('product: the type labels are translated, the data is not', () => {
-  for (const [locale, goods] of [['vi', 'Hàng hoá'], ['en', 'Goods']] as const) {
+  for (const [locale, goods] of [
+    ['vi', 'Hàng hoá'],
+    ['en', 'Goods'],
+  ] as const) {
     assert.equal(translator(manifest, locale)('product.type.goods'), goods)
   }
   // The stored value stays a stable key; only its label moves between languages.
@@ -154,7 +178,11 @@ test('product: switching the app off takes its functions with it, not its rows',
   const off = restrictManifest(manifest, new Set<string>())
   await assert.rejects(
     () => callFn('product.listTemplates', {}, { adapter: db, manifest: off, scope: SCOPE }),
-    (e: unknown) => { assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLED'); return true })
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLED')
+      return true
+    },
+  )
   assert.equal((await db.all('SELECT * FROM product_template', [])).length, 1)
   await db.close()
 })
@@ -164,7 +192,13 @@ test('product: a required self-reference would have been refused', () => {
     name: 'broken',
     models: { Node: { scope: 'shared', fields: { id: 'id', parentId: 'ref:broken.Node' } } },
   })
-  const e = (() => { try { compose([broken], { headless: true }) } catch (err) { return err as KetError } })()!
+  const e = (() => {
+    try {
+      compose([broken], { headless: true })
+    } catch (err) {
+      return err as KetError
+    }
+  })()!
   assert.match(e.message, /E_SELF_REF_REQUIRED/)
   // which is why product.Category declares its parent optional
   assert.equal(manifest.models['product.Category']!.fields.parentId!.optional, true)
@@ -173,14 +207,21 @@ test('product: a required self-reference would have been refused', () => {
 test('product: a page of templates, and a count that filters the same way', async () => {
   const db = await boot()
   for (let i = 0; i < 7; i++) {
-    await call('product.saveTemplate', { id: `t${i}`, name: `${i % 2 ? 'Xoài' : 'Nhãn'} ${String(i).padStart(2, '0')}`, type: 'goods' }, db)
+    await call(
+      'product.saveTemplate',
+      { id: `t${i}`, name: `${i % 2 ? 'Xoài' : 'Nhãn'} ${String(i).padStart(2, '0')}`, type: 'goods' },
+      db,
+    )
   }
   const page = async (o: Record<string, unknown>) =>
-    ((await call('product.listTemplates', o, db)).value as Array<{ name: string }>).map(r => r.name)
+    ((await call('product.listTemplates', o, db)).value as Array<{ name: string }>).map((r) => r.name)
 
   assert.deepEqual(await page({ limit: 3 }), ['Nhãn 00', 'Nhãn 02', 'Nhãn 04'], 'ordered by name, first page')
-  assert.deepEqual(await page({ limit: 3, offset: 3 }), ['Nhãn 06', 'Xoài 01', 'Xoài 03'],
-    'the second page starts where the first stopped — no row shown twice, none skipped')
+  assert.deepEqual(
+    await page({ limit: 3, offset: 3 }),
+    ['Nhãn 06', 'Xoài 01', 'Xoài 03'],
+    'the second page starts where the first stopped — no row shown twice, none skipped',
+  )
   assert.deepEqual(await page({ limit: 3, offset: 6 }), ['Xoài 05'], 'the last page is short')
 
   const total = ((await call('product.countTemplates', {}, db)).value as { count: number }).count
@@ -188,5 +229,8 @@ test('product: a page of templates, and a count that filters the same way', asyn
 
   // The bug this guards: a count that filters differently from the list it counts.
   assert.deepEqual(await page({ search: 'Xoài' }), ['Xoài 01', 'Xoài 03', 'Xoài 05'])
-  assert.equal(((await call('product.countTemplates', { search: 'Xoài' }, db)).value as { count: number }).count, 3)
+  assert.equal(
+    ((await call('product.countTemplates', { search: 'Xoài' }, db)).value as { count: number }).count,
+    3,
+  )
 })

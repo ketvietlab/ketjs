@@ -15,7 +15,18 @@ const setup = async () => {
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme JSC' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
-  await callFn('user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Nguyễn Quản Trị', defaultCompanyId: 'acme', superuser: true }, o)
+  await callFn(
+    'user.createUser',
+    {
+      id: 'u1',
+      login: 'admin',
+      password: 'correct horse',
+      name: 'Nguyễn Quản Trị',
+      defaultCompanyId: 'acme',
+      superuser: true,
+    },
+    o,
+  )
   await callFn('user.grantCompany', { id: 'm1', userId: 'u1', companyId: 'acme' }, o)
   const at = `http://127.0.0.1:${b.port}`
   return { b, at }
@@ -23,7 +34,8 @@ const setup = async () => {
 const HTML = { accept: 'text/html' }
 const form = (at: string, fields: Record<string, string>, extra: Record<string, string> = {}) =>
   fetch(`${at}/login`, {
-    method: 'POST', redirect: 'manual',
+    method: 'POST',
+    redirect: 'manual',
     headers: { 'content-type': 'application/x-www-form-urlencoded', ...HTML, ...extra },
     body: new URLSearchParams(fields).toString(),
   })
@@ -42,11 +54,12 @@ test('login: something that is not a browser still gets JSON, not a page', async
   const { b, at } = await setup()
   assert.equal((await fetch(`${at}/login`)).status, 405, 'GET with no Accept: text/html')
   const r = await fetch(`${at}/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ login: 'admin', password: 'correct horse' }),
   })
   assert.equal(r.status, 200)
-  assert.equal((await r.json() as { ok: boolean }).ok, true)
+  assert.equal(((await r.json()) as { ok: boolean }).ok, true)
   await b.close()
 })
 
@@ -79,7 +92,11 @@ test('login: a wrong password re-renders the form with the reason', async () => 
 test('login: a cross-site POST is refused, because it would log you in as someone else', async () => {
   const { b, at } = await setup()
   // SameSite protects the cookie once it exists, not the request that creates it.
-  const r = await form(at, { login: 'admin', password: 'correct horse' }, { origin: 'https://ke-tan-cong.com' })
+  const r = await form(
+    at,
+    { login: 'admin', password: 'correct horse' },
+    { origin: 'https://ke-tan-cong.com' },
+  )
   assert.equal(r.status, 403)
   assert.equal(r.headers.get('set-cookie'), null)
   await b.close()
@@ -87,7 +104,9 @@ test('login: a cross-site POST is refused, because it would log you in as someon
 
 test('login: already signed in, the form is skipped rather than shown twice', async () => {
   const { b, at } = await setup()
-  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers.get('set-cookie')!.split(';')[0]!
+  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers
+    .get('set-cookie')!
+    .split(';')[0]!
   const r = await fetch(`${at}/login`, { headers: { ...HTML, cookie: jar }, redirect: 'manual' })
   assert.equal(r.status, 303)
   await b.close()
@@ -109,11 +128,15 @@ test('backend: a fetch() gets a status, because a redirect to HTML answers nothi
 
 test('backend: signed in, the sidebar says who and offers the way out', async () => {
   const { b, at } = await setup()
-  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers.get('set-cookie')!.split(';')[0]!
+  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers
+    .get('set-cookie')!
+    .split(';')[0]!
   const html = await (await fetch(`${at}/admin`, { headers: { ...HTML, cookie: jar } })).text()
   // At the foot of the sidebar, not in the topbar: it competed there with the
   // title and the search for the one line that changes on every screen.
-  const foot = html.slice(html.indexOf('data-ui="sidebar-foot"'), html.indexOf('</aside>')).replace(/<!--[^>]*-->/g, '')
+  const foot = html
+    .slice(html.indexOf('data-ui="sidebar-foot"'), html.indexOf('</aside>'))
+    .replace(/<!--[^>]*-->/g, '')
   assert.match(foot, /data-ui="viewer-name">Nguyễn Quản Trị/)
   assert.match(foot, /data-ui="signout"[^>]*action="\/logout"/)
   await b.close()
@@ -121,12 +144,22 @@ test('backend: signed in, the sidebar says who and offers the way out', async ()
 
 test('logout: a form post clears the cookie and returns to the sign-in page', async () => {
   const { b, at } = await setup()
-  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers.get('set-cookie')!.split(';')[0]!
-  const out = await fetch(`${at}/logout`, { method: 'POST', headers: { ...HTML, cookie: jar }, redirect: 'manual' })
+  const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers
+    .get('set-cookie')!
+    .split(';')[0]!
+  const out = await fetch(`${at}/logout`, {
+    method: 'POST',
+    headers: { ...HTML, cookie: jar },
+    redirect: 'manual',
+  })
   assert.equal(out.status, 303)
   assert.equal(out.headers.get('location'), '/login')
   assert.match(out.headers.get('set-cookie') ?? '', /Max-Age=0/)
-  assert.equal((await fetch(`${at}/admin`, { headers: { cookie: jar } })).status, 401, 'and the session is really gone')
+  assert.equal(
+    (await fetch(`${at}/admin`, { headers: { cookie: jar } })).status,
+    401,
+    'and the session is really gone',
+  )
   await b.close()
 })
 
@@ -144,13 +177,16 @@ test('login: the page carries the stylesheets, like every other screen', async (
   const html = await (await fetch(`${at}/login`, { headers: HTML })).text()
   const links = html.match(/<link[^>]*rel="stylesheet"[^>]*>/g) ?? []
   assert.ok(links.length > 0, 'no stylesheet on the sign-in page')
-  assert.ok(links.some(l => l.includes('/_ket/asset/backend/')), 'and they come from the installed modules')
+  assert.ok(
+    links.some((l) => l.includes('/_ket/asset/backend/')),
+    'and they come from the installed modules',
+  )
   await b.close()
 })
 
 test('catalogue: the new states are there for the design team to draw', async () => {
   const { CASES } = await import('ketsuite/backend')
-  const ids = CASES.map(c => c.id)
+  const ids = CASES.map((c) => c.id)
   for (const id of ['login', 'login-failed', 'login-next', 'viewer-one', 'viewer-many', 'viewer-long']) {
     assert.ok(ids.includes(id), `missing catalogue case: ${id}`)
   }
