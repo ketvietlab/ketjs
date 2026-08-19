@@ -135,3 +135,6 @@ Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
 40 dòng, chuỗi tiếng Việt dài, disabled action, empty/error state và dark system
 preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
+
+Ảnh QA dùng trong PR được lưu tại `design/screenshots/`. Chúng là bằng chứng kiểm tra
+ở thời điểm bàn giao, không thay thế token, CSS hoặc `data-ui` contract làm đặc tả.
