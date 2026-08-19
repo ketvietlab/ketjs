@@ -32,6 +32,8 @@ export { default as purchase } from './modules/purchase/index.ts'
 export { default as purchaseBackend } from './modules/purchase_backend/index.ts'
 export { default as sale } from './modules/sale/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
+export { default as pos } from './modules/pos/index.ts'
+export { default as posBackend } from './modules/pos_backend/index.ts'
 export {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
@@ -43,6 +45,7 @@ export {
 } from './modules/account/functions.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
+export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './modules/pos/functions.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as storage } from './modules/storage/index.ts'
