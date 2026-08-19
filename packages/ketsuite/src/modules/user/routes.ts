@@ -24,7 +24,8 @@ const needSessions = () => text('this deployment has not turned sessions on', { 
 
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
   '/login': (ctx) => async (url, req) => {
-    if (!ctx.sessions) return needSessions()
+    const sessions = await ctx.sessionsOf(url, req)
+    if (!sessions) return needSessions()
     if (req.method !== 'POST') return text('POST a JSON body with login and password', { status: 405 })
     const { login, password } = await body(req)
 
@@ -42,7 +43,7 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
     const companies = verdict.companies ?? []
     if (!companies.length) return json({ ok: false }, { status: 401 })
 
-    const { record, cookie } = await ctx.sessions.start({
+    const { record, cookie } = await sessions.start({
       userId: verdict.userId,
       companies,
       company: verdict.defaultCompanyId ?? null,
@@ -53,17 +54,19 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
     )
   },
 
-  '/logout': (ctx) => async (_url, req) => {
-    if (!ctx.sessions) return needSessions()
-    await ctx.sessions.end(req)
+  '/logout': (ctx) => async (url, req) => {
+    const sessions = await ctx.sessionsOf(url, req)
+    if (!sessions) return needSessions()
+    await sessions.end(req)
     // Clearing the cookie as well as the record: leaving the browser holding an id
     // that no longer resolves means every later request pays a lookup to learn so.
-    return withHeaders(json({ ok: true }), { 'set-cookie': ctx.sessions.clearCookie() })
+    return withHeaders(json({ ok: true }), { 'set-cookie': sessions.clearCookie() })
   },
 
-  '/whoami': (ctx) => async (_url, req) => {
-    if (!ctx.sessions) return needSessions()
-    const record = await ctx.sessions.of(req)
+  '/whoami': (ctx) => async (url, req) => {
+    const sessions = await ctx.sessionsOf(url, req)
+    if (!sessions) return needSessions()
+    const record = await sessions.of(req)
     if (!record) return json({ ok: false }, { status: 401 })
     return json({ ok: true, userId: record.userId, company: record.company, companies: record.companies })
   },

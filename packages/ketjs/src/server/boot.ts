@@ -76,8 +76,11 @@ export type ServeContext = {
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Installed modules' stylesheets for this tenant, in dependency order. */
   styles: (req: IncomingMessage) => Promise<Html>
-  /** Null when the app has not turned sessions on. */
-  sessions: Sessions | null
+  /**
+   * This request's sessions. A function because with subdomain tenants they live
+   * in that tenant's database — one per tenant, not one per deployment.
+   */
+  sessionsOf: (url: URL, req: IncomingMessage) => Promise<Sessions | null>
 }
 
 
@@ -187,6 +190,36 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    * same interface rather than a second code path — two paths through the thing
    * that decides whose data a request sees is exactly how one of them rots.
    */
+  /**
+   * Where logins live.
+   *
+   * With tenants arriving by subdomain the Host names the tenant before any cookie
+   * is read, so each tenant keeps its own sessions in its own database — which is
+   * also the isolation you want: a session id from one tenant simply is not in
+   * another's table.
+   *
+   * An app serving every tenant from one domain cannot do that, because reading
+   * the session needs the database and knowing the database needs the session. It
+   * passes `sessions.store` instead — one shared store, with the tenant recorded
+   * on the session. Both work; the framework assumes neither.
+   */
+  const sharedStore = serve.sessions?.store ?? null
+  const sessionOpts = serve.sessions
+    ? {
+        ...(config.secret ? { secret: config.secret } : {}),
+        secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
+        ...serve.sessions,
+      }
+    : null
+  const makeSessions = sessionOpts
+    ? (a: Adapter) => createSessions({ ...sessionOpts, store: sharedStore ?? dbSessionStore(a) })
+    : null
+
+  // Single datastore: one Sessions, built now. Tenants: one per tenant, built on
+  // first touch — unless a shared store was supplied, in which case it is one
+  // again and every tenant hands back the same instance.
+  const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
+
   // Built per tenant, because which templates exist depends on what is installed.
   const themeFactory = spec.headless || !spec.theme
     ? {}
@@ -213,35 +246,19 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
           },
         } : {}),
         onFirstTouch: (key, made) => bootstrapInto(key, made),
+        ...(makeSessions ? { sessions: makeSessions } : {}),
         ...themeFactory,
       })
-    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, ...themeFactory })
+    : singleTenant({ adapter: adapter as Adapter, apps: apps as AppRegistry, manifest, ...themeFactory, sessions })
 
   /**
    * Sessions, when the app asks for them. Absent, the header shim stays and the
    * banner keeps saying so — an app that has not wired auth yet should look like
    * one rather than quietly appear to have it.
    */
-  // Sessions and tenants both want to own where the session table lives, and the
-  // answer — one per tenant database, so a user in two tenants has two logins — is
-  // worth deciding on its own rather than as a side effect of this change. Until
-  // then the combination is refused rather than half-built.
-  if (serve.sessions && serve.tenants && !serve.sessions.store) {
-    throw new KetError({
-      code: 'E_SESSIONS_WITH_TENANTS',
-      module: spec.name,
-      message: `app "${spec.name}" turns on both sessions and tenants`,
-      hint: 'sessions live per datastore and per-tenant sessions are not built yet — pass serve.sessions.store to decide it yourself',
-    })
-  }
-  const sessions: Sessions | null = serve.sessions
-    ? await createSessions({
-        store: serve.sessions.store ?? dbSessionStore(adapter as Adapter),
-        ...(config.secret ? { secret: config.secret } : {}),
-        secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
-        ...serve.sessions,
-      })
-    : null
+  /** This request's tenant's sessions — the same instance for all, when shared. */
+  const sessionsOf = (url: URL, req: IncomingMessage): Promise<Sessions | null> =>
+    sessions ? Promise.resolve(sessions) : tenants.ofRequest(url, req, async (t) => t.sessions)
 
   /**
    * The one place a request's identity is decided — one function since D27,
@@ -249,17 +266,24 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    *
    * With sessions on the headers are gone entirely rather than kept as a fallback:
    * a system where a header can stand in for a login is a system with no login.
+   *
+   * Reading a session now costs a tenant lease, because with subdomains the
+   * session lives in that tenant's database. That is the price of the isolation:
+   * a session id issued by one tenant is not a row in another's table at all.
    */
-  const scopeOf = async (_url: URL, req: IncomingMessage): Promise<Scope> => {
-    if (sessions) return sessions.scopeOf(await sessions.of(req)) ?? { company: null }
-    const list = (h: string) => ((req.headers[h] as string | undefined) ?? '').split(',').map(s => s.trim()).filter(Boolean)
-    const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
-    const companies = list('x-ket-companies')
-    return {
-      company,
-      companies: companies.length ? [...new Set([company, ...companies])] : null,
-      branches: list('x-ket-branch') || null,
+  const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
+    if (!makeSessions) {
+      const list = (h: string) => ((req.headers[h] as string | undefined) ?? '').split(',').map(s => s.trim()).filter(Boolean)
+      const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
+      const companies = list('x-ket-companies')
+      return {
+        company,
+        companies: companies.length ? [...new Set([company, ...companies])] : null,
+        branches: list('x-ket-branch') || null,
+      }
     }
+    const s = await sessionsOf(url, req)
+    return s?.scopeOf(await s.of(req)) ?? { company: null }
   }
 
   /**
@@ -297,14 +321,14 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     })
 
   const ctx: ServeContext = {
-    manifest, config, scopeOf, localeOf, translate, styles, sessions, document,
+    manifest, config, scopeOf, localeOf, translate, styles, sessionsOf, document,
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     call: async (name, input, url, req) => {
       // One lease for the whole call: the scope and the allow-list are resolved
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
-      const allow = await allowFor(req)
+      const allow = await allowFor(url, req)
       return tenants.ofRequest(url, req, async (t) =>
         (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value)
     },
@@ -365,9 +389,10 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
    * narrowing them by one would break every path that has no user at all. The
    * restriction begins where identity does.
    */
-  const allowFor = async (req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!sessions || !serve.permissions) return null
-    const record = await sessions.of(req)
+  const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
+    if (!makeSessions || !serve.permissions) return null
+    const s = await sessionsOf(url, req)
+    const record = await s?.of(req)
     if (!record) return null
     return serve.permissions(ctx, record.userId)
   }
@@ -400,7 +425,7 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
     } : {}),
     resolveLocale: localeOf,
     resolveScope: scopeOf,
-    resolveAllow: (_url, req) => allowFor(req),
+    resolveAllow: allowFor,
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme ? {} : {
       theme: (url: URL, req: IncomingMessage) => tenants.ofRequest(url, req, async (t) => t.theme),
@@ -474,14 +499,14 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
       ['database', adapter ? adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`) : `${(await tenants.keys()).length} tenant(s), one database each`],
       ['apps installed', apps ? (enabled.join(', ') || '(none)') : 'per tenant'],
       ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
-      ['identity', sessions ? `sessions (${sessions.store.name})` : 'X-Ket-Company header'],
+      ['identity', makeSessions ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})` : 'X-Ket-Company header'],
       // Silence here would be the wrong kind: a module that declared install:'auto'
       // and did not arrive should say why, not look broken.
       ...(config.autoInstall ? [] : [['auto-install', 'off (KET_AUTO_INSTALL=0)']]),
     ]
     const w = Math.max(...rows.map(r => (r[0] as string).length))
-    const note = sessions
-      ? (sessions.ephemeralSecret
+    const note = makeSessions
+      ? ((sessions?.ephemeralSecret ?? !config.secret)
           ? `\n  KET_SECRET is not set, so a signing key was generated for this process.`
             + `\n  Sessions will not survive a restart and will not work across pods.`
           : '')

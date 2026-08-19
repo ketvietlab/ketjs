@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, defineApp, defineModule, json, migrateOne, compose, sqliteAdapter } from 'ketjs'
+import { bootApp, defineApp, defineModule, json, migrateOne, compose, sqliteAdapter, memorySessionStore } from 'ketjs'
 import type { Adapter, ServeContext, Route } from 'ketjs'
 
 /**
@@ -127,17 +127,6 @@ test('tenants: with several databases there is no single adapter, and the type s
   await b.close()
 })
 
-test('tenants: sessions and tenants together are refused rather than half-built', async () => {
-  const bad = defineApp({
-    name: 'both', modules: [core], headless: true,
-    serve: { sessions: {}, tenants: { resolve: () => 't1', open: () => sqliteAdapter(), list: async () => ['t1'] } },
-  })
-  await assert.rejects(() => bootApp(bad, { port: 0 }), (e: unknown) => {
-    assert.equal((e as { code: string }).code, 'E_SESSIONS_WITH_TENANTS')
-    return true
-  })
-})
-
 test('single: one datastore is the same interface, not a second code path', async () => {
   const solo = defineApp({ name: 'solo', modules: [core], headless: true, serve: { bootstrap: ['core'] } })
   const b = await bootApp(solo, { env: { KET_SQLITE: ':memory:' }, port: 0 })
@@ -156,4 +145,104 @@ test('migrate: every tenant is migrated, and one failure does not stop the fleet
   assert.ok(ops.length > 0)
   assert.equal((await migrateOne(good, manifest)).length, 0, 'and running it twice is a no-op')
   await good.close()
+})
+
+// ── logins, per tenant ───────────────────────────────────────────────────────
+
+/**
+ * With tenants arriving by subdomain the Host names the tenant before any cookie
+ * is read, so each tenant keeps its own sessions in its own database. That is also
+ * the isolation: a session id from one tenant is not a row in another's table.
+ *
+ * An app serving every tenant from one domain cannot resolve a tenant that way —
+ * reading the session needs the database, knowing the database needs the session —
+ * and passes one shared store instead. Both are tested here, because both are
+ * deployments someone will have.
+ */
+const authed = defineApp({
+  name: 'authed', modules: [core], headless: true,
+  serve: {
+    bootstrap: ['core'],
+    sessions: {},
+    tenants: {
+      resolve: (_url, req) => {
+        const key = String(req.headers['x-tenant'] ?? '')
+        return key === 't1' || key === 't2' ? key : null
+      },
+      open: (key) => {
+        let a = dbs.get(key)
+        if (!a) { a = sqliteAdapter(); dbs.set(key, a) }
+        return a
+      },
+      list: async () => ['t1', 't2'],
+    },
+  },
+})
+
+const loginAs = async (port: number, tenant: string, userId: string) => {
+  // No user module here, so the session is started directly — this is testing the
+  // plumbing, not the password check, which identity.test.ts already covers.
+  return { port, tenant, userId }
+}
+
+test('sessions: each tenant keeps its own, so a cookie does not travel between them', async () => {
+  dbs.clear()
+  const b = await bootApp(authed, { env: { KET_SECRET: 'shared-across-pods' }, port: 0 })
+
+  const s1 = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
+  const jar = s1.cookie.split(';')[0]!
+  const req = { headers: { cookie: jar } } as never
+
+  const seenAtHome = await b.tenants.with('t1', async (t) => t.sessions!.of(req))
+  assert.equal(seenAtHome?.userId, 'u1')
+
+  const seenNextDoor = await b.tenants.with('t2', async (t) => t.sessions!.of(req))
+  assert.equal(seenNextDoor, null,
+    'the signature is valid — it is the same secret — but the row is in the other database')
+  await b.close()
+  void loginAs
+})
+
+test('sessions: the cookie carries no Domain, so the browser scopes it to one subdomain', async () => {
+  dbs.clear()
+  const b = await bootApp(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  const { cookie } = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
+  assert.ok(!/Domain=/i.test(cookie),
+    'Domain=.example.com would hand acme.example.com the cookie set for globex.example.com')
+  assert.match(cookie, /HttpOnly/)
+  await b.close()
+})
+
+test('sessions: a shared store is the escape hatch for one domain serving every tenant', async () => {
+  dbs.clear()
+  const control = memorySessionStore()
+  const oneDomain = defineApp({
+    name: 'onedomain', modules: [core], headless: true,
+    serve: {
+      bootstrap: ['core'],
+      // Reading the session needs the database and knowing the database needs the
+      // session, so the session cannot live in the tenant's database at all.
+      sessions: { store: control },
+      tenants: {
+        resolve: (_url, req) => (String(req.headers['x-tenant'] ?? '') === 't1' ? 't1' : 't2'),
+        open: (key) => { let a = dbs.get(key); if (!a) { a = sqliteAdapter(); dbs.set(key, a) } return a },
+        list: async () => ['t1', 't2'],
+      },
+    },
+  })
+  const b = await bootApp(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
+  const { cookie } = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
+  const req = { headers: { cookie: cookie.split(';')[0]! } } as never
+  // One store, so every tenant sees the same session — which is the point, and
+  // also why such a deployment has to record the tenant on the session itself.
+  assert.equal((await b.tenants.with('t1', async (t) => t.sessions!.of(req)))?.userId, 'u1')
+  assert.equal((await b.tenants.with('t2', async (t) => t.sessions!.of(req)))?.userId, 'u1')
+  await b.close()
+})
+
+test('sessions: turning them on with tenants is no longer refused', async () => {
+  dbs.clear()
+  const b = await bootApp(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  assert.match(await b.banner(), /identity\s+sessions \(one per tenant\)/)
+  await b.close()
 })
