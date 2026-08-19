@@ -1,0 +1,45 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   OWNED BY THE DESIGN TEAM.
+
+   Every value here is yours. The names are the contract — the framework emits
+   --ket-* custom properties from module declarations and they land in the
+   ket.theme layer; anything you set here sits in ket.app and wins.
+
+   Cascade order, fixed by the framework:
+       ket.reset  <  ket.theme  <  ket.app  <  ket.user
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@layer ket.app {
+  :root {
+    /* colour — set these first, everything else refers to them */
+    --admin-bg: ;
+    --admin-surface: ;
+    --admin-ink: ;
+    --admin-ink-muted: ;
+    --admin-line: ;
+    --admin-accent: ;
+    --admin-accent-ink: ;
+    --admin-danger: ;
+
+    /* type */
+    --admin-font: ;
+    --admin-font-mono: ;
+    --admin-size-sm: ;
+    --admin-size-base: ;
+    --admin-size-lg: ;
+
+    /* space + shape */
+    --admin-gap-sm: ;
+    --admin-gap: ;
+    --admin-gap-lg: ;
+    --admin-radius: ;
+    --admin-sidebar-width: ;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      /* the dark palette. Only the tokens change; no rule below should need a
+         dark variant of its own. */
+    }
+  }
+}

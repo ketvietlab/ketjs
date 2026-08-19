@@ -8,7 +8,8 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./backend": "./src/modules/backend/index.ts"
   },
   "dependencies": {
     "ketjs": "0.0.0",
