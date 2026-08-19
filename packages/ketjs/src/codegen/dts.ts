@@ -30,6 +30,14 @@ export function generateDts(manifest: Manifest): string {
       if (f.by !== model.owner) out.push(`  /** contributed by module "${f.by}" */`)
       out.push(`  ${fname}: ${tsTypeOf(f)}`)
     }
+    // Relations are optional on the type because they are optional in fact: they
+    // are there only if the query asked to preload them, and the type says so
+    // rather than pretending every row arrives complete.
+    for (const [name, rel] of Object.entries(manifest.relations[key] ?? {})) {
+      const target = pascal(rel.target)
+      out.push(`  /** preload("${name}") — ${rel.kind} ${rel.target}, declared by "${rel.declaredBy}" */`)
+      out.push(`  ${name}?: ${rel.kind === 'hasMany' ? `${target}[]` : `${target} | null`}`)
+    }
     out.push('}')
     out.push('')
   }

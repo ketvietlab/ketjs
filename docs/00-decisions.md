@@ -108,6 +108,38 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D24 — Relations, with no lazy side at all
+**Deferred since D11, opened now** because product cannot be modelled without it:
+a template has variants, a variant belongs to a template.
+
+**Chosen:** `belongsTo` and `hasMany`, declared by a module that depends on both
+sides, checked at compose against the models and the key they travel on. A typo is a
+build error rather than a query that quietly returns nothing.
+
+**There is no lazy loading, and that is the point.** Nothing populates itself when
+touched; a caller asks with `preload()` or does not get the rows. The N+1 that makes
+ORMs slow in ways nobody can see is not expressible here. A preload costs two
+queries — the parents, then the children by id — and a test asserts exactly that
+count rather than trusting the shape of the code.
+
+**A relation is not a way around the company boundary.** Preloaded children go
+through the same scoped path as any other read, so a child row belonging to another
+company does not arrive through its parent. There is a test that deliberately
+re-parents a row across companies to prove it.
+
+**And a relation may not widen scope.** A `hasMany` from a `shared` model to a
+company-scoped one would expose every company's rows through a row that belongs to
+none of them, so the composer refuses it — `E_RELATION_WIDENS_SCOPE`. Only the
+narrowing direction is allowed. This surfaced immediately: the obvious
+`catalog.Product.orders` was rejected the first time it was written.
+
+**Reading the far side needs its own declared effect.** A preload is a read, and it
+is checked like one.
+
+**Generated types mark relations optional**, because they are optional in fact —
+present only if the query asked for them. The type says so instead of pretending
+every row arrives complete.
+
 ## D23 — Company is a row-level boundary; branch is a dimension
 **The situation being replaced:** Odoo has no branch concept, so a business with
 several branches of one legal entity models each branch as a `res.company`. That
