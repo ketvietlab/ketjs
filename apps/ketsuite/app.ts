@@ -37,7 +37,7 @@ export const ketsuite = defineApp({
      * request, so revoking a role takes effect on the next call rather than on the
      * next login — one query is a better trade than "why can they still do that".
      */
-    permissions: (ctx, userId) => ctx.call('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
+    permissions: (ctx, userId) => ctx.callUnchecked('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
       .then(r => (r as { superuser: boolean; functions?: string[] }).superuser ? null : (r as { functions: string[] }).functions),
     pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
   },

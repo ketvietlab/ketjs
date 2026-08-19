@@ -9,7 +9,7 @@
 // what the account may see, and this decides what to do about it.
 
 import { json, text, withHeaders } from 'ketjs'
-import type { Route, ServeContext } from 'ketjs'
+import type { Route, RouteEntry, ServeContext } from 'ketjs'
 
 type Verdict = { ok: boolean; userId?: string; companies?: string[]; defaultCompanyId?: string | null }
 
@@ -22,8 +22,10 @@ const body = async (req: Parameters<Route>[1]): Promise<Record<string, unknown>>
 
 const needSessions = () => text('this deployment has not turned sessions on', { status: 501 })
 
-export const routes: Record<string, (ctx: ServeContext) => Route> = {
-  '/login': (ctx) => async (url, req) => {
+export const routes: Record<string, RouteEntry> = {
+  // The three a stranger has to be able to reach. /whoami is how a browser asks
+  // whether it is signed in, so answering 401 is the answer, not a refusal.
+  '/login': { anonymous: true, handler: (ctx) => async (url, req) => {
     const sessions = await ctx.sessionsOf(url, req)
     if (!sessions) return needSessions()
     if (req.method !== 'POST') return text('POST a JSON body with login and password', { status: 405 })
@@ -52,22 +54,22 @@ export const routes: Record<string, (ctx: ServeContext) => Route> = {
       json({ ok: true, userId: record.userId, company: record.company, companies: record.companies }),
       { 'set-cookie': cookie },
     )
-  },
+  } },
 
-  '/logout': (ctx) => async (url, req) => {
+  '/logout': { anonymous: true, handler: (ctx) => async (url, req) => {
     const sessions = await ctx.sessionsOf(url, req)
     if (!sessions) return needSessions()
     await sessions.end(req)
     // Clearing the cookie as well as the record: leaving the browser holding an id
     // that no longer resolves means every later request pays a lookup to learn so.
     return withHeaders(json({ ok: true }), { 'set-cookie': sessions.clearCookie() })
-  },
+  } },
 
-  '/whoami': (ctx) => async (url, req) => {
+  '/whoami': { anonymous: true, handler: (ctx) => async (url, req) => {
     const sessions = await ctx.sessionsOf(url, req)
     if (!sessions) return needSessions()
     const record = await sessions.of(req)
     if (!record) return json({ ok: false }, { status: 401 })
     return json({ ok: true, userId: record.userId, company: record.company, companies: record.companies })
-  },
+  } },
 }

@@ -108,6 +108,51 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D38 — A stranger is not an unrestricted caller
+**The hole, as it was found.** With sessions on and no cookie at all:
+
+```
+TẠO người dùng : {"ok": true, "id": "hack"}
+TẠO vai trò    : {"ok": true, "id": "r"}
+/admin         : 200, rendering the app list
+```
+
+Anyone reaching the port could create an account and then log in as it. The whole
+of D35 and D36 was in place and none of it applied.
+
+**The cause was a rule from D36, defended in its own pull request.** `allow: null`
+means unrestricted, and `allowFor` returned null when there was no session — under
+the reasoning that migrations, internal calls, tests and the public storefront all
+arrive without an identity, so restriction should begin where identity does. That
+is correct about *in-process* calls and catastrophically wrong about an HTTP
+request that simply has not logged in. Absence of identity is not absence of
+constraint; it is the constraint.
+
+**Chosen:** a request with no session gets the anonymous set, not the full one, and
+membership is declared per function (`anonymous: true`) and per route. Two
+functions need it and they are the two that make sense — `user.authenticate`,
+because there is no session until it runs, and `website.getPageByPath`, because a
+public storefront is public. Three routes: login, logout, whoami.
+
+**The terse form is the closed one.** A route written as a bare factory is
+protected; opening it takes an object with `anonymous: true`. A default of open is
+a default nobody notices until it is on the internet.
+
+**The route check is central, not per screen.** Every module route passes through
+one place that refuses a session-less request. Putting it in each screen is how it
+ends up missing from one.
+
+**Fixing it immediately broke the permission resolver**, which is the honest kind of
+consequence: the app resolves what a user may do by calling `user.permitted`, and
+that call went through the check it was trying to answer — asking permission to
+find out whether it has permission. So there is now `ctx.callUnchecked`, one word
+to grep for, like `raw`. Deciding what a caller may do is the one question someone
+has to be allowed to ask; nothing else has that excuse.
+
+**What this did not change:** an app that has not turned sessions on is unaffected,
+because there is no login to be outside of — the header shim is still the identity
+there, and the banner still says so.
+
 ## D37 — One deployment, many databases, and one door into each
 **Chosen:** Odoo's model — the code ships with the deployment, the decision about
 what is switched on lives in each database. `ket_app` per database is
