@@ -27,6 +27,8 @@ export type GrantedFn = {
    * role that may see an order's product name may also see its cost.
    */
   projected: boolean
+  /** The fields it hands back, when it says. Empty means it says nothing. */
+  returns: string[]
 }
 
 export type ModelReach = {
@@ -90,6 +92,7 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
       crossCompany: fn.crossCompany,
       mutates: writes.length > 0,
       projected: Object.keys(fn.output).length > 0,
+      returns: Object.keys(fn.output).sort(),
     })
   }
 
@@ -124,8 +127,11 @@ export function formatReach(r: Reach): string {
   const w = Math.max(20, ...r.functions.map(f => f.key.length))
   out.push('functions granted:')
   for (const f of r.functions) {
-    const marks = [f.mutates ? 'writes' : 'reads', ...(f.crossCompany ? ['cross-company'] : []), ...(f.projected ? [] : ['unprojected'])]
+    const marks = [f.mutates ? 'writes' : 'reads', ...(f.crossCompany ? ['cross-company'] : [])]
     out.push(`  ${pad(f.key, w)}  ${marks.join(' · ')}`)
+    // The field-level answer, which is the one that was missing: what a caller
+    // actually receives, rather than which tables were touched to build it.
+    out.push(`  ${pad('', w)}  returns ${f.projected ? f.returns.join(', ') : 'WHOLE ROWS — output undeclared'}`)
   }
 
   out.push('\nmodels reachable:')

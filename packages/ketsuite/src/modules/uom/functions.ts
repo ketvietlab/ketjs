@@ -61,7 +61,10 @@ export const functions: Record<string, FnSpec> = {
 
   convert: defineFn({
     input: { qty: 'float', fromId: 'id', toId: 'id' },
-    output: { qty: 'float' },
+    // The declaration was wrong and nothing said so until output became a
+    // projection: this answers {ok:true, qty} or {ok:false, errors}, and a caller
+    // needs the flag as much as the number.
+    output: { ok: 'bool', qty: 'float?', errors: 'json?', code: 'text?' },
     effects: ['read:uom.Unit'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
