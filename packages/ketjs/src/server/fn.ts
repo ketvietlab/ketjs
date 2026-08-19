@@ -61,7 +61,26 @@ export const _resetIdempotency = (): void => { /* records are durable; nothing t
 export async function callFn(
   fnKey: string,
   args: Record<string, unknown>,
-  o: { adapter: Adapter; manifest: Manifest; dryRun?: boolean; actor?: string | null; idempotencyKey?: string | null; scope?: import('../types.ts').Scope },
+  o: {
+    adapter: Adapter
+    manifest: Manifest
+    dryRun?: boolean
+    actor?: string | null
+    idempotencyKey?: string | null
+    scope?: import('../types.ts').Scope
+    /**
+     * The functions this caller may invoke. Undefined or null means unrestricted,
+     * which is what an internal call, a migration or a test is — the check exists
+     * for requests carrying an identity, and a caller with no identity has no
+     * business being narrowed by one.
+     *
+     * A list rather than a predicate so that it can be printed, diffed and stored.
+     * The framework enforces it; which list a user gets is the app's decision, the
+     * same split as the datastore driver.
+     */
+    allow?: readonly string[] | null
+  },
+
 ): Promise<CallResult> {
   const def = registry.get(fnKey)
   const owner = fnKey.split('.')[0] as string
@@ -74,7 +93,20 @@ export async function callFn(
     })
   }
   if (!def) throw new KetError({ code: 'E_UNKNOWN_FUNCTION', message: `no server function "${fnKey}"`, hint: `known: ${[...registry.keys()].join(', ')}` })
+
+  // Permission is checked before the input is validated, so a caller who may not
+  // call this at all learns that and nothing else — not which arguments it takes,
+  // and not whether the ones they guessed were right.
+  if (o.allow && !o.allow.includes(fnKey)) {
+    throw new KetError({
+      code: 'E_FN_NOT_PERMITTED',
+      module: owner,
+      message: `this caller may not call "${fnKey}"`,
+      hint: 'grant a role that includes it — `ket permissions --grant` shows what any set of functions reaches',
+    })
+  }
   validateInput(fnKey, o.manifest, args)
+
 
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false

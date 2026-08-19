@@ -108,6 +108,50 @@ later.
 **Cost:** every `ctx.db` call and every handler is now async, and the test suite
 had to follow. Paid once, at the cheapest possible moment.
 
+## D36 — A role is a list of functions, enforced where every call already passes
+**Chosen:** the framework enforces an allow-list, the app decides what is on it —
+the same split as the datastore driver, and for the same reason. Roles are the
+app's model; a framework that knew their shape would be a framework every app had
+to agree with.
+
+**A role is a named list of function keys, additive across roles**, which is
+Salesforce's permission sets rather than Odoo's `ir.model.access`. Model-plus-CRUD
+is what makes Odoo's permissions unanswerable: granting read on `product.template`
+grants it in the form, the list, the export, XML-RPC and every `search()` any
+module makes. Here the unit is the action, so the role *is* the list of actions,
+and `ket permissions --role kho` prints exactly what it reaches — including which
+fields, since D33.
+
+**The check runs before input validation.** A caller who may not call this at all
+should learn that and nothing else: validating first answers with the signature,
+which is a map of the surface handed to someone who may not touch it.
+
+**Absent means unrestricted, and that reads backwards until you see the
+alternative.** Migrations, internal calls, tests and the public storefront all
+arrive with no identity. Narrowing them by one would break every path that has no
+user. The restriction begins where identity does — and an *empty* list is a real
+restriction, distinct from a missing one.
+
+**Resolved per request, not cached in the session.** A cached list is a revoked
+role that keeps working until someone logs out, and "why can they still do that" is
+a worse conversation than one extra query. Tested: unassigning a role takes effect
+on the next call. Cache it when a measurement says to.
+
+**A superuser column rather than a magic id.** Something has to be exempt or a
+deployment that turns roles on can never grant the first one — the functions that
+manage roles are themselves behind the check. Odoo solves this with user id 2 and a
+group that everyone learns about by being told. A declared boolean is the same
+escape hatch with its name written on it, and it shows up in a query.
+
+**A grant for a function nobody ships is refused rather than stored.** It would sit
+in the table looking like access, and become access again the day the name comes
+back.
+
+**`ket permissions --role` is the only part that reads the database**, because what
+a role grants is a fact about a deployment rather than about the code. It looks for
+`user_role` and `user_grant` by convention and says so plainly when they are not
+there — the framework ships no role model, so it cannot import one.
+
 ## D35 — Sessions, with the store an interface because pods are the point
 **The seam was built for this.** `resolveScope` has been one function since D27
 precisely so that replacing headers with a login would be one change, and D32
