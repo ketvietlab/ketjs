@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from } from 'ketjs'
 import type { Ctx, FnSpec } from 'ketjs'
 
 export const functions: Record<string, FnSpec> = {
@@ -36,7 +36,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const M = ctx.table('website_menu.MenuItem')
-      return ctx.db.del(from(M).where(eq(M.id, args.id)))
+      return ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
     },
   }),
 }
