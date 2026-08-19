@@ -29,10 +29,31 @@ arbitrary logic. That restriction is the product, not a limitation.
 **Reversible:** no, same argument as D1.
 
 ## D4 — SQLite first, Postgres second, adapter shape fixed on day one
-**Why:** a hand-written Postgres wire-protocol driver (~2.5k lines, required to keep
-rule 1) on the critical path would stall everything else. `node:sqlite` ships with
-Node and proves the whole stack end to end.
+**Why:** `node:sqlite` ships with Node and proves the whole stack end to end, so the
+riskiest work does not sit on the critical path.
 **Reversible:** yes — that is why it was safe to decide without waiting.
+
+### D4a — The SQL driver is the one accepted breach of rule 1
+**Chosen:** take a dependency for the Postgres driver instead of hand-writing ~2.5k
+lines of wire protocol. `postgres` (porsager) rather than `pg`: measured, it installs
+**1 package with no transitive tree**, where `pg` installs **14**.
+
+**Why the exception is affordable:** the adapter contract was fixed on day one, so the
+dependency sits behind an interface the rest of the framework never sees. This is the
+decision paying for itself.
+
+**The fence — an exception without a boundary becomes the new default:**
+1. `dependencies` stays **empty**. The driver is an `optionalDependency`, so
+   `npm i ketjs` still installs nothing.
+2. Exactly one file may import it: `src/data/postgres.ts`. Enforced by
+   `tools/zero-dep-audit.ts`, not by good intentions.
+3. The allowlist is a literal set in the audit. Adding a second name is a visible
+   diff someone has to justify, which is the whole point.
+4. SQLite remains the default adapter, so the zero-dependency path stays the one
+   that is actually exercised by tests.
+
+**Cost, stated plainly:** "zero dependencies" is now "zero required dependencies".
+That is a weaker claim and the README says so rather than pretending otherwise.
 
 ## D5 — Reactivity at runtime, not compile time
 **Chosen:** signals; the renderer diffs holes, never a tree.

@@ -3,7 +3,7 @@
 A zero-dependency fullstack framework for Node, built on five pillars:
 
 1. **Lego** — modules compose through extension points the base module *publishes*, not through arbitrary patching
-2. **Zero dependencies** — 0 runtime deps; `node` and nothing else
+2. **Zero dependencies** — 0 *required* runtime deps; `node` and nothing else. One fenced exception: the Postgres driver is an optional dependency (see [D4a](docs/00-decisions.md)). SQLite, the default adapter, needs nothing.
 3. **Agent-driven** — the manifest is the agent's map; mutations are dry-runnable and idempotent
 4. **Theming-driven** — third-party themes in a restricted language that cannot run code
 5. **Fullstack** — the framework owns models, migrations, functions, streams and jobs
@@ -49,7 +49,7 @@ nothing can be safely changed.
 | A stream survives a reload | resumes from cursor, no gap and no duplicate |
 | An agent cannot double-apply | idempotency key replays the first result |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
-| Zero dependencies | `node tools/zero-dep-audit.ts` |
+| Zero required dependencies | `node tools/zero-dep-audit.ts` — enforces that only `src/data/postgres.ts` may import the one allowlisted driver |
 
 ## Layout
 
