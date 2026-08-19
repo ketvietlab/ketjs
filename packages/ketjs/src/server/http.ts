@@ -42,7 +42,7 @@ export type ServeOpts = {
    * reason the datastore is: a handler that had to remember to pass it along would
    * eventually forget, and forgetting means answering with another company's rows.
    */
-  resolveScope?: (url: URL, req: IncomingMessage) => Scope
+  resolveScope?: (url: URL, req: IncomingMessage) => Scope | Promise<Scope>
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
   /** Static file mounts. One fixed directory, or a resolver that answers per request. */
   assets?: AssetMount | AssetMount[]
@@ -138,7 +138,7 @@ export async function createKetServer(o: ServeOpts) {
       const route = o.routes?.[url.pathname]
       if (route) {
         const r = await route(url, req)
-        res.writeHead(r.status ?? 200, { 'content-type': `${r.type ?? 'text/html'}; charset=utf-8` })
+        res.writeHead(r.status ?? 200, { 'content-type': `${r.type ?? 'text/html'}; charset=utf-8`, ...r.headers })
         return res.end(r.body)
       }
 
@@ -170,10 +170,12 @@ export async function createKetServer(o: ServeOpts) {
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
         const fnKey = decodeURIComponent(url.pathname.slice('/_ket/fn/'.length))
         const args = await readBody(req)
+        // Resolved before the pool lease, so a session lookup never holds one.
+        const scope = await o.resolveScope?.(url, req)
         const result = await withDb(url, req, adapter => callFn(fnKey, args, {
           adapter,
           manifest: o.manifest,
-          scope: o.resolveScope?.(url, req),
+          scope,
           dryRun: url.searchParams.get('dryRun') === '1',
           idempotencyKey: req.headers['idempotency-key'] as string | undefined ?? null,
         }))

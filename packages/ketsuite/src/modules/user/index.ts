@@ -5,6 +5,7 @@ import { models } from './models.ts'
 import { relations } from './relations.ts'
 import { functions } from './functions.ts'
 import { messages } from './messages.ts'
+import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'user',
@@ -16,7 +17,8 @@ export default defineModule({
   category: 'Hệ thống',
   // Removing the accounts would remove every way back in.
   removable: false,
-  models, relations, functions, messages,
+  models, relations, functions, messages, routes,
 })
 
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'
+export { routes } from './routes.ts'
