@@ -45,7 +45,7 @@ async function pg(): Promise<{ adapter: Adapter; calls: Array<{ text: string; pa
 test('postgres: the query layer renders $n placeholders for this dialect', async () => {
   const { adapter, calls } = await pg()
   const P = table(manifest, 'catalog.Product')
-  const { text, params } = from(P).where_(eq(P.id!, 'p1')).limit(1).toSQL('postgres')
+  const { text, params } = from(P).where(eq(P.id!, 'p1')).limit(1).toSQL('postgres')
   await adapter.all(text, params)
   assert.match(calls[0]!.text, /"id" = \$1 LIMIT \$2/)
   assert.deepEqual(calls[0]!.params, ['p1', 1])

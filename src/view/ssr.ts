@@ -15,6 +15,7 @@ import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
 
 export const HOLE_MARKER = 'k'
+export const HOLE_OPEN = 'k['
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
 
@@ -40,8 +41,11 @@ function writeResult(result: TemplateResult, out: string[]): void {
   const write = (node: TplNode): void => {
     if (node.type === 'text') { out.push(node.value); return }
     if (node.type === 'hole') {
-      // Content first, then the anchor — the same order the client builds, so the
-      // two structures line up node for node.
+      // A hole is fenced on both sides. The closing marker is the anchor the client
+      // builds too; the opening one exists because an HTML parser merges adjacent
+      // text, so "giá trị " and "5" would arrive as a single node and the walk would
+      // be one node short. A comment cannot merge, so it keeps them apart.
+      out.push(`<!--${HOLE_OPEN}-->`)
       writeValue(result.values[node.index], out)
       out.push(`<!--${HOLE_MARKER}-->`)
       return
@@ -49,6 +53,9 @@ function writeResult(result: TemplateResult, out: string[]): void {
     const el = node as TplEl
     out.push(`<${el.tag}`)
     for (const a of el.attrs) {
+      // on:* is behaviour, not markup. It is attached during hydration and must
+      // never appear in the HTML, where it would be a dead string at best.
+      if (a.name.startsWith('on:')) continue
       const v = a.hole != null ? result.values[a.hole] : a.value
       if (v == null || v === false) continue
       out.push(` ${a.name}="${escapeHtml(v)}"`)

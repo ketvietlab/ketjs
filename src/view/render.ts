@@ -5,7 +5,7 @@
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
 import type { Host, HostNode } from './host.ts'
-import { HOLE_MARKER, HydrationMismatch } from './ssr.ts'
+import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch } from './ssr.ts'
 
 const RESULT = Symbol('ket.result')
 const EACH = Symbol('ket.each')
@@ -28,7 +28,22 @@ export function when(cond: unknown, render: () => TemplateResult, otherwise?: ()
 }
 
 type AttrPart = { attr: true; node: HostNode; name: string; last: unknown }
-type AnyPart = Part | AttrPart
+/**
+ * An event binding attaches once and reads the current handler through a box, so
+ * re-rendering with a fresh closure — which happens on every render — does not
+ * detach and re-attach a listener each time.
+ */
+type EventPart = { event: true; detach: () => void; box: { fn: ((e: unknown) => void) | null } }
+type AnyPart = Part | AttrPart | EventPart
+
+export const EVENT_PREFIX = 'on:'
+const isEventAttr = (name: string) => name.startsWith(EVENT_PREFIX)
+
+function bindEvent(host: Host, node: HostNode, name: string, initial: unknown): EventPart {
+  const box: { fn: ((e: unknown) => void) | null } = { fn: typeof initial === 'function' ? initial as (e: unknown) => void : null }
+  const detach = host.listen(node, name.slice(EVENT_PREFIX.length), (e) => box.fn?.(e))
+  return { event: true, detach, box }
+}
 
 class Part {
   attr = false as const
@@ -221,8 +236,10 @@ class Instance {
       }
       const el = this.host.createElement((node as TplEl).tag)
       for (const a of (node as TplEl).attrs) {
-        if (a.hole != null) this.parts[a.hole] = { attr: true, node: el, name: a.name, last: undefined }
-        else this.host.setAttribute(el, a.name, a.value ?? '')
+        if (a.hole == null) { this.host.setAttribute(el, a.name, a.value ?? ''); continue }
+        this.parts[a.hole] = isEventAttr(a.name)
+          ? bindEvent(this.host, el, a.name, undefined)
+          : { attr: true, node: el, name: a.name, last: undefined }
       }
       this.host.insert(target, el, atRoot ? anchor : null)
       if (atRoot) this.roots.push(el)
@@ -236,6 +253,7 @@ class Instance {
       const p = this.parts[i]
       if (!p) continue
       const v = values[i]
+      if ('event' in p) { p.box.fn = typeof v === 'function' ? v as (e: unknown) => void : null; continue }
       if (p.attr) {
         if (!Object.is(p.last, v)) { this.host.setAttribute(p.node, p.name, v); p.last = v }
         continue
@@ -264,7 +282,11 @@ class Instance {
   }
 
   remove(): void {
-    for (const p of this.parts) if (p && !p.attr) (p as Part).clear()
+    for (const p of this.parts) {
+      if (!p) continue
+      if ('event' in p) { p.detach(); continue }
+      if (!p.attr) (p as Part).clear()
+    }
     for (const n of this.roots) this.host.remove(n)
     this.roots = []
   }
@@ -352,6 +374,12 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
       return
     }
     if (node.type === 'hole') {
+      if (!c || c.nodeType !== COMMENT || c.data !== HOLE_OPEN) {
+        throw new HydrationMismatch('the start of a hole', `a <!--${HOLE_OPEN}--> marker`, describe(c))
+      }
+      const opening = c
+      if (atRoot) instance.roots.push(opening)
+      c = c.nextSibling
       const part = new Part(host, target, null as unknown as HostNode)
       const startedAt = c
       claimValue(values[node.index], part)
@@ -374,7 +402,11 @@ function hydrateInstance(host: Host, strings: readonly string[], values: unknown
     const element = c
     if (atRoot) instance.roots.push(element)
     for (const a of el.attrs) {
-      if (a.hole != null) instance.parts[a.hole] = { attr: true, node: element, name: a.name, last: values[a.hole] }
+      if (a.hole == null) continue
+      // The server never rendered a handler, so hydration is where it first attaches.
+      instance.parts[a.hole] = isEventAttr(a.name)
+        ? bindEvent(host, element, a.name, values[a.hole])
+        : { attr: true, node: element, name: a.name, last: values[a.hole] }
     }
     const after = element.nextSibling
     c = element.firstChild

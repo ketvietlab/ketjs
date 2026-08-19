@@ -68,7 +68,7 @@ test('live pg: server functions round-trip through the query layer', live, async
   assert.deepEqual((dear.value as Array<{ id: string }>).map(r => r.id), ['p2', 'p3'])
 
   const P = table(manifest, 'catalog.Product')
-  const { text, params } = from(P).where_(gte(P.priceCents!, 60_000), eq(P.active!, true)).toSQL('postgres')
+  const { text, params } = from(P).where(gte(P.priceCents!, 60_000), eq(P.active!, true)).toSQL('postgres')
   assert.equal((await a.all(text, params)).length, 2)
   })
 })
