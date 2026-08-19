@@ -44,7 +44,7 @@ test('view: updating one row of 1000 costs exactly one host operation', () => {
 
   items = items.map(i => (i.id === 500 ? { ...i, name: 'DOI' } : i))
   root.render(view(items))
-  assert.deepEqual(host.ops, { createElement: 0, createText: 0, setText: 1, setAttribute: 0, insert: 0, remove: 0, move: 0 })
+  assert.deepEqual(host.ops, { createElement: 0, createText: 0, setText: 1, setAttribute: 0, insert: 0, remove: 0, move: 0, listen: 0 })
 })
 
 test('view: re-rendering unchanged data touches nothing', () => {

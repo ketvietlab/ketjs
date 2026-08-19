@@ -40,8 +40,8 @@ export default defineModule({
       agent: true,
       handler: async (ctx, args) => {
         const P = ctx.table('catalog.Product')
-        let q = from(P).where_(eq(P.active!, true))
-        if (args.minPriceCents != null) q = q.where_(gte(P.priceCents!, args.minPriceCents))
+        let q = from(P).where(eq(P.active!, true))
+        if (args.minPriceCents != null) q = q.where(gte(P.priceCents!, args.minPriceCents))
         return ctx.db.all(q.orderBy(desc(P.priceCents!)).limit(Number(args.limit ?? 20)))
       },
     }),

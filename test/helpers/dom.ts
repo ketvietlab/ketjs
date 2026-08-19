@@ -19,6 +19,9 @@ export type TNode = {
   getAttribute(n: string): string | null
   insertBefore(node: TNode, before: TNode | null): TNode
   remove(): void
+  addEventListener(e: string, h: (ev: unknown) => void): void
+  removeEventListener(e: string, h: (ev: unknown) => void): void
+  fire(e: string, payload?: unknown): void
   querySelectorAll(sel: string): TNode[]
   readonly outerHTML: string
   readonly innerHTML: string
@@ -30,7 +33,11 @@ const ESC = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const UNESC = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
 
 export function makeNode(nodeType: number, nodeName: string, data = ''): TNode {
+  const listeners = new Map<string, Set<(ev: unknown) => void>>()
   const n: TNode = {
+    addEventListener(e, h) { (listeners.get(e) ?? listeners.set(e, new Set()).get(e)!).add(h) },
+    removeEventListener(e, h) { listeners.get(e)?.delete(h) },
+    fire(e, payload) { for (const h of listeners.get(e) ?? []) h(payload ?? { type: e }) },
     nodeType, nodeName, data,
     attrs: new Map(), childNodes: [], parentNode: null,
     get firstChild() { return n.childNodes[0] ?? null },

@@ -38,16 +38,16 @@ export class Query {
   readonly kind: QueryKind
   readonly model: string
   readonly columns: readonly string[] | null
-  readonly where: Expr | null
+  readonly condition: Expr | null
   readonly order: readonly Order[]
   readonly limitN: number | null
   readonly offsetN: number | null
 
-  constructor(init: { kind: QueryKind; model: string; columns?: readonly string[] | null; where?: Expr | null; order?: readonly Order[]; limitN?: number | null; offsetN?: number | null }) {
+  constructor(init: { kind: QueryKind; model: string; columns?: readonly string[] | null; condition?: Expr | null; order?: readonly Order[]; limitN?: number | null; offsetN?: number | null }) {
     this.kind = init.kind
     this.model = init.model
     this.columns = init.columns ?? null
-    this.where = init.where ?? null
+    this.condition = init.condition ?? null
     this.order = init.order ?? []
     this.limitN = init.limitN ?? null
     this.offsetN = init.offsetN ?? null
@@ -56,16 +56,16 @@ export class Query {
 
   private with(patch: Partial<ConstructorParameters<typeof Query>[0]>): Query {
     return new Query({
-      kind: this.kind, model: this.model, columns: this.columns, where: this.where,
+      kind: this.kind, model: this.model, columns: this.columns, condition: this.condition,
       order: this.order, limitN: this.limitN, offsetN: this.offsetN, ...patch,
     })
   }
 
   select(...cols: Col[]): Query { return this.with({ columns: cols.map(c => c.name) }) }
   /** Additional conditions are ANDed, so a query can be narrowed by several callers. */
-  where_(...parts: Expr[]): Query {
+  where(...parts: Expr[]): Query {
     const next = parts.length === 1 ? parts[0]! : and(...parts)
-    return this.with({ where: this.where ? and(this.where, next) : next })
+    return this.with({ condition: this.condition ? and(this.condition, next) : next })
   }
   orderBy(...order: Order[]): Query { return this.with({ order: [...this.order, ...order] }) }
   limit(n: number): Query { return this.with({ limitN: n }) }
@@ -74,7 +74,7 @@ export class Query {
 
   /** Every model this query reads or writes. Checked against declared effects. */
   get touches(): string[] {
-    const s = exprTouches(this.where)
+    const s = exprTouches(this.condition)
     s.add(this.model)
     return [...s].sort()
   }
@@ -109,7 +109,7 @@ export class Query {
     else if (this.kind === 'count') text = `SELECT COUNT(*) AS count FROM ${t}`
     else text = `SELECT ${this.columns ? this.columns.map(c => `${t}.${q(c)}`).join(', ') : `${t}.*`} FROM ${t}`
 
-    if (this.where) text += ` WHERE ${render(this.where)}`
+    if (this.condition) text += ` WHERE ${render(this.condition)}`
     if (this.order.length) text += ` ORDER BY ${this.order.map(o => `${colSql(o.col)} ${o.dir.toUpperCase()}`).join(', ')}`
     if (this.limitN != null) text += ` LIMIT ${bind(this.limitN)}`
     if (this.offsetN != null) text += ` OFFSET ${bind(this.offsetN)}`
@@ -118,7 +118,7 @@ export class Query {
   }
 
   toJSON() {
-    return { kind: this.kind, model: this.model, columns: this.columns, where: this.where, order: this.order, limit: this.limitN, offset: this.offsetN, touches: this.touches }
+    return { kind: this.kind, model: this.model, columns: this.columns, where: this.condition, order: this.order, limit: this.limitN, offset: this.offsetN, touches: this.touches }
   }
 }
 

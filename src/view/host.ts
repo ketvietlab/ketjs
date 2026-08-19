@@ -13,6 +13,8 @@ export type Host = {
   insert(parent: HostNode, node: HostNode, before?: HostNode | null): void
   move(parent: HostNode, node: HostNode, before?: HostNode | null): void
   remove(node: HostNode): void
+  /** Attach a listener; returns the detach function. */
+  listen(node: HostNode, event: string, handler: (e: unknown) => void): () => void
 }
 
 const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -28,6 +30,7 @@ export const escapeHtml = (s: unknown): string => {
 
 export type CountingHost = Host & {
   ops: Record<string, number>
+  fire(node: HostNode, event: string, payload?: unknown): void
   reset(): void
   text(node: HostNode): string
   html(node: HostNode): string
@@ -36,7 +39,8 @@ export type CountingHost = Host & {
 
 export function countingHost(): CountingHost {
   let id = 0
-  const ops = { createElement: 0, createText: 0, setText: 0, setAttribute: 0, insert: 0, remove: 0, move: 0 }
+  const ops = { createElement: 0, createText: 0, setText: 0, setAttribute: 0, insert: 0, remove: 0, move: 0, listen: 0 }
+  const listeners = new Map<HostNode, Map<string, Set<(e: unknown) => void>>>()
 
   const detach = (node: HostNode): void => {
     if (!node.parent) return
@@ -67,6 +71,16 @@ export function countingHost(): CountingHost {
       if (value == null || value === false) delete attrs[name]
       else attrs[name] = String(value)
     },
+    listen(node, event, handler) {
+      ops.listen++
+      const byEvent = listeners.get(node) ?? new Map<string, Set<(e: unknown) => void>>()
+      listeners.set(node, byEvent)
+      const set = byEvent.get(event) ?? new Set<(e: unknown) => void>()
+      byEvent.set(event, set)
+      set.add(handler)
+      return () => { set.delete(handler) }
+    },
+    fire(node, event, payload) { for (const fn of listeners.get(node)?.get(event) ?? []) fn(payload ?? { type: event }) },
     insert(parent, node, before = null) { ops.insert++; place(parent, node, before) },
     move(parent, node, before = null) { ops.move++; place(parent, node, before) },
     remove(node) { ops.remove++; detach(node) },
@@ -89,6 +103,8 @@ type DomLike = {
 
 export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).document as DomLike): Host {
   type El = {
+    addEventListener(e: string, h: (ev: unknown) => void): void
+    removeEventListener(e: string, h: (ev: unknown) => void): void
     setAttribute(n: string, v: string): void
     removeAttribute(n: string): void
     insertBefore(n: unknown, before: unknown): void
@@ -108,5 +124,10 @@ export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).do
     insert: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
     move: (parent, node, before = null) => { el(parent).insertBefore(node, before) },
     remove: (node) => { el(node).remove() },
+    listen: (node, event, handler) => {
+      const target = node as unknown as { addEventListener(e: string, h: (ev: unknown) => void): void; removeEventListener(e: string, h: (ev: unknown) => void): void }
+      target.addEventListener(event, handler)
+      return () => target.removeEventListener(event, handler)
+    },
   }
 }

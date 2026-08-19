@@ -22,9 +22,9 @@ function tracingDoc() {
   }
 }
 
-test('ssr: renders static markup with one marker per hole', () => {
+test('ssr: fences every hole so adjacent text cannot merge', () => {
   const out = renderToString(html`<p class="a" title=${'xin chào'}>${'nội dung'}</p>`)
-  assert.equal(out, '<p class="a" title="xin chào">nội dung<!--k--></p>')
+  assert.equal(out, '<p class="a" title="xin chào"><!--k[-->nội dung<!--k--></p>')
 })
 
 test('ssr: escapes interpolated values, in text and in attributes', () => {
@@ -36,11 +36,11 @@ test('ssr: escapes interpolated values, in text and in attributes', () => {
 
 test('ssr: nested templates and lists render in document order', () => {
   const out = renderToString(list([{ id: 1, name: 'a' }, { id: 2, name: 'b' }]))
-  assert.equal(out, '<ul class="l"><li data-id="1">a<!--k--></li><li data-id="2">b<!--k--></li><!--k--></ul>')
+  assert.equal(out, '<ul class="l"><!--k[--><li data-id="1"><!--k[-->a<!--k--></li><li data-id="2"><!--k[-->b<!--k--></li><!--k--></ul>')
 })
 
 test('ssr: an absent value renders nothing but still leaves its marker', () => {
-  assert.equal(renderToString(html`<p>${null}${when(false, () => html`<b>x</b>`)}</p>`), '<p><!--k--><!--k--></p>')
+  assert.equal(renderToString(html`<p>${null}${when(false, () => html`<b>x</b>`)}</p>`), '<p><!--k[--><!--k--><!--k[--><!--k--></p>')
 })
 
 test('hydration: adopts the server DOM instead of rebuilding it', () => {
@@ -97,10 +97,10 @@ test('hydration: growing and shrinking the list after hydration still works', ()
   const root = hydrateRoot(domHost(document), container as unknown as HostNode, list(items))
 
   root.render(list([{ id: 0, name: 'z' }, ...items]))
-  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k-->/g, '')), ['z', 'a', 'b'])
+  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k\[?-->/g, '')), ['z', 'a', 'b'])
 
   root.render(list([{ id: 2, name: 'b' }]))
-  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k-->/g, '')), ['b'])
+  assert.deepEqual(container.querySelectorAll('li').map(n => n.innerHTML.replace(/<!--k\[?-->/g, '')), ['b'])
 })
 
 test('hydration: a mismatch fails loudly rather than patching over it', () => {
@@ -121,6 +121,6 @@ test('ssr and client render agree on the markup they produce', () => {
   const container = document.createElement('div')
   createRoot(domHost(document), container as unknown as HostNode).render(list(items))
   // the client uses empty text nodes as anchors where the server writes comments
-  const client = container.innerHTML.replace(/<!--k-->/g, '')
-  assert.equal(server.replace(/<!--k-->/g, ''), client)
+  const client = container.innerHTML.replace(/<!--k\[?-->/g, '')
+  assert.equal(server.replace(/<!--k\[?-->/g, ''), client)
 })

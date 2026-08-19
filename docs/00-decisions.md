@@ -220,7 +220,7 @@ as data, and rendered for SQLite and Postgres from one shape. A tagged SQL liter
 gives up all three.
 
 ```ts
-const q = from(P).where_(eq(P.active, true)).orderBy(desc(P.priceCents)).limit(20)
+const q = from(P).where(eq(P.active, true)).orderBy(desc(P.priceCents)).limit(20)
 q.touches            // ['catalog.Product'] -> effect check happens here
 q.toSQL('postgres')  // { text, params } -- values always parameterised
 ```

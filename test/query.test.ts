@@ -28,16 +28,16 @@ async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
 
 test('query: a builder call returns a new query, never mutates the old one', () => {
   const base = from(P)
-  const narrowed = base.where_(eq(P.active!, true))
-  const narrower = narrowed.where_(gt(P.priceCents!, 100))
-  assert.equal(base.where, null, 'the original must be untouched')
+  const narrowed = base.where(eq(P.active!, true))
+  const narrower = narrowed.where(gt(P.priceCents!, 100))
+  assert.equal(base.condition, null, 'the original must be untouched')
   assert.equal(narrowed.toSQL().params.length, 1)
   assert.equal(narrower.toSQL().params.length, 2, 'conditions accumulate with AND')
   assert.match(narrower.toSQL().text, /WHERE \(.*"active" = \?.* AND .*"priceCents" > \?\)/)
 })
 
 test('query: one shape renders for both dialects', () => {
-  const q = from(P).where_(eq(P.id!, 'p1')).limit(5)
+  const q = from(P).where(eq(P.id!, 'p1')).limit(5)
   assert.match(q.toSQL('sqlite').text, /"id" = \? LIMIT \?/)
   assert.match(q.toSQL('postgres').text, /"id" = \$1 LIMIT \$2/)
   assert.deepEqual(q.toSQL('postgres').params, ['p1', 5])
@@ -45,21 +45,21 @@ test('query: one shape renders for both dialects', () => {
 
 test('query: values are always parameterised, never interpolated', () => {
   const nasty = "'; DROP TABLE catalog_product; --"
-  const sql = from(P).where_(eq(P.title!, nasty)).toSQL()
+  const sql = from(P).where(eq(P.title!, nasty)).toSQL()
   assert.ok(!sql.text.includes('DROP TABLE'), 'the value must not appear in the SQL text')
   assert.deepEqual(sql.params, [nasty])
 })
 
 test('query: touches is computed from the whole expression tree', () => {
   const O = table(manifest, 'checkout.Order')
-  const q = from(P).where_(and(eq(P.active!, true), or(gt(O.qty!, 1), not(isNull(O.id!)))))
+  const q = from(P).where(and(eq(P.active!, true), or(gt(O.qty!, 1), not(isNull(O.id!)))))
   assert.deepEqual(q.touches, ['catalog.Product', 'checkout.Order'])
 })
 
 test('query: the whole set of operators renders', () => {
   const q = from(P)
     .select(P.id!, P.title!)
-    .where_(inArray(P.id!, ['a', 'b']), like(P.title!, '%áo%'), isNull(P.slug!))
+    .where(inArray(P.id!, ['a', 'b']), like(P.title!, '%áo%'), isNull(P.slug!))
     .orderBy(desc(P.priceCents!), asc(P.title!))
     .limit(10).offset(20)
   const sql = q.toSQL()
@@ -72,7 +72,7 @@ test('query: the whole set of operators renders', () => {
 })
 
 test('query: an empty IN list is false, not a syntax error', () => {
-  assert.match(from(P).where_(inArray(P.id!, [])).toSQL().text, /WHERE 1 = 0/)
+  assert.match(from(P).where(inArray(P.id!, [])).toSQL().text, /WHERE 1 = 0/)
 })
 
 test('query: a raw string where a column belongs is refused', () => {
@@ -88,7 +88,7 @@ test('query: a query the function did not declare is blocked before it runs', as
         effects: ['read:catalog.Product'],       // reads Product but not Order
         handler: (ctx) => {
           const p = ctx.table('catalog.Product'), o = ctx.table('checkout.Order')
-          return ctx.db.all(from(p).where_(gt(o.qty!, 0)))
+          return ctx.db.all(from(p).where(gt(o.qty!, 0)))
         },
       },
     },
@@ -173,7 +173,7 @@ test('changeset: committing an invalid one is refused with its errors', async ()
 })
 
 test('query: delete is a write and is checked as one', () => {
-  const q = deleteFrom(P).where_(eq(P.id!, 'p1'))
+  const q = deleteFrom(P).where(eq(P.id!, 'p1'))
   assert.equal(q.effect, 'write')
   assert.match(q.toSQL().text, /^DELETE FROM "catalog_product" WHERE/)
 })
