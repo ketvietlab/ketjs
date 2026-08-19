@@ -71,11 +71,11 @@ const app = await createKetServer({
   assets: { prefix: '/design/', dir: DESIGN },
   routes: {
     '/': async () => ({ body: `<!doctype html><meta charset="utf-8"><ul>
-      <li><a href="/catalogue">Danh mục trạng thái — mọi màn hình, mọi trạng thái</a></li>
-      <li><a href="/admin/apps">Ứng dụng (dữ liệu thật)</a></li>
-      <li><a href="/admin/pages">Trang (dữ liệu thật)</a></li>
-      <li><a href="/admin/settings">Cài đặt (dữ liệu thật)</a></li></ul>
-      <p>Đổi ngôn ngữ bằng <code>?lang=</code>: ${LOCALES.map(l => `<a href="/catalogue?lang=${l}">${l}</a>`).join(' · ')}
+      <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
+      <li><a href="/admin/apps">Apps (real data)</a></li>
+      <li><a href="/admin/pages">Pages (real data)</a></li>
+      <li><a href="/admin/settings">Settings (real data)</a></li></ul>
+      <p>Switch language with <code>?lang=</code>: ${LOCALES.map(l => `<a href="/catalogue?lang=${l}">${l}</a>`).join(' · ')}
       <br><code>${PSEUDO_LOCALE}</code> trả về chuỗi dài hơn và có ngoặc — dùng để thử tràn chữ.</p>` }),
 
     '/catalogue': route(t => cataloguePage(t)),

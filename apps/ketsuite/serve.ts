@@ -41,7 +41,7 @@ const db: Adapter = await openDatabase(config)
 
 if (config.migrateOnBoot) {
   const ops = await migrateOne(db, manifest)
-  if (ops.length) console.log(`  migrate: ${ops.length} thao tác`)
+  if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
 }
 
 registerFunctions(modules)
@@ -51,7 +51,7 @@ const apps = await createAppRegistry(manifest, db)
 // to see something. A database that has been used is left exactly as it is.
 if ((await apps.enabled()).size === 0) {
   for (const name of config.bootstrapApps) await apps.install(name)
-  console.log(`  cài lần đầu: ${[...(await apps.enabled())].sort().join(', ')}`)
+  console.log(`  first run, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
 }
 
 /**
@@ -101,7 +101,10 @@ const app = await createKetServer({
     const page = (await callFn('website.getPageByPath', { path: url.pathname },
       { adapter: db, manifest: live, scope })).value as { id: string; title: string; layout: unknown } | null
 
-    if (!page) return { site: { title: 'KetSuite' }, page: { path: url.pathname, title: 'Không tìm thấy' }, sections: [] }
+    if (!page) {
+      const _ = translator(manifest, localeOf(url, req as never), { fallback: config.defaultLocale })
+      return { site: { title: 'KetSuite' }, page: { path: url.pathname, title: _('website.page.notFound') }, sections: [] }
+    }
     return {
       site: { title: 'KetSuite' },
       page: { id: page.id, path: url.pathname, title: page.title },
@@ -139,19 +142,19 @@ const app = await createKetServer({
 const port = await app.listen(config.port)
 const enabled = [...(await apps.enabled())].sort()
 console.log(`
-  KetSuite đang chạy
+  KetSuite is running
 
-    trang               http://127.0.0.1:${port}/
-    quản trị            http://127.0.0.1:${port}/admin
-    tình trạng          http://127.0.0.1:${port}/_ket/health
-    mô tả cho agent     http://127.0.0.1:${port}/_ket/agent
+    site                http://127.0.0.1:${port}/
+    admin               http://127.0.0.1:${port}/admin
+    health              http://127.0.0.1:${port}/_ket/health
+    agent descriptor    http://127.0.0.1:${port}/_ket/agent
 
     database            ${db.name}${config.databaseUrl ? '' : ` (${config.sqliteFile})`}
-    app đang bật        ${enabled.join(', ') || '(chưa có)'}
-    ngôn ngữ            ${Object.keys(manifest.messages ?? {}).join(', ')}
+    apps installed      ${enabled.join(', ') || '(none)'}
+    locales             ${Object.keys(manifest.messages ?? {}).join(', ')}
 
-  Chưa có xác thực: công ty lấy từ header X-Ket-Company, mặc định "${config.defaultCompany}".
-  Đủ dùng để phát triển, KHÔNG được dùng cho production.
+  No authentication yet: the company comes from the X-Ket-Company header,
+  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.
 `)
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
