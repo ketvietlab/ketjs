@@ -140,22 +140,32 @@ export async function bootApp(spec: AppSpec, o: { env?: Record<string, string | 
   /**
    * The one place a request's identity is decided. Until authentication exists this
    * reads headers; afterwards it reads a session, and nothing else changes.
+   *
+   * Two headers, because reads and writes are not the same question:
+   * X-Ket-Company is the one a new row is stamped with, X-Ket-Companies is the set
+   * a read may span. Absent, the set is just the active one — the safe default.
    */
-  const scopeOf = (_url: URL, req: IncomingMessage): Scope => ({
-    company: (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany,
-    branches: ((req.headers['x-ket-branch'] as string | undefined) ?? '').split(',').filter(Boolean) || null,
-  })
+  const scopeOf = (_url: URL, req: IncomingMessage): Scope => {
+    const list = (h: string) => ((req.headers[h] as string | undefined) ?? '').split(',').map(s => s.trim()).filter(Boolean)
+    const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
+    const companies = list('x-ket-companies')
+    return {
+      company,
+      companies: companies.length ? [...new Set([company, ...companies])] : null,
+      branches: list('x-ket-branch') || null,
+    }
+  }
+
   /**
    * A locale is only ever one the deployment ships a catalogue for.
    *
    * Anything else falls back rather than being passed on: `Accept-Language: *` —
-   * which Node's own fetch sends by default — used to reach Intl and throw, so any
-   * client that did not set the header got a 500. Restricting to a known set fixes
-   * that and closes the wider hole at the same time: the value reaches the `lang`
-   * attribute of every page, and a value drawn from a fixed set cannot carry
-   * anything into markup.
+   * which Node's own fetch sends by default — used to reach Intl and throw. It also
+   * closes the wider hole: the value reaches the `lang` attribute of every page,
+   * and one drawn from a fixed set carries nothing into markup.
    */
   const known = new Set([...Object.keys(manifest.messages ?? {}), config.defaultLocale, config.fallbackLocale])
+
   const localeOf = (url: URL, req: IncomingMessage): string => {
     const asked = [
       url.searchParams.get('lang'),

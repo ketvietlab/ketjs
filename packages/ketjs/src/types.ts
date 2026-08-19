@@ -229,7 +229,18 @@ export type Row = Record<string, unknown>
 
 /** Which company, and which of its branches, this request is acting within. */
 export type Scope = {
+  /** The company a new row is stamped with. Writes are always to exactly one. */
   company: string | null
+  /**
+   * Companies this request may READ. Absent means just `company` — the safe
+   * default, because widening what you can see should take saying so.
+   *
+   * Reads use the set and writes use `company`, which is Odoo's split between
+   * allowed_company_ids and company_id, and the split is right: a report may span
+   * three legal entities, but an invoice belongs to exactly one.
+   */
+  companies?: string[] | null
+
   /** Null means every branch of the company — ordinary, not privileged. */
   branches?: string[] | null
 }
