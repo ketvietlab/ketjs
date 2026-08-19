@@ -232,7 +232,7 @@ export const sessionsScreen = (
 export const sessionDetail = (
   _: Translator,
   frame: Frame,
-  _session: AnyRow,
+  session: AnyRow,
   closeFields: FormField[],
   actionPath: string,
 ): TemplateResult => {
