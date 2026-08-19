@@ -80,7 +80,9 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         })
         continue
       }
-      manifest.routes[path] = { by: m.name, make }
+      manifest.routes[path] = typeof make === 'function'
+        ? { by: m.name, anonymous: false, make }
+        : { by: m.name, anonymous: make.anonymous === true, make: make.handler }
     }
   }
 
@@ -259,6 +261,7 @@ export function compose(modules: KetModule[], opts: { appRequires?: string[]; he
         input: def.input ?? {}, output: def.output ?? {},
         effects: [...(def.effects ?? [])],
         crossCompany: def.crossCompany === true,
+        anonymous: def.anonymous === true,
         idempotent: def.idempotent === true,
         dryRun: def.dryRun !== false,
         agent: def.agent === true,

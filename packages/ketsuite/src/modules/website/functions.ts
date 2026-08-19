@@ -3,6 +3,8 @@ import type { Ctx, FnSpec, Row } from 'ketjs'
 
 export const functions: Record<string, FnSpec> = {
   getPageByPath: defineFn({
+    // A public storefront is public. It reads a published page and nothing else.
+    anonymous: true,
     input: { path: 'text' },
     output: { id: 'id', path: 'text', title: 'text', layout: 'json', published: 'bool' },
     effects: ['read:website.Page'],
