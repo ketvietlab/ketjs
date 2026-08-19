@@ -3,6 +3,8 @@ export { defineApp, composeWorkspace, explainWorkspace } from './kernel/workspac
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
  export { createAppRegistry, restrictManifest } from './kernel/apps.ts'
+export { buildMenu, activeApp } from './kernel/menu.ts'
+export type { MenuNode, MenuOptions } from './kernel/menu.ts'
 export { translator, missingMessages, formatMissing, PSEUDO_LOCALE } from './kernel/i18n.ts'
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
  export type { AppRegistry, AppInfo, AppState } from './kernel/apps.ts'

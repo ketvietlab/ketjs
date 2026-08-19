@@ -3,7 +3,7 @@ import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen, emptyState, errorState } from './screens.ts'
 import type { AppRow, PageRow, Viewer } from './screens.ts'
 import { loginScreen } from '../user/login.ts'
-import type { Translator } from 'ketjs'
+import type { MenuNode, Translator } from 'ketjs'
 
 /**
  * Every screen in every state, on one page.
@@ -26,6 +26,31 @@ const page = (over: Partial<PageRow> = {}): PageRow =>
 const viewer = (over: Partial<Viewer> = {}): Viewer =>
   ({ name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme'], ...over })
 
+/**
+ * A sidebar with something in it. The screens take the tree as data, so the
+ * catalogue can show the real chrome with no server, no database and no session —
+ * which is the whole point of the screens being pure functions.
+ */
+const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode =>
+  ({ id, label, path: null, icon: null, active: false, children: [], ...over })
+
+const MENU: MenuNode[] = [
+  node('sales', 'Bán hàng', { icon: 'B', children: [
+    node('sales.orders', 'Đơn hàng', { children: [
+      node('sales.quotes', 'Báo giá', { path: '/quotes' }),
+      node('sales.list', 'Đơn hàng', { path: '/orders' }),
+    ] }),
+  ] }),
+  node('product', 'Sản phẩm', { icon: '📦', children: [
+    node('product.catalogue', 'Danh mục', { children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/products' })] }),
+  ] }),
+  node('admin', 'Quản trị', { icon: '⚙', active: true, children: [
+    node('admin.apps', 'Ứng dụng', { path: '/admin', active: true }),
+    node('admin.content', 'Nội dung', { children: [node('admin.pages', 'Trang', { path: '/admin/pages' })] }),
+    node('admin.config', 'Cấu hình', { children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })] }),
+  ] }),
+]
+
 export const CASES: Array<{ id: string; label: string; note: string; render: (t: Translator) => TemplateResult }> = [
   {
     id: 'login', label: 'Đăng nhập — trống', note: 'Trang đầu tiên ai cũng thấy, và là trang duy nhất chạy không cần JavaScript. Chưa có CSS.',
@@ -41,16 +66,16 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
   },
   {
     id: 'viewer-one', label: 'Thanh trên — một công ty', note: 'Chỉ tên và nút đăng xuất. Tên công ty cố tình ẩn khi tài khoản chỉ thuộc một.',
-    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer()),
+    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer(), {}, MENU),
   },
   {
     id: 'viewer-many', label: 'Thanh trên — nhiều công ty', note: 'Có tên công ty đang chọn. Chưa có cách đổi công ty — chỗ này sẽ cần một điều khiển.',
-    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer({ companies: ['acme', 'globex', 'initech'] })),
+    render: (_) => appsScreen(_, [app({ state: 'installed' })], viewer({ companies: ['acme', 'globex', 'initech'] }), {}, MENU),
   },
   {
     id: 'viewer-long', label: 'Thanh trên — tên dài', note: 'Kiểm tra thanh trên không vỡ khi tên người và tên công ty đều dài.',
     render: (_) => appsScreen(_, [app({ state: 'installed' })],
-      viewer({ name: 'Nguyễn Thị Hoàng Yến Vy Khánh Linh', company: 'cong-ty-co-phan-thuong-mai-dich-vu', companies: ['a', 'b'] })),
+      viewer({ name: 'Nguyễn Thị Hoàng Yến Vy Khánh Linh', company: 'cong-ty-co-phan-thuong-mai-dich-vu', companies: ['a', 'b'] }), {}, MENU),
   },
   {
     id: 'apps-typical', label: 'Ứng dụng — thường gặp', note: 'Hai nhóm, có cái đã cài có cái chưa.',
@@ -59,11 +84,11 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
       app({ name: 'website_menu', title: 'Menu điều hướng', summary: 'Thanh menu cho website.', depends: ['website'] }),
       app({ name: 'website_seo', title: 'SEO', summary: 'Thẻ mô tả và canonical.', state: 'installed', depends: ['website'] }),
       app({ name: 'theme_paper', title: 'Theme Paper', summary: 'Giao diện mặc định.', category: 'Giao diện', state: 'installed' }),
-    ]),
+    ], null, {}, MENU),
   },
   {
     id: 'apps-blocked', label: 'Ứng dụng — không gỡ được', note: 'Nút Gỡ bị vô hiệu vì app khác đang phụ thuộc. Cần cho người dùng hiểu vì sao.',
-    render: (_) => appsScreen(_, [app({ state: 'installed', dependents: ['website_menu', 'website_seo'] })]),
+    render: (_) => appsScreen(_, [app({ state: 'installed', dependents: ['website_menu', 'website_seo'] })], null, {}, MENU),
   },
   {
     id: 'apps-long', label: 'Ứng dụng — danh sách dài', note: 'Kiểm tra lưới khi có nhiều thẻ và tên dài.',
@@ -71,15 +96,15 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
       name: `app_${i}`, title: i % 4 === 0 ? `Ứng dụng có tên rất dài số ${i}` : `Ứng dụng ${i}`,
       summary: i % 3 === 0 ? 'Mô tả dài hơn bình thường để xem thẻ có bị vỡ hay không khi chữ tràn sang dòng thứ hai.' : 'Mô tả ngắn.',
       category: i % 2 ? 'Website' : 'Thương mại', state: i % 3 === 0 ? 'installed' : 'available',
-    }))),
+    })), null, {}, MENU),
   },
-  { id: 'apps-empty', label: 'Ứng dụng — trống', note: 'Bản triển khai chưa build app nào vào.', render: (_) => appsScreen(_, []) },
+  { id: 'apps-empty', label: 'Ứng dụng — trống', note: 'Bản triển khai chưa build app nào vào.', render: (_) => appsScreen(_, [], null, {}, MENU) },
   {
     id: 'pages-typical', label: 'Trang — thường gặp', note: 'Có bản nháp lẫn bản đã đăng.',
     render: (_) => pagesScreen(_, [
       page(), page({ id: 'p2', path: '/gioi-thieu', title: 'Giới thiệu', published: false }),
       page({ id: 'p3', path: '/lien-he', title: 'Liên hệ' }),
-    ]),
+    ], null, {}, MENU),
   },
   {
     id: 'pages-long', label: 'Trang — danh sách dài', note: 'Đường dẫn dài, tiêu đề dài, 40 dòng.',
@@ -87,12 +112,12 @@ export const CASES: Array<{ id: string; label: string; note: string; render: (t:
       id: `p${i}`, path: i % 5 === 0 ? `/danh-muc/con-rat-sau/duong-dan-dai-${i}` : `/trang-${i}`,
       title: i % 4 === 0 ? `Tiêu đề dài bất thường dùng để kiểm tra tràn dòng số ${i}` : `Trang ${i}`,
       published: i % 3 !== 0,
-    }))),
+    })), null, {}, MENU),
   },
-  { id: 'pages-empty', label: 'Trang — trống', note: 'Chưa có trang nào.', render: (_) => pagesScreen(_, []) },
+  { id: 'pages-empty', label: 'Trang — trống', note: 'Chưa có trang nào.', render: (_) => pagesScreen(_, [], null, {}, MENU) },
   {
     id: 'settings', label: 'Cài đặt — token', note: 'Danh sách token đang áp dụng.',
-    render: (_) => settingsScreen(_, { 'color-accent': 'oklch(0.55 0.18 268)', 'radius': '0.75rem', 'page-max-width': '68rem', 'section-gap': '4rem' }),
+    render: (_) => settingsScreen(_, { 'color-accent': 'oklch(0.55 0.18 268)', 'radius': '0.75rem', 'page-max-width': '68rem', 'section-gap': '4rem' }, null, {}, MENU),
   },
   {
     id: 'state-empty', label: 'Trạng thái rỗng', note: 'Dùng ở mọi màn hình.',

@@ -1,5 +1,6 @@
 import { defineModule } from 'ketjs'
 import { routes } from './routes.ts'
+import { menus } from './menus.ts'
 
 /**
  * The catalogue, in the admin — kept out of `product`.
@@ -26,11 +27,14 @@ export default defineModule({
   summary: 'Màn hình danh mục sản phẩm và lối vào từ thanh điều hướng.',
   category: 'Hệ thống',
   routes,
+  menus,
   messages: {
     vi: {
       'app.title': 'Sản phẩm trong quản trị',
       'app.summary': 'Màn hình danh mục sản phẩm và lối vào từ thanh điều hướng.',
-      'nav': 'Sản phẩm',
+      'menu.app': 'Sản phẩm',
+      'menu.catalogue': 'Danh mục',
+      'menu.templates': 'Mẫu sản phẩm',
       'openCatalogue': 'Mở danh mục',
       'screen.title': 'Danh mục sản phẩm',
       'screen.empty.message': 'Chưa có sản phẩm nào.',
@@ -45,7 +49,9 @@ export default defineModule({
     en: {
       'app.title': 'Products in admin',
       'app.summary': 'The catalogue screen, and the way into it.',
-      'nav': 'Products',
+      'menu.app': 'Products',
+      'menu.catalogue': 'Catalogue',
+      'menu.templates': 'Templates',
       'openCatalogue': 'Open catalogue',
       'screen.title': 'Product catalogue',
       'screen.empty.message': 'No products yet.',
@@ -60,7 +66,6 @@ export default defineModule({
   },
   fills: {
     // KTL, addressing joints by name — the same language a storefront theme uses.
-    'backend:nav.items': `<a data-ui="nav-item" data-active="{% if active == '/admin/products' %}true{% else %}false{% endif %}" href="/admin/products">{{ 'product_backend.nav' | _ }}</a>`,
     'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },
 })
