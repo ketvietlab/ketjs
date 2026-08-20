@@ -28,6 +28,8 @@ export const models: Record<string, ModelDef> = {
       lang: 'text?',
       /** The company a new row is stamped with when this user acts (D32). */
       defaultCompanyId: 'ref:company.Company?',
+      /** The operational branch a company+branch row is stamped with. */
+      defaultBranchId: 'ref:company.Branch?',
       /**
        * Exempt from the permission check entirely.
        *
@@ -96,5 +98,17 @@ export const models: Record<string, ModelDef> = {
       userId: 'ref:user.User',
       companyId: 'ref:company.Company',
     },
+    indexes: { user_company: { fields: ['userId', 'companyId'], unique: true } },
+  },
+
+  /** Branches are granted explicitly, except the root granted with a company. */
+  BranchMembership: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      branchId: 'ref:company.Branch',
+    },
+    indexes: { user_branch: { fields: ['userId', 'branchId'], unique: true } },
   },
 }

@@ -233,7 +233,7 @@ test('company: a legal entity is backed by an organisation, not by a person', as
   await call(o, 'partner.savePartner', { id: 'p1', kind: 'person', name: 'Nguyễn Văn A' })
   const bad = await call(o, 'company.saveCompany', { id: 'c1', partnerId: 'p1', currency: 'VND' })
   assert.equal(bad.ok, false)
-  assert.match(JSON.stringify(bad.errors), /loại/)
+  assert.match(JSON.stringify(bad.errors), /company\.error\.partnerKind/)
 
   await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Acme JSC' })
   assert.equal(

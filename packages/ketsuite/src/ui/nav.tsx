@@ -46,7 +46,16 @@ export const HOOKS = [
   'signout-button',
 ] as const
 
-export type Viewer = { name: string; company: string | null; companies: string[] }
+export type Viewer = {
+  name: string
+  company: string | null
+  companies: string[]
+  companyName?: string | null
+  branch?: string | null
+  branches?: string[] | null
+  branchName?: string | null
+  contextPath?: string | null
+}
 
 export type Indicator = {
   id: string
@@ -202,7 +211,9 @@ export const sidebar = (
             </span>
             <span data-ui="viewer-who">
               <span data-ui="viewer-name">{viewer.name}</span>
-              {viewer.companies.length > 1 && <span data-ui="viewer-company">{viewer.company}</span>}
+              {viewer.companies.length > 1 && (
+                <span data-ui="viewer-company">{viewer.companyName ?? viewer.company}</span>
+              )}
             </span>
             <form data-ui="signout" method="post" action="/logout">
               <button
