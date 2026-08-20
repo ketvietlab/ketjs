@@ -460,6 +460,13 @@ try {
         scope: { company: null, branch: null },
       })
       console.log(JSON.stringify(result.value, null, 2))
+      if (
+        result.value &&
+        typeof result.value === 'object' &&
+        'ok' in result.value &&
+        result.value.ok === false
+      )
+        process.exitCode = 1
     } finally {
       await adapter.close()
     }

@@ -672,6 +672,56 @@ test('live pg: identity login, role edges, throttles and token CAS survive concu
   })
 })
 
+test('live pg: concurrent admin provisioning creates exactly one complete bootstrap', live, async () => {
+  await withPg(async (a) => {
+    const identityModules = [partner, company, user]
+    const identityManifest = compose(identityModules, { headless: true })
+    const identitySchema = schemaFromManifest(identityManifest)
+    for (const tableName of Object.keys(identitySchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, identitySchema), a)) await a.exec(sql)
+    registerFunctions(identityModules)
+    const peers = [a, postgresAdapter(URL), postgresAdapter(URL), postgresAdapter(URL)]
+    await Promise.all(peers.slice(1).map((adapter) => adapter.open()))
+    try {
+      const results = await Promise.all(
+        peers.map((adapter) =>
+          callFn(
+            'user.provisionAdmin',
+            {
+              companyName: 'Kết Việt',
+              companyCode: 'KET',
+              currency: 'VND',
+              adminLogin: 'admin@example.com',
+              adminName: 'Administrator',
+              adminEmail: 'admin@example.com',
+              adminPassword: 'correct horse battery staple',
+            },
+            {
+              adapter,
+              manifest: identityManifest,
+              actor: 'system:provision',
+              scope: { company: null, branch: null },
+            },
+          ),
+        ),
+      )
+      assert.equal(results.filter((result) => (result.value as { ok: boolean }).ok).length, 1)
+      for (const table of [
+        'partner_partner',
+        'company_company',
+        'company_branch',
+        'user_user',
+        'user_membership',
+        'user_branch_membership',
+      ])
+        assert.equal(Number((await a.all(`SELECT COUNT(*) AS count FROM ${table}`))[0]!.count), 1, table)
+    } finally {
+      await Promise.all(peers.slice(1).map((adapter) => adapter.close()))
+    }
+  })
+})
+
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {
     const stockModules = [uom, product, stock]

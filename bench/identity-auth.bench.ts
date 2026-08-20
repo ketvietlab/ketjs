@@ -102,7 +102,7 @@ try {
     ['bench-admin', 'bench-admin', true],
     ['bench-worker', 'bench-worker', false],
     ...Array.from(
-      { length: 12 },
+      { length: 30 },
       (_, index) => [`concurrent-${index}`, `concurrent-${index}`, false] as const,
     ),
   ] as const
@@ -115,7 +115,7 @@ try {
           {
             id,
             login,
-            password: 'benchmark-password',
+            ...(login.startsWith('concurrent-') ? {} : { password: 'benchmark-password' }),
             name: `Benchmark ${login}`,
             superuser,
           },
@@ -201,7 +201,7 @@ try {
   if (assignmentHasUnique) {
     await measureConcurrent(
       'concurrent role membership',
-      12,
+      30,
       8,
       async () => {},
       async (round, index) => {
@@ -225,7 +225,7 @@ try {
     const tokens = new Map<number, string>()
     await measureConcurrent(
       'single-use token CAS',
-      6,
+      10,
       4,
       async (round) => {
         const result = await call('user.issueAuthToken', {

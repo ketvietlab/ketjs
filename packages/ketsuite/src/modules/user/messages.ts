@@ -52,6 +52,8 @@ export const messages = {
     'error.roleNameUnique': 'Tên vai trò đã được sử dụng.',
     'error.roleMissing': 'Vai trò không tồn tại.',
     'error.functionMissing': 'Function {key} không có trong bản triển khai này.',
+    'error.provisionActor': 'Bootstrap chỉ được gọi từ lệnh provision tin cậy.',
+    'error.provisionExists': 'Hệ thống đã có công ty hoặc người dùng và không thể bootstrap lại.',
   },
   en: {
     'login.title': 'Sign in',
@@ -106,5 +108,7 @@ export const messages = {
     'error.roleNameUnique': 'That role name is already in use.',
     'error.roleMissing': 'The role does not exist.',
     'error.functionMissing': 'Function {key} is not present in this deployment.',
+    'error.provisionActor': 'Bootstrap may only run through the trusted provision command.',
+    'error.provisionExists': 'The system already has a company or user and cannot be bootstrapped again.',
   },
 }
