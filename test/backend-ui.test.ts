@@ -257,7 +257,16 @@ const everything = [
     [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })],
     {
       menu: MENU,
-      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      viewer: {
+        name: 'Nguyễn Quản Trị',
+        company: 'acme',
+        companies: ['acme', 'globex'],
+        companyName: 'Công ty Kết Việt',
+        branch: 'root:acme',
+        branches: ['root:acme'],
+        branchName: 'Trụ sở chính',
+        contextPath: '/admin/context',
+      },
       indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
     },
   ),
