@@ -61,7 +61,7 @@ nên kết quả này chỉ chứng minh không thấy hồi quy theo ngưỡng 
 
 ## Kiểm chứng đi kèm
 
-- 87 targeted tests pass: unit, PostgreSQL concurrency, HTTP E2E, Partner,
+- 90 targeted tests pass: unit, PostgreSQL concurrency, HTTP E2E, Partner,
   Company/Branch, Hospitality và joint contract.
 - Type check và format check pass; lint phần Address/Partner/Hospitality pass.
 - Full suite không chạy local theo `AGENT.md`; CI chạy khi PR target `develop`.

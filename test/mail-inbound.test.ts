@@ -5,6 +5,7 @@ import { defineApp, defineModule } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { createTestApp, TestHttpError } from 'ketjs/testing'
 import {
+  address,
   company,
   mail,
   mailInbound,
@@ -140,6 +141,7 @@ test('inbound email: signed reply/reference/bounce routing, attachment storage, 
   const app = defineApp({
     name: 'mail_inbound_e2e',
     modules: [
+      address,
       partner,
       company,
       storage,
