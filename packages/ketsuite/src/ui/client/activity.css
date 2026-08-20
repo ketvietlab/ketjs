@@ -1,11 +1,12 @@
 @layer components {
   [data-ui="activity-record"] {
     display: grid;
-    gap: var(--admin-gap-md);
+    min-inline-size: 0;
+    gap: var(--admin-gap-sm);
     max-inline-size: 52rem;
-    padding: var(--admin-gap-lg);
+    padding: var(--admin-gap-md);
     border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-lg);
+    border-radius: var(--admin-radius);
     background: var(--admin-surface);
     box-shadow: var(--admin-shadow-card);
   }
@@ -25,27 +26,35 @@
     flex-wrap: wrap;
     align-items: end;
     justify-content: flex-end;
-    gap: var(--admin-gap);
-    padding-block-start: var(--admin-gap);
+    gap: var(--admin-gap-sm);
+    padding-block-start: var(--admin-gap-sm);
     border-block-start: 1px solid var(--admin-line);
   }
 
   [data-ui="activity-title"] {
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.875rem;
   }
   [data-ui="activity-schedule"] {
     display: grid;
     gap: var(--admin-gap-sm);
-    padding: var(--admin-gap-md);
+    padding: var(--admin-gap);
     border-radius: var(--admin-radius);
     background: var(--admin-surface-subtle);
   }
   [data-ui="activity-field"] {
     display: grid;
-    gap: var(--admin-gap-xs);
+    grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--admin-gap-sm);
     color: var(--admin-ink-secondary);
     font-size: 0.8125rem;
+  }
+  [data-ui="activity-field"] > :is(input, select, textarea) {
+    grid-column: 2;
+  }
+  [data-ui="activity-field"]:has(textarea) {
+    align-items: start;
   }
   [data-ui="activity-type"],
   [data-ui="activity-summary"],
@@ -55,16 +64,27 @@
   [data-ui="activity-reschedule"] input {
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: 2.5rem;
-    padding: 0.5rem 0.625rem;
+    min-block-size: var(--admin-control-height);
+    padding: 0.25rem 0.5rem;
     border: 1px solid var(--admin-line-strong);
     border-radius: var(--admin-radius-sm);
     background: var(--admin-surface);
     color: var(--admin-ink);
     font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+  }
+  :is(
+    [data-ui="activity-type"],
+    [data-ui="activity-summary"],
+    [data-ui="activity-date"],
+    [data-ui="activity-feedback"],
+    [data-ui="activity-reschedule"] input
+  ) {
+    block-size: var(--admin-control-height);
   }
   [data-ui="activity-note"] {
-    min-block-size: 4.5rem;
+    min-block-size: 4rem;
     resize: vertical;
   }
   [data-ui="activity-attachment"] {
@@ -85,7 +105,7 @@
     gap: var(--admin-gap-sm);
   }
   [data-ui="activity-item"] {
-    padding: var(--admin-gap-md);
+    padding: var(--admin-gap);
     border-inline-start: 3px solid var(--admin-accent);
     border-radius: 0 var(--admin-radius-sm) var(--admin-radius-sm) 0;
     background: var(--admin-surface-subtle);
@@ -180,8 +200,8 @@
   }
   [data-ui="activity-indicator"] {
     display: inline-flex;
-    min-inline-size: 3.25rem;
-    block-size: 2rem;
+    min-inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
     order: 2;
     align-items: center;
     justify-content: center;
@@ -206,8 +226,8 @@
     color: var(--admin-danger);
   }
   [data-ui="activity-indicator-icon"] {
-    inline-size: 1rem;
-    block-size: 1rem;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
     flex: 0 0 auto;
   }
   [data-ui="activity-indicator-count"] {
@@ -218,5 +238,11 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
     text-align: center;
+  }
+  @media (max-width: 47.9375rem) {
+    [data-ui="activity-indicator"] {
+      min-inline-size: 2.75rem;
+      block-size: 2.75rem;
+    }
   }
 }
