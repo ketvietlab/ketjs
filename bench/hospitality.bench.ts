@@ -449,6 +449,14 @@ try {
   const transitionRooms = Array.from({ length: transitionCount }, (_, index) =>
     candidateRooms.find((candidate, offset) => offset >= index && candidate % 12 === index % 12),
   )
+  const reservedTransitionRooms = new Set(
+    transitionRooms.filter((room): room is number => room !== undefined),
+  )
+  const moveRooms = candidateRooms
+    .filter((room) => !reservedTransitionRooms.has(room))
+    .slice(0, Math.min(4, transitionCount))
+  if (moveRooms.length !== Math.min(4, transitionCount))
+    throw new Error('benchmark needs one available destination for each room move')
   const transitionStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -472,6 +480,16 @@ try {
           sourceKey: `${key}:service:${index}`,
           occurredAt: '2026-09-02T08:00:00.000Z',
         })
+        if (index < moveRooms.length) {
+          const moved = await call(key, 'hospitality_core.moveRoom', {
+            stayId: `reservation:${index}:stay`,
+            roomId: `room:${moveRooms[index]}`,
+            assignmentId: `move-assignment:${index}`,
+            reason: 'benchmark room move',
+            at: '2026-09-02T09:00:00.000Z',
+          })
+          if (!(moved.value as { ok: boolean }).ok) throw new Error(`${key}: room move failed`)
+        }
         if (index % 2 === 1) {
           const nightlyService = await call(key, 'hospitality_core.saveExtraLine', {
             id: `audit-extra:${index}`,
@@ -671,7 +689,10 @@ try {
     throw new Error(`concurrent night audit lost an attempt: ${JSON.stringify(auditResults[0])}`)
 
   const collisionKey = keys[0]!
-  const usedRooms = new Set(transitionRooms.filter((room): room is number => room !== undefined))
+  const usedRooms = new Set([
+    ...transitionRooms.filter((room): room is number => room !== undefined),
+    ...moveRooms,
+  ])
   const collisionRoom = candidateRooms.find((room) => !usedRooms.has(room))
   if (collisionRoom === undefined) throw new Error('benchmark needs one unused available room')
   for (const suffix of ['a', 'b'])
@@ -904,6 +925,15 @@ try {
     }),
   ).then((matches) => matches.every(Boolean))
   if (!housekeepingCheckoutTasksMatch) throw new Error('checkout did not create one cleaning task per stay')
+  const housekeepingMoveTasksMatch = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters
+        .get(key)!
+        .all(`SELECT COUNT(*) AS n FROM hospitality_core_cleaning_task WHERE id LIKE 'move:%:clean'`)
+      return Number(rows[0]!.n) === moveRooms.length
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!housekeepingMoveTasksMatch) throw new Error('room moves did not create one cleaning task per old room')
   const inventoryChangeCounts = await Promise.all(
     keys.map(async (key) => {
       const rows = await adapters.get(key)!.all('SELECT COUNT(*) AS n FROM hospitality_core_inventory_change')
@@ -970,6 +1000,7 @@ try {
         ),
         idempotentServiceCountsMatch,
         checkInChargeCheckoutCycles: totalTransitions,
+        roomMoves: databaseCount * moveRooms.length,
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
         stayNotices: totalTransitions,
@@ -990,6 +1021,7 @@ try {
         concurrentServicePostSingleCharge,
         concurrentCancelCheckInConsistent,
         housekeepingCheckoutTasksMatch,
+        housekeepingMoveTasksMatch,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
         durableInventoryChangesPresent,
         contentChanges: contentChangeCounts.reduce((sum, count) => sum + count, 0),
