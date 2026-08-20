@@ -4,9 +4,12 @@
 
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { extname, join, normalize } from 'node:path'
+import { delimiter, extname, join, normalize, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
-import type { AppSpec } from './kernel/workspace.ts'
+import type { AppSpec, WorkspaceDeclaration } from './kernel/workspace.ts'
+import { resolveWorkspace } from './kernel/modules.ts'
+import type { ResolvedModuleInfo } from './kernel/modules.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
@@ -84,10 +87,45 @@ const workspacePath = () => {
 }
 
 const loadWorkspace = async () => {
-  const mod = (await import(`${process.cwd()}/${workspacePath()}`)) as { apps: AppSpec[] }
-  if (!Array.isArray(mod.apps))
-    throw new Error(`${workspacePath()} must export \`apps\`, an array of defineApp(...)`)
-  return { ws: composeWorkspace(mod.apps), apps: mod.apps }
+  const configuredPath = workspacePath()
+  const absolutePath = resolve(configuredPath)
+  const mod = (await import(pathToFileURL(absolutePath).href)) as {
+    default?: WorkspaceDeclaration
+    apps?: WorkspaceDeclaration['apps']
+    modulePaths?: WorkspaceDeclaration['modulePaths']
+  }
+  const declaration =
+    mod.default && typeof mod.default === 'object' && Array.isArray(mod.default.apps)
+      ? mod.default
+      : { apps: mod.apps, modulePaths: mod.modulePaths }
+  if (!Array.isArray(declaration.apps))
+    throw new Error(
+      `${configuredPath} must default-export defineWorkspace(...) or export \`apps\`, an array of defineApp(...)`,
+    )
+  const fromEnv = (process.env.KET_MODULE_PATH ?? '')
+    .split(delimiter)
+    .map((path) => path.trim())
+    .filter(Boolean)
+  const resolved = await resolveWorkspace(declaration as WorkspaceDeclaration, {
+    baseUrl: pathToFileURL(absolutePath),
+    extraModulePaths: [...fromEnv, ...opts('module-path')],
+    allowSource: process.env.KET_DEV_SOURCE === '1',
+  })
+  return { ws: composeWorkspace(resolved.apps), apps: resolved.apps, resolved }
+}
+
+const formatModules = (paths: readonly string[], modules: readonly ResolvedModuleInfo[]): string => {
+  const lines = ['module paths:']
+  for (const path of paths) lines.push(`  ${path}`)
+  if (!paths.length) lines.push('  (none)')
+  lines.push('modules:')
+  for (const module of modules) {
+    lines.push(
+      `  ${module.name.padEnd(24)} ${module.version.padEnd(10)} ${module.kind.padEnd(6)} apps=${module.apps.join(',')}  ${module.source}`,
+    )
+  }
+  if (!modules.length) lines.push('  (none)')
+  return lines.join('\n')
 }
 
 /** The AppSpec, not the composed manifest — serving needs what the app declared. */
@@ -116,6 +154,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket check                 compose every app and report contract violations
   ket manifest [--app X]    print the composed manifest
   ket workspace             show apps, datastores and shared modules
+  ket modules               show resolved modules and their source paths
   ket types [--app X]       generate .ket/types.d.ts from the manifest
   ket agent [--app X]       print the agent capability descriptor
   ket permissions           every function that exists to be granted
@@ -153,6 +192,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket new NAME [--dir D]    scaffold an app that runs
 
 Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
+         --module-path DIR (repeatable; KET_MODULE_PATH uses the platform path separator)
          --app NAME, --port N, --header "Name: value" (repeatable)
 `
 
@@ -263,6 +303,7 @@ const callWithClient = async (baseUrl: string): Promise<number> => {
     'header',
     'app',
     'workspace',
+    'module-path',
   ])[0]
   if (!fnKey) throw new Error('usage: ket call FUNCTION [--against URL] [--input JSON|@FILE|-]')
   const cookieFile = opt('cookie-file')
@@ -339,7 +380,7 @@ try {
     await new Promise(() => {})
   }
 
-  const { ws, apps: specs } = await loadWorkspace()
+  const { ws, apps: specs, resolved } = await loadWorkspace()
   mkdirSync('.ket', { recursive: true })
 
   if (cmd === 'serve') {
@@ -465,6 +506,8 @@ try {
     console.log('\nall contracts hold')
   } else if (cmd === 'workspace') {
     console.log(explainWorkspace(ws))
+  } else if (cmd === 'modules') {
+    console.log(formatModules(resolved.modulePaths, resolved.modules))
   } else if (cmd === 'manifest') {
     const [, m] = pickApp(ws)
     console.log(JSON.stringify(m, null, 2))

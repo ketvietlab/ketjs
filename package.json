@@ -16,6 +16,7 @@
     "test": "npm run build --silent && node --test \".build/test/*.test.js\"",
     "test:built": "node --test \".build/test/*.test.js\"",
     "bench": "npm run build --silent && node .build/bench/view.bench.js && node .build/bench/domain.bench.js",
+    "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
     "bench:queue": "npm run build --silent && node .build/bench/queue.bench.js",
     "bench:storage": "npm run build --silent && node .build/bench/storage.bench.js",
     "type-proof": "npm run build --silent && node .build/tools/type-proof.js",

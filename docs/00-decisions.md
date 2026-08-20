@@ -1549,3 +1549,30 @@ contract from D48. Upload, primary selection, reordering and removal use native
 forms, and the neutral UI component receives URLs and action endpoints instead of
 depending on a schema or object-store convention. Product and stock still own no
 blob column, resize pipeline, CDN rule or file-processing implementation.
+
+## D50 — Module paths discover packages; they do not decide the deployment
+
+**Chosen:** a workspace may declare several filesystem roots whose direct children
+contain `ket.module.json`. An app selects a module by its declared name; resolution
+loads that module and its dependency closure into the ordinary object-only
+`AppSpec` before composition. Imported `KetModule` objects remain valid in the same
+list, so existing workspaces need no migration.
+
+**Why:** Odoo's `addons_path` makes private and vendor modules operationally easy
+to place, but scanning a root and installing everything found are different
+decisions. Ket keeps them different. A file appearing on disk makes a module
+discoverable, not shipped; the workspace remains the reviewable statement of what
+the deployment contains, and the database still only switches that build-time set
+on or off.
+
+**The fences:** roots are canonicalized, duplicate names across roots are errors
+rather than order-dependent overrides, descriptor and executable identities must
+match, and an entry may not escape its module directory. Discovery reads every
+small descriptor but executes only selected modules. Production accepts emitted
+JavaScript artifacts, preserving D6; TypeScript entries are admitted only through
+the explicit development loader.
+
+**Where it lives:** resolution is asynchronous and belongs between loading the
+workspace and calling `composeWorkspace`. Composition, migrations, HTTP and workers
+continue to know only `KetModule[]`. Module location therefore cannot become a
+second registration mechanism or leak into business runtime code.
