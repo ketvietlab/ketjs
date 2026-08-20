@@ -169,6 +169,24 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.match(productCreateHtml, /name="isStorable"[^>]*form="product-create-form"/)
   assert.doesNotMatch(productCreateHtml, /data-island="mail\.chatter"/)
 
+  const invalidProductPage = await e2e.client.post(
+    '/admin/products/new?lang=vi',
+    new URLSearchParams({
+      name: 'Sản phẩm cấu hình kho sai',
+      type: 'goods',
+      uomId: 'unit',
+      isStorable: '0',
+      tracking: 'lot',
+    }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(invalidProductPage.status, 200)
+  assert.match(await invalidProductPage.text(), /Dữ liệu chưa hợp lệ/)
+  const invalidProducts = await call<Row[]>('product.listTemplates', {
+    search: 'Sản phẩm cấu hình kho sai',
+  })
+  assert.equal(invalidProducts.value.length, 0)
+
   const createdProductPage = await e2e.client.post(
     '/admin/products/new?lang=vi',
     new URLSearchParams({
