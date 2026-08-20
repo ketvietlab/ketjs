@@ -174,6 +174,11 @@ try {
       markers: ['record-workspace', 'general-ledger-filter-form', 'Khách hàng thanh toán một phần'],
     },
     {
+      label: 'Accounting partner ledger',
+      path: '/admin/partner-statement?partnerId=member-party&lang=vi',
+      markers: ['record-workspace', 'partner-ledger-filter-form', 'Khách hàng thanh toán một phần'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
