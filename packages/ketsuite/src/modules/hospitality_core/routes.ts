@@ -4,6 +4,7 @@ import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { viewerOf } from '../backend/routes.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { receiveAttachment } from '../storage/routes.ts'
 import {
   amenitiesScreen,
   cleaningTasksScreen,
@@ -19,6 +20,7 @@ import {
   roomTypesScreen,
   staysScreen,
   tapeChartScreen,
+  contentScreen,
 } from './screens.ts'
 import type {
   AmenityRow,
@@ -33,6 +35,7 @@ import type {
   RoomTypeRow,
   StayRow,
   TapeChart,
+  ContentImageRow,
 } from './screens.ts'
 import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
 
@@ -102,6 +105,71 @@ const integer = (value: string | undefined, fallback = 0): number => {
 
 const optionalInteger = (value: string | undefined): number | undefined =>
   value ? integer(value) : undefined
+
+type ContentSelection = {
+  properties: PropertyRow[]
+  roomTypes: RoomTypeRow[]
+  propertyId: string | undefined
+  roomTypeId: string | null
+  target: string
+}
+
+const contentSelection = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+): Promise<ContentSelection> => {
+  const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+  const requestedProperty = url.searchParams.get('property')?.trim()
+  const propertyId = properties.some((row) => row.id === requestedProperty)
+    ? requestedProperty
+    : properties[0]?.id
+  const roomTypes = propertyId
+    ? ((await ctx.call('hospitality_core.listRoomTypes', { propertyId }, url, req)) as RoomTypeRow[])
+    : []
+  const requestedTarget = url.searchParams.get('target')?.trim() || 'property'
+  const requestedRoomType = requestedTarget.startsWith('room_type:')
+    ? requestedTarget.slice('room_type:'.length)
+    : null
+  const roomTypeId = roomTypes.some((row) => row.id === requestedRoomType) ? requestedRoomType : null
+  return {
+    properties,
+    roomTypes,
+    propertyId,
+    roomTypeId,
+    target: roomTypeId ? `room_type:${roomTypeId}` : 'property',
+  }
+}
+
+const contentQuery = (url: URL, selection: ContentSelection): string => {
+  const query = new URLSearchParams()
+  if (selection.propertyId) query.set('property', selection.propertyId)
+  query.set('target', selection.target)
+  const lang = url.searchParams.get('lang')?.trim()
+  if (lang) query.set('lang', lang)
+  return query.toString()
+}
+
+const contentRedirect = (url: URL, selection: ContentSelection, status: 'saved' | 'invalid') => {
+  const query = new URLSearchParams(contentQuery(url, selection))
+  query.set('status', status)
+  return seeOther(`/admin/hospitality/content?${query.toString()}`)
+}
+
+const contentImages = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  selection: ContentSelection,
+): Promise<ContentImageRow[]> => {
+  if (!selection.propertyId) return []
+  return (await ctx.call(
+    'hospitality_core.listContentImages',
+    selection.roomTypeId ? { roomTypeId: selection.roomTypeId } : { propertyId: selection.propertyId },
+    url,
+    req,
+  )) as ContentImageRow[]
+}
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/front-desk':
@@ -482,6 +550,153 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
+  '/admin/hospitality/content':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const selection = await contentSelection(ctx, url, req)
+      const images = await contentImages(ctx, url, req, selection)
+      const property = selection.propertyId
+        ? ((await ctx.call('hospitality_core.getProperty', { id: selection.propertyId }, url, req)) as Record<
+            string,
+            unknown
+          > | null)
+        : null
+      const roomType = selection.roomTypes.find((row) => row.id === selection.roomTypeId)
+      const checks = selection.roomTypeId
+        ? [
+            Boolean(roomType?.publicName || roomType?.name),
+            Boolean(roomType?.description),
+            Number(roomType?.defaultCapacity ?? 0) > 0,
+            Number(roomType?.maxAdults ?? 0) > 0,
+            images.length > 0,
+          ]
+        : [
+            Boolean(property?.publicName || property?.name),
+            Boolean(property?.addressLine),
+            Boolean(property?.description),
+            Number(property?.starRating ?? 0) > 0,
+            images.length > 0,
+          ]
+      const completed = checks.filter(Boolean).length
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.content.title'),
+        contentScreen(
+          _,
+          selection.properties,
+          selection.roomTypes,
+          selection.propertyId,
+          selection.target,
+          images,
+          {
+            completed,
+            total: checks.length,
+            percent: checks.length ? Math.round((completed / checks.length) * 100) : 0,
+          },
+          lang,
+          contentQuery(url, selection),
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
+      )
+    },
+
+  '/admin/hospitality/content/upload':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const selection = await contentSelection(ctx, url, req)
+      if (!selection.propertyId) return text('Property not found', { status: 404 })
+      const resourceId = selection.roomTypeId ?? selection.propertyId
+      const attachment = await receiveAttachment(ctx, url, req, {
+        resModel: selection.roomTypeId ? 'hospitality_core.RoomType' : 'hospitality_core.Property',
+        resId: resourceId,
+        resField: 'contentImages',
+        public: true,
+      })
+      try {
+        await ctx.call(
+          'hospitality_core.attachContentImage',
+          {
+            id: attachment.id,
+            attachmentId: attachment.id,
+            ...(selection.roomTypeId
+              ? { roomTypeId: selection.roomTypeId }
+              : { propertyId: selection.propertyId }),
+            category: selection.roomTypeId ? 'room' : 'exterior',
+            caption: attachment.name,
+          },
+          url,
+          req,
+        )
+      } catch (error) {
+        await ctx.call('storage.removeAttachment', { id: attachment.id }, url, req).catch(() => undefined)
+        await ctx.call('storage.requestSweep', { minAgeMs: 0 }, url, req).catch(() => undefined)
+        throw error
+      }
+      return contentRedirect(url, selection, 'saved')
+    },
+
+  '/admin/hospitality/content/images/{id}/metadata':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const selection = await contentSelection(ctx, url, req)
+      const images = await contentImages(ctx, url, req, selection)
+      if (!images.some((image) => image.id === params.id)) return text('Image not found', { status: 404 })
+      const form = await readForm(req)
+      try {
+        await ctx.call(
+          'hospitality_core.updateContentImage',
+          { id: params.id, category: form.category ?? '', caption: form.caption || undefined },
+          url,
+          req,
+        )
+        return contentRedirect(url, selection, 'saved')
+      } catch (error) {
+        if ((error as { code?: string }).code === 'E_HOSPITALITY_CONTENT_INVALID')
+          return contentRedirect(url, selection, 'invalid')
+        throw error
+      }
+    },
+
+  '/admin/hospitality/content/images/{id}/primary':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const selection = await contentSelection(ctx, url, req)
+      const images = await contentImages(ctx, url, req, selection)
+      if (!images.some((image) => image.id === params.id)) return text('Image not found', { status: 404 })
+      await ctx.call('hospitality_core.setPrimaryContentImage', { id: params.id }, url, req)
+      return contentRedirect(url, selection, 'saved')
+    },
+
+  '/admin/hospitality/content/images/{id}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const selection = await contentSelection(ctx, url, req)
+      const images = await contentImages(ctx, url, req, selection)
+      if (!images.some((image) => image.id === params.id)) return text('Image not found', { status: 404 })
+      await ctx.call('hospitality_core.removeContentImage', { id: params.id }, url, req)
+      return contentRedirect(url, selection, 'saved')
+    },
+
+  '/admin/hospitality/content/images/{id}/move-up':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) =>
+      moveContentImage(ctx, url, req, params.id, -1),
+
+  '/admin/hospitality/content/images/{id}/move-down':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) =>
+      moveContentImage(ctx, url, req, params.id, 1),
+
   '/admin/hospitality/amenities':
     (ctx: ServeContext): Route =>
     async (url, req) => {
@@ -511,4 +726,35 @@ export const routes: Record<string, RouteEntry> = {
         policiesScreen(_, rows, await frame(ctx, url, req)),
       )
     },
+}
+
+const moveContentImage = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  imageId: string,
+  delta: number,
+) => {
+  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const selection = await contentSelection(ctx, url, req)
+  const images = await contentImages(ctx, url, req, selection)
+  const index = images.findIndex((image) => image.id === imageId)
+  if (index < 0) return text('Image not found', { status: 404 })
+  const destination = index + delta
+  if (destination >= 0 && destination < images.length) {
+    const ids = images.map((image) => image.id)
+    ;[ids[index], ids[destination]] = [ids[destination]!, ids[index]!]
+    await ctx.call(
+      'hospitality_core.reorderContentImages',
+      {
+        ...(selection.roomTypeId
+          ? { roomTypeId: selection.roomTypeId }
+          : { propertyId: selection.propertyId }),
+        ids,
+      },
+      url,
+      req,
+    )
+  }
+  return contentRedirect(url, selection, 'saved')
 }

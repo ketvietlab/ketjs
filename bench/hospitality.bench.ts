@@ -146,6 +146,42 @@ try {
   )
   const writeMs = performance.now() - writeStarted
 
+  const contentImagesPerTarget = 3
+  const contentStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      const targets = [
+        { kind: 'property', id: 'property' },
+        ...Array.from({ length: 12 }, (_, index) => ({ kind: 'roomType', id: `type:${index}` })),
+      ]
+      for (const target of targets)
+        for (let image = 0; image < contentImagesPerTarget; image++) {
+          const id = `content:${target.kind}:${target.id}:${image}`
+          await call(key, 'storage.createAttachment', {
+            id,
+            name: `${id}.jpg`,
+            resModel: target.kind === 'property' ? 'hospitality_core.Property' : 'hospitality_core.RoomType',
+            resId: target.id,
+            resField: 'contentImages',
+            kind: 'url',
+            url: `https://example.com/${encodeURIComponent(id)}.jpg`,
+            mimetype: 'image/jpeg',
+            size: 1024,
+            public: true,
+            createdAt: '2026-08-20T00:00:00.000Z',
+          })
+          await call(key, 'hospitality_core.attachContentImage', {
+            id,
+            attachmentId: id,
+            ...(target.kind === 'property' ? { propertyId: target.id } : { roomTypeId: target.id }),
+            category: target.kind === 'property' ? (image ? 'lobby' : 'exterior') : 'room',
+            caption: `Benchmark image ${image}`,
+          })
+        }
+    }),
+  )
+  const contentMs = performance.now() - contentStarted
+
   const calendarConfigStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -384,6 +420,11 @@ try {
         })
         if ((reservations.value as unknown[]).length !== reservationsPerDatabase)
           throw new Error(`${key}: reservation query returned the wrong count`)
+        const images = await call(key, 'hospitality_core.listContentImages', {
+          roomTypeId: `type:${pass % 12}`,
+        })
+        if ((images.value as unknown[]).length !== contentImagesPerTarget)
+          throw new Error(`${key}: content image query returned the wrong count`)
       }
     }),
   )
@@ -408,12 +449,18 @@ try {
       throw new Error(
         `PostgreSQL change createdAt is ${changeColumns.createdAt}, expected timestamp with time zone`,
       )
+    const contentChangeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_content_change!
+    if (contentChangeColumns.createdAt !== 'timestamp with time zone')
+      throw new Error(
+        `PostgreSQL content change createdAt is ${contentChangeColumns.createdAt}, expected timestamp with time zone`,
+      )
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
   const totalReservations = databaseCount * reservationsPerDatabase
   const totalTransitions = databaseCount * transitionCount
   const totalReads = databaseCount * readPasses
+  const totalContentImages = databaseCount * 13 * contentImagesPerTarget
   const expectedCheckoutTasks = transitionRooms.filter(
     (room, index) => room !== undefined && index % 2 === 0,
   ).length
@@ -438,6 +485,16 @@ try {
   )
   if (!durableInventoryChangesPresent)
     throw new Error('rate, allotment, restriction or booking changes were not recorded durably')
+  const contentChangeCounts = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters.get(key)!.all('SELECT COUNT(*) AS n FROM hospitality_core_content_change')
+      return Number(rows[0]!.n)
+    }),
+  )
+  const minimumContentChanges = 1 + 12 + 13 * contentImagesPerTarget
+  const durableContentChangesPresent = contentChangeCounts.every((count) => count >= minimumContentChanges)
+  if (!durableContentChangesPresent)
+    throw new Error('property, room-type or media changes were not recorded durably')
   console.log(
     JSON.stringify(
       {
@@ -447,6 +504,9 @@ try {
         migrateMs: Number(migrateMs.toFixed(1)),
         writeMs: Number(writeMs.toFixed(1)),
         writesPerSecond: Math.round((totalRooms * 1_000) / writeMs),
+        contentImages: totalContentImages,
+        contentMs: Number(contentMs.toFixed(1)),
+        contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),
         ratePlans: databaseCount * 12,
         inventoryDaysConfigured: databaseCount * 12 * 3,
         restrictionDaysConfigured: databaseCount * 7,
@@ -464,6 +524,8 @@ try {
         housekeepingCheckoutTasksMatch,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
         durableInventoryChangesPresent,
+        contentChanges: contentChangeCounts.reduce((sum, count) => sum + count, 0),
+        durableContentChangesPresent,
         listQueries: totalReads,
         readMs: Number(readMs.toFixed(1)),
         readsPerSecond: Math.round((totalReads * 1_000) / readMs),

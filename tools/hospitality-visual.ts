@@ -77,6 +77,7 @@ try {
     publicName: 'Ket Hotel',
     accommodationType: 'hotel',
     starRating: 4,
+    description: 'Khách sạn đô thị bên phố đi bộ, phù hợp cho chuyến công tác và kỳ nghỉ cuối tuần.',
     street1: '25 Nguyễn Huệ',
     countryId: 'VN',
     divisionId: 'VN:2025-07-01:70101063',
@@ -100,6 +101,8 @@ try {
     propertyId: property,
     code: 'DLX',
     name: 'Deluxe King',
+    publicName: 'Deluxe King hướng phố',
+    description: 'Phòng sáng, giường king và góc làm việc nhìn ra trung tâm thành phố.',
     defaultCapacity: 2,
     maxAdults: 2,
     maxChildren: 1,
@@ -111,12 +114,71 @@ try {
     propertyId: property,
     code: 'STE',
     name: 'Executive Suite',
+    publicName: 'Executive Suite',
+    description: 'Không gian suite tách biệt phòng ngủ và phòng khách dành cho kỳ nghỉ dài ngày.',
     defaultCapacity: 3,
     maxAdults: 2,
     maxChildren: 2,
     baseRate: '2650000',
     published: true,
   })
+  for (const image of [
+    {
+      id: 'hotel-exterior',
+      resModel: 'hospitality_core.Property',
+      resId: property,
+      category: 'exterior',
+      caption: 'Mặt tiền Ket Hotel lúc hoàng hôn',
+      url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
+      id: 'hotel-lobby',
+      resModel: 'hospitality_core.Property',
+      resId: property,
+      category: 'lobby',
+      caption: 'Sảnh đón khách',
+      url: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
+      id: 'deluxe-room',
+      resModel: 'hospitality_core.RoomType',
+      resId: roomType,
+      category: 'room',
+      caption: 'Phòng Deluxe King',
+      url: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
+      id: 'deluxe-bathroom',
+      resModel: 'hospitality_core.RoomType',
+      resId: roomType,
+      category: 'bathroom',
+      caption: 'Phòng tắm Deluxe',
+      url: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1600&q=80',
+    },
+  ]) {
+    await call('storage.createAttachment', {
+      id: image.id,
+      name: `${image.id}.jpg`,
+      resModel: image.resModel,
+      resId: image.resId,
+      resField: 'contentImages',
+      kind: 'url',
+      url: image.url,
+      mimetype: 'image/jpeg',
+      size: 1,
+      public: true,
+      createdAt: '2026-08-20T01:00:00.000Z',
+    })
+    await call('hospitality_core.attachContentImage', {
+      id: image.id,
+      attachmentId: image.id,
+      ...(image.resModel === 'hospitality_core.Property'
+        ? { propertyId: image.resId }
+        : { roomTypeId: image.resId }),
+      category: image.category,
+      caption: image.caption,
+    })
+  }
   for (const room of [
     { id: '101', type: roomType, status: 'available' },
     { id: '102', type: roomType, status: 'available' },

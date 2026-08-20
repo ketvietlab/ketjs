@@ -52,6 +52,8 @@ test('hospitality core: public namespace is clean and the whole vertical is one 
   assert.ok(manifest.models['hospitality_core.Property'])
   assert.ok(manifest.models['hospitality_core.Room'])
   assert.ok(manifest.models['hospitality_core.Amenity'])
+  assert.ok(manifest.models['hospitality_core.ContentImage'])
+  assert.ok(manifest.models['hospitality_core.ContentChange'])
   assert.equal(
     Object.keys(manifest.modules).some((name) => name.startsWith('vidoo_')),
     false,
@@ -297,6 +299,184 @@ test('hospitality core: amenities preserve property and room scopes', async () =
     )
     assert.equal((first.value as Row).id, 'hotel-pool')
     assert.equal((retry.value as Row).id, 'hotel-pool', 'an idempotent retry returns the existing assignment')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality content: media lifecycle is ordered, scoped and emits a durable feed', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: 'DLX',
+        name: 'Deluxe',
+        description: 'A bright room with a city view.',
+      },
+      adapter,
+    )
+    const attachment = async (id: string, resModel = 'hospitality_core.Property', resId = 'hotel') =>
+      call(
+        'storage.createAttachment',
+        {
+          id,
+          name: `${id}.jpg`,
+          resModel,
+          resId,
+          resField: 'contentImages',
+          kind: 'url',
+          url: `https://example.com/${id}.jpg`,
+          mimetype: 'image/jpeg',
+          size: 42,
+          public: true,
+          createdAt: '2026-08-20T00:00:00.000Z',
+        },
+        adapter,
+      )
+    await attachment('exterior')
+    await attachment('lobby')
+    await attachment('wrong-target', 'hospitality_core.RoomType', 'deluxe')
+
+    const first = await call(
+      'hospitality_core.attachContentImage',
+      {
+        id: 'exterior',
+        attachmentId: 'exterior',
+        propertyId: 'hotel',
+        category: 'exterior',
+        caption: 'Main entrance',
+      },
+      adapter,
+    )
+    assert.equal((first.value as Row).primary, true, 'the first image becomes primary')
+    const retried = await call(
+      'hospitality_core.attachContentImage',
+      {
+        id: 'exterior',
+        attachmentId: 'exterior',
+        propertyId: 'hotel',
+        category: 'exterior',
+        caption: 'Main entrance',
+      },
+      adapter,
+    )
+    assert.deepEqual(
+      { primary: (retried.value as Row).primary, sequence: (retried.value as Row).sequence },
+      { primary: true, sequence: 10 },
+      'an idempotent retry preserves primary and ordering semantics',
+    )
+    await call(
+      'hospitality_core.attachContentImage',
+      {
+        id: 'lobby',
+        attachmentId: 'lobby',
+        propertyId: 'hotel',
+        category: 'lobby',
+      },
+      adapter,
+    )
+    await assert.rejects(
+      call(
+        'hospitality_core.attachContentImage',
+        {
+          id: 'wrong-target',
+          attachmentId: 'wrong-target',
+          propertyId: 'hotel',
+          category: 'room',
+        },
+        adapter,
+      ),
+      (error: unknown) => (error as { code?: string }).code === 'E_HOSPITALITY_CONTENT_INVALID',
+    )
+    assert.equal(
+      (
+        await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_content_image WHERE id = ?', [
+          'wrong-target',
+        ])
+      )[0]!.n,
+      0,
+      'invalid attachment ownership leaves no partial media row',
+    )
+
+    await call('hospitality_core.setPrimaryContentImage', { id: 'lobby' }, adapter)
+    await call(
+      'hospitality_core.updateContentImage',
+      { id: 'lobby', category: 'restaurant', caption: 'Breakfast room' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.reorderContentImages',
+      { propertyId: 'hotel', ids: ['lobby', 'exterior'] },
+      adapter,
+    )
+    let images = (await call('hospitality_core.listContentImages', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.deepEqual(
+      images.map((image) => [image.id, image.sequence, image.primary, image.category]),
+      [
+        ['lobby', 10, true, 'restaurant'],
+        ['exterior', 20, false, 'exterior'],
+      ],
+    )
+
+    const allChanges = (await call('hospitality_core.listContentChanges', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.equal(
+      allChanges.some((change) => change.resourceType === 'property'),
+      true,
+    )
+    assert.equal(
+      allChanges.some((change) => change.resourceType === 'room_type'),
+      true,
+    )
+    const cursor = allChanges[2]!
+    const after = (
+      await call(
+        'hospitality_core.listContentChanges',
+        {
+          propertyId: 'hotel',
+          afterAt: cursor.createdAt,
+          afterId: cursor.id,
+        },
+        adapter,
+      )
+    ).value as Row[]
+    assert.deepEqual(
+      after.map((change) => change.id),
+      allChanges.slice(3).map((change) => change.id),
+      'the tuple cursor resumes after the exact persisted row',
+    )
+    assert.equal(
+      after.every((change) => change.propertyId === 'hotel'),
+      true,
+    )
+
+    await call('hospitality_core.removeContentImage', { id: 'lobby' }, adapter)
+    images = (await call('hospitality_core.listContentImages', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.deepEqual(
+      images.map((image) => [image.id, image.primary]),
+      [['exterior', true]],
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM storage_attachment WHERE id = ?', ['lobby']))[0]!.n,
+      0,
+      'removal drops attachment metadata in the same transaction',
+    )
+    const deletion = (
+      await adapter.all(
+        'SELECT kind FROM hospitality_core_content_change WHERE "resourceType" = \'image\' AND "resourceId" = \'lobby\' ORDER BY "createdAt" DESC, id DESC LIMIT 1',
+      )
+    )[0]!
+    assert.equal(deletion.kind, 'delete')
+    assert.equal(
+      (await adapter.all("SELECT COUNT(*) AS n FROM ket_job WHERE job = 'storage.sweep'"))[0]!.n,
+      1,
+    )
   } finally {
     await adapter.close()
   }
