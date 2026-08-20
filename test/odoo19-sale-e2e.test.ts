@@ -168,6 +168,13 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
       assert.match(html, /Khách hàng Minh Anh/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
+    if (path === '/admin/sales/invoicing-policies') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /id="invoicing-policy-form"/)
+      assert.match(html, /type="radio" name="invoicePolicy" value="delivery"/)
+      assert.match(html, /Theo số lượng giao/)
+      assert.doesNotMatch(html, /data-island="mail\.chatter"/)
+    }
     if (path === '/admin/sales/orders/so-1') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /data-ui="record-aside"/)
@@ -220,6 +227,26 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
   assert.match(englishOrdersHtml, /Confirmed sales orders/)
   assert.match(englishOrdersHtml, /href="\/admin\/sales\/orders\/so-1\?lang=en"/)
   assert.doesNotMatch(englishOrdersHtml, /data-island="mail\.chatter"/)
+  const englishPolicies = await e2e.client.get('/admin/sales/invoicing-policies?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const englishPoliciesHtml = await englishPolicies.text()
+  assert.match(englishPoliciesHtml, /Policies by product/)
+  assert.match(englishPoliciesHtml, /Delivered quantities/)
+  assert.match(englishPoliciesHtml, /action="\/admin\/sales\/invoicing-policies\?lang=en"/)
+  assert.doesNotMatch(englishPoliciesHtml, /data-island="mail\.chatter"/)
+  const updatePolicy = await e2e.client.post(
+    '/admin/sales/invoicing-policies?lang=en',
+    new URLSearchParams({ templateId: 'goods', invoicePolicy: 'order' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(updatePolicy.status, 303)
+  assert.equal(updatePolicy.headers.get('location'), '/admin/sales/invoicing-policies?lang=en')
+  const templates = (await call<Row[]>('sale.listInvoicePolicies', {})).value
+  assert.equal(templates.find((row) => row.id === 'goods')?.invoicePolicy, 'order')
 
   await call('sale.createOrder', {
     id: 'so-ui',

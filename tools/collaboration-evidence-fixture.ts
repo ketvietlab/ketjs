@@ -148,6 +148,7 @@ export async function collaborationEvidenceApp(
       priceUnit: '1250000',
     })
     await call('sale.confirmOrder', { id: 'sales-order-collab' })
+    await call('sale.setInvoicePolicy', { templateId: 'tpl-collab', invoicePolicy: 'delivery' })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
