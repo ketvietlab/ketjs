@@ -1,5 +1,19 @@
 export { defineModule, defineTheme } from './kernel/define.ts'
-export { defineApp, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { defineApp, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { resolveWorkspace } from './kernel/modules.ts'
+export type {
+  ModuleRef,
+  ModulePath,
+  AppDeclaration,
+  AppSpec,
+  WorkspaceDeclaration,
+} from './kernel/workspace.ts'
+export type {
+  ModuleSource,
+  ResolvedModuleInfo,
+  ResolvedWorkspace,
+  ResolveWorkspaceOptions,
+} from './kernel/modules.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
 export { createAppRegistry, restrictManifest } from './kernel/apps.ts'

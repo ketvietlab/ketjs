@@ -41,6 +41,26 @@ export type AppSpec = {
   worker?: WorkerSpec
 }
 
+/**
+ * What an authored workspace may name before module paths have been resolved.
+ *
+ * Keeping this separate from AppSpec is deliberate: composition, HTTP and workers
+ * continue to receive executable KetModule objects only. A string is allowed at
+ * the workspace boundary and nowhere deeper in the framework.
+ */
+export type ModuleRef = KetModule | string
+export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme'> & {
+  modules: ModuleRef[]
+  theme?: ModuleRef
+}
+
+export type ModulePath = string | URL
+export type WorkspaceDeclaration = {
+  apps: AppDeclaration[]
+  /** Odoo-like roots whose direct children may contain ket.module.json. */
+  modulePaths?: ModulePath[]
+}
+
 export type Workspace = {
   apps: Record<string, Manifest>
   datastores: Record<string, { schema: Schema; apps: string[]; modules: string[] }>
@@ -48,7 +68,9 @@ export type Workspace = {
   soloed: Record<string, string[]>
 }
 
-export function defineApp(spec: AppSpec): AppSpec {
+export function defineApp(spec: AppSpec): AppSpec
+export function defineApp(spec: AppDeclaration): AppDeclaration
+export function defineApp(spec: AppDeclaration): AppDeclaration {
   if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
   if (spec.headless && spec.theme) throw new Error(`app "${spec.name}" is headless but installs a theme`)
   if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
@@ -59,6 +81,14 @@ export function defineApp(spec: AppSpec): AppSpec {
     if (!Number.isInteger(concurrency) || concurrency < 1)
       throw new Error(`app "${spec.name}" queue "${queue}" needs concurrency >= 1`)
   }
+  return spec
+}
+
+export function defineWorkspace<T extends WorkspaceDeclaration>(spec: T): T {
+  if (!spec || typeof spec !== 'object') throw new Error('defineWorkspace() expects an object')
+  if (!Array.isArray(spec.apps)) throw new Error('workspace apps must be an array')
+  if (spec.modulePaths !== undefined && !Array.isArray(spec.modulePaths))
+    throw new Error('workspace modulePaths must be an array')
   return spec
 }
 

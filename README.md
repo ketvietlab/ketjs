@@ -20,6 +20,7 @@ npm run dev -- --all                       # HTTP + worker, still one tsx watche
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
 npm run test:one -- test/e2e.test.ts        # one emitted test file
+npm run bench:modules                       # custom module catalogue + selected closure
 npm run bench:queue                         # queue across many physical databases
 npm run bench:storage                       # S3 storage across tenant databases
 ```
@@ -53,6 +54,49 @@ npx ket new shop && cd shop && npm install && npm run dev
 ```
 
 writes an app that runs unedited: a module, a model, a function and a route.
+
+## Custom module paths
+
+A workspace may select compiled modules from several filesystem roots, like
+Odoo's `addons_path`, without importing every custom package by hand:
+
+```ts
+import { defineApp, defineWorkspace } from 'ketjs'
+import { product } from 'ketsuite'
+
+export default defineWorkspace({
+  modulePaths: [new URL('./custom-addons/', import.meta.url), '/opt/vendor-addons'],
+  apps: [
+    defineApp({
+      name: 'shop',
+      modules: [product, 'sale_discount'],
+      headless: true,
+    }),
+  ],
+})
+```
+
+Each direct child of a root is a module directory with a small discovery file:
+
+```text
+custom-addons/sale_discount/
+├── ket.module.json       { "name": "sale_discount", "entry": "./dist/index.js" }
+├── dist/index.js         default-exports defineModule(...)
+└── assets/
+```
+
+Only selected names and their dependency closure are executed; merely dropping a
+module into a root does not add it to the deployment. Roots never shadow one
+another silently, descriptor identity must match the exported module, and an entry
+may not escape its module directory. Production accepts JavaScript artifacts only;
+the `tsx` development path additionally permits TypeScript source entries.
+
+`--module-path DIR` supplements the workspace and is repeatable.
+`KET_MODULE_PATH` uses the platform path separator. Run `ket modules` to see every
+resolved module, the apps that ship it and its concrete source path.
+
+The full packaging, resolution, deployment and error contract is documented in
+[Module discovery](docs/06-module-discovery.md).
 
 ## Headless end-to-end tests
 
