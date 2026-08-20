@@ -1,7 +1,9 @@
-import { page } from 'ketjs'
+import { randomUUID } from 'node:crypto'
+import { page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { viewerOf } from '../backend/routes.ts'
+import { readForm, seeOther } from '../backend/forms.ts'
 import {
   amenitiesScreen,
   cleaningTasksScreen,
@@ -10,7 +12,9 @@ import {
   housekeepingRoomsScreen,
   policiesScreen,
   propertiesScreen,
+  ratePlansScreen,
   reservationsScreen,
+  inventoryScreen,
   roomsScreen,
   roomTypesScreen,
   staysScreen,
@@ -22,13 +26,15 @@ import type {
   FolioRow,
   PolicyRow,
   PropertyRow,
+  RatePlanRow,
+  InventoryRow,
   ReservationRow,
   RoomRow,
   RoomTypeRow,
   StayRow,
   TapeChart,
 } from './screens.ts'
-import { calendarRange } from './calendar.ts'
+import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   viewer: await viewerOf(ctx, url, req),
@@ -74,6 +80,28 @@ const selectedProperty = async (
   const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
   return properties[0]?.id
 }
+
+const redirected = (
+  url: URL,
+  state: 'saved' | 'invalid',
+  values: Record<string, string | undefined> = {},
+) => {
+  const params = new URLSearchParams(url.searchParams)
+  params.set('status', state)
+  for (const [key, value] of Object.entries(values)) {
+    if (value) params.set(key, value)
+    else params.delete(key)
+  }
+  return seeOther(`${url.pathname}?${params.toString()}`)
+}
+
+const integer = (value: string | undefined, fallback = 0): number => {
+  const parsed = Number(value ?? fallback)
+  return Number.isInteger(parsed) ? parsed : -1
+}
+
+const optionalInteger = (value: string | undefined): number | undefined =>
+  value ? integer(value) : undefined
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/front-desk':
@@ -262,6 +290,158 @@ export const routes: Record<string, RouteEntry> = {
         req,
         _('hospitality_core.screen.roomTypes.title'),
         roomTypesScreen(_, rows, await frame(ctx, url, req)),
+      )
+    },
+
+  '/admin/hospitality/rate-plans':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'save-rate-plan') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.saveRatePlan',
+          {
+            id: randomUUID(),
+            propertyId: form.propertyId ?? '',
+            roomTypeId: form.roomTypeId ?? '',
+            code: form.code ?? '',
+            name: form.name ?? '',
+            rateType: form.rateType ?? 'nightly',
+            amount: form.amount ?? '',
+            mealPlan: form.mealPlan || undefined,
+            minStay: integer(form.minStay),
+            maxStay: integer(form.maxStay),
+            isDefault: form.isDefault === '1',
+            active: form.active === '1',
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        return redirected(url, result.ok ? 'saved' : 'invalid', { property: form.propertyId })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const [rows, roomTypes] = (await Promise.all([
+        ctx.call('hospitality_core.listRatePlans', { propertyId }, url, req),
+        ctx.call('hospitality_core.listRoomTypes', { propertyId }, url, req),
+      ])) as [RatePlanRow[], RoomTypeRow[]]
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.ratePlans.title'),
+        ratePlansScreen(
+          _,
+          rows,
+          properties,
+          roomTypes,
+          propertyId,
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
+      )
+    },
+
+  '/admin/hospitality/inventory':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        let result: { ok?: boolean }
+        if (form.operation === 'set-inventory')
+          result = (await ctx.call(
+            'hospitality_core.setInventoryRange',
+            {
+              propertyId: form.propertyId ?? '',
+              roomTypeId: form.roomTypeId ?? '',
+              from: form.from ?? '',
+              to: form.to ?? '',
+              total: optionalInteger(form.total),
+              blocked: optionalInteger(form.blocked),
+            },
+            url,
+            req,
+          )) as { ok?: boolean }
+        else if (form.operation === 'set-restrictions')
+          result = (await ctx.call(
+            'hospitality_core.setRestrictionRange',
+            {
+              propertyId: form.propertyId ?? '',
+              roomTypeId: form.roomTypeId ?? '',
+              from: form.from ?? '',
+              to: form.to ?? '',
+              minLos: integer(form.minLos),
+              maxLos: integer(form.maxLos),
+              stopSell: form.stopSell === '1',
+              closedToArrival: form.closedToArrival === '1',
+              closedToDeparture: form.closedToDeparture === '1',
+            },
+            url,
+            req,
+          )) as { ok?: boolean }
+        else return text('unknown action', { status: 400 })
+        return redirected(url, result.ok ? 'saved' : 'invalid', {
+          property: form.propertyId,
+          roomType: form.roomTypeId,
+          from: form.from,
+          to: form.to,
+        })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const roomTypes = (await ctx.call(
+        'hospitality_core.listRoomTypes',
+        { propertyId },
+        url,
+        req,
+      )) as RoomTypeRow[]
+      const requestedRoomType = url.searchParams.get('roomType')?.trim()
+      const roomTypeId = roomTypes.some((row) => row.id === requestedRoomType)
+        ? requestedRoomType
+        : roomTypes[0]?.id
+      const timezone = await propertyTimezone(ctx, propertyId, url, req)
+      const today = dateKeyIn(new Date(), timezone)
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('from') ?? '')
+        ? url.searchParams.get('from')!
+        : today
+      const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('to') ?? '')
+        ? url.searchParams.get('to')!
+        : addCalendarDays(from, 13)
+      const rows = roomTypeId
+        ? ((await ctx.call(
+            'hospitality_core.listInventory',
+            { propertyId, roomTypeId, from, to },
+            url,
+            req,
+          )) as InventoryRow[])
+        : []
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.inventory.title'),
+        inventoryScreen(
+          _,
+          rows,
+          properties,
+          roomTypes,
+          { propertyId, roomTypeId, from, to },
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
       )
     },
 

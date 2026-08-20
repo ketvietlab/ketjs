@@ -100,6 +100,100 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /** A sellable price independent from room-type content. */
+  RatePlan: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      code: 'text',
+      name: 'text',
+      rateType: 'text',
+      amount: 'decimal',
+      isDefault: 'bool',
+      defaultKey: 'text?',
+      mealPlan: 'text?',
+      minStay: 'int',
+      maxStay: 'int',
+      active: 'bool',
+    },
+    indexes: {
+      room_type_code: { fields: ['companyId', 'roomTypeId', 'code'], unique: true },
+      active_property: { fields: ['companyId', 'propertyId', 'active', 'rateType', 'name'] },
+      active_default: {
+        fields: ['companyId', 'roomTypeId', 'rateType', 'defaultKey'],
+        unique: true,
+      },
+    },
+  },
+
+  /**
+   * Durable room-night capacity. `version` makes changes serialisable through
+   * compare-and-set on every supported database adapter.
+   */
+  AvailabilityLedger: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      date: 'date',
+      total: 'int',
+      sold: 'int',
+      blocked: 'int',
+      available: 'int',
+      version: 'int',
+    },
+    indexes: {
+      room_night: { fields: ['companyId', 'propertyId', 'roomTypeId', 'date'], unique: true },
+      availability: { fields: ['companyId', 'propertyId', 'date', 'available'] },
+    },
+  },
+
+  /** Sales controls for one room type and one property-local calendar date. */
+  Restriction: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      date: 'date',
+      minLos: 'int',
+      maxLos: 'int',
+      closedToArrival: 'bool',
+      closedToDeparture: 'bool',
+      stopSell: 'bool',
+      version: 'int',
+    },
+    indexes: {
+      room_night: { fields: ['companyId', 'propertyId', 'roomTypeId', 'date'], unique: true },
+      sales_control: { fields: ['companyId', 'propertyId', 'date', 'stopSell'] },
+    },
+  },
+
+  /**
+   * Append-only domain signal. Private channel adapters keep their own cursor and
+   * rebuild provider payloads from current rate, inventory and restriction rows.
+   */
+  InventoryChange: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      roomTypeId: 'ref:hospitality_core.RoomType',
+      kind: 'text',
+      dateFrom: 'date',
+      dateTo: 'date',
+      aggregateId: 'text?',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      property_cursor: { fields: ['companyId', 'propertyId', 'createdAt', 'id'] },
+      room_type_cursor: { fields: ['companyId', 'roomTypeId', 'createdAt', 'id'] },
+    },
+  },
+
   Room: {
     scope: 'company',
     fields: {

@@ -317,6 +317,11 @@ test('hospitality operations: nightly quantity follows the property calendar, no
       { id: 'ocean', propertyId: 'honolulu', code: 'OCN', name: 'Ocean', baseRate: '100' },
       adapter,
     )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: 'hnl-101', propertyId: 'honolulu', roomTypeId: 'ocean', code: '101', name: '101' },
+      adapter,
+    )
     const created = await call(
       'hospitality_core.createReservation',
       reservation('honolulu-night', {

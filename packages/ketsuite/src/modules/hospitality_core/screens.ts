@@ -5,12 +5,17 @@ import {
   cardGrid,
   code,
   dataTable,
+  datePicker,
   emptyState,
+  formCluster,
   formatMoney,
   framed,
   metric,
+  notice,
   person,
+  recordForm,
   scheduleBoard,
+  section,
   stack,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
@@ -58,6 +63,39 @@ export type PolicyRow = {
   type: string
   freeCancellationHours: number
   penaltyPercent: string | number
+}
+
+export type RatePlanRow = {
+  id: string
+  propertyId: string
+  roomTypeId: string
+  code: string
+  name: string
+  rateType: string
+  amount: string | number
+  isDefault: boolean
+  mealPlan?: string | null
+  minStay: number
+  maxStay: number
+  active: boolean
+  roomType?: { code?: string; name?: string } | null
+}
+
+export type InventoryRow = {
+  id: string
+  propertyId: string
+  roomTypeId: string
+  date: string
+  total: number
+  sold: number
+  blocked: number
+  available: number
+  minLos: number
+  maxLos: number
+  closedToArrival: boolean
+  closedToDeparture: boolean
+  stopSell: boolean
+  persisted: boolean
 }
 
 export type CleaningTaskRow = {
@@ -289,6 +327,116 @@ const policyColumns = (_: Translator): Array<Column<PolicyRow>> => [
   },
 ]
 
+const ratePlanColumns = (_: Translator): Array<Column<RatePlanRow>> => [
+  { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
+  { key: 'name', label: _('hospitality_core.col.name'), cell: (row) => row.name, priority: 'primary' },
+  {
+    key: 'roomType',
+    label: _('hospitality_core.col.roomType'),
+    cell: (row) => row.roomType?.name ?? row.roomType?.code ?? code(row.roomTypeId),
+  },
+  {
+    key: 'rateType',
+    label: _('hospitality_core.col.rateType'),
+    cell: (row) => badge(_(`hospitality_core.bookingType.${row.rateType}`)),
+    kind: 'status',
+  },
+  {
+    key: 'amount',
+    label: _('hospitality_core.col.amount'),
+    cell: (row) => formatMoney(_, row.amount),
+    align: 'end',
+    kind: 'currency',
+  },
+  {
+    key: 'mealPlan',
+    label: _('hospitality_core.col.mealPlan'),
+    cell: (row) => (row.mealPlan ? _(`hospitality_core.mealPlan.${row.mealPlan}`) : '—'),
+  },
+  {
+    key: 'los',
+    label: _('hospitality_core.col.los'),
+    cell: (row) => `${row.minStay || '—'} / ${row.maxStay || '∞'}`,
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'default',
+    label: _('hospitality_core.col.default'),
+    cell: (row) =>
+      badge(
+        _(row.isDefault ? 'hospitality_core.value.yes' : 'hospitality_core.value.no'),
+        row.isDefault ? 'positive' : 'neutral',
+      ),
+    kind: 'status',
+  },
+  {
+    key: 'active',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(
+        _(row.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+        row.active ? 'positive' : 'neutral',
+      ),
+    kind: 'status',
+  },
+]
+
+const inventoryColumns = (_: Translator): Array<Column<InventoryRow>> => [
+  { key: 'date', label: _('hospitality_core.col.date'), cell: (row) => row.date, kind: 'date' },
+  {
+    key: 'total',
+    label: _('hospitality_core.col.total'),
+    cell: (row) => String(row.total),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'sold',
+    label: _('hospitality_core.col.sold'),
+    cell: (row) => String(row.sold),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'blocked',
+    label: _('hospitality_core.col.blocked'),
+    cell: (row) => String(row.blocked),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'available',
+    label: _('hospitality_core.col.available'),
+    cell: (row) => String(row.available),
+    align: 'end',
+    kind: 'number',
+    priority: 'primary',
+  },
+  {
+    key: 'los',
+    label: _('hospitality_core.col.los'),
+    cell: (row) => `${row.minLos || '—'} / ${row.maxLos || '∞'}`,
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'restrictions',
+    label: _('hospitality_core.col.restrictions'),
+    cell: (row) => {
+      const values = [
+        ...(row.stopSell ? [_('hospitality_core.restriction.stopSell')] : []),
+        ...(row.closedToArrival ? ['CTA'] : []),
+        ...(row.closedToDeparture ? ['CTD'] : []),
+      ]
+      return values.length
+        ? badge(values.join(' · '), row.stopSell ? 'danger' : 'warning')
+        : badge(_('hospitality_core.restriction.open'), 'positive')
+    },
+    kind: 'status',
+  },
+]
+
 const cleaningTaskColumns = (_: Translator, locale: string): Array<Column<CleaningTaskRow>> => [
   { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
   {
@@ -442,6 +590,298 @@ export const policiesScreen = (_: Translator, rows: PolicyRow[], frame: Frame): 
           _('hospitality_core.screen.policies.emptyHint'),
         ),
   )
+
+type Choice = { id: string; code?: string; name: string; propertyId?: string }
+
+const choices = (rows: readonly Choice[]) =>
+  rows.map((row) => ({
+    value: row.id,
+    label: `${row.code ? `${row.code} · ` : ''}${row.name}`,
+  }))
+
+const feedback = (_: Translator, state?: string | null): TemplateResult | null => {
+  if (state === 'saved')
+    return notice({
+      title: _('hospitality_core.feedback.saved'),
+      message: _('hospitality_core.feedback.savedHint'),
+      tone: 'positive',
+    })
+  if (state === 'invalid')
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: _('hospitality_core.feedback.invalidHint'),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const ratePlansScreen = (
+  _: Translator,
+  rows: RatePlanRow[],
+  properties: Choice[],
+  roomTypes: Choice[],
+  propertyId: string | undefined,
+  frame: Frame,
+  state?: string | null,
+): TemplateResult =>
+  framed(
+    _,
+    _('hospitality_core.screen.ratePlans.title'),
+    frame,
+    stack([
+      feedback(_, state),
+      recordForm({
+        action: '/admin/hospitality/rate-plans',
+        method: 'get',
+        layout: 'inline',
+        submit: _('hospitality_core.action.select'),
+        submitVariant: 'secondary',
+        fields: [
+          {
+            name: 'property',
+            label: _('hospitality_core.menu.properties'),
+            type: 'select',
+            value: propertyId,
+            options: choices(properties),
+            required: true,
+          },
+        ],
+      }),
+      section({
+        title: _('hospitality_core.screen.ratePlans.create'),
+        description: _('hospitality_core.screen.ratePlans.createHint'),
+        body: roomTypes.length
+          ? recordForm({
+              action: `/admin/hospitality/rate-plans${propertyId ? `?property=${encodeURIComponent(propertyId)}` : ''}`,
+              method: 'post',
+              submit: _('hospitality_core.action.saveRatePlan'),
+              submitVariant: 'primary',
+              hidden: { operation: 'save-rate-plan', propertyId: propertyId ?? '' },
+              fields: [
+                {
+                  name: 'roomTypeId',
+                  label: _('hospitality_core.col.roomType'),
+                  type: 'select',
+                  options: choices(roomTypes),
+                  required: true,
+                },
+                { name: 'code', label: _('hospitality_core.col.code'), required: true },
+                { name: 'name', label: _('hospitality_core.col.name'), required: true },
+                {
+                  name: 'rateType',
+                  label: _('hospitality_core.col.rateType'),
+                  type: 'select',
+                  value: 'nightly',
+                  options: ['nightly', 'hourly', 'weekly', 'monthly'].map((value) => ({
+                    value,
+                    label: _(`hospitality_core.bookingType.${value}`),
+                  })),
+                  required: true,
+                },
+                { name: 'amount', label: _('hospitality_core.col.amount'), type: 'decimal', required: true },
+                {
+                  name: 'mealPlan',
+                  label: _('hospitality_core.col.mealPlan'),
+                  type: 'select',
+                  options: [
+                    { value: '', label: '—' },
+                    ...['RO', 'BB', 'HB', 'FB', 'AI'].map((value) => ({
+                      value,
+                      label: _(`hospitality_core.mealPlan.${value}`),
+                    })),
+                  ],
+                },
+                { name: 'minStay', label: _('hospitality_core.field.minStay'), type: 'number', value: 0 },
+                { name: 'maxStay', label: _('hospitality_core.field.maxStay'), type: 'number', value: 0 },
+                {
+                  name: 'isDefault',
+                  label: _('hospitality_core.field.isDefault'),
+                  type: 'checkbox',
+                  help: _('hospitality_core.field.isDefaultHint'),
+                },
+                { name: 'active', label: _('hospitality_core.field.active'), type: 'checkbox', value: true },
+              ],
+            })
+          : emptyState(
+              _('hospitality_core.screen.ratePlans.noRoomTypes'),
+              _('hospitality_core.screen.ratePlans.noRoomTypesHint'),
+            ),
+      }),
+      section({
+        title: _('hospitality_core.screen.ratePlans.list'),
+        body: rows.length
+          ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
+          : emptyState(
+              _('hospitality_core.screen.ratePlans.empty'),
+              _('hospitality_core.screen.ratePlans.emptyHint'),
+            ),
+      }),
+    ]),
+  )
+
+export const inventoryScreen = (
+  _: Translator,
+  rows: InventoryRow[],
+  properties: Choice[],
+  roomTypes: Choice[],
+  selected: { propertyId?: string; roomTypeId?: string; from: string; to: string },
+  frame: Frame,
+  state?: string | null,
+): TemplateResult => {
+  const selectedRoomTypes = roomTypes.filter((row) => row.propertyId === selected.propertyId)
+  const hidden = {
+    propertyId: selected.propertyId ?? '',
+    roomTypeId: selected.roomTypeId ?? '',
+  }
+  return framed(
+    _,
+    _('hospitality_core.screen.inventory.title'),
+    frame,
+    stack([
+      feedback(_, state),
+      formCluster({
+        label: _('hospitality_core.screen.inventory.filters'),
+        forms: [
+          recordForm({
+            action: '/admin/hospitality/inventory',
+            method: 'get',
+            layout: 'inline',
+            submit: _('hospitality_core.action.select'),
+            submitVariant: 'secondary',
+            hidden: { from: selected.from, to: selected.to },
+            fields: [
+              {
+                name: 'property',
+                label: _('hospitality_core.menu.properties'),
+                type: 'select',
+                value: selected.propertyId,
+                options: choices(properties),
+                required: true,
+              },
+              {
+                name: 'roomType',
+                label: _('hospitality_core.col.roomType'),
+                type: 'select',
+                value: selected.roomTypeId,
+                options: choices(selectedRoomTypes),
+                required: true,
+              },
+            ],
+          }),
+          datePicker({
+            action: '/admin/hospitality/inventory',
+            label: _('hospitality_core.screen.inventory.dateRange'),
+            fields: [
+              { name: 'from', label: _('hospitality_core.field.from'), value: selected.from, required: true },
+              { name: 'to', label: _('hospitality_core.field.to'), value: selected.to, required: true },
+            ],
+            hidden: {
+              property: selected.propertyId ?? '',
+              roomType: selected.roomTypeId ?? '',
+            },
+            submit: _('hospitality_core.action.apply'),
+          }),
+        ],
+      }),
+      cardGrid({
+        items: [
+          { id: 'days', label: _('hospitality_core.metric.inventoryDays'), value: rows.length },
+          {
+            id: 'available',
+            label: _('hospitality_core.metric.minimumAvailable'),
+            value: rows.length ? Math.min(...rows.map((row) => row.available)) : 0,
+          },
+          {
+            id: 'sold',
+            label: _('hospitality_core.metric.sold'),
+            value: rows.reduce((sum, row) => sum + row.sold, 0),
+          },
+          {
+            id: 'blocked',
+            label: _('hospitality_core.metric.blocked'),
+            value: rows.reduce((sum, row) => sum + row.blocked, 0),
+          },
+        ],
+        id: (item) => item.id,
+        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+      }),
+      section({
+        title: _('hospitality_core.screen.inventory.allotment'),
+        description: _('hospitality_core.screen.inventory.allotmentHint'),
+        body: selected.roomTypeId
+          ? recordForm({
+              action: '/admin/hospitality/inventory',
+              method: 'post',
+              submit: _('hospitality_core.action.updateAllotment'),
+              submitVariant: 'primary',
+              hidden: { ...hidden, operation: 'set-inventory' },
+              fields: [
+                {
+                  name: 'from',
+                  label: _('hospitality_core.field.from'),
+                  type: 'date',
+                  value: selected.from,
+                  required: true,
+                },
+                {
+                  name: 'to',
+                  label: _('hospitality_core.field.to'),
+                  type: 'date',
+                  value: selected.to,
+                  required: true,
+                },
+                { name: 'total', label: _('hospitality_core.col.total'), type: 'number', required: true },
+                { name: 'blocked', label: _('hospitality_core.col.blocked'), type: 'number' },
+              ],
+            })
+          : emptyState(
+              _('hospitality_core.screen.inventory.noRoomType'),
+              _('hospitality_core.screen.inventory.noRoomTypeHint'),
+            ),
+      }),
+      section({
+        title: _('hospitality_core.screen.inventory.restrictions'),
+        description: _('hospitality_core.screen.inventory.restrictionsHint'),
+        body: selected.roomTypeId
+          ? recordForm({
+              action: '/admin/hospitality/inventory',
+              method: 'post',
+              submit: _('hospitality_core.action.updateRestrictions'),
+              submitVariant: 'secondary',
+              hidden: { ...hidden, operation: 'set-restrictions' },
+              fields: [
+                {
+                  name: 'from',
+                  label: _('hospitality_core.field.from'),
+                  type: 'date',
+                  value: selected.from,
+                  required: true,
+                },
+                {
+                  name: 'to',
+                  label: _('hospitality_core.field.to'),
+                  type: 'date',
+                  value: selected.to,
+                  required: true,
+                },
+                { name: 'minLos', label: _('hospitality_core.field.minLos'), type: 'number', value: 0 },
+                { name: 'maxLos', label: _('hospitality_core.field.maxLos'), type: 'number', value: 0 },
+                { name: 'stopSell', label: _('hospitality_core.restriction.stopSell'), type: 'checkbox' },
+                { name: 'closedToArrival', label: _('hospitality_core.restriction.cta'), type: 'checkbox' },
+                { name: 'closedToDeparture', label: _('hospitality_core.restriction.ctd'), type: 'checkbox' },
+              ],
+            })
+          : null,
+      }),
+      rows.length
+        ? dataTable(_, { columns: inventoryColumns(_), rows, id: (row) => row.id })
+        : emptyState(
+            _('hospitality_core.screen.inventory.empty'),
+            _('hospitality_core.screen.inventory.emptyHint'),
+          ),
+    ]),
+  )
+}
 
 const reservationColumns = (
   _: Translator,

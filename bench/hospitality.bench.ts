@@ -146,6 +146,48 @@ try {
   )
   const writeMs = performance.now() - writeStarted
 
+  const calendarConfigStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let type = 0; type < 12; type++) {
+        const roomTypeId = `type:${type}`
+        const total = Array.from({ length: roomsPerDatabase }, (_, room) => room).filter(
+          (room) => room % 12 === type,
+        ).length
+        const plan = await call(key, 'hospitality_core.saveRatePlan', {
+          id: `rate:${type}`,
+          propertyId: 'property',
+          roomTypeId,
+          code: 'DEFAULT',
+          name: `Default rate ${type}`,
+          rateType: 'nightly',
+          amount: String(800_000 + type * 125_000),
+          isDefault: true,
+          active: true,
+        })
+        if (!(plan.value as { ok: boolean }).ok) throw new Error(`${key}: rate plan failed`)
+        const inventory = await call(key, 'hospitality_core.setInventoryRange', {
+          propertyId: 'property',
+          roomTypeId,
+          from: '2026-09-01',
+          to: '2026-09-03',
+          total,
+        })
+        if (!(inventory.value as { ok: boolean }).ok) throw new Error(`${key}: inventory setup failed`)
+      }
+      const restriction = await call(key, 'hospitality_core.setRestrictionRange', {
+        propertyId: 'property',
+        roomTypeId: 'type:0',
+        from: '2026-12-15',
+        to: '2026-12-21',
+        minLos: 2,
+        closedToArrival: true,
+      })
+      if (!(restriction.value as { ok: boolean }).ok) throw new Error(`${key}: restriction setup failed`)
+    }),
+  )
+  const calendarConfigMs = performance.now() - calendarConfigStarted
+
   const bookingStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -224,6 +266,38 @@ try {
     })
   const contender = driver === 'postgres' ? open(collisionKey) : null
   if (contender) await contender.open()
+  await call(collisionKey, 'hospitality_core.setInventoryRange', {
+    propertyId: 'property',
+    roomTypeId: 'type:0',
+    from: '2027-01-10',
+    to: '2027-01-10',
+    total: 1,
+  })
+  const reserveScarceInventory = (adapter: Adapter, suffix: string) =>
+    callWith(adapter, collisionKey, 'hospitality_core.createReservation', {
+      id: `inventory-collision:${suffix}`,
+      propertyId: 'property',
+      roomTypeId: 'type:0',
+      partnerId: 'guest',
+      bookingType: 'nightly',
+      checkIn: '2027-01-10T14:00:00.000Z',
+      checkOut: '2027-01-11T12:00:00.000Z',
+      rate: '1000000',
+    })
+  const inventoryCollisionResults =
+    contender === null
+      ? [
+          await reserveScarceInventory(adapters.get(collisionKey)!, 'a'),
+          await reserveScarceInventory(adapters.get(collisionKey)!, 'b'),
+        ]
+      : await Promise.all([
+          reserveScarceInventory(adapters.get(collisionKey)!, 'a'),
+          reserveScarceInventory(contender, 'b'),
+        ])
+  const concurrentInventoryClaimSingleWinner =
+    inventoryCollisionResults.filter((result) => (result.value as { ok: boolean }).ok).length === 1
+  if (!concurrentInventoryClaimSingleWinner)
+    throw new Error('room-night inventory claim did not produce exactly one winner')
   const claim = (adapter: Adapter, suffix: string) =>
     callWith(adapter, collisionKey, 'hospitality_core.checkIn', {
       stayId: `collision:${suffix}:stay`,
@@ -321,6 +395,19 @@ try {
     const roomTypeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_room_type!
     if (roomTypeColumns['baseRate'] !== 'numeric')
       throw new Error(`PostgreSQL baseRate is ${roomTypeColumns['baseRate']}, expected numeric`)
+    const rateColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_rate_plan!
+    if (rateColumns.amount !== 'numeric')
+      throw new Error(`PostgreSQL rate amount is ${rateColumns.amount}, expected numeric`)
+    const ledgerColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_availability_ledger!
+    if (ledgerColumns.date !== 'date')
+      throw new Error(`PostgreSQL inventory date is ${ledgerColumns.date}, expected date`)
+    const changeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_inventory_change!
+    if (changeColumns.dateFrom !== 'date')
+      throw new Error(`PostgreSQL change dateFrom is ${changeColumns.dateFrom}, expected date`)
+    if (changeColumns.createdAt !== 'timestamp with time zone')
+      throw new Error(
+        `PostgreSQL change createdAt is ${changeColumns.createdAt}, expected timestamp with time zone`,
+      )
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
@@ -339,6 +426,18 @@ try {
     }),
   ).then((matches) => matches.every(Boolean))
   if (!housekeepingCheckoutTasksMatch) throw new Error('checkout did not create one cleaning task per stay')
+  const inventoryChangeCounts = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters.get(key)!.all('SELECT COUNT(*) AS n FROM hospitality_core_inventory_change')
+      return Number(rows[0]!.n)
+    }),
+  )
+  const minimumInventoryChanges = 12 + 12 + 1 + reservationsPerDatabase
+  const durableInventoryChangesPresent = inventoryChangeCounts.every(
+    (count) => count >= minimumInventoryChanges,
+  )
+  if (!durableInventoryChangesPresent)
+    throw new Error('rate, allotment, restriction or booking changes were not recorded durably')
   console.log(
     JSON.stringify(
       {
@@ -348,6 +447,11 @@ try {
         migrateMs: Number(migrateMs.toFixed(1)),
         writeMs: Number(writeMs.toFixed(1)),
         writesPerSecond: Math.round((totalRooms * 1_000) / writeMs),
+        ratePlans: databaseCount * 12,
+        inventoryDaysConfigured: databaseCount * 12 * 3,
+        restrictionDaysConfigured: databaseCount * 7,
+        calendarConfigMs: Number(calendarConfigMs.toFixed(1)),
+        calendarRowsPerSecond: Math.round((databaseCount * (12 * 3 + 7) * 1_000) / calendarConfigMs),
         reservations: totalReservations,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
@@ -355,8 +459,11 @@ try {
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
         concurrentRoomClaimSingleWinner,
+        concurrentInventoryClaimSingleWinner,
         concurrentCancelCheckInConsistent,
         housekeepingCheckoutTasksMatch,
+        inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
+        durableInventoryChangesPresent,
         listQueries: totalReads,
         readMs: Number(readMs.toFixed(1)),
         readsPerSecond: Math.round((totalReads * 1_000) / readMs),

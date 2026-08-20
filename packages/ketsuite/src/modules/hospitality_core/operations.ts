@@ -10,6 +10,15 @@ import {
   OCR_STATES,
 } from './types.ts'
 import { dateKeyIn } from './calendar.ts'
+import {
+  defaultRatePlan,
+  InventoryConflict,
+  occupancyDates,
+  recordInventoryChange,
+  releaseInventory,
+  reserveInventory,
+  restrictionIssues,
+} from './inventory.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
 type Schedule = {
@@ -114,6 +123,7 @@ const transition = async <T>(run: () => Promise<T>): Promise<T | { ok: false; er
     return await run()
   } catch (error) {
     if (error instanceof TransitionConflict) return failure(error.problem)
+    if (error instanceof InventoryConflict) return failure(error.problem)
     throw error
   }
 }
@@ -178,6 +188,10 @@ const stayOutput = {
 const bookingEffects = [
   'read:hospitality_core.Property',
   'read:hospitality_core.RoomType',
+  'read:hospitality_core.Room',
+  'read:hospitality_core.RatePlan',
+  'read:hospitality_core.Restriction',
+  'read:hospitality_core.AvailabilityLedger',
   'read:partner.Partner',
   'read:hospitality_core.Reservation',
   'write:hospitality_core.Folio',
@@ -185,6 +199,8 @@ const bookingEffects = [
   'write:hospitality_core.Stay',
   'write:hospitality_core.Charge',
   'write:hospitality_core.StayGuest',
+  'write:hospitality_core.AvailabilityLedger',
+  'write:hospitality_core.InventoryChange',
 ]
 
 export const operations: Record<string, FnSpec> = {
@@ -227,7 +243,8 @@ export const operations: Record<string, FnSpec> = {
       const billingMode = String(
         args.billingMode ?? (bookingType === 'weekly' || bookingType === 'monthly' ? 'recurring' : 'upfront'),
       )
-      const rate = String(args.rate ?? roomType?.baseRate ?? '0')
+      const ratePlan = roomType ? await defaultRatePlan(ctx, args.roomTypeId, bookingType) : null
+      const rate = String(args.rate ?? ratePlan?.amount ?? roomType?.baseRate ?? '0')
       const calculated = scheduleOf(
         bookingType,
         args.checkIn,
@@ -244,6 +261,42 @@ export const operations: Record<string, FnSpec> = {
       if (!oneOf(BILLING_MODES, billingMode)) errors.push(issue('billingMode', 'billing_mode'))
       if (Number(args.adults ?? 1) < 1) errors.push(issue('adults', 'positive'))
       if (Number(args.children ?? 0) < 0) errors.push(issue('children', 'non_negative'))
+      if (calculated.schedule && ratePlan) {
+        const quantity = Number(calculated.schedule.quantity)
+        if (Number(ratePlan.minStay) > 0 && quantity < Number(ratePlan.minStay))
+          errors.push(
+            issue('checkOut', 'rate_plan_min_stay', {
+              count: ratePlan.minStay,
+              actual: quantity,
+            }),
+          )
+        if (Number(ratePlan.maxStay) > 0 && quantity > Number(ratePlan.maxStay))
+          errors.push(
+            issue('checkOut', 'rate_plan_max_stay', {
+              count: ratePlan.maxStay,
+              actual: quantity,
+            }),
+          )
+      }
+      const inventoryDates =
+        calculated.schedule && bookingType !== 'hourly'
+          ? occupancyDates(
+              calculated.schedule.checkIn,
+              calculated.schedule.checkOut,
+              String(property?.timezone ?? 'UTC'),
+            )
+          : []
+      if (inventoryDates.length > 366) errors.push(issue('checkOut', 'inventory_horizon', { count: 366 }))
+      if (calculated.schedule && inventoryDates.length)
+        errors.push(
+          ...(await restrictionIssues(
+            ctx,
+            args.propertyId,
+            args.roomTypeId,
+            inventoryDates,
+            dateKeyIn(new Date(calculated.schedule.checkOut), String(property?.timezone ?? 'UTC')),
+          )),
+        )
       if (args.externalId) {
         const R = ctx.table('hospitality_core.Reservation')
         const duplicate = await ctx.db.one(
@@ -265,83 +318,96 @@ export const operations: Record<string, FnSpec> = {
       const code = text(args.code) || String(args.id).toUpperCase()
       const state = 'confirmed'
       const initialFolioTotal = billingMode === 'upfront' ? calculated.schedule.amountTotal : '0'
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('hospitality_core.Folio', {
-          id: folioId,
-          code: `F-${code}`,
-          propertyId: args.propertyId,
-          partnerId: args.partnerId,
-          state: 'open',
-          amountTotal: initialFolioTotal,
-          version: 0,
-          openedAt: now,
-        })
-        await tx.db.insert('hospitality_core.Reservation', {
-          id: args.id,
-          code,
-          propertyId: args.propertyId,
-          roomTypeId: args.roomTypeId,
-          folioId,
-          partnerId: args.partnerId,
-          provider,
-          externalId: args.externalId,
-          channelRef: args.channelRef,
-          bookingType,
-          checkIn: calculated.schedule!.checkIn,
-          checkOut: calculated.schedule!.checkOut,
-          adults: Number(args.adults ?? 1),
-          children: Number(args.children ?? 0),
-          rate,
-          quantity: calculated.schedule!.quantity,
-          billingMode,
-          amountTotal: calculated.schedule!.amountTotal,
-          state,
-          createdAt: now,
-          updatedAt: now,
-        })
-        await tx.db.insert('hospitality_core.Stay', {
-          id: stayId,
-          code: `S-${code}`,
-          folioId,
-          reservationId: args.id,
-          partnerId: args.partnerId,
-          propertyId: args.propertyId,
-          roomTypeId: args.roomTypeId,
-          bookingType,
-          checkIn: calculated.schedule!.checkIn,
-          checkOut: calculated.schedule!.checkOut,
-          adults: Number(args.adults ?? 1),
-          children: Number(args.children ?? 0),
-          billingMode,
-          rate,
-          state: 'draft',
-        })
-        await tx.db.update('hospitality_core.Reservation', { id: args.id }, { stayId })
-        await tx.db.insert('hospitality_core.StayGuest', {
-          id: guestId,
-          stayId,
-          propertyId: args.propertyId,
-          partnerId: args.partnerId,
-          displayName: partner!.name,
-          primary: true,
-          primaryKey: 'primary',
-        })
-        if (billingMode === 'upfront')
-          await tx.db.insert('hospitality_core.Charge', {
-            id: chargeId,
-            folioId,
-            stayId,
-            description: `room:${String(args.roomTypeId)}`,
-            type: 'room',
-            quantity: calculated.schedule!.quantity,
-            unitPrice: rate,
-            amount: calculated.schedule!.amountTotal,
-            occurredAt: now,
-            sourceKey: `reservation:${String(args.id)}:room`,
-            state: 'active',
+      return transition(() =>
+        ctx.tx(async (tx) => {
+          if (inventoryDates.length)
+            await reserveInventory(tx, args.propertyId, args.roomTypeId, inventoryDates)
+          if (inventoryDates.length)
+            await recordInventoryChange(tx, {
+              propertyId: args.propertyId,
+              roomTypeId: args.roomTypeId,
+              kind: 'availability',
+              dateFrom: inventoryDates[0]!,
+              dateTo: inventoryDates.at(-1)!,
+              aggregateId: args.id,
+            })
+          await tx.db.insert('hospitality_core.Folio', {
+            id: folioId,
+            code: `F-${code}`,
+            propertyId: args.propertyId,
+            partnerId: args.partnerId,
+            state: 'open',
+            amountTotal: initialFolioTotal,
+            version: 0,
+            openedAt: now,
           })
-      })
-      return success(args.id, { folioId, stayId, existing: false })
+          await tx.db.insert('hospitality_core.Reservation', {
+            id: args.id,
+            code,
+            propertyId: args.propertyId,
+            roomTypeId: args.roomTypeId,
+            folioId,
+            partnerId: args.partnerId,
+            provider,
+            externalId: args.externalId,
+            channelRef: args.channelRef,
+            bookingType,
+            checkIn: calculated.schedule!.checkIn,
+            checkOut: calculated.schedule!.checkOut,
+            adults: Number(args.adults ?? 1),
+            children: Number(args.children ?? 0),
+            rate,
+            quantity: calculated.schedule!.quantity,
+            billingMode,
+            amountTotal: calculated.schedule!.amountTotal,
+            state,
+            createdAt: now,
+            updatedAt: now,
+          })
+          await tx.db.insert('hospitality_core.Stay', {
+            id: stayId,
+            code: `S-${code}`,
+            folioId,
+            reservationId: args.id,
+            partnerId: args.partnerId,
+            propertyId: args.propertyId,
+            roomTypeId: args.roomTypeId,
+            bookingType,
+            checkIn: calculated.schedule!.checkIn,
+            checkOut: calculated.schedule!.checkOut,
+            adults: Number(args.adults ?? 1),
+            children: Number(args.children ?? 0),
+            billingMode,
+            rate,
+            state: 'draft',
+          })
+          await tx.db.update('hospitality_core.Reservation', { id: args.id }, { stayId })
+          await tx.db.insert('hospitality_core.StayGuest', {
+            id: guestId,
+            stayId,
+            propertyId: args.propertyId,
+            partnerId: args.partnerId,
+            displayName: partner!.name,
+            primary: true,
+            primaryKey: 'primary',
+          })
+          if (billingMode === 'upfront')
+            await tx.db.insert('hospitality_core.Charge', {
+              id: chargeId,
+              folioId,
+              stayId,
+              description: `room:${String(args.roomTypeId)}`,
+              type: 'room',
+              quantity: calculated.schedule!.quantity,
+              unitPrice: rate,
+              amount: calculated.schedule!.amountTotal,
+              occurredAt: now,
+              sourceKey: `reservation:${String(args.id)}:room`,
+              state: 'active',
+            })
+          return success(args.id, { folioId, stayId, existing: false })
+        }),
+      )
     },
   }),
 
@@ -392,10 +458,15 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.Reservation',
       'read:hospitality_core.Charge',
       'read:hospitality_core.Folio',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.Reservation',
       'write:hospitality_core.Stay',
       'write:hospitality_core.Folio',
       'write:hospitality_core.Charge',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
     ],
     idempotent: true,
     agent: true,
@@ -406,6 +477,11 @@ export const operations: Record<string, FnSpec> = {
       if (reservation.state === 'checked_in' || reservation.state === 'checked_out')
         return failure(issue('state', 'reservation_cannot_cancel'))
       const at = date(args.at)?.toISOString() ?? new Date().toISOString()
+      const property = await record(ctx, 'hospitality_core.Property', reservation.propertyId)
+      const inventoryDates =
+        reservation.bookingType === 'hourly'
+          ? []
+          : occupancyDates(reservation.checkIn, reservation.checkOut, String(property?.timezone ?? 'UTC'))
       return transition(() =>
         ctx.tx(async (tx) => {
           const reservationClaim = await tx.db.compareAndSet(
@@ -438,6 +514,17 @@ export const operations: Record<string, FnSpec> = {
           )
           for (const charge of charges)
             await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
+          if (inventoryDates.length)
+            await releaseInventory(tx, reservation.propertyId, reservation.roomTypeId, inventoryDates)
+          if (inventoryDates.length)
+            await recordInventoryChange(tx, {
+              propertyId: reservation.propertyId,
+              roomTypeId: reservation.roomTypeId,
+              kind: 'availability',
+              dateFrom: inventoryDates[0]!,
+              dateTo: inventoryDates.at(-1)!,
+              aggregateId: reservation.id,
+            })
           return success(args.id, { state: 'cancelled' })
         }),
       )

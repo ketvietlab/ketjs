@@ -1,6 +1,7 @@
 import { defineModule } from 'ketjs'
 import { functions } from './functions.ts'
 import { housekeeping } from './housekeeping.ts'
+import { inventory } from './inventory.ts'
 import { operations } from './operations.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
@@ -18,7 +19,7 @@ export default defineModule({
   category: 'Khách sạn',
   models,
   relations,
-  functions: { ...functions, ...operations, ...housekeeping },
+  functions: { ...functions, ...inventory, ...operations, ...housekeeping },
   routes,
   menus,
   messages,
@@ -35,6 +36,8 @@ export {
   BILLING_MODES,
   BOOKING_PROVIDERS,
   BOOKING_TYPES,
+  RATE_TYPES,
+  MEAL_PLANS,
   CHARGE_TYPES,
   DOCUMENT_TYPES,
   FOLIO_STATES,
@@ -57,6 +60,8 @@ export type {
   BillingMode,
   BookingProvider,
   BookingType,
+  RateType,
+  MealPlan,
   ChargeType,
   DocumentType,
   FolioState,

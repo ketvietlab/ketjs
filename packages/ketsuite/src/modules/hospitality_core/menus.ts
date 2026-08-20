@@ -38,6 +38,13 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listFolios',
     sequence: 50,
   },
+  'hospitality.inventory': {
+    parent: 'hospitality.operations',
+    label: 'menu.inventory',
+    path: '/admin/hospitality/inventory',
+    needs: 'hospitality_core.listInventory',
+    sequence: 55,
+  },
   'hospitality.properties': {
     parent: 'hospitality.operations',
     label: 'menu.properties',
@@ -74,6 +81,13 @@ export const menus: Record<string, MenuDef> = {
     path: '/admin/hospitality/room-types',
     needs: 'hospitality_core.listRoomTypes',
     sequence: 10,
+  },
+  'hospitality.ratePlans': {
+    parent: 'hospitality.configuration',
+    label: 'menu.ratePlans',
+    path: '/admin/hospitality/rate-plans',
+    needs: 'hospitality_core.listRatePlans',
+    sequence: 15,
   },
   'hospitality.amenities': {
     parent: 'hospitality.configuration',

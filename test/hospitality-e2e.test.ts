@@ -75,7 +75,56 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     { idempotencyKey: 'hospitality-booking-1' },
   )
   assert.equal(booked.value.ok, true)
-  assert.equal(booked.writes.length, 6)
+  assert.equal(booked.writes.length, 9, 'booking, room-night inventory and change signal commit together')
+
+  const rateSaved = await e2e.client.post(
+    '/admin/hospitality/rate-plans?lang=vi',
+    new URLSearchParams({
+      operation: 'save-rate-plan',
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      code: 'WEB-FLEX',
+      name: 'Giá trực tiếp',
+      rateType: 'nightly',
+      amount: '120',
+      minStay: '0',
+      maxStay: '0',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(rateSaved.status, 303, await rateSaved.clone().text())
+  assert.match(rateSaved.headers.get('location') ?? '', /status=saved/)
+  const inventorySaved = await e2e.client.post(
+    '/admin/hospitality/inventory?lang=vi',
+    new URLSearchParams({
+      operation: 'set-inventory',
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      from: '2026-08-20',
+      to: '2026-08-20',
+      total: '1',
+      blocked: '0',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(inventorySaved.status, 303, await inventorySaved.clone().text())
+  assert.match(inventorySaved.headers.get('location') ?? '', /status=saved/)
+  const inventoryRejected = await e2e.client.post(
+    '/admin/hospitality/inventory?lang=vi',
+    new URLSearchParams({
+      operation: 'set-inventory',
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      from: '2026-08-20',
+      to: '2026-08-20',
+      total: '0',
+      blocked: '0',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(inventoryRejected.status, 303, await inventoryRejected.clone().text())
+  assert.match(inventoryRejected.headers.get('location') ?? '', /status=invalid/)
 
   const checkedIn = await e2e.client.call<Row>('hospitality_core.checkIn', {
     stayId: 'booking-1:stay',
@@ -97,6 +146,11 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ['/admin/hospitality/properties?lang=vi', 'Cơ sở lưu trú'],
     ['/admin/hospitality/rooms?lang=vi', 'Sơ đồ phòng'],
     ['/admin/hospitality/room-types?lang=vi', 'Loại phòng'],
+    ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
+    [
+      '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
+      'Tồn kho &amp; hạn chế bán',
+    ],
     ['/admin/hospitality/amenities?lang=vi', 'Danh mục tiện nghi'],
     ['/admin/hospitality/policies?lang=vi', 'Chính sách hủy'],
   ] as const

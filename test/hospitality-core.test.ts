@@ -302,6 +302,332 @@ test('hospitality core: amenities preserve property and room scopes', async () =
   }
 })
 
+test('hospitality inventory: default rate plans price bookings and remain unique per rate type', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'deluxe', propertyId: 'hotel', code: 'DLX', name: 'Deluxe', baseRate: '100' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'deluxe', code: '101', name: '101' },
+      adapter,
+    )
+    const saved = await call(
+      'hospitality_core.saveRatePlan',
+      {
+        id: 'flex',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: 'FLEX',
+        name: 'Flexible nightly',
+        rateType: 'nightly',
+        amount: '250',
+        isDefault: true,
+        mealPlan: 'BB',
+        minStay: 2,
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    const rateChanges = (
+      await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel' }, adapter)
+    ).value as Row[]
+    assert.deepEqual(
+      rateChanges.map((change) => change.kind),
+      ['rate'],
+    )
+    assert.equal(rateChanges[0]?.aggregateId, 'flex')
+    const duplicate = await call(
+      'hospitality_core.saveRatePlan',
+      {
+        id: 'other',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: 'OTHER',
+        name: 'Other nightly',
+        rateType: 'nightly',
+        amount: '200',
+        isDefault: true,
+      },
+      adapter,
+    )
+    assert.equal((duplicate.value as Row).ok, false)
+    assert.equal(((duplicate.value as Row).errors as Row[])[0]?.code, 'default_rate_unique')
+
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const tooShort = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'short',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        partnerId: 'guest',
+        checkIn: '2026-09-01T07:00:00.000Z',
+        checkOut: '2026-09-02T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((tooShort.value as Row).ok, false)
+    assert.equal(((tooShort.value as Row).errors as Row[])[0]?.code, 'rate_plan_min_stay')
+    const booked = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'two-nights',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        partnerId: 'guest',
+        checkIn: '2026-09-01T07:00:00.000Z',
+        checkOut: '2026-09-03T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((booked.value as Row).ok, true)
+    const reservation = (await call('hospitality_core.getReservation', { id: 'two-nights' }, adapter))
+      .value as Row
+    assert.equal(Number(reservation.rate), 250)
+    assert.equal(Number(reservation.amountTotal), 500)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality inventory: room-night capacity is atomic and cancellation releases it', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '100' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const range = await call(
+      'hospitality_core.setInventoryRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        from: '2026-10-01',
+        to: '2026-10-02',
+        total: 1,
+      },
+      adapter,
+    )
+    assert.deepEqual(range.value, { ok: true, count: 2, errors: [] })
+    const reserve = (id: string, from: string, to: string) =>
+      call(
+        'hospitality_core.createReservation',
+        {
+          id,
+          propertyId: 'hotel',
+          roomTypeId: 'standard',
+          partnerId: 'guest',
+          checkIn: `${from}T07:00:00.000Z`,
+          checkOut: `${to}T05:00:00.000Z`,
+          rate: '100',
+        },
+        adapter,
+      )
+    assert.equal(((await reserve('first', '2026-10-01', '2026-10-02')).value as Row).ok, true)
+    const full = await reserve('second', '2026-10-01', '2026-10-02')
+    assert.equal((full.value as Row).ok, false)
+    assert.equal(((full.value as Row).errors as Row[])[0]?.code, 'no_availability')
+    const changesAfterRejectedBooking = (
+      await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel' }, adapter)
+    ).value as Row[]
+    assert.equal(changesAfterRejectedBooking.length, 2, 'failed booking and change signal roll back together')
+    assert.equal(
+      Number(
+        (await adapter.all(`SELECT COUNT(*) AS n FROM hospitality_core_reservation WHERE id = 'second'`))[0]
+          ?.n,
+      ),
+      0,
+      'a failed reserve leaves no partial booking records',
+    )
+    const lowered = await call(
+      'hospitality_core.setInventoryRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        from: '2026-10-01',
+        to: '2026-10-01',
+        total: 0,
+      },
+      adapter,
+    )
+    assert.equal((lowered.value as Row).ok, false)
+    assert.equal(((lowered.value as Row).errors as Row[])[0]?.code, 'inventory_capacity')
+    assert.equal(
+      ((await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel' }, adapter)).value as Row[])
+        .length,
+      2,
+      'rejected allotment changes do not emit a signal',
+    )
+    await call('hospitality_core.cancelReservation', { id: 'first' }, adapter)
+    assert.equal(((await reserve('second', '2026-10-01', '2026-10-02')).value as Row).ok, true)
+    const calendar = (
+      await call(
+        'hospitality_core.listInventory',
+        { propertyId: 'hotel', roomTypeId: 'standard', from: '2026-10-01', to: '2026-10-02' },
+        adapter,
+      )
+    ).value as Row[]
+    assert.deepEqual(
+      calendar.map((row) => ({ date: row.date, sold: row.sold, available: row.available })),
+      [
+        { date: '2026-10-01', sold: 1, available: 0 },
+        { date: '2026-10-02', sold: 0, available: 1 },
+      ],
+    )
+    const changes = (await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.equal(changes.length, 4)
+    assert.deepEqual(
+      changes.map((change) => change.kind),
+      ['availability', 'availability', 'availability', 'availability'],
+    )
+    const firstPage = (
+      await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel', limit: 1 }, adapter)
+    ).value as Row[]
+    const rest = (
+      await call(
+        'hospitality_core.listInventoryChanges',
+        {
+          propertyId: 'hotel',
+          afterAt: firstPage[0]!.createdAt,
+          afterId: firstPage[0]!.id,
+        },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(rest.length, 3, 'the durable cursor resumes after an exact timestamp/id pair')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality inventory: restrictions enforce stop-sell, CTA, CTD and LOS', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'suite', propertyId: 'hotel', code: 'STE', name: 'Suite', baseRate: '500' },
+      adapter,
+    )
+    for (const room of ['201', '202'])
+      await call(
+        'hospitality_core.saveRoom',
+        { id: room, propertyId: 'hotel', roomTypeId: 'suite', code: room, name: room },
+        adapter,
+      )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    await call(
+      'hospitality_core.setRestrictionRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        from: '2026-11-01',
+        to: '2026-11-01',
+        stopSell: true,
+      },
+      adapter,
+    )
+    const restrictionChanges = (
+      await call('hospitality_core.listInventoryChanges', { propertyId: 'hotel' }, adapter)
+    ).value as Row[]
+    assert.deepEqual(
+      restrictionChanges.map((change) => change.kind),
+      ['restriction'],
+    )
+    const stopped = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'stopped',
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        partnerId: 'guest',
+        checkIn: '2026-11-01T07:00:00.000Z',
+        checkOut: '2026-11-02T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal(((stopped.value as Row).errors as Row[])[0]?.code, 'stop_sell')
+    await call(
+      'hospitality_core.setRestrictionRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        from: '2026-11-01',
+        to: '2026-11-01',
+        minLos: 2,
+        closedToArrival: true,
+      },
+      adapter,
+    )
+    const restricted = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'restricted',
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        partnerId: 'guest',
+        checkIn: '2026-11-01T07:00:00.000Z',
+        checkOut: '2026-11-02T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.deepEqual(((restricted.value as Row).errors as Row[]).map((error) => error.code).sort(), [
+      'closed_to_arrival',
+      'min_los',
+    ])
+    await call(
+      'hospitality_core.setRestrictionRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        from: '2026-11-01',
+        to: '2026-11-01',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.setRestrictionRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        from: '2026-11-03',
+        to: '2026-11-03',
+        closedToDeparture: true,
+      },
+      adapter,
+    )
+    const departure = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'departure',
+        propertyId: 'hotel',
+        roomTypeId: 'suite',
+        partnerId: 'guest',
+        checkIn: '2026-11-01T07:00:00.000Z',
+        checkOut: '2026-11-03T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal(((departure.value as Row).errors as Row[])[0]?.code, 'closed_to_departure')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality core: Vietnamese and English cover every UI and validation key', () => {
   assert.deepEqual(missingMessages(manifest, ['vi', 'en']), {})
   const vi = translator(manifest, 'vi')
@@ -311,6 +637,8 @@ test('hospitality core: Vietnamese and English cover every UI and validation key
     'hospitality_core.roomStatus.out_of_order',
     'hospitality_core.validation.property_mismatch',
     'hospitality_core.policy.non_refundable',
+    'hospitality_core.screen.inventory.title',
+    'hospitality_core.validation.no_availability',
   ]) {
     assert.equal(vi.has(key), true, `Vietnamese should own ${key}`)
     assert.equal(en.has(key), true, `English should own ${key}`)
