@@ -45,6 +45,13 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listExtraLines',
     sequence: 52,
   },
+  'hospitality.nightAudit': {
+    parent: 'hospitality.operations',
+    label: 'menu.nightAudit',
+    path: '/admin/hospitality/night-audit',
+    needs: 'hospitality_core.listNightAudits',
+    sequence: 54,
+  },
   'hospitality.inventory': {
     parent: 'hospitality.operations',
     label: 'menu.inventory',

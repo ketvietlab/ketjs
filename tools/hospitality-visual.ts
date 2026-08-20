@@ -330,6 +330,19 @@ try {
     externalId: 'TVL-9931',
   })
   await booking('res-cancel', 'guest-giang', '2026-08-22T14:00:00.000Z', '2026-08-23T12:00:00.000Z')
+  await call('hospitality_core.createReservation', {
+    id: 'res-long-stay',
+    code: 'RES-LONG-STAY',
+    propertyId: property,
+    roomTypeId: 'suite',
+    partnerId: 'guest-giang',
+    bookingType: 'weekly',
+    billingMode: 'recurring',
+    checkIn: '2026-07-01T14:00:00.000Z',
+    checkOut: '2026-09-02T12:00:00.000Z',
+    rate: '9200000',
+    createdAt: '2026-06-25T02:00:00.000Z',
+  })
   await call('hospitality_core.cancelReservation', {
     id: 'res-cancel',
     reason: 'Khách đổi lịch',
@@ -347,6 +360,12 @@ try {
     assignmentId: 'assignment-depart',
     at: '2026-08-18T14:10:00.000Z',
   })
+  await call('hospitality_core.checkIn', {
+    stayId: 'res-long-stay:stay',
+    roomId: '104',
+    assignmentId: 'assignment-long-stay',
+    at: '2026-07-01T14:00:00.000Z',
+  })
   await call('hospitality_core.saveExtraLine', {
     id: 'extra-minibar',
     reservationId: 'res-arrive',
@@ -362,6 +381,14 @@ try {
     description: 'Bữa sáng người lớn',
     recurrence: 'per_night',
     quantity: '2',
+  })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-long-stay-breakfast',
+    stayId: 'res-long-stay:stay',
+    productId: 'breakfast',
+    description: 'Bữa sáng lưu trú dài hạn',
+    recurrence: 'per_night',
+    quantity: '1',
   })
   for (const serviceDate of ['2026-08-19', '2026-08-20'])
     await call('hospitality_core.materializeExtraLine', { id: 'extra-breakfast', serviceDate })
@@ -402,6 +429,10 @@ try {
     id: 'cleaning-103',
     assigneeId: 'visual-admin',
     at: '2026-08-20T01:45:00.000Z',
+  })
+  await call('hospitality_core.requestNightAudit', {
+    propertyId: property,
+    auditDate: '2026-08-20',
   })
   console.log(`hospitality visual database ready: ${path}`)
   console.log('sign in with admin / hospitality-demo')
