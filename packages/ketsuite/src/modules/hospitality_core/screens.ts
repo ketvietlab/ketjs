@@ -202,6 +202,34 @@ export type ReservationRow = {
   roomType?: { name?: string } | null
 }
 
+export type ReservationQuote = {
+  ok: boolean
+  ratePlanId?: string | null
+  bookingType?: string | null
+  billingMode?: string | null
+  checkIn?: string | null
+  checkOut?: string | null
+  rate?: string | number | null
+  quantity?: string | number | null
+  amountTotal?: string | number | null
+  minimumAvailable?: number | null
+  errors?: Array<{ messageKey?: string; params?: Record<string, unknown> }>
+}
+
+export type ReservationIntakeValues = {
+  id: string
+  code: string
+  propertyId: string
+  roomTypeId: string
+  partnerId: string
+  bookingType: string
+  checkIn: string
+  checkOut: string
+  adults: number
+  children: number
+  rate: string
+}
+
 export type StayRow = {
   id: string
   code: string
@@ -2270,24 +2298,248 @@ export const frontDeskScreen = (
     ]),
   )
 
+const reservationFeedback = (_: Translator, status?: string | null): TemplateResult | null => {
+  if (status === 'saved')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.saved'),
+      message: _('hospitality_core.reservation.feedback.savedHint'),
+      tone: 'positive',
+    })
+  if (status === 'quoted')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.quoted'),
+      message: _('hospitality_core.reservation.feedback.quotedHint'),
+      tone: 'info',
+    })
+  if (status === 'invalid')
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: _('hospitality_core.reservation.feedback.invalidHint'),
+      tone: 'danger',
+    })
+  return null
+}
+
 export const reservationsScreen = (
   _: Translator,
-  rows: ReservationRow[],
+  data: {
+    rows: ReservationRow[]
+    properties: Choice[]
+    roomTypes: Choice[]
+    partners: Choice[]
+    values: ReservationIntakeValues
+    quote?: ReservationQuote | null
+  },
   locale: string,
   timezone: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
+  status?: string | null,
+): TemplateResult => {
+  const errors = (data.quote?.errors ?? []).map((error) =>
+    error.messageKey ? _(error.messageKey, error.params) : _('hospitality_core.feedback.invalid'),
+  )
+  const quote = data.quote?.ok ? data.quote : null
+  return framed(
     _,
     _('hospitality_core.screen.reservations.title'),
     frame,
-    rows.length
-      ? dataTable(_, { columns: reservationColumns(_, locale, timezone), rows, id: (row) => row.id })
-      : emptyState(
-          _('hospitality_core.screen.reservations.empty'),
-          _('hospitality_core.screen.reservations.emptyHint'),
-        ),
+    stack([
+      reservationFeedback(_, status),
+      recordForm({
+        action: '/admin/hospitality/reservations',
+        method: 'get',
+        layout: 'inline',
+        submit: _('hospitality_core.action.select'),
+        submitVariant: 'secondary',
+        hidden: { lang: locale },
+        fields: [
+          {
+            name: 'property',
+            label: _('hospitality_core.reservation.field.property'),
+            type: 'select',
+            value: data.values.propertyId,
+            options: choices(data.properties),
+            required: true,
+          },
+        ],
+      }),
+      section({
+        title: _('hospitality_core.reservation.section.intake'),
+        description: _('hospitality_core.reservation.section.intakeHint'),
+        body:
+          data.roomTypes.length && data.partners.length
+            ? recordForm({
+                action: '/admin/hospitality/reservations',
+                method: 'post',
+                submit: _('hospitality_core.reservation.action.quote'),
+                submitVariant: 'primary',
+                errors,
+                hidden: {
+                  operation: 'quote',
+                  lang: locale,
+                  property: data.values.propertyId,
+                  id: data.values.id,
+                },
+                fields: [
+                  {
+                    name: 'code',
+                    label: _('hospitality_core.reservation.field.code'),
+                    value: data.values.code,
+                    help: _('hospitality_core.reservation.field.codeHint'),
+                  },
+                  {
+                    name: 'partnerId',
+                    label: _('hospitality_core.reservation.field.guest'),
+                    type: 'select',
+                    value: data.values.partnerId,
+                    options: [
+                      { value: '', label: _('hospitality_core.reservation.value.selectGuest') },
+                      ...choices(data.partners),
+                    ],
+                    required: true,
+                  },
+                  {
+                    name: 'roomTypeId',
+                    label: _('hospitality_core.reservation.field.roomType'),
+                    type: 'select',
+                    value: data.values.roomTypeId,
+                    options: choices(data.roomTypes),
+                    required: true,
+                  },
+                  {
+                    name: 'bookingType',
+                    label: _('hospitality_core.reservation.field.bookingType'),
+                    type: 'select',
+                    value: data.values.bookingType,
+                    options: ['nightly', 'weekly', 'monthly'].map((value) => ({
+                      value,
+                      label: _(`hospitality_core.bookingType.${value}`),
+                    })),
+                    required: true,
+                  },
+                  {
+                    name: 'checkIn',
+                    label: _('hospitality_core.col.checkIn'),
+                    type: 'datetime-local',
+                    value: data.values.checkIn,
+                    required: true,
+                  },
+                  {
+                    name: 'checkOut',
+                    label: _('hospitality_core.col.checkOut'),
+                    type: 'datetime-local',
+                    value: data.values.checkOut,
+                    required: true,
+                  },
+                  {
+                    name: 'adults',
+                    label: _('hospitality_core.reservation.field.adults'),
+                    type: 'number',
+                    value: data.values.adults,
+                    required: true,
+                    step: '1',
+                  },
+                  {
+                    name: 'children',
+                    label: _('hospitality_core.reservation.field.children'),
+                    type: 'number',
+                    value: data.values.children,
+                    required: true,
+                    step: '1',
+                  },
+                  {
+                    name: 'rate',
+                    label: _('hospitality_core.reservation.field.rate'),
+                    type: 'decimal',
+                    value: data.values.rate,
+                    help: _('hospitality_core.reservation.field.rateHint'),
+                  },
+                ],
+              })
+            : emptyState(
+                data.roomTypes.length
+                  ? _('hospitality_core.reservation.empty.partners')
+                  : _('hospitality_core.reservation.empty.roomTypes'),
+                data.roomTypes.length
+                  ? _('hospitality_core.reservation.empty.partnersHint')
+                  : _('hospitality_core.reservation.empty.roomTypesHint'),
+              ),
+      }),
+      ...(quote
+        ? [
+            section({
+              title: _('hospitality_core.reservation.section.quote'),
+              description: _('hospitality_core.reservation.section.quoteHint'),
+              body: stack([
+                cardGrid({
+                  items: [
+                    {
+                      id: 'rate',
+                      label: _('hospitality_core.reservation.quote.rate'),
+                      value: formatMoney(_, quote.rate ?? 0),
+                    },
+                    {
+                      id: 'quantity',
+                      label: _('hospitality_core.reservation.quote.quantity'),
+                      value: String(quote.quantity ?? 0),
+                    },
+                    {
+                      id: 'availability',
+                      label: _('hospitality_core.reservation.quote.availability'),
+                      value: String(quote.minimumAvailable ?? 0),
+                    },
+                    {
+                      id: 'total',
+                      label: _('hospitality_core.reservation.quote.total'),
+                      value: formatMoney(_, quote.amountTotal ?? 0),
+                    },
+                  ],
+                  id: (item) => item.id,
+                  card: (item) => metric({ label: item.label, value: item.value, tone: item.id }),
+                }),
+                recordForm({
+                  action: '/admin/hospitality/reservations',
+                  method: 'post',
+                  submit: _('hospitality_core.reservation.action.create'),
+                  submitVariant: 'primary',
+                  hidden: {
+                    operation: 'create',
+                    lang: locale,
+                    property: data.values.propertyId,
+                    id: data.values.id,
+                    code: data.values.code,
+                    partnerId: data.values.partnerId,
+                    roomTypeId: data.values.roomTypeId,
+                    bookingType: data.values.bookingType,
+                    checkIn: data.values.checkIn,
+                    checkOut: data.values.checkOut,
+                    adults: String(data.values.adults),
+                    children: String(data.values.children),
+                    rate: String(quote.rate ?? ''),
+                  },
+                  fields: [],
+                }),
+              ]),
+            }),
+          ]
+        : []),
+      section({
+        title: _('hospitality_core.reservation.section.list'),
+        description: _('hospitality_core.reservation.section.listHint'),
+        body: data.rows.length
+          ? dataTable(_, {
+              columns: reservationColumns(_, locale, timezone),
+              rows: data.rows,
+              id: (row) => row.id,
+            })
+          : emptyState(
+              _('hospitality_core.screen.reservations.empty'),
+              _('hospitality_core.screen.reservations.emptyHint'),
+            ),
+      }),
+    ]),
   )
+}
 
 export const staysScreen = (
   _: Translator,

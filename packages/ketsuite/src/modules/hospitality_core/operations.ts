@@ -13,6 +13,7 @@ import {
   defaultRatePlan,
   InventoryConflict,
   occupancyDates,
+  quoteAvailability,
   recordInventoryChange,
   releaseInventory,
   reserveInventory,
@@ -129,6 +130,100 @@ const transition = async <T>(run: () => Promise<T>): Promise<T | { ok: false; er
   }
 }
 
+type ReservationPlanInput = {
+  propertyId?: unknown
+  roomTypeId?: unknown
+  bookingType?: unknown
+  checkIn?: unknown
+  checkOut?: unknown
+  adults?: unknown
+  children?: unknown
+  rate?: unknown
+  billingMode?: unknown
+}
+
+const planReservation = async (ctx: Ctx, args: ReservationPlanInput) => {
+  const property = await record(ctx, 'hospitality_core.Property', args.propertyId)
+  const roomType = await record(ctx, 'hospitality_core.RoomType', args.roomTypeId)
+  const bookingType = String(args.bookingType ?? 'nightly')
+  const billingMode = String(
+    args.billingMode ?? (bookingType === 'weekly' || bookingType === 'monthly' ? 'recurring' : 'upfront'),
+  )
+  const ratePlan = roomType ? await defaultRatePlan(ctx, args.roomTypeId, bookingType) : null
+  const rate = String(args.rate ?? ratePlan?.amount ?? roomType?.baseRate ?? '0')
+  const calculated = scheduleOf(
+    bookingType,
+    args.checkIn,
+    args.checkOut,
+    rate,
+    String(property?.timezone ?? 'UTC'),
+  )
+  const errors = [...calculated.errors]
+  if (!property) errors.push(issue('propertyId', 'property_missing'))
+  if (!roomType) errors.push(issue('roomTypeId', 'room_type_missing'))
+  else if (roomType.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
+  if (!oneOf(BILLING_MODES, billingMode)) errors.push(issue('billingMode', 'billing_mode'))
+  if (Number(args.adults ?? 1) < 1) errors.push(issue('adults', 'positive'))
+  if (Number(args.children ?? 0) < 0) errors.push(issue('children', 'non_negative'))
+  if (calculated.schedule && ratePlan) {
+    const quantity = Number(calculated.schedule.quantity)
+    if (Number(ratePlan.minStay) > 0 && quantity < Number(ratePlan.minStay))
+      errors.push(
+        issue('checkOut', 'rate_plan_min_stay', {
+          count: ratePlan.minStay,
+          actual: quantity,
+        }),
+      )
+    if (Number(ratePlan.maxStay) > 0 && quantity > Number(ratePlan.maxStay))
+      errors.push(
+        issue('checkOut', 'rate_plan_max_stay', {
+          count: ratePlan.maxStay,
+          actual: quantity,
+        }),
+      )
+  }
+  const inventoryDates =
+    calculated.schedule && bookingType !== 'hourly'
+      ? occupancyDates(
+          calculated.schedule.checkIn,
+          calculated.schedule.checkOut,
+          String(property?.timezone ?? 'UTC'),
+        )
+      : []
+  if (inventoryDates.length > 366) errors.push(issue('checkOut', 'inventory_horizon', { count: 366 }))
+  let minimumAvailable: number | undefined
+  if (property && roomType && roomType.propertyId === args.propertyId && calculated.schedule) {
+    if (inventoryDates.length) {
+      errors.push(
+        ...(await restrictionIssues(
+          ctx,
+          args.propertyId,
+          args.roomTypeId,
+          inventoryDates,
+          dateKeyIn(new Date(calculated.schedule.checkOut), String(property.timezone ?? 'UTC')),
+        )),
+      )
+      const availability = await quoteAvailability(ctx, args.propertyId, args.roomTypeId, inventoryDates)
+      minimumAvailable = availability.minimumAvailable
+      errors.push(...availability.errors)
+    } else if (bookingType === 'hourly') {
+      minimumAvailable = (await quoteAvailability(ctx, args.propertyId, args.roomTypeId, [])).minimumAvailable
+    }
+  }
+  return {
+    property,
+    roomType,
+    bookingType,
+    billingMode,
+    ratePlan,
+    rate,
+    schedule: calculated.schedule,
+    inventoryDates,
+    minimumAvailable,
+    errors,
+  }
+}
+
 const reservationOutput = {
   id: 'id',
   code: 'text',
@@ -187,13 +282,17 @@ const stayOutput = {
   guests: 'json?',
 }
 
-const bookingEffects = [
+const reservationQuoteEffects = [
   'read:hospitality_core.Property',
   'read:hospitality_core.RoomType',
   'read:hospitality_core.Room',
   'read:hospitality_core.RatePlan',
   'read:hospitality_core.Restriction',
   'read:hospitality_core.AvailabilityLedger',
+]
+
+const bookingEffects = [
+  ...reservationQuoteEffects,
   'read:partner.Partner',
   'read:hospitality_core.Reservation',
   'write:hospitality_core.Folio',
@@ -206,6 +305,56 @@ const bookingEffects = [
 ]
 
 export const operations: Record<string, FnSpec> = {
+  quoteReservation: defineFn({
+    input: {
+      propertyId: 'id',
+      roomTypeId: 'id',
+      bookingType: 'text?',
+      checkIn: 'datetime',
+      checkOut: 'datetime',
+      adults: 'int?',
+      children: 'int?',
+      rate: 'decimal?',
+      billingMode: 'text?',
+    },
+    output: {
+      ok: 'bool',
+      propertyId: 'id?',
+      roomTypeId: 'id?',
+      ratePlanId: 'id?',
+      bookingType: 'text?',
+      billingMode: 'text?',
+      checkIn: 'datetime?',
+      checkOut: 'datetime?',
+      rate: 'decimal?',
+      quantity: 'decimal?',
+      amountTotal: 'decimal?',
+      minimumAvailable: 'int?',
+      errors: 'json?',
+    },
+    effects: reservationQuoteEffects,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const plan = await planReservation(ctx, args)
+      if (plan.errors.length || !plan.schedule) return failure(...plan.errors)
+      return {
+        ok: true,
+        propertyId: String(args.propertyId),
+        roomTypeId: String(args.roomTypeId),
+        ratePlanId: plan.ratePlan?.id,
+        bookingType: plan.bookingType,
+        billingMode: plan.billingMode,
+        checkIn: plan.schedule.checkIn,
+        checkOut: plan.schedule.checkOut,
+        rate: plan.rate,
+        quantity: plan.schedule.quantity,
+        amountTotal: plan.schedule.amountTotal,
+        minimumAvailable: plan.minimumAvailable,
+        errors: [],
+      }
+    },
+  }),
+
   createReservation: defineFn({
     input: {
       id: 'id',
@@ -237,68 +386,12 @@ export const operations: Record<string, FnSpec> = {
           stayId: existing.stayId,
           existing: true,
         })
-      const property = await record(ctx, 'hospitality_core.Property', args.propertyId)
-      const roomType = await record(ctx, 'hospitality_core.RoomType', args.roomTypeId)
       const partner = await record(ctx, 'partner.Partner', args.partnerId)
       const provider = String(args.provider ?? 'direct')
-      const bookingType = String(args.bookingType ?? 'nightly')
-      const billingMode = String(
-        args.billingMode ?? (bookingType === 'weekly' || bookingType === 'monthly' ? 'recurring' : 'upfront'),
-      )
-      const ratePlan = roomType ? await defaultRatePlan(ctx, args.roomTypeId, bookingType) : null
-      const rate = String(args.rate ?? ratePlan?.amount ?? roomType?.baseRate ?? '0')
-      const calculated = scheduleOf(
-        bookingType,
-        args.checkIn,
-        args.checkOut,
-        rate,
-        String(property?.timezone ?? 'UTC'),
-      )
-      const errors = [...calculated.errors]
-      if (!property) errors.push(issue('propertyId', 'property_missing'))
-      if (!roomType) errors.push(issue('roomTypeId', 'room_type_missing'))
-      else if (roomType.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
+      const plan = await planReservation(ctx, args)
+      const errors = [...plan.errors]
       if (!partner) errors.push(issue('partnerId', 'partner_missing'))
       if (!oneOf(BOOKING_PROVIDERS, provider)) errors.push(issue('provider', 'booking_provider'))
-      if (!oneOf(BILLING_MODES, billingMode)) errors.push(issue('billingMode', 'billing_mode'))
-      if (Number(args.adults ?? 1) < 1) errors.push(issue('adults', 'positive'))
-      if (Number(args.children ?? 0) < 0) errors.push(issue('children', 'non_negative'))
-      if (calculated.schedule && ratePlan) {
-        const quantity = Number(calculated.schedule.quantity)
-        if (Number(ratePlan.minStay) > 0 && quantity < Number(ratePlan.minStay))
-          errors.push(
-            issue('checkOut', 'rate_plan_min_stay', {
-              count: ratePlan.minStay,
-              actual: quantity,
-            }),
-          )
-        if (Number(ratePlan.maxStay) > 0 && quantity > Number(ratePlan.maxStay))
-          errors.push(
-            issue('checkOut', 'rate_plan_max_stay', {
-              count: ratePlan.maxStay,
-              actual: quantity,
-            }),
-          )
-      }
-      const inventoryDates =
-        calculated.schedule && bookingType !== 'hourly'
-          ? occupancyDates(
-              calculated.schedule.checkIn,
-              calculated.schedule.checkOut,
-              String(property?.timezone ?? 'UTC'),
-            )
-          : []
-      if (inventoryDates.length > 366) errors.push(issue('checkOut', 'inventory_horizon', { count: 366 }))
-      if (calculated.schedule && inventoryDates.length)
-        errors.push(
-          ...(await restrictionIssues(
-            ctx,
-            args.propertyId,
-            args.roomTypeId,
-            inventoryDates,
-            dateKeyIn(new Date(calculated.schedule.checkOut), String(property?.timezone ?? 'UTC')),
-          )),
-        )
       if (args.externalId) {
         const R = ctx.table('hospitality_core.Reservation')
         const duplicate = await ctx.db.one(
@@ -310,8 +403,9 @@ export const operations: Record<string, FnSpec> = {
         )
         if (duplicate) errors.push(issue('externalId', 'provider_external_unique'))
       }
-      if (errors.length || !calculated.schedule) return failure(...errors)
+      if (errors.length || !plan.schedule) return failure(...errors)
 
+      const schedule = plan.schedule
       const now = date(args.createdAt)?.toISOString() ?? new Date().toISOString()
       const folioId = `${String(args.id)}:folio`
       const stayId = `${String(args.id)}:stay`
@@ -319,18 +413,18 @@ export const operations: Record<string, FnSpec> = {
       const guestId = `${String(args.id)}:guest`
       const code = text(args.code) || String(args.id).toUpperCase()
       const state = 'confirmed'
-      const initialFolioTotal = billingMode === 'upfront' ? calculated.schedule.amountTotal : '0'
+      const initialFolioTotal = plan.billingMode === 'upfront' ? schedule.amountTotal : '0'
       return transition(() =>
         ctx.tx(async (tx) => {
-          if (inventoryDates.length)
-            await reserveInventory(tx, args.propertyId, args.roomTypeId, inventoryDates)
-          if (inventoryDates.length)
+          if (plan.inventoryDates.length)
+            await reserveInventory(tx, args.propertyId, args.roomTypeId, plan.inventoryDates)
+          if (plan.inventoryDates.length)
             await recordInventoryChange(tx, {
               propertyId: args.propertyId,
               roomTypeId: args.roomTypeId,
               kind: 'availability',
-              dateFrom: inventoryDates[0]!,
-              dateTo: inventoryDates.at(-1)!,
+              dateFrom: plan.inventoryDates[0]!,
+              dateTo: plan.inventoryDates.at(-1)!,
               aggregateId: args.id,
             })
           await tx.db.insert('hospitality_core.Folio', {
@@ -353,15 +447,15 @@ export const operations: Record<string, FnSpec> = {
             provider,
             externalId: args.externalId,
             channelRef: args.channelRef,
-            bookingType,
-            checkIn: calculated.schedule!.checkIn,
-            checkOut: calculated.schedule!.checkOut,
+            bookingType: plan.bookingType,
+            checkIn: schedule.checkIn,
+            checkOut: schedule.checkOut,
             adults: Number(args.adults ?? 1),
             children: Number(args.children ?? 0),
-            rate,
-            quantity: calculated.schedule!.quantity,
-            billingMode,
-            amountTotal: calculated.schedule!.amountTotal,
+            rate: plan.rate,
+            quantity: schedule.quantity,
+            billingMode: plan.billingMode,
+            amountTotal: schedule.amountTotal,
             state,
             createdAt: now,
             updatedAt: now,
@@ -374,13 +468,13 @@ export const operations: Record<string, FnSpec> = {
             partnerId: args.partnerId,
             propertyId: args.propertyId,
             roomTypeId: args.roomTypeId,
-            bookingType,
-            checkIn: calculated.schedule!.checkIn,
-            checkOut: calculated.schedule!.checkOut,
+            bookingType: plan.bookingType,
+            checkIn: schedule.checkIn,
+            checkOut: schedule.checkOut,
             adults: Number(args.adults ?? 1),
             children: Number(args.children ?? 0),
-            billingMode,
-            rate,
+            billingMode: plan.billingMode,
+            rate: plan.rate,
             state: 'draft',
           })
           await tx.db.update('hospitality_core.Reservation', { id: args.id }, { stayId })
@@ -393,16 +487,16 @@ export const operations: Record<string, FnSpec> = {
             primary: true,
             primaryKey: 'primary',
           })
-          if (billingMode === 'upfront')
+          if (plan.billingMode === 'upfront')
             await tx.db.insert('hospitality_core.Charge', {
               id: chargeId,
               folioId,
               stayId,
               description: `room:${String(args.roomTypeId)}`,
               type: 'room',
-              quantity: calculated.schedule!.quantity,
-              unitPrice: rate,
-              amount: calculated.schedule!.amountTotal,
+              quantity: schedule.quantity,
+              unitPrice: plan.rate,
+              amount: schedule.amountTotal,
               occurredAt: now,
               sourceKey: `reservation:${String(args.id)}:room`,
               state: 'active',

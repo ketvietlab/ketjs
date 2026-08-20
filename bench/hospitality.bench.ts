@@ -300,6 +300,41 @@ try {
   )
   const calendarConfigMs = performance.now() - calendarConfigStarted
 
+  const ledgerCountsBeforeQuote = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters
+        .get(key)!
+        .all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger')
+      return Number(rows[0]!.n)
+    }),
+  )
+  const quoteStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let quote = 0; quote < reservationsPerDatabase; quote++) {
+        const result = await call(key, 'hospitality_core.quoteReservation', {
+          propertyId: 'property',
+          roomTypeId: `type:${quote % 12}`,
+          bookingType: 'nightly',
+          checkIn: '2026-09-01T14:00:00.000Z',
+          checkOut: '2026-09-03T12:00:00.000Z',
+        })
+        const value = result.value as { ok: boolean; minimumAvailable?: number }
+        if (!value.ok || Number(value.minimumAvailable) < 1) throw new Error(`${key}: quote failed`)
+      }
+    }),
+  )
+  const quoteMs = performance.now() - quoteStarted
+  const quoteIsReadOnly = await Promise.all(
+    keys.map(async (key, index) => {
+      const rows = await adapters
+        .get(key)!
+        .all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger')
+      return Number(rows[0]!.n) === ledgerCountsBeforeQuote[index]
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!quoteIsReadOnly) throw new Error('reservation quote mutated the availability ledger')
+
   const bookingStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -922,6 +957,10 @@ try {
         calendarConfigMs: Number(calendarConfigMs.toFixed(1)),
         calendarRowsPerSecond: Math.round((databaseCount * (12 * 3 + 7) * 1_000) / calendarConfigMs),
         reservations: totalReservations,
+        quotes: totalReservations,
+        quoteMs: Number(quoteMs.toFixed(1)),
+        quotesPerSecond: Math.round((totalReservations * 1_000) / quoteMs),
+        quoteIsReadOnly,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
         serviceIntentions: databaseCount * serviceIntentionsPerDatabase,
