@@ -99,6 +99,11 @@ try {
       markers: ['replenishment-create-form', 'record-workspace', 'Đề xuất bổ sung'],
     },
     {
+      label: 'Forecast',
+      path: '/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi',
+      markers: ['forecast-filter-form', 'record-workspace', 'Khả năng đáp ứng'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],

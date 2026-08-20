@@ -205,6 +205,7 @@ const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
 const replenishmentEvidenceDir = resolve('docs/assets/inventory-replenishment')
+const forecastEvidenceDir = resolve('docs/assets/inventory-forecast')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -214,6 +215,7 @@ try {
   await mkdir(routeEvidenceDir, { recursive: true })
   await mkdir(routeDetailEvidenceDir, { recursive: true })
   await mkdir(replenishmentEvidenceDir, { recursive: true })
+  await mkdir(forecastEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -300,6 +302,11 @@ try {
       name: 'replenishment',
       path: '/admin/replenishment?lang=vi',
       ready: `document.querySelector('#replenishment-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'forecast',
+      path: '/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi',
+      ready: `document.querySelector('#forecast-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length === 1`,
     },
     {
       name: 'lot-list',
@@ -1335,6 +1342,124 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'forecast') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            filterForm: Boolean(document.querySelector('#forecast-filter-form[data-scope="stock-forecast"]')),
+            selectedProduct: document.querySelector('#forecast-filter-form [name="productId"]')?.value === 'variant-collab',
+            selectedLocation: document.querySelector('#forecast-filter-form [name="locationId"]')?.value === 'wh:stock',
+            locationPrecedence: document.querySelector('[data-ui="record-workspace"]')?.textContent.includes('Vị trí: Tồn kho'),
+            result: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length === 1,
+            formula: document.body.textContent.includes('Tồn thực tế + sắp nhận − sắp xuất = tồn dự báo'),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#forecast-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          filterForm: true,
+          selectedProduct: true,
+          selectedLocation: true,
+          locationPrecedence: true,
+          result: true,
+          formula: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/forecast?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#forecast-filter-form')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            empty: document.body.textContent.includes('Chưa chọn sản phẩm'),
+            table: Boolean(document.querySelector('[data-ui="table"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
+          })`,
+        ),
+        { empty: true, table: false, chatter: false },
+      )
+
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'vi'`,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(forecastEvidenceDir, 'forecast-vi-desktop.png'))
+
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Availability')`), true)
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(forecastEvidenceDir, 'forecast-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#forecast-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            resultVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
+          })`,
+        ),
+        { horizontalOverflow: false, formRowsAtLeast28: true, resultVisible: true },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(forecastEvidenceDir, 'forecast-vi-mobile.png'))
+
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(forecastEvidenceDir, 'forecast-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
