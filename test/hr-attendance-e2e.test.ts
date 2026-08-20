@@ -146,9 +146,9 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   const leave = await e2e.client.form<string>('/my/work', {
     action: 'leave',
     leaveTypeId: 'annual',
-    dateFrom: '2026-08-21',
-    dateTo: '2026-08-21',
-    portion: 'morning',
+    dateFrom: '2026-08-20',
+    dateTo: '2026-08-20',
+    portion: 'full',
     reason: 'Khám bệnh',
   })
   assert.match(leave, /Thành công/)
@@ -177,6 +177,16 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
 
   await e2e.client.logout()
   await e2e.client.login({ login: 'admin', password: 'correct horse' })
+  const pendingLeaves = (await fixture(
+    'hr.leave.manageList',
+    { state: 'requested' },
+    'admin',
+  )) as unknown as Row[]
+  await fixture(
+    'hr.leave.manageDecision',
+    { id: pendingLeaves[0]!.id, decision: 'approved', note: 'E2E period close' },
+    'admin',
+  )
   const english = await e2e.client.get('/admin/hr?lang=en')
   assert.equal(english.status, 200)
   const englishHtml = await english.text()

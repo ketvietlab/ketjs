@@ -5,15 +5,16 @@ import {
   dataTable,
   emptyState,
   framed,
-  recordActions,
-  recordForm,
-  section,
+  recordActions as RecordActions,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 
 type R = Record<string, unknown>
+
 const stateBadge = (_: Translator, value: unknown) => {
   const state = String(value ?? '')
   return badge(
@@ -33,30 +34,34 @@ export const employeesScreen = (
     _('hr_backend.employees.title'),
     frame,
     stack([
-      section({
-        title: _('hr_backend.employees.create'),
-        body: surface({
-          body: recordForm({
-            action: '/admin/hr',
-            errors,
-            submit: _('hr_backend.action.create'),
-            submitVariant: 'primary',
-            fields: [
-              { name: 'code', label: _('hr_backend.field.code'), required: true },
-              { name: 'partnerId', label: _('hr_backend.field.partnerId'), required: true },
-              { name: 'userId', label: _('hr_backend.field.userId') },
-              { name: 'homeBranchId', label: _('hr_backend.field.branchId'), required: true },
-              {
-                name: 'timezone',
-                label: _('hr_backend.field.timezone'),
-                value: 'Asia/Ho_Chi_Minh',
-                required: true,
-              },
-              { name: 'startDate', label: _('hr_backend.field.startDate'), type: 'date', required: true },
-            ],
-          }),
-        }),
-      }),
+      <Section
+        title={_('hr_backend.employees.create')}
+        body={
+          <Surface
+            body={
+              <RecordForm
+                action="/admin/hr"
+                errors={errors}
+                submit={_('hr_backend.action.create')}
+                submitVariant="primary"
+                fields={[
+                  { name: 'code', label: _('hr_backend.field.code'), required: true },
+                  { name: 'partnerId', label: _('hr_backend.field.partnerId'), required: true },
+                  { name: 'userId', label: _('hr_backend.field.userId') },
+                  { name: 'homeBranchId', label: _('hr_backend.field.branchId'), required: true },
+                  {
+                    name: 'timezone',
+                    label: _('hr_backend.field.timezone'),
+                    value: 'Asia/Ho_Chi_Minh',
+                    required: true,
+                  },
+                  { name: 'startDate', label: _('hr_backend.field.startDate'), type: 'date', required: true },
+                ]}
+              />
+            }
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -100,45 +105,57 @@ export const rosterScreen = (
     _('hr_backend.roster.title'),
     frame,
     stack([
-      section({
-        title: _('hr_backend.roster.generate'),
-        body: surface({
-          body: recordForm({
-            action: '/admin/hr/roster',
-            errors,
-            submit: _('hr_backend.action.generate'),
-            submitVariant: 'primary',
-            fields: [
-              { name: 'branchId', label: _('hr_backend.field.branchId'), value: branchId, required: true },
-              {
-                name: 'weekStart',
-                label: _('hr_backend.field.weekStart'),
-                type: 'date',
-                value: weekStart,
-                required: true,
-              },
-            ],
-          }),
-        }),
-      }),
+      <Section
+        title={_('hr_backend.roster.generate')}
+        body={
+          <Surface
+            body={
+              <RecordForm
+                action="/admin/hr/roster"
+                errors={errors}
+                submit={_('hr_backend.action.generate')}
+                submitVariant="primary"
+                fields={[
+                  {
+                    name: 'branchId',
+                    label: _('hr_backend.field.branchId'),
+                    value: branchId,
+                    required: true,
+                  },
+                  {
+                    name: 'weekStart',
+                    label: _('hr_backend.field.weekStart'),
+                    type: 'date',
+                    value: weekStart,
+                    required: true,
+                  },
+                ]}
+              />
+            }
+          />
+        }
+      />,
       ...(roster
         ? [
-            section({
-              title: `${_('hr_backend.roster.week')} ${String(roster.weekStart)}`,
-              description: _('hr_backend.roster.hint'),
-              body: stack([
+            <Section
+              title={`${_('hr_backend.roster.week')} ${String(roster.weekStart)}`}
+              description={_('hr_backend.roster.hint')}
+              body={stack([
                 stateBadge(_, roster.state),
-                surface({
-                  body: recordActions({
-                    action: `/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`,
-                    actions:
-                      roster.state === 'published'
-                        ? [{ value: 'reopen', label: _('hr_backend.action.reopen'), variant: 'secondary' }]
-                        : [{ value: 'publish', label: _('hr_backend.action.publish'), variant: 'primary' }],
-                  }),
-                }),
-              ]),
-            }),
+                <Surface
+                  body={
+                    <RecordActions
+                      action={`/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`}
+                      actions={
+                        roster.state === 'published'
+                          ? [{ value: 'reopen', label: _('hr_backend.action.reopen'), variant: 'secondary' }]
+                          : [{ value: 'publish', label: _('hr_backend.action.publish'), variant: 'primary' }]
+                      }
+                    />
+                  }
+                />,
+              ])}
+            />,
             shifts.length
               ? dataTable(_, {
                   rows: shifts,
@@ -193,15 +210,17 @@ export const leavesScreen = (_: Translator, frame: Frame, rows: R[]): TemplateRe
               key: 'actions',
               label: _('hr_backend.field.actions'),
               cell: (row) =>
-                row.state === 'requested'
-                  ? recordActions({
-                      action: `/admin/hr/leaves?id=${encodeURIComponent(String(row.id))}`,
-                      actions: [
-                        { value: 'approved', label: _('hr_backend.action.approve'), variant: 'primary' },
-                        { value: 'rejected', label: _('hr_backend.action.reject'), variant: 'destructive' },
-                      ],
-                    })
-                  : '',
+                row.state === 'requested' ? (
+                  <RecordActions
+                    action={`/admin/hr/leaves?id=${encodeURIComponent(String(row.id))}`}
+                    actions={[
+                      { value: 'approved', label: _('hr_backend.action.approve'), variant: 'primary' },
+                      { value: 'rejected', label: _('hr_backend.action.reject'), variant: 'destructive' },
+                    ]}
+                  />
+                ) : (
+                  ''
+                ),
             },
           ],
         })
