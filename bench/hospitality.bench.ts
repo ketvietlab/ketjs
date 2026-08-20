@@ -16,10 +16,13 @@ const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const databaseCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 4 : 8))
 const roomsPerDatabase = Number(process.env.KET_BENCH_ROOMS ?? 250)
 const readPasses = Number(process.env.KET_BENCH_READS ?? 50)
+const reservationsPerDatabase = Number(process.env.KET_BENCH_RESERVATIONS ?? 100)
 if (!Number.isInteger(databaseCount) || databaseCount < 2) throw new Error('KET_BENCH_DATABASES must be >= 2')
 if (!Number.isInteger(roomsPerDatabase) || roomsPerDatabase < 1)
   throw new Error('KET_BENCH_ROOMS must be >= 1')
 if (!Number.isInteger(readPasses) || readPasses < 1) throw new Error('KET_BENCH_READS must be >= 1')
+if (!Number.isInteger(reservationsPerDatabase) || reservationsPerDatabase < 2)
+  throw new Error('KET_BENCH_RESERVATIONS must be >= 2')
 
 const keys = Array.from(
   { length: databaseCount },
@@ -64,8 +67,11 @@ const cleanup = async () => {
 }
 
 const call = (key: string, name: string, args: Record<string, unknown>) =>
+  callWith(adapters.get(key)!, key, name, args)
+
+const callWith = (adapter: Adapter, key: string, name: string, args: Record<string, unknown>) =>
   callFn(name, args, {
-    adapter: adapters.get(key)!,
+    adapter,
     manifest,
     scope: { company: key, branches: null },
   })
@@ -85,6 +91,11 @@ try {
   const writeStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
+      await call(key, 'partner.savePartner', {
+        id: 'guest',
+        kind: 'person',
+        name: `Benchmark guest ${key}`,
+      })
       await call(key, 'hospitality_core.saveProperty', {
         id: 'property',
         code: 'MAIN',
@@ -134,6 +145,153 @@ try {
   )
   const writeMs = performance.now() - writeStarted
 
+  const bookingStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let booking = 0; booking < reservationsPerDatabase; booking++)
+        await call(key, 'hospitality_core.createReservation', {
+          id: `reservation:${booking}`,
+          propertyId: 'property',
+          roomTypeId: `type:${booking % 12}`,
+          partnerId: 'guest',
+          provider: booking % 3 === 0 ? 'booking' : 'direct',
+          ...(booking % 3 === 0 ? { externalId: `${key}:${booking}` } : {}),
+          bookingType: 'nightly',
+          checkIn: '2026-09-01T14:00:00.000Z',
+          checkOut: '2026-09-03T12:00:00.000Z',
+          rate: String(800_000 + (booking % 12) * 125_000),
+          createdAt: '2026-08-20T00:00:00.000Z',
+        })
+    }),
+  )
+  const bookingMs = performance.now() - bookingStarted
+
+  const candidateRooms = Array.from({ length: roomsPerDatabase }, (_, room) => room).filter(
+    (room) => room % 17 !== 0 && room % 5 !== 0,
+  )
+  const transitionCount = Math.min(12, candidateRooms.length, reservationsPerDatabase)
+  const transitionRooms = Array.from({ length: transitionCount }, (_, index) =>
+    candidateRooms.find((candidate, offset) => offset >= index && candidate % 12 === index % 12),
+  )
+  const transitionStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let index = 0; index < transitionCount; index++) {
+        const room = transitionRooms[index]
+        if (room === undefined) continue
+        const checkedIn = await call(key, 'hospitality_core.checkIn', {
+          stayId: `reservation:${index}:stay`,
+          roomId: `room:${room}`,
+          assignmentId: `assignment:${index}`,
+          at: '2026-09-01T14:05:00.000Z',
+        })
+        if (!(checkedIn.value as { ok: boolean }).ok) throw new Error(`${key}: check-in failed`)
+        await call(key, 'hospitality_core.addCharge', {
+          id: `service:${index}`,
+          folioId: `reservation:${index}:folio`,
+          stayId: `reservation:${index}:stay`,
+          description: 'Benchmark service',
+          type: 'service',
+          unitPrice: '250000',
+          sourceKey: `${key}:service:${index}`,
+          occurredAt: '2026-09-02T08:00:00.000Z',
+        })
+        if (index % 2 === 0)
+          await call(key, 'hospitality_core.checkOut', {
+            stayId: `reservation:${index}:stay`,
+            at: '2026-09-03T12:00:00.000Z',
+          })
+      }
+    }),
+  )
+  const transitionMs = performance.now() - transitionStarted
+
+  const collisionKey = keys[0]!
+  const usedRooms = new Set(transitionRooms.filter((room): room is number => room !== undefined))
+  const collisionRoom = candidateRooms.find((room) => !usedRooms.has(room))
+  if (collisionRoom === undefined) throw new Error('benchmark needs one unused available room')
+  for (const suffix of ['a', 'b'])
+    await call(collisionKey, 'hospitality_core.createReservation', {
+      id: `collision:${suffix}`,
+      propertyId: 'property',
+      roomTypeId: `type:${collisionRoom % 12}`,
+      partnerId: 'guest',
+      bookingType: 'nightly',
+      checkIn: '2026-10-01T14:00:00.000Z',
+      checkOut: '2026-10-02T12:00:00.000Z',
+      rate: '1000000',
+    })
+  const contender = driver === 'postgres' ? open(collisionKey) : null
+  if (contender) await contender.open()
+  const claim = (adapter: Adapter, suffix: string) =>
+    callWith(adapter, collisionKey, 'hospitality_core.checkIn', {
+      stayId: `collision:${suffix}:stay`,
+      roomId: `room:${collisionRoom}`,
+      assignmentId: `collision:${suffix}:assignment`,
+      at: '2026-10-01T14:05:00.000Z',
+    })
+  const collisionResults =
+    contender === null
+      ? [await claim(adapters.get(collisionKey)!, 'a'), await claim(adapters.get(collisionKey)!, 'b')]
+      : await Promise.all([claim(adapters.get(collisionKey)!, 'a'), claim(contender, 'b')])
+  const concurrentRoomClaimSingleWinner =
+    collisionResults.filter((result) => (result.value as { ok: boolean }).ok).length === 1
+  if (!concurrentRoomClaimSingleWinner) throw new Error('room claim did not produce exactly one winner')
+
+  const raceRoom = candidateRooms.find((room) => !usedRooms.has(room) && room !== collisionRoom)
+  if (raceRoom === undefined) throw new Error('benchmark needs another unused available room')
+  await call(collisionKey, 'hospitality_core.createReservation', {
+    id: 'transition-race',
+    propertyId: 'property',
+    roomTypeId: `type:${raceRoom % 12}`,
+    partnerId: 'guest',
+    bookingType: 'nightly',
+    checkIn: '2026-11-01T14:00:00.000Z',
+    checkOut: '2026-11-02T12:00:00.000Z',
+    rate: '1000000',
+  })
+  const checkInRace = (adapter: Adapter) =>
+    callWith(adapter, collisionKey, 'hospitality_core.checkIn', {
+      stayId: 'transition-race:stay',
+      roomId: `room:${raceRoom}`,
+      assignmentId: 'transition-race:assignment',
+      at: '2026-11-01T14:05:00.000Z',
+    })
+  const cancelRace = (adapter: Adapter) =>
+    callWith(adapter, collisionKey, 'hospitality_core.cancelReservation', {
+      id: 'transition-race',
+      reason: 'concurrent benchmark',
+      at: '2026-10-20T00:00:00.000Z',
+    })
+  const transitionRaceResults =
+    contender === null
+      ? [await checkInRace(adapters.get(collisionKey)!), await cancelRace(adapters.get(collisionKey)!)]
+      : await Promise.all([checkInRace(adapters.get(collisionKey)!), cancelRace(contender)])
+  if (contender) await contender.close()
+  if (transitionRaceResults.filter((result) => (result.value as { ok: boolean }).ok).length !== 1)
+    throw new Error('check-in/cancel race did not produce exactly one winner')
+  const transitionState = (
+    await adapters.get(collisionKey)!.all(
+      `SELECT r.state AS reservation, s.state AS stay, room.status AS room,
+          (SELECT COUNT(*) FROM hospitality_core_room_assignment a WHERE a."stayId" = s.id) AS assignments
+         FROM hospitality_core_reservation r
+         JOIN hospitality_core_stay s ON s.id = r."stayId"
+         JOIN hospitality_core_room room ON room.id = ${driver === 'postgres' ? '$1' : '?'}
+         WHERE r.id = ${driver === 'postgres' ? '$2' : '?'}`,
+      [`room:${raceRoom}`, 'transition-race'],
+    )
+  )[0]!
+  const concurrentCancelCheckInConsistent =
+    (transitionState.reservation === 'checked_in' &&
+      transitionState.stay === 'checked_in' &&
+      transitionState.room === 'occupied' &&
+      Number(transitionState.assignments) === 1) ||
+    (transitionState.reservation === 'cancelled' &&
+      transitionState.stay === 'cancelled' &&
+      transitionState.room === 'available' &&
+      Number(transitionState.assignments) === 0)
+  if (!concurrentCancelCheckInConsistent) throw new Error('check-in/cancel race left inconsistent state')
+
   const readStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -144,6 +302,13 @@ try {
         })
         const rows = response.value as unknown[]
         if (!rows.length) throw new Error(`${key}: room query returned no rows`)
+        const reservations = await call(key, 'hospitality_core.listReservations', {
+          propertyId: 'property',
+          from: '2026-09-01T00:00:00.000Z',
+          to: '2026-09-04T00:00:00.000Z',
+        })
+        if ((reservations.value as unknown[]).length !== reservationsPerDatabase)
+          throw new Error(`${key}: reservation query returned the wrong count`)
       }
     }),
   )
@@ -158,6 +323,8 @@ try {
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
+  const totalReservations = databaseCount * reservationsPerDatabase
+  const totalTransitions = databaseCount * transitionCount
   const totalReads = databaseCount * readPasses
   console.log(
     JSON.stringify(
@@ -168,6 +335,14 @@ try {
         migrateMs: Number(migrateMs.toFixed(1)),
         writeMs: Number(writeMs.toFixed(1)),
         writesPerSecond: Math.round((totalRooms * 1_000) / writeMs),
+        reservations: totalReservations,
+        bookingMs: Number(bookingMs.toFixed(1)),
+        bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
+        checkInChargeCheckoutCycles: totalTransitions,
+        transitionMs: Number(transitionMs.toFixed(1)),
+        transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
+        concurrentRoomClaimSingleWinner,
+        concurrentCancelCheckInConsistent,
         listQueries: totalReads,
         readMs: Number(readMs.toFixed(1)),
         readsPerSecond: Math.round((totalReads * 1_000) / readMs),

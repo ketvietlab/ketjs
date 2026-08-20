@@ -53,4 +53,50 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.PropertyContact': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
   },
+  'hospitality_core.Folio': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    reservations: { hasMany: 'hospitality_core.Reservation', by: 'folioId' },
+    stays: { hasMany: 'hospitality_core.Stay', by: 'folioId' },
+    charges: { hasMany: 'hospitality_core.Charge', by: 'folioId' },
+  },
+  'hospitality_core.Reservation': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+    folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+  },
+  'hospitality_core.Stay': {
+    folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
+    reservation: { belongsTo: 'hospitality_core.Reservation', by: 'reservationId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+    currentRoom: { belongsTo: 'hospitality_core.Room', by: 'currentRoomId' },
+    assignments: { hasMany: 'hospitality_core.RoomAssignment', by: 'stayId' },
+    guests: { hasMany: 'hospitality_core.StayGuest', by: 'stayId' },
+    charges: { hasMany: 'hospitality_core.Charge', by: 'stayId' },
+    documents: { hasMany: 'hospitality_core.GuestDocument', by: 'stayId' },
+  },
+  'hospitality_core.RoomAssignment': {
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    room: { belongsTo: 'hospitality_core.Room', by: 'roomId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.StayGuest': {
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+  },
+  'hospitality_core.Charge': {
+    folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+  },
+  'hospitality_core.GuestDocument': {
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    frontAttachment: { belongsTo: 'storage.Attachment', by: 'frontAttachmentId' },
+    backAttachment: { belongsTo: 'storage.Attachment', by: 'backAttachmentId' },
+  },
 }
