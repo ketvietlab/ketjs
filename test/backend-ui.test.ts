@@ -363,6 +363,29 @@ test('sidebar: every KetSuite app declares a glyph carried by the design system'
   assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
 })
 
+test('sidebar footer: legacy systray order keeps settings and sign-out functional', () => {
+  const html = renderToString(
+    appsScreen(_, [app({ state: 'installed' })], {
+      menu: MENU,
+      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      indicators: [
+        { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
+        { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
+  assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
+  assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
+  assert.match(html, /<a data-ui="sidebar-settings" href="\/admin\/settings">/)
+  assert.ok(
+    html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
+    'Settings belongs below the systray divider',
+  )
+})
+
 test('design tokens: every admin role used by components is declared', () => {
   const css = [
     'packages/ketsuite/src/modules/backend/design/admin.css',

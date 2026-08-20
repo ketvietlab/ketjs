@@ -158,7 +158,7 @@ preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
 ở thời điểm bàn giao, không thay thế token, CSS hoặc `data-ui` contract làm đặc tả.
 
 
-## Màn hình đăng nhập và thanh danh tính
+## Màn hình đăng nhập và footer sidebar
 
 Hai bề mặt dùng cùng token, focus contract và density với phần backend còn lại.
 
@@ -177,32 +177,39 @@ Hai bề mặt dùng cùng token, focus contract và density với phần backen
 Trang này **chạy không cần JavaScript** và phải giữ như vậy: một trang đăng nhập
 hỏng khi script lỗi là trang hỏng đúng lúc người ta cần vào nhất.
 
-**Thanh danh tính** — nằm trong `[data-ui="topbar"]` đã có, bên cạnh
-`[data-ui="title"]`:
+**Footer sidebar** — bám theo cấu trúc KétViệt cũ: systray một hàng, divider, rồi
+liên kết Cài đặt. Tin nhắn/Hoạt động là ô icon + số đếm; kế bên là công ty hiện tại
+và avatar có presence dot. Avatar là `<summary>` native, mở menu tài khoản mà không
+cần JavaScript:
 
 | Selector | Là gì |
 |---|---|
-| `[data-ui="viewer"]` | cụm bên phải thanh trên |
+| `[data-ui="sidebar-tools"]` | một hàng Tin nhắn · Hoạt động · Công ty · Avatar |
+| `[data-ui="indicator"]`, `[data-ui="mail-indicator"]`, `[data-ui="activity-indicator"]` | ô đếm nghiệp vụ, cả ô là link |
+| `[data-ui="viewer-company-indicator"]` | công ty/chi nhánh đang chọn, icon có accessible label |
+| `[data-ui="viewer"]`, `[data-ui="viewer-trigger"]` | `<details>` tài khoản và avatar mở nó |
+| `[data-ui="viewer-presence"]` | dấu hiện diện, chỉ là thông tin thị giác |
+| `[data-ui="viewer-menu"]` | popover native chứa danh tính và đăng xuất |
 | `[data-ui="viewer-name"]` | tên người đang đăng nhập |
 | `[data-ui="viewer-company"]` | công ty đang chọn — **chỉ hiện khi tài khoản thuộc nhiều hơn một công ty** |
 | `[data-ui="signout"]` | form POST tới `/logout` |
 | `[data-ui="signout-button"]` | nút bên trong nó |
+| `[data-ui="sidebar-settings"]` | link thật tới `/admin/settings`, nằm dưới divider |
 
 Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
 
     login            đăng nhập, trống
     login-failed     sai mật khẩu — thông báo có role="alert"
     login-next       có ô ẩn "next", quay lại nơi đang tới
-    viewer-one       thanh trên, tài khoản một công ty
-    viewer-many      thanh trên, nhiều công ty — có tên công ty đang chọn
-    viewer-long      tên người và tên công ty đều dài, kiểm tra thanh trên không vỡ
+    viewer-one       footer, tài khoản một công ty
+    viewer-many      footer, nhiều công ty — có tên công ty/chi nhánh đang chọn
+    viewer-long      tên người và tên công ty đều dài, kiểm tra popover không vỡ
 
 Các selector này đã có baseline trong `admin.css` và nằm trong `@layer ket.app`, nên
 `ket.user` vẫn override được mà không cần tăng specificity.
 
-Một chỗ chưa có điều khiển: tài khoản thuộc nhiều công ty thì `viewer-company` chỉ
-**hiện** công ty đang chọn, chưa **đổi** được. Khi vẽ tới đó, cần một control ở chính
-chỗ này.
+Việc đổi công ty/chi nhánh dùng `context-switcher` trên thanh trên. Footer chỉ hiển
+thị ngữ cảnh hiện tại trong menu tài khoản để giữ hàng systray gọn như KétViệt cũ.
 
 ## Điều hướng hai cấp
 

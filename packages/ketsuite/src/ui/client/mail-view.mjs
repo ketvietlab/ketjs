@@ -281,7 +281,9 @@ export function createInboxIndicatorView(runtime, props, initialCount = 0) {
   }
   if (typeof window !== 'undefined') queueMicrotask(load)
   return () => html`<a data-ui="mail-indicator" href="/admin/inbox" title=${labels.inbox} aria-label=${labels.inbox}>
-    <span data-ui="mail-indicator-icon" aria-hidden="true">✉</span>
+    <svg data-ui="mail-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-3.8A4 4 0 0 1 1 15V7a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4Z" />
+    </svg>
     ${count() > 0 ? html`<span data-ui="mail-indicator-count">${count()}</span>` : ''}
   </a>`
 }

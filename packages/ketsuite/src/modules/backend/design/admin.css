@@ -313,8 +313,7 @@
   [data-ui="pager-step"] > [data-ui="icon"],
   [data-ui="view-kind"] > [data-ui="icon"],
   [data-ui="facet-remove"] > [data-ui="icon"],
-  [data-ui="col-config-open"] > [data-ui="icon"],
-  [data-ui="signout-button"] > [data-ui="icon"] {
+  [data-ui="col-config-open"] > [data-ui="icon"] {
     inline-size: 100%;
     block-size: 100%;
   }
@@ -1763,73 +1762,163 @@
     font-weight: 600;
   }
 
-  /* ── the identity strip ───────────────────────────────────────────────────── */
+  /* ── KétViệt sidebar systray ──────────────────────────────────────────────── */
 
-  /* At the foot of the sidebar, not in the topbar. In the topbar it competed with
-   the title and the search for the one line that changes on every screen; here it
-   sits with the one thing that never changes. */
+  /* The old KétViệt footer had one compact operational row, then Settings below
+     a divider. KetSuite keeps that composition while the avatar opens a native
+     account menu, so sign-out remains available without another permanent icon. */
   [data-ui="sidebar-foot"] {
     display: flex;
+    position: relative;
+    min-inline-size: 0;
     flex-direction: column;
     gap: var(--admin-gap-xs);
     margin-block-start: auto;
-    padding-block-start: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm) 0.625rem var(--admin-gap);
     border-block-start: 1px solid var(--admin-line);
   }
 
-  /* Things waiting for you: a row of counters, each one a way in. */
-  [data-ui="indicators"] {
+  [data-ui="sidebar-tools"] {
     display: flex;
+    min-inline-size: 0;
+    min-block-size: 2.5rem;
     align-items: center;
     gap: var(--admin-gap-xs);
-    padding-inline: 0.375rem;
+    padding: 0 0.125rem var(--admin-gap-sm);
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="indicators"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="indicators"] > ket-island[data-island="mail.inbox-indicator"],
+  [data-ui="indicator"][data-kind="message"] {
+    order: 1;
+  }
+
+  [data-ui="indicators"] > ket-island[data-island="activity.indicator"],
+  [data-ui="indicator"][data-kind="activity"] {
+    order: 2;
   }
 
   [data-ui="indicator"] {
-    position: relative;
-    display: grid;
-    inline-size: 2.5rem;
-    block-size: 2.5rem;
-    place-items: center;
+    display: inline-flex;
+    min-inline-size: 3.25rem;
+    block-size: 2rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding-inline: var(--admin-gap-sm);
+    border: 1px solid var(--admin-line-strong);
     border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
     color: var(--admin-ink-secondary);
-    font-size: 0.875rem;
+    font-size: var(--admin-size-sm);
     line-height: 1;
     text-decoration: none;
     transition:
+      border-color var(--admin-motion-fast),
       background-color var(--admin-motion-fast),
       color var(--admin-motion-fast);
   }
 
   [data-ui="indicator"]:hover {
+    border-color: var(--admin-ink-muted);
     background: var(--admin-surface-hover);
     color: var(--admin-ink);
   }
 
-  /* A count of zero is not rendered at all, so this is always a real number. */
+  [data-ui="indicator-icon"] {
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex: 0 0 auto;
+    place-items: center;
+  }
+
   [data-ui="indicator-count"] {
-    position: absolute;
-    inset-block-start: -0.125rem;
-    inset-inline-end: -0.125rem;
-    min-inline-size: 1rem;
-    padding-inline: 0.1875rem;
-    border-radius: 0.5rem;
-    background: var(--admin-danger);
-    color: #fff;
-    font-size: 0.625rem;
+    min-inline-size: 0.75rem;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-sm);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    line-height: 1rem;
+    line-height: 1;
     text-align: center;
   }
 
+  [data-ui="viewer-company-indicator"] {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--admin-ink-muted);
+  }
+
+  [data-ui="viewer-company-indicator"] > [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
   [data-ui="viewer"] {
-    display: flex;
-    align-items: center;
-    gap: var(--admin-gap-xs);
+    position: relative;
     min-inline-size: 0;
-    padding: 0.25rem 0.375rem;
+    margin-inline-start: auto;
+  }
+
+  [data-ui="viewer-trigger"] {
+    position: relative;
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    place-items: center;
     border-radius: var(--admin-radius-sm);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  [data-ui="viewer-trigger"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="viewer-trigger"] > [data-ui="avatar"] {
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-success-icon);
+    color: #fff;
+    font-size: var(--admin-size-md);
+    font-weight: 500;
+  }
+
+  [data-ui="viewer-presence"] {
+    position: absolute;
+    inset-inline-end: -0.125rem;
+    inset-block-end: -0.125rem;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 50%;
+    background: var(--admin-success);
+    box-shadow: 0 0 0 2px var(--admin-bg);
+  }
+
+  [data-ui="viewer-menu"] {
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-end: calc(100% + var(--admin-gap-sm));
+    z-index: 40;
+    display: grid;
+    inline-size: 12rem;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
   }
 
   [data-ui="viewer-who"] {
@@ -1864,23 +1953,23 @@
   }
 
   [data-ui="signout"] {
-    display: contents;
+    display: block;
   }
 
   [data-ui="signout-button"] {
-    display: grid;
-    inline-size: 2.5rem;
-    block-size: 2.5rem;
-    flex: 0 0 auto;
-    place-items: center;
-    padding: 0;
-    border: 1px solid var(--admin-line-strong);
+    display: flex;
+    inline-size: 100%;
+    min-block-size: 2.25rem;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    padding-inline: var(--admin-gap-sm);
+    border: 0;
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
+    background: transparent;
     color: var(--admin-ink-secondary);
     font: inherit;
     font-size: var(--admin-size-sm);
-    white-space: nowrap;
+    text-align: start;
     cursor: pointer;
     transition:
       background-color var(--admin-motion-fast),
@@ -1888,6 +1977,35 @@
   }
 
   [data-ui="signout-button"]:hover {
+    background: var(--admin-surface-hover);
+    color: var(--admin-ink);
+  }
+
+  [data-ui="signout-button"] > [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  [data-ui="signout-label"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="sidebar-settings"] {
+    display: flex;
+    min-block-size: 2rem;
+    align-items: center;
+    padding-inline: var(--admin-gap-sm);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      background-color var(--admin-motion-fast),
+      color var(--admin-motion-fast);
+  }
+
+  [data-ui="sidebar-settings"]:hover {
     background: var(--admin-surface-hover);
     color: var(--admin-ink);
   }

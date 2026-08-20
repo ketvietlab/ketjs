@@ -306,7 +306,10 @@ export function createActivityIndicatorView(runtime, props, initial = { count: 0
   }
   if (typeof window !== 'undefined') queueMicrotask(load)
   return () => html`<a data-ui="activity-indicator" data-overdue=${overdue() > 0} href="/admin/activities" title=${labels.myActivities} aria-label=${labels.myActivities}>
-    <span data-ui="activity-indicator-icon" aria-hidden="true">✓</span>
+    <svg data-ui="activity-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
     ${count() > 0 ? html`<span data-ui="activity-indicator-count">${count()}</span>` : ''}
   </a>`
 }
