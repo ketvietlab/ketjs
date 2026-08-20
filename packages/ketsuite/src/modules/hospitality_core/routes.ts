@@ -15,6 +15,7 @@ import {
   policiesScreen,
   propertiesScreen,
   ratePlansScreen,
+  reservationDetailScreen,
   reservationsScreen,
   inventoryScreen,
   roomsScreen,
@@ -35,6 +36,7 @@ import type {
   RatePlanRow,
   InventoryRow,
   ReservationRow,
+  ReservationDetail,
   ReservationQuote,
   ReservationIntakeValues,
   RoomRow,
@@ -75,6 +77,26 @@ const document = async (
   return backendPage(ctx, req, { lang, title, body })
 }
 
+type OperationResult = {
+  ok?: boolean
+  errors?: Array<{ messageKey?: string; params?: Record<string, unknown> }>
+}
+
+const operationErrors = (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  result: OperationResult,
+): string[] => {
+  const _ = ctx.translate(ctx.localeOf(url, req))
+  const errors = result.errors ?? []
+  return errors.length
+    ? errors.map((error) =>
+        error.messageKey ? _(error.messageKey, error.params) : _('hospitality_core.feedback.invalidHint'),
+      )
+    : [_('hospitality_core.feedback.invalidHint')]
+}
+
 const propertyTimezone = async (
   ctx: ServeContext,
   propertyId: string | undefined,
@@ -86,6 +108,60 @@ const propertyTimezone = async (
     timezone?: string
   } | null
   return property?.timezone || 'UTC'
+}
+
+const renderReservationDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+) => {
+  const reservation = (await ctx.call(
+    'hospitality_core.getReservation',
+    { id },
+    url,
+    req,
+  )) as ReservationDetail | null
+  if (!reservation) return text('Not found', { status: 404 })
+  if (reservation.stayId) {
+    reservation.stay = (await ctx.call(
+      'hospitality_core.getStay',
+      { id: reservation.stayId },
+      url,
+      req,
+    )) as StayRow | null
+  }
+  const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
+  const rooms =
+    reservation.state === 'confirmed'
+      ? (
+          (await ctx.call(
+            'hospitality_core.listRooms',
+            { propertyId: reservation.propertyId, status: 'available' },
+            url,
+            req,
+          )) as RoomRow[]
+        ).filter((room) => room.roomTypeId === reservation.roomTypeId)
+      : []
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.reservation.detail.title', { code: reservation.code }),
+    reservationDetailScreen(
+      _,
+      reservation,
+      rooms,
+      lang,
+      timezone,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
 }
 
 const selectedProperty = async (
@@ -434,6 +510,65 @@ export const routes: Record<string, RouteEntry> = {
           url.searchParams.get('status'),
         ),
       )
+    },
+
+  '/admin/hospitality/reservations/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderReservationDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const reservation = (await ctx.call(
+        'hospitality_core.getReservation',
+        { id: params.id },
+        url,
+        req,
+      )) as ReservationDetail | null
+      if (!reservation) return text('Not found', { status: 404 })
+
+      let result: OperationResult
+      let status: 'checked-in' | 'checked-out' | 'cancelled'
+      if (form.operation === 'check-in') {
+        if (!reservation.stayId || !form.roomId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.no_available_room'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.checkIn',
+          { stayId: reservation.stayId, roomId: form.roomId, assignmentId: randomUUID() },
+          url,
+          req,
+        )) as OperationResult
+        status = 'checked-in'
+      } else if (form.operation === 'check-out') {
+        if (!reservation.stayId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.stay_missing'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.checkOut',
+          { stayId: reservation.stayId },
+          url,
+          req,
+        )) as OperationResult
+        status = 'checked-out'
+      } else if (form.operation === 'cancel') {
+        result = (await ctx.call(
+          'hospitality_core.cancelReservation',
+          { id: reservation.id, reason: form.reason?.trim() || undefined },
+          url,
+          req,
+        )) as OperationResult
+        status = 'cancelled'
+      } else return text('unknown action', { status: 400 })
+
+      if (!result.ok)
+        return renderReservationDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams()
+      query.set('status', status)
+      const lang = url.searchParams.get('lang')?.trim() || form.lang?.trim()
+      if (lang) query.set('lang', lang)
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/stays':
