@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { asc, defineFn, deleteFrom, eq, from, inArray } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
@@ -10,6 +11,102 @@ const issue = (field: string, code: string, params?: Record<string, unknown>): I
   ...(params ? { params } : {}),
 })
 const invalid = (errors: Issue[]) => ({ ok: false, errors })
+const nowIso = () => new Date().toISOString()
+const normalizeLogin = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
+const timestampMs = (value: unknown): number =>
+  value instanceof Date ? value.getTime() : Date.parse(String(value))
+const DUMMY_HASH =
+  'scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+
+class TokenClaimRace extends Error {}
+
+const audit = async (
+  ctx: Ctx,
+  event: string,
+  userId?: unknown,
+  networkFingerprint?: unknown,
+  metadata?: Record<string, unknown>,
+) => {
+  await ctx.db.insert('user.SecurityAudit', {
+    id: randomUUID(),
+    userId: userId || null,
+    event,
+    occurredAt: nowIso(),
+    networkFingerprint: networkFingerprint || null,
+    metadata: metadata ?? null,
+  })
+}
+
+const superuser = async (ctx: Ctx, userId: string): Promise<boolean> => {
+  const U = ctx.table('user.User')
+  return Boolean(await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true), eq(U.superuser, true))))
+}
+
+const liveSuperusers = async (ctx: Ctx): Promise<number> => {
+  const U = ctx.table('user.User')
+  return ctx.db.count(from(U).where(eq(U.active, true), eq(U.superuser, true), eq(U.accessKind, 'internal')))
+}
+
+const lockLastSuperuser = async (ctx: Ctx): Promise<void> => {
+  const id = 'last-superuser'
+  await ctx.db.insertIfAbsent('user.SecurityGuard', { id, updatedAt: nowIso() })
+  // PostgreSQL holds this row lock until the surrounding transaction commits.
+  // SQLite already serializes writers, so the same portable statement is enough.
+  await ctx.db.update('user.SecurityGuard', { id }, { updatedAt: nowIso() })
+}
+
+const throttleIds = (login: string, networkFingerprint: string): string[] => [
+  `login:${digest(login)}`,
+  `network:${digest(networkFingerprint || 'unknown')}`,
+]
+
+const throttled = async (ctx: Ctx, ids: string[], at: number): Promise<boolean> => {
+  const T = ctx.table('user.AuthThrottle')
+  const rows = await ctx.db.all(from(T).where(inArray(T.id, ids)))
+  return rows.some((row) => row.blockedUntil && timestampMs(row.blockedUntil) > at)
+}
+
+const failThrottle = async (ctx: Ctx, ids: string[], at: number): Promise<void> => {
+  for (const id of ids) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const T = ctx.table('user.AuthThrottle')
+      const row = await ctx.db.one(from(T).where(eq(T.id, id)))
+      if (!row) {
+        const inserted = await ctx.db.insertIfAbsent('user.AuthThrottle', {
+          id,
+          failures: 1,
+          blockedUntil: null,
+          updatedAt: new Date(at).toISOString(),
+        })
+        if ('dryRun' in inserted || inserted.inserted) break
+        continue
+      }
+      const failures = Math.min(Number(row.failures) + 1, 20)
+      const delay = failures < 3 ? 0 : Math.min(15 * 60_000, 1000 * 2 ** Math.min(failures - 3, 9))
+      const changed = await ctx.db.compareAndSet(
+        'user.AuthThrottle',
+        { id },
+        { failures: row.failures, blockedUntil: row.blockedUntil },
+        {
+          failures,
+          blockedUntil: delay ? new Date(at + delay).toISOString() : null,
+          updatedAt: new Date(at).toISOString(),
+        },
+      )
+      if ('dryRun' in changed || changed.matched) break
+    }
+  }
+}
+
+const clearThrottle = async (ctx: Ctx, ids: string[]): Promise<void> => {
+  const T = ctx.table('user.AuthThrottle')
+  await ctx.db.del(deleteFrom(T).where(inArray(T.id, ids)))
+}
 
 type LiveIdentity = {
   user: Row
@@ -19,7 +116,11 @@ type LiveIdentity = {
 
 const liveIdentity = async (ctx: Ctx, userId: string): Promise<LiveIdentity | null> => {
   const U = ctx.table('user.User')
-  const user = await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true)))
+  const user = await ctx.db.one(
+    from(U)
+      .select(U.id, U.defaultCompanyId, U.defaultBranchId, U.securityVersion)
+      .where(eq(U.id, userId), eq(U.active, true)),
+  )
   if (!user) return null
   const M = ctx.table('user.Membership')
   const companyIds = (await ctx.db.all(from(M).where(eq(M.userId, userId)))).map((row) => row.companyId)
@@ -53,6 +154,9 @@ const contextFor = (
   },
   strict: boolean,
 ) => {
+  const liveVersion = Number(live.user.securityVersion ?? 0)
+  if (Number(requested.securityVersion ?? 0) !== liveVersion)
+    return invalid([issue('securityVersion', 'user.error.sessionRevoked')])
   const allowedCompanies = new Set(live.companies.map((row) => String(row.id)))
   const askedCompanies = requestedIds(requested.companies)
   let companies = (askedCompanies ?? [...allowedCompanies]).filter((id) => allowedCompanies.has(id))
@@ -95,7 +199,7 @@ const contextFor = (
       company,
       branches,
       branch,
-      securityVersion: Number(requested.securityVersion ?? 0),
+      securityVersion: liveVersion,
     },
   }
 }
@@ -118,6 +222,10 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
+      accessKind: 'text',
+      securityVersion: 'int',
+      lastLoginAt: 'datetime?',
+      passwordReady: 'bool',
       active: 'bool',
       superuser: 'bool',
     },
@@ -126,7 +234,8 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
       const q = from(U).orderBy(asc(U.login))
-      return ctx.db.all(a.includeArchived === true ? q : q.where(eq(U.active, true)))
+      const rows = await ctx.db.all(a.includeArchived === true ? q : q.where(eq(U.active, true)))
+      return rows.map((row) => ({ ...row, passwordReady: Boolean(row.passwordHash) }))
     },
   }),
 
@@ -141,15 +250,28 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
+      accessKind: 'text',
+      securityVersion: 'int',
+      lastLoginAt: 'datetime?',
+      passwordReady: 'bool',
       active: 'bool',
       superuser: 'bool',
       memberships: 'json?',
+      branchMemberships: 'json?',
+      assignments: 'json?',
     },
-    effects: ['read:user.User', 'read:user.Membership'],
+    effects: ['read:user.User', 'read:user.Membership', 'read:user.BranchMembership', 'read:user.Assignment'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
-      return ctx.db.one(from(U).where(eq(U.id, a.id)).preload('memberships'))
+      const row = await ctx.db.one(
+        from(U)
+          .where(eq(U.id, a.id))
+          .preload('memberships')
+          .preload('branchMemberships')
+          .preload('assignments'),
+      )
+      return row ? { ...row, passwordReady: Boolean(row.passwordHash) } : null
     },
   }),
 
@@ -157,12 +279,13 @@ export const functions: Record<string, FnSpec> = {
     input: {
       id: 'id',
       login: 'text',
-      password: 'text',
+      password: 'text?',
       name: 'text',
       email: 'text?',
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
+      accessKind: 'text?',
       superuser: 'bool?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -172,30 +295,111 @@ export const functions: Record<string, FnSpec> = {
     // that can mint itself one.
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
-      if (await ctx.db.one(from(U).where(eq(U.login, a.login)))) {
-        return { ok: false, errors: [{ field: 'login', message: 'tên đăng nhập đã tồn tại' }] }
+      const login = normalizeLogin(a.login)
+      const password = String(a.password ?? '')
+      const accessKind = String(a.accessKind ?? 'internal')
+      const errors: Issue[] = []
+      if (!login) errors.push(issue('login', 'user.error.required'))
+      if (!String(a.name).trim()) errors.push(issue('name', 'user.error.required'))
+      if (!['internal', 'portal', 'public'].includes(accessKind))
+        errors.push(issue('accessKind', 'user.error.accessKind'))
+      if (password && password.length < 8) errors.push(issue('password', 'user.error.passwordLength'))
+      if (password && ctx.actor) errors.push(issue('password', 'user.error.adminPassword'))
+      if (await ctx.db.one(from(U).where(eq(U.login, login))))
+        errors.push(issue('login', 'user.error.loginUnique'))
+      if (a.superuser === true && ctx.actor && !(await superuser(ctx, ctx.actor)))
+        errors.push(issue('superuser', 'user.error.superuserRequired'))
+      if (errors.length) return invalid(errors)
+      const inserted = await ctx.db.insertIfAbsent('user.User', {
+        id: a.id,
+        login,
+        passwordHash: password ? await hashPassword(password) : null,
+        name: String(a.name).trim(),
+        email: a.email || null,
+        partnerId: a.partnerId || null,
+        defaultCompanyId: a.defaultCompanyId || null,
+        defaultBranchId: a.defaultBranchId || null,
+        accessKind,
+        securityVersion: 0,
+        lastLoginAt: null,
+        active: true,
+        superuser: a.superuser === true,
+      })
+      return 'dryRun' in inserted || inserted.inserted
+        ? { ok: true, id: a.id }
+        : invalid([issue('login', 'user.error.loginUnique')])
+    },
+  }),
+
+  saveUser: defineFn({
+    input: {
+      id: 'id',
+      login: 'text',
+      name: 'text',
+      email: 'text?',
+      partnerId: 'id?',
+      accessKind: 'text',
+      active: 'bool',
+      superuser: 'bool',
+    },
+    output: { ok: 'bool', id: 'id?', securityVersion: 'int?', errors: 'json?' },
+    effects: ['read:user.User', 'write:user.User', 'read:user.SecurityGuard', 'write:user.SecurityGuard'],
+    handler: async (ctx: Ctx, a) => {
+      const U = ctx.table('user.User')
+      const row = await ctx.db.one(from(U).where(eq(U.id, a.id)))
+      if (!row) return invalid([issue('id', 'user.error.userMissing')])
+      const login = normalizeLogin(a.login)
+      const accessKind = String(a.accessKind)
+      const errors: Issue[] = []
+      if (!login) errors.push(issue('login', 'user.error.required'))
+      if (!String(a.name).trim()) errors.push(issue('name', 'user.error.required'))
+      if (!['internal', 'portal', 'public'].includes(accessKind))
+        errors.push(issue('accessKind', 'user.error.accessKind'))
+      const owner = await ctx.db.one(from(U).where(eq(U.login, login)))
+      if (owner && owner.id !== a.id) errors.push(issue('login', 'user.error.loginUnique'))
+      if (a.superuser === true && row.superuser !== true && ctx.actor && !(await superuser(ctx, ctx.actor)))
+        errors.push(issue('superuser', 'user.error.superuserRequired'))
+      const removesLiveSuperuser =
+        row.superuser === true &&
+        row.active === true &&
+        row.accessKind === 'internal' &&
+        (a.superuser !== true || a.active !== true || accessKind !== 'internal')
+      if (errors.length) return invalid(errors)
+      const update = async (writeCtx: Ctx, held: Row) => {
+        const securityChange =
+          login !== held.login || a.active !== held.active || accessKind !== held.accessKind
+        const securityVersion = Number(held.securityVersion ?? 0) + (securityChange ? 1 : 0)
+        await writeCtx.db.update(
+          'user.User',
+          { id: a.id },
+          {
+            login,
+            name: String(a.name).trim(),
+            email: a.email || null,
+            partnerId: a.partnerId || null,
+            accessKind,
+            active: a.active,
+            superuser: a.superuser,
+            securityVersion,
+          },
+        )
+        return { ok: true, id: a.id, securityVersion }
       }
-      if (String(a.password).length < 8) {
-        return { ok: false, errors: [{ field: 'password', message: 'mật khẩu phải dài ít nhất 8 ký tự' }] }
-      }
-      const cs = ctx
-        .change('user.User', { ...a, password: await hashPassword(String(a.password)) }, null)
-        .cast([
-          'id',
-          'login',
-          'password',
-          'name',
-          'email',
-          'partnerId',
-          'defaultCompanyId',
-          'defaultBranchId',
-        ])
-        .required(['login', 'password', 'name'])
-        .put('active', true)
-        .put('superuser', a.superuser === true)
-      if (!cs.valid) return { ok: false, errors: cs.errors }
-      await ctx.db.commit(cs)
-      return { ok: true, id: a.id }
+      if (!removesLiveSuperuser) return update(ctx, row)
+      return ctx.tx(async (tx) => {
+        await lockLastSuperuser(tx)
+        const U2 = tx.table('user.User')
+        const held = await tx.db.one(from(U2).where(eq(U2.id, a.id)))
+        if (
+          held?.active === true &&
+          held.superuser === true &&
+          held.accessKind === 'internal' &&
+          (await liveSuperusers(tx)) <= 1
+        )
+          return invalid([issue('active', 'user.error.lastSuperuser')])
+        if (!held) return invalid([issue('id', 'user.error.userMissing')])
+        return update(tx, held)
+      })
     },
   }),
 
@@ -204,22 +408,30 @@ export const functions: Record<string, FnSpec> = {
    * their own account: a session someone walked away from should not be enough.
    */
   setPassword: defineFn({
+    exposure: 'internal',
+    anonymous: true,
     input: { id: 'id', currentPassword: 'text', newPassword: 'text' },
-    output: { ok: 'bool', errors: 'json?' },
-    effects: ['read:user.User', 'write:user.User'],
+    output: { ok: 'bool', securityVersion: 'int?', errors: 'json?' },
+    effects: ['read:user.User', 'write:user.User', 'write:user.SecurityAudit'],
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
       const row = await ctx.db.one(from(U).where(eq(U.id, a.id)))
-      if (!row || !(await verifyPassword(String(a.currentPassword), String(row.password)))) {
-        return { ok: false, errors: [{ field: 'currentPassword', message: 'mật khẩu hiện tại không đúng' }] }
-      }
-      if (String(a.newPassword).length < 8) {
-        return { ok: false, errors: [{ field: 'newPassword', message: 'mật khẩu phải dài ít nhất 8 ký tự' }] }
-      }
-      await ctx.db.update('user.User', { id: a.id }, {
-        password: await hashPassword(String(a.newPassword)),
-      } as Row)
-      return { ok: true }
+      if (ctx.actor !== a.id) return invalid([issue('id', 'user.error.passwordActor')])
+      if (!row?.passwordHash || !(await verifyPassword(String(a.currentPassword), String(row.passwordHash))))
+        return invalid([issue('currentPassword', 'user.error.currentPassword')])
+      if (String(a.newPassword).length < 8)
+        return invalid([issue('newPassword', 'user.error.passwordLength')])
+      const securityVersion = Number(row.securityVersion ?? 0) + 1
+      await ctx.db.update(
+        'user.User',
+        { id: a.id },
+        {
+          passwordHash: await hashPassword(String(a.newPassword)),
+          securityVersion,
+        },
+      )
+      await audit(ctx, 'password.change', a.id)
+      return { ok: true, securityVersion }
     },
   }),
 
@@ -231,7 +443,8 @@ export const functions: Record<string, FnSpec> = {
   authenticate: defineFn({
     // There is no session yet — checking the password is how one begins.
     anonymous: true,
-    input: { login: 'text', password: 'text' },
+    exposure: 'internal',
+    input: { login: 'text', password: 'text', networkFingerprint: 'text?' },
     output: {
       ok: 'bool',
       userId: 'id?',
@@ -239,6 +452,7 @@ export const functions: Record<string, FnSpec> = {
       defaultCompanyId: 'id?',
       branches: 'json?',
       defaultBranchId: 'id?',
+      securityVersion: 'int?',
       rehash: 'bool?',
     },
     effects: [
@@ -248,17 +462,29 @@ export const functions: Record<string, FnSpec> = {
       'read:company.Company',
       'read:company.Branch',
       'read:partner.Partner',
+      'read:user.AuthThrottle',
+      'write:user.AuthThrottle',
+      'write:user.User',
+      'write:user.SecurityAudit',
     ],
     handler: async (ctx: Ctx, a) => {
-      const U = ctx.table('user.User')
-      const row = await ctx.db.one(from(U).where(eq(U.login, a.login), eq(U.active, true)))
-      if (!row) {
-        // Verify against nothing anyway, so a missing account does not answer
-        // faster than a wrong password.
-        await verifyPassword(String(a.password), 'scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAA')
+      const login = normalizeLogin(a.login)
+      const fingerprint = String(a.networkFingerprint ?? 'unknown')
+      const throttle = throttleIds(login, fingerprint)
+      const at = Date.now()
+      if (await throttled(ctx, throttle, at)) {
+        await verifyPassword(String(a.password), DUMMY_HASH)
+        await audit(ctx, 'login.failure', undefined, fingerprint, { reason: 'cooldown' })
         return { ok: false }
       }
-      if (!(await verifyPassword(String(a.password), String(row.password)))) return { ok: false }
+      const U = ctx.table('user.User')
+      const row = await ctx.db.one(from(U).where(eq(U.login, login), eq(U.active, true)))
+      const verified = await verifyPassword(String(a.password), String(row?.passwordHash ?? DUMMY_HASH))
+      if (row?.accessKind !== 'internal' || !row.passwordHash || !verified) {
+        await failThrottle(ctx, throttle, at)
+        await audit(ctx, 'login.failure', undefined, fingerprint)
+        return { ok: false }
+      }
 
       const live = await liveIdentity(ctx, String(row.id))
       const companies = live?.companies.map((company) => String(company.id)) ?? []
@@ -274,6 +500,18 @@ export const functions: Record<string, FnSpec> = {
         ) ??
         live?.branches.find((branch) => branch.companyId === defaultCompanyId)?.id ??
         null
+      if (needsRehash(String(row.passwordHash)))
+        await ctx.db.update(
+          'user.User',
+          { id: row.id },
+          { passwordHash: await hashPassword(String(a.password)) },
+        )
+      await ctx.db.update('user.User', { id: row.id }, { lastLoginAt: new Date(at).toISOString() })
+      // A successful account login clears that account's failures. Keep the
+      // network bucket: otherwise an attacker can repeatedly sign in to one
+      // account to erase failures from every other login on the same network.
+      await clearThrottle(ctx, [throttle[0]!])
+      await audit(ctx, 'login.success', row.id, fingerprint)
       return {
         ok: true,
         userId: row.id,
@@ -281,7 +519,8 @@ export const functions: Record<string, FnSpec> = {
         defaultCompanyId,
         branches,
         defaultBranchId,
-        rehash: needsRehash(String(row.password)),
+        securityVersion: Number(row.securityVersion ?? 0),
+        rehash: false,
       }
     },
   }),
@@ -453,6 +692,7 @@ export const functions: Record<string, FnSpec> = {
 
   contextOptions: defineFn({
     exposure: 'internal',
+    anonymous: true,
     input: { userId: 'id' },
     output: { ok: 'bool', companies: 'json?', branches: 'json?', defaults: 'json?', errors: 'json?' },
     effects: [
@@ -464,6 +704,7 @@ export const functions: Record<string, FnSpec> = {
       'read:partner.Partner',
     ],
     handler: async (ctx: Ctx, a) => {
+      if (ctx.actor && ctx.actor !== a.userId) return invalid([issue('userId', 'user.error.contextActor')])
       const live = await liveIdentity(ctx, String(a.userId))
       if (!live) return invalid([issue('userId', 'user.error.userMissing')])
       return {
@@ -490,6 +731,7 @@ export const functions: Record<string, FnSpec> = {
 
   prepareContext: defineFn({
     exposure: 'internal',
+    anonymous: true,
     input: {
       userId: 'id',
       companyId: 'id',
@@ -610,14 +852,166 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  issueAuthToken: defineFn({
+    exposure: 'internal',
+    input: { userId: 'id', kind: 'text', realm: 'text?' },
+    output: { ok: 'bool', token: 'text?', expiresAt: 'datetime?', errors: 'json?' },
+    effects: ['read:user.User', 'read:user.AuthToken', 'write:user.AuthToken'],
+    handler: async (ctx: Ctx, a) => {
+      const kind = String(a.kind)
+      if (!['invitation', 'reset'].includes(kind)) return invalid([issue('kind', 'user.error.tokenKind')])
+      const U = ctx.table('user.User')
+      const user = await ctx.db.one(from(U).where(eq(U.id, a.userId), eq(U.active, true)))
+      if (!user) return invalid([issue('userId', 'user.error.userMissing')])
+      const token = randomBytes(32).toString('base64url')
+      const at = Date.now()
+      const expiresAt = new Date(at + (kind === 'invitation' ? 144 : 4) * 60 * 60_000).toISOString()
+      const id = `auth:${a.userId}:${kind}`
+      const values = {
+        userId: a.userId,
+        kind,
+        realm: String(a.realm ?? 'backend'),
+        digest: digest(token),
+        securityVersion: Number(user.securityVersion ?? 0),
+        expiresAt,
+        consumedAt: null,
+        createdAt: new Date(at).toISOString(),
+      }
+      const inserted = await ctx.db.insertIfAbsent('user.AuthToken', { id, ...values })
+      if (!('dryRun' in inserted) && !inserted.inserted) await ctx.db.update('user.AuthToken', { id }, values)
+      return { ok: true, token, expiresAt }
+    },
+  }),
+
+  consumeAuthToken: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { token: 'text', kind: 'text', realm: 'text?', password: 'text' },
+    output: { ok: 'bool', userId: 'id?', errors: 'json?' },
+    effects: [
+      'read:user.AuthToken',
+      'write:user.AuthToken',
+      'read:user.User',
+      'write:user.User',
+      'write:user.SecurityAudit',
+    ],
+    handler: async (ctx: Ctx, a) => {
+      if (String(a.password).length < 8) return invalid([issue('password', 'user.error.passwordLength')])
+      const T = ctx.table('user.AuthToken')
+      const row = await ctx.db.one(from(T).where(eq(T.digest, digest(String(a.token)))))
+      const realm = String(a.realm ?? 'backend')
+      if (
+        !row ||
+        row.kind !== a.kind ||
+        row.realm !== realm ||
+        row.consumedAt ||
+        timestampMs(row.expiresAt) <= Date.now()
+      )
+        return invalid([issue('token', 'user.error.tokenInvalid')])
+      const U = ctx.table('user.User')
+      const user = await ctx.db.one(from(U).where(eq(U.id, row.userId), eq(U.active, true)))
+      if (!user || Number(user.securityVersion ?? 0) !== Number(row.securityVersion))
+        return invalid([issue('token', 'user.error.tokenInvalid')])
+      const passwordHash = await hashPassword(String(a.password))
+      const consumedAt = nowIso()
+      try {
+        return await ctx.tx(async (tx) => {
+          const claimed = await tx.db.compareAndSet(
+            'user.AuthToken',
+            { id: row.id },
+            { digest: row.digest, consumedAt: null, securityVersion: row.securityVersion },
+            { consumedAt },
+          )
+          if (!('dryRun' in claimed) && !claimed.matched)
+            return invalid([issue('token', 'user.error.tokenInvalid')])
+          const securityVersion = Number(user.securityVersion ?? 0) + 1
+          const updated = await tx.db.compareAndSet(
+            'user.User',
+            { id: user.id },
+            { active: true, securityVersion: user.securityVersion },
+            { passwordHash, securityVersion },
+          )
+          if (!('dryRun' in updated) && !updated.matched) throw new TokenClaimRace()
+          await audit(tx, a.kind === 'invitation' ? 'invitation.accept' : 'password.reset', user.id)
+          return { ok: true, userId: user.id }
+        })
+      } catch (error) {
+        if (error instanceof TokenClaimRace) return invalid([issue('token', 'user.error.tokenInvalid')])
+        throw error
+      }
+    },
+  }),
+
+  recordSecurityEvent: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { event: 'text', userId: 'id?', networkFingerprint: 'text?', metadata: 'json?' },
+    output: { ok: 'bool' },
+    effects: ['read:user.User', 'write:user.SecurityAudit'],
+    handler: async (ctx: Ctx, a) => {
+      if (a.userId && ctx.actor && ctx.actor !== a.userId && !(await superuser(ctx, ctx.actor)))
+        return { ok: false }
+      await audit(
+        ctx,
+        String(a.event),
+        a.userId,
+        a.networkFingerprint,
+        (a.metadata as Record<string, unknown> | null) ?? undefined,
+      )
+      return { ok: true }
+    },
+  }),
+
+  listSecurityAudit: defineFn({
+    input: { userId: 'id?' },
+    output: {
+      id: 'id',
+      userId: 'id?',
+      event: 'text',
+      occurredAt: 'datetime',
+      networkFingerprint: 'text?',
+      metadata: 'json?',
+    },
+    effects: ['read:user.SecurityAudit'],
+    handler: (ctx: Ctx, a) => {
+      const A = ctx.table('user.SecurityAudit')
+      let q = from(A).orderBy(asc(A.occurredAt))
+      if (a.userId) q = q.where(eq(A.userId, a.userId))
+      return ctx.db.all(q)
+    },
+  }),
+
   archiveUser: defineFn({
     input: { id: 'id', active: 'bool' },
-    output: { id: 'id', active: 'bool' },
-    effects: ['write:user.User'],
+    output: { ok: 'bool', id: 'id?', active: 'bool?', securityVersion: 'int?', errors: 'json?' },
+    effects: [
+      'read:user.User',
+      'write:user.User',
+      'write:user.SecurityAudit',
+      'read:user.SecurityGuard',
+      'write:user.SecurityGuard',
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
-      await ctx.db.update('user.User', { id: a.id }, { active: a.active } as Row)
-      return { id: a.id, active: a.active }
+      const U = ctx.table('user.User')
+      const row = await ctx.db.one(from(U).where(eq(U.id, a.id)))
+      if (!row) return invalid([issue('id', 'user.error.userMissing')])
+      const update = async (writeCtx: Ctx, held: Row) => {
+        const securityVersion = Number(held.securityVersion ?? 0) + (held.active === a.active ? 0 : 1)
+        await writeCtx.db.update('user.User', { id: a.id }, { active: a.active, securityVersion })
+        if (held.active !== a.active) await audit(writeCtx, a.active ? 'user.restore' : 'user.archive', a.id)
+        return { ok: true, id: a.id, active: a.active, securityVersion }
+      }
+      if (!(a.active === false && row.active === true && row.superuser === true)) return update(ctx, row)
+      return ctx.tx(async (tx) => {
+        await lockLastSuperuser(tx)
+        const U2 = tx.table('user.User')
+        const held = await tx.db.one(from(U2).where(eq(U2.id, a.id)))
+        if (!held) return invalid([issue('id', 'user.error.userMissing')])
+        if (held.active === true && held.superuser === true && (await liveSuperusers(tx)) <= 1)
+          return invalid([issue('active', 'user.error.lastSuperuser')])
+        return update(tx, held)
+      })
     },
   }),
 }

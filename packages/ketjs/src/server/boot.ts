@@ -594,7 +594,8 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     const record = await sessionRecordOf(url, req)
     if (!record) return anonymousFns // a stranger, not an administrator
     if (!serve.permissions) return null
-    return serve.permissions(ctx, record.userId)
+    const granted = await serve.permissions(ctx, record.userId)
+    return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
   }
 
   const pages = serve.pages

@@ -19,7 +19,16 @@ export type FormOption = { value: string; label: string }
 export type FormField = {
   name: string
   label: string
-  type?: 'text' | 'number' | 'decimal' | 'date' | 'datetime-local' | 'select' | 'checkbox' | 'textarea'
+  type?:
+    | 'text'
+    | 'password'
+    | 'number'
+    | 'decimal'
+    | 'date'
+    | 'datetime-local'
+    | 'select'
+    | 'checkbox'
+    | 'textarea'
   value?: string | number | boolean | null
   placeholder?: string | null
   required?: boolean

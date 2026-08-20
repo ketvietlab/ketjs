@@ -78,6 +78,7 @@ export type Sessions = {
   of(req: IncomingMessage): Promise<SessionRecord | null>
   end(req: IncomingMessage): Promise<void>
   endUser(userId: string): Promise<number>
+  endUserExcept(userId: string, keepId: string): Promise<number>
   /** Atomically switch or reconcile the live company/branch context. */
   update(record: SessionRecord, context: SessionContext): Promise<SessionRecord | null>
   /** A cookie that clears the browser's. */
@@ -187,6 +188,10 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
 
     endUser(userId) {
       return store.destroyUser(userId)
+    },
+
+    endUserExcept(userId, keepId) {
+      return store.destroyUserExcept(userId, keepId)
     },
 
     update(record, context) {
