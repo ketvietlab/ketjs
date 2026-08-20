@@ -3,24 +3,26 @@ import type { Ctx, FnSpec } from 'ketjs'
 
 export const functions: Record<string, FnSpec> = {
   listMenu: defineFn({
-    input: {},
+    input: { siteId: 'id?' },
     effects: ['read:website_menu.MenuItem'],
     agent: true,
-    handler: async (ctx: Ctx) => {
+    handler: async (ctx: Ctx, args) => {
       const M = ctx.table('website_menu.MenuItem')
-      return ctx.db.all(from(M).orderBy(asc(M.position)))
+      let query = from(M).orderBy(asc(M.position))
+      if (args.siteId) query = query.where(eq(M.siteId, args.siteId))
+      return ctx.db.all(query)
     },
   }),
 
   addMenuItem: defineFn({
-    input: { id: 'id', label: 'text', href: 'text', position: 'int?' },
+    input: { id: 'id', siteId: 'id?', label: 'text', href: 'text', position: 'int?', parentId: 'id?' },
     effects: ['write:website_menu.MenuItem'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
       let cs = ctx
         .change('website_menu.MenuItem', args)
-        .cast(['id', 'label', 'href', 'position'])
+        .cast(['id', 'siteId', 'label', 'href', 'position', 'parentId'])
         .required(['label', 'href'])
         .validate(
           'href',

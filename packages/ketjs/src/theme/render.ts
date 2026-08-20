@@ -23,6 +23,8 @@ export function createTheme(
   opts: {
     filters?: Record<string, Filter>
     translate?: (key: string, params?: Record<string, unknown>) => string
+    /** Select one theme when the deployment ships several. Non-theme module templates remain available. */
+    theme?: string
   } = {},
 ): ThemeRuntime {
   // A theme is written against what the DEPLOYMENT ships, not against what a
@@ -47,11 +49,16 @@ export function createTheme(
   const sources: Record<string, string> = {}
   for (const m of modules) {
     if (off.has(m.name)) continue // a removed theme contributes no templates
+    if (m.kind === 'theme' && opts.theme && m.name !== opts.theme) continue
     for (const [name, src] of Object.entries(m.templates)) sources[name] = src
   }
 
   const fillSources: Record<string, Array<{ by: string; template: string }>> = {}
-  for (const fill of manifest.fills) (fillSources[fill.joint] ??= []).push(fill)
+  for (const fill of manifest.fills) {
+    const owner = manifest.modules[fill.by]
+    if (owner?.kind === 'theme' && opts.theme && fill.by !== opts.theme) continue
+    ;(fillSources[fill.joint] ??= []).push(fill)
+  }
 
   const templates: Record<string, Compiled> = {}
   const fills: Record<string, Compiled[]> = {}
