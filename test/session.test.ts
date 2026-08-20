@@ -82,6 +82,41 @@ for (const [name, make] of stores) {
     assert.notEqual(await store.read(live.record.id), null)
     await close()
   })
+
+  test(`session (${name}): context updates are compare-and-set`, async () => {
+    const { store, close } = await make()
+    const s = await createSessions({ store, secret: 'k' })
+    const { record } = await s.start({
+      userId: 'u1',
+      companies: ['c1', 'c2'],
+      company: 'c1',
+      branch: 'b1',
+      branches: ['b1', 'b2'],
+      securityVersion: 3,
+    })
+    const changed = await s.update(record, {
+      companies: ['c1', 'c2'],
+      company: 'c2',
+      branch: 'b2',
+      branches: ['b1', 'b2'],
+      securityVersion: 3,
+    })
+    assert.equal(changed?.revision, 1)
+    assert.equal(changed?.company, 'c2')
+    assert.equal(changed?.branch, 'b2')
+    assert.equal(
+      await s.update(record, {
+        companies: ['c1'],
+        company: 'c1',
+        branch: 'b1',
+        branches: ['b1'],
+        securityVersion: 3,
+      }),
+      null,
+      'a stale browser tab cannot overwrite a newer context',
+    )
+    await close()
+  })
 }
 
 // ── the cookie ───────────────────────────────────────────────────────────────
@@ -151,7 +186,12 @@ test('cookie: a session refreshes while in use but never past its absolute limit
 test('session: the scope is exactly the shape D32 defined', async () => {
   const s = await createSessions({ store: memorySessionStore(), secret: 'k' })
   const { record } = await s.start({ userId: 'u1', companies: ['c1', 'c2'], company: 'c2' })
-  assert.deepEqual(s.scopeOf(record), { company: 'c2', companies: ['c1', 'c2'], branches: null })
+  assert.deepEqual(s.scopeOf(record), {
+    company: 'c2',
+    companies: ['c1', 'c2'],
+    branch: null,
+    branches: null,
+  })
 })
 
 test('session: writing to a company the user is not a member of is refused at login', async () => {
@@ -160,6 +200,23 @@ test('session: writing to a company the user is not a member of is refused at lo
     () => s.start({ userId: 'u1', companies: ['c1'], company: 'c9' }),
     (e: unknown) => {
       assert.equal((e as { code: string }).code, 'E_WRITE_COMPANY_NOT_READABLE')
+      return true
+    },
+  )
+})
+
+test('session: writing to a branch outside the readable set is refused', async () => {
+  const s = await createSessions({ store: memorySessionStore(), secret: 'k' })
+  await assert.rejects(
+    () =>
+      s.start({
+        userId: 'u1',
+        companies: ['c1'],
+        branch: 'other',
+        branches: ['main'],
+      }),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_WRITE_BRANCH_NOT_READABLE')
       return true
     },
   )
@@ -279,5 +336,33 @@ test('store: the database store creates its own table, like every other store he
   } as never)
   await dbSessionStore(adapter).init()
   assert.ok('ket_session' in (await adapter.introspect()))
+  await adapter.close()
+})
+
+test('store: an existing session table gains identity context columns without losing rows', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await adapter.exec(`CREATE TABLE ket_session (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    companies TEXT NOT NULL,
+    company TEXT,
+    branches TEXT,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+  )`)
+  await adapter.run(
+    `INSERT INTO ket_session
+      (id, user_id, companies, company, branches, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ['old', 'u1', '["c1"]', 'c1', null, 1, Date.now() + 60_000],
+  )
+  const store = dbSessionStore(adapter)
+  await store.init()
+  const row = await store.read('old')
+  assert.equal(row?.branch, null)
+  assert.equal(row?.securityVersion, 0)
+  assert.equal(row?.revision, 0)
+  assert.equal(row?.userId, 'u1')
   await adapter.close()
 })
