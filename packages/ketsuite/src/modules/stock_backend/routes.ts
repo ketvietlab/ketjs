@@ -3,10 +3,10 @@ import { json, page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
 import type { JSXChild } from 'ketjs-view'
-import { metric, recordForm, section, stack, surface } from '../../ui/index.ts'
-import type { FormField } from '../../ui/index.ts'
+import { metric, recordForm, stack, surface } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
+import { inventoryScreen } from './inventory-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
@@ -157,70 +157,73 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/inventory'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/inventory?applied=1'))
+          : seeOther(inLocale(url, '/admin/inventory?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [quants, data] = (await Promise.all([
+      const [quants, data, templates] = (await Promise.all([
         ctx.call('stock.listQuants', {}, url, req),
         common(ctx, url, req),
-      ])) as [AnyRow[], Awaited<ReturnType<typeof common>>]
-      const fields: FormField[] = [
-        { name: 'productId', label: _('stock_backend.field.productId'), required: true },
-        {
-          name: 'locationId',
-          label: _('stock_backend.field.location'),
-          type: 'select',
-          options: options(data.locations.filter((row) => row.usage === 'internal')),
-          required: true,
-        },
-        {
-          name: 'inventoryLocationId',
-          label: _('stock_backend.field.inventoryLocation'),
-          type: 'select',
-          options: options(data.locations.filter((row) => row.usage === 'inventory')),
-          required: true,
-        },
-        {
-          name: 'productUomId',
-          label: _('stock_backend.field.uom'),
-          type: 'select',
-          options: options(data.units),
-          required: true,
-        },
-        {
-          name: 'lotId',
-          label: _('stock_backend.field.lot'),
-          type: 'select',
-          options: [{ value: '', label: '—' }, ...options(data.lots)],
-        },
-        { name: 'countedQuantity', label: _('stock_backend.field.counted'), type: 'decimal', required: true },
-      ]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.inventory',
-        quants.map((row) => ({
-          id: String(row.id),
-          name: String(row.productId),
-          kind: 'quant',
-          detail: `${String(row.quantity)} / ${String(row.reservedQuantity)} · ${String(row.locationId)}`,
-        })),
-        [
-          section({
-            title: _('stock_backend.adjustment.title'),
-            body: surface({
-              body: recordForm({
-                action: inLocale(url, '/admin/inventory'),
-                submit: _('stock_backend.action.apply'),
-                submitVariant: 'primary',
-                errors: invalid(url, _),
-                fields,
-              }),
-            }),
-          }),
-        ],
+        ctx.call('stock.listStorableProducts', {}, url, req),
+      ])) as [AnyRow[], Awaited<ReturnType<typeof common>>, AnyRow[]]
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            name: String(template.name),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+            reference: String(variant.defaultCode ?? ''),
+          })),
       )
+      const productById = new Map(products.map((product) => [product.value, product]))
+      const locationById = new Map(data.locations.map((location) => [String(location.id), location]))
+      const lotById = new Map(data.lots.map((lot) => [String(lot.id), lot]))
+      const rows = quants
+        .filter((quant) =>
+          ['internal', 'transit'].includes(String(locationById.get(String(quant.locationId))?.usage)),
+        )
+        .map((quant) => {
+          const product = productById.get(String(quant.productId))
+          const quantity = String(quant.quantity)
+          const reserved = String(quant.reservedQuantity)
+          return {
+            id: String(quant.id),
+            product: product?.name ?? String(quant.productId),
+            reference: product?.reference ?? '',
+            location: String(locationById.get(String(quant.locationId))?.name ?? quant.locationId),
+            lot: String(lotById.get(String(quant.lotId))?.name ?? ''),
+            quantity,
+            reserved,
+            available: String(Number(quantity) - Number(reserved)),
+          }
+        })
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.inventory'),
+          head: await ctx.styles(req),
+          body: inventoryScreen(
+            _,
+            {
+              rows,
+              products: products.map(({ value, label }) => ({ value, label })),
+              locations: options(data.locations.filter((row) => row.usage === 'internal')),
+              inventoryLocations: options(data.locations.filter((row) => row.usage === 'inventory')),
+              units: options(data.units),
+              lots: options(data.lots),
+              action: inLocale(url, '/admin/inventory'),
+              locationsHref: inLocale(url, '/admin/locations'),
+              applied: url.searchParams.has('applied'),
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/transfers':
