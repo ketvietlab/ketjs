@@ -457,6 +457,8 @@ try {
     .slice(0, Math.min(4, transitionCount))
   if (moveRooms.length !== Math.min(4, transitionCount))
     throw new Error('benchmark needs one available destination for each room move')
+  const folioCorrectionCount = Math.min(4, transitionCount)
+  let concurrentFolioCorrectionSingleAdjustment = true
   const transitionStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -480,6 +482,42 @@ try {
           sourceKey: `${key}:service:${index}`,
           occurredAt: '2026-09-02T08:00:00.000Z',
         })
+        if (index < folioCorrectionCount) {
+          const correction = {
+            id: `service:${index}`,
+            folioId: `reservation:${index}:folio`,
+            reason: 'benchmark correction',
+            voidedAt: '2026-09-02T08:30:00.000Z',
+          }
+          if (driver === 'postgres') {
+            const contender = open(key)
+            await contender.open()
+            try {
+              const attempts = await Promise.all([
+                callWith(adapters.get(key)!, key, 'hospitality_core.voidCharge', correction),
+                callWith(contender, key, 'hospitality_core.voidCharge', correction),
+              ])
+              const values = attempts.map((attempt) => attempt.value as { ok: boolean; existing?: boolean })
+              if (
+                values.some((value) => !value.ok) ||
+                values.filter((value) => value.existing === false).length !== 1 ||
+                values.filter((value) => value.existing === true).length !== 1
+              )
+                concurrentFolioCorrectionSingleAdjustment = false
+            } finally {
+              await contender.close()
+            }
+          } else {
+            const first = await call(key, 'hospitality_core.voidCharge', correction)
+            const retry = await call(key, 'hospitality_core.voidCharge', correction)
+            if (
+              !(first.value as { ok: boolean }).ok ||
+              (first.value as { existing?: boolean }).existing !== false ||
+              (retry.value as { existing?: boolean }).existing !== true
+            )
+              concurrentFolioCorrectionSingleAdjustment = false
+          }
+        }
         if (index < moveRooms.length) {
           const moved = await call(key, 'hospitality_core.moveRoom', {
             stayId: `reservation:${index}:stay`,
@@ -895,6 +933,8 @@ try {
     const serviceChargeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_charge!
     if (serviceChargeColumns.serviceDate !== 'date')
       throw new Error(`PostgreSQL serviceDate is ${serviceChargeColumns.serviceDate}, expected date`)
+    if (serviceChargeColumns.voidedAt !== 'timestamp with time zone')
+      throw new Error(`PostgreSQL voidedAt is ${serviceChargeColumns.voidedAt}, expected timestamptz`)
     const stayColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_stay!
     if (stayColumns.nextBillDate !== 'date')
       throw new Error(`PostgreSQL nextBillDate is ${stayColumns.nextBillDate}, expected date`)
@@ -934,6 +974,18 @@ try {
     }),
   ).then((matches) => matches.every(Boolean))
   if (!housekeepingMoveTasksMatch) throw new Error('room moves did not create one cleaning task per old room')
+  const folioCorrectionsMatch = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters
+        .get(key)!
+        .all(
+          `SELECT COUNT(*) AS n FROM hospitality_core_charge WHERE id LIKE 'service:%' AND state = 'void' AND "voidReason" = 'benchmark correction'`,
+        )
+      return Number(rows[0]!.n) === folioCorrectionCount
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!folioCorrectionsMatch || !concurrentFolioCorrectionSingleAdjustment)
+    throw new Error('folio correction was lost, duplicated or adjusted the total more than once')
   const inventoryChangeCounts = await Promise.all(
     keys.map(async (key) => {
       const rows = await adapters.get(key)!.all('SELECT COUNT(*) AS n FROM hospitality_core_inventory_change')
@@ -1001,6 +1053,7 @@ try {
         idempotentServiceCountsMatch,
         checkInChargeCheckoutCycles: totalTransitions,
         roomMoves: databaseCount * moveRooms.length,
+        folioCorrections: databaseCount * folioCorrectionCount,
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
         stayNotices: totalTransitions,
@@ -1022,6 +1075,8 @@ try {
         concurrentCancelCheckInConsistent,
         housekeepingCheckoutTasksMatch,
         housekeepingMoveTasksMatch,
+        folioCorrectionsMatch,
+        concurrentFolioCorrectionSingleAdjustment,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
         durableInventoryChangesPresent,
         contentChanges: contentChangeCounts.reduce((sum, count) => sum + count, 0),

@@ -618,6 +618,8 @@ export const models: Record<string, ModelDef> = {
       serviceDate: 'date?',
       sourceKey: 'text?',
       state: 'text',
+      voidedAt: 'datetime?',
+      voidReason: 'text?',
     },
     indexes: {
       folio_date: { fields: ['companyId', 'folioId', 'occurredAt'] },
