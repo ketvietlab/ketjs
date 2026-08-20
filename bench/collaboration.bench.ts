@@ -134,6 +134,11 @@ try {
       markers: ['record-workspace', 'vendor-bill-create-form', 'vendor-bill-collab'],
     },
     {
+      label: 'Accounting journal entries',
+      path: '/admin/journal-entries?lang=vi',
+      markers: ['record-workspace', 'journal-entry-create-form', 'journal-entry-collab'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
