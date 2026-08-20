@@ -226,8 +226,8 @@ exactly its own company-scoped rows and that PostgreSQL kept room rates as
 
 | driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | operation cycles/s | list pairs/s | one room winner | cancel/check-in consistent | isolated counts |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| SQLite | 8 | 2,000 | 800 | 112.6 ms | 1,990 | 1,254 | 578 | 287 | yes (sequential) | yes (sequential) | complete |
-| PostgreSQL 17 | 4 | 1,000 | 400 | 41,909.4 ms | 26 | 149 | 95 | 117 | yes (concurrent) | yes (concurrent) | complete |
+| SQLite | 8 | 2,000 | 800 | 119.5 ms | 2,397 | 727 | 929 | 379 | yes (sequential) | yes (sequential) | complete |
+| PostgreSQL 17 | 4 | 1,000 | 400 | 954.2 ms | 356 | 170 | 150 | 197 | yes (concurrent) | yes (concurrent) | complete |
 
 An operation cycle contains check-in, an idempotent folio charge and checkout for
 every second stay. A list pair contains the room board plus the reservation list;
@@ -244,7 +244,8 @@ KetSuite deployment. PostgreSQL migration and master-data figures therefore
 include the much larger dependency manifest now pulled in by the backend module;
 the operation rates remain the hospitality-only paths. The rerun also includes
 the property-timezone, primary-guest, room-claim and cancel/check-in concurrency
-guards.
+guards, and verifies that every checkout creates exactly one durable housekeeping
+task in every physical tenant database.
 
 ## Not measured
 

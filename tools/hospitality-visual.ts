@@ -206,6 +206,21 @@ try {
     sourceKey: 'visual:spa:1',
     occurredAt: '2026-08-19T16:00:00.000Z',
   })
+  await call('hospitality_core.createCleaningTask', {
+    id: 'cleaning-103',
+    code: 'HK-000103',
+    roomId: '103',
+    taskType: 'daily_clean',
+    priority: 'normal',
+    assigneeId: 'visual-admin',
+    requestedAt: '2026-08-20T01:30:00.000Z',
+    notes: 'Ưu tiên bổ sung khăn và nước uống.',
+  })
+  await call('hospitality_core.startCleaningTask', {
+    id: 'cleaning-103',
+    assigneeId: 'visual-admin',
+    at: '2026-08-20T01:45:00.000Z',
+  })
   console.log(`hospitality visual database ready: ${path}`)
   console.log('sign in with admin / hospitality-demo')
 } finally {

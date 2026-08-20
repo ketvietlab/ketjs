@@ -58,6 +58,18 @@ export type PolicyRow = {
   penaltyPercent: string | number
 }
 
+export type CleaningTaskRow = {
+  id: string
+  code: string
+  taskType: string
+  priority: string
+  state: string
+  requestedAt: string
+  startedAt?: string | null
+  room?: { code?: string; name?: string } | null
+  assigneeId?: string | null
+}
+
 export type ReservationRow = {
   id: string
   code: string
@@ -278,6 +290,50 @@ const policyColumns = (_: Translator): Array<Column<PolicyRow>> => [
   },
 ]
 
+const cleaningTaskColumns = (_: Translator, locale: string): Array<Column<CleaningTaskRow>> => [
+  { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
+  {
+    key: 'room',
+    label: _('hospitality_core.col.room'),
+    cell: (row) => row.room?.name ?? row.room?.code ?? '—',
+    priority: 'primary',
+  },
+  {
+    key: 'type',
+    label: _('hospitality_core.col.type'),
+    cell: (row) => _(`hospitality_core.cleaningType.${row.taskType}`),
+  },
+  {
+    key: 'assignee',
+    label: _('hospitality_core.col.assignee'),
+    cell: (row) => row.assigneeId ?? '—',
+  },
+  {
+    key: 'requestedAt',
+    label: _('hospitality_core.col.requestedAt'),
+    cell: (row) => dateTime(row.requestedAt, locale, 'UTC'),
+    kind: 'date',
+  },
+  {
+    key: 'priority',
+    label: _('hospitality_core.col.priority'),
+    cell: (row) =>
+      badge(
+        _(`hospitality_core.cleaningPriority.${row.priority}`),
+        row.priority === 'urgent' ? 'danger' : 'neutral',
+      ),
+    kind: 'status',
+  },
+  {
+    key: 'status',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(_(`hospitality_core.cleaningState.${row.state}`), workflowTone(row.state), row.state),
+    kind: 'status',
+    priority: 'primary',
+  },
+]
+
 export const propertiesScreen = (
   _: Translator,
   rows: PropertyRow[],
@@ -316,6 +372,37 @@ export const roomsScreen = (_: Translator, rows: RoomRow[], frame: Frame): Templ
     rows.length
       ? dataTable(_, { columns: roomColumns(_), rows, id: (row) => row.id })
       : emptyState(_('hospitality_core.screen.rooms.empty'), _('hospitality_core.screen.rooms.emptyHint')),
+  )
+
+export const cleaningTasksScreen = (
+  _: Translator,
+  rows: CleaningTaskRow[],
+  locale: string,
+  frame: Frame,
+): TemplateResult =>
+  framed(
+    _,
+    _('hospitality_core.screen.cleaningTasks.title'),
+    frame,
+    rows.length
+      ? dataTable(_, { columns: cleaningTaskColumns(_, locale), rows, id: (row) => row.id })
+      : emptyState(
+          _('hospitality_core.screen.cleaningTasks.empty'),
+          _('hospitality_core.screen.cleaningTasks.emptyHint'),
+        ),
+  )
+
+export const housekeepingRoomsScreen = (_: Translator, rows: RoomRow[], frame: Frame): TemplateResult =>
+  framed(
+    _,
+    _('hospitality_core.screen.housekeepingRooms.title'),
+    frame,
+    rows.length
+      ? dataTable(_, { columns: roomColumns(_), rows, id: (row) => row.id })
+      : emptyState(
+          _('hospitality_core.screen.housekeepingRooms.empty'),
+          _('hospitality_core.screen.housekeepingRooms.emptyHint'),
+        ),
   )
 
 export const roomTypesScreen = (_: Translator, rows: RoomTypeRow[], frame: Frame): TemplateResult =>

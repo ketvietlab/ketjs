@@ -52,6 +52,21 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listRooms',
     sequence: 70,
   },
+  'hospitality.housekeeping': { parent: 'hospitality', label: 'menu.housekeeping', sequence: 70 },
+  'hospitality.cleaningTasks': {
+    parent: 'hospitality.housekeeping',
+    label: 'menu.cleaningTasks',
+    path: '/admin/hospitality/housekeeping',
+    needs: 'hospitality_core.listCleaningTasks',
+    sequence: 10,
+  },
+  'hospitality.housekeepingRooms': {
+    parent: 'hospitality.housekeeping',
+    label: 'menu.housekeepingRooms',
+    path: '/admin/hospitality/housekeeping/rooms',
+    needs: 'hospitality_core.listRooms',
+    sequence: 20,
+  },
   'hospitality.configuration': { parent: 'hospitality', label: 'menu.configuration', sequence: 90 },
   'hospitality.roomTypes': {
     parent: 'hospitality.configuration',

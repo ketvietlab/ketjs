@@ -326,6 +326,18 @@ try {
   const totalReservations = databaseCount * reservationsPerDatabase
   const totalTransitions = databaseCount * transitionCount
   const totalReads = databaseCount * readPasses
+  const expectedCheckoutTasks = transitionRooms.filter(
+    (room, index) => room !== undefined && index % 2 === 0,
+  ).length
+  const housekeepingCheckoutTasksMatch = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters
+        .get(key)!
+        .all(`SELECT COUNT(*) AS n FROM hospitality_core_cleaning_task WHERE "taskType" = 'checkout_clean'`)
+      return Number(rows[0]!.n) === expectedCheckoutTasks
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!housekeepingCheckoutTasksMatch) throw new Error('checkout did not create one cleaning task per stay')
   console.log(
     JSON.stringify(
       {
@@ -343,6 +355,7 @@ try {
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
         concurrentRoomClaimSingleWinner,
         concurrentCancelCheckInConsistent,
+        housekeepingCheckoutTasksMatch,
         listQueries: totalReads,
         readMs: Number(readMs.toFixed(1)),
         readsPerSecond: Math.round((totalReads * 1_000) / readMs),

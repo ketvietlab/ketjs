@@ -354,6 +354,32 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /** Housekeeping work is durable and auditable; checkout creates one atomically. */
+  CleaningTask: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      code: 'text',
+      propertyId: 'ref:hospitality_core.Property',
+      roomId: 'ref:hospitality_core.Room',
+      stayId: 'ref:hospitality_core.Stay?',
+      taskType: 'text',
+      priority: 'text',
+      state: 'text',
+      assigneeId: 'text?',
+      requestedAt: 'datetime',
+      startedAt: 'datetime?',
+      doneAt: 'datetime?',
+      notes: 'text?',
+    },
+    indexes: {
+      code_company: { fields: ['companyId', 'code'], unique: true },
+      property_state: { fields: ['companyId', 'propertyId', 'state', 'priority', 'requestedAt'] },
+      room_state: { fields: ['companyId', 'roomId', 'state', 'requestedAt'] },
+      stay_type: { fields: ['companyId', 'stayId', 'taskType'], unique: true },
+    },
+  },
+
   /** PII-minimised identity data; scanned images are ordinary storage attachments. */
   GuestDocument: {
     scope: 'company',

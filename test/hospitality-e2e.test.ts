@@ -123,4 +123,30 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ])
     assert.deepEqual({ ...stays[0] }, { state: 'checked_in', currentRoomId: '101' })
   })
+
+  const checkedOut = await e2e.client.call<Row>('hospitality_core.checkOut', {
+    stayId: 'booking-1:stay',
+    at: '2026-08-21T12:00:00.000Z',
+  })
+  assert.equal(checkedOut.value.state, 'checked_out')
+  assert.equal(checkedOut.writes.length, 6)
+
+  for (const [path, title] of [
+    ['/admin/hospitality/housekeeping?lang=vi', 'Việc dọn phòng'],
+    ['/admin/hospitality/housekeeping/rooms?lang=vi', 'Bảng trạng thái phòng'],
+  ] as const) {
+    const response = await e2e.client.get(path)
+    const page = await response.text()
+    assert.equal(response.status, 200, `${path}: ${page}`)
+    assert.match(page, new RegExp(title), path)
+    assert.doesNotMatch(page, /hospitality_core\./, path)
+  }
+
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    const tasks = await adapter.all(
+      'SELECT state, priority, "roomId" FROM hospitality_core_cleaning_task WHERE id = ?',
+      ['checkout:booking-1:stay'],
+    )
+    assert.deepEqual({ ...tasks[0] }, { state: 'todo', priority: 'urgent', roomId: '101' })
+  })
 })
