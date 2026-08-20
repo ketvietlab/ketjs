@@ -671,31 +671,28 @@ export const routes: Record<string, RouteEntry> = {
       const number = new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
         maximumFractionDigits: 6,
       })
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.lots'),
-          head: await ctx.styles(req),
-          body: lotsScreen(
-            _,
-            {
-              rows: lots.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                product: productById.get(String(row.productId)) ?? String(row.productId),
-                reference: String(row.ref ?? ''),
-                onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
-                onHandValue: onHandByLot.get(String(row.id)) ?? 0,
-                active: row.active !== false,
-                href: inLocale(url, `/admin/lots/${String(row.id)}`),
-              })),
-              products: productOptions,
-              action: inLocale(url, '/admin/lots'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.lots'),
+        body: lotsScreen(
+          _,
+          {
+            rows: lots.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              product: productById.get(String(row.productId)) ?? String(row.productId),
+              reference: String(row.ref ?? ''),
+              onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
+              onHandValue: onHandByLot.get(String(row.id)) ?? 0,
+              active: row.active !== false,
+              href: inLocale(url, `/admin/lots/${String(row.id)}`),
+            })),
+            products: productOptions,
+            action: inLocale(url, '/admin/lots'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
