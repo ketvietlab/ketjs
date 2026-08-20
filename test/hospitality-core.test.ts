@@ -159,6 +159,64 @@ test('hospitality core: explicit booleans override creation defaults', async () 
   }
 })
 
+test('hospitality core: property settings validate timezone and default cancellation policy', async () => {
+  const adapter = await boot()
+  try {
+    const invalidTimezone = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'invalid-timezone',
+        code: 'TZ-BAD',
+        name: 'Invalid timezone',
+        accommodationType: 'hotel',
+        timezone: 'Asia/Nowhere',
+      },
+      adapter,
+    )
+    assert.equal((invalidTimezone.value as Row).ok, false)
+    assert.equal(((invalidTimezone.value as Row).errors as Row[])[0]?.code, 'timezone')
+
+    const missingPolicy = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'missing-policy',
+        code: 'POL-BAD',
+        name: 'Missing policy',
+        accommodationType: 'hotel',
+        defaultCancellationPolicyId: 'not-here',
+      },
+      adapter,
+    )
+    assert.equal((missingPolicy.value as Row).ok, false)
+    assert.equal(((missingPolicy.value as Row).errors as Row[])[0]?.code, 'policy_missing')
+
+    await call(
+      'hospitality_core.saveCancellationPolicy',
+      { id: 'flex', code: 'FLEX', name: 'Flexible', type: 'flexible' },
+      adapter,
+    )
+    const saved = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'policy-hotel',
+        code: 'POLICY',
+        name: 'Policy Hotel',
+        accommodationType: 'hotel',
+        timezone: 'Pacific/Honolulu',
+        longStayBillOnCheckIn: false,
+        defaultCancellationPolicyId: 'flex',
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    const detail = (await call('hospitality_core.getProperty', { id: 'policy-hotel' }, adapter)).value as Row
+    assert.equal(detail.longStayBillOnCheckIn, false)
+    assert.equal((detail.defaultCancellationPolicy as Row).name, 'Flexible')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality core: property location uses the active address catalog', async () => {
   const adapter = await boot()
   try {

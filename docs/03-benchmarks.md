@@ -312,6 +312,21 @@ continued to pass the booking, folio, housekeeping-task, night-audit, concurrenc
 cross-database assertions listed above. PostgreSQL also races task creation against an
 out-of-service transition on two real connections and proves that exactly one wins.
 
+The property-workspace extension then creates a company-scoped cancellation policy,
+updates the operating profile through `saveProperty`, and reads the complete detail
+back in every physical database. The assertion covers the display name, local clocks,
+long-stay policy, preserved address, preloaded default policy, durable content feed and
+cross-database isolation.
+
+| driver | physical databases | profile updates | elapsed | updates/s | settings, address and policy |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 13.5 ms | 594 | complete |
+| PostgreSQL 17 | 4 | 4 | 21.1 ms | 190 | complete |
+
+These figures measure the guarded domain update plus detail read, not form rendering or
+operator input. The same runs kept every prior booking, inventory, folio, housekeeping,
+night-audit, stay-notice and PostgreSQL contention assertion green.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so

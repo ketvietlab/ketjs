@@ -101,6 +101,124 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   })
 
   await e2e.client.login({ login: 'admin', password: 'hospitality-e2e' })
+
+  const propertyList = await e2e.client.get('/admin/hospitality/properties?lang=vi')
+  const propertyListHtml = await propertyList.text()
+  assert.equal(propertyList.status, 200, propertyListHtml)
+  assert.match(propertyListHtml, /Tạo cơ sở/)
+  assert.match(propertyListHtml, /\/admin\/hospitality\/properties\/hotel\?lang=vi/)
+  assert.doesNotMatch(propertyListHtml, /hospitality_core\./)
+
+  const preservedProperty = await e2e.client.post(
+    '/admin/hospitality/properties/hotel?lang=en',
+    new URLSearchParams({
+      code: 'HCM',
+      name: 'Ket Hotel',
+      publicName: 'Ket Hotel Saigon',
+      accommodationType: 'hotel',
+      starRating: '0',
+      timezone: 'Asia/Ho_Chi_Minh',
+      defaultCheckIn: '14:00',
+      defaultCheckOut: '12:00',
+      enforceTimes: '1',
+      longStayBillOnCheckIn: '1',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(preservedProperty.status, 303, await preservedProperty.clone().text())
+  const preservedPropertyPage = await e2e.client.get(preservedProperty.headers.get('location')!)
+  assert.match(await preservedPropertyPage.text(), /123 Nguyễn Huệ, Thành phố Hồ Chí Minh/)
+
+  const newProperty = await e2e.client.get('/admin/hospitality/properties/new?lang=en')
+  const newPropertyHtml = await newProperty.text()
+  assert.equal(newProperty.status, 200, newPropertyHtml)
+  assert.match(newPropertyHtml, /Create property/)
+  assert.match(newPropertyHtml, /type="time"[^>]*name="defaultCheckIn"[^>]*value="14:00"/)
+  assert.doesNotMatch(newPropertyHtml, /hospitality_core\./)
+
+  const invalidProperty = await e2e.client.post(
+    '/admin/hospitality/properties/new?lang=en',
+    new URLSearchParams({
+      code: 'TZ-BAD',
+      name: 'Invalid timezone property',
+      accommodationType: 'hotel',
+      starRating: '0',
+      timezone: 'Asia/Nowhere',
+      defaultCheckIn: '14:00',
+      defaultCheckOut: '12:00',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const invalidPropertyHtml = await invalidProperty.text()
+  assert.equal(invalidProperty.status, 200, invalidPropertyHtml)
+  assert.match(invalidPropertyHtml, /Timezone must be a valid IANA name/)
+
+  const createdProperty = await e2e.client.post(
+    '/admin/hospitality/properties/new?lang=vi',
+    new URLSearchParams({
+      code: 'DAD',
+      name: 'Két Hotel Đà Nẵng',
+      publicName: 'Két Riverside',
+      accommodationType: 'boutique',
+      starRating: '4',
+      timezone: 'Asia/Ho_Chi_Minh',
+      defaultCheckIn: '15:00',
+      defaultCheckOut: '11:00',
+      enforceTimes: '1',
+      longStayBillOnCheckIn: '1',
+      minimumGuestAge: '18',
+      description: 'Khách sạn ven sông dành cho chuyến đi thành phố.',
+      houseRules: 'Không hút thuốc trong phòng.',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(createdProperty.status, 303, await createdProperty.clone().text())
+  const propertyLocation = createdProperty.headers.get('location') ?? ''
+  assert.match(propertyLocation, /^\/admin\/hospitality\/properties\/[^?]+\?status=created&lang=vi$/)
+  const propertyDetailPath = propertyLocation.split('?')[0]!
+  const createdPropertyPage = await e2e.client.get(propertyLocation)
+  const createdPropertyHtml = await createdPropertyPage.text()
+  assert.match(createdPropertyHtml, /Đã tạo cơ sở lưu trú/)
+  assert.match(createdPropertyHtml, /Két Riverside/)
+  assert.match(createdPropertyHtml, /15:00/)
+  assert.doesNotMatch(createdPropertyHtml, /hospitality_core\./)
+
+  const updatedProperty = await e2e.client.post(
+    `${propertyDetailPath}?lang=en`,
+    new URLSearchParams({
+      code: 'DAD',
+      name: 'Ket Hotel Da Nang',
+      publicName: 'Ket Riverside Hotel',
+      accommodationType: 'boutique',
+      starRating: '5',
+      timezone: 'Asia/Ho_Chi_Minh',
+      defaultCheckIn: '15:00',
+      defaultCheckOut: '11:00',
+      enforceTimes: '1',
+      childrenStayFree: '1',
+      minimumGuestAge: '18',
+      description: 'A riverside city stay.',
+      houseRules: 'No smoking in guest rooms.',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(updatedProperty.status, 303, await updatedProperty.clone().text())
+  const updatedPropertyPage = await e2e.client.get(updatedProperty.headers.get('location')!)
+  const updatedPropertyHtml = await updatedPropertyPage.text()
+  assert.match(updatedPropertyHtml, /Property settings saved/)
+  assert.match(updatedPropertyHtml, /Ket Riverside Hotel/)
+  assert.match(updatedPropertyHtml, /value="5"/)
+  assert.doesNotMatch(updatedPropertyHtml, /hospitality_core\./)
+
   const directQuote = await e2e.client.post(
     '/admin/hospitality/reservations',
     new URLSearchParams({
