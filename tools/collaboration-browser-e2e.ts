@@ -208,6 +208,7 @@ const replenishmentEvidenceDir = resolve('docs/assets/inventory-replenishment')
 const forecastEvidenceDir = resolve('docs/assets/inventory-forecast')
 const quotationEvidenceDir = resolve('docs/assets/sales-quotation-list')
 const saleOrderEvidenceDir = resolve('docs/assets/sales-order-detail')
+const salesOrderListEvidenceDir = resolve('docs/assets/sales-order-list')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -220,6 +221,7 @@ try {
   await mkdir(forecastEvidenceDir, { recursive: true })
   await mkdir(quotationEvidenceDir, { recursive: true })
   await mkdir(saleOrderEvidenceDir, { recursive: true })
+  await mkdir(salesOrderListEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -321,6 +323,11 @@ try {
       name: 'sale-order-detail',
       path: '/admin/sales/quotations/quotation-collab?lang=vi',
       ready: `document.querySelector('#sale-order-line-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
+    },
+    {
+      name: 'sales-order-list',
+      path: '/admin/sales/orders?lang=vi',
+      ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1740,6 +1747,97 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(saleOrderEvidenceDir, 'sales-order-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'sales-order-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            customer: document.querySelector('[data-ui="table"]')?.textContent.includes('Trần Điều Phối'),
+            invoiceStatus: document.querySelector('[data-ui="table"]')?.textContent.includes('Chờ lập hoá đơn'),
+            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/sales/orders/sales-order-collab"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          customer: true,
+          invoiceStatus: true,
+          detailLink: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(salesOrderListEvidenceDir, 'sales-orders-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/orders?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            title: document.body.textContent.includes('Confirmed sales orders'),
+            invoiceStatus: document.querySelector('[data-ui="table"]')?.textContent.includes('To Invoice'),
+            localizedLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/sales/orders/sales-order-collab?lang=en"]')),
+            overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        { title: true, invoiceStatus: true, localizedLink: true, overflow: false },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(salesOrderListEvidenceDir, 'sales-orders-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/orders?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            tableVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0,
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
+          })`,
+        ),
+        { horizontalOverflow: false, tableVisible: true, chatter: false },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(salesOrderListEvidenceDir, 'sales-orders-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/orders?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(salesOrderListEvidenceDir, 'sales-orders-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,

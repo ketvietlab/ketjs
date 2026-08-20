@@ -126,6 +126,10 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     summary: 'Xác nhận lịch giao hàng',
     dueDate: '2026-08-20',
   })
+  const emptyOrdersPage = await e2e.client.get('/admin/sales/orders?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await emptyOrdersPage.text(), /Chưa có đơn bán hàng/)
   await call('sale.sendQuotation', { id: 'so-1' })
   assert.equal((await call<Row>('sale.confirmOrder', { id: 'so-1' })).value.pickingId, 'so-1:delivery')
   await call('stock.confirmPicking', { id: 'so-1:delivery' })
@@ -158,6 +162,12 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     const html = await response.text()
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
+    if (path === '/admin/sales/orders') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /Đơn bán đã xác nhận/)
+      assert.match(html, /Khách hàng Minh Anh/)
+      assert.doesNotMatch(html, /data-island="mail\.chatter"/)
+    }
     if (path === '/admin/sales/orders/so-1') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /data-ui="record-aside"/)
@@ -203,6 +213,13 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
   })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Sales Order Detail/)
+  const englishOrders = await e2e.client.get('/admin/sales/orders?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const englishOrdersHtml = await englishOrders.text()
+  assert.match(englishOrdersHtml, /Confirmed sales orders/)
+  assert.match(englishOrdersHtml, /href="\/admin\/sales\/orders\/so-1\?lang=en"/)
+  assert.doesNotMatch(englishOrdersHtml, /data-island="mail\.chatter"/)
 
   await call('sale.createOrder', {
     id: 'so-ui',
