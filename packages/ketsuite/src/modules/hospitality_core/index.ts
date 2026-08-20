@@ -4,6 +4,7 @@ import { housekeeping } from './housekeeping.ts'
 import { content } from './content.ts'
 import { inventory } from './inventory.ts'
 import { operations } from './operations.ts'
+import { services } from './services.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
@@ -13,14 +14,14 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'hospitality_core',
   version: '0.1.0',
-  depends: ['backend', 'storage', 'partner', 'address'],
+  depends: ['backend', 'storage', 'partner', 'address', 'uom', 'product'],
   app: true,
   title: 'Khách sạn',
   summary: 'Cơ sở lưu trú, loại phòng, phòng, tiện nghi và chính sách vận hành.',
   category: 'Khách sạn',
   models,
   relations,
-  functions: { ...functions, ...inventory, ...operations, ...housekeeping, ...content },
+  functions: { ...functions, ...inventory, ...operations, ...housekeeping, ...content, ...services },
   routes,
   menus,
   messages,
@@ -41,6 +42,8 @@ export {
   RATE_TYPES,
   MEAL_PLANS,
   CHARGE_TYPES,
+  PROPERTY_CHARGE_TYPES,
+  EXTRA_RECURRENCES,
   DOCUMENT_TYPES,
   FOLIO_STATES,
   GENDERS,
@@ -66,6 +69,8 @@ export type {
   RateType,
   MealPlan,
   ChargeType,
+  PropertyChargeType,
+  ExtraRecurrence,
   DocumentType,
   FolioState,
   Gender,
