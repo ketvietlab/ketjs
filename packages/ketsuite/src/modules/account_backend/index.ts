@@ -16,7 +16,7 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { accountingDashboard, movesScreen, optionsOf, reportScreen } from './screens.ts'
+import { accountingDashboard, movesScreen, optionsOf } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
@@ -24,6 +24,7 @@ import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { paymentTermsScreen } from './payment-terms-screen.tsx'
+import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
@@ -991,11 +992,12 @@ export default defineModule({
           : []
         return document(ctx, url, req, 'account_backend.partnerStatement.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.partnerStatement.title'),
+          return partnerLedgerScreen(tr, {
             frame: shell,
-            action: '/admin/partner-statement',
+            action: `/admin/partner-statement${localeSuffix(url)}`,
             rows,
+            currency,
+            selected: Boolean(partnerId),
             fields: [
               {
                 name: 'partnerId',
@@ -1003,41 +1005,6 @@ export default defineModule({
                 type: 'select',
                 value: partnerId,
                 options: choices(data.partners, true),
-              },
-            ],
-            columns: [
-              {
-                key: 'date',
-                label: tr('account_backend.field.date'),
-                cell: (row) => String((row.move as AnyRow)?.date ?? '').slice(0, 10),
-                priority: 'primary',
-              },
-              {
-                key: 'entry',
-                label: tr('account_backend.field.entry'),
-                cell: (row) => String((row.move as AnyRow)?.name ?? ''),
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'residual',
-                label: tr('account_backend.field.residual'),
-                cell: (row) => formatMoney(tr, row.amountResidual, currency),
-                align: 'end',
-                kind: 'currency',
               },
             ],
           })
@@ -1193,6 +1160,19 @@ const vi: Record<string, string> = {
   'ledger.empty': 'Không có phát sinh phù hợp',
   'ledger.emptyHint': 'Thay đổi tài khoản hoặc khoảng ngày để xem dữ liệu khác.',
   'partnerStatement.title': 'Sổ đối tác',
+  'partnerLedger.kicker': 'Công nợ đối tác',
+  'partnerLedger.subtitle': 'Theo dõi phát sinh phải thu, phải trả và số còn lại theo đối tác.',
+  'partnerLedger.summary.debit': 'Tổng Nợ',
+  'partnerLedger.summary.credit': 'Tổng Có',
+  'partnerLedger.summary.residual': 'Còn lại',
+  'partnerLedger.filter.title': 'Chọn đối tác',
+  'partnerLedger.filter.hint': 'Báo cáo chỉ bao gồm tài khoản phải thu và phải trả trên bút toán đã ghi sổ.',
+  'partnerLedger.result.title': 'Chi tiết công nợ',
+  'partnerLedger.result.hint': 'Theo dõi chứng từ, phát sinh Nợ/Có và phần chưa đối soát.',
+  'partnerLedger.select': 'Chưa chọn đối tác',
+  'partnerLedger.selectHint': 'Chọn một đối tác để xem sổ công nợ.',
+  'partnerLedger.empty': 'Đối tác chưa có phát sinh',
+  'partnerLedger.emptyHint': 'Đối tác đã chọn không có bút toán phải thu hoặc phải trả đã ghi sổ.',
   'lines.title': 'Dòng bút toán',
   'lines.add': 'Thêm dòng bút toán',
   'move.kicker': 'Chứng từ kế toán',
@@ -1414,6 +1394,19 @@ const en: Record<string, string> = {
   'ledger.empty': 'No matching movements',
   'ledger.emptyHint': 'Change the account or date range to view other data.',
   'partnerStatement.title': 'Partner ledger',
+  'partnerLedger.kicker': 'Partner receivables and payables',
+  'partnerLedger.subtitle': 'Track receivable, payable, and residual movements by partner.',
+  'partnerLedger.summary.debit': 'Total debit',
+  'partnerLedger.summary.credit': 'Total credit',
+  'partnerLedger.summary.residual': 'Residual',
+  'partnerLedger.filter.title': 'Select a partner',
+  'partnerLedger.filter.hint': 'The report includes only posted receivable and payable journal items.',
+  'partnerLedger.result.title': 'Partner movements',
+  'partnerLedger.result.hint': 'Review documents, debit/credit movements, and unreconciled amounts.',
+  'partnerLedger.select': 'No partner selected',
+  'partnerLedger.selectHint': 'Choose a partner to view its ledger.',
+  'partnerLedger.empty': 'No partner movements',
+  'partnerLedger.emptyHint': 'The selected partner has no posted receivable or payable items.',
   'lines.title': 'Journal items',
   'lines.add': 'Add journal item',
   'move.kicker': 'Accounting document',
