@@ -10,10 +10,12 @@ async function bootSale(t: TestContext) {
   const scope = { company: 'acme', branches: null },
     fixture = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
+  await fixture('partner.savePartner', { id: 'admin-party', kind: 'person', name: 'Administrator' })
   await fixture('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng Minh Anh' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
   await fixture('user.createUser', {
     id: 'admin',
+    partnerId: 'admin-party',
     login: 'admin',
     password: 'correct horse',
     name: 'Administrator',
@@ -94,6 +96,36 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     productUomId: 'unit',
     taxId: 'vat10',
   })
+  await call('sale_mail_backend.follow', { targetId: 'so-1' })
+  await call('sale_mail_backend.post', {
+    id: 'sale-message-1',
+    targetId: 'so-1',
+    kind: 'note',
+    body: 'Ghi chú nội bộ trên đơn bán.',
+  })
+  assert.equal(
+    (await call<{ messages: Row[] }>('sale_mail_backend.timeline', { targetId: 'so-1' })).value.messages[0]
+      ?.body,
+    'Ghi chú nội bộ trên đơn bán.',
+  )
+  await call('activity.saveType', {
+    id: 'sale-follow-up',
+    name: 'Theo dõi khách hàng',
+    category: 'todo',
+    icon: 'check',
+    defaultDelayDays: 0,
+    chainingPolicy: 'none',
+    sequence: 10,
+    active: true,
+  })
+  await call('sale_activity_backend.schedule', {
+    id: 'sale-activity-1',
+    targetId: 'so-1',
+    typeId: 'sale-follow-up',
+    assigneeUserId: 'admin',
+    summary: 'Xác nhận lịch giao hàng',
+    dueDate: '2026-08-20',
+  })
   await call('sale.sendQuotation', { id: 'so-1' })
   assert.equal((await call<Row>('sale.confirmOrder', { id: 'so-1' })).value.pickingId, 'so-1:delivery')
   await call('stock.confirmPicking', { id: 'so-1:delivery' })
@@ -126,6 +158,15 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     const html = await response.text()
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
+    if (path === '/admin/sales/orders/so-1') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /data-ui="record-aside"/)
+      assert.match(html, /data-island="mail\.chatter"/)
+      assert.match(html, /data-island="activity\.record"/)
+      assert.match(html, /data-island="sale\.editor"/)
+      assert.match(html, /data-scope="sale-order"/)
+      assert.match(html, /Thông tin đơn hàng/)
+    }
   }
   const quotationsPage = await e2e.client.get('/admin/sales/quotations?lang=vi', {
     headers: { accept: 'text/html' },
@@ -162,4 +203,65 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
   })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Sales Order Detail/)
+
+  await call('sale.createOrder', {
+    id: 'so-ui',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+    pricelistId: 'retail',
+  })
+  const invalidPartial = await e2e.client.post(
+    '/admin/sales/quotations/so-ui?lang=vi',
+    new URLSearchParams({
+      action: 'add-line',
+      productId: '',
+      productUomQty: '1',
+      productUomId: 'unit',
+    }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-ket-partial': 'sale-order',
+      },
+    },
+  )
+  assert.equal(invalidPartial.status, 422)
+  assert.match(await invalidPartial.text(), /Dữ liệu chưa hợp lệ/)
+  const partial = await e2e.client.post(
+    '/admin/sales/quotations/so-ui?lang=vi',
+    new URLSearchParams({
+      action: 'add-line',
+      productId: 'chair',
+      productUomQty: '1',
+      productUomId: 'unit',
+      taxId: 'vat10',
+    }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-ket-partial': 'sale-order',
+      },
+    },
+  )
+  assert.equal(partial.status, 200)
+  assert.match(partial.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
+  assert.equal(partial.headers.get('x-ket-location'), '/admin/sales/quotations/so-ui?lang=vi')
+  const partialHtml = await partial.text()
+  assert.match(partialHtml, /data-ket-slot="sale\.order-header"/)
+  assert.match(partialHtml, /data-ket-slot="sale\.order-body"/)
+  assert.match(partialHtml, /Ghế công thái học/)
+  assert.doesNotMatch(partialHtml, /data-island="mail\.chatter"/)
+  const confirmedPartial = await e2e.client.post(
+    '/admin/sales/quotations/so-ui?lang=vi',
+    new URLSearchParams({ action: 'confirm' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-ket-partial': 'sale-order',
+      },
+    },
+  )
+  assert.equal(confirmedPartial.status, 200)
+  assert.equal(confirmedPartial.headers.get('x-ket-location'), '/admin/sales/orders/so-ui?lang=vi')
+  assert.match(await confirmedPartial.text(), /Đơn bán hàng/)
 })
