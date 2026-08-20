@@ -39,6 +39,11 @@ try {
       markers: ['mail.chatter', 'activity.record', 'record-workspace', 'stock.editor'],
     },
     {
+      label: 'Inventory adjustment',
+      path: '/admin/inventory?lang=vi',
+      markers: ['inventory-adjustment-form', 'record-workspace', 'Tồn kho hiện tại'],
+    },
+    {
       label: 'My activities',
       path: '/admin/activities?lang=vi&today=2026-08-20',
       markers: ['Hoạt động của tôi'],

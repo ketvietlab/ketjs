@@ -254,6 +254,11 @@ try {
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
+      name: 'inventory-adjustment',
+      path: '/admin/inventory?lang=vi',
+      ready: `document.querySelector('#inventory-adjustment-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -718,6 +723,50 @@ try {
         `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('Sản phẩm Browser E2E') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
       )
     }
+    if (screen.name === 'inventory-adjustment') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            productSelector: document.querySelector('#inventory-adjustment-form [name="productId"]')?.tagName === 'SELECT',
+            stockRows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#inventory-adjustment-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          productSelector: true,
+          stockRows: 1,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#inventory-adjustment-form')
+          form.querySelector('[name="productId"]').value = 'variant-collab'
+          form.querySelector('[name="locationId"]').value = 'wh:stock'
+          form.querySelector('[name="inventoryLocationId"]').value = 'inventory-adjustment'
+          form.querySelector('[name="productUomId"]').value = 'unit'
+          form.querySelector('[name="countedQuantity"]').value = '21'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="notice"][data-tone="positive"]')?.textContent.includes('Đã áp dụng kiểm kê') && document.querySelector('[data-ui="table"]')?.textContent.includes('21')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+    }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -842,6 +891,7 @@ try {
             'authenticated product and transfer islands reached ready state',
             'Product save replaced only its record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Transfer actions replaced only the record header/body and preserved Chatter, Activity and sidebar DOM identity',
+            'Inventory adjustment selected a product, applied a count through real browser HTTP and rendered no Chatter',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',
