@@ -35,6 +35,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
     building: { belongsTo: 'hospitality_core.Building', by: 'buildingId' },
     floor: { belongsTo: 'hospitality_core.Floor', by: 'floorId' },
+    cleaningTasks: { hasMany: 'hospitality_core.CleaningTask', by: 'roomId' },
   },
   'hospitality_core.Amenity': {
     category: { belongsTo: 'hospitality_core.AmenityCategory', by: 'categoryId' },
@@ -98,5 +99,10 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
     frontAttachment: { belongsTo: 'storage.Attachment', by: 'frontAttachmentId' },
     backAttachment: { belongsTo: 'storage.Attachment', by: 'backAttachmentId' },
+  },
+  'hospitality_core.CleaningTask': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    room: { belongsTo: 'hospitality_core.Room', by: 'roomId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
   },
 }

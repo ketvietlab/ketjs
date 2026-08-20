@@ -33,6 +33,9 @@ export const CHARGE_TYPES = ['room', 'minibar', 'spa', 'restaurant', 'service', 
 export const DOCUMENT_TYPES = ['cccd', 'cmnd', 'passport', 'other'] as const
 export const GENDERS = ['male', 'female', 'other'] as const
 export const OCR_STATES = ['pending', 'done', 'failed'] as const
+export const CLEANING_TASK_TYPES = ['checkout_clean', 'daily_clean', 'maintenance', 'inspection'] as const
+export const CLEANING_TASK_PRIORITIES = ['normal', 'urgent'] as const
+export const CLEANING_TASK_STATES = ['todo', 'in_progress', 'done', 'cancelled'] as const
 
 export type AccommodationType = (typeof ACCOMMODATION_TYPES)[number]
 export type RoomStatus = (typeof ROOM_STATUSES)[number]
@@ -51,3 +54,6 @@ export type ChargeType = (typeof CHARGE_TYPES)[number]
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 export type Gender = (typeof GENDERS)[number]
 export type OcrState = (typeof OCR_STATES)[number]
+export type CleaningTaskType = (typeof CLEANING_TASK_TYPES)[number]
+export type CleaningTaskPriority = (typeof CLEANING_TASK_PRIORITIES)[number]
+export type CleaningTaskState = (typeof CLEANING_TASK_STATES)[number]
