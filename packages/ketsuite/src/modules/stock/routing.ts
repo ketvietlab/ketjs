@@ -242,7 +242,11 @@ export const routingFunctions: Record<string, FnSpec> = {
     input: { routeId: 'id?' },
     effects: ['read:stock.Rule'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('stock.Rule', args.routeId ? { routeId: args.routeId } : {}),
+    handler: (ctx, args) =>
+      ctx.db.select('stock.Rule', {
+        active: true,
+        ...(args.routeId ? { routeId: args.routeId } : {}),
+      }),
   }),
   listOrderpoints: defineFn({
     input: {},
