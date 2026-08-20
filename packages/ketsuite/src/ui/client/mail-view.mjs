@@ -74,8 +74,31 @@ const errorText = (error) =>
     ? String(error.message)
     : 'The collaboration request failed'
 
-const callApi = async (name, input) => {
-  const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
+const requestScope = () => {
+  const pending = new Set()
+  let disposed = false
+  return {
+    fetch: async (url, options = {}) => {
+      if (disposed) throw new DOMException('Island disposed', 'AbortError')
+      const controller = new AbortController()
+      pending.add(controller)
+      try {
+        return await fetch(url, { ...options, signal: controller.signal })
+      } finally {
+        pending.delete(controller)
+      }
+    },
+    disposed: () => disposed,
+    dispose: () => {
+      disposed = true
+      for (const controller of pending) controller.abort()
+      pending.clear()
+    },
+  }
+}
+
+const callApi = async (request, name, input) => {
+  const response = await request(`/_ket/fn/${encodeURIComponent(name)}`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -90,12 +113,12 @@ const callApi = async (name, input) => {
   return payload.value
 }
 
-const upload = async (file, messageId) => {
+const upload = async (request, file, messageId) => {
   const form = new FormData()
   form.set('file', file)
   form.set('resModel', 'mail.Message')
   form.set('resId', messageId)
-  const response = await fetch('/files', { method: 'POST', credentials: 'same-origin', body: form })
+  const response = await request('/files', { method: 'POST', credentials: 'same-origin', body: form })
   const payload = await response.json()
   if (!response.ok) throw new Error(String(payload.message ?? `HTTP ${response.status}`))
   return String(payload.id)
@@ -119,7 +142,9 @@ export function createChatterView(runtime, props, seed = {}) {
     },
   )
   const bridge = apiFor(String(props.resModel))
+  const requests = requestScope()
   let pollCount = 0
+  let pollTimer = null
 
   const load = async ({ append = false, quiet = false } = {}) => {
     if (!bridge) {
@@ -130,7 +155,7 @@ export function createChatterView(runtime, props, seed = {}) {
     if (!quiet) status.set('loading')
     try {
       const current = page()
-      const result = await callApi(`${bridge}.timeline`, {
+      const result = await callApi(requests.fetch, `${bridge}.timeline`, {
         targetId: props.resId,
         limit: append ? 20 : Math.max(20, current.messages.length),
         offset: append ? current.messages.length : 0,
@@ -139,6 +164,7 @@ export function createChatterView(runtime, props, seed = {}) {
       error.set('')
       status.set('ready')
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     }
@@ -156,8 +182,9 @@ export function createChatterView(runtime, props, seed = {}) {
     try {
       const id = crypto.randomUUID()
       const selected = values.get('attachment')
-      const attachmentIds = selected instanceof File && selected.size > 0 ? [await upload(selected, id)] : []
-      await callApi(`${bridge}.post`, {
+      const attachmentIds =
+        selected instanceof File && selected.size > 0 ? [await upload(requests.fetch, selected, id)] : []
+      await callApi(requests.fetch, `${bridge}.post`, {
         id,
         targetId: props.resId,
         kind: String(values.get('kind') ?? 'comment'),
@@ -168,6 +195,7 @@ export function createChatterView(runtime, props, seed = {}) {
       await load()
       composerKind.set(null)
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -179,9 +207,12 @@ export function createChatterView(runtime, props, seed = {}) {
     if (!bridge || busy()) return
     busy.set(true)
     try {
-      await callApi(`${bridge}.${page().following ? 'unfollow' : 'follow'}`, { targetId: props.resId })
+      await callApi(requests.fetch, `${bridge}.${page().following ? 'unfollow' : 'follow'}`, {
+        targetId: props.resId,
+      })
       await load({ quiet: true })
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -190,9 +221,10 @@ export function createChatterView(runtime, props, seed = {}) {
   }
 
   const schedulePoll = () => {
-    if (pollCount >= 240) return
+    if (requests.disposed() || pollCount >= 240) return
     pollCount++
-    setTimeout(async () => {
+    pollTimer = setTimeout(async () => {
+      if (requests.disposed()) return
       if (document.visibilityState === 'visible' && !busy()) await load({ quiet: true })
       schedulePoll()
     }, 15_000)
@@ -200,11 +232,12 @@ export function createChatterView(runtime, props, seed = {}) {
 
   if (typeof window !== 'undefined')
     queueMicrotask(async () => {
+      if (requests.disposed()) return
       await load()
       schedulePoll()
     })
 
-  return () => {
+  const view = () => {
     const data = page()
     return html`<section data-ui="chatter" data-state=${status()} aria-label=${labels.title}>
       <div data-ui="chatter-kinds" role="toolbar" aria-label=${labels.title}>
@@ -279,25 +312,37 @@ export function createChatterView(runtime, props, seed = {}) {
       }
     </section>`
   }
+  return {
+    view,
+    dispose: () => {
+      if (pollTimer !== null) clearTimeout(pollTimer)
+      requests.dispose()
+    },
+  }
 }
 
 export function createInboxIndicatorView(runtime, props, initialCount = 0) {
   const { html, signal } = runtime
   const labels = labelsOf(props)
   const count = signal(initialCount)
+  const requests = requestScope()
   const load = async () => {
     try {
-      const result = await callApi('mail.countUnread', {})
+      const result = await callApi(requests.fetch, 'mail.countUnread', {})
       count.set(Number(result.count ?? 0))
     } catch {
+      if (requests.disposed()) return
       count.set(0)
     }
   }
   if (typeof window !== 'undefined') queueMicrotask(load)
-  return () => html`<a data-ui="mail-indicator" href="/admin/inbox" title=${labels.inbox} aria-label=${labels.inbox}>
+  return {
+    view: () => html`<a data-ui="mail-indicator" href="/admin/inbox" title=${labels.inbox} aria-label=${labels.inbox}>
     <svg data-ui="mail-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-3.8A4 4 0 0 1 1 15V7a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4Z" />
     </svg>
     ${count() > 0 ? html`<span data-ui="mail-indicator-count">${count()}</span>` : ''}
-  </a>`
+  </a>`,
+    dispose: requests.dispose,
+  }
 }

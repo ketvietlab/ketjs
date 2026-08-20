@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { json, text, withHeaders } from 'ketjs'
+import { NAVIGATION_TYPE, fragment, json, text, withHeaders } from 'ketjs'
 import type { RouteEntry, Route, ServeContext } from 'ketjs'
 import {
   PRODUCT_DETAIL_TABS,
@@ -455,61 +455,72 @@ export const routes: Record<string, RouteEntry> = {
           ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
           : Promise.resolve(null),
       ])
+      const body = productDetailScreen(
+        _,
+        { ...row, ...(stockConfig as Record<string, unknown> | null) },
+        {
+          status: 'ready',
+          uploadAction: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
+          images: mediaRows.map((image, index) => ({
+            id: image.id,
+            src: `/files/${image.attachmentId}`,
+            alt: image.alt || image.attachment?.name || row.name,
+            primary: image.primary,
+            actions: {
+              primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary?tab=media`),
+              remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove?tab=media`),
+              ...(index > 0
+                ? {
+                    moveUp: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-up?tab=media`),
+                  }
+                : {}),
+              ...(index + 1 < mediaRows.length
+                ? {
+                    moveDown: inLocale(
+                      url,
+                      `/admin/products/${row.id}/media/${image.id}/move-down?tab=media`,
+                    ),
+                  }
+                : {}),
+            },
+          })),
+          extension: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.media', {
+                templateId: row.id,
+              }),
+        },
+        {
+          ...options,
+          variants,
+          stockEnabled: hasStock,
+          errors: invalidErrors(url, _),
+          editor: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.editor', {
+                identity: `template:${row.id}`,
+                templateId: row.id,
+                lang,
+              }),
+        },
+        savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'product_backend:template.collaboration', {
+              resModel: 'product.Template',
+              resId: row.id,
+              lang,
+            }),
+        savedPartial ? {} : await frameFor(ctx, url, req),
+        localeSuffix(url),
+        activeTab,
+        savedPartial,
+      )
+      if (savedPartial)
+        return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
         title: row.name,
-        body: productDetailScreen(
-          _,
-          { ...row, ...(stockConfig as Record<string, unknown> | null) },
-          {
-            status: 'ready',
-            uploadAction: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
-            images: mediaRows.map((image, index) => ({
-              id: image.id,
-              src: `/files/${image.attachmentId}`,
-              alt: image.alt || image.attachment?.name || row.name,
-              primary: image.primary,
-              actions: {
-                primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary?tab=media`),
-                remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove?tab=media`),
-                ...(index > 0
-                  ? {
-                      moveUp: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-up?tab=media`),
-                    }
-                  : {}),
-                ...(index + 1 < mediaRows.length
-                  ? {
-                      moveDown: inLocale(
-                        url,
-                        `/admin/products/${row.id}/media/${image.id}/move-down?tab=media`,
-                      ),
-                    }
-                  : {}),
-              },
-            })),
-            extension: await ctx.joint(url, req, 'product_backend:template.media', {
-              templateId: row.id,
-            }),
-          },
-          {
-            ...options,
-            variants,
-            stockEnabled: hasStock,
-            errors: invalidErrors(url, _),
-            editor: await ctx.joint(url, req, 'product_backend:template.editor', {
-              templateId: row.id,
-              lang,
-            }),
-          },
-          await ctx.joint(url, req, 'product_backend:template.collaboration', {
-            resModel: 'product.Template',
-            resId: row.id,
-            lang,
-          }),
-          await frameFor(ctx, url, req),
-          localeSuffix(url),
-          activeTab,
-        ),
+        body,
       })
     },
   '/admin/products/{id}/variants/generate':
@@ -639,71 +650,82 @@ export const routes: Record<string, RouteEntry> = {
       ])
       if (!current || current.templateId !== params.id || !template)
         return text('Variant not found', { status: 404 })
+      const body = variantScreen(
+        _,
+        params.id,
+        current,
+        {
+          status: 'ready',
+          uploadAction: inLocale(
+            url,
+            `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
+          ),
+          images: mediaRows.map((image, index) => ({
+            id: image.id,
+            src: `/files/${image.attachmentId}`,
+            alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
+            primary: image.primary,
+            actions: {
+              primary: inLocale(
+                url,
+                `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary?tab=media`,
+              ),
+              remove: inLocale(
+                url,
+                `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove?tab=media`,
+              ),
+              ...(index > 0
+                ? {
+                    moveUp: inLocale(
+                      url,
+                      `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up?tab=media`,
+                    ),
+                  }
+                : {}),
+              ...(index + 1 < mediaRows.length
+                ? {
+                    moveDown: inLocale(
+                      url,
+                      `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down?tab=media`,
+                    ),
+                  }
+                : {}),
+            },
+          })),
+          extension: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:variant.media', {
+                productId: params.variantId,
+              }),
+        },
+        options.uoms,
+        template,
+        savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'product_backend:variant.collaboration', {
+              resModel: 'product.Product',
+              resId: params.variantId,
+              lang,
+            }),
+        savedPartial ? {} : await frameFor(ctx, url, req),
+        invalidErrors(url, _),
+        localeSuffix(url),
+        savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'product_backend:variant.editor', {
+              identity: `variant:${params.variantId}`,
+              productId: params.variantId,
+              lang,
+            }),
+        activeTab,
+        savedPartial,
+      )
+      if (savedPartial)
+        return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
         title: String(current.defaultCode || current.id),
-        body: variantScreen(
-          _,
-          params.id,
-          current,
-          {
-            status: 'ready',
-            uploadAction: inLocale(
-              url,
-              `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
-            ),
-            images: mediaRows.map((image, index) => ({
-              id: image.id,
-              src: `/files/${image.attachmentId}`,
-              alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
-              primary: image.primary,
-              actions: {
-                primary: inLocale(
-                  url,
-                  `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary?tab=media`,
-                ),
-                remove: inLocale(
-                  url,
-                  `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove?tab=media`,
-                ),
-                ...(index > 0
-                  ? {
-                      moveUp: inLocale(
-                        url,
-                        `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up?tab=media`,
-                      ),
-                    }
-                  : {}),
-                ...(index + 1 < mediaRows.length
-                  ? {
-                      moveDown: inLocale(
-                        url,
-                        `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down?tab=media`,
-                      ),
-                    }
-                  : {}),
-              },
-            })),
-            extension: await ctx.joint(url, req, 'product_backend:variant.media', {
-              productId: params.variantId,
-            }),
-          },
-          options.uoms,
-          template,
-          await ctx.joint(url, req, 'product_backend:variant.collaboration', {
-            resModel: 'product.Product',
-            resId: params.variantId,
-            lang,
-          }),
-          await frameFor(ctx, url, req),
-          invalidErrors(url, _),
-          localeSuffix(url),
-          await ctx.joint(url, req, 'product_backend:variant.editor', {
-            productId: params.variantId,
-            lang,
-          }),
-          activeTab,
-        ),
+        body,
       })
     },
   '/admin/products/{id}/variants/{variantId}/media':

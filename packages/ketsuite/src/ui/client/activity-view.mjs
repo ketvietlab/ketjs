@@ -74,8 +74,31 @@ const localDate = () => {
 const errorText = (error) =>
   error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Activity request failed'
 
-const callApi = async (name, input) => {
-  const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
+const requestScope = () => {
+  const pending = new Set()
+  let disposed = false
+  return {
+    fetch: async (url, options = {}) => {
+      if (disposed) throw new DOMException('Island disposed', 'AbortError')
+      const controller = new AbortController()
+      pending.add(controller)
+      try {
+        return await fetch(url, { ...options, signal: controller.signal })
+      } finally {
+        pending.delete(controller)
+      }
+    },
+    disposed: () => disposed,
+    dispose: () => {
+      disposed = true
+      for (const controller of pending) controller.abort()
+      pending.clear()
+    },
+  }
+}
+
+const callApi = async (request, name, input) => {
+  const response = await request(`/_ket/fn/${encodeURIComponent(name)}`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -90,12 +113,12 @@ const callApi = async (name, input) => {
   return payload.value
 }
 
-const upload = async (file, activityId) => {
+const upload = async (request, file, activityId) => {
   const form = new FormData()
   form.set('file', file)
   form.set('resModel', 'activity.Activity')
   form.set('resId', activityId)
-  const response = await fetch('/files', { method: 'POST', credentials: 'same-origin', body: form })
+  const response = await request('/files', { method: 'POST', credentials: 'same-origin', body: form })
   const payload = await response.json()
   if (!response.ok) throw new Error(String(payload.message ?? `HTTP ${response.status}`))
   return String(payload.id)
@@ -112,7 +135,9 @@ export function createRecordActivityView(runtime, props, seed = {}) {
   const types = signal(seed.types ?? [])
   const activities = signal(seed.activities ?? [])
   const bridge = apiFor(String(props.resModel))
+  const requests = requestScope()
   let pollCount = 0
+  let pollTimer = null
 
   const load = async ({ quiet = false } = {}) => {
     if (!bridge) {
@@ -123,14 +148,15 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     if (!quiet) status.set('loading')
     try {
       const [typeRows, result] = await Promise.all([
-        callApi('activity.listTypes', {}),
-        callApi(`${bridge}.list`, { targetId: props.resId, today: localDate() }),
+        callApi(requests.fetch, 'activity.listTypes', {}),
+        callApi(requests.fetch, `${bridge}.list`, { targetId: props.resId, today: localDate() }),
       ])
       types.set(typeRows)
       activities.set(result.activities ?? [])
       error.set('')
       status.set('ready')
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     }
@@ -146,8 +172,9 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     try {
       const id = crypto.randomUUID()
       const selected = values.get('attachment')
-      const attachmentIds = selected instanceof File && selected.size > 0 ? [await upload(selected, id)] : []
-      await callApi(`${bridge}.schedule`, {
+      const attachmentIds =
+        selected instanceof File && selected.size > 0 ? [await upload(requests.fetch, selected, id)] : []
+      await callApi(requests.fetch, `${bridge}.schedule`, {
         id,
         targetId: props.resId,
         typeId: String(values.get('typeId') ?? ''),
@@ -162,6 +189,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       await load({ quiet: true })
       scheduleOpen.set(false)
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -176,7 +204,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     const values = new FormData(form)
     busy.set(true)
     try {
-      await callApi('activity.complete', {
+      await callApi(requests.fetch, 'activity.complete', {
         id: String(form.dataset.id),
         feedback: String(values.get('feedback') ?? ''),
         completedDate: localDate(),
@@ -184,6 +212,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       await load({ quiet: true })
       itemAction.set(null)
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -198,13 +227,14 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     const values = new FormData(form)
     busy.set(true)
     try {
-      await callApi('activity.reschedule', {
+      await callApi(requests.fetch, 'activity.reschedule', {
         id: String(form.dataset.id),
         dueDate: String(values.get('dueDate') ?? ''),
       })
       await load({ quiet: true })
       itemAction.set(null)
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -216,10 +246,11 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     if (busy()) return
     busy.set(true)
     try {
-      await callApi('activity.cancel', { id })
+      await callApi(requests.fetch, 'activity.cancel', { id })
       await load({ quiet: true })
       itemAction.set(null)
     } catch (cause) {
+      if (requests.disposed()) return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -228,20 +259,23 @@ export function createRecordActivityView(runtime, props, seed = {}) {
   }
 
   const schedulePoll = () => {
-    if (pollCount >= 240) return
+    if (requests.disposed() || pollCount >= 240) return
     pollCount++
-    setTimeout(async () => {
+    pollTimer = setTimeout(async () => {
+      if (requests.disposed()) return
       if (document.visibilityState === 'visible' && !busy()) await load({ quiet: true })
       schedulePoll()
     }, 15_000)
   }
   if (typeof window !== 'undefined')
     queueMicrotask(async () => {
+      if (requests.disposed()) return
       await load()
       schedulePoll()
     })
 
-  return () => html`<section data-ui="activity-record" data-state=${status()} aria-label=${labels.title}>
+  return {
+    view: () => html`<section data-ui="activity-record" data-state=${status()} aria-label=${labels.title}>
     <header data-ui="activity-head">
       <h2 data-ui="activity-title">${labels.title}</h2>
       <button data-ui="activity-schedule-trigger" data-active=${scheduleOpen()} data-control="action" data-variant="secondary" data-size="compact" type="button" aria-pressed=${scheduleOpen()} on:click=${() => scheduleOpen.set(!scheduleOpen())} disabled=${busy()}>${labels.newActivity}</button>
@@ -318,7 +352,12 @@ export function createRecordActivityView(runtime, props, seed = {}) {
         </article>`,
       )}
     </div>
-  </section>`
+  </section>`,
+    dispose: () => {
+      if (pollTimer !== null) clearTimeout(pollTimer)
+      requests.dispose()
+    },
+  }
 }
 
 export function createActivityIndicatorView(runtime, props, initial = { count: 0, overdue: 0 }) {
@@ -326,22 +365,27 @@ export function createActivityIndicatorView(runtime, props, initial = { count: 0
   const labels = labelsOf(props)
   const count = signal(Number(initial.count ?? 0))
   const overdue = signal(Number(initial.overdue ?? 0))
+  const requests = requestScope()
   const load = async () => {
     try {
-      const result = await callApi('activity.countDue', { today: localDate() })
+      const result = await callApi(requests.fetch, 'activity.countDue', { today: localDate() })
       count.set(Number(result.count ?? 0))
       overdue.set(Number(result.overdue ?? 0))
     } catch {
+      if (requests.disposed()) return
       count.set(0)
       overdue.set(0)
     }
   }
   if (typeof window !== 'undefined') queueMicrotask(load)
-  return () => html`<a data-ui="activity-indicator" data-overdue=${overdue() > 0} href="/admin/activities" title=${labels.myActivities} aria-label=${labels.myActivities}>
+  return {
+    view: () => html`<a data-ui="activity-indicator" data-overdue=${overdue() > 0} href="/admin/activities" title=${labels.myActivities} aria-label=${labels.myActivities}>
     <svg data-ui="activity-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
     </svg>
     ${count() > 0 ? html`<span data-ui="activity-indicator-count">${count()}</span>` : ''}
-  </a>`
+  </a>`,
+    dispose: requests.dispose,
+  }
 }

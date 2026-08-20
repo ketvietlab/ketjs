@@ -19,12 +19,12 @@ export default defineModule({
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
-    'picking.editor': { props: { pickingId: 'id', lang: 'text?' } },
+    'picking.editor': { props: { identity: 'text', pickingId: 'id', lang: 'text?' } },
     'lot.collaboration': {
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
-    'lot.editor': { props: { lotId: 'id', lang: 'text?' } },
+    'lot.editor': { props: { identity: 'text', lotId: 'id', lang: 'text?' } },
   },
   menus: {
     stock: { label: 'menu.app', icon: 'warehouse', sequence: 30 },

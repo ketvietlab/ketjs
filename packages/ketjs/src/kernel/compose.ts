@@ -777,7 +777,7 @@ export function compose(
           diag.add({ code: 'E_ISLAND_KEY', module: m.name, message: `island "${name}" repeats a key prop` })
         }
         for (const field of def.key) {
-          const spec = (def.props ?? {})[field]
+          const spec = def.props?.[field]
           const parsed = spec === undefined ? null : parseType(spec)
           if (!parsed?.ok || parsed.optional || parsed.base === 'json') {
             diag.add({
