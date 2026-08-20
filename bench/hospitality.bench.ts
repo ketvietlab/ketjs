@@ -222,6 +222,55 @@ try {
   )
   const writeMs = performance.now() - writeStarted
 
+  const propertySettingsStarted = performance.now()
+  const propertySettingsMatch = await Promise.all(
+    keys.map(async (key) => {
+      const policy = await call(key, 'hospitality_core.saveCancellationPolicy', {
+        id: 'property-default-policy',
+        code: 'PROPERTY-DEFAULT',
+        name: 'Benchmark flexible policy',
+        type: 'flexible',
+        freeCancellationHours: 24,
+      })
+      if (!(policy.value as { ok: boolean }).ok) return false
+      const saved = await call(key, 'hospitality_core.saveProperty', {
+        id: 'property',
+        code: 'MAIN',
+        name: `Benchmark ${key}`,
+        publicName: `Benchmark public ${key}`,
+        accommodationType: 'hotel',
+        timezone: 'Asia/Ho_Chi_Minh',
+        defaultCheckIn: '15:00',
+        defaultCheckOut: '11:00',
+        enforceTimes: true,
+        longStayBillOnCheckIn: true,
+        starRating: 4,
+        street1: '123 Benchmark Street',
+        locality: 'Ho Chi Minh City',
+        description: `Property workspace ${key}`,
+        houseRules: 'Synthetic benchmark rules',
+        childrenStayFree: true,
+        minimumGuestAge: 18,
+        defaultCancellationPolicyId: 'property-default-policy',
+      })
+      if (!(saved.value as { ok: boolean }).ok) return false
+      const detail = await call(key, 'hospitality_core.getProperty', { id: 'property' })
+      const value = detail.value as Record<string, unknown>
+      const defaultPolicy = value.defaultCancellationPolicy as Record<string, unknown> | null
+      return (
+        value.publicName === `Benchmark public ${key}` &&
+        value.defaultCheckIn === '15:00' &&
+        value.defaultCheckOut === '11:00' &&
+        value.longStayBillOnCheckIn === true &&
+        value.addressLine === '123 Benchmark Street, Ho Chi Minh City' &&
+        defaultPolicy?.id === 'property-default-policy'
+      )
+    }),
+  ).then((matches) => matches.every(Boolean))
+  const propertySettingsMs = performance.now() - propertySettingsStarted
+  if (!propertySettingsMatch)
+    throw new Error('property workspace settings, address preservation or default policy did not persist')
+
   const contentImagesPerTarget = 3
   const contentStarted = performance.now()
   await Promise.all(
@@ -1130,7 +1179,7 @@ try {
       return Number(rows[0]!.n)
     }),
   )
-  const minimumContentChanges = 1 + 12 + 13 * contentImagesPerTarget + 3
+  const minimumContentChanges = 2 + 12 + 13 * contentImagesPerTarget + 3
   const durableContentChangesPresent = contentChangeCounts.every((count) => count >= minimumContentChanges)
   if (!durableContentChangesPresent)
     throw new Error('property, room-type or media changes were not recorded durably')
@@ -1156,6 +1205,10 @@ try {
         migrateMs: Number(migrateMs.toFixed(1)),
         writeMs: Number(writeMs.toFixed(1)),
         writesPerSecond: Math.round((totalRooms * 1_000) / writeMs),
+        propertySettingsUpdates: databaseCount,
+        propertySettingsMs: Number(propertySettingsMs.toFixed(1)),
+        propertySettingsPerSecond: Math.round((databaseCount * 1_000) / propertySettingsMs),
+        propertySettingsMatch,
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),

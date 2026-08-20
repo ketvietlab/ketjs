@@ -32,6 +32,14 @@ const normalized = <T extends Record<string, unknown>>(
   values: T,
 ): Record<string, unknown> & T => ({ ...raw, ...values })
 const isClock = (value: unknown): boolean => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value))
+const isTimezone = (value: unknown): boolean => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: String(value) }).format()
+    return true
+  } catch {
+    return false
+  }
+}
 const countryCodeOf = (value: unknown): string => {
   const country = cleanText(value)
   if (/^vi(?:ệ|e)t\s*nam$/iu.test(country)) return 'VN'
@@ -299,6 +307,7 @@ export const functions: Record<string, FnSpec> = {
       defaultCheckIn: 'text',
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
+      longStayBillOnCheckIn: 'bool?',
       starRating: 'int',
       street1: 'text?',
       street2: 'text?',
@@ -320,6 +329,7 @@ export const functions: Record<string, FnSpec> = {
       childrenStayFree: 'bool',
       minimumGuestAge: 'int?',
       defaultCancellationPolicyId: 'id?',
+      defaultCancellationPolicy: 'json?',
       active: 'bool',
       buildings: 'json?',
       floors: 'json?',
@@ -334,6 +344,7 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.RoomType',
       'read:hospitality_core.Room',
       'read:hospitality_core.PropertyContact',
+      'read:hospitality_core.CancellationPolicy',
       'read:address.Country',
       'read:address.CurrentCatalog',
       'read:address.Division',
@@ -342,9 +353,15 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const P = ctx.table('hospitality_core.Property')
       const row = await ctx.db.one(
-        from(P).where(eq(P.id, args.id)).preload('buildings', 'floors', 'roomTypes', 'rooms', 'contacts'),
+        from(P)
+          .where(eq(P.id, args.id))
+          .preload('buildings', 'floors', 'roomTypes', 'rooms', 'contacts', 'cancellationPolicy'),
       )
-      return row ? propertyPresentation(ctx, row) : null
+      if (!row) return null
+      return {
+        ...(await propertyPresentation(ctx, row)),
+        defaultCancellationPolicy: row.cancellationPolicy ?? null,
+      }
     },
   }),
 
@@ -387,6 +404,7 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.Property',
       'write:hospitality_core.Property',
       'write:hospitality_core.ContentChange',
+      'read:hospitality_core.CancellationPolicy',
       'read:address.Country',
       'read:address.CurrentCatalog',
       'read:address.Division',
@@ -416,12 +434,18 @@ export const functions: Record<string, FnSpec> = {
         errors.push(issue('accommodationType', 'accommodation_type'))
       if (!isClock(args.defaultCheckIn)) errors.push(issue('defaultCheckIn', 'clock'))
       if (!isClock(args.defaultCheckOut)) errors.push(issue('defaultCheckOut', 'clock'))
+      if (!isTimezone(args.timezone)) errors.push(issue('timezone', 'timezone'))
       if (!Number.isInteger(args.starRating) || args.starRating < 0 || args.starRating > 5)
         errors.push(issue('starRating', 'star_rating'))
       if (raw.minimumGuestAge != null && Number(raw.minimumGuestAge) < 0)
         errors.push(issue('minimumGuestAge', 'non_negative'))
       if (await duplicate(ctx, 'hospitality_core.Property', 'code', args.code, args.id))
         errors.push(issue('code', 'unique'))
+      if (
+        args.defaultCancellationPolicyId &&
+        !(await record(ctx, 'hospitality_core.CancellationPolicy', args.defaultCancellationPolicyId))
+      )
+        errors.push(issue('defaultCancellationPolicyId', 'policy_missing'))
       if (args.countryCode && !/^[A-Z]{2}$/.test(args.countryCode))
         errors.push(issue('countryId', 'address.error.countryCode'))
       if (args.countryCode) {
