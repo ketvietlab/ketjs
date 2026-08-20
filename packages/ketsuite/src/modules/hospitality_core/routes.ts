@@ -20,6 +20,7 @@ import {
   inventoryScreen,
   roomsScreen,
   roomTypesScreen,
+  stayDetailScreen,
   staysScreen,
   tapeChartScreen,
   contentScreen,
@@ -155,6 +156,41 @@ const renderReservationDetail = async (
       _,
       reservation,
       rooms,
+      lang,
+      timezone,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
+const renderStayDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+) => {
+  const stay = (await ctx.call('hospitality_core.getStay', { id }, url, req)) as StayRow | null
+  if (!stay) return text('Not found', { status: 404 })
+  const [rooms, partners] = (await Promise.all([
+    ctx.call('hospitality_core.listRooms', { propertyId: stay.propertyId, includeArchived: true }, url, req),
+    ctx.call('partner.listPartners', { kind: 'person', limit: 500 }, url, req),
+  ])) as [RoomRow[], Array<{ id: string; name: string; ref?: string }>]
+  const timezone = await propertyTimezone(ctx, stay.propertyId, url, req)
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.stay.detail.title', { code: stay.code }),
+    stayDetailScreen(
+      _,
+      stay,
+      rooms,
+      partners,
       lang,
       timezone,
       await frame(ctx, url, req),
@@ -535,7 +571,7 @@ export const routes: Record<string, RouteEntry> = {
           ])
         result = (await ctx.call(
           'hospitality_core.checkIn',
-          { stayId: reservation.stayId, roomId: form.roomId, assignmentId: randomUUID() },
+          { stayId: reservation.stayId, roomId: form.roomId },
           url,
           req,
         )) as OperationResult
@@ -591,6 +627,58 @@ export const routes: Record<string, RouteEntry> = {
         _('hospitality_core.screen.stays.title'),
         staysScreen(_, rows, lang, timezone, await frame(ctx, url, req)),
       )
+    },
+
+  '/admin/hospitality/stays/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderStayDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const stay = (await ctx.call('hospitality_core.getStay', { id: params.id }, url, req)) as StayRow | null
+      if (!stay) return text('Not found', { status: 404 })
+
+      let result: OperationResult
+      let status: 'guest-added' | 'room-moved'
+      if (form.operation === 'add-guest') {
+        result = (await ctx.call(
+          'hospitality_core.addStayGuest',
+          {
+            id: randomUUID(),
+            stayId: stay.id,
+            partnerId: form.partnerId?.trim() || undefined,
+            displayName: form.displayName?.trim() || '',
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'guest-added'
+      } else if (form.operation === 'move-room') {
+        if (!form.roomId?.trim() || !form.reason?.trim())
+          return renderStayDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.stay.validation.moveRequired'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.moveRoom',
+          {
+            stayId: stay.id,
+            roomId: form.roomId,
+            assignmentId: randomUUID(),
+            reason: form.reason.trim(),
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'room-moved'
+      } else return text('unknown action', { status: 400 })
+
+      if (!result.ok)
+        return renderStayDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams()
+      query.set('status', status)
+      const lang = url.searchParams.get('lang')?.trim() || form.lang?.trim()
+      if (lang) query.set('lang', lang)
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/folios':

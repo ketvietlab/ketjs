@@ -180,6 +180,23 @@ test('hospitality operations: room assignments are append-only across check-in, 
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'dirty',
     )
+    const moveTasks = await adapter.all(
+      `SELECT "roomId", "stayId", "taskType", priority, state, notes
+         FROM hospitality_core_cleaning_task
+        WHERE id = ?`,
+      ['move:a1:clean'],
+    )
+    assert.deepEqual(
+      { ...moveTasks[0] },
+      {
+        roomId: '101',
+        stayId: 'r1:stay',
+        taskType: 'daily_clean',
+        priority: 'normal',
+        state: 'todo',
+        notes: 'upgrade',
+      },
+    )
 
     const checkedOut = await call(
       'hospitality_core.checkOut',
