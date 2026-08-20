@@ -88,13 +88,17 @@ const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode
 })
 
 const MENU: MenuNode[] = [
-  node('sales', 'Bán hàng', {
-    icon: 'shopping-cart',
+  node('hospitality', 'Khách sạn', { icon: 'hotel', path: '/admin/hospitality' }),
+  node('partner', 'Đối tác', { icon: 'users', path: '/admin/partners' }),
+  node('pos', 'Điểm bán hàng', { icon: 'store', path: '/admin/pos' }),
+  node('sale', 'Bán hàng', {
+    icon: 'shopping-bag',
     children: [
-      node('sales.orders', 'Đơn hàng', {
+      node('sale.orders', 'Đơn hàng', {
+        icon: 'receipt-text',
         children: [
-          node('sales.quotes', 'Báo giá', { path: '/quotes' }),
-          node('sales.list', 'Đơn hàng', { path: '/orders' }),
+          node('sale.quotes', 'Báo giá', { path: '/quotes' }),
+          node('sale.list', 'Đơn hàng', { path: '/orders' }),
         ],
       }),
     ],
@@ -103,19 +107,26 @@ const MENU: MenuNode[] = [
     icon: 'package',
     children: [
       node('product.catalogue', 'Danh mục', {
+        icon: 'package',
         children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/products' })],
       }),
     ],
   }),
+  node('pricing', 'Bảng giá', { icon: 'tag', path: '/admin/pricing' }),
+  node('purchase', 'Mua hàng', { icon: 'shopping-cart', path: '/admin/purchase' }),
+  node('accounting', 'Kế toán', { icon: 'banknote', path: '/admin/accounting' }),
+  node('stock', 'Kho', { icon: 'warehouse', path: '/admin/stock' }),
   node('admin', 'Quản trị', {
     icon: 'settings',
     active: true,
     children: [
-      node('admin.apps', 'Ứng dụng', { path: '/admin', active: true }),
+      node('admin.apps', 'Ứng dụng', { icon: 'layout-grid', path: '/admin', active: true }),
       node('admin.content', 'Nội dung', {
+        icon: 'file-text',
         children: [node('admin.pages', 'Trang', { path: '/admin/pages' })],
       }),
       node('admin.config', 'Cấu hình', {
+        icon: 'settings',
         children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })],
       }),
     ],

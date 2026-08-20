@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { renderToString } from 'ketjs-view'
 import { compose, translator } from 'ketjs'
 import type { MenuNode } from 'ketjs'
+import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
@@ -20,6 +21,7 @@ import {
   emptyState,
   errorState,
   HOOKS,
+  hasIcon,
   icon,
   iconButton,
   inline,
@@ -88,8 +90,11 @@ const MENU: MenuNode[] = [
     icon: 'settings',
     active: true,
     children: [
-      node('admin.apps', { path: '/admin', active: true }),
-      node('admin.content', { children: [node('admin.pages', { path: '/admin/pages' })] }),
+      node('admin.apps', { icon: 'layout-grid', path: '/admin', active: true }),
+      node('admin.content', {
+        icon: 'file-text',
+        children: [node('admin.pages', { path: '/admin/pages' })],
+      }),
     ],
   }),
   // An icon this build does not carry: the entry keeps its row and falls back to
@@ -293,6 +298,16 @@ test('ui contract: every documented hook has an explicit CSS rule', () => {
   const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
+})
+
+test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const missing = Object.entries(manifest.menus)
+    .filter(([, entry]) => !entry.parent)
+    .filter(([, entry]) => !entry.icon || !hasIcon(entry.icon))
+    .map(([id]) => id)
+    .sort()
+  assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
 })
 
 test('design tokens: every admin role used by components is declared', () => {
