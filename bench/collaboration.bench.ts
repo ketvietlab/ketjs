@@ -59,6 +59,11 @@ try {
       markers: ['location-create-form', 'record-workspace', 'Cây vị trí'],
     },
     {
+      label: 'Operation type list',
+      path: '/admin/picking-types?lang=vi',
+      markers: ['picking-type-create-form', 'record-workspace', 'Loại hoạt động đã cấu hình'],
+    },
+    {
       label: 'My activities',
       path: '/admin/activities?lang=vi&today=2026-08-20',
       markers: ['Hoạt động của tôi'],

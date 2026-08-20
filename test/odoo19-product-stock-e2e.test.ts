@@ -580,11 +580,29 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     headers: { accept: 'text/html' },
   })
   const operationTypesHtml = await operationTypesPage.text()
+  assert.match(operationTypesHtml, /data-ui="record-workspace"/)
+  assert.match(operationTypesHtml, /id="picking-type-create-form"/)
+  assert.match(operationTypesHtml, /data-scope="picking-type-create"/)
   assert.match(operationTypesHtml, /Kiểm tra chất lượng/)
   assert.match(operationTypesHtml, /Nhập kho nội bộ/)
   assert.match(operationTypesHtml, /Lấy hàng/)
   assert.match(operationTypesHtml, /Đóng gói/)
   assert.doesNotMatch(operationTypesHtml, /Quality Control|Store|Pick|Pack/)
+  assert.match(operationTypesHtml, /Kho cấu hình \/ Tồn kho/)
+  assert.match(operationTypesHtml, /Hỏi khi hoàn tất/)
+  assert.doesNotMatch(operationTypesHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/picking-types?lang=vi', {
+    name: 'Điều chuyển HTTP',
+    code: 'internal',
+    warehouseId: 'wh-config',
+    defaultLocationSrcId: 'wh-config:stock',
+    defaultLocationDestId: 'wh-config:output',
+    createBackorder: 'ask',
+  })
+  assert.equal(
+    (await call<Row[]>('stock.listPickingTypes', {})).value.some((row) => row.name === 'Điều chuyển HTTP'),
+    true,
+  )
 
   for (const path of ['/admin/inventory', '/admin/transfers/pick1', '/admin/forecast']) {
     const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
