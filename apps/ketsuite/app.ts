@@ -135,7 +135,12 @@ export const ketsuite = defineApp({
             ? null
             : (r as { functions: string[] }).functions,
         ),
-    pages: { resolve: 'website.getPageByPath', notFound: 'website.page.notFound', siteTitle: 'KetSuite' },
+    pages: {
+      resolve: 'website.getPageByPath',
+      region: 'website.page',
+      notFound: 'website.page.notFound',
+      siteTitle: 'KetSuite',
+    },
   },
 })
 

@@ -3,6 +3,7 @@
 
 import { createServer } from 'node:http'
 import { pipeline } from 'node:stream/promises'
+import { isNavigationRequest, navigablePage } from './respond.ts'
 import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
@@ -19,6 +20,7 @@ import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import { compileRoutes } from '../kernel/routes.ts'
 import type { RouteParams } from '../kernel/routes.ts'
+import { html, trustedMarkup } from 'ketjs-view'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
@@ -65,6 +67,8 @@ export type ServeOpts = {
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, HttpRoute>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
+  /** Theme region returned for progressive GET navigation. */
+  pageRegion?: string
 }
 
 /**
@@ -253,7 +257,9 @@ const navigate = async (asked, mode = 'push', scroll = null) => {
 }
 
 const optedOut = (element) => Boolean(element.closest?.('[data-ket-reload]'))
+const navigationEnabled = Boolean(document.querySelector('[data-ket-slot]'))
 document.addEventListener('click', (click) => {
+  if (!navigationEnabled) return
   if (click.defaultPrevented || click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey) return
   const anchor = click.target.closest?.('a[href]')
   if (!anchor || optedOut(anchor) || anchor.hasAttribute('download')) return
@@ -266,6 +272,7 @@ document.addEventListener('click', (click) => {
 })
 
 document.addEventListener('submit', (submit) => {
+  if (!navigationEnabled) return
   if (submit.defaultPrevented) return
   const form = submit.target
   if (!(form instanceof HTMLFormElement) || optedOut(form) || String(form.method || 'get').toLowerCase() !== 'get') return
@@ -278,9 +285,11 @@ document.addEventListener('submit', (submit) => {
   void navigate(target)
 })
 
-history.scrollRestoration = 'manual'
-if (!history.state?.__ketScroll) history.replaceState({ ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }, '', location.href)
-window.addEventListener('popstate', (pop) => void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0]))
+if (navigationEnabled) {
+  history.scrollRestoration = 'manual'
+  if (!history.state?.__ketScroll) history.replaceState({ ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }, '', location.href)
+  window.addEventListener('popstate', (pop) => void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0]))
+}
 globalThis.__ketNavigation = { applyFragments, navigate, islands }
 `
 
@@ -490,9 +499,26 @@ export async function createKetServer(o: ServeOpts) {
           return res.end('not found')
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
-        const html = bootstrapDocument(theme.renderRegion('layout', scope))
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        return res.end(html)
+        const pageRegion = o.pageRegion
+        if (pageRegion && isNavigationRequest(req)) {
+          const page = scope['page'] as { title?: unknown } | undefined
+          return send(
+            res,
+            navigablePage(req, {
+              title: String(page?.title ?? ''),
+              document: () => html``,
+              slots: {
+                [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
+              },
+            }),
+          )
+        }
+        const fullHtml = bootstrapDocument(theme.renderRegion('layout', scope))
+        res.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
+        })
+        return res.end(fullHtml)
       }
       return json(res, 404, { code: 'E_NOT_FOUND', message: `no route for ${url.pathname}` })
     } catch (e) {
