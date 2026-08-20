@@ -205,6 +205,10 @@ export const routes: Record<string, RouteEntry> = {
               menu: await ctx.menu(url, req),
               menuFilter: url.searchParams.get('menu')?.trim() || null,
               chrome: {
+                create: {
+                  label: _('product_backend.action.create'),
+                  path: inLocale(url, '/admin/products/new'),
+                },
                 search: {
                   name: 'q',
                   value: search ?? '',
