@@ -2862,6 +2862,7 @@
   [data-ui="form-field"] {
     display: grid;
     min-inline-size: 0;
+    min-block-size: var(--admin-control-height);
     gap: 0.125rem;
   }
   [data-ui="form-field"][data-span="full"] {

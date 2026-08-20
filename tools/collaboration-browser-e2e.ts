@@ -434,6 +434,7 @@ try {
             headerToggles: document.querySelectorAll('[data-ui="record-header"] [data-ui="record-toggle"]').length,
             bodyType: document.querySelectorAll('[data-ui="record-body"] [name="type"]').length,
             bodyToggles: document.querySelectorAll('[data-ui="record-body"] input[type="checkbox"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="record-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
             statusesAligned: (() => {
               const items = Array.from(document.querySelectorAll('[data-ui="record-badges"] > *'))
@@ -451,6 +452,7 @@ try {
           headerToggles: 3,
           bodyType: 2,
           bodyToggles: 0,
+          gridRowsAtLeast28: true,
           collaborationNarrower: true,
           statusesAligned: true,
           statusesSpaced: true,

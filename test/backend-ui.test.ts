@@ -482,6 +482,7 @@ test('style safety: hidden content has no box and adjacent record controls use a
   assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
   assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
   assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
+  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
   assert.match(
     css,
     /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,
