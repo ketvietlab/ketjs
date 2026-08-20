@@ -27,6 +27,7 @@ export type TransferDetail = {
 export type TransferDetailOptions = {
   transfer: TransferDetail
   rows: StockRow[]
+  products: FormOption[]
   units: FormOption[]
   lots: FormOption[]
   operationOptions: FormOption[]
@@ -190,6 +191,8 @@ export const transferDetailScreen = (
                         {
                           name: 'productId',
                           label: _('stock_backend.field.productId'),
+                          type: 'select',
+                          options: options.products,
                           required: true,
                         },
                         {

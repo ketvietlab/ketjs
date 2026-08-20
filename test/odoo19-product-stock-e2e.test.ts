@@ -560,6 +560,9 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   assert.match(uiHtml, /data-ui="record-aside"/)
   assert.match(uiHtml, /data-island="stock\.editor"/)
   assert.match(uiHtml, /data-scope="stock-transfer"/)
+  assert.match(uiHtml, /<select[^>]*name="productId"/)
+  assert.match(uiHtml, /<option value="p1"/)
+  assert.match(uiHtml, /Áo thun · AO/)
   assert.match(uiHtml, /name="operationId"/)
   assert.match(uiHtml, /name="backorder" value="create"/)
   await e2e.client.form<string>('/admin/transfers/ui-pick?lang=vi', {
