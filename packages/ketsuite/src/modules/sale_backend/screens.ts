@@ -6,6 +6,7 @@ import {
   contentCard,
   dataTable,
   emptyState,
+  formatMoney,
   framed,
   linkButton,
   metric,
@@ -126,7 +127,9 @@ export const ordersScreen = (
               {
                 key: 'total',
                 label: _('sale_backend.field.amountTotal'),
-                cell: (r) => `${String(r.amountTotal)} ${String(r.currency)}`,
+                cell: (r) => formatMoney(_, r.amountTotal, r.currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
           })
@@ -221,7 +224,7 @@ export const orderDetail = (
           {
             id: 'total',
             label: _('sale_backend.field.amountTotal'),
-            value: `${String(o.order.amountTotal)} ${String(o.order.currency)}`,
+            value: formatMoney(_, o.order.amountTotal, o.order.currency),
           },
         ],
         id: (item) => item.id,
@@ -257,11 +260,19 @@ export const orderDetail = (
                   label: _('sale_backend.field.invoiced'),
                   cell: (r) => String(r.qtyInvoiced),
                 },
-                { key: 'price', label: _('sale_backend.field.priceUnit'), cell: (r) => String(r.priceUnit) },
+                {
+                  key: 'price',
+                  label: _('sale_backend.field.priceUnit'),
+                  cell: (r) => formatMoney(_, r.priceUnit, o.order.currency),
+                  align: 'end',
+                  kind: 'currency',
+                },
                 {
                   key: 'subtotal',
                   label: _('sale_backend.field.subtotal'),
-                  cell: (r) => String(r.priceSubtotal),
+                  cell: (r) => formatMoney(_, r.priceSubtotal, o.order.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
               ],
             })
@@ -352,7 +363,9 @@ export const orderDetail = (
                   {
                     key: 'total',
                     label: _('sale_backend.field.amountTotal'),
-                    cell: (r) => String(r.amountTotal),
+                    cell: (r) => formatMoney(_, r.amountTotal, r.currency ?? o.order.currency),
+                    align: 'end',
+                    kind: 'currency',
                   },
                 ],
               }),

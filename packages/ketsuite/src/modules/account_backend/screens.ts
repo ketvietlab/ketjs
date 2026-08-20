@@ -7,6 +7,7 @@ import {
   contentCard,
   dataTable,
   emptyState,
+  formatMoney,
   framed,
   linkButton,
   metric,
@@ -218,7 +219,9 @@ export const movesScreen = (
               {
                 key: 'total',
                 label: _('account_backend.field.amountTotal'),
-                cell: (row) => `${String(row.amountTotal)} ${String(row.currency)}`,
+                cell: (row) => formatMoney(_, row.amountTotal, row.currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
           })
@@ -253,7 +256,7 @@ export const moveDetailScreen = (
           {
             id: 'total',
             label: _('account_backend.field.amountTotal'),
-            value: `${String(move.amountTotal)} ${String(move.currency)}`,
+            value: formatMoney(_, move.amountTotal, move.currency),
           },
         ],
         id: (item) => item.id,
@@ -278,16 +281,26 @@ export const moveDetailScreen = (
                   label: _('account_backend.field.accountId'),
                   cell: (line) => code(String(line.accountId)),
                 },
-                { key: 'debit', label: _('account_backend.field.debit'), cell: (line) => String(line.debit) },
+                {
+                  key: 'debit',
+                  label: _('account_backend.field.debit'),
+                  cell: (line) => formatMoney(_, line.debit, move.currency),
+                  align: 'end',
+                  kind: 'currency',
+                },
                 {
                   key: 'credit',
                   label: _('account_backend.field.credit'),
-                  cell: (line) => String(line.credit),
+                  cell: (line) => formatMoney(_, line.credit, move.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
                 {
                   key: 'residual',
                   label: _('account_backend.field.residual'),
-                  cell: (line) => String(line.amountResidual),
+                  cell: (line) => formatMoney(_, line.amountResidual, move.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
               ],
             })
