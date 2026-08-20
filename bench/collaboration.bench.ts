@@ -104,6 +104,11 @@ try {
       markers: ['forecast-filter-form', 'record-workspace', 'Khả năng đáp ứng'],
     },
     {
+      label: 'Quotation list',
+      path: '/admin/sales/quotations?lang=vi',
+      markers: ['quotation-create-form', 'record-workspace', 'Báo giá hiện có'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
