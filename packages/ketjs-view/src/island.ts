@@ -203,7 +203,10 @@ const identityOf = (element: IslandElement): { name: string; key: string; id: st
   return { name, key, id: JSON.stringify([name, key]) }
 }
 
-const uniqueByIdentity = (elements: IslandElement[]): Map<string, IslandElement> => {
+const uniqueByIdentity = (
+  elements: IslandElement[],
+  onDuplicate?: (identity: { name: string; key: string; id: string }) => void,
+): Map<string, IslandElement> => {
   const unique = new Map<string, IslandElement>()
   const duplicates = new Set<string>()
   for (const element of elements) {
@@ -212,6 +215,7 @@ const uniqueByIdentity = (elements: IslandElement[]): Map<string, IslandElement>
     if (unique.has(identity.id)) {
       duplicates.add(identity.id)
       unique.delete(identity.id)
+      onDuplicate?.(identity)
     } else if (!duplicates.has(identity.id)) unique.set(identity.id, element)
   }
   return unique
@@ -275,8 +279,15 @@ export function createIslandManager(
   const reconcile = (slot: IslandElement, nextContent: IslandElement): HydratedIsland[] => {
     const current = elementsOf(slot)
     const next = elementsOf(nextContent)
-    const currentById = uniqueByIdentity(current)
-    const nextById = uniqueByIdentity(next)
+    const ambiguous = new Map<string, { name: string; key: string }>()
+    const rememberDuplicate = (identity: { name: string; key: string; id: string }) =>
+      ambiguous.set(identity.id, identity)
+    const currentById = uniqueByIdentity(current, rememberDuplicate)
+    const nextById = uniqueByIdentity(next, rememberDuplicate)
+    for (const identity of ambiguous.values())
+      console.warn(
+        `island "${identity.name}" has duplicate key ${identity.key}; remounting ambiguous instances`,
+      )
     const preserved = new Set<IslandElement>()
 
     for (const [id, nextElement] of nextById) {
