@@ -127,6 +127,36 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
   }
+  const quotationsPage = await e2e.client.get('/admin/sales/quotations?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const quotationsHtml = await quotationsPage.text()
+  assert.match(quotationsHtml, /data-ui="record-workspace"/)
+  assert.match(quotationsHtml, /id="quotation-create-form"/)
+  assert.match(quotationsHtml, /data-scope="sale-quotation-create"/)
+  assert.match(quotationsHtml, /<option value=""/)
+  assert.match(quotationsHtml, /Chưa có báo giá/)
+  assert.doesNotMatch(quotationsHtml, /data-island="mail\.chatter"/)
+
+  const invalidQuotation = await e2e.client.form<string>('/admin/sales/quotations?lang=vi', {
+    partnerId: '',
+    warehouseId: '',
+  })
+  assert.match(invalidQuotation, /Dữ liệu chưa hợp lệ/)
+  const createdQuotation = await e2e.client.form<string>('/admin/sales/quotations?lang=vi', {
+    partnerId: 'customer',
+    warehouseId: 'wh',
+    clientOrderRef: 'KH/2026/HTTP',
+    pricelistId: 'retail',
+  })
+  assert.match(createdQuotation, /data-ui="table"/)
+  assert.match(createdQuotation, /Khách hàng Minh Anh/)
+  assert.match(createdQuotation, /Bản nháp/)
+  assert.doesNotMatch(createdQuotation, /data-island="mail\.chatter"/)
+  const englishQuotations = await e2e.client.get('/admin/sales/quotations?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await englishQuotations.text(), /href="\/admin\/sales\/quotations\/[^"?]+\?lang=en"/)
   const english = await e2e.client.get('/admin/sales/orders/so-1?lang=en', {
     headers: { accept: 'text/html' },
   })

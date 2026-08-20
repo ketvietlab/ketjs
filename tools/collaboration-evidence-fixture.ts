@@ -116,6 +116,14 @@ export async function collaborationEvidenceApp(
       replenishmentUomId: 'unit',
       routeId: 'wh:receipt-route',
     })
+    await call('sale.createOrder', {
+      id: 'quotation-collab',
+      partnerId: 'member-party',
+      warehouseId: 'wh',
+      clientOrderRef: 'KH/2026/OPS',
+      validityDate: '2026-08-31',
+      notes: 'Báo giá mẫu dùng để kiểm chứng giao diện bán hàng.',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
