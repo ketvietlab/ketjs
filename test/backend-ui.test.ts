@@ -35,6 +35,7 @@ import {
   recordList,
   recordActions,
   recordForm,
+  scheduleBoard,
   section,
   settingsScreen,
   stack,
@@ -231,6 +232,23 @@ const componentContract = [
       },
     ],
   }),
+  scheduleBoard({
+    corner: 'Room / day',
+    days: [{ key: '2026-08-20', label: 'Thu', detail: '20/08', today: true }],
+    rows: [{ id: '101', label: 'Room 101', detail: 'Deluxe', state: 'occupied' }],
+    events: [
+      {
+        id: 'stay-1',
+        rowId: '101',
+        start: 0,
+        span: 1,
+        label: 'Nguyễn An',
+        detail: 'Direct',
+        tone: 'positive',
+        state: 'checked_in',
+      },
+    ],
+  }),
 ]
 
 const everything = [
@@ -351,6 +369,15 @@ test('media: primary state has a label and image actions keep accessible icon co
   assert.match(html, /data-value="primary"/)
   assert.match(html, /data-icon-only="true"[\s\S]*aria-label="Set as primary"/)
   assert.match(html, /data-variant="destructive"[\s\S]*aria-label="Remove image"/)
+})
+
+test('schedule: every declared status tone has a concrete visual state', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  for (const tone of ['neutral', 'positive', 'info', 'warning', 'danger'])
+    assert.ok(
+      css.includes(`[data-ui="schedule-event"][data-tone="${tone}"]`),
+      `schedule tone ${tone} needs an explicit design-system rule`,
+    )
 })
 
 test('ui contract: the states a stylesheet branches on are present', () => {

@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { createTestApp } from 'ketjs/testing'
+import type { Row, Scope } from 'ketjs'
+import { ketsuite } from '../apps/ketsuite/app.ts'
+
+const scope: Scope = { company: 'default', companies: ['default'], branches: null }
+
+test('hospitality e2e: authenticated booking and front-desk flow crosses real HTTP', async (t) => {
+  const e2e = await createTestApp(ketsuite, { worker: false })
+  t.after(() => e2e.close())
+  const seed = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
+
+  await seed('partner.savePartner', {
+    id: 'company-partner',
+    kind: 'company',
+    name: 'Ket Hospitality',
+  })
+  await seed('company.saveCompany', {
+    id: 'default',
+    partnerId: 'company-partner',
+    currency: 'VND',
+  })
+  await seed('user.createUser', {
+    id: 'admin',
+    login: 'admin',
+    password: 'hospitality-e2e',
+    name: 'Hospitality admin',
+    defaultCompanyId: 'default',
+    superuser: true,
+  })
+  await seed('user.grantCompany', {
+    id: 'admin:default',
+    userId: 'admin',
+    companyId: 'default',
+  })
+  await seed('partner.savePartner', { id: 'guest', kind: 'person', name: 'Nguyễn An' })
+  await seed('hospitality_core.saveProperty', {
+    id: 'hotel',
+    code: 'HCM',
+    name: 'Ket Hotel',
+    accommodationType: 'hotel',
+    timezone: 'Asia/Ho_Chi_Minh',
+  })
+  await seed('hospitality_core.saveRoomType', {
+    id: 'deluxe',
+    propertyId: 'hotel',
+    code: 'DLX',
+    name: 'Deluxe',
+    baseRate: '100',
+    published: true,
+  })
+  await seed('hospitality_core.saveRoom', {
+    id: '101',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    code: '101',
+    name: 'Phòng 101',
+  })
+
+  await e2e.client.login({ login: 'admin', password: 'hospitality-e2e' })
+  const booked = await e2e.client.call<Row>(
+    'hospitality_core.createReservation',
+    {
+      id: 'booking-1',
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      partnerId: 'guest',
+      bookingType: 'nightly',
+      checkIn: '2026-08-20T14:00:00.000Z',
+      checkOut: '2026-08-21T12:00:00.000Z',
+      rate: '100',
+      createdAt: '2026-08-20T01:00:00.000Z',
+    },
+    { idempotencyKey: 'hospitality-booking-1' },
+  )
+  assert.equal(booked.value.ok, true)
+  assert.equal(booked.writes.length, 6)
+
+  const checkedIn = await e2e.client.call<Row>('hospitality_core.checkIn', {
+    stayId: 'booking-1:stay',
+    roomId: '101',
+    assignmentId: 'booking-1:assignment',
+    at: '2026-08-20T14:05:00.000Z',
+  })
+  assert.deepEqual(
+    { ok: checkedIn.value.ok, state: checkedIn.value.state, roomId: checkedIn.value.roomId },
+    { ok: true, state: 'checked_in', roomId: '101' },
+  )
+
+  const screens = [
+    ['/admin/hospitality/front-desk?lang=vi&date=2026-08-20', 'Bàn lễ tân'],
+    ['/admin/hospitality/tape-chart?lang=vi&from=2026-08-20', 'Lịch phòng'],
+    ['/admin/hospitality/reservations?lang=vi', 'Đặt phòng'],
+    ['/admin/hospitality/stays?lang=vi', 'Lưu trú'],
+    ['/admin/hospitality/folios?lang=vi', 'Hồ sơ dịch vụ'],
+    ['/admin/hospitality/properties?lang=vi', 'Cơ sở lưu trú'],
+    ['/admin/hospitality/rooms?lang=vi', 'Sơ đồ phòng'],
+    ['/admin/hospitality/room-types?lang=vi', 'Loại phòng'],
+    ['/admin/hospitality/amenities?lang=vi', 'Danh mục tiện nghi'],
+    ['/admin/hospitality/policies?lang=vi', 'Chính sách hủy'],
+  ] as const
+  for (const [path, title] of screens) {
+    const response = await e2e.client.get(path)
+    assert.equal(response.status, 200, path)
+    const html = await response.text()
+    assert.doesNotMatch(html, /hospitality_core\./, path)
+    assert.match(html, new RegExp(title), path)
+  }
+
+  const frontDesk = await e2e.client.get('/admin/hospitality/front-desk?lang=vi&date=2026-08-20')
+  const html = await frontDesk.text()
+  assert.match(html, /Bàn lễ tân/)
+  assert.match(html, /Nguyễn An/)
+
+  const english = await e2e.client.get('/admin/hospitality/front-desk?lang=en&date=2026-08-20')
+  assert.equal(english.status, 200)
+  assert.match(await english.text(), /Front desk/)
+
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    const stays = await adapter.all('SELECT state, "currentRoomId" FROM hospitality_core_stay WHERE id = ?', [
+      'booking-1:stay',
+    ])
+    assert.deepEqual({ ...stays[0] }, { state: 'checked_in', currentRoomId: '101' })
+  })
+})

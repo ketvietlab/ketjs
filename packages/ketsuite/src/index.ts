@@ -57,6 +57,17 @@ export {
   CANCELLATION_POLICY_TYPES,
   CONTACT_TYPES,
   ROOM_STATUSES,
+  ASSIGNMENT_STATES,
+  BILLING_MODES,
+  BOOKING_PROVIDERS,
+  BOOKING_TYPES,
+  CHARGE_TYPES,
+  DOCUMENT_TYPES,
+  FOLIO_STATES,
+  GENDERS,
+  OCR_STATES,
+  RESERVATION_STATES,
+  STAY_STATES,
 } from './modules/hospitality_core/types.ts'
 export type {
   AccommodationType,
@@ -65,6 +76,17 @@ export type {
   CancellationPolicyType,
   ContactType,
   RoomStatus,
+  AssignmentState,
+  BillingMode,
+  BookingProvider,
+  BookingType,
+  ChargeType,
+  DocumentType,
+  FolioState,
+  Gender,
+  OcrState,
+  ReservationState,
+  StayState,
 } from './modules/hospitality_core/types.ts'
 export { default as user } from './modules/user/index.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
@@ -75,6 +97,8 @@ export { PRODUCT_TYPES } from './modules/product/types.ts'
 export type { ProductType } from './modules/product/types.ts'
 export { mediaPanel } from './ui/media.tsx'
 export type { MediaItem, MediaLabels, MediaPanelProps } from './ui/media.tsx'
+export { scheduleBoard } from './ui/schedule.tsx'
+export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './ui/schedule.tsx'
 
 // commerce — demo-grade scaffolding, kept until the vertical is written for real
 export { default as catalog } from './modules/catalog/index.ts'

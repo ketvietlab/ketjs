@@ -23,6 +23,7 @@ export function createContext(o: {
   scope?: Scope
   kind?: 'function' | 'job'
   queueNotify?: boolean
+  writes?: WriteRecord[]
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
@@ -35,7 +36,7 @@ export function createContext(o: {
     })
 
   const effects = new Set(operation.effects)
-  const writes: WriteRecord[] = []
+  const writes = o.writes ?? []
 
   const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
     if (effects.has(`${effect}:${target}`)) return
@@ -118,6 +119,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'bool')
       .map(([n]) => n)
 
+  const jsonOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'json')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     if (!cols.length) return row
@@ -131,8 +137,11 @@ export function createContext(o: {
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const cols = decimalsOf(model)
     const bools = booleansOf(model)
+    const json = dialect === 'sqlite' ? jsonOf(model) : []
     for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
     for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
+    for (const row of rows)
+      for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)
     return rows
   }
 
@@ -441,8 +450,14 @@ export function createContext(o: {
     // A transaction hands the body a ctx bound to the transaction's connection —
     // the same reason tx() takes a scoped adapter rather than assuming the pool
     // will hand back the session that issued BEGIN.
-    tx: <T>(body: (inner: Ctx) => Promise<T>): Promise<T> =>
-      adapter.tx((txAdapter) => body(createContext({ ...o, adapter: txAdapter }))),
+    tx: async <T>(body: (inner: Ctx) => Promise<T>): Promise<T> => {
+      const transactionWrites: WriteRecord[] = []
+      const value = await adapter.tx((txAdapter) =>
+        body(createContext({ ...o, adapter: txAdapter, writes: transactionWrites })),
+      )
+      writes.push(...transactionWrites)
+      return value
+    },
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
       changeset(manifest, model, params, base),

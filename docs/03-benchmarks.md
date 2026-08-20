@@ -212,26 +212,39 @@ writes, tenant-pool leasing, SigV4 and actual S3 HTTP. They are development-mach
 figures, not object-store capacity claims. Reproduce with `npm run bench:storage`;
 select PostgreSQL with `KET_BENCH_DRIVER=postgres`.
 
-## Hospitality master data across databases
+## Hospitality operations across databases
 
 The hospitality benchmark migrates separate physical databases and loads each one
 through the public `hospitality_core` functions: one property, one building, ten
-floors, twelve room types and 250 rooms. The read pass alternates complete and
-availability-filtered room boards with explicit relation preloads. It also checks
-that every database contains exactly its own company-scoped rows and that
-PostgreSQL kept room rates as `numeric`.
+floors, twelve room types, 250 rooms and 100 reservations. It then runs check-in,
+service-charge and checkout cycles, alternates room-board and reservation queries,
+and makes two PostgreSQL connections race for one physical room. A second race
+checks that cancel and check-in cannot both win or leave reservation, stay, room
+and assignment states out of sync. It also checks that every database contains
+exactly its own company-scoped rows and that PostgreSQL kept room rates as
+`numeric`.
 
-| driver | databases | rooms | migrate | writes/s | list queries/s | isolated counts |
-|---|---:|---:|---:|---:|---:|---|
-| SQLite | 8 | 2,000 | 61.5 ms | 2,604 | 1,254 | complete |
-| PostgreSQL 17 | 4 | 1,000 | 544.9 ms | 482 | 510 | complete |
+| driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | operation cycles/s | list pairs/s | one room winner | cancel/check-in consistent | isolated counts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
+| SQLite | 8 | 2,000 | 800 | 112.6 ms | 1,990 | 1,254 | 578 | 287 | yes (sequential) | yes (sequential) | complete |
+| PostgreSQL 17 | 4 | 1,000 | 400 | 41,909.4 ms | 26 | 149 | 95 | 117 | yes (concurrent) | yes (concurrent) | complete |
 
-These are local development figures and the write rate includes application-level
-reference, uniqueness and same-property validation. Reproduce with
+An operation cycle contains check-in, an idempotent folio charge and checkout for
+every second stay. A list pair contains the room board plus the reservation list;
+the table keeps the benchmark field name `readsPerSecond` for compatibility. These
+are local development figures and the rates include application-level reference,
+uniqueness, scope and transition validation. Reproduce with
 `npm run bench:hospitality`; select PostgreSQL with
-`KET_BENCH_DRIVER=postgres`. The first PostgreSQL run caught a placeholder dialect
-bug in the benchmark's final isolation assertion, which is why both drivers remain
-part of the acceptance path.
+`KET_BENCH_DRIVER=postgres`. Both drivers remain part of the acceptance path;
+SQLite covers the local single-writer shape while PostgreSQL exercises real
+multi-connection compare-and-set.
+
+Hospitality figures were rerun on 2026-08-20 after rebasing onto the full current
+KetSuite deployment. PostgreSQL migration and master-data figures therefore
+include the much larger dependency manifest now pulled in by the backend module;
+the operation rates remain the hospitality-only paths. The rerun also includes
+the property-timezone, primary-guest, room-claim and cancel/check-in concurrency
+guards.
 
 ## Not measured
 

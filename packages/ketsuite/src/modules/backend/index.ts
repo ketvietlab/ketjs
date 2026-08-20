@@ -98,6 +98,7 @@ export {
   mediaPanel,
   recordForm,
   recordActions,
+  scheduleBoard,
   HOOKS,
   OWNERS,
 } from '../../ui/index.ts'
@@ -127,4 +128,8 @@ export type {
   MediaPanelProps,
   FormField,
   FormOption,
+  ScheduleDay,
+  ScheduleEvent,
+  ScheduleRow,
+  ScheduleTone,
 } from '../../ui/index.ts'
