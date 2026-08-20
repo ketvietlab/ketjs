@@ -1,4 +1,4 @@
-import { defineFn } from 'ketjs'
+import { defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
@@ -145,6 +145,20 @@ async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
 }
 
 export const functions: Record<string, FnSpec> = {
+  listStorableProducts: defineFn({
+    input: {},
+    effects: ['read:product.Template', 'read:product.Product'],
+    agent: true,
+    handler: (ctx) => {
+      const Template = ctx.table('product.Template')
+      return ctx.db.all(
+        from(Template)
+          .where(eq(Template.active, true))
+          .where(eq(Template.isStorable, true))
+          .preload('variants'),
+      )
+    },
+  }),
   getProductConfig: defineFn({
     input: { templateId: 'id' },
     output: { templateId: 'id', isStorable: 'bool', tracking: 'text' },
