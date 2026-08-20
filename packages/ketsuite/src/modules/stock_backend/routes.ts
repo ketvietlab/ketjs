@@ -3,8 +3,8 @@ import { page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
 import type { JSXChild } from 'ketjs-view'
-import { metric, recordForm, section, stack, surface } from '../../ui/index.ts'
-import type { FormField } from '../../ui/index.ts'
+import { formCluster, metric, recordForm, section, stack, surface } from '../../ui/index.ts'
+import type { ActionVariant, FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { stockScreen } from './screens.ts'
@@ -19,6 +19,9 @@ const frame = async (ctx: ServeContext, url: URL, req: Req) => ({
   extras: {
     'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
     'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+    'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', {
+      lang: ctx.localeOf(url, req),
+    }),
   },
 })
 
@@ -197,6 +200,7 @@ export const routes: Record<string, RouteEntry> = {
               body: recordForm({
                 action: inLocale(url, '/admin/inventory'),
                 submit: _('stock_backend.action.apply'),
+                submitVariant: 'primary',
                 errors: invalid(url, _),
                 fields,
               }),
@@ -252,6 +256,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/transfers'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               errors: invalid(url, _),
               fields: [
                 { name: 'name', label: _('stock_backend.field.reference'), required: true },
@@ -340,10 +345,17 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const data = await common(ctx, url, req)
-      const actionForm = (action: string, label: string, hidden: Record<string, unknown> = {}) =>
+      const actionForm = (
+        action: string,
+        label: string,
+        variant: ActionVariant,
+        hidden: Record<string, string> = {},
+      ) =>
         recordForm({
           action: here,
           submit: label,
+          submitVariant: variant,
+          layout: 'inline',
           hidden: { action, ...hidden },
           fields: [],
         })
@@ -390,6 +402,7 @@ export const routes: Record<string, RouteEntry> = {
                 body: recordForm({
                   action: here,
                   submit: _('stock_backend.action.addMove'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'add-move' },
                   errors: invalid(url, _),
                   fields: [
@@ -419,6 +432,7 @@ export const routes: Record<string, RouteEntry> = {
                 body: recordForm({
                   action: here,
                   submit: _('stock_backend.action.recordDone'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'pick' },
                   errors: invalid(url, _),
                   fields: [
@@ -448,26 +462,36 @@ export const routes: Record<string, RouteEntry> = {
           : []),
         ...(editable
           ? [
-              stack([
-                ...(state === 'draft'
-                  ? [actionForm('confirm', _('stock_backend.action.confirm'))]
-                  : [actionForm('assign', _('stock_backend.action.assign'))]),
-                ...(state === 'draft'
-                  ? []
-                  : backorderPolicy === 'ask'
-                    ? [
-                        actionForm('validate', _('stock_backend.action.validateCreateBackorder'), {
-                          backorder: 'create',
-                        }),
-                        actionForm('validate', _('stock_backend.action.validateNoBackorder'), {
-                          backorder: 'cancel',
-                        }),
-                      ]
-                    : [actionForm('validate', _('stock_backend.action.validate'))]),
-                actionForm('cancel', _('stock_backend.action.cancel')),
-              ]),
+              formCluster({
+                forms: [
+                  ...(state === 'draft'
+                    ? [actionForm('confirm', _('stock_backend.action.confirm'), 'primary')]
+                    : [actionForm('assign', _('stock_backend.action.assign'), 'primary')]),
+                  ...(state === 'draft'
+                    ? []
+                    : backorderPolicy === 'ask'
+                      ? [
+                          actionForm(
+                            'validate',
+                            _('stock_backend.action.validateCreateBackorder'),
+                            'primary',
+                            { backorder: 'create' },
+                          ),
+                          actionForm('validate', _('stock_backend.action.validateNoBackorder'), 'secondary', {
+                            backorder: 'cancel',
+                          }),
+                        ]
+                      : [actionForm('validate', _('stock_backend.action.validate'), 'primary')]),
+                  actionForm('cancel', _('stock_backend.action.cancel'), 'destructive'),
+                ],
+              }),
             ]
           : []),
+        await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+          resModel: 'stock.Picking',
+          resId: String(current.id),
+          lang,
+        }),
       ])
     },
 
@@ -510,6 +534,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/warehouses'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               errors: invalid(url, _),
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
@@ -572,6 +597,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/locations'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               errors: invalid(url, _),
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
@@ -649,6 +675,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/picking-types'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
                 {
@@ -727,6 +754,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/lots'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               errors: invalid(url, _),
               fields: [
                 { name: 'productId', label: _('stock_backend.field.productId'), required: true },
@@ -777,6 +805,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/stock-routes'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
                 { name: 'sequence', label: _('stock_backend.field.sequence'), type: 'number', value: 10 },
@@ -836,6 +865,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, `/admin/stock-routes/${params.id}`),
               submit: _('stock_backend.action.addRule'),
+              submitVariant: 'secondary',
               errors: invalid(url, _),
               fields: [
                 { name: 'name', label: _('stock_backend.col.name'), required: true },
@@ -929,6 +959,7 @@ export const routes: Record<string, RouteEntry> = {
             body: recordForm({
               action: inLocale(url, '/admin/replenishment'),
               submit: _('stock_backend.action.create'),
+              submitVariant: 'primary',
               errors: invalid(url, _),
               fields: [
                 { name: 'productId', label: _('stock_backend.field.productId'), required: true },
@@ -983,6 +1014,8 @@ export const routes: Record<string, RouteEntry> = {
             recordForm({
               action: inLocale(url, `/admin/replenishment/${String(row.id)}/run`),
               submit: `${_('stock_backend.action.run')}: ${String(row.productId)}`,
+              submitVariant: 'secondary',
+              layout: 'inline',
               fields: [],
             }),
           ),
@@ -1033,6 +1066,7 @@ export const routes: Record<string, RouteEntry> = {
               action: inLocale(url, '/admin/forecast'),
               method: 'get',
               submit: _('stock_backend.action.calculate'),
+              submitVariant: 'secondary',
               fields: [
                 {
                   name: 'productId',

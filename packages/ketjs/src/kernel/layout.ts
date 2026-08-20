@@ -6,7 +6,7 @@
 // of the wrong shape are all caught here — as a list, not as an exception, because
 // a list is what an agent can act on.
 
-import { parseType } from './types.ts'
+import { isDateText, parseType } from './types.ts'
 import type { Manifest } from '../types.ts'
 
 export type Placement = { type: string; settings?: Record<string, unknown> }
@@ -19,6 +19,7 @@ const JS_OF: Record<string, string> = {
   int: 'number',
   float: 'number',
   bool: 'boolean',
+  date: 'string',
   datetime: 'string',
   json: 'object',
 }
@@ -62,6 +63,8 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
       const want = JS_OF[t.base]
       if (want && typeof value !== want) {
         errors.push({ at, type: placement.type, field, message: `expects ${t.base}, got ${typeof value}` })
+      } else if (t.base === 'date' && !isDateText(value)) {
+        errors.push({ at, type: placement.type, field, message: 'expects date in YYYY-MM-DD format' })
       }
     }
     for (const field of Object.keys(settings)) {

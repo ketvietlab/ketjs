@@ -84,6 +84,7 @@ const screen =
     const extras: Extras = {
       'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+      'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
       'apps.footer': await ctx.joint(url, req, 'backend:apps.footer'),
     }
     return page({

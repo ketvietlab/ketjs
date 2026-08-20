@@ -206,3 +206,24 @@ test('island: props must be plain JSON all the way down', () => {
     /not JSON-serializable/,
   )
 })
+
+test('island: an initially empty text hole hydrates and can become content', () => {
+  const value = signal('')
+  const empty = defineModule({
+    name: 'empty_island',
+    islands: {
+      empty: {
+        view: () => () => html`<div>${value()}<i>stable</i></div>`,
+      },
+    },
+  })
+  const manifest = compose([empty])
+  const rt = createTheme(manifest, [empty])
+  const markup = renderIsland('empty', rt.islands.empty!, {})
+  assert.match(markup, /<!--k\[--><!--k-->/, 'SSR correctly emits no empty text node')
+  const container = parseFragment(markup)
+  const live = hydrateIslands(domHost(document), container as never, rt.islands)
+  value.set('now visible')
+  assert.match(container.innerHTML, /now visible/)
+  live[0]!.dispose()
+})

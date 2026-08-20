@@ -189,15 +189,15 @@ export const CASES: Array<{
   },
   {
     id: 'viewer-one',
-    label: 'Thanh trên — một công ty',
-    note: 'Chỉ tên và nút đăng xuất. Tên công ty cố tình ẩn khi tài khoản chỉ thuộc một.',
+    label: 'Footer sidebar — một công ty',
+    note: 'Systray KétViệt: counters, công ty, avatar; menu tài khoản native giữ đăng xuất.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], { viewer: viewer(), menu: MENU, indicators: INDICATORS }),
   },
   {
     id: 'viewer-many',
-    label: 'Thanh trên — nhiều công ty',
-    note: 'Tên công ty và chi nhánh thật là một điều khiển dẫn tới màn hình đổi ngữ cảnh.',
+    label: 'Footer sidebar — nhiều công ty',
+    note: 'Icon công ty có accessible label; tên công ty/chi nhánh hiện trong menu và thanh trên vẫn đổi được ngữ cảnh.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], {
         viewer: viewer({ companies: ['acme', 'globex', 'initech'] }),
@@ -206,8 +206,8 @@ export const CASES: Array<{
   },
   {
     id: 'viewer-long',
-    label: 'Thanh trên — tên dài',
-    note: 'Kiểm tra thanh trên không vỡ khi tên người và tên công ty đều dài.',
+    label: 'Footer sidebar — tên dài',
+    note: 'Kiểm tra popover tài khoản không vỡ khi tên người và tên công ty đều dài.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], {
         viewer: viewer({
@@ -530,6 +530,7 @@ export const CASES: Array<{
         body: recordForm({
           action: '#kit-form',
           submit: 'Lưu sản phẩm',
+          submitVariant: 'primary',
           cancelHref: '#kit-form',
           cancelLabel: 'Hủy',
           errors: ['Tên sản phẩm cần ít nhất 3 ký tự.'],

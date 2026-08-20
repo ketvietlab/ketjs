@@ -12,7 +12,7 @@ export type AgentTool = {
   description: string
   inputSchema: {
     type: 'object'
-    properties: Record<string, { type: string; description?: string }>
+    properties: Record<string, { type: string; format?: string; description?: string }>
     required: string[]
   }
   effects: string[]
@@ -30,6 +30,7 @@ const JSON_TYPE: Record<string, string> = {
   int: 'integer',
   float: 'number',
   bool: 'boolean',
+  date: 'string',
   datetime: 'string',
   json: 'object',
 }
@@ -43,7 +44,10 @@ export function agentTools(manifest: Manifest): AgentTool[] {
     for (const [name, spec] of Object.entries(fn.input)) {
       const optional = spec.endsWith('?')
       const base = optional ? spec.slice(0, -1) : spec
-      properties[name] = { type: JSON_TYPE[base.startsWith('ref:') ? 'ref' : base] ?? 'string' }
+      properties[name] = {
+        type: JSON_TYPE[base.startsWith('ref:') ? 'ref' : base] ?? 'string',
+        ...(base === 'date' || base === 'datetime' ? { format: base === 'date' ? 'date' : 'date-time' } : {}),
+      }
       if (!optional) required.push(name)
     }
     const mutates = fn.effects.some((e) => e.startsWith('write:') || e.startsWith('enqueue:'))

@@ -19,6 +19,9 @@ import { HOOKS as data } from './data.tsx'
 import { HOOKS as media } from './media.tsx'
 import { HOOKS as form } from './form.tsx'
 import { HOOKS as schedule } from './schedule.tsx'
+import { HOOKS as mail } from './mail.ts'
+import { HOOKS as activity } from './activity.ts'
+import { HOOKS as calendar } from './calendar.ts'
 
 const ALL = [
   ...icons,
@@ -35,6 +38,9 @@ const ALL = [
   ...nav,
   ...chrome,
   ...layout,
+  ...mail,
+  ...activity,
+  ...calendar,
 ]
 
 /** Sorted and de-duplicated: two files may legitimately share `title`. */
@@ -61,6 +67,9 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['media', media],
           ['form', form],
           ['schedule', schedule],
+          ['mail', mail],
+          ['activity', activity],
+          ['calendar', calendar],
         ] as Array<[string, readonly string[]]>
       )
         .filter(([, list]) => (list as readonly string[]).includes(h))

@@ -204,6 +204,7 @@ export const partnerDetailScreen = (
           body: recordForm({
             action: localized(`/admin/partners/${row.id}`, locale),
             submit: _('partner_backend.action.save'),
+            submitVariant: 'primary',
             errors: options.errors,
             fields: [
               { name: 'name', label: _('partner_backend.field.name'), value: row.name, required: true },
@@ -237,6 +238,7 @@ export const partnerDetailScreen = (
           body: recordForm({
             action: localized(`/admin/partners/${row.id}/roles`, locale),
             submit: _('partner_backend.action.saveRoles'),
+            submitVariant: 'secondary',
             fields: ['customer', 'supplier', 'employee'].map((role) => ({
               name: role,
               label: _(`partner.role.${role}`),
@@ -257,6 +259,7 @@ export const partnerDetailScreen = (
                 body: recordForm({
                   action: localized(`/admin/partners/${row.id}/addresses/${address.id}`, locale),
                   submit: _('partner_backend.action.saveAddress'),
+                  submitVariant: 'secondary',
                   fields: addressFields(_, address),
                 }),
               }),
@@ -268,6 +271,7 @@ export const partnerDetailScreen = (
               body: recordForm({
                 action: localized(`/admin/partners/${row.id}/addresses`, locale),
                 submit: _('partner_backend.action.addAddress'),
+                submitVariant: 'secondary',
                 fields: addressFields(_, { use: 'contact', country: 'VN' }),
               }),
             }),
@@ -281,6 +285,7 @@ export const partnerDetailScreen = (
           body: recordForm({
             action: localized(`/admin/partners/${row.id}/terms`, locale),
             submit: _('partner_backend.action.saveTerms'),
+            submitVariant: 'secondary',
             fields: [
               {
                 name: 'creditLimit',
@@ -318,6 +323,7 @@ export const newPartnerScreen = (
       body: recordForm({
         action: localized('/admin/partners/new', locale),
         submit: _('partner_backend.action.create'),
+        submitVariant: 'primary',
         cancelHref: localized('/admin/partners', locale),
         cancelLabel: _('partner_backend.action.cancel'),
         errors,
