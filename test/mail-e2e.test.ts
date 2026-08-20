@@ -4,6 +4,7 @@ import { defineApp, defineModule, eq, from, KetError } from 'ketjs'
 import type { Ctx, Row } from 'ketjs'
 import { createTestApp, TestHttpError } from 'ketjs/testing'
 import { company, mail, partner, storage, user } from 'ketsuite'
+import { address } from 'ketsuite'
 import { ensureThread, followThread, postMessage } from '../packages/ketsuite/src/modules/mail/index.ts'
 
 const recordBridge = defineModule({
@@ -103,7 +104,7 @@ const recordBridge = defineModule({
 
 const app = defineApp({
   name: 'mail_headless_e2e',
-  modules: [partner, company, storage, user, mail, recordBridge],
+  modules: [address, partner, company, storage, user, mail, recordBridge],
   headless: true,
   serve: {
     bootstrap: ['mail_e2e_bridge'],

@@ -59,6 +59,106 @@ const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate
     (error) => `${error.field ? `${error.field}: ` : ''}${_(error.code ?? 'partner.error.invalid')}`,
   )
 
+const addressFormsFor = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  partnerId: string,
+  addresses: AnyRow[],
+) => {
+  const _ = ctx.translate(ctx.localeOf(url, req))
+  const installed = (await ctx.call('address.listCountries', {}, url, req)) as AnyRow[]
+  const available = (await ctx.call('address.availableCatalogs', {}, url, req)) as AnyRow[]
+  const countryCodes = new Set([
+    ...installed.map((row) => String(row.code)),
+    ...available.map((row) => String(row.countryCode)),
+  ])
+  const countries = [...countryCodes].sort().map((value) => ({
+    value,
+    label:
+      installed.find((row) => row.code === value)?.localName ||
+      installed.find((row) => row.code === value)?.name ||
+      (value === 'VN' ? _('partner_backend.address.country.VN') : value),
+  }))
+  const roots = new Map<string, AnyRow[]>()
+  const children = new Map<string, AnyRow[]>()
+  const list = async (countryCode: string, parentId?: string | null) => {
+    const cache = parentId ? children : roots
+    const key = parentId ? `${countryCode}:${parentId}` : countryCode
+    const held = cache.get(key)
+    if (held) return held
+    const rows = (await ctx.call(
+      'address.listDivisionChildren',
+      { countryCode, parentId: parentId || null, limit: 1000 },
+      url,
+      req,
+    )) as AnyRow[]
+    cache.set(key, rows)
+    return rows
+  }
+  const uses = ['contact', 'invoice', 'delivery', 'other'].map((value) => ({
+    value,
+    label: _(`partner.use.${value}`),
+  }))
+  const labels = {
+    use: _('partner_backend.address.use'),
+    street: _('partner_backend.address.street'),
+    street2: _('partner_backend.address.street2'),
+    locality: _('partner_backend.address.locality'),
+    localityHint: _('partner_backend.address.localityHint'),
+    postalCode: _('partner_backend.address.zip'),
+    country: _('partner_backend.address.country'),
+    province: _('partner_backend.address.province'),
+    division: _('partner_backend.address.division'),
+    chooseProvince: _('partner_backend.address.chooseProvince'),
+    chooseDivision: _('partner_backend.address.chooseDivision'),
+    loading: _('partner_backend.address.loading'),
+    loadError: _('partner_backend.address.loadError'),
+    catalogMissing: _('partner_backend.address.catalogMissing'),
+    default: _('partner_backend.address.default'),
+    previewHint: _('partner_backend.address.previewHint'),
+  }
+  const render = async (address: AnyRow, isNew = false) => {
+    const countryCode = String(address.countryCode || 'VN')
+    let provinceId: string | null = null
+    if (address.divisionId) {
+      const path = (await ctx.call(
+        'address.resolveDivisionPath',
+        { id: address.divisionId },
+        url,
+        req,
+      )) as AnyRow[]
+      provinceId = path.find((entry) => Number(entry.level) === 1)?.id
+        ? String(path.find((entry) => Number(entry.level) === 1)!.id)
+        : null
+    }
+    const body = await ctx.joint(url, req, 'partner_backend:address.form', {
+      action: isNew
+        ? inLocale(url, `/admin/partners/${partnerId}/addresses`)
+        : inLocale(url, `/admin/partners/${partnerId}/addresses/${address.id}`),
+      address,
+      countries,
+      provinces: await list(countryCode),
+      provinceId,
+      divisions: provinceId ? await list(countryCode, provinceId) : [],
+      uses,
+      labels,
+      submitLabel: isNew ? _('partner_backend.action.addAddress') : _('partner_backend.action.saveAddress'),
+      defaultCountry: 'VN',
+    })
+    return {
+      title: isNew
+        ? _('partner_backend.address.new')
+        : `${_(`partner.use.${address.use}`)}${address.isDefault ? ` · ${_('partner_backend.address.default')}` : ''}`,
+      body,
+    }
+  }
+  return Promise.all([
+    ...addresses.map((address) => render(address)),
+    render({ use: 'contact', countryCode: 'VN', isDefault: false }, true),
+  ])
+}
+
 const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
@@ -74,6 +174,13 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     }),
   ])
   if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
+  const addressForms = await addressFormsFor(
+    ctx,
+    url,
+    req,
+    id,
+    Array.isArray(row.addresses) ? (row.addresses as AnyRow[]) : [],
+  )
   return document(
     ctx,
     url,
@@ -82,7 +189,7 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     partnerDetailScreen(
       _,
       row as never,
-      { parents, terms: terms as never, errors, integration },
+      { parents, terms: terms as never, errors, integration, addressForms },
       await frameFor(ctx, url, req),
       url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
     ),
@@ -247,12 +354,12 @@ export const routes: Record<string, RouteEntry> = {
           id: randomUUID(),
           partnerId: params.id,
           use: form.use || 'contact',
-          street: form.street ?? '',
+          street1: form.street1 ?? '',
           street2: form.street2 || null,
-          city: form.city ?? '',
-          zip: form.zip || null,
-          state: form.state || null,
-          country: form.country ?? '',
+          locality: form.locality || null,
+          postalCode: form.postalCode || null,
+          countryId: form.countryId || 'VN',
+          divisionId: form.divisionId || null,
           isDefault: form.isDefault === '1',
         },
         url,
@@ -280,12 +387,12 @@ export const routes: Record<string, RouteEntry> = {
           id: params.addressId,
           partnerId: params.id,
           use: form.use || 'contact',
-          street: form.street ?? '',
+          street1: form.street1 ?? '',
           street2: form.street2 || null,
-          city: form.city ?? '',
-          zip: form.zip || null,
-          state: form.state || null,
-          country: form.country ?? '',
+          locality: form.locality || null,
+          postalCode: form.postalCode || null,
+          countryId: form.countryId || 'VN',
+          divisionId: form.divisionId || null,
           isDefault: form.isDefault === '1',
         },
         url,

@@ -52,6 +52,7 @@ try {
     userId: 'visual-admin',
     companyId: 'default',
   })
+  await call('address.installCatalog', { countryCode: 'VN' })
   for (const guest of [
     { id: 'guest-an', name: 'Nguyễn Minh An' },
     { id: 'guest-binh', name: 'Trần Gia Bình' },
@@ -76,8 +77,9 @@ try {
     publicName: 'Ket Hotel',
     accommodationType: 'hotel',
     starRating: 4,
-    city: 'TP. Hồ Chí Minh',
-    country: 'Việt Nam',
+    street1: '25 Nguyễn Huệ',
+    countryId: 'VN',
+    divisionId: 'VN:2025-07-01:70101063',
     defaultCancellationPolicyId: 'flexible',
   })
   await call('hospitality_core.saveBuilding', {

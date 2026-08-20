@@ -5,6 +5,7 @@ import type { Ctx, FnSpec } from 'ketjs'
 import { createTestApp } from 'ketjs/testing'
 import {
   activity,
+  address,
   calendar,
   company,
   mail,
@@ -342,6 +343,7 @@ test('Odoo 19 collaboration snapshot previews, imports idempotently and reports 
   const app = defineApp({
     name: 'odoo_collaboration_import_e2e',
     modules: [
+      address,
       partner,
       company,
       storage,

@@ -116,12 +116,15 @@ export const partnersScreen = (
 type AddressRow = {
   id: string
   use: string
-  street: string
+  street1: string
   street2?: string | null
-  city: string
-  zip?: string | null
-  state?: string | null
-  country: string
+  locality?: string | null
+  postalCode?: string | null
+  countryCode: string
+  countryId?: string | null
+  divisionId?: string | null
+  divisionText?: string | null
+  oneLine?: string | null
   isDefault?: boolean
 }
 
@@ -133,31 +136,6 @@ type PartnerDetail = PartnerListRow & {
   roles: Array<{ role: string }>
 }
 
-const addressFields = (_: Translator, address: Partial<AddressRow>) => [
-  {
-    name: 'use',
-    label: _('partner_backend.address.use'),
-    type: 'select' as const,
-    value: address.use ?? 'contact',
-    options: ['contact', 'invoice', 'delivery', 'other'].map((value) => ({
-      value,
-      label: _(`partner.use.${value}`),
-    })),
-  },
-  { name: 'street', label: _('partner_backend.address.street'), value: address.street, required: true },
-  { name: 'street2', label: _('partner_backend.address.street2'), value: address.street2 },
-  { name: 'city', label: _('partner_backend.address.city'), value: address.city, required: true },
-  { name: 'state', label: _('partner_backend.address.state'), value: address.state },
-  { name: 'zip', label: _('partner_backend.address.zip'), value: address.zip },
-  { name: 'country', label: _('partner_backend.address.country'), value: address.country, required: true },
-  {
-    name: 'isDefault',
-    label: _('partner_backend.address.default'),
-    type: 'checkbox' as const,
-    value: address.isDefault,
-  },
-]
-
 export const partnerDetailScreen = (
   _: Translator,
   row: PartnerDetail,
@@ -166,6 +144,7 @@ export const partnerDetailScreen = (
     terms?: { creditLimit?: string | number | null; note?: string | null } | null
     errors?: string[]
     integration?: JSXChild
+    addressForms: Array<{ title: string; body: JSXChild }>
   },
   frame: Frame,
   locale = '',
@@ -252,30 +231,12 @@ export const partnerDetailScreen = (
         title: _('partner_backend.addresses.title'),
         description: _('partner_backend.addresses.hint'),
         body: stack([
-          ...row.addresses.map((address) =>
+          ...options.addressForms.map((address) =>
             section({
-              title: `${_(`partner.use.${address.use}`)}${address.isDefault ? ` · ${_('partner_backend.address.default')}` : ''}`,
-              body: surface({
-                body: recordForm({
-                  action: localized(`/admin/partners/${row.id}/addresses/${address.id}`, locale),
-                  submit: _('partner_backend.action.saveAddress'),
-                  submitVariant: 'secondary',
-                  fields: addressFields(_, address),
-                }),
-              }),
+              title: address.title,
+              body: surface({ body: address.body }),
             }),
           ),
-          section({
-            title: _('partner_backend.address.new'),
-            body: surface({
-              body: recordForm({
-                action: localized(`/admin/partners/${row.id}/addresses`, locale),
-                submit: _('partner_backend.action.addAddress'),
-                submitVariant: 'secondary',
-                fields: addressFields(_, { use: 'contact', country: 'VN' }),
-              }),
-            }),
-          }),
         ]),
       }),
       section({

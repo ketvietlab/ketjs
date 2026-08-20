@@ -4,8 +4,9 @@ import { performance } from 'node:perf_hooks'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter } from 'ketjs'
 import { company, partner, pricing, product, stock, uom } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const modules = [partner, company, uom, product, pricing, stock]
+const modules = [address, partner, company, uom, product, pricing, stock]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'bench', branches: null }
 

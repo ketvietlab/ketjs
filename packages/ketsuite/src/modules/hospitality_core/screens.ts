@@ -24,6 +24,7 @@ export type PropertyRow = {
   starRating: number
   city?: string | null
   country?: string | null
+  addressLine?: string | null
   rooms: number
   availableRooms: number
   attentionRooms: number
@@ -174,7 +175,7 @@ const propertyColumns = (_: Translator): Array<Column<PropertyRow>> => [
   {
     key: 'location',
     label: _('hospitality_core.col.location'),
-    cell: (row) => [row.city, row.country].filter(Boolean).join(', ') || '—',
+    cell: (row) => row.addressLine || [row.city, row.country].filter(Boolean).join(', ') || '—',
   },
   {
     key: 'rooms',

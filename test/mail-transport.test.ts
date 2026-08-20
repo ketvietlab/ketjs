@@ -13,6 +13,7 @@ import {
   storage,
   user,
 } from 'ketsuite'
+import { address } from 'ketsuite'
 import { deliveryEnvelope, queueTemplate } from '../packages/ketsuite/src/modules/mail_transport/index.ts'
 import { renderTemplate } from '../packages/ketsuite/src/modules/mail_transport/template.ts'
 
@@ -157,7 +158,7 @@ test('mail transport: transactional snapshots survive edits, retries, accepted-c
   })
   const app = defineApp({
     name: 'mail_transport_e2e',
-    modules: [partner, company, storage, user, mail, mailTransport, fixtureBridge],
+    modules: [address, partner, company, storage, user, mail, mailTransport, fixtureBridge],
     headless: true,
     worker: { queues: { mail: 1 } },
     serve: {
@@ -314,7 +315,7 @@ test('calendar email producer creates one immutable RSVP delivery per attendee',
   const provider = memoryTransport({ now: () => new Date('2026-08-20T12:00:00.000Z') })
   const app = defineApp({
     name: 'calendar_mail_transport_e2e',
-    modules: [partner, company, storage, user, mail, mailTransport, calendar, calendarMailTransport],
+    modules: [address, partner, company, storage, user, mail, mailTransport, calendar, calendarMailTransport],
     headless: true,
     worker: { queues: { default: 1, mail: 1 } },
     serve: {

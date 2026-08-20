@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "countries": {
+    "VN": {
+      "recommendedCatalog": "2025-07-01",
+      "catalogs": {
+        "2025-07-01": {
+          "manifest": "VN/catalogs/2025-07-01/manifest.json",
+          "sha256": "5f949a50d10ab8ddb9fb13199faec5d873eb2c37df06fbb0067228956a1a3e8e"
+        }
+      }
+    }
+  }
+}

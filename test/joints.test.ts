@@ -255,13 +255,25 @@ test('bridge: a module does not depend on the admin just to add a button to it',
   //
   // The fill belongs in a bridge that installs itself once both sides are there,
   // which is what install:'auto' was built for and what Odoo does with sale_stock.
-  const { company, partner, product, productBackend, productMedia, storage, uom } = await import('ketsuite')
+  const { address, company, partner, product, productBackend, productMedia, storage, uom } = await import(
+    'ketsuite'
+  )
   const backend = (await import('ketsuite/backend')).default
 
   const catalogueOnly = compose([uom, product])
   assert.ok(catalogueOnly.modules['product'], 'a catalogue composes with no admin at all')
 
-  const both = compose([partner, company, storage, uom, product, productMedia, backend, productBackend])
+  const both = compose([
+    address,
+    partner,
+    company,
+    storage,
+    uom,
+    product,
+    productMedia,
+    backend,
+    productBackend,
+  ])
   assert.equal(
     both.modules['product_backend']!.install,
     'auto',

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "countryCode": "VN",
+  "postalCode": {
+    "required": false,
+    "pattern": "^[0-9]{5,6}$"
+  },
+  "divisionLevels": [
+    {
+      "level": 1,
+      "labelKey": "address.level.province",
+      "allowedKinds": [
+        "province",
+        "municipality"
+      ],
+      "required": true
+    },
+    {
+      "level": 2,
+      "labelKey": "address.level.commune",
+      "allowedKinds": [
+        "commune",
+        "ward",
+        "special_zone"
+      ],
+      "required": true
+    }
+  ],
+  "format": {
+    "lines": [
+      [
+        "street1"
+      ],
+      [
+        "street2"
+      ],
+      [
+        "division:2",
+        "division:1"
+      ],
+      [
+        "postalCode"
+      ],
+      [
+        "country"
+      ]
+    ]
+  }
+}

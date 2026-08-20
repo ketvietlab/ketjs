@@ -3,11 +3,13 @@ import { test } from 'node:test'
 import { compose, formatMissing, missingMessages, renderToString, translator } from 'ketjs'
 import backend, { appsScreen } from 'ketsuite/backend'
 import {
-  company,
   account,
   accountBackend,
   accountPartner,
   accountPartnerBackend,
+  address,
+  addressBackend,
+  company,
   partner,
   partnerBackend,
   pricing,
@@ -32,6 +34,7 @@ import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_
 import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.ts'
 
 const modules = [
+  address,
   partner,
   partnerBackend,
   company,
@@ -48,6 +51,7 @@ const modules = [
   sale,
   pos,
   backend,
+  addressBackend,
   productBackend,
   pricingBackend,
   stockBackend,
@@ -66,6 +70,8 @@ test('ketsuite i18n: business catalogues have complete vi/en parity', () => {
 
 test('ketsuite i18n: app metadata is translated instead of falling back to Vietnamese literals', () => {
   const rows = [
+    address,
+    addressBackend,
     product,
     productMedia,
     pricing,
@@ -97,9 +103,12 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
   const html = renderToString(appsScreen(translator(manifest, 'en'), rows))
 
   assert.match(html, /Product images/)
+  assert.match(html, /Shared countries, versioned administrative divisions/)
+  assert.match(html, /Install and inspect country administrative catalogs/)
   assert.match(html, /Odoo 19 stock, transfers, and replenishment/)
   assert.match(html, /Manage company pricelists/)
   assert.doesNotMatch(html, /Hình ảnh sản phẩm/)
+  assert.doesNotMatch(html, /Quốc gia, catalog địa giới/)
   assert.doesNotMatch(html, /Tồn kho, dịch chuyển/)
   assert.doesNotMatch(html, /Danh sách bảng giá theo company/)
 })

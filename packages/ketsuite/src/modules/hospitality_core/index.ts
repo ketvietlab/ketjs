@@ -11,7 +11,7 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'hospitality_core',
   version: '0.1.0',
-  depends: ['backend', 'storage', 'partner'],
+  depends: ['backend', 'storage', 'partner', 'address'],
   app: true,
   title: 'Khách sạn',
   summary: 'Cơ sở lưu trú, loại phòng, phòng, tiện nghi và chính sách vận hành.',

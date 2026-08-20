@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { callFn, compose, registerFunctions, renderSql, planMigration, schemaFromManifest } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { partner as shippedPartner } from 'ketsuite'
+import { address } from 'ketsuite'
 
 const url = process.env.KET_BENCH_PG
 if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark database')
@@ -13,7 +14,7 @@ if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark 
 const partner = process.env.KET_BENCH_PARTNER_MODULE
   ? (await import(pathToFileURL(process.env.KET_BENCH_PARTNER_MODULE).href)).default
   : shippedPartner
-const modules = [partner]
+const modules = [address, partner]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'bench', branch: 'main', branches: null }
 const adapter = postgresAdapter(url)

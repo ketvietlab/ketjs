@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter, schemaFromManifest } from 'ketjs'
 import type { Adapter, Manifest, Scope } from 'ketjs'
 import { partner, company, user, hashPassword, verifyPassword, needsRehash } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const mods = [partner, company, user]
+const mods = [address, partner, company, user]
 const SCOPE: Scope = { company: 'c1' }
 
 async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {

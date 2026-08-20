@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, renderToString, sqliteAdapter } from 'ketjs'
 import { company, mediaPanel, partner, product, productBackend, productMedia, storage, uom } from 'ketsuite'
+import { address } from 'ketsuite'
 
 test('product media: unavailable state performs no image request and cannot upload', () => {
   const html = renderToString(mediaPanel({ status: 'unavailable' }))
@@ -35,7 +36,7 @@ test('product media: ready gallery exposes native, storage-neutral actions', () 
 })
 
 test('product media: metadata is ordered and primary is unique per target', async () => {
-  const modules = [partner, company, storage, uom, product, productMedia]
+  const modules = [address, partner, company, storage, uom, product, productMedia]
   const manifest = compose(modules, { headless: true })
   const adapter = sqliteAdapter()
   await adapter.open()
@@ -93,7 +94,17 @@ test('product media: metadata is ordered and primary is unique per target', asyn
 
 test('product media: backend retains named integration joints and Product stays headless', async () => {
   const backend = (await import('ketsuite/backend')).default
-  const manifest = compose([partner, company, storage, uom, product, productMedia, backend, productBackend])
+  const manifest = compose([
+    address,
+    partner,
+    company,
+    storage,
+    uom,
+    product,
+    productMedia,
+    backend,
+    productBackend,
+  ])
   assert.deepEqual(manifest.joints['product_backend:template.media']!.props, { templateId: 'id' })
   assert.deepEqual(manifest.joints['product_backend:variant.media']!.props, { productId: 'id' })
   assert.equal('product.Media' in manifest.models, false)

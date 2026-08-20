@@ -4,6 +4,7 @@ import { callFn, compose, migrateOne, registerFunctions } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { company, loyalty, partner, pricing, product, uom } from 'ketsuite'
+import { address } from 'ketsuite'
 
 const configured = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const adminUrl = new URL(configured)
@@ -23,7 +24,7 @@ const reachable = await (async () => {
 })()
 
 const live = { skip: reachable ? false : `no PostgreSQL at ${adminUrl.toString()}` }
-const modules = [partner, company, uom, product, pricing, loyalty]
+const modules = [address, partner, company, uom, product, pricing, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 

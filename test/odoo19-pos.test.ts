@@ -15,8 +15,9 @@ import {
   uom,
   user,
 } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const modules = [partner, company, user, uom, product, pricing, stock, account, pos]
+const modules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
 const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>

@@ -5,11 +5,12 @@ import { performance } from 'node:perf_hooks'
 import { callFn, compose, planMigration, registerFunctions, renderSql, schemaFromManifest } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { company, oauth, partner, user } from 'ketsuite'
+import { address } from 'ketsuite'
 
 const url = process.env.KET_BENCH_PG
 if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark database')
 
-const modules = [partner, company, user, oauth]
+const modules = [address, partner, company, user, oauth]
 const manifest = compose(modules, { headless: true })
 const scope = {
   company: 'company-a',

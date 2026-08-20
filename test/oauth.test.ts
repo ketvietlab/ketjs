@@ -3,8 +3,9 @@ import { createHash } from 'node:crypto'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import { company, oauth, partner, user } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const modules = [partner, company, user, oauth]
+const modules = [address, partner, company, user, oauth]
 
 const boot = async () => {
   const manifest = compose(modules)

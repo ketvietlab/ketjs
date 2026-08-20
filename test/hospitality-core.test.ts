@@ -11,9 +11,10 @@ import {
 } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
 import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
-const modules = [partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const ACME = { company: 'acme', branches: null }
 const GLOBEX = { company: 'globex', branches: null }
@@ -146,6 +147,46 @@ test('hospitality core: explicit booleans override creation defaults', async () 
       { timezone: 'Pacific/Honolulu', enforceTimes: 0, childrenStayFree: 1 },
     )
     assert.equal(savedType.published, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality core: property location uses the active address catalog', async () => {
+  const adapter = await boot()
+  try {
+    await call('address.installCatalog', { countryCode: 'VN' }, adapter)
+    const invalidCountry = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'invalid-country',
+        code: 'INVALID',
+        name: 'Invalid country',
+        accommodationType: 'hotel',
+        countryCode: 'France',
+      },
+      adapter,
+    )
+    assert.equal((invalidCountry.value as Row).ok, false)
+    assert.equal(((invalidCountry.value as Row).errors as Row[])[0]?.code, 'address.error.countryCode')
+
+    const saved = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'hanoi-hotel',
+        code: 'HAN',
+        name: 'Ket Hotel Hà Nội',
+        accommodationType: 'hotel',
+        street1: '12 Nguyễn Huệ',
+        countryId: 'VN',
+        divisionId: 'VN:2025-07-01:10101003',
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    const detail = await call('hospitality_core.getProperty', { id: 'hanoi-hotel' }, adapter)
+    assert.equal((detail.value as Row).addressLine, '12 Nguyễn Huệ, Phường Ba Đình, Hà Nội, Việt Nam')
+    assert.equal((detail.value as Row).countryId, 'VN')
   } finally {
     await adapter.close()
   }

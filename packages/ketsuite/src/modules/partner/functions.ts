@@ -1,6 +1,7 @@
 import { asc, defineFn, deleteFrom, eq, from, like } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
+import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
 const issue = (field: string, code: string, params?: Record<string, unknown>): Issue => ({
@@ -12,6 +13,105 @@ const invalid = (errors: Issue[]) => ({ ok: false, errors })
 class DefaultConflict extends Error {}
 const changeIssues = (errors: Array<{ field: string }>): Issue[] =>
   errors.map((error) => issue(error.field, 'partner.error.invalid'))
+
+type AddressArgs = Record<string, unknown>
+const canonicalAddress = (args: AddressArgs) => ({
+  street1: String(args.street1 ?? args.street ?? '').trim(),
+  street2: args.street2 ? String(args.street2).trim() : null,
+  locality: args.locality || args.city ? String(args.locality ?? args.city).trim() : null,
+  postalCode: args.postalCode || args.zip ? String(args.postalCode ?? args.zip).trim() : null,
+  countryCode: String(args.countryId ?? args.countryCode ?? args.country ?? '')
+    .trim()
+    .toUpperCase(),
+  divisionId: args.divisionId ? String(args.divisionId) : null,
+  divisionText: args.divisionText || args.state ? String(args.divisionText ?? args.state).trim() : null,
+})
+
+const presentationOf = async (ctx: Ctx, row: Row): Promise<Row> => {
+  const canonical = {
+    id: row.id,
+    street1: row.street1,
+    street2: row.street2,
+    locality: row.locality,
+    postalCode: row.postalCode,
+    countryId: row.countryId,
+    divisionId: row.divisionId,
+  }
+  let oneLine = [row.street1, row.street2, row.divisionText, row.locality, row.postalCode, row.countryCode]
+    .filter(Boolean)
+    .join(', ')
+  let divisionPath: Row[] = []
+  if (row.countryId) {
+    const resolved = await resolveAddress(ctx, canonical)
+    if (resolved.value) {
+      oneLine = resolved.value.oneLine
+      divisionPath = resolved.value.divisions
+    }
+  }
+  return {
+    ...row,
+    oneLine,
+    divisionPath,
+    // Compatibility projection for callers created before canonical address refs.
+    street: row.street1,
+    city: divisionPath.at(-1)?.officialName ?? row.locality ?? '',
+    zip: row.postalCode,
+    state: divisionPath.at(-2)?.officialName ?? row.divisionText,
+    country: row.countryCode,
+  }
+}
+
+export const defaultAddressFor = async (ctx: Ctx, partnerId: string, use: string): Promise<Row | null> => {
+  const D = ctx.table('partner.AddressDefault')
+  const selected = await ctx.db.one(from(D).where(eq(D.partnerId, partnerId), eq(D.use, use)))
+  if (!selected) return null
+  const A = ctx.table('partner.Address')
+  return ctx.db.one(from(A).where(eq(A.id, selected.addressId)))
+}
+
+export const snapshotPartnerAddress = async (
+  ctx: Ctx,
+  addressId: string | null | undefined,
+  capturedAt = new Date().toISOString(),
+): Promise<Record<string, unknown> | null> => {
+  if (!addressId) return null
+  const A = ctx.table('partner.Address')
+  const row = await ctx.db.one(from(A).where(eq(A.id, addressId)))
+  if (!row) return null
+  if (row.countryId) {
+    const result = await snapshotAddress(
+      ctx,
+      {
+        id: row.id,
+        street1: row.street1,
+        street2: row.street2,
+        locality: row.locality,
+        postalCode: row.postalCode,
+        countryId: row.countryId,
+        divisionId: row.divisionId,
+      },
+      capturedAt,
+    )
+    if (result.snapshot) return result.snapshot
+  }
+  const fallback = await presentationOf(ctx, row)
+  return {
+    schemaVersion: 1,
+    sourceAddressId: row.id,
+    capturedAt,
+    catalogId: null,
+    country: { id: null, code: row.countryCode, name: row.countryCode },
+    divisions: [],
+    street1: row.street1,
+    street2: row.street2 ?? null,
+    locality: row.locality ?? null,
+    postalCode: row.postalCode ?? null,
+    lines: [row.street1, row.street2, row.divisionText, row.locality, row.postalCode, row.countryCode].filter(
+      Boolean,
+    ),
+    oneLine: fallback.oneLine,
+  }
+}
 
 const parentIssue = async (
   ctx: Ctx,
@@ -148,6 +248,9 @@ export const functions: Record<string, FnSpec> = {
       'read:partner.Address',
       'read:partner.AddressDefault',
       'read:partner.Role',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
     ],
     agent: true,
     handler: async (ctx: Ctx, a) => {
@@ -165,12 +268,56 @@ export const functions: Record<string, FnSpec> = {
       const selected = new Set(defaults.map((item) => item.addressId))
       return {
         ...row,
-        addresses: addresses.map((address) => ({
-          ...address,
-          isDefault: selected.has(address.id),
-        })),
+        addresses: await Promise.all(
+          addresses.map(async (address) => ({
+            ...(await presentationOf(ctx, address)),
+            isDefault: selected.has(address.id),
+          })),
+        ),
         roles,
       }
+    },
+  }),
+
+  listAddresses: defineFn({
+    input: { partnerId: 'id', use: 'text?' },
+    output: {
+      id: 'id',
+      partnerId: 'id',
+      use: 'text',
+      street1: 'text',
+      street2: 'text?',
+      locality: 'text?',
+      postalCode: 'text?',
+      countryCode: 'text',
+      countryId: 'id?',
+      divisionId: 'id?',
+      divisionText: 'text?',
+      oneLine: 'text',
+      isDefault: 'bool',
+    },
+    effects: [
+      'read:partner.Address',
+      'read:partner.AddressDefault',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const A = ctx.table('partner.Address')
+      let query = from(A).where(eq(A.partnerId, args.partnerId))
+      if (args.use) query = query.where(eq(A.use, args.use))
+      const rows = await ctx.db.all(query)
+      const D = ctx.table('partner.AddressDefault')
+      const defaults = new Set(
+        (await ctx.db.all(from(D).select(D.addressId).where(eq(D.partnerId, args.partnerId)))).map(
+          (row) => row.addressId,
+        ),
+      )
+      return Promise.all(
+        rows.map(async (row) => ({ ...(await presentationOf(ctx, row)), isDefault: defaults.has(row.id) })),
+      )
     },
   }),
 
@@ -231,12 +378,19 @@ export const functions: Record<string, FnSpec> = {
       id: 'id',
       partnerId: 'id',
       use: 'text',
-      street: 'text',
+      street: 'text?',
+      street1: 'text?',
       street2: 'text?',
-      city: 'text',
+      city: 'text?',
+      locality: 'text?',
       zip: 'text?',
+      postalCode: 'text?',
       state: 'text?',
-      country: 'text',
+      divisionText: 'text?',
+      country: 'text?',
+      countryCode: 'text?',
+      countryId: 'id?',
+      divisionId: 'id?',
       isDefault: 'bool?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -246,15 +400,36 @@ export const functions: Record<string, FnSpec> = {
       'read:partner.AddressDefault',
       'write:partner.Address',
       'write:partner.AddressDefault',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const errors: Issue[] = []
+      const address = canonicalAddress(a)
       if (!ADDRESS_USES.includes(String(a.use) as never))
         errors.push(issue('use', 'partner.error.addressUse', { allowed: ADDRESS_USES }))
-      for (const field of ['street', 'city', 'country'] as const)
-        if (!String(a[field]).trim()) errors.push(issue(field, 'partner.error.required'))
+      if (!address.street1) errors.push(issue('street1', 'partner.error.required'))
+      if (!/^[A-Z]{2}$/.test(address.countryCode))
+        errors.push(issue('countryId', 'address.error.countryCode'))
+      const country = /^[A-Z]{2}$/.test(address.countryCode)
+        ? await ctx.db.one(
+            from(ctx.table('address.Country')).where(
+              eq(ctx.table('address.Country').id, address.countryCode),
+            ),
+          )
+        : null
+      if (country) {
+        const checked = await validateAddress(ctx, {
+          ...address,
+          countryId: address.countryCode,
+        })
+        errors.push(...checked.issues)
+      } else if (address.divisionId) {
+        errors.push(issue('divisionId', 'address.error.catalogNotInstalled'))
+      }
       if (errors.length) return invalid(errors)
 
       try {
@@ -269,9 +444,28 @@ export const functions: Record<string, FnSpec> = {
             if (!(await tx.db.one(from(P).where(eq(P.id, a.partnerId)))))
               return invalid([issue('partnerId', 'partner.error.partnerMissing')])
           }
+          const values = {
+            id: a.id,
+            partnerId: a.partnerId,
+            use: a.use,
+            ...address,
+            countryId: country ? address.countryCode : null,
+          }
           const cs = tx
-            .change('partner.Address', a, existing)
-            .cast(['id', 'partnerId', 'use', 'street', 'street2', 'city', 'zip', 'state', 'country'])
+            .change('partner.Address', values, existing)
+            .cast([
+              'id',
+              'partnerId',
+              'use',
+              'street1',
+              'street2',
+              'locality',
+              'postalCode',
+              'countryCode',
+              'countryId',
+              'divisionId',
+              'divisionText',
+            ])
           if (!cs.valid) return invalid(changeIssues(cs.errors))
           await tx.db.commit(cs, existing ? { id: a.id } : undefined)
           if (a.isDefault !== true || (existing && existing.use !== a.use)) {
@@ -290,6 +484,22 @@ export const functions: Record<string, FnSpec> = {
           return invalid([issue('isDefault', 'partner.error.defaultConflict')])
         throw error
       }
+    },
+  }),
+
+  snapshotAddress: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', snapshot: 'json?', errors: 'json?' },
+    effects: [
+      'read:partner.Address',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const snapshot = await snapshotPartnerAddress(ctx, String(args.id))
+      return snapshot ? { ok: true, snapshot } : invalid([issue('id', 'partner.error.addressMissing')])
     },
   }),
 

@@ -84,6 +84,19 @@ export {
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
 export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './modules/pos/functions.ts'
+export { default as address } from './modules/address/index.ts'
+export {
+  availableCatalogs as availableAddressCatalogs,
+  loadCatalog as loadAddressCatalog,
+} from './modules/address/loader.ts'
+export {
+  divisionPath,
+  resolveAddress,
+  snapshotAddress,
+  validateAddress,
+} from './modules/address/format.ts'
+export type { AddressInput, AddressIssue, ResolvedAddress } from './modules/address/format.ts'
+export { default as addressBackend } from './modules/address_backend/index.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as partnerBackend } from './modules/partner_backend/index.ts'
 export { default as accountPartner } from './modules/account_partner/index.ts'

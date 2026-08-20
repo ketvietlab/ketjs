@@ -10,6 +10,7 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'k
 import type { Adapter, Row } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { company, loyalty, partner, pricing, product, uom } from 'ketsuite'
+import { address } from 'ketsuite'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const measuredRuns = Math.max(7, Number(process.env.KET_BENCH_RUNS ?? 7))
@@ -28,7 +29,7 @@ for (const [name, value] of Object.entries({
 }))
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`)
 
-const modules = [partner, company, uom, product, pricing, loyalty]
+const modules = [address, partner, company, uom, product, pricing, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'bench', branches: null }
 registerFunctions(modules)

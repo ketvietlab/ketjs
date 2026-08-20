@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "country": {
+    "code": "VN",
+    "alpha3": "VNM",
+    "numericCode": "704",
+    "name": "Vietnam",
+    "officialName": "Socialist Republic of Vietnam",
+    "localName": "Việt Nam",
+    "callingCode": "84"
+  },
+  "recommendedCatalog": "2025-07-01",
+  "catalogs": [
+    {
+      "version": "2025-07-01",
+      "codeSystem": "VIDOO_VN_ADDRESS_2025",
+      "authority": "Vidoo Vietnam Address Core",
+      "legalBasis": "19/2025/QĐ-TTg",
+      "effectiveFrom": "2025-07-01",
+      "sourceUrl": "https://vanban.chinhphu.vn/?docid=214409&pageid=27160",
+      "sourceAttribution": {
+        "name": "Vidoo Vietnam Address Core",
+        "author": "vidoo.dev",
+        "website": "https://vidoo.dev",
+        "license": "LGPL-3.0"
+      },
+      "sourceFiles": [
+        {
+          "name": "provinces.json",
+          "sha256": "b6af62499d891bf2bc9b7c7f11ed14f69a16422b4e1b796331d94b2a4968197d",
+          "count": 34
+        },
+        {
+          "name": "wards.json",
+          "sha256": "0b9d49d38486e59b08cefd4fe5930e6e4f22171b7652f2d25f5cb6e88a1236d2",
+          "count": 3321
+        }
+      ],
+      "policy": {
+        "path": "policy.json",
+        "sha256": "8f3770eb07328e492570f6b36e0e5e215303561efd7dcccfcab7db0b841a31ba"
+      },
+      "divisions": {
+        "totalCount": 3355,
+        "counts": {
+          "municipality": 6,
+          "province": 28,
+          "ward": 687,
+          "commune": 2621,
+          "special_zone": 13
+        },
+        "chunks": [
+          {
+            "path": "divisions/0001.json",
+            "count": 1000,
+            "sha256": "effb2b9942d1d8d509a97887a1f47d1e9010bc48d9ef3cb220ab1495418c9b10"
+          },
+          {
+            "path": "divisions/0002.json",
+            "count": 1000,
+            "sha256": "f6d79c0bc9429b8bd75e7bc703f6820de9621e6d03990670eed73b03978be6ce"
+          },
+          {
+            "path": "divisions/0003.json",
+            "count": 1000,
+            "sha256": "a926cc2627319759952557b7c0e7b3bb9e34e5b3da27d7d5169276f4a48dd9cd"
+          },
+          {
+            "path": "divisions/0004.json",
+            "count": 355,
+            "sha256": "ac119a975b2f4ec791547fe22eaa15d0852ca952a1a5df0d937fc263d0546c07"
+          }
+        ]
+      }
+    }
+  ]
+}
