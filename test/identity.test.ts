@@ -28,7 +28,7 @@ test('partner: a party is a person or an organisation, and nothing else', async 
   const o = await boot()
   const bad = await call(o, 'partner.savePartner', { id: 'p1', kind: 'robot', name: 'X' })
   assert.equal(bad.ok, false)
-  assert.match(JSON.stringify(bad.errors), /loại đối tác/)
+  assert.match(JSON.stringify(bad.errors), /partner\.error\.kind/)
   const good = await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
   assert.equal(good.ok, true)
   await o.adapter.close()
@@ -48,11 +48,16 @@ test('partner: an address is its own row, so there is nothing to compute about w
       street: '1 Lê Lợi',
       city: 'Hà Nội',
       country: 'VN',
+      isDefault: true,
     })
     assert.equal(r.ok, true)
   }
   const got = await call(o, 'partner.getPartner', { id: 'p1' })
   assert.equal((got.addresses as unknown[]).length, 2)
+  assert.equal(
+    (got.addresses as Array<{ isDefault: boolean }>).filter((address) => address.isDefault).length,
+    2,
+  )
   // In Odoo both of these would be partners, and `commercial_partner_id` would
   // exist to walk back up and answer "so who is the customer".
   const parties = await callFn('partner.listPartners', {}, { ...o, scope: SCOPE })
@@ -71,6 +76,33 @@ test('partner: an address must belong to a party that exists', async () => {
     country: 'VN',
   })
   assert.equal(r.ok, false)
+  await o.adapter.close()
+})
+
+test('partner: an existing address cannot be moved to another party', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
+  await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Globex' })
+  await call(o, 'partner.saveAddress', {
+    id: 'a1',
+    partnerId: 'p1',
+    use: 'invoice',
+    street: 'A',
+    city: 'Hà Nội',
+    country: 'VN',
+  })
+  const moved = await call(o, 'partner.saveAddress', {
+    id: 'a1',
+    partnerId: 'p2',
+    use: 'invoice',
+    street: 'B',
+    city: 'Hà Nội',
+    country: 'VN',
+  })
+  assert.equal(moved.ok, false)
+  assert.match(JSON.stringify(moved.errors), /partner\.error\.addressOwner/)
+  assert.equal(((await call(o, 'partner.getPartner', { id: 'p1' })).addresses as unknown[]).length, 1)
+  assert.equal(((await call(o, 'partner.getPartner', { id: 'p2' })).addresses as unknown[]).length, 0)
   await o.adapter.close()
 })
 
@@ -102,19 +134,81 @@ test('partner: a party cannot be its own parent', async () => {
   await o.adapter.close()
 })
 
+test('partner: hierarchy rejects deep cycles and a person parenting a company', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'a', kind: 'company', name: 'A' })
+  await call(o, 'partner.savePartner', { id: 'b', kind: 'company', name: 'B', parentId: 'a' })
+  await call(o, 'partner.savePartner', { id: 'c', kind: 'company', name: 'C', parentId: 'b' })
+  const cycle = await call(o, 'partner.savePartner', {
+    id: 'a',
+    kind: 'company',
+    name: 'A',
+    parentId: 'c',
+  })
+  assert.equal(cycle.ok, false)
+  assert.match(JSON.stringify(cycle.errors), /partner\.error\.parentCycle/)
+
+  await call(o, 'partner.savePartner', { id: 'person', kind: 'person', name: 'Person' })
+  const wrongParent = await call(o, 'partner.savePartner', {
+    id: 'child',
+    kind: 'company',
+    name: 'Child',
+    parentId: 'person',
+  })
+  assert.equal(wrongParent.ok, false)
+  assert.match(JSON.stringify(wrongParent.errors), /partner\.error\.personCannotOwnCompany/)
+  await o.adapter.close()
+})
+
+test('partner: repeated defaults and roles remain unique and idempotent', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
+  for (const id of ['a1', 'a2'])
+    await call(o, 'partner.saveAddress', {
+      id,
+      partnerId: 'p1',
+      use: 'invoice',
+      street: id,
+      city: 'Hà Nội',
+      country: 'VN',
+      isDefault: true,
+    })
+  for (let index = 0; index < 8; index++)
+    await call(o, 'partner.grantRole', {
+      id: `role-${index}`,
+      partnerId: 'p1',
+      role: 'customer',
+    })
+  assert.equal((await o.adapter.all('SELECT * FROM partner_address_default', [])).length, 1)
+  assert.equal((await o.adapter.all('SELECT * FROM partner_role', [])).length, 1)
+  await call(o, 'partner.saveAddress', {
+    id: 'a2',
+    partnerId: 'p1',
+    use: 'invoice',
+    street: 'a2',
+    city: 'Hà Nội',
+    country: 'VN',
+    isDefault: false,
+  })
+  assert.equal((await o.adapter.all('SELECT * FROM partner_address_default', [])).length, 0)
+  const addresses = (await call(o, 'partner.getPartner', { id: 'p1' })).addresses as Array<{
+    id: string
+    isDefault: boolean
+  }>
+  assert.equal(addresses.find((address) => address.id === 'a2')?.isDefault, false)
+  await o.adapter.close()
+})
+
 // ── the per-company segment: ir.property, as an ordinary model ───────────────
 
 test('terms: the same shared party carries different terms per legal entity', async () => {
   const o = await boot()
   await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
-  await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', paymentTermDays: 30 }, { company: 'c1' })
-  await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', paymentTermDays: 0 }, { company: 'c2' })
+  await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', creditLimit: '3000' }, { company: 'c1' })
+  await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', creditLimit: '0' }, { company: 'c2' })
 
-  assert.equal(
-    (await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).paymentTermDays,
-    30,
-  )
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).paymentTermDays, 0)
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit, 3000)
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, 0)
   // And the party itself is one row, seen identically from both.
   assert.equal((await call(o, 'partner.getPartner', { id: 'p1' }, { company: 'c2' })).name, 'Acme')
   await o.adapter.close()
@@ -123,7 +217,12 @@ test('terms: the same shared party carries different terms per legal entity', as
 test('terms: the segment is a real table, not an EAV side table', () => {
   const schema = schemaFromManifest(compose(mods))
   const cols = Object.keys(schema.tables['partner_company_terms']!.columns).sort()
-  assert.ok(cols.includes('paymentTermDays'), 'a typed column, visible to SQL')
+  assert.ok(cols.includes('creditLimit'), 'a typed column, visible to SQL')
+  assert.ok(cols.includes('note'), 'core terms contain only domain-neutral fields')
+  assert.ok(
+    !cols.includes('paymentTermDays'),
+    'accounting terms do not remain as text or day counters in core',
+  )
   assert.ok(cols.includes('companyId'), 'and scoped by the machinery that already exists')
 })
 
