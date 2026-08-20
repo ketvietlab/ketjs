@@ -35,6 +35,21 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     companyId: 'default',
   })
   await seed('partner.savePartner', { id: 'guest', kind: 'person', name: 'Nguyễn An' })
+  await seed('uom.saveUnit', { id: 'service-unit', name: 'Lần', relativeFactor: '1' })
+  await seed('product.saveTemplate', {
+    id: 'breakfast-template',
+    name: 'Bữa sáng',
+    type: 'service',
+    uomId: 'service-unit',
+    listPrice: '25',
+    saleOk: true,
+  })
+  await seed('product.saveVariant', {
+    id: 'breakfast',
+    templateId: 'breakfast-template',
+    defaultCode: 'BF',
+    combinationKey: '',
+  })
   await seed('hospitality_core.saveProperty', {
     id: 'hotel',
     code: 'HCM',
@@ -148,6 +163,48 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(inventoryRejected.status, 303, await inventoryRejected.clone().text())
   assert.match(inventoryRejected.headers.get('location') ?? '', /status=invalid/)
 
+  const feeSaved = await e2e.client.post(
+    '/admin/hospitality/services?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'save-property-charge',
+      id: 'city-tax',
+      propertyId: 'hotel',
+      chargeType: 'city_tax',
+      name: 'Thuế thành phố',
+      amount: '20',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(feeSaved.status, 303, await feeSaved.clone().text())
+  assert.match(feeSaved.headers.get('location') ?? '', /status=saved/)
+  const extraSaved = await e2e.client.post(
+    '/admin/hospitality/services?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'save-extra-line',
+      id: 'breakfast-extra',
+      target: 'reservation:booking-1',
+      productId: 'breakfast',
+      quantity: '1',
+      recurrence: 'once',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(extraSaved.status, 303, await extraSaved.clone().text())
+  assert.match(extraSaved.headers.get('location') ?? '', /status=saved/)
+  const extraPosted = await e2e.client.post(
+    '/admin/hospitality/services?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'materialize-extra',
+      id: 'breakfast-extra',
+      requestKey: 'e2e-breakfast',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(extraPosted.status, 303, await extraPosted.clone().text())
+  assert.match(extraPosted.headers.get('location') ?? '', /status=saved/)
+
   const checkedIn = await e2e.client.call<Row>('hospitality_core.checkIn', {
     stayId: 'booking-1:stay',
     roomId: '101',
@@ -173,6 +230,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
       'Nội dung &amp; hình ảnh',
     ],
     ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
+    ['/admin/hospitality/services?lang=vi&property=hotel', 'Dịch vụ &amp; phụ phí'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
       'Tồn kho &amp; hạn chế bán',
@@ -196,6 +254,11 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const english = await e2e.client.get('/admin/hospitality/front-desk?lang=en&date=2026-08-20')
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Front desk/)
+  const englishServices = await e2e.client.get('/admin/hospitality/services?lang=en&property=hotel')
+  assert.equal(englishServices.status, 200)
+  const englishServicesHtml = await englishServices.text()
+  assert.match(englishServicesHtml, /Services &amp; fees/)
+  assert.doesNotMatch(englishServicesHtml, /hospitality_core\./)
 
   await e2e.fixture.withTenant('', async ({ adapter }) => {
     const stays = await adapter.all('SELECT state, "currentRoomId" FROM hospitality_core_stay WHERE id = ?', [

@@ -1776,3 +1776,25 @@ explicit splits, merges and replacements when a future source provides them; the
 system never guesses a replacement by string similarity. Catalog installation is
 an internal function owned by a trusted administration route and uses unique
 indexes, `insertIfAbsent` and CAS so concurrent pods converge.
+
+## D58 — Hospitality services are intentions plus immutable occurrences
+
+A service intention (`ExtraLine`) attaches one sellable Product variant to exactly
+one reservation or physical stay. It snapshots the description, unit, quantity,
+price and recurrence used by hotel operations. `once`, `per_night` and `per_unit`
+are explicit policies: a night must fall inside the property-timezone occupancy
+range, while each quantity-based post carries a caller request key. Every policy
+produces a stable Charge source key, so a retry or two concurrent PostgreSQL
+connections converge on one operational occurrence.
+
+Posting a service and advancing the open Folio total share one transaction. Once
+any occurrence exists, the intention cannot be repriced or retargeted; corrections
+will be represented by later operational adjustments rather than rewriting audit
+history. The Charge remains an operational folio record, not an accounting move or
+invoice line. Those systems may consume the stable Product, UoM, ExtraLine and
+Charge references later without changing the hotel source of truth.
+
+Property fees are separate provider-visible content. Their create/update writes a
+ContentChange in the same transaction so each private OTA connection can rebuild
+its current payload independently. Storage is not involved: services and fees are
+structured database records, while Storage continues to own only binary media.
