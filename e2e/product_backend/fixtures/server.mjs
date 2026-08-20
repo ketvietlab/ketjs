@@ -36,11 +36,12 @@ const call = async (name, input) => {
   return result.value
 }
 
-const attachment = async ({ id, source, resId, alt, primary = false, sequence }) => {
+const attachment = async ({ id, source, resId, productId, alt, primary = false, sequence }) => {
   const bytes = readFileSync(source)
   const attachmentId = `${id}-attachment`
   const checksum = createHash('sha256').update(bytes).digest('hex')
   const storeKey = `blobs/default/${checksum.slice(0, 2)}/${checksum}`
+  const recordId = productId ?? resId
   await objects.put(
     storeKey,
     (async function* () {
@@ -51,8 +52,8 @@ const attachment = async ({ id, source, resId, alt, primary = false, sequence })
   await call('storage.createAttachment', {
     id: attachmentId,
     name: `${id}.png`,
-    resModel: 'product.Template',
-    resId,
+    resModel: productId ? 'product.Product' : 'product.Template',
+    resId: recordId,
     resField: 'media',
     kind: 'stored',
     storeKey,
@@ -65,7 +66,7 @@ const attachment = async ({ id, source, resId, alt, primary = false, sequence })
   await call('product_media.attachMedia', {
     id,
     attachmentId,
-    templateId: resId,
+    ...(productId ? { productId } : { templateId: resId }),
     alt,
     primary,
     sequence,
@@ -166,6 +167,12 @@ const seed = async () => {
     weight: '0.65',
     volume: '0.004',
   })
+  await call('product.setCost', { productId: 'variant-review', standardPrice: '820000' })
+  await call('product.addProductUom', {
+    productId: 'variant-review',
+    uomId: 'unit',
+    barcode: '8938500000017-UOM',
+  })
   await attachment({
     id: 'media-primary',
     source: join(root, 'e2e/product_backend/fixtures/product-primary.png'),
@@ -179,6 +186,21 @@ const seed = async () => {
     source: join(root, 'e2e/product_backend/fixtures/product-secondary.png'),
     resId: 'tpl-review',
     alt: 'Áo khoác vận hành màu cam',
+    sequence: 20,
+  })
+  await attachment({
+    id: 'variant-media-primary',
+    source: join(root, 'e2e/product_backend/fixtures/product-primary.png'),
+    productId: 'variant-review',
+    alt: 'Biến thể áo khoác màu xanh',
+    primary: true,
+    sequence: 10,
+  })
+  await attachment({
+    id: 'variant-media-secondary',
+    source: join(root, 'e2e/product_backend/fixtures/product-secondary.png'),
+    productId: 'variant-review',
+    alt: 'Biến thể áo khoác màu cam',
     sequence: 20,
   })
 
