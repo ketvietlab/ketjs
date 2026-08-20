@@ -296,6 +296,22 @@ The same run retained the existing room, inventory, folio-correction, stay-notic
 night-audit and cross-database isolation assertions. These figures measure the task
 lifecycle only; browser rendering and operator think time are intentionally excluded.
 
+The room-status workspace extension then released one maintenance room to housekeeping
+and returned it to service hold in every physical database through guarded public
+transitions. Each run verifies the final note, exact property summary and physical
+database isolation; occupied/cleaning/open-task rejection remains covered by the
+engine tests.
+
+| driver | physical databases | status transitions | elapsed | transitions/s | status, note and summary |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 16 | 3.4 ms | 4,713 | complete |
+| PostgreSQL 17 | 4 | 8 | 9.5 ms | 839 | complete |
+
+These are transition-engine timings, not operator or browser latency. The same run
+continued to pass the booking, folio, housekeeping-task, night-audit, concurrency and
+cross-database assertions listed above. PostgreSQL also races task creation against an
+out-of-service transition on two real connections and proves that exactly one wins.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
