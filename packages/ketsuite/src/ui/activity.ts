@@ -57,20 +57,20 @@ const activeActivity = {
 }
 
 export const activityContractCases = (): TemplateResult[] => [
-  createRecordActivityView(runtime, props)(),
-  createRecordActivityView(runtime, props, { status: 'error', error: 'Request failed' })(),
-  createRecordActivityView(runtime, props, { status: 'ready' })(),
+  createRecordActivityView(runtime, props).view(),
+  createRecordActivityView(runtime, props, { status: 'error', error: 'Request failed' }).view(),
+  createRecordActivityView(runtime, props, { status: 'ready' }).view(),
   createRecordActivityView(runtime, props, {
     status: 'ready',
     scheduleOpen: true,
     itemAction: 'complete:activity',
     types: [{ id: 'todo', name: 'To do' }],
     activities: [activeActivity],
-  })(),
+  }).view(),
   createRecordActivityView(runtime, props, {
     status: 'ready',
     itemAction: 'reschedule:activity',
     activities: [activeActivity],
-  })(),
-  createActivityIndicatorView(runtime, { lang: 'en' }, { count: 3, overdue: 2 })(),
+  }).view(),
+  createActivityIndicatorView(runtime, { lang: 'en' }, { count: 3, overdue: 2 }).view(),
 ]

@@ -145,4 +145,5 @@ export type {
   ScheduleRow,
   ScheduleTone,
   RecordSummaryItem,
+  RecordWorkspaceSlots,
 } from '../../ui/index.ts'

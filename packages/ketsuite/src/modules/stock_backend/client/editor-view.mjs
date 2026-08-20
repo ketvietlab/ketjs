@@ -78,6 +78,8 @@ export function createStockEditorView(runtime, props) {
   const message = signal('')
   const host = editorHostFor(props)
   const scope = props.lotId ? 'stock-lot' : 'stock-transfer'
+  let activeRequest = null
+  let disposed = false
   if (host) host.hidden = true
 
   const showState = (nextState, nextMessage) => {
@@ -86,49 +88,60 @@ export function createStockEditorView(runtime, props) {
     message.set(nextMessage)
   }
 
-  if (typeof document !== 'undefined') {
-    document.addEventListener('submit', async (event) => {
-      const form = event.target
-      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
-      event.preventDefault()
-      if (state() === 'saving') return
+  const submit = async (event) => {
+    const form = event.target
+    if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
+    event.preventDefault()
+    if (state() === 'saving') return
 
-      const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
-      showState('saving', labels.saving)
-      form.setAttribute('aria-busy', 'true')
-      for (const submitter of submitters) submitter.disabled = true
+    const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
+    showState('saving', labels.saving)
+    form.setAttribute('aria-busy', 'true')
+    for (const submitter of submitters) submitter.disabled = true
 
-      try {
-        const body = new URLSearchParams()
-        for (const [name, value] of new FormData(form))
-          if (typeof value === 'string') body.append(name, value)
-        const response = await fetch(form.getAttribute('action') || window.location.href, {
-          method: String(form.method || 'post').toUpperCase(),
-          credentials: 'same-origin',
-          headers: {
-            accept: 'text/html',
-            'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            'x-ket-partial': scope,
-          },
-          body,
-        })
-        if (!response.ok) throw new Error(await errorText(response, labels.failed))
-        replaceRecordParts(await response.text())
-        showState('saved', labels.saved)
-      } catch (caught) {
-        showState('error', caught instanceof Error ? caught.message : labels.failed)
-      } finally {
-        form.removeAttribute('aria-busy')
-        for (const submitter of submitters) submitter.disabled = false
-      }
-    })
+    try {
+      activeRequest?.abort()
+      activeRequest = new AbortController()
+      const body = new URLSearchParams()
+      for (const [name, value] of new FormData(form)) if (typeof value === 'string') body.append(name, value)
+      const response = await fetch(form.getAttribute('action') || window.location.href, {
+        method: String(form.method || 'post').toUpperCase(),
+        credentials: 'same-origin',
+        headers: {
+          accept: 'text/html',
+          'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'x-ket-partial': scope,
+        },
+        body,
+        signal: activeRequest.signal,
+      })
+      if (!response.ok) throw new Error(await errorText(response, labels.failed))
+      replaceRecordParts(await response.text())
+      if (disposed) return
+      showState('saved', labels.saved)
+    } catch (caught) {
+      if (disposed || caught?.name === 'AbortError') return
+      showState('error', caught instanceof Error ? caught.message : labels.failed)
+    } finally {
+      activeRequest = null
+      form.removeAttribute('aria-busy')
+      for (const submitter of submitters) submitter.disabled = false
+    }
   }
+  if (typeof document !== 'undefined') document.addEventListener('submit', submit)
 
-  return () => html`<aside
+  return {
+    view: () => html`<aside
     data-ui="notice"
     data-tone=${state() === 'saved' ? 'positive' : state() === 'error' ? 'danger' : 'info'}
     role=${state() === 'error' ? 'alert' : 'status'}
     aria-live="polite"
     hidden=${state() === 'idle'}
-  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`
+  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`,
+    dispose: () => {
+      disposed = true
+      activeRequest?.abort()
+      if (typeof document !== 'undefined') document.removeEventListener('submit', submit)
+    },
+  }
 }

@@ -198,6 +198,7 @@ export const productDetailScreen = (
   frame: Frame = {},
   locale = '',
   activeTab: ProductDetailTab = 'general',
+  partial = false,
 ): TemplateResult => {
   const images = media.images ?? []
   const primaryImage = images.find((image) => image.primary) ?? images[0]
@@ -360,77 +361,78 @@ export const productDetailScreen = (
     body: mediaPanel({ ...media, labels: mediaLabels(_) }),
   })
 
-  return framed(
-    _,
-    _('product_backend.detail.kicker'),
-    frame,
-    recordWorkspace({
-      kicker: _('product_backend.detail.kicker'),
-      title: row.name,
-      subtitle,
-      image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
-      imageFallback: icon('package'),
-      badges: [
-        productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
-        productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
-        ...(management.stockEnabled
-          ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
-          : []),
-      ],
-      summary: [
+  const workspace = recordWorkspace({
+    kicker: _('product_backend.detail.kicker'),
+    title: row.name,
+    subtitle,
+    image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
+    imageFallback: icon('package'),
+    badges: [
+      productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
+      productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
+      ...(management.stockEnabled
+        ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
+        : []),
+    ],
+    summary: [
+      {
+        id: 'variants',
+        label: _('product_backend.summary.variants'),
+        value: management.variants.length,
+        href: tabHref('variants'),
+      },
+      {
+        id: 'media',
+        label: _('product_backend.summary.images'),
+        value: images.length,
+        href: tabHref('media'),
+      },
+      ...(management.stockEnabled
+        ? [
+            {
+              id: 'tracking',
+              label: _('product_backend.summary.tracking'),
+              value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
+            },
+          ]
+        : []),
+    ],
+    navigation: tabs({
+      label: _('product_backend.tabs.label'),
+      items: [
+        {
+          id: 'general',
+          label: _('product_backend.tabs.general'),
+          href: tabHref('general'),
+          active: activeTab === 'general',
+        },
         {
           id: 'variants',
-          label: _('product_backend.summary.variants'),
-          value: management.variants.length,
+          label: _('product_backend.tabs.variants'),
           href: tabHref('variants'),
+          active: activeTab === 'variants',
+          count: management.variants.length,
         },
         {
           id: 'media',
-          label: _('product_backend.summary.images'),
-          value: images.length,
+          label: _('product_backend.tabs.media'),
           href: tabHref('media'),
+          active: activeTab === 'media',
+          count: images.length,
         },
-        ...(management.stockEnabled
-          ? [
-              {
-                id: 'tracking',
-                label: _('product_backend.summary.tracking'),
-                value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
-              },
-            ]
-          : []),
       ],
-      navigation: tabs({
-        label: _('product_backend.tabs.label'),
-        items: [
-          {
-            id: 'general',
-            label: _('product_backend.tabs.general'),
-            href: tabHref('general'),
-            active: activeTab === 'general',
-          },
-          {
-            id: 'variants',
-            label: _('product_backend.tabs.variants'),
-            href: tabHref('variants'),
-            active: activeTab === 'variants',
-            count: management.variants.length,
-          },
-          {
-            id: 'media',
-            label: _('product_backend.tabs.media'),
-            href: tabHref('media'),
-            active: activeTab === 'media',
-            count: images.length,
-          },
-        ],
-      }),
-      controller: management.editor,
-      body: activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general,
-      aside: collaboration,
-      asideLabel: _('product_backend.collaboration.label'),
     }),
-  )
+    controller: management.editor,
+    body: activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general,
+    aside: collaboration,
+    asideLabel: _('product_backend.collaboration.label'),
+    slots: {
+      header: 'product.record-header',
+      body: 'product.record-body',
+      ...(partial ? { fragmentTitle: row.name } : {}),
+    },
+  })
+  return partial ? workspace : framed(_, _('product_backend.detail.kicker'), frame, workspace)
 }
 
 export const variantScreen = (
@@ -446,6 +448,7 @@ export const variantScreen = (
   locale = '',
   editor?: JSXChild,
   activeTab: VariantDetailTab = 'general',
+  partial = false,
 ): TemplateResult => {
   const images = media.images ?? []
   const primaryImage = images.find((image) => image.primary) ?? images[0]
@@ -513,51 +516,52 @@ export const variantScreen = (
     body: mediaPanel({ ...media, labels: mediaLabels(_) }),
   })
 
-  return framed(
-    _,
+  const workspace = recordWorkspace({
+    kicker: _('product_backend.variant.kicker'),
     title,
-    frame,
-    recordWorkspace({
-      kicker: _('product_backend.variant.kicker'),
-      title,
-      subtitle,
-      image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
-      imageFallback: icon('package'),
-      summary: [
+    subtitle,
+    image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
+    imageFallback: icon('package'),
+    summary: [
+      {
+        id: 'media',
+        label: _('product_backend.summary.images'),
+        value: images.length,
+        href: tabHref('media'),
+      },
+      {
+        id: 'state',
+        label: _('product_backend.col.state'),
+        value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
+      },
+    ],
+    navigation: tabs({
+      label: _('product_backend.variant.tabs.label'),
+      items: [
+        {
+          id: 'general',
+          label: _('product_backend.tabs.general'),
+          href: tabHref('general'),
+          active: activeTab === 'general',
+        },
         {
           id: 'media',
-          label: _('product_backend.summary.images'),
-          value: images.length,
+          label: _('product_backend.tabs.media'),
           href: tabHref('media'),
-        },
-        {
-          id: 'state',
-          label: _('product_backend.col.state'),
-          value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
+          active: activeTab === 'media',
+          count: images.length,
         },
       ],
-      navigation: tabs({
-        label: _('product_backend.variant.tabs.label'),
-        items: [
-          {
-            id: 'general',
-            label: _('product_backend.tabs.general'),
-            href: tabHref('general'),
-            active: activeTab === 'general',
-          },
-          {
-            id: 'media',
-            label: _('product_backend.tabs.media'),
-            href: tabHref('media'),
-            active: activeTab === 'media',
-            count: images.length,
-          },
-        ],
-      }),
-      controller: editor,
-      body: activeTab === 'media' ? mediaTab : general,
-      aside: collaboration,
-      asideLabel: _('product_backend.variant.collaboration.label'),
     }),
-  )
+    controller: editor,
+    body: activeTab === 'media' ? mediaTab : general,
+    aside: collaboration,
+    asideLabel: _('product_backend.variant.collaboration.label'),
+    slots: {
+      header: 'product.record-header',
+      body: 'product.record-body',
+      ...(partial ? { fragmentTitle: title } : {}),
+    },
+  })
+  return partial ? workspace : framed(_, title, frame, workspace)
 }

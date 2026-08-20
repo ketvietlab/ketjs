@@ -455,6 +455,7 @@ export const routes: Record<string, RouteEntry> = {
               lang,
             }),
             editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
+              identity: `picking:${String(current.id)}`,
               pickingId: String(current.id),
               lang,
             }),
@@ -813,6 +814,7 @@ export const routes: Record<string, RouteEntry> = {
                 lang,
               }),
               editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
+                identity: `lot:${String(current.id)}`,
                 lotId: String(current.id),
                 lang,
               }),

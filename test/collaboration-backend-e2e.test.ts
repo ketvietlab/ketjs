@@ -251,9 +251,13 @@ test('Product Variant form keeps its own Chatter, activities and partial-save wo
     { headers: { accept: 'text/html', 'x-ket-partial': 'product-variant' } },
   )
   assert.equal(partial.status, 200)
+  assert.equal(partial.headers.get('content-type'), 'text/vnd.ket.fragments+html; charset=utf-8')
   const partialHtml = await partial.text()
-  assert.match(partialHtml, /data-ui="record-header"/)
-  assert.match(partialHtml, /data-ui="record-body"/)
+  assert.deepEqual(
+    [...partialHtml.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
+    ['product.record-header', 'product.record-body'],
+  )
+  assert.doesNotMatch(partialHtml, /<!doctype|data-ui="shell"|data-ui="record-aside"|data-island=/)
   assert.match(partialHtml, /COLLAB-UPDATED/)
 })
 

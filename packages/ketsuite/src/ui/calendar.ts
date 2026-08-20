@@ -44,22 +44,22 @@ const event = {
   organizerName: 'Author',
 }
 export const calendarContractCases = (): TemplateResult[] => [
-  createCalendarView(runtime, { lang: 'en', view: 'agenda' })(),
-  createCalendarView(runtime, { lang: 'en' }, { status: 'error', error: 'Failed' })(),
-  createCalendarView(runtime, { lang: 'en' }, { status: 'ready', events: [] })(),
+  createCalendarView(runtime, { lang: 'en', view: 'agenda' }).view(),
+  createCalendarView(runtime, { lang: 'en' }, { status: 'error', error: 'Failed' }).view(),
+  createCalendarView(runtime, { lang: 'en' }, { status: 'ready', events: [] }).view(),
   createCalendarView(
     runtime,
     { lang: 'en' },
     { status: 'ready', view: 'agenda', cursor: '2026-08-20', events: [event] },
-  )(),
+  ).view(),
   createCalendarView(
     runtime,
     { lang: 'en' },
     { status: 'ready', view: 'week', cursor: '2026-08-20', events: [event] },
-  )(),
+  ).view(),
   createCalendarView(
     runtime,
     { lang: 'en' },
     { status: 'ready', view: 'month', cursor: '2026-08-20', events: [event] },
-  )(),
+  ).view(),
 ]
