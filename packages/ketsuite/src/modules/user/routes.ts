@@ -12,7 +12,14 @@ import { json, page, text, withHeaders } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { loginScreen } from './login.ts'
 
-type Verdict = { ok: boolean; userId?: string; companies?: string[]; defaultCompanyId?: string | null }
+type Verdict = {
+  ok: boolean
+  userId?: string
+  companies?: string[]
+  defaultCompanyId?: string | null
+  branches?: string[]
+  defaultBranchId?: string | null
+}
 type Req = Parameters<Route>[1]
 
 const read = async (req: Req): Promise<string> => {
@@ -129,11 +136,20 @@ export const routes: Record<string, RouteEntry> = {
         userId: verdict.userId,
         companies,
         company: verdict.defaultCompanyId ?? null,
+        branches: verdict.branches ?? [],
+        branch: verdict.defaultBranchId ?? null,
       })
       return html
         ? seeOther(safeNext(next), cookie)
         : withHeaders(
-            json({ ok: true, userId: record.userId, company: record.company, companies: record.companies }),
+            json({
+              ok: true,
+              userId: record.userId,
+              company: record.company,
+              companies: record.companies,
+              branch: record.branch,
+              branches: record.branches,
+            }),
             { 'set-cookie': cookie },
           )
     },
@@ -160,9 +176,20 @@ export const routes: Record<string, RouteEntry> = {
     handler: (ctx: ServeContext) => async (url, req) => {
       const sessions = await ctx.sessionsOf(url, req)
       if (!sessions) return needSessions()
+      // /whoami is anonymous at the routing layer so it can answer 401. Explicitly
+      // resolve the live scope first; otherwise reading the store directly would
+      // bypass membership and active-state revocation for this one route.
+      await ctx.scopeOf(url, req)
       const record = await sessions.of(req)
       if (!record) return json({ ok: false }, { status: 401 })
-      return json({ ok: true, userId: record.userId, company: record.company, companies: record.companies })
+      return json({
+        ok: true,
+        userId: record.userId,
+        company: record.company,
+        companies: record.companies,
+        branch: record.branch,
+        branches: record.branches,
+      })
     },
   },
 }

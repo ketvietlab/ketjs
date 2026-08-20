@@ -30,6 +30,9 @@ export const HOOKS = [
   'token',
   'token-name',
   'token-value',
+  'context-switcher',
+  'context-company',
+  'context-branch',
 ] as const
 
 export type Extras = {
@@ -69,6 +72,16 @@ export const shell = (
       <main data-ui="main">
         <header data-ui="topbar">
           {frame.chrome ? listChrome(_, title, frame.chrome) : <h1 data-ui="title">{title}</h1>}
+          {!!viewer?.contextPath && (
+            <a
+              data-ui="context-switcher"
+              href={viewer.contextPath}
+              title={`${viewer.companyName ?? viewer.company ?? ''}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+            >
+              <span data-ui="context-company">{viewer.companyName ?? viewer.company}</span>
+              {!!viewer.branchName && <span data-ui="context-branch">{viewer.branchName}</span>}
+            </a>
+          )}
           {extras['topbar.end'] ?? ''}
         </header>
         <div data-ui="content">{body}</div>

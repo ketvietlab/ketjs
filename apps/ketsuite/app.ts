@@ -33,6 +33,7 @@ export const ketsuite = defineApp({
     suite.sale,
     suite.pos,
     suite.accountPartner,
+    suite.companyBackend,
     suite.partnerBackend,
     suite.accountPartnerBackend,
     suite.productBackend,
@@ -75,6 +76,7 @@ export const ketsuite = defineApp({
      * anonymous requests still get a company, because a public storefront needs one.
      */
     sessions: { anonymous: { company: 'default' } },
+    resolveSession: suite.resolveUserSession,
     /**
      * The framework enforces the list; this decides what is in it. Resolved per
      * request, so revoking a role takes effect on the next call rather than on the

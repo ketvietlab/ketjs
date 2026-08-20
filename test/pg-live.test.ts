@@ -502,6 +502,67 @@ test('live pg: concurrent partner defaults, roles and terms stay unique', live, 
   })
 })
 
+test('live pg: concurrent company roots and user memberships stay unique', live, async () => {
+  await withPg(async (a) => {
+    const identityModules = [partner, company, user]
+    const identityManifest = compose(identityModules, { headless: true })
+    const identitySchema = schemaFromManifest(identityManifest)
+    for (const tableName of Object.keys(identitySchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, identitySchema), a)) await a.exec(sql)
+    registerFunctions(identityModules)
+    const options = { adapter: a, manifest: identityManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
+
+    await Promise.all(
+      Array.from({ length: 12 }, () =>
+        callFn(
+          'company.saveCompany',
+          { id: 'acme', code: 'ACME', partnerId: 'company-party', currency: 'VND' },
+          options,
+        ),
+      ),
+    )
+    assert.equal((await a.all('SELECT id FROM company_company')).length, 1)
+    assert.equal((await a.all('SELECT id FROM company_branch WHERE "rootKey" = $1', ['acme'])).length, 1)
+
+    await callFn(
+      'company.saveBranch',
+      { id: 'north', companyId: 'acme', code: 'NORTH', name: 'North', parentId: 'root:acme' },
+      options,
+    )
+    await callFn(
+      'user.createUser',
+      { id: 'admin', login: 'admin', password: 'correct horse', name: 'Admin' },
+      options,
+    )
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        callFn(
+          'user.grantCompany',
+          { id: `membership-${index}`, userId: 'admin', companyId: 'acme' },
+          options,
+        ),
+      ),
+    )
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        callFn(
+          'user.grantBranch',
+          { id: `branch-membership-${index}`, userId: 'admin', branchId: 'north' },
+          options,
+        ),
+      ),
+    )
+    assert.equal((await a.all('SELECT id FROM user_membership')).length, 1)
+    assert.equal(
+      (await a.all('SELECT id FROM user_branch_membership')).length,
+      2,
+      'one root grant plus one explicit branch grant',
+    )
+  })
+})
+
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {
     const stockModules = [uom, product, stock]

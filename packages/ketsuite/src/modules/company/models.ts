@@ -21,12 +21,43 @@ export const models: Record<string, ModelDef> = {
     scope: 'shared',
     fields: {
       id: 'id',
+      /** Stable business code used by provisioning, selectors and documents. */
+      code: 'text',
       /** Its own party record — name, tax number and addresses live there. */
       partnerId: 'ref:partner.Partner',
       /** A subsidiary keeps its own books; consolidation reads across (D32). */
       parentId: 'ref:company.Company?',
       currency: 'text',
       active: 'bool',
+    },
+    indexes: {
+      code: { fields: ['code'], unique: true },
+      partner: { fields: ['partnerId'], unique: true },
+    },
+  },
+
+  /**
+   * Operational branches inside one legal entity.
+   *
+   * This is deliberately not Company.parentId: a subsidiary keeps its own books,
+   * while a branch chooses where company+branch rows are written. `rootKey` is set
+   * only on the root row. A nullable unique column is the database-level invariant
+   * that lets every company have one root without limiting ordinary children.
+   */
+  Branch: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      companyId: 'ref:company.Company',
+      code: 'text',
+      name: 'text',
+      parentId: 'ref:company.Branch?',
+      rootKey: 'text?',
+      active: 'bool',
+    },
+    indexes: {
+      company_code: { fields: ['companyId', 'code'], unique: true },
+      root: { fields: ['rootKey'], unique: true },
     },
   },
 }

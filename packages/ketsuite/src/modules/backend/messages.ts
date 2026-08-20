@@ -21,6 +21,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Trang',
     'nav.settings': 'Cài đặt',
     brand: 'KetSuite',
+    'context.rootBranch': 'Chi nhánh gốc',
 
     'table.columns': 'Chọn cột',
     'table.id': 'Mã',
@@ -76,6 +77,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Pages',
     'nav.settings': 'Settings',
     brand: 'KetSuite',
+    'context.rootBranch': 'Root branch',
 
     'table.columns': 'Columns',
     'table.id': 'Id',

@@ -32,7 +32,35 @@ export const viewerOf = async (
   const user = (await ctx.callUnchecked('user.getUser', { id: record.userId }, url, req)) as {
     name?: string
   } | null
-  return { name: user?.name ?? record.userId, company: record.company, companies: record.companies }
+  const live = await ctx.live(req)
+  const labels = live.functions['company.contextLabels']
+    ? ((await ctx.callUnchecked(
+        'company.contextLabels',
+        { companyId: record.company, branchId: record.branch },
+        url,
+        req,
+      )) as {
+        companyName?: string | null
+        branchName?: string | null
+        branchCode?: string | null
+        branchIsRoot?: boolean | null
+      })
+    : {}
+  const lang = url.searchParams.get('lang')
+  return {
+    name: user?.name ?? record.userId,
+    company: record.company,
+    companies: record.companies,
+    companyName: labels.companyName ?? record.company,
+    branch: record.branch,
+    branches: record.branches,
+    branchName: labels.branchIsRoot
+      ? `${ctx.translate(ctx.localeOf(url, req))('backend.context.rootBranch')} · ${labels.branchCode}`
+      : (labels.branchName ?? record.branch),
+    contextPath: live.routes['/admin/context']
+      ? `/admin/context${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
+      : null,
+  }
 }
 
 /**

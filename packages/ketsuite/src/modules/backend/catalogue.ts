@@ -69,6 +69,11 @@ const viewer = (over: Partial<Viewer> = {}): Viewer => ({
   name: 'Nguyễn Quản Trị',
   company: 'acme',
   companies: ['acme'],
+  companyName: 'Công ty Kết Việt',
+  branch: 'root:acme',
+  branches: ['root:acme'],
+  branchName: 'Trụ sở chính',
+  contextPath: '/admin/context',
   ...over,
 })
 
@@ -181,7 +186,7 @@ export const CASES: Array<{
   {
     id: 'viewer-many',
     label: 'Thanh trên — nhiều công ty',
-    note: 'Có tên công ty đang chọn. Chưa có cách đổi công ty — chỗ này sẽ cần một điều khiển.',
+    note: 'Tên công ty và chi nhánh thật là một điều khiển dẫn tới màn hình đổi ngữ cảnh.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], {
         viewer: viewer({ companies: ['acme', 'globex', 'initech'] }),
