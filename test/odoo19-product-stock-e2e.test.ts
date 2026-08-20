@@ -790,6 +790,14 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     false,
   )
 
+  const forecastPage = await e2e.client.get('/admin/forecast?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const forecastHtml = await forecastPage.text()
+  assert.match(forecastHtml, /<select[^>]*name="productId"/)
+  assert.match(forecastHtml, /<option value="p1"/)
+  assert.match(forecastHtml, /name="lang" value="vi"/)
+
   for (const path of ['/admin/inventory', '/admin/transfers/pick1', '/admin/forecast']) {
     const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
     assert.equal(page.status, 200, path)

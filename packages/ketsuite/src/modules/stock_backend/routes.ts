@@ -1122,7 +1122,20 @@ export const routes: Record<string, RouteEntry> = {
       const productId = url.searchParams.get('productId') ?? ''
       const locationId = url.searchParams.get('locationId') ?? ''
       const warehouseId = url.searchParams.get('warehouseId') ?? ''
-      const data = await common(ctx, url, req)
+      const [data, templates] = await Promise.all([
+        common(ctx, url, req),
+        ctx.call('stock.listStorableProducts', {}, url, req) as Promise<AnyRow[]>,
+      ])
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
+      )
       const forecast = productId
         ? ((await ctx.call(
             'stock.forecast',
@@ -1144,11 +1157,14 @@ export const routes: Record<string, RouteEntry> = {
               method: 'get',
               submit: _('stock_backend.action.calculate'),
               submitVariant: 'secondary',
+              hidden: { lang },
               fields: [
                 {
                   name: 'productId',
                   label: _('stock_backend.field.productId'),
+                  type: 'select',
                   value: productId,
+                  options: [{ value: '', label: '—' }, ...products],
                   required: true,
                 },
                 {
