@@ -16,12 +16,13 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { accountingDashboard, entityScreen, movesScreen, optionsOf, reportScreen } from './screens.ts'
+import { accountingDashboard, movesScreen, optionsOf, reportScreen } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
+import { paymentTermsScreen } from './payment-terms-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
@@ -640,94 +641,69 @@ export default defineModule({
                   url,
                   req,
                 )
-          return resultRedirect(result, '/admin/payment-terms')
+          return resultRedirect(result, `/admin/payment-terms${localeSuffix(url)}`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listPaymentTerms', {}, url, req)) as AnyRow[]
         return document(ctx, url, req, 'account_backend.terms.title', (_, tr, shell) =>
-          entityScreen(tr, {
-            title: tr('account_backend.terms.title'),
+          paymentTermsScreen(tr, {
             frame: shell,
-            action: '/admin/payment-terms',
-            submit: tr('account_backend.action.createTerm'),
+            action: `/admin/payment-terms${localeSuffix(url)}`,
             rows,
-            fields: [
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
+            termFields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               { name: 'note', label: tr('account_backend.field.note'), type: 'textarea', span: 'full' },
             ],
-            extraForms: rows.length
+            lineFields: rows.length
               ? [
                   {
-                    action: '/admin/payment-terms',
-                    submit: tr('account_backend.action.addTermLine'),
-                    hidden: { action: 'line' },
-                    fields: [
-                      {
-                        name: 'paymentId',
-                        label: tr('account_backend.field.paymentTermId'),
-                        type: 'select',
-                        options: choices(rows),
-                        required: true,
-                      },
-                      {
-                        name: 'value',
-                        label: tr('account_backend.field.termValue'),
-                        type: 'select',
-                        options: optionsOf(tr, 'paymentTermValue', PAYMENT_TERM_VALUES),
-                      },
-                      {
-                        name: 'valueAmount',
-                        label: tr('account_backend.field.valueAmount'),
-                        type: 'decimal',
-                        value: 100,
-                        required: true,
-                      },
-                      {
-                        name: 'delayType',
-                        label: tr('account_backend.field.delayType'),
-                        type: 'select',
-                        options: optionsOf(tr, 'paymentTermDelay', PAYMENT_TERM_DELAY_TYPES),
-                      },
-                      {
-                        name: 'nbDays',
-                        label: tr('account_backend.field.nbDays'),
-                        type: 'number',
-                        value: 0,
-                        required: true,
-                      },
-                      {
-                        name: 'daysNextMonth',
-                        label: tr('account_backend.field.daysNextMonth'),
-                        type: 'number',
-                      },
-                      {
-                        name: 'sequence',
-                        label: tr('account_backend.field.sequence'),
-                        type: 'number',
-                        value: 10,
-                      },
-                    ],
+                    name: 'paymentId',
+                    label: tr('account_backend.field.paymentTermId'),
+                    type: 'select',
+                    options: choices(rows),
+                    required: true,
+                  },
+                  {
+                    name: 'value',
+                    label: tr('account_backend.field.termValue'),
+                    type: 'select',
+                    options: optionsOf(tr, 'paymentTermValue', PAYMENT_TERM_VALUES),
+                  },
+                  {
+                    name: 'valueAmount',
+                    label: tr('account_backend.field.valueAmount'),
+                    type: 'decimal',
+                    value: 100,
+                    required: true,
+                  },
+                  {
+                    name: 'delayType',
+                    label: tr('account_backend.field.delayType'),
+                    type: 'select',
+                    options: optionsOf(tr, 'paymentTermDelay', PAYMENT_TERM_DELAY_TYPES),
+                  },
+                  {
+                    name: 'nbDays',
+                    label: tr('account_backend.field.nbDays'),
+                    type: 'number',
+                    value: 0,
+                    required: true,
+                  },
+                  {
+                    name: 'daysNextMonth',
+                    label: tr('account_backend.field.daysNextMonth'),
+                    type: 'number',
+                  },
+                  {
+                    name: 'sequence',
+                    label: tr('account_backend.field.sequence'),
+                    type: 'number',
+                    value: 10,
                   },
                 ]
-              : [],
-            columns: [
-              {
-                key: 'name',
-                label: tr('account_backend.field.name'),
-                cell: (row) => String(row.name),
-                priority: 'primary',
-              },
-              {
-                key: 'lines',
-                label: tr('account_backend.terms.lines'),
-                cell: (row) => String(Array.isArray(row.lines) ? row.lines.length : 0),
-              },
-              {
-                key: 'note',
-                label: tr('account_backend.field.note'),
-                cell: (row) => String(row.note ?? '—'),
-              },
-            ],
+              : undefined,
           }),
         )
       },
@@ -1195,6 +1171,19 @@ const vi: Record<string, string> = {
   'tax.empty': 'Chưa có thuế',
   'tax.emptyHint': 'Tạo sắc thuế đầu tiên để áp dụng trên chứng từ.',
   'terms.title': 'Điều khoản thanh toán',
+  'term.kicker': 'Lịch thanh toán',
+  'term.subtitle': 'Cấu hình các mốc đến hạn theo quy tắc Odoo 19.',
+  'term.summary.total': 'Tổng điều khoản',
+  'term.summary.configured': 'Đã có mốc',
+  'term.summary.lines': 'Tổng số mốc',
+  'term.create.title': 'Tạo điều khoản thanh toán',
+  'term.create.hint': 'Đặt tên và ghi chú hiển thị trên chứng từ.',
+  'term.line.create.title': 'Thêm mốc đến hạn',
+  'term.line.create.hint': 'Phân bổ phần trăm hoặc số tiền và chọn cách tính ngày đến hạn.',
+  'term.list.title': 'Điều khoản hiện có',
+  'term.list.hint': 'Kiểm tra số mốc đến hạn và ghi chú của từng điều khoản.',
+  'term.empty': 'Chưa có điều khoản thanh toán',
+  'term.emptyHint': 'Tạo điều khoản đầu tiên, sau đó thêm các mốc đến hạn.',
   'entries.title': 'Bút toán',
   'entry.kicker': 'Sổ cái',
   'entry.subtitle': 'Ghi nhận và kiểm soát các bút toán kế toán thủ công.',
@@ -1381,6 +1370,19 @@ const en: Record<string, string> = {
   'tax.empty': 'No taxes yet',
   'tax.emptyHint': 'Create the first tax to apply it on documents.',
   'terms.title': 'Payment terms',
+  'term.kicker': 'Payment schedule',
+  'term.subtitle': 'Configure due milestones with Odoo 19 rules.',
+  'term.summary.total': 'Total terms',
+  'term.summary.configured': 'With milestones',
+  'term.summary.lines': 'Total milestones',
+  'term.create.title': 'Create a payment term',
+  'term.create.hint': 'Set the name and note shown on documents.',
+  'term.line.create.title': 'Add a due milestone',
+  'term.line.create.hint': 'Allocate a percentage or fixed amount and choose the due-date computation.',
+  'term.list.title': 'Current payment terms',
+  'term.list.hint': 'Review milestone counts and notes for every term.',
+  'term.empty': 'No payment terms yet',
+  'term.emptyHint': 'Create the first term, then add its due milestones.',
   'entries.title': 'Journal entries',
   'entry.kicker': 'General ledger',
   'entry.subtitle': 'Record and control manual accounting journal entries.',
