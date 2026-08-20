@@ -21,6 +21,8 @@ export type TestIdentity = {
   company?: string | null
   /** Other companies a read may include. The write company is included automatically. */
   companies?: readonly string[] | null
+  /** The operational branch new company+branch rows are written to. */
+  branch?: string | null
   /** Operational branches visible to this client. */
   branches?: readonly string[] | null
   /** Conventional test tenant header. Override tenantHeader for another resolver. */
@@ -197,6 +199,7 @@ export class TestClient {
     this.#identity = {
       company: options.company,
       companies: options.companies,
+      branch: options.branch,
       branches: options.branches,
       tenant: options.tenant,
       tenantHeader: options.tenantHeader,
@@ -212,6 +215,7 @@ export class TestClient {
     if (companies && identity.company && !companies.includes(identity.company))
       companies.unshift(identity.company)
     setHeader(headers, 'x-ket-companies', companies)
+    setHeader(headers, 'x-ket-current-branch', identity.branch)
     setHeader(headers, 'x-ket-branch', identity.branches)
     setHeader(headers, identity.tenantHeader ?? 'x-tenant', identity.tenant)
     setHeader(headers, 'accept-language', identity.locale)

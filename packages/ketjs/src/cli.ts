@@ -16,10 +16,13 @@ import { agentDescriptor } from './agent/capabilities.ts'
 import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
-import { migrateFleet, formatFleet } from './data/fleet.ts'
+import { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
 import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
 import { bootApp, serveApp } from './server/boot.ts'
+import { bootRuntime } from './server/runtime.ts'
+import { callFn } from './server/fn.ts'
+import { createAppRegistry, restrictManifest } from './kernel/apps.ts'
 import { bootWorker, serveWorker } from './server/worker.ts'
 import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
@@ -179,6 +182,9 @@ const HELP = `ket — zero-dependency fullstack framework
     --dry-run               report declared writes without applying them
     --idempotency-key KEY   exercise idempotent retry handling
     --isolated              boot a temporary app/database for this call
+  ket provision FUNCTION    run a declared one-shot bootstrap function
+    --input -               read JSON, including secrets, from stdin only
+    --tenant KEY            required when the app uses tenant databases
   ket test [FILES...]       run emitted headless tests with Node's test runner
     --watch                 rerun when the selected JavaScript artifacts change
     --test-name-pattern P   select tests by name; --coverage enables coverage
@@ -419,6 +425,43 @@ try {
       } finally {
         await app.close()
       }
+    }
+  } else if (cmd === 'provision') {
+    const fnKey = positionals(['input', 'tenant', 'app', 'workspace', 'module-path'])[0]
+    if (!fnKey) throw new Error('usage: ket provision FUNCTION --input - [--tenant KEY]')
+    if (opt('input') !== '-')
+      throw new Error('ket provision reads input only from stdin; pass --input - so secrets never enter argv')
+    const spec = pickSpec(specs)
+    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
+    const runtime = await bootRuntime(spec, { env: process.env })
+    const meta = runtime.manifest.functions[fnKey]
+    if (!meta) throw new Error(`unknown function "${fnKey}"`)
+    if (!meta.provision || meta.exposure !== 'internal')
+      throw new Error(`function "${fnKey}" is not declared internal + provision`)
+    const tenant = opt('tenant')
+    if (spec.serve.tenants && !tenant)
+      throw new Error(`app "${spec.name}" has tenant databases; pass --tenant NAME`)
+    const adapter = spec.serve.tenants
+      ? await spec.serve.tenants.open(tenant as string, runtime.config)
+      : await (spec.serve.openStore ?? sqliteStore)(runtime.config)
+    if (spec.serve.tenants) await adapter.open()
+    try {
+      await migrateOne(adapter, runtime.manifest)
+      const apps = await createAppRegistry(runtime.manifest, adapter, {
+        autoInstall: runtime.config.autoInstall,
+      })
+      const bootstrap = runtime.config.bootstrapApps ?? spec.serve.bootstrap ?? []
+      if ((await apps.enabled()).size === 0) for (const name of bootstrap) await apps.install(name)
+      const live = restrictManifest(runtime.manifest, await apps.enabled())
+      const result = await callFn(fnKey, jsonObject('-', '--input'), {
+        adapter,
+        manifest: live,
+        actor: 'system:provision',
+        scope: { company: null, branch: null },
+      })
+      console.log(JSON.stringify(result.value, null, 2))
+    } finally {
+      await adapter.close()
     }
   } else if (cmd === 'all') {
     const spec = pickSpec(specs)

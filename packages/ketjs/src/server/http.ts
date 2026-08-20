@@ -321,6 +321,14 @@ export async function createKetServer(o: ServeOpts) {
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
         const fnKey = decodeURIComponent(url.pathname.slice('/_ket/fn/'.length))
+        const meta = o.manifest.functions[fnKey]
+        if (meta?.exposure === 'internal') {
+          throw new KetError({
+            code: 'E_FUNCTION_INTERNAL',
+            message: `server function "${fnKey}" is internal and has no generic HTTP endpoint`,
+            hint: 'call it from the trusted route that owns its security policy',
+          })
+        }
         const args = await readBody(req)
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)

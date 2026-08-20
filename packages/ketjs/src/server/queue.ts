@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS ket_job (
   actor         TEXT,
   company_id    TEXT,
   companies     TEXT,
+  branch        TEXT,
   branches      TEXT,
   unique_key    TEXT,
   errors        TEXT NOT NULL DEFAULT '[]',
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS ket_job (
   actor         TEXT,
   company_id    TEXT,
   companies     TEXT,
+  branch        TEXT,
   branches      TEXT,
   unique_key    TEXT,
   errors        TEXT NOT NULL DEFAULT '[]',
@@ -196,6 +198,7 @@ const toJob = (r: Row): DurableJob => {
     scope: {
       company: r.company_id == null ? null : String(r.company_id),
       ...(companies === null ? {} : { companies }),
+      ...(r.branch == null ? {} : { branch: String(r.branch) }),
       ...(branches === null ? {} : { branches }),
     },
     uniqueKey: r.unique_key == null ? null : String(r.unique_key),
@@ -265,6 +268,8 @@ async function ensureSchema(adapter: Adapter): Promise<void> {
           migrateLegacy = true
         }
         await target.exec(target.name === 'postgres' ? DDL_POSTGRES : DDL_SQLITE)
+        if (before.ket_job?.job && !before.ket_job.branch)
+          await target.exec('ALTER TABLE ket_job ADD COLUMN branch TEXT')
         await target.exec(INDEX_DDL)
         if (migrateLegacy) {
           // V1 used queue as both routing key and operation name. Preserve its rows
@@ -388,6 +393,7 @@ export async function createQueue(
         o.actor ?? null,
         scope.company,
         scope.companies == null ? null : encode(scope.companies),
+        scope.branch ?? null,
         scope.branches == null ? null : encode(scope.branches),
         o.uniqueKey ?? null,
         at.toISOString(),
@@ -398,7 +404,7 @@ export async function createQueue(
         adapter.run(
           `INSERT INTO ket_job
            (id, job, queue, args, state, priority, max_attempts, scheduled_at, actor,
-            company_id, companies, branches, unique_key, inserted_at, updated_at)
+            company_id, companies, branch, branches, unique_key, inserted_at, updated_at)
            VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
           values,
         )

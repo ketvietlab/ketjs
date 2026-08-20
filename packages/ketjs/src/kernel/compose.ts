@@ -166,7 +166,8 @@ export function compose(
       // that spelled them itself could spell them differently, and the filter would
       // silently stop matching.
       if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
-      if (def.scope === 'company+branch') fields['branchId'] = { base: 'text', optional: true, by: '(scope)' }
+      if (def.scope === 'company+branch')
+        fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
       for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
         const t = parseType(tspec)
         if (!t.ok) {
@@ -506,6 +507,22 @@ export function compose(
   // --- server functions ----------------------------------------------------
   for (const m of order) {
     for (const [fname, def] of Object.entries(m.functions)) {
+      if (def.exposure !== undefined && def.exposure !== 'http' && def.exposure !== 'internal') {
+        diag.add({
+          code: 'E_FUNCTION_EXPOSURE',
+          module: m.name,
+          message: `function "${qualify(m.name, fname)}" has unknown exposure "${String(def.exposure)}"`,
+          hint: 'use "http" or "internal"',
+        })
+      }
+      if (def.provision === true && def.exposure !== 'internal') {
+        diag.add({
+          code: 'E_PROVISION_EXPOSED',
+          module: m.name,
+          message: `provision function "${qualify(m.name, fname)}" must be internal`,
+          hint: 'set exposure: "internal" so bootstrap credentials never have a generic endpoint',
+        })
+      }
       manifest.functions[qualify(m.name, fname)] = {
         by: m.name,
         input: def.input ?? {},
@@ -513,6 +530,8 @@ export function compose(
         effects: [...(def.effects ?? [])],
         crossCompany: def.crossCompany === true,
         anonymous: def.anonymous === true,
+        exposure: def.exposure ?? 'http',
+        provision: def.provision === true,
         idempotent: def.idempotent === true,
         dryRun: def.dryRun !== false,
         agent: def.agent === true,

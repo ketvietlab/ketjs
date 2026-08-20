@@ -43,7 +43,7 @@ import {
 } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
-const SCOPE = { company: 'c1', branches: null }
+const SCOPE = { company: 'c1', branch: 'main', branches: null }
 
 const URL = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const mods = [catalog, inventory, checkout, theme]

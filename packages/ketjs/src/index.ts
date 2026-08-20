@@ -30,7 +30,15 @@ export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server
 export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
 export { bootApp, serveApp } from './server/boot.ts'
-export type { ServeSpec, ServeContext, PagesSpec, BootedApp, BootAppOptions, Route } from './server/boot.ts'
+export type {
+  ServeSpec,
+  ServeContext,
+  SessionResolveContext,
+  PagesSpec,
+  BootedApp,
+  BootAppOptions,
+  Route,
+} from './server/boot.ts'
 export { bootRuntime } from './server/runtime.ts'
 export type { BootedRuntime } from './server/runtime.ts'
 export { bootWorker, serveWorker } from './server/worker.ts'
@@ -61,7 +69,13 @@ export {
   parseCookies,
   SESSION_COOKIE,
 } from './server/session.ts'
-export type { Sessions, SessionOptions, SessionStore, SessionRecord } from './server/session.ts'
+export type {
+  Sessions,
+  SessionOptions,
+  SessionContext,
+  SessionStore,
+  SessionRecord,
+} from './server/session.ts'
 export type { StreamStore, Writer } from './server/stream.ts'
 export { createQueue, queueFor, JOB_CHANNEL } from './server/queue.ts'
 export type { DurableJob, JobState, Queue, QueueListOptions } from './server/queue.ts'

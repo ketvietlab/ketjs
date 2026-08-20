@@ -18,7 +18,7 @@ import type { Adapter, Manifest } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
-const SCOPE = { company: 'c1', branches: null }
+const SCOPE = { company: 'c1', branch: 'main', branches: null }
 
 const mods = [catalog, inventory, checkout, theme]
 

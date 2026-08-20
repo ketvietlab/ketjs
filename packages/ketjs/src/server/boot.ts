@@ -28,7 +28,7 @@ import type { IslandRegistry, Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
-import type { Sessions, SessionOptions, SessionRecord } from './session.ts'
+import type { SessionContext, Sessions, SessionOptions, SessionRecord } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
 import { html, each } from 'ketjs-view'
@@ -134,6 +134,14 @@ export type PagesSpec = {
   siteTitle?: string
 }
 
+export type SessionResolveContext = {
+  adapter: Adapter
+  manifest: Manifest
+  record: SessionRecord
+  url: URL
+  req: IncomingMessage
+}
+
 export type ServeSpec = {
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
@@ -149,6 +157,8 @@ export type ServeSpec = {
    * comes from a signed cookie; absent means the shim stays and the banner says so.
    */
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
+  /** Revalidate live account state and memberships before scope and permissions. */
+  resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
   /**
    * Serve several tenants, one database each — Odoo's model, and the one that
    * makes per-tenant module sets work. Absent, the app has a single datastore.
@@ -340,7 +350,26 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     if (!makeSessions) return Promise.resolve(null)
     let record = sessionRecords.get(req)
     if (!record) {
-      record = sessionsOf(url, req).then((manager) => manager?.of(req) ?? null)
+      record = sessionsOf(url, req).then(async (manager) => {
+        const raw = (await manager?.of(req)) ?? null
+        if (!raw || !manager || !serve.resolveSession) return raw
+        const resolved = await tenants.ofRequest(url, req, (tenant) =>
+          serve.resolveSession!({ adapter: tenant.adapter, manifest: tenant.live, record: raw, url, req }),
+        )
+        if (!resolved) {
+          await manager.store.destroy(raw.id)
+          return null
+        }
+        const current: SessionContext = {
+          companies: raw.companies,
+          company: raw.company,
+          branch: raw.branch,
+          branches: raw.branches,
+          securityVersion: raw.securityVersion,
+        }
+        if (JSON.stringify(current) === JSON.stringify(resolved)) return raw
+        return manager.update(raw, resolved)
+      })
       sessionRecords.set(req, record)
     }
     return record
@@ -372,6 +401,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       return {
         company,
         companies: companies.length ? [...new Set([company, ...companies])] : null,
+        branch: (req.headers['x-ket-current-branch'] as string | undefined) ?? null,
         branches: list('x-ket-branch') || null,
       }
     }
@@ -515,8 +545,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       // page carrying where it was going; anything else gets the status, because a
       // redirect to an HTML form is a useless answer to a fetch().
       if (makeSessions && !entry.anonymous) {
-        const s = await sessionsOf(url, req)
-        if (!(await s?.of(req))) {
+        if (!(await sessionRecordOf(url, req))) {
           const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
           return wantsHtml
             ? withHeaders(text('', { status: 303 }), {

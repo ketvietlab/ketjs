@@ -37,7 +37,7 @@ const JSON_TYPE: Record<string, string> = {
 export function agentTools(manifest: Manifest): AgentTool[] {
   const tools: AgentTool[] = []
   for (const [key, fn] of Object.entries(manifest.functions)) {
-    if (!fn.agent) continue
+    if (!fn.agent || fn.exposure === 'internal') continue
     const properties: AgentTool['inputSchema']['properties'] = {}
     const required: string[] = []
     for (const [name, spec] of Object.entries(fn.input)) {
