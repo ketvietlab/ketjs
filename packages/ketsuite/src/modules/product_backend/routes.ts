@@ -309,11 +309,13 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
         const form = await readForm(req)
+        const name = form.name?.trim()
+        if (!name) return seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
         const result = await ctx.call(
           'product.saveAttribute',
           {
             id: randomUUID(),
-            name: form.name ?? '',
+            name,
             sequence: Number(form.sequence || 10),
             displayType: form.displayType || 'radio',
             createVariant: form.createVariant || 'always',
@@ -348,12 +350,14 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
+      const name = form.name?.trim()
+      if (!name) return seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
       const result = await ctx.call(
         'product.saveAttributeValue',
         {
           id: randomUUID(),
           attributeId: params.id,
-          name: form.name ?? '',
+          name,
           sequence: Number(form.sequence || 10),
         },
         url,
