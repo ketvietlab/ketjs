@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**"],
+    "includes": ["**", "!packages/ketsuite/src/modules/address/data"],
     "ignoreUnknown": true
   },
   "formatter": {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { callFn, compose, defineModule, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter, Ctx, Row } from 'ketjs'
 import { company, mail, partner, storage, user } from 'ketsuite'
+import { address } from 'ketsuite'
 import {
   ensureThread,
   followThread,
@@ -116,7 +117,7 @@ const bridge = defineModule({
   },
 })
 
-const modules = [partner, company, storage, user, mail, bridge]
+const modules = [address, partner, company, storage, user, mail, bridge]
 const manifest = compose(modules, { headless: true })
 const acme = { company: 'acme', branches: null }
 const beta = { company: 'beta', branches: null }

@@ -3,8 +3,9 @@ import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
 import { account, company, MOVE_TYPES, partner, product, uom } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const modules = [partner, company, uom, product, account]
+const modules = [address, partner, company, uom, product, account]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 

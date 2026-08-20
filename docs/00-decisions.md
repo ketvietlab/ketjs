@@ -1745,3 +1745,27 @@ is single-use CAS before code exchange. ID tokens must pass signature, key,
 algorithm, issuer, audience, authorized-party, nonce and time validation. Provider
 claims cannot grant function permissions; they resolve one local User, after which
 the existing live session and Role/Grant rules remain authoritative.
+
+## D57 — Address catalogs are versioned, lazy reference data
+
+KetSuite owns one `address` module, not one source module per country and not a
+country registry inside KetJS. Bundled data is organized by ISO 3166-1 alpha-2 and
+catalog version. The server reads no administrative dataset at boot: a small index
+is opened on first discovery and complete chunks only on explicit installation.
+Every manifest, policy and chunk is checksum-verified before a transaction can move
+the country's single active-catalog pointer.
+
+Country and Division are shared reference rows; a Partner address remains the
+business-owned row. Company refers to the Partner that represents the legal entity
+instead of copying address columns. Canonical addresses store the terminal Division
+reference and derive the complete parent path. A policy declares required levels,
+allowed kinds, postal-code validation and formatting, so a new country is data plus
+policy rather than new application code.
+
+Catalog rows are immutable after verification. New writes must resolve against the
+active catalog, while business modules that freeze a document must retain an address
+snapshot with catalog id, named division path and formatted lines. `DivisionTransition` records
+explicit splits, merges and replacements when a future source provides them; the
+system never guesses a replacement by string similarity. Catalog installation is
+an internal function owned by a trusted administration route and uses unique
+indexes, `insertIfAbsent` and CAS so concurrent pods converge.

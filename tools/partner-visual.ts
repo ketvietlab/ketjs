@@ -7,6 +7,7 @@ import type { Adapter } from 'ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const path = process.env.KET_VISUAL_SQLITE
+const addressInstalled = process.env.KET_VISUAL_ADDRESS !== 'uninstalled'
 if (!path) throw new Error('set KET_VISUAL_SQLITE to a new SQLite file')
 if (existsSync(path)) throw new Error(`refusing to replace existing visual database: ${path}`)
 
@@ -52,6 +53,18 @@ try {
     userId: 'visual-admin',
     companyId: 'default',
   })
+  if (addressInstalled) {
+    await call('address.installCatalog', { countryCode: 'VN' })
+    await call('partner.saveAddress', {
+      id: 'ket-company:legal',
+      partnerId: 'ket-company',
+      use: 'contact',
+      street1: '12 Nguyễn Huệ',
+      countryId: 'VN',
+      divisionId: 'VN:2025-07-01:10101003',
+      isDefault: true,
+    })
+  }
 
   const partners = [
     {
@@ -101,26 +114,28 @@ try {
       await call('partner.grantRole', { id: `${partner.id}:${role}`, partnerId: partner.id, role })
   }
 
-  await call('partner.saveAddress', {
-    id: 'minh-an:invoice',
-    partnerId: 'minh-an',
-    use: 'invoice',
-    street: '18 Lý Thường Kiệt',
-    street2: 'Tầng 6, Tòa nhà Minh An',
-    city: 'Hà Nội',
-    country: 'VN',
-    zip: '100000',
-    isDefault: true,
-  })
-  await call('partner.saveAddress', {
-    id: 'minh-an:delivery',
-    partnerId: 'minh-an',
-    use: 'delivery',
-    street: '125 Nguyễn Văn Linh',
-    city: 'Hải Phòng',
-    country: 'VN',
-    isDefault: true,
-  })
+  if (addressInstalled) {
+    await call('partner.saveAddress', {
+      id: 'minh-an:invoice',
+      partnerId: 'minh-an',
+      use: 'invoice',
+      street1: '18 Lý Thường Kiệt',
+      street2: 'Tầng 6, Tòa nhà Minh An',
+      countryId: 'VN',
+      divisionId: 'VN:2025-07-01:10101003',
+      postalCode: '100000',
+      isDefault: true,
+    })
+    await call('partner.saveAddress', {
+      id: 'minh-an:delivery',
+      partnerId: 'minh-an',
+      use: 'delivery',
+      street1: '125 Nguyễn Văn Linh',
+      countryId: 'VN',
+      divisionId: 'VN:2025-07-01:10301008',
+      isDefault: true,
+    })
+  }
   await call('partner.saveTerms', {
     id: 'minh-an:terms',
     partnerId: 'minh-an',

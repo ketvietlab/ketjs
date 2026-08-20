@@ -1,0 +1,12 @@
+[data-address-form] [data-ui="address-preview"] {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+}
+
+[data-address-form] [data-ui="address-error"] {
+  color: var(--color-danger-text, #b42318);
+}
