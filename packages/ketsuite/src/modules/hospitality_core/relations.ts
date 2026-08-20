@@ -10,6 +10,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     rooms: { hasMany: 'hospitality_core.Room', by: 'propertyId' },
     amenities: { hasMany: 'hospitality_core.PropertyAmenity', by: 'propertyId' },
     contacts: { hasMany: 'hospitality_core.PropertyContact', by: 'propertyId' },
+    contentImages: { hasMany: 'hospitality_core.ContentImage', by: 'propertyId' },
     cancellationPolicy: {
       belongsTo: 'hospitality_core.CancellationPolicy',
       by: 'defaultCancellationPolicyId',
@@ -34,6 +35,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     availability: { hasMany: 'hospitality_core.AvailabilityLedger', by: 'roomTypeId' },
     restrictions: { hasMany: 'hospitality_core.Restriction', by: 'roomTypeId' },
     cancellationPolicy: { belongsTo: 'hospitality_core.CancellationPolicy', by: 'cancellationPolicyId' },
+    contentImages: { hasMany: 'hospitality_core.ContentImage', by: 'roomTypeId' },
   },
   'hospitality_core.RatePlan': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
@@ -50,6 +52,14 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.InventoryChange': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
     roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.ContentImage': {
+    attachment: { belongsTo: 'storage.Attachment', by: 'attachmentId' },
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.ContentChange': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
   },
   'hospitality_core.Room': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },

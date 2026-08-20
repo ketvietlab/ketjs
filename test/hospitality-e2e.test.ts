@@ -59,6 +59,28 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   })
 
   await e2e.client.login({ login: 'admin', password: 'hospitality-e2e' })
+  const contentUpload = new FormData()
+  contentUpload.set(
+    'file',
+    new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'hotel-e2e.png', {
+      type: 'image/png',
+    }),
+  )
+  const uploaded = await e2e.client.post(
+    '/admin/hospitality/content/upload?lang=en&property=hotel&target=property',
+    contentUpload,
+    { redirect: 'manual' },
+  )
+  assert.equal(uploaded.status, 303, await uploaded.clone().text())
+  assert.match(uploaded.headers.get('location') ?? '', /status=saved/)
+  const contentMedia = await e2e.client.call<Row[]>('hospitality_core.listContentImages', {
+    propertyId: 'hotel',
+  })
+  assert.equal(contentMedia.value.length, 1)
+  assert.equal(contentMedia.value[0]!.primary, true)
+  const downloaded = await e2e.client.get(`/files/${contentMedia.value[0]!.attachmentId}`)
+  assert.equal(downloaded.status, 200)
+  assert.equal(downloaded.headers.get('content-type'), 'image/png')
   const booked = await e2e.client.call<Row>(
     'hospitality_core.createReservation',
     {
@@ -146,6 +168,10 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ['/admin/hospitality/properties?lang=vi', 'Cơ sở lưu trú'],
     ['/admin/hospitality/rooms?lang=vi', 'Sơ đồ phòng'],
     ['/admin/hospitality/room-types?lang=vi', 'Loại phòng'],
+    [
+      '/admin/hospitality/content?lang=vi&property=hotel&target=room_type%3Adeluxe',
+      'Nội dung &amp; hình ảnh',
+    ],
     ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',

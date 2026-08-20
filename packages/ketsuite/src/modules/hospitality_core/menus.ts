@@ -82,6 +82,13 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listRoomTypes',
     sequence: 10,
   },
+  'hospitality.content': {
+    parent: 'hospitality.configuration',
+    label: 'menu.content',
+    path: '/admin/hospitality/content',
+    needs: 'hospitality_core.listContentImages',
+    sequence: 12,
+  },
   'hospitality.ratePlans': {
     parent: 'hospitality.configuration',
     label: 'menu.ratePlans',

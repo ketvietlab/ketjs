@@ -194,6 +194,56 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * Ordered marketing images for a property or room type. Storage owns bytes;
+   * this model owns hospitality captions, ordering and primary-image semantics.
+   */
+  ContentImage: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      attachmentId: 'ref:storage.Attachment',
+      propertyId: 'ref:hospitality_core.Property?',
+      roomTypeId: 'ref:hospitality_core.RoomType?',
+      targetKey: 'text',
+      primarySlot: 'text?',
+      category: 'text',
+      caption: 'text?',
+      sequence: 'int',
+      primary: 'bool',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      attachment: { fields: ['companyId', 'attachmentId'], unique: true },
+      one_primary: { fields: ['companyId', 'primarySlot'], unique: true },
+      property_order: { fields: ['companyId', 'propertyId', 'sequence', 'id'] },
+      room_type_order: { fields: ['companyId', 'roomTypeId', 'sequence', 'id'] },
+    },
+  },
+
+  /**
+   * Append-only content signal. Private OTA adapters consume a stable cursor and
+   * rebuild provider payloads from current public hospitality records.
+   */
+  ContentChange: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      resourceType: 'text',
+      resourceId: 'text',
+      kind: 'text',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      property_cursor: { fields: ['companyId', 'propertyId', 'createdAt', 'id'] },
+      resource_cursor: {
+        fields: ['companyId', 'propertyId', 'resourceType', 'resourceId', 'createdAt', 'id'],
+      },
+    },
+  },
+
   Room: {
     scope: 'company',
     fields: {

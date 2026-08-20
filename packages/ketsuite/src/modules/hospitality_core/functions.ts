@@ -1,6 +1,7 @@
 import { asc, defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { resolveAddress, validateAddress } from '../address/format.ts'
+import { appendContentChange } from './content.ts'
 import {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
@@ -100,6 +101,53 @@ const save = async (
   if (!changes.valid) return { ok: false, errors: changes.errors }
   await ctx.db.commit(changes, existing ? { id: args.id } : undefined)
   return success(args.id)
+}
+
+const signalAmenityUsers = async (ctx: Ctx, amenityId: unknown): Promise<void> => {
+  const PropertyAmenity = ctx.table('hospitality_core.PropertyAmenity')
+  const RoomTypeAmenity = ctx.table('hospitality_core.RoomTypeAmenity')
+  const propertyAssignments = await ctx.db.all(
+    from(PropertyAmenity).where(eq(PropertyAmenity.amenityId, amenityId)),
+  )
+  const roomAssignments = await ctx.db.all(
+    from(RoomTypeAmenity).where(eq(RoomTypeAmenity.amenityId, amenityId)),
+  )
+  for (const assignment of propertyAssignments)
+    await appendContentChange(ctx, {
+      propertyId: assignment.propertyId,
+      resourceType: 'property',
+      resourceId: assignment.propertyId,
+    })
+  for (const assignment of roomAssignments) {
+    const roomType = await record(ctx, 'hospitality_core.RoomType', assignment.roomTypeId)
+    if (roomType)
+      await appendContentChange(ctx, {
+        propertyId: roomType.propertyId,
+        resourceType: 'room_type',
+        resourceId: roomType.id,
+      })
+  }
+}
+
+const signalPolicyUsers = async (ctx: Ctx, policyId: unknown): Promise<void> => {
+  const Property = ctx.table('hospitality_core.Property')
+  const RoomType = ctx.table('hospitality_core.RoomType')
+  const properties = await ctx.db.all(
+    from(Property).where(eq(Property.defaultCancellationPolicyId, policyId)),
+  )
+  const roomTypes = await ctx.db.all(from(RoomType).where(eq(RoomType.cancellationPolicyId, policyId)))
+  for (const property of properties)
+    await appendContentChange(ctx, {
+      propertyId: property.id,
+      resourceType: 'property',
+      resourceId: property.id,
+    })
+  for (const roomType of roomTypes)
+    await appendContentChange(ctx, {
+      propertyId: roomType.propertyId,
+      resourceType: 'room_type',
+      resourceId: roomType.id,
+    })
 }
 
 const writable = (name: string): string[] =>
@@ -327,6 +375,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:hospitality_core.Property',
       'write:hospitality_core.Property',
+      'write:hospitality_core.ContentChange',
       'read:address.Country',
       'read:address.CurrentCatalog',
       'read:address.Division',
@@ -383,10 +432,19 @@ export const functions: Record<string, FnSpec> = {
         }
       }
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.Property', args, writable('Property'), {
-        enforceTimes: true,
-        childrenStayFree: false,
-        active: true,
+      return ctx.tx(async (tx) => {
+        const result = await save(tx, 'hospitality_core.Property', args, writable('Property'), {
+          enforceTimes: true,
+          childrenStayFree: false,
+          active: true,
+        })
+        if (result.ok)
+          await appendContentChange(tx, {
+            propertyId: args.id,
+            resourceType: 'property',
+            resourceId: args.id,
+          })
+        return result
       })
     },
   }),
@@ -394,11 +452,25 @@ export const functions: Record<string, FnSpec> = {
   archiveProperty: defineFn({
     input: { id: 'id', active: 'bool' },
     output: { id: 'id', active: 'bool' },
-    effects: ['write:hospitality_core.Property'],
+    effects: [
+      'read:hospitality_core.Property',
+      'write:hospitality_core.Property',
+      'write:hospitality_core.ContentChange',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      await ctx.db.update('hospitality_core.Property', { id: args.id }, { active: args.active } as Row)
+      const property = await record(ctx, 'hospitality_core.Property', args.id)
+      if (!property) return args
+      await ctx.tx(async (tx) => {
+        await tx.db.update('hospitality_core.Property', { id: args.id }, { active: args.active } as Row)
+        await appendContentChange(tx, {
+          propertyId: args.id,
+          resourceType: 'property',
+          resourceId: args.id,
+          kind: args.active ? 'upsert' : 'archive',
+        })
+      })
       return args
     },
   }),
@@ -512,9 +584,15 @@ export const functions: Record<string, FnSpec> = {
       code: 'text',
       name: 'text',
       publicName: 'text?',
+      description: 'text?',
       defaultCapacity: 'int',
       maxAdults: 'int',
       maxChildren: 'int',
+      maxInfants: 'int',
+      maxExtraBeds: 'int',
+      sizeSqm: 'decimal?',
+      viewType: 'text?',
+      sharedBathroom: 'bool',
       baseRate: 'decimal',
       published: 'bool',
       active: 'bool',
@@ -559,6 +637,7 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.RoomType',
       'read:hospitality_core.CancellationPolicy',
       'write:hospitality_core.RoomType',
+      'write:hospitality_core.ContentChange',
     ],
     idempotent: true,
     agent: true,
@@ -601,10 +680,19 @@ export const functions: Record<string, FnSpec> = {
       )
         errors.push(issue('code', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.RoomType', args, writable('RoomType'), {
-        sharedBathroom: false,
-        published: false,
-        active: true,
+      return ctx.tx(async (tx) => {
+        const result = await save(tx, 'hospitality_core.RoomType', args, writable('RoomType'), {
+          sharedBathroom: false,
+          published: false,
+          active: true,
+        })
+        if (result.ok)
+          await appendContentChange(tx, {
+            propertyId: args.propertyId,
+            resourceType: 'room_type',
+            resourceId: args.id,
+          })
+        return result
       })
     },
   }),
@@ -771,7 +859,11 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:hospitality_core.AmenityCategory',
       'read:hospitality_core.Amenity',
+      'read:hospitality_core.PropertyAmenity',
+      'read:hospitality_core.RoomTypeAmenity',
+      'read:hospitality_core.RoomType',
       'write:hospitality_core.Amenity',
+      'write:hospitality_core.ContentChange',
     ],
     idempotent: true,
     agent: true,
@@ -790,13 +882,17 @@ export const functions: Record<string, FnSpec> = {
       if (await duplicate(ctx, 'hospitality_core.Amenity', 'code', args.code, args.id))
         errors.push(issue('code', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(
-        ctx,
-        'hospitality_core.Amenity',
-        args,
-        ['id', 'categoryId', 'code', 'name', 'scope', 'sequence'],
-        { active: true },
-      )
+      return ctx.tx(async (tx) => {
+        const result = await save(
+          tx,
+          'hospitality_core.Amenity',
+          args,
+          ['id', 'categoryId', 'code', 'name', 'scope', 'sequence'],
+          { active: true },
+        )
+        if (result.ok) await signalAmenityUsers(tx, args.id)
+        return result
+      })
     },
   }),
 
@@ -811,6 +907,7 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.RoomTypeAmenity',
       'write:hospitality_core.PropertyAmenity',
       'write:hospitality_core.RoomTypeAmenity',
+      'write:hospitality_core.ContentChange',
     ],
     idempotent: true,
     agent: true,
@@ -824,8 +921,8 @@ export const functions: Record<string, FnSpec> = {
         return failure(issue('amenityId', 'amenity_scope_mismatch'))
       if (roomType && amenity.scope !== 'room') return failure(issue('amenityId', 'amenity_scope_mismatch'))
       const targetModel = property ? 'hospitality_core.Property' : 'hospitality_core.RoomType'
-      if (!(await record(ctx, targetModel, args.targetId)))
-        return failure(issue('targetId', 'target_missing'))
+      const targetRecord = await record(ctx, targetModel, args.targetId)
+      if (!targetRecord) return failure(issue('targetId', 'target_missing'))
       const model = property ? 'hospitality_core.PropertyAmenity' : 'hospitality_core.RoomTypeAmenity'
       const targetField = property ? 'propertyId' : 'roomTypeId'
       const table = ctx.table(model)
@@ -833,26 +930,57 @@ export const functions: Record<string, FnSpec> = {
         from(table).where(eq(table[targetField]!, args.targetId), eq(table.amenityId, args.amenityId)),
       )
       if (existing) return success(existing.id)
-      await ctx.db.insert(model, { id: args.id, [targetField]: args.targetId, amenityId: args.amenityId })
-      return success(args.id)
+      return ctx.tx(async (tx) => {
+        await tx.db.insert(model, {
+          id: args.id,
+          [targetField]: args.targetId,
+          amenityId: args.amenityId,
+        })
+        await appendContentChange(tx, {
+          propertyId: property ? args.targetId : targetRecord.propertyId,
+          resourceType: property ? 'property' : 'room_type',
+          resourceId: args.targetId,
+        })
+        return success(args.id)
+      })
     },
   }),
 
   saveBed: defineFn({
     input: { id: 'id', roomTypeId: 'id', type: 'text', quantity: 'int', roomName: 'text?' },
     output: result,
-    effects: ['read:hospitality_core.RoomType', 'read:hospitality_core.Bed', 'write:hospitality_core.Bed'],
+    effects: [
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.Bed',
+      'write:hospitality_core.Bed',
+      'write:hospitality_core.ContentChange',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const errors: Issue[] = []
-      if (!(await record(ctx, 'hospitality_core.RoomType', args.roomTypeId)))
-        errors.push(issue('roomTypeId', 'room_type_missing'))
+      const roomType = await record(ctx, 'hospitality_core.RoomType', args.roomTypeId)
+      if (!roomType) errors.push(issue('roomTypeId', 'room_type_missing'))
       if (!isOneOf(BED_TYPES, args.type)) errors.push(issue('type', 'bed_type'))
       if (!Number.isInteger(Number(args.quantity)) || Number(args.quantity) < 1)
         errors.push(issue('quantity', 'positive'))
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.Bed', args, ['id', 'roomTypeId', 'type', 'quantity', 'roomName'])
+      return ctx.tx(async (tx) => {
+        const result = await save(tx, 'hospitality_core.Bed', args, [
+          'id',
+          'roomTypeId',
+          'type',
+          'quantity',
+          'roomName',
+        ])
+        if (result.ok && roomType)
+          await appendContentChange(tx, {
+            propertyId: roomType.propertyId,
+            resourceType: 'room_type',
+            resourceId: args.roomTypeId,
+          })
+        return result
+      })
     },
   }),
 
@@ -889,7 +1017,13 @@ export const functions: Record<string, FnSpec> = {
       penaltyPercent: 'decimal?',
     },
     output: result,
-    effects: ['read:hospitality_core.CancellationPolicy', 'write:hospitality_core.CancellationPolicy'],
+    effects: [
+      'read:hospitality_core.CancellationPolicy',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'write:hospitality_core.CancellationPolicy',
+      'write:hospitality_core.ContentChange',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
@@ -910,13 +1044,17 @@ export const functions: Record<string, FnSpec> = {
       if (await duplicate(ctx, 'hospitality_core.CancellationPolicy', 'code', args.code, args.id))
         errors.push(issue('code', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(
-        ctx,
-        'hospitality_core.CancellationPolicy',
-        args,
-        ['id', 'code', 'name', 'type', 'description', 'freeCancellationHours', 'penaltyPercent'],
-        { active: true },
-      )
+      return ctx.tx(async (tx) => {
+        const result = await save(
+          tx,
+          'hospitality_core.CancellationPolicy',
+          args,
+          ['id', 'code', 'name', 'type', 'description', 'freeCancellationHours', 'penaltyPercent'],
+          { active: true },
+        )
+        if (result.ok) await signalPolicyUsers(tx, args.id)
+        return result
+      })
     },
   }),
 
@@ -927,6 +1065,7 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.Property',
       'read:hospitality_core.PropertyContact',
       'write:hospitality_core.PropertyContact',
+      'write:hospitality_core.ContentChange',
     ],
     idempotent: true,
     agent: true,
@@ -945,14 +1084,23 @@ export const functions: Record<string, FnSpec> = {
       )
         errors.push(issue('type', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.PropertyContact', args, [
-        'id',
-        'propertyId',
-        'type',
-        'name',
-        'email',
-        'phone',
-      ])
+      return ctx.tx(async (tx) => {
+        const result = await save(tx, 'hospitality_core.PropertyContact', args, [
+          'id',
+          'propertyId',
+          'type',
+          'name',
+          'email',
+          'phone',
+        ])
+        if (result.ok)
+          await appendContentChange(tx, {
+            propertyId: args.propertyId,
+            resourceType: 'property',
+            resourceId: args.propertyId,
+          })
+        return result
+      })
     },
   }),
 }
