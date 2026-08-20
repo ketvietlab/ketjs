@@ -109,6 +109,11 @@ try {
       markers: ['quotation-create-form', 'record-workspace', 'Báo giá hiện có'],
     },
     {
+      label: 'Sales order detail',
+      path: '/admin/sales/quotations/quotation-collab?lang=vi',
+      markers: ['sale-order-line-form', 'sale.editor', 'mail.chatter', 'activity.record'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
