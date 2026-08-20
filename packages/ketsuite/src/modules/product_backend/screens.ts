@@ -117,7 +117,7 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   },
 ]
 
-const kanban = (_: Translator, rows: readonly TemplateRow[]): TemplateResult =>
+const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): TemplateResult =>
   kanbanGrid({
     rows,
     id: (r) => r.id,
@@ -125,6 +125,7 @@ const kanban = (_: Translator, rows: readonly TemplateRow[]): TemplateResult =>
       kanbanCard({
         key: r.id,
         title: r.name,
+        href: localized(`/admin/products/${r.id}`, locale),
         meta: inline([
           badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
           r.uomId ? code(r.uomId, 'unit') : '',
@@ -153,20 +154,17 @@ export const productsScreen = (
     _,
     _('product_backend.screen.title'),
     frame,
-    stack([
-      inline([
-        linkButton({
-          label: _('product_backend.action.create'),
-          href: localized('/admin/products/new', locale),
-          variant: 'primary',
-        }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-        : view === 'kanban'
-          ? kanban(_, rows)
-          : dataTable(_, { columns: templateColumns(_), rows, id: (r) => r.id, ...table }),
-    ]),
+    rows.length === 0
+      ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+      : view === 'kanban'
+        ? kanban(_, rows, locale)
+        : dataTable(_, {
+            columns: templateColumns(_),
+            rows,
+            id: (r) => r.id,
+            rowHref: (r) => localized(`/admin/products/${r.id}`, locale),
+            ...table,
+          }),
   )
 
 export type { MenuNode }

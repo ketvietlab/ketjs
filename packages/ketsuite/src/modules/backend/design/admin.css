@@ -963,6 +963,11 @@
     font-weight: 500;
   }
 
+  [data-ui="row-link"] {
+    color: inherit;
+    text-underline-offset: 0.14em;
+  }
+
   [data-ui="cell"] code {
     color: var(--admin-ink);
     font-family: var(--admin-font-mono);
