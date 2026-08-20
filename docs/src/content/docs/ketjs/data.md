@@ -1,0 +1,192 @@
+---
+title: Queries and changesets
+description: Read and write KetJS data with immutable queries, validated changesets, and transactions.
+---
+
+KetJS exposes data access only through an operation context. Queries are immutable values that can be
+inspected before execution; changesets cast and validate untrusted input before persistence.
+
+## Build a query
+
+```ts
+import { asc, desc, eq, from, gte, like } from 'ketjs'
+
+const Orders = ctx.table('sales.Order')
+
+const query = from(Orders)
+  .select(Orders.id, Orders.number, Orders.total)
+  .where(eq(Orders.active, true), gte(Orders.total, 100))
+  .where(like(Orders.number, 'SO%'))
+  .orderBy(desc(Orders.total), asc(Orders.number))
+  .limit(50)
+  .offset(0)
+
+const rows = await ctx.db.all(query)
+```
+
+Each builder call returns a new `Query`; the previous value is unchanged. Additional `where()` calls
+combine with `AND`, which allows several modules or helpers to narrow a query without mutating shared
+state.
+
+## Expression helpers
+
+Import expression helpers from `ketjs`:
+
+| Helper | SQL intent |
+| --- | --- |
+| `eq`, `ne` | Equality and inequality. |
+| `gt`, `lt`, `gte`, `lte` | Ordered comparisons. |
+| `like` | Pattern comparison. |
+| `inArray` | Membership; an empty array becomes an always-false expression. |
+| `isNull`, `isNotNull` | Null checks. |
+| `and`, `or`, `not` | Boolean composition. |
+| `asc`, `desc` | Sort direction. |
+
+Column handles must come from `ctx.table()` or `table(manifest, model)`. Plain strings are rejected.
+Values are always parameterized rather than interpolated into SQL.
+
+## Execute reads and deletes
+
+```ts
+const one = await ctx.db.one(from(Orders).where(eq(Orders.id, orderId)))
+const count = await ctx.db.count(from(Orders).where(eq(Orders.active, true)))
+const all = await ctx.db.all(from(Orders).preload('customer', 'lines'))
+```
+
+Use a delete query when its condition benefits from the query builder:
+
+```ts
+import { deleteFrom, eq } from 'ketjs'
+
+await ctx.db.del(deleteFrom(Orders).where(eq(Orders.id, orderId)))
+```
+
+A delete query has a write effect. The context checks every model touched by an expression or preload
+against the current function or job's declarations before the adapter executes SQL.
+
+Convenience methods remain available for simple operations:
+
+```ts
+await ctx.db.select('sales.Order', { active: true })
+await ctx.db.insert('sales.Order', row)
+await ctx.db.update('sales.Order', { id }, patch)
+```
+
+Prefer query values for complex reads and deletes because their complete reach is inspectable.
+
+## Build a changeset
+
+```ts
+const changes = ctx
+  .change('sales.Order', input)
+  .cast(['id', 'number', 'customerId', 'orderedOn', 'total'])
+  .required(['id', 'number', 'customerId', 'orderedOn'])
+  .validate('total', (value) => Number(value) >= 0 || 'must not be negative')
+  .put('active', true)
+
+if (!changes.valid) return { ok: false, errors: changes.errors }
+
+await ctx.db.commit(changes)
+```
+
+Only fields named in `cast()` can enter `changes`. Other input keys appear in `changes.dropped` and
+are never written. This allow-list is KetJS's mass-assignment boundary.
+
+`put()` sets a server-controlled value after casting. Do not cast a field and then assume the client
+could not control it.
+
+## Insert and update changesets
+
+Pass a base row for updates:
+
+```ts
+const current = await ctx.db.one(from(Orders).where(eq(Orders.id, input.id)))
+if (!current) return { ok: false, code: 'not_found' }
+
+const changes = ctx
+  .change('sales.Order', input, current)
+  .cast(['number', 'orderedOn', 'total'])
+
+await ctx.db.commit(changes, { id: current.id })
+```
+
+The changeset records only real differences from `base`. Without a base row, its action is `insert`;
+with a base row, its action is `update`. Committing an invalid changeset throws
+`E_INVALID_CHANGESET` with its structured field errors.
+
+## Casting behavior
+
+Changesets derive casts from the manifest:
+
+- `int` and `float` accept finite numeric strings when conversion is unambiguous.
+- `decimal` accepts finite numbers or plain decimal strings and normalizes exponent notation for
+  storage.
+- `bool` accepts booleans, `0`/`1`, and the strings `"false"`/`"true"`.
+- `date` requires a valid `YYYY-MM-DD` calendar date.
+- `datetime` accepts a `Date` or a parseable date-time string.
+- `json` accepts objects, including arrays; scalar strings are rejected.
+
+Inspect `changeset.toJSON()` when returning validation data to a UI or agent.
+
+## Atomic operations
+
+Use `insertIfAbsent()` when a declared unique index should settle a race:
+
+```ts
+const result = await ctx.db.insertIfAbsent('sales.Sequence', {
+  id: sequenceId,
+  key: 'order',
+  next: 1,
+})
+
+if (!('dryRun' in result) && !result.inserted) {
+  // Another transaction already created the unique row.
+}
+```
+
+Use `compareAndSet()` for optimistic concurrency:
+
+```ts
+const result = await ctx.db.compareAndSet(
+  'sales.Order',
+  { id: orderId },
+  { revision: expectedRevision },
+  { revision: expectedRevision + 1, status: 'confirmed' },
+)
+```
+
+The returned `matched` flag distinguishes a successful update from stale state.
+
+## Transactions
+
+Run related writes through `ctx.tx()`:
+
+```ts
+await ctx.tx(async (tx) => {
+  await tx.db.commit(orderChanges)
+  await tx.db.commit(lineChanges)
+  await tx.jobs.enqueue('sales.confirmOrder', { orderId })
+})
+```
+
+The callback receives a context bound to one adapter transaction. On PostgreSQL, KetJS reserves a
+connection so `BEGIN`, the body, and `COMMIT` cannot land on different pool connections.
+
+Jobs enqueued through the transaction commit atomically with business rows. A rollback removes both
+the writes and the job notification.
+
+Nested adapter transactions are not supported. Keep the transaction boundary at the business
+operation level.
+
+## Dry-run
+
+Functions declaring `dryRun: true` may be called with dry-run enabled. Context write methods report
+the intended mutation in `ctx.writes` without committing it:
+
+```ts
+const preview = await client.call('sales.createOrder', input, { dryRun: true })
+console.log(preview.writes)
+```
+
+Validation and declared-effect checks still run. Dry-run is a preview of the real operation, not a
+permission bypass.

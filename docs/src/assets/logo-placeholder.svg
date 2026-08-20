@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">KetSuite placeholder logo</title>
+  <rect width="48" height="48" rx="10" fill="#5167c4"/>
+  <path d="M15 12v24M16 25l16-13M18 23l15 13" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="39" cy="39" r="6" fill="#2f8a59" stroke="#fff" stroke-width="2"/>
+</svg>
