@@ -414,6 +414,29 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   })
   assert.match(await appliedInventoryPage.text(), /Đã áp dụng kiểm kê/)
 
+  const transfersPage = await e2e.client.get('/admin/transfers?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const transfersHtml = await transfersPage.text()
+  assert.match(transfersHtml, /data-ui="record-workspace"/)
+  assert.match(transfersHtml, /id="transfer-create-form"/)
+  assert.match(transfersHtml, /data-scope="transfer-create"/)
+  assert.match(transfersHtml, /Phiếu chuyển kho/)
+  assert.match(transfersHtml, />Từ</)
+  assert.match(transfersHtml, />Đến</)
+  assert.match(transfersHtml, /Loại hoạt động/)
+  assert.match(transfersHtml, /Tồn kho/)
+  assert.doesNotMatch(transfersHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/transfers?lang=vi', {
+    name: 'WH/INT/FORM',
+    pickingTypeId: 'wh:internal',
+    scheduledDate: '2026-08-22T09:00',
+  })
+  assert.equal(
+    (await call<Row[]>('stock.listPickings', {})).value.some((row) => row.name === 'WH/INT/FORM'),
+    true,
+  )
+
   // Exercise the same partial flow through the rendered backend form, including
   // the Odoo `ask` backorder choice rather than bypassing it with a direct call.
   await call('stock.createPicking', {

@@ -10,6 +10,7 @@ import { inventoryScreen } from './inventory-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
+import { transfersScreen } from './transfers-screen.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
@@ -254,45 +255,34 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listPickings', {}, url, req),
         common(ctx, url, req),
       ])) as [AnyRow[], Awaited<ReturnType<typeof common>>]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.transfers',
-        pickings.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: 'transfer',
-          state: String(row.state),
-          detail: String(row.scheduledDate),
-          href: inLocale(url, `/admin/transfers/${String(row.id)}`),
-        })),
-        [
-          surface({
-            body: recordForm({
+      const locationsById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const pickingTypesById = new Map(data.pickingTypes.map((row) => [String(row.id), String(row.name)]))
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.transfers'),
+          head: await ctx.styles(req),
+          body: transfersScreen(
+            _,
+            {
+              rows: pickings.map((row) => ({
+                id: String(row.id),
+                name: String(row.name),
+                operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
+                source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
+                destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
+                scheduledDate: dateTimeLabel(row.scheduledDate, lang),
+                state: String(row.state),
+                href: inLocale(url, `/admin/transfers/${String(row.id)}`),
+              })),
+              pickingTypes: options(data.pickingTypes),
               action: inLocale(url, '/admin/transfers'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
               errors: invalid(url, _),
-              fields: [
-                { name: 'name', label: _('stock_backend.field.reference'), required: true },
-                {
-                  name: 'pickingTypeId',
-                  label: _('stock_backend.field.operationType'),
-                  type: 'select',
-                  options: options(data.pickingTypes),
-                  required: true,
-                },
-                {
-                  name: 'scheduledDate',
-                  label: _('stock_backend.field.scheduledDate'),
-                  type: 'datetime-local',
-                },
-              ],
-            }),
-          }),
-        ],
-      )
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/transfers/{id}':
