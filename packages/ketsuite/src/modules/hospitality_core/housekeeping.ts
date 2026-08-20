@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from 'ketjs'
+import { asc, defineFn, desc, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { CLEANING_TASK_PRIORITIES, CLEANING_TASK_STATES, CLEANING_TASK_TYPES } from './types.ts'
 
@@ -63,6 +63,12 @@ const taskOutput = {
   room: 'json?',
 }
 
+const taskDetailOutput = {
+  ...taskOutput,
+  property: 'json?',
+  stay: 'json?',
+}
+
 export const housekeeping: Record<string, FnSpec> = {
   createCleaningTask: defineFn({
     input: {
@@ -111,18 +117,57 @@ export const housekeeping: Record<string, FnSpec> = {
     },
   }),
 
+  getCleaningTask: defineFn({
+    input: { id: 'id' },
+    output: taskDetailOutput,
+    effects: [
+      'read:hospitality_core.CleaningTask',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Stay',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const T = ctx.table('hospitality_core.CleaningTask')
+      return ctx.db.one(from(T).where(eq(T.id, args.id)).preload('property').preload('room').preload('stay'))
+    },
+  }),
+
+  cleaningTaskSummary: defineFn({
+    input: { propertyId: 'id' },
+    output: { todo: 'int', inProgress: 'int', done: 'int', cancelled: 'int' },
+    effects: ['read:hospitality_core.CleaningTask'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const T = ctx.table('hospitality_core.CleaningTask')
+      const count = (state: string) =>
+        ctx.db.count(from(T).where(eq(T.propertyId, args.propertyId), eq(T.state, state)))
+      const [todo, inProgress, done, cancelled] = await Promise.all([
+        count('todo'),
+        count('in_progress'),
+        count('done'),
+        count('cancelled'),
+      ])
+      return { todo, inProgress, done, cancelled }
+    },
+  }),
+
   listCleaningTasks: defineFn({
-    input: { propertyId: 'id?', state: 'text?', assigneeId: 'id?' },
+    input: { propertyId: 'id?', state: 'text?', assigneeId: 'id?', limit: 'int?' },
     output: taskOutput,
     effects: ['read:hospitality_core.CleaningTask', 'read:hospitality_core.Room'],
     agent: true,
     handler: async (ctx, args) => {
       const T = ctx.table('hospitality_core.CleaningTask')
-      let query = from(T).orderBy(asc(T.requestedAt)).preload('room')
+      let query = from(T).preload('room')
       if (args.propertyId) query = query.where(eq(T.propertyId, args.propertyId))
       if (args.state) query = query.where(eq(T.state, args.state))
       if (args.assigneeId) query = query.where(eq(T.assigneeId, args.assigneeId))
-      return ctx.db.all(query)
+      query =
+        args.state === 'todo' || args.state === 'in_progress'
+          ? query.orderBy(desc(T.priority), asc(T.requestedAt))
+          : query.orderBy(desc(T.requestedAt))
+      return ctx.db.all(query.limit(Math.max(1, Math.min(500, Number(args.limit ?? 100)))))
     },
   }),
 

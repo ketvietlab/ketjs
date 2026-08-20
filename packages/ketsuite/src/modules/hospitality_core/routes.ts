@@ -8,6 +8,7 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import {
   amenitiesScreen,
+  cleaningTaskDetailScreen,
   cleaningTasksScreen,
   folioDetailScreen,
   foliosScreen,
@@ -31,6 +32,7 @@ import {
 } from './screens.ts'
 import type {
   AmenityRow,
+  CleaningTaskSummary,
   CleaningTaskRow,
   FolioRow,
   PolicyRow,
@@ -55,7 +57,7 @@ import type {
   StayNoticeRow,
 } from './screens.ts'
 import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
-import { STAY_NOTICE_STATES } from './types.ts'
+import { CLEANING_TASK_STATES, STAY_NOTICE_STATES } from './types.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -231,6 +233,40 @@ const renderFolioDetail = async (
   )
 }
 
+const renderCleaningTaskDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+) => {
+  const task = (await ctx.call(
+    'hospitality_core.getCleaningTask',
+    { id },
+    url,
+    req,
+  )) as CleaningTaskRow | null
+  if (!task) return text('Not found', { status: 404 })
+  const timezone = await propertyTimezone(ctx, task.propertyId, url, req)
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.housekeeping.detail.title', { code: task.code }),
+    cleaningTaskDetailScreen(
+      _,
+      task,
+      lang,
+      timezone,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
 const selectedProperty = async (
   ctx: ServeContext,
   url: URL,
@@ -244,7 +280,7 @@ const selectedProperty = async (
 
 const redirected = (
   url: URL,
-  state: 'saved' | 'quoted' | 'queued' | 'refreshed' | 'submitted' | 'confirmed' | 'invalid',
+  state: 'saved' | 'quoted' | 'queued' | 'refreshed' | 'submitted' | 'confirmed' | 'created' | 'invalid',
   values: Record<string, string | undefined> = {},
 ) => {
   const params = new URLSearchParams(url.searchParams)
@@ -1286,22 +1322,121 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/housekeeping':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'create') return text('unknown action', { status: 400 })
+        const id = form.id?.trim() || randomUUID()
+        const result = (await ctx.call(
+          'hospitality_core.createCleaningTask',
+          {
+            id,
+            code: form.code?.trim() || `HK-${id.slice(0, 12).toUpperCase()}`,
+            roomId: form.roomId?.trim() || '',
+            taskType: form.taskType?.trim() || 'daily_clean',
+            priority: form.priority?.trim() || 'normal',
+            assigneeId: form.assigneeId?.trim() || undefined,
+            notes: form.notes?.trim() || undefined,
+          },
+          url,
+          req,
+        )) as OperationResult
+        return redirected(url, result.ok ? 'created' : 'invalid', {
+          property: form.propertyId,
+          state: form.state === 'all' ? undefined : form.state,
+          lang: form.lang,
+        })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const propertyId = await selectedProperty(ctx, url, req)
-      const rows = (await ctx.call(
-        'hospitality_core.listCleaningTasks',
-        { propertyId, state: url.searchParams.get('state') || undefined },
-        url,
-        req,
-      )) as CleaningTaskRow[]
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const requestedState = url.searchParams.get('state')?.trim()
+      const state = CLEANING_TASK_STATES.includes(requestedState as (typeof CLEANING_TASK_STATES)[number])
+        ? requestedState!
+        : 'all'
+      const [rows, rooms, summary] = propertyId
+        ? ((await Promise.all([
+            ctx.call(
+              'hospitality_core.listCleaningTasks',
+              { propertyId, state: state === 'all' ? undefined : state, limit: 500 },
+              url,
+              req,
+            ),
+            ctx.call('hospitality_core.listRooms', { propertyId }, url, req),
+            ctx.call('hospitality_core.cleaningTaskSummary', { propertyId }, url, req),
+          ])) as [CleaningTaskRow[], RoomRow[], CleaningTaskSummary])
+        : [[], [], { todo: 0, inProgress: 0, done: 0, cancelled: 0 }]
+      const timezone = await propertyTimezone(ctx, propertyId, url, req)
+      const taskId = randomUUID()
       return document(
         ctx,
         url,
         req,
         _('hospitality_core.screen.cleaningTasks.title'),
-        cleaningTasksScreen(_, rows, lang, await frame(ctx, url, req)),
+        cleaningTasksScreen(
+          _,
+          {
+            rows,
+            properties,
+            propertyId,
+            state,
+            rooms,
+            summary,
+            id: taskId,
+            code: `HK-${taskId.slice(0, 12).toUpperCase()}`,
+          },
+          lang,
+          timezone,
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
       )
+    },
+
+  '/admin/hospitality/housekeeping/tasks/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderCleaningTaskDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      let result: OperationResult
+      let status: 'started' | 'completed' | 'cancelled'
+      if (form.operation === 'start') {
+        result = (await ctx.call(
+          'hospitality_core.startCleaningTask',
+          { id: params.id, assigneeId: form.assigneeId?.trim() || undefined },
+          url,
+          req,
+        )) as OperationResult
+        status = 'started'
+      } else if (form.operation === 'complete') {
+        result = (await ctx.call(
+          'hospitality_core.completeCleaningTask',
+          { id: params.id },
+          url,
+          req,
+        )) as OperationResult
+        status = 'completed'
+      } else if (form.operation === 'cancel') {
+        result = (await ctx.call(
+          'hospitality_core.cancelCleaningTask',
+          { id: params.id },
+          url,
+          req,
+        )) as OperationResult
+        status = 'cancelled'
+      } else return text('unknown action', { status: 400 })
+
+      if (!result.ok)
+        return renderCleaningTaskDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams({ status })
+      const lang = url.searchParams.get('lang')?.trim() || form.lang?.trim()
+      if (lang) query.set('lang', lang)
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/housekeeping/rooms':
