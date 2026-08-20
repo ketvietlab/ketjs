@@ -6,6 +6,7 @@ import { inventory } from './inventory.ts'
 import { nightAuditFunctions, nightAuditJobs } from './night-audit.ts'
 import { operations } from './operations.ts'
 import { services } from './services.ts'
+import { stayNoticeFunctions, stayNoticeJobs } from './stay-notices.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
@@ -30,8 +31,9 @@ export default defineModule({
     ...content,
     ...services,
     ...nightAuditFunctions,
+    ...stayNoticeFunctions,
   },
-  jobs: nightAuditJobs,
+  jobs: { ...nightAuditJobs, ...stayNoticeJobs },
   routes,
   menus,
   messages,
@@ -64,6 +66,9 @@ export {
   CLEANING_TASK_STATES,
   CLEANING_TASK_TYPES,
   NIGHT_AUDIT_STATES,
+  STAY_NOTICE_CHANNELS,
+  STAY_NOTICE_REASONS,
+  STAY_NOTICE_STATES,
 } from './types.ts'
 export type {
   AccommodationType,
@@ -92,4 +97,7 @@ export type {
   CleaningTaskState,
   CleaningTaskType,
   NightAuditState,
+  StayNoticeChannel,
+  StayNoticeReason,
+  StayNoticeState,
 } from './types.ts'

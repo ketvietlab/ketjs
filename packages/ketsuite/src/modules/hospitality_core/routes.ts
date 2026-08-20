@@ -24,6 +24,7 @@ import {
   contentScreen,
   servicesScreen,
   nightAuditScreen,
+  stayNoticesScreen,
 } from './screens.ts'
 import type {
   AmenityRow,
@@ -45,8 +46,10 @@ import type {
   ServiceProductRow,
   NightAuditPreview,
   NightAuditRow,
+  StayNoticeRow,
 } from './screens.ts'
 import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
+import { STAY_NOTICE_STATES } from './types.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -96,7 +99,7 @@ const selectedProperty = async (
 
 const redirected = (
   url: URL,
-  state: 'saved' | 'queued' | 'invalid',
+  state: 'saved' | 'queued' | 'refreshed' | 'submitted' | 'confirmed' | 'invalid',
   values: Record<string, string | undefined> = {},
 ) => {
   const params = new URLSearchParams(url.searchParams)
@@ -694,6 +697,87 @@ export const routes: Record<string, RouteEntry> = {
           _,
           { properties, propertyId, auditDate, today, preview, runs },
           lang,
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
+      )
+    },
+
+  '/admin/hospitality/stay-notices':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        let result: { ok?: boolean } = { ok: false }
+        let state: 'refreshed' | 'submitted' | 'confirmed' = 'refreshed'
+        if (form.operation === 'refresh') {
+          result = (await ctx.call(
+            'hospitality_core.requestStayNoticeRefresh',
+            { stayId: form.stayId ?? '' },
+            url,
+            req,
+          )) as { ok?: boolean }
+        } else if (form.operation === 'record-submission') {
+          state = 'submitted'
+          result = (await ctx.call(
+            'hospitality_core.recordStayNoticeSubmission',
+            {
+              id: form.id ?? '',
+              reason: form.reason ?? '',
+              channel: form.channel ?? '',
+              evidenceRef: form.evidenceRef ?? '',
+            },
+            url,
+            req,
+          )) as { ok?: boolean }
+        } else if (form.operation === 'confirm') {
+          state = 'confirmed'
+          result = (await ctx.call(
+            'hospitality_core.confirmStayNotice',
+            { id: form.id ?? '', receiptRef: form.receiptRef ?? '' },
+            url,
+            req,
+          )) as { ok?: boolean }
+        } else return text('unknown action', { status: 400 })
+        return redirected(url, result.ok ? state : 'invalid', {
+          property: form.property,
+          state: form.state === 'all' ? undefined : form.state,
+          notice: form.id,
+        })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const requestedState = url.searchParams.get('state')?.trim()
+      const state = STAY_NOTICE_STATES.includes(requestedState as (typeof STAY_NOTICE_STATES)[number])
+        ? requestedState!
+        : 'all'
+      const rows = propertyId
+        ? ((await ctx.call(
+            'hospitality_core.listStayNotices',
+            { propertyId, limit: 500 },
+            url,
+            req,
+          )) as StayNoticeRow[])
+        : []
+      const selectedId = url.searchParams.get('notice')?.trim()
+      const selected = rows.find((row) => row.id === selectedId)
+      const timezone = await propertyTimezone(ctx, propertyId, url, req)
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.stayNotices.title'),
+        stayNoticesScreen(
+          _,
+          { properties, propertyId, state, rows, selected },
+          lang,
+          timezone,
           await frame(ctx, url, req),
           url.searchParams.get('status'),
         ),

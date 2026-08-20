@@ -13,6 +13,7 @@ import { company, hospitalityCore, partner, product, storage, uom } from 'ketsui
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 import { executeNightAudit } from '../packages/ketsuite/src/modules/hospitality_core/night-audit.ts'
+import { prepareStayNotices } from '../packages/ketsuite/src/modules/hospitality_core/stay-notices.ts'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const databaseCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 4 : 8))
@@ -78,6 +79,18 @@ const benchmarkAudit = defineModule({
           auditDate: String(args.auditDate),
         }),
     },
+    prepareStayNotices: {
+      input: { stayId: 'id' },
+      effects: [
+        'read:hospitality_core.Stay',
+        'read:hospitality_core.Property',
+        'read:hospitality_core.StayGuest',
+        'read:hospitality_core.GuestDocument',
+        'read:hospitality_core.StayNotice',
+        'write:hospitality_core.StayNotice',
+      ],
+      handler: (ctx: Ctx, args) => prepareStayNotices(ctx, String(args.stayId)),
+    },
   },
 })
 const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore, benchmarkAudit]
@@ -126,6 +139,7 @@ const callWith = (adapter: Adapter, key: string, name: string, args: Record<stri
     adapter,
     manifest,
     scope: { company: key, branches: null },
+    actor: 'benchmark-operator',
   })
 
 await prepare()
@@ -154,6 +168,17 @@ try {
         name: `Benchmark ${key}`,
         accommodationType: 'hotel',
         starRating: 4,
+        street1: '123 Benchmark Street',
+        locality: 'Ho Chi Minh City',
+      })
+      await call(key, 'hospitality_core.saveGuestDocument', {
+        id: 'guest-document',
+        partnerId: 'guest',
+        type: 'cccd',
+        number: `ID-${key}-9876`,
+        fullName: `Benchmark guest ${key}`,
+        dateOfBirth: '1990-05-12T00:00:00.000Z',
+        ocrState: 'done',
       })
       await call(key, 'hospitality_core.saveBuilding', {
         id: 'building',
@@ -431,6 +456,114 @@ try {
     }),
   )
   const transitionMs = performance.now() - transitionStarted
+
+  const stayNoticeStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let index = 0; index < transitionCount; index++)
+        await call(key, 'hospitality_benchmark_audit.prepareStayNotices', {
+          stayId: `reservation:${index}:stay`,
+        })
+      if (driver === 'postgres' && key === keys[0] && transitionCount > 0) {
+        const contender = open(key)
+        await contender.open()
+        try {
+          await Promise.all([
+            callWith(adapters.get(key)!, key, 'hospitality_benchmark_audit.prepareStayNotices', {
+              stayId: 'reservation:0:stay',
+            }),
+            callWith(contender, key, 'hospitality_benchmark_audit.prepareStayNotices', {
+              stayId: 'reservation:0:stay',
+            }),
+          ])
+        } finally {
+          await contender.close()
+        }
+      }
+      let submissionStart = 0
+      if (driver === 'postgres' && key === keys[0] && transitionCount > 0) {
+        const contender = open(key)
+        await contender.open()
+        try {
+          const attempts = await Promise.all([
+            callWith(adapters.get(key)!, key, 'hospitality_core.recordStayNoticeSubmission', {
+              id: 'reservation:0:stay:notice:reservation:0:guest',
+              reason: 'business',
+              channel: 'online',
+              evidenceRef: `${key}:notice:0:first`,
+            }),
+            callWith(contender, key, 'hospitality_core.recordStayNoticeSubmission', {
+              id: 'reservation:0:stay:notice:reservation:0:guest',
+              reason: 'business',
+              channel: 'vneid',
+              evidenceRef: `${key}:notice:0:second`,
+            }),
+          ])
+          if (attempts.some((attempt) => !(attempt.value as { ok: boolean }).ok))
+            throw new Error(`${key}: concurrent stay-notice submission failed`)
+          submissionStart = 1
+        } finally {
+          await contender.close()
+        }
+      }
+      for (let index = submissionStart; index < transitionCount; index++) {
+        const id = `reservation:${index}:stay:notice:reservation:${index}:guest`
+        const submitted = await call(key, 'hospitality_core.recordStayNoticeSubmission', {
+          id,
+          reason: index % 3 === 0 ? 'business' : 'tourism',
+          channel: 'online',
+          evidenceRef: `${key}:notice:${index}`,
+        })
+        if (!(submitted.value as { ok: boolean }).ok) throw new Error(`${key}: stay notice submission failed`)
+        if (index % 2 === 0) {
+          const confirmed = await call(key, 'hospitality_core.confirmStayNotice', {
+            id,
+            receiptRef: `${key}:notice:${index}`,
+          })
+          if (!(confirmed.value as { ok: boolean }).ok)
+            throw new Error(`${key}: stay notice confirmation failed`)
+        }
+      }
+      if (submissionStart === 1) {
+        const confirmed = await call(key, 'hospitality_core.confirmStayNotice', {
+          id: 'reservation:0:stay:notice:reservation:0:guest',
+          receiptRef: `${key}:notice:0`,
+        })
+        if (!(confirmed.value as { ok: boolean }).ok)
+          throw new Error(`${key}: concurrent stay-notice confirmation failed`)
+      }
+    }),
+  )
+  const stayNoticeMs = performance.now() - stayNoticeStarted
+  const stayNoticeCounts = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters.get(key)!.all(
+        `SELECT state, "documentLast4", "packageHash"
+           FROM hospitality_core_stay_notice
+          WHERE "companyId" = ${driver === 'postgres' ? '$1' : '?'}`,
+        [key],
+      )
+      return {
+        count: rows.length,
+        readyEvidence: rows.every(
+          (row) =>
+            row.documentLast4 === '9876' &&
+            /^[a-f0-9]{64}$/u.test(String(row.packageHash)) &&
+            (row.state === 'submitted' || row.state === 'confirmed'),
+        ),
+        confirmed: rows.filter((row) => row.state === 'confirmed').length,
+      }
+    }),
+  )
+  if (
+    !stayNoticeCounts.every(
+      (result) =>
+        result.count === transitionCount &&
+        result.readyEvidence &&
+        result.confirmed === Math.ceil(transitionCount / 2),
+    )
+  )
+    throw new Error('stay-notice preparation, evidence or database isolation mismatch')
 
   const auditDate = '2026-09-02'
   const auditStarted = performance.now()
@@ -712,6 +845,11 @@ try {
     const auditColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_night_audit_run!
     if (auditColumns.auditDate !== 'date')
       throw new Error(`PostgreSQL auditDate is ${auditColumns.auditDate}, expected date`)
+    const stayNoticeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_stay_notice!
+    if (stayNoticeColumns.dueAt !== 'timestamp with time zone')
+      throw new Error(`PostgreSQL stay-notice dueAt is ${stayNoticeColumns.dueAt}, expected timestamptz`)
+    if (stayNoticeColumns.documentNumber)
+      throw new Error('PostgreSQL stay-notice table must not retain a full document number')
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
@@ -795,6 +933,12 @@ try {
         checkInChargeCheckoutCycles: totalTransitions,
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
+        stayNotices: totalTransitions,
+        stayNoticeMs: Number(stayNoticeMs.toFixed(1)),
+        stayNoticesPerSecond: Math.round((totalTransitions * 1_000) / stayNoticeMs),
+        stayNoticeEvidenceAndIsolationMatch: stayNoticeCounts.every(
+          (result) => result.count === transitionCount && result.readyEvidence,
+        ),
         nightAudits: databaseCount,
         auditCharges: databaseCount * (expectedAuditServices + 13),
         auditMs: Number(auditMs.toFixed(1)),
