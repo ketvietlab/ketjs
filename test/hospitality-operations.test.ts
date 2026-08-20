@@ -488,6 +488,17 @@ test('hospitality housekeeping: checkout creates one urgent task and cleaning re
         },
       ],
     )
+    const detail = (await call('hospitality_core.getCleaningTask', { id: 'checkout:clean:stay' }, adapter))
+      .value as Row
+    assert.equal((detail.room as Row).status, 'dirty')
+    assert.equal((detail.property as Row).name, 'Ket Hotel')
+    assert.equal((detail.stay as Row).code, 'S-CLEAN')
+    const hidden = await callFn(
+      'hospitality_core.getCleaningTask',
+      { id: 'checkout:clean:stay' },
+      { adapter, manifest, scope: { company: 'globex', branches: null } },
+    )
+    assert.equal(hidden.value, null, 'a company cannot open another company’s housekeeping task')
     assert.equal(
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'dirty',
@@ -514,6 +525,9 @@ test('hospitality housekeeping: checkout creates one urgent task and cleaning re
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'available',
     )
+    const summary = (await call('hospitality_core.cleaningTaskSummary', { propertyId: 'hotel' }, adapter))
+      .value as Row
+    assert.deepEqual(summary, { todo: 0, inProgress: 0, done: 1, cancelled: 0 })
   } finally {
     await adapter.close()
   }

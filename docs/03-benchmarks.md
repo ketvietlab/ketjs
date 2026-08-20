@@ -282,6 +282,20 @@ each database so both engines exercised the same workflow. It is a regression ba
 not a capacity estimate; the PostgreSQL figure includes real transactions and
 cross-connection contention on the local development cluster.
 
+The 2026-08-21 housekeeping-workspace extension then claimed and completed every
+checkout cleaning task through the public functions. It verifies the durable task
+state, assignee, timestamps and restored room state on every physical database; room
+moves and their pending cleaning tasks remain separately asserted.
+
+| driver | physical databases | tasks completed | elapsed | tasks/s | task and room lifecycle |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 48 | 14.9 ms | 3,226 | complete |
+| PostgreSQL 17 | 4 | 24 | 53.5 ms | 448 | complete |
+
+The same run retained the existing room, inventory, folio-correction, stay-notice,
+night-audit and cross-database isolation assertions. These figures measure the task
+lifecycle only; browser rendering and operator think time are intentionally excluded.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so

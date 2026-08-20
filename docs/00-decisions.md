@@ -1635,6 +1635,13 @@ so overlapping unassigned bookings remain legible instead of painting over each
 other. The browser acceptance path runs every hospitality route with seeded data
 in Vietnamese and English, plus the calendar at a narrow viewport; this is part of
 the feature definition, not a release-only visual pass.
+
+Housekeeping tasks are durable operational records, not ephemeral UI cards. Checkout
+creates exactly one urgent task in the same transaction that marks the room dirty;
+manual daily cleaning, inspection and maintenance use the same state machine. Starting,
+completing or cancelling a task uses compare-and-set and recalculates room state in the
+same transaction. A company-scoped detail read preloads only its property, room and stay,
+and archived rooms remain visible in history but cannot receive new work from the UI.
 ## D53 — Collaboration keeps one polymorphic boundary and external I/O behind jobs
 
 **A date is not a datetime with the clock hidden.** Activity deadlines and all-day
