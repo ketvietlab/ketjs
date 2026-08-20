@@ -76,6 +76,85 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   })
 
   await e2e.client.login({ login: 'admin', password: 'hospitality-e2e' })
+  const directQuote = await e2e.client.post(
+    '/admin/hospitality/reservations',
+    new URLSearchParams({
+      operation: 'quote',
+      lang: 'vi',
+      property: 'hotel',
+      id: 'direct-web',
+      code: 'WEB-001',
+      partnerId: 'guest',
+      roomTypeId: 'deluxe',
+      bookingType: 'nightly',
+      checkIn: '2026-08-22T14:00',
+      checkOut: '2026-08-23T12:00',
+      adults: '2',
+      children: '0',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(directQuote.status, 303, await directQuote.clone().text())
+  assert.match(directQuote.headers.get('location') ?? '', /status=quoted/)
+  const quotePage = await e2e.client.get(directQuote.headers.get('location')!)
+  const quoteHtml = await quotePage.text()
+  assert.equal(quotePage.status, 200)
+  assert.match(quoteHtml, /Báo giá sẵn sàng/)
+  assert.match(quoteHtml, /100/)
+  assert.doesNotMatch(quoteHtml, /hospitality_core\./)
+
+  const impossibleLocalDate = await e2e.client.post(
+    '/admin/hospitality/reservations',
+    new URLSearchParams({
+      operation: 'quote',
+      lang: 'vi',
+      property: 'hotel',
+      id: 'invalid-local-date',
+      partnerId: 'guest',
+      roomTypeId: 'deluxe',
+      bookingType: 'nightly',
+      checkIn: '2026-02-31T14:00',
+      checkOut: '2026-03-04T12:00',
+      adults: '1',
+      children: '0',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(impossibleLocalDate.status, 303, await impossibleLocalDate.clone().text())
+  assert.match(impossibleLocalDate.headers.get('location') ?? '', /status=invalid/)
+
+  const confirmDirect = () =>
+    e2e.client.post(
+      '/admin/hospitality/reservations',
+      new URLSearchParams({
+        operation: 'create',
+        lang: 'vi',
+        property: 'hotel',
+        id: 'direct-web',
+        code: 'WEB-001',
+        partnerId: 'guest',
+        roomTypeId: 'deluxe',
+        bookingType: 'nightly',
+        checkIn: '2026-08-22T14:00',
+        checkOut: '2026-08-23T12:00',
+        adults: '2',
+        children: '0',
+        rate: '100',
+      }),
+      { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+    )
+  const directCreated = await confirmDirect()
+  assert.equal(directCreated.status, 303, await directCreated.clone().text())
+  assert.match(directCreated.headers.get('location') ?? '', /status=saved/)
+  const directRetried = await confirmDirect()
+  assert.equal(directRetried.status, 303, await directRetried.clone().text())
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    const count = await adapter.all(
+      `SELECT COUNT(*) AS n FROM hospitality_core_reservation WHERE id = 'direct-web'`,
+    )
+    assert.equal(Number(count[0]?.n), 1, 'a retried confirmation keeps the same reservation')
+  })
+
   const contentUpload = new FormData()
   contentUpload.set(
     'file',

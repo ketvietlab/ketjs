@@ -229,6 +229,20 @@ content-change durability and PostgreSQL `numeric`/`date` column types.
 | SQLite | 8 | 2,000 | 800 | 178.1 ms | 3,135 | 908 | 1,060 | 1,391 | 529 | one row (sequential) | complete |
 | PostgreSQL 17 | 4 | 1,000 | 400 | 906.1 ms | 729 | 227 | 195 | 237 | 261 | one row (concurrent) | complete |
 
+The reservation-intake run on 2026-08-21 adds a read-only quote before every
+booking and verifies that the quote phase does not create or update an
+`AvailabilityLedger` row.
+
+| driver | physical databases | quotes | elapsed | quotes/s | inventory unchanged |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 800 | 334.1 ms | 2,394 | yes |
+| PostgreSQL 17 | 4 | 400 | 600.6 ms | 666 | yes |
+
+Each quote resolves the default rate, validates the property calendar and sales
+restrictions, and reads the minimum room-night availability. Confirmation still
+performs the compare-and-set inventory claim; the quote is never treated as a
+hold.
+
 An operation cycle contains check-in, an idempotent folio charge and checkout for
 every second stay. A list pair contains the room board plus the reservation list;
 the table keeps the benchmark field name `readsPerSecond` for compatibility. These

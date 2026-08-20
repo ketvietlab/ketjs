@@ -35,6 +35,8 @@ import type {
   RatePlanRow,
   InventoryRow,
   ReservationRow,
+  ReservationQuote,
+  ReservationIntakeValues,
   RoomRow,
   RoomTypeRow,
   StayRow,
@@ -48,7 +50,7 @@ import type {
   NightAuditRow,
   StayNoticeRow,
 } from './screens.ts'
-import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
+import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { STAY_NOTICE_STATES } from './types.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
@@ -99,7 +101,7 @@ const selectedProperty = async (
 
 const redirected = (
   url: URL,
-  state: 'saved' | 'queued' | 'refreshed' | 'submitted' | 'confirmed' | 'invalid',
+  state: 'saved' | 'quoted' | 'queued' | 'refreshed' | 'submitted' | 'confirmed' | 'invalid',
   values: Record<string, string | undefined> = {},
 ) => {
   const params = new URLSearchParams(url.searchParams)
@@ -119,12 +121,45 @@ const integer = (value: string | undefined, fallback = 0): number => {
 const optionalInteger = (value: string | undefined): number | undefined =>
   value ? integer(value) : undefined
 
+const localDateTime = (value: Date, timezone: string): string => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      hourCycle: 'h23',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+  return `${dateKeyIn(value, timezone)}T${parts.hour}:${parts.minute}`
+}
+
+const instantFromLocal = (value: string | undefined, timezone: string): string | null => {
+  const matched = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(String(value ?? ''))
+  if (!matched) return null
+  const hour = Number(matched[2])
+  const minute = Number(matched[3])
+  if (hour > 23 || minute > 59) return null
+  const instant = zonedDateTime(matched[1]!, hour, minute, timezone)
+  if (!Number.isFinite(instant.getTime()) || localDateTime(instant, timezone) !== value) return null
+  return instant.toISOString()
+}
+
 type ContentSelection = {
   properties: PropertyRow[]
   roomTypes: RoomTypeRow[]
   propertyId: string | undefined
   roomTypeId: string | null
   target: string
+}
+
+type ReservationProperty = {
+  id: string
+  timezone: string
+  defaultCheckIn: string
+  defaultCheckOut: string
 }
 
 const contentSelection = async (
@@ -222,22 +257,182 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/reservations':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'quote' && form.operation !== 'create')
+          return text('unknown action', { status: 400 })
+        const propertyId = form.property?.trim() || ''
+        const property = propertyId
+          ? ((await ctx.call(
+              'hospitality_core.getProperty',
+              { id: propertyId },
+              url,
+              req,
+            )) as ReservationProperty | null)
+          : null
+        const timezone = property?.timezone || 'UTC'
+        const checkIn = instantFromLocal(form.checkIn, timezone)
+        const checkOut = instantFromLocal(form.checkOut, timezone)
+        const values = {
+          lang: form.lang,
+          property: propertyId,
+          preview: '1',
+          id: form.id,
+          code: form.code,
+          partnerId: form.partnerId,
+          roomTypeId: form.roomTypeId,
+          bookingType: form.bookingType,
+          checkIn: form.checkIn,
+          checkOut: form.checkOut,
+          adults: form.adults,
+          children: form.children,
+          rate: form.rate,
+        }
+        if (!property || !checkIn || !checkOut || !form.partnerId) return redirected(url, 'invalid', values)
+
+        if (form.operation === 'quote') {
+          const result = (await ctx.call(
+            'hospitality_core.quoteReservation',
+            {
+              propertyId,
+              roomTypeId: form.roomTypeId ?? '',
+              bookingType: form.bookingType ?? 'nightly',
+              checkIn,
+              checkOut,
+              adults: integer(form.adults, 1),
+              children: integer(form.children),
+              rate: form.rate || undefined,
+            },
+            url,
+            req,
+          )) as ReservationQuote
+          return redirected(url, result.ok ? 'quoted' : 'invalid', values)
+        }
+
+        const result = (await ctx.call(
+          'hospitality_core.createReservation',
+          {
+            id: form.id ?? '',
+            code: form.code || undefined,
+            propertyId,
+            partnerId: form.partnerId,
+            roomTypeId: form.roomTypeId ?? '',
+            provider: 'direct',
+            bookingType: form.bookingType ?? 'nightly',
+            checkIn,
+            checkOut,
+            adults: integer(form.adults, 1),
+            children: integer(form.children),
+            rate: form.rate || undefined,
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        return result.ok
+          ? redirected(url, 'saved', { lang: form.lang, property: propertyId })
+          : redirected(url, 'invalid', values)
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const propertyId = await selectedProperty(ctx, url, req)
-      const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const rows = (await ctx.call(
-        'hospitality_core.listReservations',
-        { propertyId, state: url.searchParams.get('state') || undefined },
-        url,
-        req,
-      )) as ReservationRow[]
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.find((row) => row.id === requestedProperty)?.id ?? properties[0]?.id ?? ''
+      const property = propertyId
+        ? ((await ctx.call(
+            'hospitality_core.getProperty',
+            { id: propertyId },
+            url,
+            req,
+          )) as ReservationProperty | null)
+        : null
+      const timezone = property?.timezone || 'UTC'
+      const today = dateKeyIn(new Date(), timezone)
+      const checkInClock = /^(\d{2}):(\d{2})$/.exec(property?.defaultCheckIn ?? '')
+      const checkOutClock = /^(\d{2}):(\d{2})$/.exec(property?.defaultCheckOut ?? '')
+      const defaultCheckIn = zonedDateTime(
+        today,
+        Number(checkInClock?.[1] ?? 14),
+        Number(checkInClock?.[2] ?? 0),
+        timezone,
+      )
+      const defaultCheckOut = zonedDateTime(
+        addCalendarDays(today, 1),
+        Number(checkOutClock?.[1] ?? 12),
+        Number(checkOutClock?.[2] ?? 0),
+        timezone,
+      )
+      const [rows, roomTypes, partners] = (await Promise.all([
+        ctx.call(
+          'hospitality_core.listReservations',
+          { propertyId: propertyId || undefined, state: url.searchParams.get('state') || undefined },
+          url,
+          req,
+        ),
+        propertyId
+          ? ctx.call('hospitality_core.listRoomTypes', { propertyId }, url, req)
+          : Promise.resolve([]),
+        ctx.call('partner.listPartners', { kind: 'person', limit: 500 }, url, req),
+      ])) as [ReservationRow[], RoomTypeRow[], Array<{ id: string; name: string; ref?: string }>]
+      const reservationId = url.searchParams.get('id')?.trim() || randomUUID()
+      const values: ReservationIntakeValues = {
+        id: reservationId,
+        code: url.searchParams.get('code')?.trim() || `R-${reservationId.slice(0, 8).toUpperCase()}`,
+        propertyId,
+        roomTypeId:
+          roomTypes.find((row) => row.id === url.searchParams.get('roomTypeId'))?.id ??
+          roomTypes[0]?.id ??
+          '',
+        partnerId:
+          partners.find((row) => row.id === url.searchParams.get('partnerId'))?.id ?? partners[0]?.id ?? '',
+        bookingType: ['nightly', 'weekly', 'monthly'].includes(url.searchParams.get('bookingType') ?? '')
+          ? url.searchParams.get('bookingType')!
+          : 'nightly',
+        checkIn: url.searchParams.get('checkIn') || localDateTime(defaultCheckIn, timezone),
+        checkOut: url.searchParams.get('checkOut') || localDateTime(defaultCheckOut, timezone),
+        adults: Math.max(1, integer(url.searchParams.get('adults') ?? undefined, 1)),
+        children: Math.max(0, integer(url.searchParams.get('children') ?? undefined)),
+        rate: url.searchParams.get('rate')?.trim() || '',
+      }
+      let quote: ReservationQuote | null = null
+      if (url.searchParams.get('preview') === '1') {
+        const checkIn = instantFromLocal(values.checkIn, timezone)
+        const checkOut = instantFromLocal(values.checkOut, timezone)
+        quote =
+          checkIn && checkOut
+            ? ((await ctx.call(
+                'hospitality_core.quoteReservation',
+                {
+                  propertyId,
+                  roomTypeId: values.roomTypeId,
+                  bookingType: values.bookingType,
+                  checkIn,
+                  checkOut,
+                  adults: values.adults,
+                  children: values.children,
+                  rate: values.rate || undefined,
+                },
+                url,
+                req,
+              )) as ReservationQuote)
+            : {
+                ok: false,
+                errors: [{ messageKey: 'hospitality_core.validation.datetime' }],
+              }
+      }
       return document(
         ctx,
         url,
         req,
         _('hospitality_core.screen.reservations.title'),
-        reservationsScreen(_, rows, lang, timezone, await frame(ctx, url, req)),
+        reservationsScreen(
+          _,
+          { rows, properties, roomTypes, partners, values, quote },
+          lang,
+          timezone,
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
       )
     },
 

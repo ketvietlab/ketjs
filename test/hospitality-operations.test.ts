@@ -93,6 +93,52 @@ test('hospitality operations: booking engine creates one atomic reservation, fol
   }
 })
 
+test('hospitality operations: quote is read-only and reflects committed room-night inventory', async () => {
+  const adapter = await boot()
+  try {
+    const args = {
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      bookingType: 'nightly',
+      checkIn: '2026-09-01T14:00:00.000Z',
+      checkOut: '2026-09-03T12:00:00.000Z',
+    }
+    const initial = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.deepEqual(
+      {
+        ok: initial.ok,
+        rate: initial.rate,
+        quantity: initial.quantity,
+        amountTotal: initial.amountTotal,
+        minimumAvailable: initial.minimumAvailable,
+      },
+      { ok: true, rate: '100', quantity: '2', amountTotal: '200', minimumAvailable: 2 },
+    )
+    assert.equal(
+      Number((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger'))[0]?.n),
+      0,
+      'quoting does not materialize inventory rows',
+    )
+
+    await call('hospitality_core.createReservation', reservation('quoted-r1'), adapter)
+    const afterOne = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.equal(afterOne.ok, true)
+    assert.equal(afterOne.minimumAvailable, 1)
+    assert.equal(
+      Number((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger'))[0]?.n),
+      2,
+      're-quoting does not mutate the committed ledger',
+    )
+
+    await call('hospitality_core.createReservation', reservation('quoted-r2'), adapter)
+    const full = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.equal(full.ok, false)
+    assert.equal(((full.errors as Row[])[0] as Row).code, 'no_availability')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality operations: room assignments are append-only across check-in, move and checkout', async () => {
   const adapter = await boot()
   try {
