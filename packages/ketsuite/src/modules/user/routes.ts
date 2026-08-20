@@ -70,11 +70,17 @@ const crossSite = (req: Req): boolean => {
 }
 
 /** Where to land after signing in. Only ever a path on this site. */
+const hasUnsafePathCharacter = (value: string): boolean =>
+  value.includes('\\') ||
+  [...value].some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
 const safeNext = (value: string | undefined): string => {
   if (
     !value?.startsWith('/') ||
     value.startsWith('//') ||
-    /[\\\u0000-\u001f\u007f]/.test(value) ||
+    hasUnsafePathCharacter(value) ||
     /%5c/i.test(value)
   )
     return '/admin'
