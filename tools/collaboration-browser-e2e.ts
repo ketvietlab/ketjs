@@ -239,6 +239,11 @@ try {
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
+      name: 'product-attributes',
+      path: '/admin/product-attributes?lang=vi',
+      ready: `document.querySelector('#product-attribute-create') && document.querySelectorAll('[data-ui="content-card"]').length >= 3`,
+    },
+    {
       name: 'transfer-chatter',
       path: '/admin/transfers/pick-collab?lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
@@ -632,6 +637,44 @@ try {
         ),
         { chatter: true, activity: true, sidebar: true, formReady: true, editorVisible: true },
       )
+    }
+    if (screen.name === 'product-attributes') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            cards: document.querySelectorAll('[data-ui="content-card"]').length,
+            createFieldsAtLeast28: Array.from(document.querySelectorAll('#product-attribute-create [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            valueFieldsAtLeast28: Array.from(document.querySelectorAll('form[data-scope="product-attribute-value"] [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          cards: 3,
+          createFieldsAtLeast28: true,
+          valueFieldsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#product-attribute-create')
+          form.querySelector('[name="name"]').value = 'Hoàn thiện'
+          form.querySelector('[name="sequence"]').value = '20'
+          form.querySelector('[name="displayType"]').value = 'pills'
+          form.querySelector('[name="createVariant"]').value = 'no_variant'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `[...document.querySelectorAll('[data-ui="card-title"]')].some((title) => title.textContent.includes('Hoàn thiện'))`,
+      )
+      assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-ui="content-card"]').length`), 4)
     }
     if (screen.name === 'transfer-chatter') {
       await evaluate(cdp, `document.querySelector('[data-ui="chatter-kind"][data-kind="note"]').click()`)

@@ -61,6 +61,26 @@ export async function collaborationEvidenceApp() {
       defaultCode: 'OPS-JACKET',
       combinationKey: '',
     })
+    for (const attribute of [
+      { id: 'attribute-color', name: 'Màu sắc', displayType: 'pills', createVariant: 'always' },
+      { id: 'attribute-size', name: 'Kích cỡ', displayType: 'radio', createVariant: 'always' },
+      {
+        id: 'attribute-material',
+        name: 'Chất liệu',
+        displayType: 'select',
+        createVariant: 'no_variant',
+      },
+    ])
+      await call('product.saveAttribute', { ...attribute, sequence: 10, active: true })
+    for (const value of [
+      { id: 'attribute-color-navy', attributeId: 'attribute-color', name: 'Xanh navy' },
+      { id: 'attribute-color-black', attributeId: 'attribute-color', name: 'Đen' },
+      { id: 'attribute-size-small', attributeId: 'attribute-size', name: 'S' },
+      { id: 'attribute-size-medium', attributeId: 'attribute-size', name: 'M' },
+      { id: 'attribute-size-large', attributeId: 'attribute-size', name: 'L' },
+      { id: 'attribute-material-cotton', attributeId: 'attribute-material', name: 'Cotton' },
+    ])
+      await call('product.saveAttributeValue', { ...value, sequence: 10 })
     await call('stock.saveWarehouse', { id: 'wh', name: 'Kho Thành Phẩm', code: 'TP' })
     await call('stock.createPicking', {
       id: 'pick-collab',

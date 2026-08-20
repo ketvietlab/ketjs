@@ -245,6 +245,32 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.equal(variantPartial.status, 200)
   assert.match(await variantPartial.text(), /AO-UPDATED/)
 
+  const attributesPage = await e2e.client.get('/admin/product-attributes?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(attributesPage.status, 200)
+  const attributesHtml = await attributesPage.text()
+  assert.match(attributesHtml, /id="product-attribute-create"/)
+  assert.match(attributesHtml, /data-scope="product-attribute-create"/)
+  assert.match(attributesHtml, /data-ui="card-grid"/)
+  assert.match(attributesHtml, /data-scope="product-attribute-value"/)
+  assert.match(attributesHtml, /Thuộc tính đã cấu hình/)
+  assert.doesNotMatch(attributesHtml, /data-island="mail\.chatter"/)
+
+  const createdAttribute = await e2e.client.post(
+    '/admin/product-attributes?lang=vi',
+    new URLSearchParams({
+      name: 'Hoàn thiện',
+      sequence: '20',
+      displayType: 'pills',
+      createVariant: 'no_variant',
+    }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(createdAttribute.status, 200)
+  assert.match(await createdAttribute.text(), /Hoàn thiện/)
+  assert.equal((await call<Row[]>('product.listAttributes')).value.length, 2)
+
   const pricingPage = await e2e.client.get('/admin/pricelists/retail?lang=vi', {
     headers: { accept: 'text/html' },
   })

@@ -24,6 +24,11 @@ try {
       markers: ['mail.chatter', 'activity.record', 'product-variant-form'],
     },
     {
+      label: 'Product attributes',
+      path: '/admin/product-attributes?lang=vi',
+      markers: ['product-attribute-create', 'product-attribute-value'],
+    },
+    {
       label: 'Transfer collaboration',
       path: '/admin/transfers/pick-collab?lang=vi',
       markers: ['mail.chatter', 'activity.record'],

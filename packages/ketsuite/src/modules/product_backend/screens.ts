@@ -5,7 +5,6 @@ import {
   emptyState,
   badge,
   code,
-  contentCard,
   dataTable,
   inline,
   icon,
@@ -634,67 +633,3 @@ export const variantScreen = (
     }),
   )
 }
-
-export const attributesScreen = (
-  _: Translator,
-  rows: Array<Record<string, unknown>>,
-  frame: Frame,
-  errors?: string[],
-  locale = '',
-): TemplateResult =>
-  framed(
-    _,
-    _('product_backend.attributes.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: localized('/admin/product-attributes', locale),
-          submit: _('product_backend.action.create'),
-          submitVariant: 'primary',
-          errors,
-          fields: [
-            { name: 'name', label: _('product_backend.field.name'), required: true },
-            { name: 'sequence', label: _('product_backend.col.sequence'), type: 'number', value: 10 },
-            {
-              name: 'displayType',
-              label: _('product_backend.attributes.displayType'),
-              type: 'select',
-              options: ['radio', 'pills', 'select', 'color', 'multi'].map((value) => ({
-                value,
-                label: selectionLabel(_, 'displayType', value),
-              })),
-            },
-            {
-              name: 'createVariant',
-              label: _('product_backend.attributes.createVariant'),
-              type: 'select',
-              options: [
-                { value: 'always', label: _('product_backend.attributes.always') },
-                { value: 'no_variant', label: _('product_backend.attributes.never') },
-              ],
-            },
-          ],
-        }),
-      }),
-      ...rows.map((row) => {
-        const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
-        return contentCard({
-          title: String(row.name),
-          summary: `${selectionLabel(_, 'displayType', row.displayType)} · ${selectionLabel(_, 'createVariant', row.createVariant)}`,
-          meta: values.length
-            ? values.map((value) => String(value.name)).join(', ')
-            : _('product_backend.attributes.noValues'),
-          body: recordForm({
-            action: localized(`/admin/product-attributes/${String(row.id)}/values`, locale),
-            submit: _('product_backend.action.add'),
-            submitVariant: 'secondary',
-            fields: [
-              { name: 'name', label: _('product_backend.attributes.valueName'), required: true },
-              { name: 'sequence', label: _('product_backend.col.sequence'), type: 'number', value: 10 },
-            ],
-          }),
-        })
-      }),
-    ]),
-  )
