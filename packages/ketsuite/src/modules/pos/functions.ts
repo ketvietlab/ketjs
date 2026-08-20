@@ -129,8 +129,12 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
     })
     let sequence = 10
     for (const line of lines) {
-      const base = Math.abs(n(line.priceSubtotal)),
-        debitSide = refund
+      // Revenue follows the signed line subtotal. A negative Loyalty line is a
+      // contra-revenue debit on a sale, and becomes a credit when a refund
+      // reverses it. Looking only at the order direction would overstate revenue.
+      const balance = -n(line.priceSubtotal),
+        debit = Math.max(0, balance),
+        credit = Math.max(0, -balance)
       await tx.db.insert('account.MoveLine', {
         id: `${id}:line:${String(line.id)}`,
         moveId: id,
@@ -143,9 +147,9 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
         priceUnit: line.priceUnit,
         discount: line.discount,
         taxId: line.taxId,
-        debit: debitSide ? decimal(base) : '0',
-        credit: debitSide ? '0' : decimal(base),
-        balance: decimal(debitSide ? base : -base),
+        debit: decimal(debit),
+        credit: decimal(credit),
+        balance: decimal(balance),
         dateMaturity: null,
         displayType: null,
         reconciled: false,

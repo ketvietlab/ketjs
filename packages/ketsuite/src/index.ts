@@ -34,6 +34,44 @@ export { default as sale } from './modules/sale/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
+export { default as loyalty } from './modules/loyalty/index.ts'
+export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
+export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
+export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
+export {
+  APPLICATION_STATES,
+  DISCOUNT_APPLICABILITY,
+  DISCOUNT_MODES,
+  LEDGER_OPERATIONS,
+  LOYALTY_CHANNELS,
+  POINT_MODES,
+  PROGRAM_APPLIES_ON,
+  PROGRAM_TRIGGERS,
+  PROGRAM_TYPES,
+  RESERVATION_STATES as LOYALTY_RESERVATION_STATES,
+  REWARD_TYPES,
+  TAX_MODES,
+  WALLET_UNITS,
+} from './modules/loyalty/types.ts'
+export type {
+  DiscountApplicability,
+  DiscountMode,
+  EligibilityResult,
+  LedgerOperation,
+  LoyaltyChannel,
+  MembershipSummary,
+  OrderLineSnapshot,
+  OrderSnapshot,
+  PointMode,
+  ProgramAppliesOn,
+  ProgramTrigger,
+  ProgramType,
+  RewardQuote,
+  RewardType,
+  TaxMode,
+  WalletSummary,
+  WalletUnit,
+} from './modules/loyalty/types.ts'
 export {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,

@@ -3050,7 +3050,7 @@
     border-inline-start: 3px solid var(--admin-accent);
     border-radius: var(--admin-radius);
     background: var(--admin-accent-soft);
-    color: var(--admin-status-fixed-ink);
+    color: var(--admin-ink);
   }
   [data-ui="notice"][data-tone="positive"] {
     border-color: var(--admin-success-icon);
@@ -3064,6 +3064,11 @@
     border-color: var(--admin-danger-line);
     border-inline-start-color: var(--admin-danger);
     background: var(--admin-danger-soft);
+  }
+  [data-ui="notice"][data-tone="positive"],
+  [data-ui="notice"][data-tone="warning"],
+  [data-ui="notice"][data-tone="danger"] {
+    color: var(--admin-status-fixed-ink);
   }
   [data-ui="notice-icon"] {
     display: grid;
@@ -3084,8 +3089,13 @@
   }
   [data-ui="notice-message"] {
     margin-block-start: 0.125rem;
-    color: var(--admin-status-fixed-ink-secondary);
+    color: var(--admin-ink-secondary);
     font-size: 0.8125rem;
+  }
+  [data-ui="notice"][data-tone="positive"] [data-ui="notice-message"],
+  [data-ui="notice"][data-tone="warning"] [data-ui="notice-message"],
+  [data-ui="notice"][data-tone="danger"] [data-ui="notice-message"] {
+    color: var(--admin-status-fixed-ink-secondary);
   }
   [data-ui="notice-actions"],
   [data-ui="empty-actions"] {
