@@ -849,27 +849,24 @@ export const routes: Record<string, RouteEntry> = {
         const routeId = String(rule.routeId)
         ruleCountByRoute.set(routeId, (ruleCountByRoute.get(routeId) ?? 0) + 1)
       }
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.routes'),
-          head: await ctx.styles(req),
-          body: stockRoutesScreen(
-            _,
-            {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: localizedGeneratedRouteName(_, row),
-                sequence: Number(row.sequence),
-                ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
-                href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
-              })),
-              action: inLocale(url, '/admin/stock-routes'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.routes'),
+        body: stockRoutesScreen(
+          _,
+          {
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: localizedGeneratedRouteName(_, row),
+              sequence: Number(row.sequence),
+              ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
+              href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
+            })),
+            action: inLocale(url, '/admin/stock-routes'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
