@@ -26,6 +26,17 @@ export { default as pricing } from './modules/pricing/index.ts'
 export { default as stock } from './modules/stock/index.ts'
 export { default as stockBackend } from './modules/stock_backend/index.ts'
 export { default as pricingBackend } from './modules/pricing_backend/index.ts'
+export { default as account } from './modules/account/index.ts'
+export { default as accountBackend } from './modules/account_backend/index.ts'
+export {
+  ACCOUNT_TYPES,
+  JOURNAL_TYPES,
+  MOVE_TYPES,
+  MOVE_STATES,
+  PAYMENT_STATES,
+  TAX_USES,
+  TAX_AMOUNT_TYPES,
+} from './modules/account/functions.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as storage } from './modules/storage/index.ts'

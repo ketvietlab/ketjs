@@ -97,6 +97,7 @@ export {
   tabs,
   mediaPanel,
   recordForm,
+  recordActions,
   HOOKS,
   OWNERS,
 } from '../../ui/index.ts'

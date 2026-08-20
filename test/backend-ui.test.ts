@@ -33,6 +33,7 @@ import {
   pagesScreen,
   person,
   recordList,
+  recordActions,
   recordForm,
   section,
   settingsScreen,
@@ -170,6 +171,13 @@ const componentContract = [
     fields: [
       { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
       { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+    ],
+  }),
+  recordActions({
+    action: '/records/1',
+    actions: [
+      { value: 'confirm', label: 'Confirm', variant: 'primary' },
+      { value: 'cancel', label: 'Cancel', variant: 'destructive' },
     ],
   }),
   mediaPanel({ status: 'unavailable' }),
