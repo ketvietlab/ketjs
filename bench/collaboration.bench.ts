@@ -114,6 +114,11 @@ try {
       markers: ['sale-order-line-form', 'sale.editor', 'mail.chatter', 'activity.record'],
     },
     {
+      label: 'Sales order list',
+      path: '/admin/sales/orders?lang=vi',
+      markers: ['record-workspace', 'Đơn bán đã xác nhận', 'sales-order-collab'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
