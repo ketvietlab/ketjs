@@ -241,7 +241,7 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     name: 'island_shell',
     depends: ['website_search'],
     templates: {
-      layout: `<html><body>{% island "website.search" %}</body></html>`,
+      layout: `<html><body><main data-ket-slot="website.page">{% island "website.search" %}</main></body></html>`,
       'website.page': '<main></main>',
     },
   })
@@ -266,7 +266,10 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
 
     const bootstrap = await fetch(`${base}/_ket/islands.js`)
     assert.match(bootstrap.headers.get('content-type') ?? '', /^text\/javascript/)
-    assert.match(await bootstrap.text(), /\/_ket\/asset\/website_search\/search\.mjs/)
+    const bootstrapSource = await bootstrap.text()
+    assert.match(bootstrapSource, /\/_ket\/asset\/website_search\/search\.mjs/)
+    assert.match(bootstrapSource, /createIslandManager/)
+    assert.match(bootstrapSource, /x-ket-navigation/)
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)

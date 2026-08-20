@@ -13,12 +13,16 @@
 // review. `bytes` and `streamed` carry octets rather than a string, and they refuse
 // markup content types so that the same claim holds for them.
 
-import { renderToString, html, when } from 'ketjs-view'
+import { renderToString, html, when, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
+import type { IncomingMessage } from 'node:http'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */
 export type Html = TemplateResult
 export type ResponseBody = string | Uint8Array | AsyncIterable<Uint8Array>
+export const NAVIGATION_HEADER = 'x-ket-navigation'
+export const NAVIGATION_VERSION = 'fragment-v1'
+export const NAVIGATION_TYPE = 'text/vnd.ket.fragments+html'
 
 declare const RESPONSE: unique symbol
 export type RouteResult = {
@@ -44,6 +48,41 @@ export function page(o: { body: Html; status?: number }): RouteResult {
 /** A fragment: no doctype, for a partial response or an island. */
 export function fragment(body: Html, o: { status?: number } = {}): RouteResult {
   return made(renderToString(body), 'text/html', o.status)
+}
+
+/** Whether this browser asks for the progressive-navigation representation. */
+export function isNavigationRequest(req: Pick<IncomingMessage, 'headers'>): boolean {
+  return req.headers[NAVIGATION_HEADER] === NAVIGATION_VERSION
+}
+
+/**
+ * Serve either the full document or only its named, replaceable slot bodies.
+ * Thunks are deliberate: an island outside the selected representation is never
+ * constructed merely to be thrown away by the browser.
+ */
+export function navigablePage(
+  req: Pick<IncomingMessage, 'headers'>,
+  o: {
+    title: string
+    document: () => Html
+    slots: Record<string, () => Html>
+    status?: number
+  },
+): RouteResult {
+  const vary = { vary: 'X-Ket-Navigation' }
+  if (!isNavigationRequest(req)) return withHeaders(page({ body: o.document(), status: o.status }), vary)
+
+  const entries = Object.entries(o.slots)
+  for (const [name] of entries) {
+    if (!/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(name))
+      throw new TypeError(`navigation slot "${name}" must be a lowercase dotted name`)
+  }
+  const body = html`<ket-fragments data-title=${o.title}>${each(
+    entries,
+    ([name]) => name,
+    ([name, render]) => html`<template data-ket-slot=${name}>${render()}</template>`,
+  )}</ket-fragments>`
+  return withHeaders(made(renderToString(body), NAVIGATION_TYPE, o.status), vary)
 }
 
 export function json(value: unknown, o: { status?: number } = {}): RouteResult {
