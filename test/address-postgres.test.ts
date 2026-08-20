@@ -5,7 +5,8 @@ import type { Adapter, Row } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import { address, partner } from 'ketsuite'
 
-const configured = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
+const configured =
+  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const adminUrl = new URL(configured)
 adminUrl.pathname = '/postgres'
 
