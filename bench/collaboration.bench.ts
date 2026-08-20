@@ -44,6 +44,11 @@ try {
       markers: ['inventory-adjustment-form', 'record-workspace', 'Tồn kho hiện tại'],
     },
     {
+      label: 'Transfer list',
+      path: '/admin/transfers?lang=vi',
+      markers: ['transfer-create-form', 'record-workspace', 'Phiếu chuyển kho'],
+    },
+    {
       label: 'My activities',
       path: '/admin/activities?lang=vi&today=2026-08-20',
       markers: ['Hoạt động của tôi'],

@@ -259,6 +259,11 @@ try {
       ready: `document.querySelector('#inventory-adjustment-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
+      name: 'transfer-list',
+      path: '/admin/transfers?lang=vi',
+      ready: `document.querySelector('#transfer-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -767,6 +772,46 @@ try {
         false,
       )
     }
+    if (screen.name === 'transfer-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            source: document.querySelector('[data-ui="table"]')?.textContent.includes('Tồn kho'),
+            destination: document.querySelector('[data-ui="table"]')?.textContent.includes('Khách hàng'),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#transfer-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          source: true,
+          destination: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#transfer-create-form')
+          form.querySelector('[name="name"]').value = 'TP/INT/BROWSER'
+          form.querySelector('[name="pickingTypeId"]').value = 'wh:internal'
+          form.querySelector('[name="scheduledDate"]').value = '2026-08-22T09:00'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('TP/INT/BROWSER') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
+      )
+    }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -892,6 +937,7 @@ try {
             'Product save replaced only its record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Transfer actions replaced only the record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Inventory adjustment selected a product, applied a count through real browser HTTP and rendered no Chatter',
+            'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',
