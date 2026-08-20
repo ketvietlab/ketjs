@@ -1,5 +1,5 @@
 import type { Translator } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import {
   badge,
   cardGrid,
@@ -235,6 +235,7 @@ export const moveDetailScreen = (
   lines: AnyRow[],
   frame: Frame,
   accountOptions: Array<{ value: string; label: string }>,
+  printActions?: JSXChild,
 ): TemplateResult =>
   framed(
     _,
@@ -263,6 +264,7 @@ export const moveDetailScreen = (
         card: (item) =>
           contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
       }),
+      ...(printActions === undefined ? [] : [surface({ body: printActions })]),
       section({
         title: _('account_backend.lines.title'),
         body: lines.length

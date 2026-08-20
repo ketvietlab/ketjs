@@ -107,6 +107,24 @@ export type MenuDef = {
 export type SectionDef = { title?: string; settings?: Record<string, string> }
 export type ViewDef = { of: string; fields: string[] }
 
+/** A printable document owned by the business module that owns its data. */
+export type ReportDef = {
+  /** Message key, resolved against the declaring module. */
+  title: string
+  /** Model whose record id is accepted by the report source. */
+  target: string
+  /** Read-only function receiving `{ id }` and returning a JSON view model. */
+  source: string
+  /** KTL which must render the constrained report markup accepted by `ketjs/pdf`. */
+  template: string
+  filename?: string
+  paper?: 'A4' | 'A5'
+  orientation?: 'portrait' | 'landscape'
+  margins?: { top?: number; right?: number; bottom?: number; left?: number }
+}
+
+export type ComposedReport = ReportDef & { by: string; id: string }
+
 /**
  * A relation between two models, declared by a module that depends on both.
  *
@@ -284,6 +302,7 @@ export type ModuleSpec = AppMeta & {
   functions?: Record<string, FnSpec>
   jobs?: Record<string, JobSpec>
   views?: Record<string, ViewDef>
+  reports?: Record<string, ReportDef>
   requires?: string[]
   tokens?: Record<string, string>
   templates?: Record<string, string>
@@ -337,6 +356,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly functions: Record<string, FnSpec>
   readonly jobs: Record<string, JobSpec>
   readonly views: Record<string, ViewDef>
+  readonly reports: Record<string, ReportDef>
   readonly requires: readonly string[]
   readonly tokens: Record<string, string>
   readonly templates: Record<string, string>
@@ -367,6 +387,7 @@ export type Manifest = {
   functions: Record<string, FnMeta>
   jobs: Record<string, JobMeta>
   views: Record<string, ViewDef & { by: string }>
+  reports: Record<string, ComposedReport>
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<
     string,

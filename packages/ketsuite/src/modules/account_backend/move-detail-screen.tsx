@@ -28,6 +28,7 @@ export const moveDetailScreen = (
   accountOptions: Array<{ value: string; label: string }>,
   action: string,
   collaboration: JSXChild,
+  printActions?: JSXChild,
 ): TemplateResult => {
   const draft = move.state === 'draft'
   const residual = lines.reduce((total, line) => total + Number(line.amountResidual ?? 0), 0)
@@ -136,6 +137,7 @@ export const moveDetailScreen = (
           actionForms.length ? (
             <FormCluster forms={actionForms} label={_('account_backend.move.actions')} />
           ) : null,
+          printActions === undefined ? null : <Surface body={printActions} />,
           <Section title={_('account_backend.lines.title')} body={table} />,
           draft ? (
             <Section

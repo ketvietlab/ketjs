@@ -276,6 +276,11 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     styles: manifest.styles.filter((s) => keep(s.by)),
     routes: pick(manifest.routes),
     functions: pick(manifest.functions),
+    reports: Object.fromEntries(
+      Object.entries(manifest.reports).filter(
+        ([, report]) => keep(report.by) && manifest.functions[report.source] !== undefined,
+      ),
+    ),
     jobs: pick(manifest.jobs),
     sections: pick(manifest.sections),
     islands: pick(manifest.islands),

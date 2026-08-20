@@ -16,6 +16,7 @@ const MODULE_KEYS = new Set([
   'functions',
   'jobs',
   'views',
+  'reports',
   'requires',
   'tokens',
   'templates',
@@ -71,6 +72,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     functions: spec.functions ?? {},
     jobs: spec.jobs ?? {},
     views: spec.views ?? {},
+    reports: spec.reports ?? {},
     requires: Object.freeze([...(spec.requires ?? [])]),
     tokens: spec.tokens ?? {},
     templates: spec.templates ?? {},
@@ -97,7 +99,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
 // joints and declare tokens; it may NOT declare models, extend models, or register
 // server functions. Third-party themes are only safe to install because this
 // restriction is enforced here rather than left to convention.
-const THEME_FORBIDDEN = ['models', 'extend', 'functions', 'jobs', 'islands'] as const
+const THEME_FORBIDDEN = ['models', 'extend', 'functions', 'jobs', 'islands', 'reports'] as const
 
 /**
  * A theme is installable like anything else — it has to be, since its templates are

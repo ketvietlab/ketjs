@@ -28,6 +28,9 @@ export type CompileOpts = {
   /** Renders another template by name, with the scope this one built for it. */
   renderTemplate?: (name: string, scope: Scope, from: string) => string
   name?: string
+  /** Report templates may only produce data markup; web extension primitives and raw output are forbidden. */
+  mode?: 'theme' | 'report'
+  maxIterations?: number
 }
 
 export type Compiled = {
@@ -141,6 +144,9 @@ const at = (o: { name: string; line?: number }): string =>
 
 export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const name = opts.name ?? '(anonymous)'
+  if (opts.mode === 'report' && source.length > 256_000) {
+    throw new KetError({ code: 'E_REPORT_TEMPLATE_LIMIT', message: `template "${name}" exceeds 256 KiB` })
+  }
   // Translation arrives as a filter rather than a function in scope, because scope
   // holds data only — a theme that could call functions would be a theme that could
   // run code, which is the whole thing KTL exists to prevent.
@@ -161,6 +167,8 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const regionsUsed: string[] = []
   const islandsUsed: string[] = []
 
+  let iterations = 0
+  const maxIterations = opts.maxIterations ?? (opts.mode === 'report' ? 10_000 : Number.MAX_SAFE_INTEGER)
   const compileNodes = (nodes: Node[]): Array<(s: Scope, out: string[]) => void> =>
     nodes.map((n) => {
       if (n.k === 'text') {
@@ -170,6 +178,13 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'out') {
+        if (opts.mode === 'report' && n.raw) {
+          throw new KetError({
+            code: 'E_REPORT_RAW_OUTPUT',
+            message: `${at({ name, line: n.line })} uses raw output`,
+            hint: 'report expressions are escaped and report markup is parsed after rendering',
+          })
+        }
         const t = compileExpr(n.expr, { filters, name, line: n.line })
         const raw = n.raw
         return (s, out) => {
@@ -199,6 +214,13 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
           const loop = { index: 0, first: true, last: n === 1, length: n }
           inner['loop'] = loop
           for (let i = 0; i < n; i++) {
+            iterations++
+            if (iterations > maxIterations) {
+              throw new KetError({
+                code: 'E_REPORT_RENDER_LIMIT',
+                message: `template "${name}" exceeded ${maxIterations} loop iterations`,
+              })
+            }
             inner[varName] = list[i]
             loop.index = i
             loop.first = i === 0
@@ -208,6 +230,11 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'joint') {
+        if (opts.mode === 'report')
+          throw new KetError({
+            code: 'E_REPORT_WEB_PRIMITIVE',
+            message: `${at({ name, line: n.line })} uses joint`,
+          })
         jointsUsed.push(n.joint)
         const key = n.joint
         return (s, out) => {
@@ -215,6 +242,11 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'sections') {
+        if (opts.mode === 'report')
+          throw new KetError({
+            code: 'E_REPORT_WEB_PRIMITIVE',
+            message: `${at({ name, line: n.line })} uses sections`,
+          })
         return (s, out) => {
           out.push(opts.renderSections ? opts.renderSections(s) : '')
         }
@@ -234,12 +266,22 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'island') {
+        if (opts.mode === 'report')
+          throw new KetError({
+            code: 'E_REPORT_WEB_PRIMITIVE',
+            message: `${at({ name, line: n.line })} uses island`,
+          })
         islandsUsed.push(n.name)
         const iname = n.name
         return (s, out) => {
           out.push(opts.renderIsland ? opts.renderIsland(iname, s) : '')
         }
       }
+      if (opts.mode === 'report')
+        throw new KetError({
+          code: 'E_REPORT_WEB_PRIMITIVE',
+          message: `${at({ name, line: n.line })} uses region`,
+        })
       regionsUsed.push(n.name)
       const rname = n.name
       return (s, out) => {
@@ -254,6 +296,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
     regionsUsed,
     islandsUsed,
     render(scope) {
+      iterations = 0
       const out: string[] = []
       // sealScope() already hands over a null-prototype object; copying it again
       // on every render was pure waste.

@@ -19,6 +19,7 @@
       "ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
       "ketjs": ["./packages/ketjs/src/index.ts"],
       "ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
+      "ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],
       "ketjs/testing": ["./packages/ketjs/src/testing.ts"],
       "ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
       "ketsuite": ["./packages/ketsuite/src/index.ts"],
