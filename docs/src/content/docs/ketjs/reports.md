@@ -94,13 +94,21 @@ import {
 
 const document = compileReportTemplate(source, { translate }).render(viewModel)
 const preview = renderReportHtml(document)
-const pdf = renderPdf(document, { font: await readFile(interFontUrl()) })
+const [font, semiboldFont, boldFont] = await Promise.all([
+  readFile(interFontUrl()),
+  readFile(interFontUrl('semibold')),
+  readFile(interFontUrl('bold')),
+])
+const pdf = renderPdf(document, { font, semiboldFont, boldFont })
 ```
 
-The framework ships static Inter Regular, SemiBold, and Bold under the SIL Open Font License. The PDF renderer
-embeds the supplied TrueType font and writes a Unicode map, so Vietnamese output does not depend on fonts
-installed on the host. Current text shaping covers Latin scripts; complex-script shaping, RTL, and emoji are
-outside the contract.
+The framework ships the same Inter family used by KetSuite: Regular, SemiBold, and Bold, under the SIL Open Font
+License. Pass all three files to preserve the application typography in titles, metadata, table headings, and
+totals; callers that pass only `font` retain Regular as a backwards-compatible fallback. The renderer embeds the
+supplied TrueType files and writes Unicode maps, so Vietnamese output does not depend on fonts installed on the
+host. `tone="accent"` and `tone="muted"` use fixed KetSuite document roles, while table headings receive the
+accent-soft surface automatically. Current text shaping covers Latin scripts; complex-script shaping, RTL, and
+emoji are outside the contract.
 
 ## Request integration
 
@@ -143,7 +151,12 @@ routes: {
     const document = compileReportTemplate(report.template, {
       translate: ctx.translate(ctx.localeOf(url, req)),
     }).render(dto)
-    const pdf = renderPdf(document, { font: await readFile(interFontUrl()) })
+    const [font, semiboldFont, boldFont] = await Promise.all([
+      readFile(interFontUrl()),
+      readFile(interFontUrl('semibold')),
+      readFile(interFontUrl('bold')),
+    ])
+    const pdf = renderPdf(document, { font, semiboldFont, boldFont })
 
     return withHeaders(bytes(pdf, { type: 'application/pdf' }), {
       'cache-control': 'private, no-store',

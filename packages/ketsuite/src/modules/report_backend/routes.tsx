@@ -210,7 +210,12 @@ export const previewReport =
       name: `${reportId}:preview`,
       translate: ctx.translate(ctx.localeOf(url, req)),
     }).render(data as Row)
-    return bytes(renderPdf(document, { font: await readFile(interFontUrl()) }), { type: 'application/pdf' })
+    const [font, semiboldFont, boldFont] = await Promise.all([
+      readFile(interFontUrl()),
+      readFile(interFontUrl('semibold')),
+      readFile(interFontUrl('bold')),
+    ])
+    return bytes(renderPdf(document, { font, semiboldFont, boldFont }), { type: 'application/pdf' })
   }
 
 export const routes = {

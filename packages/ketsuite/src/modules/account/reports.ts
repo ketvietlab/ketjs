@@ -1,17 +1,19 @@
 import { defineFn } from 'ketjs'
 import type { FnSpec, ReportDef } from 'ketjs'
 
-const template = (title: string) => `<report paper="A4" margin="40">
-  <header><text size="9" align="right">{{ company.name }}</text></header>
-  <text size="22" weight="bold">{{ '${title}' | _ }}</text>
-  <row><text>{{ 'account.report.number' | _ }}: {{ name }}</text><text>{{ 'account.report.date' | _ }}: {{ invoiceDate }}</text></row>
-  <text>{{ 'account.report.partner' | _ }}: {{ partner.name }}</text>
+const template = (title: string) => `<report paper="A4" margin="42">
+  <header><row gap="6"><text size="10" weight="bold" tone="accent">{{ company.name }}</text><text size="8" weight="semibold" tone="muted" align="right">KETSUITE · ACCOUNTING</text></row></header>
+  <text size="9" weight="semibold" tone="accent" gap="12">{{ '${title}' | _ }}</text>
+  <text size="24" weight="bold" gap="14">{{ name }}</text>
+  <row gap="12"><text size="9" weight="semibold">{{ 'account.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'account.report.date' | _ }} · {{ invoiceDate }}</text></row>
+  <text size="8" weight="semibold" tone="muted" gap="3">{{ 'account.report.partner' | _ }}</text>
+  <text size="12" weight="semibold" gap="18">{{ partner.name }}</text>
   <table><thead><tr><th>{{ 'account.report.description' | _ }}</th><th>{{ 'account.report.quantity' | _ }}</th><th>{{ 'account.report.unitPrice' | _ }}</th><th>{{ 'account.report.balance' | _ }}</th></tr></thead>
   <tbody>{% for line in lines %}<tr><td>{{ line.name }}</td><td>{{ line.quantity }}</td><td>{{ line.priceUnit }}</td><td>{{ line.balance }}</td></tr>{% endfor %}</tbody></table>
-  <text align="right">{{ 'account.report.untaxed' | _ }}: {{ amountUntaxed }} {{ currency }}</text>
-  <text align="right">{{ 'account.report.tax' | _ }}: {{ amountTax }} {{ currency }}</text>
-  <text size="14" weight="bold" align="right">{{ 'account.report.total' | _ }}: {{ amountTotal }} {{ currency }}</text>
-  <footer><text size="8" align="center">{page}/{pages}</text></footer>
+  <text size="9" tone="muted" align="right" gap="5">{{ 'account.report.untaxed' | _ }} · {{ amountUntaxed }} {{ currency }}</text>
+  <text size="9" tone="muted" align="right" gap="7">{{ 'account.report.tax' | _ }} · {{ amountTax }} {{ currency }}</text>
+  <text size="15" weight="bold" tone="accent" align="right" gap="4">{{ 'account.report.total' | _ }} · {{ amountTotal }} {{ currency }}</text>
+  <footer><row gap="0"><text size="8" weight="semibold" tone="muted">{{ company.name }}</text><text size="8" tone="muted" align="right">{page} / {pages}</text></row></footer>
 </report>`
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, moveType: string) {

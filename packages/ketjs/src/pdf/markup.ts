@@ -54,6 +54,7 @@ const ATTRS = new Set([
   'margin-left',
   'size',
   'weight',
+  'tone',
   'align',
   'gap',
   'width',

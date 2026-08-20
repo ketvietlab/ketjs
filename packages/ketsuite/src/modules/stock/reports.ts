@@ -1,13 +1,15 @@
 import { defineFn } from 'ketjs'
 import type { FnSpec, ReportDef } from 'ketjs'
 
-const template = (title: string) => `<report paper="A4" margin="40">
-  <text size="22" weight="bold">{{ '${title}' | _ }}</text>
-  <row><text>{{ 'stock.report.number' | _ }}: {{ name }}</text><text>{{ 'stock.report.date' | _ }}: {{ scheduledDate }}</text></row>
-  <text>{{ 'stock.report.from' | _ }}: {{ source.name }}</text><text>{{ 'stock.report.to' | _ }}: {{ destination.name }}</text>
+const template = (title: string) => `<report paper="A4" margin="42">
+  <header><row gap="6"><text size="10" weight="bold" tone="accent">{{ company.name }}</text><text size="8" weight="semibold" tone="muted" align="right">KETSUITE · INVENTORY</text></row></header>
+  <text size="9" weight="semibold" tone="accent" gap="12">{{ '${title}' | _ }}</text>
+  <text size="24" weight="bold" gap="14">{{ name }}</text>
+  <row gap="12"><text size="9" weight="semibold">{{ 'stock.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'stock.report.date' | _ }} · {{ scheduledDate }}</text></row>
+  <row gap="18"><text size="10" weight="semibold">{{ 'stock.report.from' | _ }} · {{ source.name }}</text><text size="10" weight="semibold" align="right">{{ 'stock.report.to' | _ }} · {{ destination.name }}</text></row>
   <table><thead><tr><th>{{ 'stock.report.product' | _ }}</th><th>{{ 'stock.report.demand' | _ }}</th><th>{{ 'stock.report.done' | _ }}</th></tr></thead>
   <tbody>{% for move in moves %}<tr><td>{{ move.name }}</td><td>{{ move.productUomQty }}</td><td>{{ move.quantity }}</td></tr>{% endfor %}</tbody></table>
-  <footer><text size="8" align="center">{page}/{pages}</text></footer>
+  <footer><row gap="0"><text size="8" weight="semibold" tone="muted">{{ company.name }}</text><text size="8" tone="muted" align="right">{page} / {pages}</text></row></footer>
 </report>`
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, code: string) {
@@ -15,19 +17,33 @@ async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, code: st
   if (!picking) return null
   const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
   if (!type || type.code !== code) return null
+  const company = ctx.scope.company
+    ? (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
+    : null
   return {
     ...picking,
+    company: company
+      ? ((await ctx.db.select('partner.Partner', { id: company.partnerId }))[0] ?? { name: '' })
+      : { name: '' },
     operationType: type,
     source: (await ctx.db.select('stock.Location', { id: picking.locationId }))[0] ?? { name: '' },
     destination: (await ctx.db.select('stock.Location', { id: picking.locationDestId }))[0] ?? { name: '' },
     moves: await ctx.db.select('stock.Move', { pickingId: id }),
   }
 }
-const effects = ['read:stock.Picking', 'read:stock.PickingType', 'read:stock.Location', 'read:stock.Move']
+const effects = [
+  'read:stock.Picking',
+  'read:stock.PickingType',
+  'read:stock.Location',
+  'read:stock.Move',
+  'read:company.Company',
+  'read:partner.Partner',
+]
 const output = {
   id: 'id',
   name: 'text',
   scheduledDate: 'datetime',
+  company: 'json',
   operationType: 'json',
   source: 'json',
   destination: 'json',

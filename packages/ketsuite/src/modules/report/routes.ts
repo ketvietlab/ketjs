@@ -62,8 +62,8 @@ export const reportRoute =
         data,
         template: template.published,
         layout: template.layout,
-        engine: 1,
-        font: 'Inter-4.1',
+        engine: 2,
+        font: 'Inter-4.1-static-family',
       }),
     )
     const storage = await ctx.storageOf(url, req)
@@ -105,7 +105,11 @@ export const reportRoute =
       const value = margins?.[side]
       if (value !== undefined) document.attrs[`margin-${side}`] ??= String(value)
     }
-    const font = await readFile(interFontUrl())
+    const [font, semiboldFont, boldFont] = await Promise.all([
+      readFile(interFontUrl()),
+      readFile(interFontUrl('semibold')),
+      readFile(interFontUrl('bold')),
+    ])
     const images: Record<string, Uint8Array> = {}
     if (layout.images && typeof layout.images === 'object') {
       for (const [key, storageKey] of Object.entries(layout.images as Record<string, unknown>)) {
@@ -113,7 +117,7 @@ export const reportRoute =
         if (found) images[key] = await collect(found.body)
       }
     }
-    const pdf = renderPdf(document, { font, images })
+    const pdf = renderPdf(document, { font, semiboldFont, boldFont, images })
     const storageKey = `reports/${reportId}/${recordId}/${locale}/${fingerprint}.pdf`
     try {
       await storage.put(storageKey, one(pdf), { type: 'application/pdf', size: pdf.length })
