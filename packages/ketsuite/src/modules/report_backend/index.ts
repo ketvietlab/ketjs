@@ -12,10 +12,10 @@ export default defineModule({
   category: 'Hệ thống',
   routes,
   menus: {
-    reports: {
-      label: 'menu.reports',
-      icon: 'document',
-      sequence: 85,
+    'admin.reportTemplates': {
+      parent: 'admin.config',
+      label: 'menu.reportTemplates',
+      sequence: 50,
       path: '/admin/reports',
       needs: 'report.manageTemplates',
     },
@@ -25,7 +25,7 @@ export default defineModule({
       'app.title': 'Báo cáo trong quản trị',
       'app.summary': 'Quản lý mẫu in và phiên bản.',
       'app.category': 'Hệ thống',
-      'menu.reports': 'Báo cáo',
+      'menu.reportTemplates': 'Mẫu in',
       title: 'Mẫu in',
       'action.manage': 'Quản lý mẫu',
       'action.save': 'Lưu nháp',
@@ -41,7 +41,7 @@ export default defineModule({
       'app.title': 'Reports in admin',
       'app.summary': 'Manage print templates and versions.',
       'app.category': 'System',
-      'menu.reports': 'Reports',
+      'menu.reportTemplates': 'Print templates',
       title: 'Print templates',
       'action.manage': 'Manage template',
       'action.save': 'Save draft',

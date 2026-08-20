@@ -3,19 +3,36 @@ import { parseTrueType } from './font.ts'
 import { parseImage } from './image.ts'
 
 export type PdfRenderOptions = {
+  /** Inter Regular, retained as the fallback for backwards compatibility. */
   font: Uint8Array
+  /** Inter SemiBold used by table headings and `weight="semibold"`. */
+  semiboldFont?: Uint8Array
+  /** Inter Bold used by `weight="bold"`. */
+  boldFont?: Uint8Array
   /** Attachment bytes keyed by the `<image src="...">` identifier. */
   images?: Record<string, Uint8Array>
   maxPages?: number
+}
+
+type FontWeight = 'regular' | 'semibold' | 'bold'
+type Tone = 'ink' | 'muted' | 'accent'
+type Cell = {
+  text: string
+  size: number
+  align: 'left' | 'center' | 'right'
+  weight: FontWeight
+  tone: Tone
 }
 
 type Line = {
   text: string
   size: number
   align: 'left' | 'center' | 'right'
+  weight: FontWeight
+  tone: Tone
   gap: number
   rule?: boolean
-  cells?: string[]
+  cells?: Cell[]
   repeat?: boolean
   image?: string
   imageWidth?: number
@@ -28,6 +45,16 @@ const number = (value: string | undefined, fallback: number) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
 }
+const weightOf = (value: string | undefined, fallback: FontWeight = 'regular'): FontWeight =>
+  value === 'bold' || value === '700'
+    ? 'bold'
+    : value === 'semibold' || value === '600'
+      ? 'semibold'
+      : fallback
+const toneOf = (value: string | undefined, fallback: Tone = 'ink'): Tone =>
+  value === 'muted' || value === 'accent' ? value : fallback
+const alignOf = (value: string | undefined, fallback: Cell['align'] = 'left'): Cell['align'] =>
+  value === 'center' || value === 'right' ? value : fallback
 
 function blocksOf(root: ReportElement): { body: Block[]; header: Line[]; footer: Line[] } {
   const body: Block[] = []
@@ -35,7 +62,15 @@ function blocksOf(root: ReportElement): { body: Block[]; header: Line[]; footer:
   const footer: Line[] = []
   const walk = (node: ReportNode, out: Block[], repeat = false) => {
     if (node.kind === 'text') {
-      if (node.value.trim()) out.push({ text: node.value.trim(), size: 10, align: 'left', gap: 4 })
+      if (node.value.trim())
+        out.push({
+          text: node.value.trim(),
+          size: 10,
+          align: 'left',
+          weight: 'regular',
+          tone: 'ink',
+          gap: 4,
+        })
       return
     }
     if (node.tag === 'page-break') {
@@ -46,9 +81,9 @@ function blocksOf(root: ReportElement): { body: Block[]; header: Line[]; footer:
       out.push({
         text: textOf(node).trim(),
         size: number(node.attrs.size, 10),
-        align: (['center', 'right'].includes(node.attrs.align ?? '')
-          ? node.attrs.align
-          : 'left') as Line['align'],
+        align: alignOf(node.attrs.align),
+        weight: weightOf(node.attrs.weight),
+        tone: toneOf(node.attrs.tone),
         gap: number(node.attrs.gap, 4),
       })
       return
@@ -60,19 +95,63 @@ function blocksOf(root: ReportElement): { body: Block[]; header: Line[]; footer:
         imageWidth: number(node.attrs.width, 96),
         imageHeight: number(node.attrs.height, 48),
         size: 0,
-        align: (['center', 'right'].includes(node.attrs.align ?? '')
-          ? node.attrs.align
-          : 'left') as Line['align'],
+        align: alignOf(node.attrs.align),
+        weight: 'regular',
+        tone: 'ink',
         gap: number(node.attrs.gap, 8),
       })
       return
+    }
+    if (node.tag === 'row') {
+      const children = node.children.filter(
+        (child): child is ReportElement => child.kind === 'element' && child.tag === 'text',
+      )
+      if (children.length) {
+        const cells = children.map(
+          (child, index): Cell => ({
+            text: textOf(child).trim(),
+            size: number(child.attrs.size, 10),
+            align: alignOf(child.attrs.align, index === children.length - 1 ? 'right' : 'left'),
+            weight: weightOf(child.attrs.weight),
+            tone: toneOf(child.attrs.tone),
+          }),
+        )
+        out.push({
+          text: cells.map((cell) => cell.text).join(' '),
+          cells,
+          size: Math.max(...cells.map((cell) => cell.size)),
+          align: 'left',
+          weight: 'regular',
+          tone: 'ink',
+          gap: number(node.attrs.gap, 6),
+        })
+        return
+      }
     }
     if (node.tag === 'tr') {
       const cells = node.children.filter(
         (child): child is ReportElement => child.kind === 'element' && ['td', 'th'].includes(child.tag),
       )
-      const values = cells.map((cell) => textOf(cell).trim())
-      out.push({ text: values.join(' '), cells: values, repeat, size: 9, align: 'left', gap: 5, rule: true })
+      const values = cells.map(
+        (cell, index): Cell => ({
+          text: textOf(cell).trim(),
+          size: number(cell.attrs.size, 9),
+          align: alignOf(cell.attrs.align, index === 0 ? 'left' : 'right'),
+          weight: weightOf(cell.attrs.weight, repeat ? 'semibold' : 'regular'),
+          tone: toneOf(cell.attrs.tone, repeat ? 'accent' : 'ink'),
+        }),
+      )
+      out.push({
+        text: values.map((cell) => cell.text).join(' '),
+        cells: values,
+        repeat,
+        size: Math.max(9, ...values.map((cell) => cell.size)),
+        align: 'left',
+        weight: repeat ? 'semibold' : 'regular',
+        tone: repeat ? 'accent' : 'ink',
+        gap: 6,
+        rule: true,
+      })
       return
     }
     if (node.tag === 'thead') {
@@ -149,7 +228,15 @@ const hex4 = (value: number) => value.toString(16).padStart(4, '0').toUpperCase(
 const points = (value: string) => [...value].map((char) => char.codePointAt(0) ?? 0)
 
 export function renderPdf(document: ReportDocument, options: PdfRenderOptions): Uint8Array {
-  const font = parseTrueType(options.font)
+  const fontBytes: Partial<Record<FontWeight, Uint8Array>> = {
+    regular: options.font,
+    ...(options.semiboldFont ? { semibold: options.semiboldFont } : {}),
+    ...(options.boldFont ? { bold: options.boldFont } : {}),
+  }
+  const fontWeight = (weight: FontWeight): FontWeight => (fontBytes[weight] ? weight : 'regular')
+  const fonts = Object.fromEntries(
+    Object.entries(fontBytes).map(([weight, bytes]) => [weight, parseTrueType(bytes)]),
+  ) as Partial<Record<FontWeight, ReturnType<typeof parseTrueType>>>
   const paper = document.attrs.paper === 'A5' ? [419.53, 595.28] : [595.28, 841.89]
   if (document.attrs.orientation === 'landscape') paper.reverse()
   const margin = number(document.attrs.margin, 34)
@@ -161,17 +248,29 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
   }
   const usable = paper[0]! - margins.left - margins.right
   const source = blocksOf(document)
-  const used = new Map<number, number>()
-  const encode = (text: string) =>
-    points(text)
+  const used: Record<FontWeight, Map<number, number>> = {
+    regular: new Map(),
+    semibold: new Map(),
+    bold: new Map(),
+  }
+  const encode = (text: string, asked: FontWeight) => {
+    const weight = fontWeight(asked)
+    const font = fonts[weight]!
+    return points(text)
       .map((point) => {
         const glyph = font.glyphOf(point)
-        used.set(glyph, point)
+        used[weight].set(glyph, point)
         return hex4(glyph)
       })
       .join('')
-  const measure = (text: string, size: number) =>
-    points(text).reduce((sum, point) => sum + font.widthOf(font.glyphOf(point)), 0) * (size / font.unitsPerEm)
+  }
+  const measure = (text: string, size: number, asked: FontWeight) => {
+    const font = fonts[fontWeight(asked)]!
+    return (
+      points(text).reduce((sum, point) => sum + font.widthOf(font.glyphOf(point)), 0) *
+      (size / font.unitsPerEm)
+    )
+  }
   const wrap = (line: Line): Line[] => {
     if (line.cells || line.image) return [line]
     const words = line.text.split(/\s+/).filter(Boolean)
@@ -179,7 +278,7 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
     let current = ''
     for (const word of words) {
       const next = current ? `${current} ${word}` : word
-      if (current && measure(next, line.size) > usable) {
+      if (current && measure(next, line.size, line.weight) > usable) {
         rows.push(current)
         current = word
       } else current = next
@@ -224,6 +323,10 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
 
   const contentFor = (lines: Line[], pageNumber: number) => {
     const out: string[] = []
+    const fontName = (weight: FontWeight) =>
+      fontWeight(weight) === 'bold' ? 'F3' : fontWeight(weight) === 'semibold' ? 'F2' : 'F1'
+    const color = (tone: Tone) =>
+      tone === 'accent' ? '0.271 0.341 0.624' : tone === 'muted' ? '0.353 0.361 0.369' : '0.141 0.149 0.165'
     const draw = (line: Line, y: number) => {
       if (line.image) {
         const held = imageDefinitions.get(line.image)
@@ -243,11 +346,23 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
       }
       if (line.cells?.length) {
         const cellWidth = usable / line.cells.length
-        line.cells.forEach((cell, index) => {
-          const width = measure(cell, line.size)
-          const x = index === 0 ? margins.left : margins.left + cellWidth * (index + 1) - width - 4
+        if (line.repeat) {
+          const height = line.size * 1.3 + line.gap
           out.push(
-            `BT /F1 ${line.size} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm <${encode(cell)}> Tj ET`,
+            `q 0.933 0.941 0.984 rg ${margins.left} ${(y - 5).toFixed(2)} ${usable.toFixed(2)} ${height.toFixed(2)} re f Q`,
+          )
+        }
+        line.cells.forEach((cell, index) => {
+          const width = measure(cell.text, cell.size, cell.weight)
+          const start = margins.left + cellWidth * index
+          const x =
+            cell.align === 'center'
+              ? start + (cellWidth - width) / 2
+              : cell.align === 'right'
+                ? start + cellWidth - width - (index === line.cells!.length - 1 ? 0 : 4)
+                : start + (index === 0 ? 0 : 4)
+          out.push(
+            `q ${color(cell.tone)} rg BT /${fontName(cell.weight)} ${cell.size} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm <${encode(cell.text, cell.weight)}> Tj ET Q`,
           )
         })
         if (line.rule)
@@ -256,7 +371,7 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
           )
         return
       }
-      const width = measure(line.text, line.size)
+      const width = measure(line.text, line.size, line.weight)
       const x =
         line.align === 'center'
           ? margins.left + (usable - width) / 2
@@ -264,7 +379,7 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
             ? paper[0]! - margins.right - width
             : margins.left
       out.push(
-        `BT /F1 ${line.size} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm <${encode(line.text)}> Tj ET`,
+        `q ${color(line.tone)} rg BT /${fontName(line.weight)} ${line.size} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm <${encode(line.text, line.weight)}> Tj ET Q`,
       )
       if (line.rule)
         out.push(
@@ -276,12 +391,21 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
       draw(line, y)
       y -= line.size * 1.3 + line.gap
     }
-    if (source.header.length) y -= 12
+    if (source.header.length) {
+      out.push(
+        `0.765 0.804 0.941 RG ${margins.left} ${(y - 2).toFixed(2)} m ${paper[0]! - margins.right} ${(y - 2).toFixed(2)} l S`,
+      )
+      y -= 12
+    }
     for (const line of lines) {
       draw(line, y)
       y -= line.image ? (line.imageHeight ?? 48) + line.gap : line.size * 1.3 + line.gap
     }
     y = margins.bottom + footerHeight
+    if (source.footer.length)
+      out.push(
+        `0.867 0.863 0.871 RG ${margins.left} ${(y + 7).toFixed(2)} m ${paper[0]! - margins.right} ${(y + 7).toFixed(2)} l S`,
+      )
     for (const line of source.footer) {
       draw(
         {
@@ -289,6 +413,12 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
           text: line.text
             .replaceAll('{page}', String(pageNumber))
             .replaceAll('{pages}', String(pages.length)),
+          cells: line.cells?.map((cell) => ({
+            ...cell,
+            text: cell.text
+              .replaceAll('{page}', String(pageNumber))
+              .replaceAll('{pages}', String(pages.length)),
+          })),
         },
         y,
       )
@@ -302,31 +432,41 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
   const pdf = new Pdf()
   const pagesId = pdf.reserve()
   const catalogId = pdf.reserve()
-  const fontFile = pdf.stream(font.bytes, `/Length1 ${font.bytes.length}`)
-  const descriptor = pdf.add(
-    `<< /Type /FontDescriptor /FontName /Inter /Flags 32 /FontBBox [-1000 -1000 3000 3000] /ItalicAngle 0 /Ascent ${Math.round((font.ascent * 1000) / font.unitsPerEm)} /Descent ${Math.round((font.descent * 1000) / font.unitsPerEm)} /CapHeight 750 /StemV 80 /FontFile2 ${fontFile} 0 R >>`,
-  )
-  const mappings = [...used.entries()]
-    .map(
-      ([glyph, point]) =>
-        `<${hex4(glyph)}> <${point <= 0xffff ? hex4(point) : `D${hex4(0x7c0 + (point >> 10))}D${hex4(0xdc00 + (point & 0x3ff))}`}>`,
+  const fontResourceNames: Record<FontWeight, string> = { regular: 'F1', semibold: 'F2', bold: 'F3' }
+  const fontIds = new Map<FontWeight, number>()
+  for (const weight of ['regular', 'semibold', 'bold'] as const) {
+    const font = fonts[weight]
+    if (!font || used[weight].size === 0) continue
+    const baseName = weight === 'regular' ? 'Inter' : weight === 'semibold' ? 'Inter-SemiBold' : 'Inter-Bold'
+    const fontFile = pdf.stream(font.bytes, `/Length1 ${font.bytes.length}`)
+    const descriptor = pdf.add(
+      `<< /Type /FontDescriptor /FontName /${baseName} /Flags 32 /FontBBox [-1000 -1000 3000 3000] /ItalicAngle 0 /Ascent ${Math.round((font.ascent * 1000) / font.unitsPerEm)} /Descent ${Math.round((font.descent * 1000) / font.unitsPerEm)} /CapHeight 750 /StemV ${weight === 'regular' ? 80 : weight === 'semibold' ? 105 : 130} /FontFile2 ${fontFile} 0 R >>`,
     )
-    .join('\n')
-  const toUnicode = pdf.stream(
-    new TextEncoder().encode(
-      `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Inter-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${used.size} beginbfchar\n${mappings}\nendbfchar\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`,
-    ),
-  )
-  const widths = [...used.keys()]
-    .sort((a, b) => a - b)
-    .map((glyph) => `${glyph} [${Math.round((font.widthOf(glyph) * 1000) / font.unitsPerEm)}]`)
-    .join(' ')
-  const cid = pdf.add(
-    `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Inter /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${descriptor} 0 R /DW 1000 /W [${widths}] /CIDToGIDMap /Identity >>`,
-  )
-  const type0 = pdf.add(
-    `<< /Type /Font /Subtype /Type0 /BaseFont /Inter /Encoding /Identity-H /DescendantFonts [${cid} 0 R] /ToUnicode ${toUnicode} 0 R >>`,
-  )
+    const mappings = [...used[weight].entries()]
+      .map(
+        ([glyph, point]) =>
+          `<${hex4(glyph)}> <${point <= 0xffff ? hex4(point) : `D${hex4(0x7c0 + (point >> 10))}D${hex4(0xdc00 + (point & 0x3ff))}`}>`,
+      )
+      .join('\n')
+    const toUnicode = pdf.stream(
+      new TextEncoder().encode(
+        `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /${baseName}-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${used[weight].size} beginbfchar\n${mappings}\nendbfchar\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`,
+      ),
+    )
+    const widths = [...used[weight].keys()]
+      .sort((a, b) => a - b)
+      .map((glyph) => `${glyph} [${Math.round((font.widthOf(glyph) * 1000) / font.unitsPerEm)}]`)
+      .join(' ')
+    const cid = pdf.add(
+      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${baseName} /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${descriptor} 0 R /DW 1000 /W [${widths}] /CIDToGIDMap /Identity >>`,
+    )
+    fontIds.set(
+      weight,
+      pdf.add(
+        `<< /Type /Font /Subtype /Type0 /BaseFont /${baseName} /Encoding /Identity-H /DescendantFonts [${cid} 0 R] /ToUnicode ${toUnicode} 0 R >>`,
+      ),
+    )
+  }
   const imageObjects = new Map(
     [...imageDefinitions].map(([key, held]) => [
       key,
@@ -340,10 +480,13 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
     ]),
   )
   const imageResources = [...imageObjects.values()].map((held) => `/${held.name} ${held.id} 0 R`).join(' ')
+  const fontResources = [...fontIds.entries()]
+    .map(([weight, id]) => `/${fontResourceNames[weight]} ${id} 0 R`)
+    .join(' ')
   const pageIds = contents.map((content) => {
     const contentId = pdf.stream(content)
     return pdf.add(
-      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${paper[0]} ${paper[1]}] /Resources << /Font << /F1 ${type0} 0 R >>${imageResources ? ` /XObject << ${imageResources} >>` : ''} >> /Contents ${contentId} 0 R >>`,
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${paper[0]} ${paper[1]}] /Resources << /Font << ${fontResources} >>${imageResources ? ` /XObject << ${imageResources} >>` : ''} >> /Contents ${contentId} 0 R >>`,
     )
   })
   pdf.set(

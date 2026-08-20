@@ -99,13 +99,21 @@ test('report KTL forbids raw and web primitives', () => {
 test('PDF renderer embeds Inter, paginates, and preserves Vietnamese Unicode mapping', async () => {
   const rows = Array.from({ length: 90 }, (_, index) => ({ name: `Sản phẩm ${index + 1}`, qty: index + 1 }))
   const document = compileReportTemplate(
-    '<report paper="A4"><header><text size="9">CÔNG TY KẾT</text></header><text size="20">Phiếu xuất kho</text><table><tbody>{% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.qty }}</td></tr>{% endfor %}</tbody></table><footer><text>{page}/{pages}</text></footer></report>',
+    '<report paper="A4"><header><text size="9">CÔNG TY KẾT</text></header><text size="20" weight="bold">Phiếu xuất kho</text><table><thead><tr><th>Sản phẩm</th><th>Số lượng</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.qty }}</td></tr>{% endfor %}</tbody></table><footer><text>{page}/{pages}</text></footer></report>',
   ).render({ rows })
   assert.match(renderReportHtml(document), /Sản phẩm 1/)
-  const pdf = renderPdf(document, { font: await readFile(interFontUrl()) })
+  const [font, semiboldFont, boldFont] = await Promise.all([
+    readFile(interFontUrl()),
+    readFile(interFontUrl('semibold')),
+    readFile(interFontUrl('bold')),
+  ])
+  const pdf = renderPdf(document, { font, semiboldFont, boldFont })
   const ascii = Buffer.from(pdf).toString('latin1')
   assert.ok(ascii.startsWith('%PDF-1.7'))
   assert.match(ascii, /\/BaseFont \/Inter/)
+  assert.match(ascii, /\/BaseFont \/Inter-SemiBold/)
+  assert.match(ascii, /\/BaseFont \/Inter-Bold/)
+  assert.match(ascii, /0\.933 0\.941 0\.984 rg/)
   assert.ok((ascii.match(/\/Type \/Page\b/g) ?? []).length >= 2)
 })
 
