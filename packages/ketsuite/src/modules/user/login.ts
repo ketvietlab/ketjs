@@ -17,7 +17,14 @@ import type { Translator } from 'ketjs'
  */
 export const loginScreen = (
   _: Translator,
-  o: { next?: string; failed?: boolean; locales?: string[]; locale?: string } = {},
+  o: {
+    next?: string
+    failed?: boolean
+    oauthFailed?: boolean
+    providers?: Array<{ code: string; name: string; href: string }>
+    locales?: string[]
+    locale?: string
+  } = {},
 ): TemplateResult => html`
 <div data-ui="login">
   <form data-ui="login-form" method="post" action="/login">
@@ -26,6 +33,11 @@ export const loginScreen = (
       o.failed === true,
       () => html`
       <p data-ui="login-error" role="alert">${_('user.login.failed')}</p>`,
+    )}
+    ${when(
+      o.oauthFailed === true,
+      () => html`
+      <p data-ui="login-error" role="alert">${_('oauth.login.failed')}</p>`,
     )}
     <label data-ui="field">
       <span data-ui="field-label">${_('user.login.login')}</span>
@@ -37,6 +49,21 @@ export const loginScreen = (
     </label>
     ${when(o.next !== undefined, () => html`<input type="hidden" name="next" value=${o.next}>`)}
     <button data-ui="login-submit" type="submit">${_('user.login.submit')}</button>
+    ${when(
+      (o.providers?.length ?? 0) > 0,
+      () => html`
+      <div data-ui="login-providers">
+        <span data-ui="login-divider">${_('oauth.login.or')}</span>
+        ${each(
+          o.providers ?? [],
+          (provider) => provider.code,
+          (provider) => html`
+          <a data-ui="login-provider" href=${provider.href}>${_('oauth.login.continueWith', {
+            provider: provider.name,
+          })}</a>`,
+        )}
+      </div>`,
+    )}
     ${when(
       (o.locales?.length ?? 0) > 1,
       () => html`

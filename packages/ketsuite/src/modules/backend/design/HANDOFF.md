@@ -173,6 +173,8 @@ Hai bề mặt dùng cùng token, focus contract và density với phần backen
 | `[data-ui="field"]`, `[data-ui="field-label"]`, `[data-ui="field-input"]` | một ô nhập; dùng lại được ở form khác |
 | `[data-ui="login-submit"]` | nút gửi |
 | `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, chỉ hiện khi có nhiều hơn một |
+| `[data-ui="login-providers"]`, `[data-ui="login-provider"]` | các OIDC provider đang hoạt động; không render logo hoặc request ngoài |
+| `[data-ui="login-divider"]` | ngăn cách đăng nhập mật khẩu và OIDC |
 
 Trang này **chạy không cần JavaScript** và phải giữ như vậy: một trang đăng nhập
 hỏng khi script lỗi là trang hỏng đúng lúc người ta cần vào nhất.

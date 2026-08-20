@@ -1722,3 +1722,26 @@ at freeze it remains an intact read-only fallback. The rollback manifest is a re
 of imported targets, not a delete script. Once KetSuite has accepted writes, an
 automated reverse merge would guess at business conflicts, so both sides must be
 frozen and reconciled explicitly.
+
+## D56 — OAuth belongs to KetSuite; provider policy belongs to the deployment
+
+KetJS remains an application-neutral framework. Its signed sessions, actor,
+function allow-list, transaction and compare-and-set primitives are enough for an
+application to build identity, but the framework does not own issuer discovery,
+external subjects or account provisioning. The open-source `oauth` and
+`oauth_backend` modules live in KetSuite because they map verified identities into
+`user.User`, company/branch context and KetSuite Role/Grant rows.
+
+The protocol path is generic OpenID Connect Authorization Code with PKCE. Provider
+configuration contains issuer, client id, exact callback, scopes, client auth
+method and signature algorithm allow-list; there is no ZITADEL branch in protocol
+code. ZITADEL organization binding, KétViệt tenant policy and provisioning
+credentials remain deployment adapters. Keycloak, Auth0, Okta, Entra or another
+conforming issuer use the same module.
+
+An external identity is `(provider, issuer, subject)`, never email. State and nonce
+are digest-only, the short-lived verifier is server-side, and claiming a callback
+is single-use CAS before code exchange. ID tokens must pass signature, key,
+algorithm, issuer, audience, authorized-party, nonce and time validation. Provider
+claims cannot grant function permissions; they resolve one local User, after which
+the existing live session and Role/Grant rules remain authoritative.

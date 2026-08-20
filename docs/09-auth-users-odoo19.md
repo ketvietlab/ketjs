@@ -29,9 +29,10 @@ Cụm này cung cấp:
 - UI Users, Roles, permission presets, membership, profile, active sessions và token acceptance;
 - toàn bộ domain error qua message catalog tiếng Việt/Anh.
 
-Website signup/portal UI, OAuth, API key, passkey, MFA/TOTP, SSO và hạ tầng gửi
-mail chưa nằm trong phạm vi. `portal`/`public` đã là access kind hợp lệ nhưng không
-được đăng nhập vào backend realm.
+Website signup/portal UI, API key, passkey, MFA/TOTP và hạ tầng gửi mail chưa nằm
+trong phạm vi. OAuth/OIDC backend realm được triển khai ở module KetSuite riêng và
+được mô tả tại [10-oauth-oidc.md](./10-oauth-oidc.md). `portal`/`public` đã là access
+kind hợp lệ nhưng không được đăng nhập vào backend realm.
 
 ## Kiến trúc
 

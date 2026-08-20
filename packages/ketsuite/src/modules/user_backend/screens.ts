@@ -511,12 +511,14 @@ export const profileScreen = (
   frame: Frame,
   locale = '',
   errors?: string[],
+  integration?: JSXChild,
 ): TemplateResult =>
   framed(
     _,
     _('user_backend.profile.title'),
     frame,
     stack([
+      ...(integration ? [integration] : []),
       section({
         title: _('user_backend.profile.account'),
         body: surface({

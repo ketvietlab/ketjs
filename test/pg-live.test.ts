@@ -31,6 +31,7 @@ import {
   company,
   defaultTheme as theme,
   inventory,
+  oauth,
   partner,
   product,
   pricing,
@@ -974,6 +975,172 @@ test('live pg: concurrent POS orders assign one session-unique gapless sequence'
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `Order ${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test('live pg: OAuth provider, identity and transaction races settle atomically', live, async () => {
+  await withPg(async (a) => {
+    const oauthModules = [partner, company, user, oauth]
+    const oauthManifest = compose(oauthModules, { headless: true })
+    const oauthSchema = schemaFromManifest(oauthManifest)
+    for (const tableName of Object.keys(oauthSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, oauthSchema), a)) await a.exec(sql)
+    registerFunctions(oauthModules)
+    const options = {
+      adapter: a,
+      manifest: oauthManifest,
+      scope: {
+        company: 'c1',
+        companies: ['c1'],
+        branch: 'root:c1',
+        branches: ['root:c1'],
+      },
+      actor: 'admin',
+    }
+    const anonymous = { ...options, actor: undefined }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, anonymous)
+    await callFn(
+      'company.saveCompany',
+      { id: 'c1', code: 'ACME', partnerId: 'company-party', currency: 'VND' },
+      anonymous,
+    )
+    for (const id of ['admin', 'operator']) {
+      await callFn(
+        'user.createUser',
+        {
+          id,
+          login: id,
+          password: 'correct horse battery staple',
+          name: id === 'admin' ? 'Administrator' : 'Operator',
+          superuser: id === 'admin',
+          defaultCompanyId: 'c1',
+          defaultBranchId: 'root:c1',
+        },
+        anonymous,
+      )
+      await callFn('user.grantCompany', { id: `${id}:c1`, userId: id, companyId: 'c1' }, options)
+    }
+
+    const providerAttempts = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        callFn(
+          'oauth.saveProvider',
+          {
+            id: `provider-${index}`,
+            code: 'main',
+            name: 'Identity Cloud',
+            protocol: 'oidc',
+            issuer: 'https://identity.example.test',
+            clientId: 'ket-client',
+            clientAuthMethod: 'none',
+            scopes: 'openid profile email',
+            redirectUri: 'https://suite.example.test/auth/oauth/main/callback',
+            allowedAlgorithms: 'RS256',
+            allowLinking: true,
+            autoProvision: false,
+            requireVerifiedEmail: true,
+            active: true,
+          },
+          options,
+        ),
+      ),
+    )
+    assert.equal(
+      providerAttempts.filter((attempt) => (attempt.value as { ok?: boolean }).ok === true).length,
+      1,
+      'the database unique indexes admit one provider configuration',
+    )
+    const providerId = String((await a.all('SELECT id FROM oauth_provider'))[0]?.id)
+
+    const begun = (
+      await callFn(
+        'oauth.beginTransaction',
+        {
+          providerId,
+          mode: 'login',
+          discovery: {
+            issuer: 'https://identity.example.test',
+            authorizationEndpoint: 'https://identity.example.test/oauth/v2/authorize',
+            tokenEndpoint: 'https://identity.example.test/oauth/v2/token',
+            jwksUri: 'https://identity.example.test/oauth/v2/keys',
+          },
+        },
+        anonymous,
+      )
+    ).value as { state: string }
+    const claims = await Promise.all(
+      Array.from({ length: 16 }, () =>
+        callFn('oauth.claimTransaction', { providerId, state: begun.state }, anonymous),
+      ),
+    )
+    assert.equal(
+      claims.filter((claim) => (claim.value as { ok?: boolean }).ok === true).length,
+      1,
+      'compare-and-set consumes the state exactly once',
+    )
+
+    const identityAttempts = await Promise.all(
+      ['admin', 'operator'].map((userId) =>
+        callFn(
+          'oauth.linkIdentity',
+          {
+            id: `identity:${userId}`,
+            providerId,
+            userId,
+            subject: 'shared-subject',
+          },
+          options,
+        ),
+      ),
+    )
+    assert.equal(
+      identityAttempts.filter((attempt) => (attempt.value as { ok?: boolean }).ok === true).length,
+      1,
+      'a verified issuer subject cannot be linked to two users',
+    )
+    assert.equal(
+      (await a.all('SELECT id FROM oauth_external_identity WHERE subject = $1', ['shared-subject'])).length,
+      1,
+    )
+
+    await callFn(
+      'user.createUser',
+      {
+        id: 'oidc-only',
+        login: 'oidc-only',
+        name: 'OIDC only',
+        defaultCompanyId: 'c1',
+        defaultBranchId: 'root:c1',
+      },
+      anonymous,
+    )
+    await callFn('user.grantCompany', { id: 'oidc-only:c1', userId: 'oidc-only', companyId: 'c1' }, options)
+    for (const subject of ['oidc-one', 'oidc-two'])
+      await callFn(
+        'oauth.linkIdentity',
+        {
+          id: `identity:${subject}`,
+          providerId,
+          userId: 'oidc-only',
+          subject,
+        },
+        options,
+      )
+    const unlinks = await Promise.all(
+      ['oidc-one', 'oidc-two'].map((subject) =>
+        callFn('oauth.unlinkIdentity', { id: `identity:${subject}` }, options),
+      ),
+    )
+    assert.equal(
+      unlinks.filter((attempt) => (attempt.value as { ok?: boolean }).ok === true).length,
+      1,
+      'security-version CAS preserves one login method under concurrent unlink',
+    )
+    assert.equal(
+      (await a.all('SELECT id FROM oauth_external_identity WHERE "userId" = $1', ['oidc-only'])).length,
+      1,
     )
   })
 })

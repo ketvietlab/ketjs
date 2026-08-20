@@ -1744,6 +1744,51 @@
     background: var(--admin-accent-hover);
   }
 
+  [data-ui="login-providers"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="login-divider"] {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    text-transform: uppercase;
+  }
+
+  [data-ui="login-divider"]::before,
+  [data-ui="login-divider"]::after {
+    block-size: 1px;
+    flex: 1;
+    background: var(--admin-line);
+    content: "";
+  }
+
+  [data-ui="login-provider"] {
+    display: grid;
+    min-block-size: var(--admin-control-height);
+    padding-inline: 0.75rem;
+    place-items: center;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-bg);
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    transition:
+      border-color var(--admin-motion-fast),
+      background-color var(--admin-motion-fast);
+  }
+
+  [data-ui="login-provider"]:hover {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent-soft);
+  }
+
   [data-ui="login-locales"] {
     display: flex;
     margin: 0;

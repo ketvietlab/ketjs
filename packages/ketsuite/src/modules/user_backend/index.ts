@@ -15,6 +15,10 @@ export default defineModule({
   routes,
   menus,
   messages,
+  joints: {
+    'user.external-identities': { props: { userId: 'id' } },
+    'profile.external-identities': { props: { userId: 'id' } },
+  },
 })
 
 export { routes } from './routes.ts'
