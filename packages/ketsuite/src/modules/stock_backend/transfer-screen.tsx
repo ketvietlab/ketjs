@@ -35,6 +35,7 @@ export type TransferDetailOptions = {
   action: string
   collaboration: JSXChild
   editor: JSXChild
+  printActions?: JSXChild
   errors?: string[]
 }
 
@@ -166,6 +167,7 @@ export const transferDetailScreen = (
           actions.length ? (
             <FormCluster forms={actions} label={_('stock_backend.transfer.actions.label')} />
           ) : null,
+          options.printActions === undefined ? null : <Surface body={options.printActions} />,
           <Section
             title={_('stock_backend.transfer.operations.title')}
             description={_('stock_backend.transfer.operations.hint')}

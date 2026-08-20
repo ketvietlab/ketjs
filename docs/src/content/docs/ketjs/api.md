@@ -198,3 +198,14 @@ implements KetJS's public `Adapter` contract; core does not import a PostgreSQL 
 - Review manifest and migration diffs when upgrading.
 - Treat identifiers persisted in databases, queues, storage, and cookies as compatibility contracts even
   when TypeScript signatures still compile.
+`ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
+
+## `ketjs/pdf`
+
+| Export | Purpose |
+| --- | --- |
+| `compileReportTemplate` | Compile KTL in report-safe mode and return a typed document tree. |
+| `parseReportMarkup` | Validate constrained report markup. |
+| `renderReportHtml` | Produce a safe HTML preview from the document tree. |
+| `renderPdf` | Render PDF bytes using an explicit TrueType font. |
+| `interFontUrl` | Resolve the framework-vendored Inter Regular, SemiBold, or Bold asset. |

@@ -34,6 +34,7 @@ KetJS is organized around five constraints:
 | --- | --- |
 | `ketjs` | Modules, workspaces, data, functions, HTTP, jobs, storage, sessions, and composition. |
 | `ketjs/theme` | KTL compilation, theme runtime helpers, view models, and design tokens. |
+| `ketjs/pdf` | Constrained report markup, HTML preview, Inter font assets, and deterministic PDF rendering. |
 | `ketjs/testing` | Isolated headless end-to-end applications and an HTTP test client. |
 | `ketjs-view` | Browser-safe signals, HTML templates, SSR, hydration, JSX, and islands. |
 | `ketjs-postgres` | The optional PostgreSQL adapter. SQLite remains the built-in default. |
@@ -71,6 +72,7 @@ planned from the complete deployment manifest.
 - Continue with [Models and scopes](/ketjs/models/), [Queries and changesets](/ketjs/data/), and
   [Functions and effects](/ketjs/functions/) for the core server model.
 - Use [Rendering and islands](/ketjs/rendering/) and [Themes and KTL](/ketjs/themes/) for UI work.
+- Use [Reports and PDF](/ketjs/reports/) for printable business documents.
 - Finish with [Testing](/ketjs/testing/) and [Deployment](/ketjs/deployment/) before shipping an app.
 
 ## Current runtime requirements

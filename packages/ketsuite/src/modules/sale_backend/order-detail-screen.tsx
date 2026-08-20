@@ -29,6 +29,7 @@ export type SaleOrderDetailOptions = {
   collaboration: JSXChild
   editor: JSXChild
   integration?: JSXChild
+  printActions?: JSXChild
   locale?: string
   errors?: string[]
 }
@@ -201,6 +202,7 @@ export const orderDetailScreen = (
           actions.length ? (
             <FormCluster forms={actions} label={_('sale_backend.order.actions.label')} />
           ) : null,
+          options.printActions === undefined ? null : <Surface body={options.printActions} />,
           options.integration,
           <Section
             title={_('sale_backend.order.information.title')}

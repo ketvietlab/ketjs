@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { json, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
-import { backendPage } from '../../ui/index.ts'
+import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
@@ -399,6 +399,14 @@ export const routes: Record<string, RouteEntry> = {
           : [{ value: `move:${String(move.id)}`, label: String(move.name) }]
       })
       const pickingType = data.pickingTypes.find((row) => row.id === current.pickingTypeId)
+      const reportId = {
+        incoming: 'stock.receipt',
+        outgoing: 'stock.delivery',
+        internal: 'stock.internalTransfer',
+      }[String(pickingType?.code)]
+      const printable = (await ctx.reportsOf(url, req, 'stock.Picking')).filter(
+        (report) => report.id === reportId,
+      )
       const backorderPolicy = String(pickingType?.createBackorder ?? 'ask')
       const state = String(current.state)
       const moveRows = moves.flatMap((move) => [
@@ -436,6 +444,17 @@ export const routes: Record<string, RouteEntry> = {
             lots: options(data.lots),
             operationOptions,
             backorderPolicy,
+            printActions: printable.length
+              ? actionGroup({
+                  label: 'Print',
+                  actions: printable.map((report) =>
+                    linkButton({
+                      label: _(report.title),
+                      href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(current.id))}${url.search}`,
+                    }),
+                  ),
+                })
+              : undefined,
             action: here,
             collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
               resModel: 'stock.Picking',
