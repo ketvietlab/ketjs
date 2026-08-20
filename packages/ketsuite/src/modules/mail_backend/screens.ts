@@ -19,6 +19,7 @@ export const inboxScreen = (_: Translator, rows: Row[], frame: Frame): TemplateR
               actions: recordForm({
                 action: '/admin/inbox',
                 submit: _('mail_backend.inbox.markRead'),
+                submitVariant: 'secondary',
                 hidden: { id: String(row.id) },
                 fields: [],
               }),

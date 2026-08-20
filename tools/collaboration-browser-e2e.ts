@@ -282,6 +282,52 @@ try {
     const readyMs = performance.now() - started
     report.push({ screen: screen.name, readyMs, navigationMs })
 
+    if (screen.name === 'my-activities') {
+      const layout = await evaluate<{
+        clusters: number
+        aligned: boolean
+        contained: boolean
+        uniqueIds: boolean
+        variants: string[][]
+      }>(
+        cdp,
+        `(() => {
+          const clusters = [...document.querySelectorAll('[data-ui="form-cluster"]')]
+          const ids = [...document.querySelectorAll('[data-ui="form-cluster"] input[id]')]
+            .map((input) => input.id)
+          return {
+            clusters: clusters.length,
+            aligned: clusters.every((cluster) => {
+              const controls = [...cluster.querySelectorAll('input:not([type="hidden"]), button')]
+              const bottoms = controls.map((control) => control.getBoundingClientRect().bottom)
+              return Math.max(...bottoms) - Math.min(...bottoms) <= 1
+            }),
+            contained: clusters.every((cluster) => {
+              const bounds = cluster.getBoundingClientRect()
+              return [...cluster.querySelectorAll('input:not([type="hidden"]), button')]
+                .every((control) => {
+                  const box = control.getBoundingClientRect()
+                  return box.left >= bounds.left - 1 && box.right <= bounds.right + 1
+                })
+            }),
+            uniqueIds: new Set(ids).size === ids.length,
+            variants: clusters.map((cluster) =>
+              [...cluster.querySelectorAll('[data-ui="action"]')]
+                .map((action) => action.dataset.variant)
+            )
+          }
+        })()`,
+      )
+      assert.equal(layout.clusters, 2)
+      assert.equal(layout.aligned, true)
+      assert.equal(layout.contained, true)
+      assert.equal(layout.uniqueIds, true)
+      assert.deepEqual(layout.variants, [
+        ['primary', 'secondary', 'destructive'],
+        ['primary', 'secondary', 'destructive'],
+      ])
+    }
+
     if (screen.name === 'product-chatter') {
       await evaluate(
         cdp,
@@ -352,6 +398,31 @@ try {
       )
     }
     if (screen.name === 'calendar-agenda') {
+      const dateLayout = await evaluate<{
+        sameRow: boolean
+        sameSize: boolean
+        contained: boolean
+      }>(
+        cdp,
+        `(() => {
+          const form = document.querySelector('[data-ui="calendar-create"]')
+          const start = form.querySelector('[name="start"]')
+          const stop = form.querySelector('[name="stop"]')
+          const startBox = start.getBoundingClientRect()
+          const stopBox = stop.getBoundingClientRect()
+          const formBox = form.getBoundingClientRect()
+          return {
+            sameRow: Math.abs(startBox.top - stopBox.top) <= 1,
+            sameSize: Math.abs(startBox.width - stopBox.width) <= 1 &&
+              Math.abs(startBox.height - stopBox.height) <= 1,
+            contained: [...form.querySelectorAll('input')].every((input) => {
+              const box = input.getBoundingClientRect()
+              return box.left >= formBox.left - 1 && box.right <= formBox.right + 1
+            })
+          }
+        })()`,
+      )
+      assert.deepEqual(dateLayout, { sameRow: true, sameSize: true, contained: true })
       await evaluate(
         cdp,
         `(() => {
@@ -381,7 +452,9 @@ try {
           'Chatter exposed linked sent and terminal-failure email delivery states',
           'record activity island scheduled and completed an activity through real browser HTTP',
           'My Activities rendered the actor due list and sidebar counter',
+          'My Activities kept inputs, date pickers and semantic actions on one contained baseline',
           'Agenda, week and month calendar views hydrated with bounded occurrence expansion',
+          'calendar date-time pickers kept equal dimensions and stayed inside their form grid',
           'calendar event creation crossed real browser HTTP and remained visible after reload',
           'transactional outbox rendered both provider-accepted and terminal-failure delivery states',
           'inbound log rendered processed, failed and ignored signed-provider outcomes',

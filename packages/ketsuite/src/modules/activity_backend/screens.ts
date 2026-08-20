@@ -4,6 +4,7 @@ import {
   badge,
   contentCard,
   emptyState,
+  formCluster,
   framed,
   inline,
   linkButton,
@@ -64,40 +65,48 @@ export const activitiesScreen = (
                 body: row.note ? String(row.note) : undefined,
                 actions:
                   row.active === true
-                    ? inline([
-                        recordForm({
-                          action: '/admin/activities',
-                          submit: _('activity_backend.complete'),
-                          hidden: { action: 'complete', id: String(row.id), today },
-                          fields: [
-                            {
-                              name: 'feedback',
-                              label: _('activity_backend.feedback'),
-                              value: '',
-                            },
-                          ],
-                        }),
-                        recordForm({
-                          action: '/admin/activities',
-                          submit: _('activity_backend.reschedule'),
-                          hidden: { action: 'reschedule', id: String(row.id), today },
-                          fields: [
-                            {
-                              name: 'dueDate',
-                              label: _('activity_backend.dueDate'),
-                              type: 'date',
-                              value: String(row.dueDate),
-                              required: true,
-                            },
-                          ],
-                        }),
-                        recordForm({
-                          action: '/admin/activities',
-                          submit: _('activity_backend.cancel'),
-                          hidden: { action: 'cancel', id: String(row.id), today },
-                          fields: [],
-                        }),
-                      ])
+                    ? formCluster({
+                        forms: [
+                          recordForm({
+                            action: '/admin/activities',
+                            submit: _('activity_backend.complete'),
+                            submitVariant: 'primary',
+                            layout: 'inline',
+                            hidden: { action: 'complete', id: String(row.id), today },
+                            fields: [
+                              {
+                                name: 'feedback',
+                                label: _('activity_backend.feedback'),
+                                value: '',
+                              },
+                            ],
+                          }),
+                          recordForm({
+                            action: '/admin/activities',
+                            submit: _('activity_backend.reschedule'),
+                            submitVariant: 'secondary',
+                            layout: 'inline',
+                            hidden: { action: 'reschedule', id: String(row.id), today },
+                            fields: [
+                              {
+                                name: 'dueDate',
+                                label: _('activity_backend.dueDate'),
+                                type: 'date',
+                                value: String(row.dueDate),
+                                required: true,
+                              },
+                            ],
+                          }),
+                          recordForm({
+                            action: '/admin/activities',
+                            submit: _('activity_backend.cancel'),
+                            submitVariant: 'destructive',
+                            layout: 'inline',
+                            hidden: { action: 'cancel', id: String(row.id), today },
+                            fields: [],
+                          }),
+                        ],
+                      })
                     : undefined,
               }),
             ),

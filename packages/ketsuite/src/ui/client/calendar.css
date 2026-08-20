@@ -22,32 +22,17 @@
   [data-ui="calendar-navigation"],
   [data-ui="calendar-views"] {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--admin-gap-xs);
-  }
-  [data-ui="calendar-navigation"] button,
-  [data-ui="calendar-views"] button,
-  [data-ui="calendar-submit"],
-  [data-ui="calendar-error"] button {
-    min-block-size: 2.25rem;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    color: var(--admin-ink);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 600;
   }
   [data-ui="calendar-submit"] {
     grid-column: 1 / -1;
     justify-self: end;
   }
-  [data-ui="calendar-views"] button[data-active="true"],
-  [data-ui="calendar-submit"] {
-    border-color: var(--admin-accent);
-    background: var(--admin-accent);
-    color: var(--admin-accent-ink);
+  [data-ui="calendar-views"] [data-ui="action"][data-active="true"] {
+    border-color: var(--admin-accent-line);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
   }
   [data-ui="calendar-create"] {
     display: grid;
@@ -71,6 +56,8 @@
     font-size: 0.8125rem;
   }
   [data-ui="calendar-field"] input {
+    inline-size: 100%;
+    min-inline-size: 0;
     min-block-size: 2.5rem;
     padding: 0.5rem 0.625rem;
     border: 1px solid var(--admin-line-strong);
@@ -86,6 +73,11 @@
     min-block-size: 2.5rem;
   }
   [data-ui="calendar-error"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
     padding: var(--admin-gap-sm);
     border-radius: var(--admin-radius-sm);
     background: var(--admin-danger-soft);

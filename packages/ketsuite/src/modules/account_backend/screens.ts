@@ -131,12 +131,20 @@ export const entityScreen = (
     o.title,
     o.frame,
     stack([
-      surface({ body: recordForm({ action: o.action, submit: o.submit, fields: o.fields }) }),
+      surface({
+        body: recordForm({
+          action: o.action,
+          submit: o.submit,
+          submitVariant: 'primary',
+          fields: o.fields,
+        }),
+      }),
       ...(o.extraForms ?? []).map((form) =>
         surface({
           body: recordForm({
             action: form.action,
             submit: form.submit,
+            submitVariant: 'secondary',
             hidden: form.hidden,
             fields: form.fields,
           }),
@@ -164,7 +172,12 @@ export const movesScreen = (
     o.frame,
     stack([
       surface({
-        body: recordForm({ action: o.action, submit: _('account_backend.action.create'), fields: o.fields }),
+        body: recordForm({
+          action: o.action,
+          submit: _('account_backend.action.create'),
+          submitVariant: 'primary',
+          fields: o.fields,
+        }),
       }),
       o.rows.length
         ? dataTable(_, {
@@ -288,6 +301,7 @@ export const moveDetailScreen = (
                 body: recordForm({
                   action: movePath(move),
                   submit: _('account_backend.action.addLine'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'add-line' },
                   fields: [
                     { name: 'name', label: _('account_backend.field.name'), required: true },
@@ -348,6 +362,7 @@ export const reportScreen = (
           action: o.action,
           method: 'get',
           submit: _('account_backend.action.calculate'),
+          submitVariant: 'secondary',
           fields: o.fields,
         }),
       }),

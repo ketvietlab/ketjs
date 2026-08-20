@@ -52,6 +52,7 @@ export const outboxScreen = (_: Translator, rows: Row[], frame: Frame): Template
                   ? recordForm({
                       action: '/admin/outbox',
                       submit: _('mail_transport_backend.retry'),
+                      submitVariant: 'secondary',
                       hidden: { action: 'retry', id: String(row.id) },
                       fields: [],
                     })
@@ -59,6 +60,7 @@ export const outboxScreen = (_: Translator, rows: Row[], frame: Frame): Template
                     ? recordForm({
                         action: '/admin/outbox',
                         submit: _('mail_transport_backend.cancel'),
+                        submitVariant: 'destructive',
                         hidden: { action: 'cancel', id: String(row.id) },
                         fields: [],
                       })

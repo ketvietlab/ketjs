@@ -28,6 +28,8 @@ export const HOOKS = [
   'activity-meta',
   'activity-attachments',
   'activity-actions',
+  'activity-action-field',
+  'activity-action-label',
   'activity-complete',
   'activity-feedback',
   'activity-reschedule',

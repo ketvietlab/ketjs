@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-20T04:08:02.835Z",
+  "generatedAt": "2026-08-20T04:30:38.160Z",
   "viewport": {
     "width": 1440,
     "height": 1100
@@ -10,7 +10,9 @@
     "Chatter exposed linked sent and terminal-failure email delivery states",
     "record activity island scheduled and completed an activity through real browser HTTP",
     "My Activities rendered the actor due list and sidebar counter",
+    "My Activities kept inputs, date pickers and semantic actions on one contained baseline",
     "Agenda, week and month calendar views hydrated with bounded occurrence expansion",
+    "calendar date-time pickers kept equal dimensions and stayed inside their form grid",
     "calendar event creation crossed real browser HTTP and remained visible after reload",
     "transactional outbox rendered both provider-accepted and terminal-failure delivery states",
     "inbound log rendered processed, failed and ignored signed-provider outcomes",
@@ -20,48 +22,48 @@
   "screens": [
     {
       "screen": "product-chatter",
-      "readyMs": 321.8810000000003,
-      "navigationMs": 169.10000014305115
+      "readyMs": 298.7693750000003,
+      "navigationMs": 150.59999990463257
     },
     {
       "screen": "transfer-chatter",
-      "readyMs": 280.5049170000002,
-      "navigationMs": 149.60000014305115
+      "readyMs": 127.05216699999983,
+      "navigationMs": 94.79999995231628
     },
     {
       "screen": "notification-inbox",
-      "readyMs": 132.34829100000024,
-      "navigationMs": 91.10000014305115
+      "readyMs": 95.53400000000056,
+      "navigationMs": 75.59999990463257
     },
     {
       "screen": "my-activities",
-      "readyMs": 122.75104199999987,
-      "navigationMs": 103.69999980926514
+      "readyMs": 122.69229199999972,
+      "navigationMs": 98.60000014305115
     },
     {
       "screen": "calendar-agenda",
-      "readyMs": 224.66087499999958,
-      "navigationMs": 107
+      "readyMs": 191.07683300000008,
+      "navigationMs": 75.40000009536743
     },
     {
       "screen": "calendar-week",
-      "readyMs": 118.27800000000025,
-      "navigationMs": 93
+      "readyMs": 216.74462500000027,
+      "navigationMs": 88.80000019073486
     },
     {
       "screen": "calendar-month",
-      "readyMs": 203.1904169999998,
-      "navigationMs": 84.29999995231628
+      "readyMs": 195.89587500000016,
+      "navigationMs": 83.39999985694885
     },
     {
       "screen": "transactional-outbox",
-      "readyMs": 106.65758300000016,
-      "navigationMs": 82.20000004768372
+      "readyMs": 111.63274999999976,
+      "navigationMs": 83.70000004768372
     },
     {
       "screen": "inbound-email-log",
-      "readyMs": 109.31887499999993,
-      "navigationMs": 85.40000009536743
+      "readyMs": 95.4315000000006,
+      "navigationMs": 81.20000004768372
     }
   ]
 }

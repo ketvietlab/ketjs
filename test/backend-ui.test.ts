@@ -22,6 +22,7 @@ import {
   dataTable,
   emptyState,
   errorState,
+  formCluster,
   HOOKS,
   hasIcon,
   icon,
@@ -176,10 +177,40 @@ const componentContract = [
   recordForm({
     action: '/records',
     submit: 'Save',
+    submitVariant: 'primary',
     errors: ['Invalid value'],
     fields: [
       { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
       { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+    ],
+  }),
+  formCluster({
+    label: 'Activity actions',
+    forms: [
+      recordForm({
+        action: '/activities/1',
+        submit: 'Complete',
+        submitVariant: 'primary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'complete' },
+        fields: [{ name: 'feedback', label: 'Feedback' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Reschedule',
+        submitVariant: 'secondary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'reschedule' },
+        fields: [{ name: 'dueDate', label: 'New due date', type: 'date' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Cancel',
+        submitVariant: 'destructive',
+        layout: 'inline',
+        hidden: { id: '1', action: 'cancel' },
+        fields: [],
+      }),
     ],
   }),
   recordActions({
@@ -372,6 +403,7 @@ test('form: required, help and error states are visible and semantically connect
     recordForm({
       action: '/records',
       submit: 'Save',
+      submitVariant: 'primary',
       fields: [
         {
           name: 'name',
@@ -392,6 +424,68 @@ test('form: required, help and error states are visible and semantically connect
   assert.match(html, /data-ui="form-help" id="field--records-name-help"/)
   assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
   assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
+})
+
+test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {
+  const html = renderToString(
+    formCluster({
+      forms: [
+        recordForm({
+          action: '/activities',
+          submit: 'Complete',
+          submitVariant: 'primary',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'complete' },
+          fields: [{ name: 'feedback', label: 'Feedback' }],
+        }),
+        recordForm({
+          action: '/activities',
+          submit: 'Cancel',
+          submitVariant: 'destructive',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'cancel' },
+          fields: [],
+        }),
+      ],
+    }),
+  )
+  assert.match(html, /^<div data-ui="form-cluster"/)
+  assert.match(html, /data-layout="inline" data-has-fields="true" data-submit-variant="primary"/)
+  assert.match(html, /data-layout="inline" data-has-fields="false" data-submit-variant="destructive"/)
+  assert.doesNotMatch(html, /^<span/, 'a form cluster must never use a phrasing root')
+  assert.match(html, /id="field--activities-one-complete-feedback"/)
+})
+
+test('actions: one decision cluster cannot declare two primary actions', () => {
+  assert.throws(
+    () =>
+      recordActions({
+        action: '/records/1',
+        actions: [
+          { value: 'confirm', label: 'Confirm', variant: 'primary' },
+          { value: 'approve', label: 'Approve', variant: 'primary' },
+        ],
+      }),
+    /declares 2 primary actions/,
+  )
+})
+
+test('islands: every business button declares the shared action role and hierarchy', () => {
+  for (const path of [
+    'packages/ketsuite/src/ui/client/mail-view.mjs',
+    'packages/ketsuite/src/ui/client/activity-view.mjs',
+    'packages/ketsuite/src/ui/client/calendar-view.mjs',
+  ]) {
+    const source = readFileSync(path, 'utf8')
+    for (const [index, match] of [...source.matchAll(/<button\b[\s\S]*?>/g)].entries()) {
+      assert.match(
+        match[0],
+        /(?:data-ui="action"|data-control="action")/,
+        `${path} button ${index + 1} bypasses the shared action control`,
+      )
+      assert.match(match[0], /data-variant="(?:primary|secondary|tertiary|destructive)"/)
+    }
+  }
 })
 
 test('media: primary state has a label and image actions keep accessible icon controls', () => {

@@ -12,13 +12,22 @@
 
   [data-ui="activity-head"],
   [data-ui="activity-item-head"],
-  [data-ui="activity-schedule-actions"],
-  [data-ui="activity-actions"] {
+  [data-ui="activity-schedule-actions"] {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--admin-gap-sm);
     flex-wrap: wrap;
+  }
+  [data-ui="activity-actions"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: flex-end;
+    gap: var(--admin-gap);
+    padding-block-start: var(--admin-gap);
+    border-block-start: 1px solid var(--admin-line);
   }
 
   [data-ui="activity-title"] {
@@ -44,6 +53,8 @@
   [data-ui="activity-date"],
   [data-ui="activity-feedback"],
   [data-ui="activity-reschedule"] input {
+    inline-size: 100%;
+    min-inline-size: 0;
     min-block-size: 2.5rem;
     padding: 0.5rem 0.625rem;
     border: 1px solid var(--admin-line-strong);
@@ -63,27 +74,11 @@
     color: var(--admin-ink-secondary);
     font-size: 0.8125rem;
   }
-  [data-ui="activity-submit"],
-  [data-ui="activity-complete"] button,
-  [data-ui="activity-reschedule"] button,
-  [data-ui="activity-cancel"],
-  [data-ui="activity-error"] button {
-    min-block-size: 2.25rem;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    color: var(--admin-ink);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 600;
+  [data-ui="activity-submit"] {
+    flex: 0 0 auto;
   }
-  [data-ui="activity-submit"],
-  [data-ui="activity-complete"] button {
-    border-color: var(--admin-accent);
-    background: var(--admin-accent);
-    color: var(--admin-accent-ink);
+  [data-ui="activity-cancel"] {
+    flex: 0 0 auto;
   }
   [data-ui="activity-list"] {
     display: grid;
@@ -142,15 +137,46 @@
   }
   [data-ui="activity-complete"],
   [data-ui="activity-reschedule"] {
-    display: flex;
-    align-items: center;
+    display: grid;
+    min-inline-size: min(100%, 15rem);
+    flex: 1 1 16rem;
+    grid-template-columns: minmax(8rem, 1fr) auto;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="activity-action-field"] {
+    display: grid;
+    min-inline-size: 0;
     gap: var(--admin-gap-xs);
   }
+  [data-ui="activity-action-label"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
   [data-ui="activity-error"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
     padding: var(--admin-gap-sm);
     border-radius: var(--admin-radius-sm);
     background: var(--admin-danger-soft);
     color: var(--admin-danger);
+  }
+  @media (max-width: 42rem) {
+    [data-ui="activity-actions"] {
+      align-items: stretch;
+    }
+    [data-ui="activity-complete"],
+    [data-ui="activity-reschedule"] {
+      min-inline-size: 100%;
+      flex-basis: 100%;
+    }
+    [data-ui="activity-cancel"] {
+      inline-size: 100%;
+    }
   }
   [data-ui="activity-indicator"] {
     position: relative;

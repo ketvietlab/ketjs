@@ -189,19 +189,19 @@ export function createCalendarView(runtime, props, seed = {}) {
       <header data-ui="calendar-head">
         <div data-ui="calendar-heading"><h2 data-ui="calendar-title">${labels.title}</h2><time data-ui="calendar-range">${range.start} — ${addDays(range.stop, -1)}</time></div>
         <div data-ui="calendar-navigation">
-          <button type="button" on:click=${() => move(-1)}>${labels.previous}</button>
-          <button type="button" on:click=${async () => {
+          <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => move(-1)}>${labels.previous}</button>
+          <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${async () => {
             cursor.set(localDate())
             await load()
           }}>${labels.today}</button>
-          <button type="button" on:click=${() => move(1)}>${labels.next}</button>
+          <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => move(1)}>${labels.next}</button>
         </div>
         <div data-ui="calendar-views" role="group" aria-label=${labels.title}>
           ${each(
             ['agenda', 'week', 'month'],
             (name) => name,
             (name) =>
-              html`<button type="button" data-active=${view() === name} on:click=${() => chooseView(name)}>${labels[name]}</button>`,
+              html`<button data-ui="action" data-variant="tertiary" data-size="compact" type="button" data-active=${view() === name} on:click=${() => chooseView(name)}>${labels[name]}</button>`,
           )}
         </div>
       </header>
@@ -212,9 +212,9 @@ export function createCalendarView(runtime, props, seed = {}) {
         <label data-ui="calendar-field">${labels.stop}<input type="datetime-local" name="stop" required disabled=${busy()}></label>
         <label data-ui="calendar-field">${labels.location}<input name="location" disabled=${busy()}></label>
         <label data-ui="calendar-all-day"><input type="checkbox" name="allDay" disabled=${busy()}>${labels.allDay}</label>
-        <button data-ui="calendar-submit" type="submit" disabled=${busy()}>${busy() ? labels.saving : labels.save}</button>
+        <button data-ui="calendar-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.saving : labels.save}</button>
       </form>
-      ${error() ? html`<div data-ui="calendar-error" role="alert">${error()} <button type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
+      ${error() ? html`<div data-ui="calendar-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
       ${status() === 'loading' ? html`<p data-ui="calendar-loading">${labels.loading}</p>` : ''}
       ${status() === 'ready' && events().length === 0 ? html`<p data-ui="calendar-empty">${labels.empty}</p>` : ''}
       ${

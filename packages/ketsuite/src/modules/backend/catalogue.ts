@@ -530,6 +530,7 @@ export const CASES: Array<{
         body: recordForm({
           action: '#kit-form',
           submit: 'Lưu sản phẩm',
+          submitVariant: 'primary',
           cancelHref: '#kit-form',
           cancelLabel: 'Hủy',
           errors: ['Tên sản phẩm cần ít nhất 3 ký tự.'],

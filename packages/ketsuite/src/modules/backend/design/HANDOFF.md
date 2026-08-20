@@ -317,6 +317,23 @@ helper và lỗi tại field được nối với control qua `aria-describedby`
 `role="alert"`. Checkbox giữ vùng label click được, còn control invalid/disabled/focus
 dùng đúng semantic token.
 
+Mỗi cụm quyết định chỉ có **một primary**. `recordForm` bắt buộc khai báo
+`submitVariant`; module không được dựa vào màu mặc định:
+
+| Vai trò | Dùng cho |
+| --- | --- |
+| `primary` | bước chính hoàn tất mục tiêu hiện tại: tạo, lưu, xác nhận, hoàn tất |
+| `secondary` | phương án phụ hoặc có thể thử lại: đổi hạn, tính lại, retry |
+| `tertiary` | điều hướng, quay lại, đóng một bề mặt |
+| `destructive` | huỷ nghiệp vụ hoặc xoá dữ liệu |
+
+Các form liên quan đặt trong `formCluster`, là block flow hợp lệ; không đặt `<form>`
+trong `inline`/phrasing content. Ở desktop, input và nút liền kề dùng
+`layout: 'inline'`, chung baseline và chỉ wrap theo **cả cụm** khi không đủ chỗ. Mọi
+`form-control`, kể cả `date`/`datetime-local`, có `inline-size: 100%` và
+`min-inline-size: 0` để native picker không tự nới grid. Mobile xếp mỗi form thành một
+hàng và giữ touch target `44px`.
+
 `mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
 sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
 chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide với hit area `40px`, tooltip

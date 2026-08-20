@@ -28,6 +28,7 @@ export const accountingTermsScreen = (
         body: recordForm({
           action,
           submit: _('account_partner_backend.action.save'),
+          submitVariant: 'primary',
           cancelHref: backHref,
           cancelLabel: _('account_partner_backend.action.back'),
           errors,

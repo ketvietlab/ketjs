@@ -206,7 +206,7 @@ export function createChatterView(runtime, props, seed = {}) {
           <h2 data-ui="chatter-title">${labels.title}</h2>
           <span data-ui="chatter-followers">${data.followers.length} ${labels.followers}</span>
         </div>
-        <button data-ui="chatter-follow" type="button" on:click=${toggleFollow} disabled=${busy()}>
+        <button data-ui="chatter-follow" data-control="action" data-variant="secondary" data-size="compact" type="button" on:click=${toggleFollow} disabled=${busy()}>
           ${data.following ? labels.unfollow : labels.follow}
         </button>
       </header>
@@ -218,10 +218,10 @@ export function createChatterView(runtime, props, seed = {}) {
         <textarea data-ui="chatter-body" name="body" placeholder=${labels.placeholder} required disabled=${busy()}></textarea>
         <div data-ui="chatter-compose-actions">
           <label data-ui="chatter-attachment">${labels.attachment}<input type="file" name="attachment" disabled=${busy()}></label>
-          <button data-ui="chatter-send" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
+          <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
         </div>
       </form>
-      ${error() ? html`<div data-ui="chatter-error" role="alert">${error()} <button type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
+      ${error() ? html`<div data-ui="chatter-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
       <div data-ui="chatter-timeline" aria-live="polite">
         ${status() === 'loading' ? html`<p data-ui="chatter-loading">${labels.loading}</p>` : ''}
         ${status() === 'ready' && data.messages.length === 0 ? html`<p data-ui="chatter-empty">${labels.empty}</p>` : ''}
@@ -260,7 +260,7 @@ export function createChatterView(runtime, props, seed = {}) {
       </div>
       ${
         data.messages.length < data.total
-          ? html`<button data-ui="chatter-more" type="button" on:click=${() => load({ append: true })} disabled=${busy()}>${labels.loadMore}</button>`
+          ? html`<button data-ui="chatter-more" data-control="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load({ append: true })} disabled=${busy()}>${labels.loadMore}</button>`
           : ''
       }
     </section>`
