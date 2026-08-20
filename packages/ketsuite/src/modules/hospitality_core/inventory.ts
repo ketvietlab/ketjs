@@ -110,6 +110,41 @@ const physicalTotal = async (ctx: Ctx, propertyId: unknown, roomTypeId: unknown)
   )
 }
 
+/** Read-only availability used by quotes. The final reservation still claims with compare-and-set. */
+export const quoteAvailability = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  roomTypeId: unknown,
+  dates: readonly string[],
+  quantity = 1,
+): Promise<{ minimumAvailable: number; errors: InventoryIssue[] }> => {
+  const total = await physicalTotal(ctx, propertyId, roomTypeId)
+  if (!dates.length) return { minimumAvailable: total, errors: [] }
+  const Ledger = ctx.table('hospitality_core.AvailabilityLedger')
+  const rows = await ctx.db.all(
+    from(Ledger).where(
+      eq(Ledger.propertyId, propertyId),
+      eq(Ledger.roomTypeId, roomTypeId),
+      gte(Ledger.date, dates[0]),
+      lte(Ledger.date, dates.at(-1)),
+    ),
+  )
+  const byDate = new Map(rows.map((row) => [String(row.date), row]))
+  let minimumAvailable = Number.POSITIVE_INFINITY
+  const errors: InventoryIssue[] = []
+  for (const date of dates) {
+    const row = byDate.get(date)
+    const available = Number(row?.available ?? total)
+    minimumAvailable = Math.min(minimumAvailable, available)
+    if (available < quantity)
+      errors.push(issue('roomTypeId', 'no_availability', { date, available, required: quantity }))
+  }
+  return {
+    minimumAvailable: Number.isFinite(minimumAvailable) ? minimumAvailable : total,
+    errors,
+  }
+}
+
 const ledgerId = (roomTypeId: unknown, date: string): string => `${String(roomTypeId)}:${date}`
 const restrictionId = (roomTypeId: unknown, date: string): string => `${String(roomTypeId)}:${date}`
 
