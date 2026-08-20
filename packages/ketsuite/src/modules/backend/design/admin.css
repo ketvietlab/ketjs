@@ -1517,6 +1517,77 @@
   }
 }
 
+/* The compact shell is two useful rows: identity/search, then a horizontally
+   scrollable menu for the current app. The old responsive rules changed the
+   sidebar to a row but left its flexing navigation at desktop height, producing
+   more than 500px of empty space above every mobile screen. */
+@media (max-width: 47.9375rem) {
+  [data-ui="sidebar"],
+  body > [data-ui="shell"] > [data-ui="sidebar"] {
+    display: grid;
+    grid-template-columns: auto minmax(8rem, 1fr);
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    block-size: auto;
+    padding: var(--admin-gap-sm);
+  }
+  [data-ui="sidebar-header"] {
+    padding: 0;
+  }
+  [data-ui="sidebar-search"] {
+    margin: 0;
+  }
+  [data-ui="sidebar-nav"] {
+    display: block;
+    grid-column: 1 / -1;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  [data-ui="sidebar-section-label"],
+  [data-ui="app-list"],
+  [data-ui="menu-section-title"],
+  [data-ui="sidebar-foot"] {
+    display: none;
+  }
+  [data-ui="menu"] {
+    display: flex;
+    inline-size: max-content;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="menu-item-wrap"],
+  [data-ui="menu-section"] {
+    display: block;
+  }
+  [data-ui="menu-section-children"] {
+    display: flex;
+    inline-size: max-content;
+    gap: var(--admin-gap-xs);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  [data-ui="menu-item"] {
+    min-block-size: 2.5rem;
+    padding-inline: var(--admin-gap);
+  }
+  [data-ui="menu-dot"] {
+    display: none;
+  }
+
+  /* A list remains a readable list on a narrow screen. Let its own scroll box
+     carry the width instead of squeezing identifiers into one-character lines. */
+  [data-ui="table"] {
+    inline-size: max-content;
+    min-inline-size: 100%;
+  }
+  [data-ui="row"] td,
+  [data-ui="cell"] code {
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Sign-in, and the identity strip in the topbar.
 
@@ -1908,6 +1979,147 @@
     to {
       transform: rotate(1turn);
     }
+  }
+
+  /* Operational schedule: a real grid rather than a decorative calendar. The
+     label column remains readable while the date range scrolls horizontally. */
+  [data-ui="schedule-scroll"] {
+    max-inline-size: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+  }
+  [data-ui="schedule"] {
+    position: relative;
+    inline-size: 100%;
+  }
+  [data-ui="schedule-head"],
+  [data-ui="schedule-row"] {
+    position: relative;
+    display: grid;
+    min-block-size: 3.25rem;
+  }
+  [data-ui="schedule-head"] {
+    position: sticky;
+    z-index: 4;
+    inset-block-start: 0;
+    background: var(--admin-surface-subtle);
+    border-block-end: 1px solid var(--admin-line-strong);
+  }
+  [data-ui="schedule-row"] {
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="schedule-row"]:last-child {
+    border-block-end: 0;
+  }
+  [data-ui="schedule-corner"],
+  [data-ui="schedule-row-label"] {
+    position: sticky;
+    z-index: 3;
+    inset-inline-start: 0;
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    background: var(--admin-surface);
+    border-inline-end: 1px solid var(--admin-line-strong);
+  }
+  [data-ui="schedule-corner"] {
+    z-index: 5;
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+  [data-ui="schedule-day"] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-inline-end: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="schedule-day"][data-today="true"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="schedule-day-label"],
+  [data-ui="schedule-row-name"] {
+    font-size: var(--admin-size-sm);
+    font-weight: 650;
+  }
+  [data-ui="schedule-day-detail"],
+  [data-ui="schedule-row-detail"] {
+    overflow: hidden;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="schedule-cell"] {
+    grid-row: 1;
+    border-inline-end: 1px solid var(--admin-line);
+  }
+  [data-ui="schedule-cell"][data-today="true"] {
+    background: color-mix(in srgb, var(--admin-accent-soft) 48%, transparent);
+  }
+  [data-ui="schedule-event"] {
+    z-index: 2;
+    grid-row: 1;
+    align-self: center;
+    display: flex;
+    min-inline-size: 0;
+    block-size: 2.25rem;
+    flex-direction: column;
+    justify-content: center;
+    margin-inline: 0.2rem;
+    padding-inline: var(--admin-gap-sm);
+    overflow: hidden;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="schedule-event"][data-tone="neutral"] {
+    background: var(--admin-neutral-soft);
+    color: var(--admin-neutral);
+  }
+  [data-ui="schedule-event"][data-tone="positive"] {
+    border-color: var(--admin-success-icon);
+    background: var(--admin-success-soft);
+    color: var(--admin-success);
+  }
+  [data-ui="schedule-event"][data-tone="info"] {
+    border-color: var(--admin-accent-line);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="schedule-event"][data-tone="warning"] {
+    border-color: var(--admin-warning-icon);
+    background: var(--admin-warning-soft);
+    color: var(--admin-warning);
+  }
+  [data-ui="schedule-event"][data-tone="danger"] {
+    border-color: var(--admin-danger-line);
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+  [data-ui="schedule-event-title"],
+  [data-ui="schedule-event-detail"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="schedule-event-title"] {
+    font-size: var(--admin-size-xs);
+  }
+  [data-ui="schedule-event-detail"] {
+    font-size: 0.6875rem;
+    opacity: 0.82;
   }
 
   [data-ui="tag"] {
@@ -2315,6 +2527,9 @@
     border-radius: var(--admin-radius);
     background: var(--admin-surface);
   }
+  [data-ui="card-grid"]:has(> [data-ui="metric"]) {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
   [data-ui="metric-label"],
   [data-ui="metric-value"],
   [data-ui="metric-detail"] {
@@ -2631,5 +2846,11 @@
     [data-ui="content-card"] {
       transform: none !important;
     }
+  }
+}
+
+@media (max-width: 47.9375rem) {
+  [data-ui="sidebar-foot"] {
+    display: none;
   }
 }
