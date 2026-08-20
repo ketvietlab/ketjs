@@ -63,6 +63,7 @@ const localeOf = (props) => (String(props.lang).toLowerCase().startsWith('en') ?
 
 const apiFor = (resModel) => {
   if (resModel === 'product.Template') return 'product_mail_backend'
+  if (resModel === 'product.Product') return 'product_variant_mail_backend'
   if (resModel === 'stock.Picking') return 'stock_mail_backend'
   return null
 }

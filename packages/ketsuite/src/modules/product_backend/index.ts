@@ -38,7 +38,12 @@ export default defineModule({
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
+    'variant.collaboration': {
+      props: { resModel: 'text', resId: 'id', lang: 'text' },
+      multiple: true,
+    },
     'template.editor': { props: { templateId: 'id', lang: 'text?' } },
+    'variant.editor': { props: { productId: 'id', lang: 'text?' } },
   },
   messages: {
     vi: {
@@ -89,6 +94,11 @@ export default defineModule({
       'tabs.variants': 'Thuộc tính & biến thể',
       'tabs.media': 'Hình ảnh',
       'collaboration.label': 'Trao đổi và hoạt động của sản phẩm',
+      'variant.kicker': 'Biến thể sản phẩm',
+      'variant.template': 'Mẫu sản phẩm',
+      'variant.combination': 'Tổ hợp',
+      'variant.tabs.label': 'Nội dung biến thể',
+      'variant.collaboration.label': 'Trao đổi và hoạt động của biến thể',
       'action.create': 'Tạo mới',
       'action.save': 'Lưu',
       'action.cancel': 'Hủy',
@@ -186,6 +196,11 @@ export default defineModule({
       'tabs.variants': 'Attributes & variants',
       'tabs.media': 'Images',
       'collaboration.label': 'Product conversation and activities',
+      'variant.kicker': 'Product variant',
+      'variant.template': 'Product template',
+      'variant.combination': 'Combination',
+      'variant.tabs.label': 'Variant sections',
+      'variant.collaboration.label': 'Variant conversation and activities',
       'action.create': 'Create',
       'action.save': 'Save',
       'action.cancel': 'Cancel',
@@ -238,6 +253,7 @@ export default defineModule({
   },
   fills: {
     'product_backend:template.editor': `{% island "product.editor" %}`,
+    'product_backend:variant.editor': `{% island "product.editor" %}`,
     // KTL, addressing joints by name — the same language a storefront theme uses.
     'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },

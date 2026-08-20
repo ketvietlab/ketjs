@@ -78,8 +78,10 @@ export async function collaborationEvidenceApp() {
     })
 
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'admin')
+    await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'admin')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'admin')
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'member')
+    await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'member')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'member')
 
     await call('activity.saveType', {
@@ -111,6 +113,19 @@ export async function collaborationEvidenceApp() {
         assigneeUserId: 'admin',
         summary: 'Xác nhận quy cách đóng gói',
         note: 'Đối chiếu mã vạch với tài liệu đã duyệt.',
+        dueDate: '2026-08-20',
+      },
+      'admin',
+    )
+    await call(
+      'product_variant_activity_backend.schedule',
+      {
+        id: 'activity-product-variant-seed',
+        targetId: 'variant-collab',
+        typeId: 'activity-todo',
+        assigneeUserId: 'admin',
+        summary: 'Kiểm tra mã vạch biến thể',
+        note: 'Đối chiếu mã nội bộ và mã vạch trước khi mở bán.',
         dueDate: '2026-08-20',
       },
       'admin',
@@ -196,6 +211,26 @@ export async function collaborationEvidenceApp() {
         targetId: 'tpl-collab',
         kind: 'note',
         body: 'Ghi chú nội bộ: kiểm tra lại mã vạch trước khi phát hành.',
+      },
+      'admin',
+    )
+    await call(
+      'product_variant_mail_backend.post',
+      {
+        id: 'product-variant-message-1',
+        targetId: 'variant-collab',
+        kind: 'comment',
+        body: 'Đã xác nhận khối lượng và thể tích của biến thể.',
+      },
+      'member',
+    )
+    await call(
+      'product_variant_mail_backend.post',
+      {
+        id: 'product-variant-message-2',
+        targetId: 'variant-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: chờ kiểm tra mã vạch cuối cùng.',
       },
       'admin',
     )

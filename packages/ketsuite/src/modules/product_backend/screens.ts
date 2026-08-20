@@ -67,6 +67,9 @@ export type View = (typeof VIEWS)[number]
 export const PRODUCT_DETAIL_TABS = ['general', 'variants', 'media'] as const
 export type ProductDetailTab = (typeof PRODUCT_DETAIL_TABS)[number]
 
+export const VARIANT_DETAIL_TABS = ['general', 'media'] as const
+export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
+
 /**
  * The catalogue's columns, as data — so a module that adds a field to
  * `product.Template` has something to name when it wants a column for it.
@@ -509,63 +512,128 @@ export const variantScreen = (
   row: Record<string, unknown>,
   media: Parameters<typeof mediaPanel>[0],
   uoms: FormOption[],
+  template: { name: string },
+  collaboration: JSXChild,
   frame: Frame,
   errors?: string[],
   locale = '',
-): TemplateResult =>
-  framed(
+  editor?: JSXChild,
+  activeTab: VariantDetailTab = 'general',
+): TemplateResult => {
+  const images = media.images ?? []
+  const primaryImage = images.find((image) => image.primary) ?? images[0]
+  const productUom = Array.isArray(row.uoms)
+    ? (row.uoms[0] as Record<string, unknown> | undefined)
+    : undefined
+  const tabHref = (tab: VariantDetailTab) =>
+    localized(`/admin/products/${templateId}/variants/${String(row.id)}?tab=${tab}`, locale)
+  const title = String(row.defaultCode || template.name || row.id)
+  const subtitle = [
+    `${_('product_backend.variant.template')}: ${template.name}`,
+    row.combinationKey ? `${_('product_backend.variant.combination')}: ${String(row.combinationKey)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const general = recordForm({
+    id: 'product-variant-form',
+    action: tabHref('general'),
+    submit: _('product_backend.action.save'),
+    submitVariant: 'primary',
+    scope: 'product-variant',
+    errors,
+    fields: [
+      {
+        name: 'defaultCode',
+        label: _('product_backend.field.defaultCode'),
+        value: String(row.defaultCode ?? ''),
+      },
+      { name: 'barcode', label: _('product_backend.field.barcode'), value: String(row.barcode ?? '') },
+      {
+        name: 'weight',
+        label: _('product_backend.field.weight'),
+        type: 'decimal',
+        value: Number(row.weight ?? 0),
+      },
+      {
+        name: 'volume',
+        label: _('product_backend.field.volume'),
+        type: 'decimal',
+        value: Number(row.volume ?? 0),
+      },
+      {
+        name: 'standardPrice',
+        label: _('product_backend.field.standardPrice'),
+        type: 'decimal',
+        value: Number((row.cost as Record<string, unknown> | null)?.standardPrice ?? 0),
+      },
+      {
+        name: 'uomId',
+        label: _('product_backend.field.uom'),
+        type: 'select',
+        value: productUom?.uomId ? String(productUom.uomId) : '',
+        options: [{ value: '', label: '—' }, ...uoms],
+      },
+      {
+        name: 'uomBarcode',
+        label: _('product_backend.field.uomBarcode'),
+        value: String(productUom?.barcode ?? ''),
+      },
+    ],
+  })
+  const mediaTab = section({
+    title: _('product_backend.media.title'),
+    description: _('product_backend.media.description'),
+    body: mediaPanel({ ...media, labels: mediaLabels(_) }),
+  })
+
+  return framed(
     _,
-    String(row.defaultCode || row.id),
+    title,
     frame,
-    stack([
-      section({
-        title: _('product_backend.media.title'),
-        description: _('product_backend.media.description'),
-        body: mediaPanel({ ...media, labels: mediaLabels(_) }),
+    recordWorkspace({
+      kicker: _('product_backend.variant.kicker'),
+      title,
+      subtitle,
+      image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
+      imageFallback: icon('package'),
+      summary: [
+        {
+          id: 'media',
+          label: _('product_backend.summary.images'),
+          value: images.length,
+          href: tabHref('media'),
+        },
+        {
+          id: 'state',
+          label: _('product_backend.col.state'),
+          value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
+        },
+      ],
+      navigation: tabs({
+        label: _('product_backend.variant.tabs.label'),
+        items: [
+          {
+            id: 'general',
+            label: _('product_backend.tabs.general'),
+            href: tabHref('general'),
+            active: activeTab === 'general',
+          },
+          {
+            id: 'media',
+            label: _('product_backend.tabs.media'),
+            href: tabHref('media'),
+            active: activeTab === 'media',
+            count: images.length,
+          },
+        ],
       }),
-      surface({
-        body: recordForm({
-          action: localized(`/admin/products/${templateId}/variants/${String(row.id)}`, locale),
-          submit: _('product_backend.action.save'),
-          submitVariant: 'primary',
-          errors,
-          fields: [
-            {
-              name: 'defaultCode',
-              label: _('product_backend.field.defaultCode'),
-              value: String(row.defaultCode ?? ''),
-            },
-            { name: 'barcode', label: _('product_backend.field.barcode'), value: String(row.barcode ?? '') },
-            {
-              name: 'weight',
-              label: _('product_backend.field.weight'),
-              type: 'decimal',
-              value: Number(row.weight ?? 0),
-            },
-            {
-              name: 'volume',
-              label: _('product_backend.field.volume'),
-              type: 'decimal',
-              value: Number(row.volume ?? 0),
-            },
-            {
-              name: 'standardPrice',
-              label: _('product_backend.field.standardPrice'),
-              type: 'decimal',
-              value: Number((row.cost as Record<string, unknown> | null)?.standardPrice ?? 0),
-            },
-            {
-              name: 'uomId',
-              label: _('product_backend.field.uom'),
-              type: 'select',
-              options: [{ value: '', label: '—' }, ...uoms],
-            },
-            { name: 'uomBarcode', label: _('product_backend.field.uomBarcode') },
-          ],
-        }),
-      }),
-    ]),
+      controller: editor,
+      body: activeTab === 'media' ? mediaTab : general,
+      aside: collaboration,
+      asideLabel: _('product_backend.variant.collaboration.label'),
+    }),
   )
+}
 
 export const attributesScreen = (
   _: Translator,

@@ -6,7 +6,7 @@ const runtime = { html, signal }
 
 export const islands: Record<string, IslandDefinition> = {
   'product.editor': {
-    props: { templateId: 'id', lang: 'text?' },
+    props: { templateId: 'id?', productId: 'id?', lang: 'text?' },
     client: 'product.mjs',
     export: 'editor',
     view: (props: IslandProps) => createProductEditorView(runtime, props),

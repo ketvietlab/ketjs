@@ -7,10 +7,11 @@ import {
   PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
+  VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
 } from './screens.ts'
-import type { ProductDetailTab, TemplateRow, View } from './screens.ts'
+import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import type { Extras } from '../../ui/index.ts'
@@ -42,14 +43,24 @@ const productTabOf = (url: URL): ProductDetailTab => {
     ? (asked as ProductDetailTab)
     : 'general'
 }
-const isProductPartial = (req: Parameters<Route>[1]): boolean =>
-  req.headers['x-ket-partial'] === 'product-detail'
+const variantTabOf = (url: URL): VariantDetailTab => {
+  const asked = url.searchParams.get('tab')
+  return (VARIANT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
+    ? (asked as VariantDetailTab)
+    : 'general'
+}
+const isProductPartial = (req: Parameters<Route>[1], scope = 'product-detail'): boolean =>
+  req.headers['x-ket-partial'] === scope
 const seeProduct = (id: string, url: URL, tab: ProductDetailTab = productTabOf(url)) =>
   withHeaders(text('', { status: 303 }), {
     location: inLocale(url, `/admin/products/${id}?tab=${tab}`),
   })
-const seeVariant = (templateId: string, productId: string, url: URL) =>
-  seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}`))
+const seeVariant = (
+  templateId: string,
+  productId: string,
+  url: URL,
+  tab: VariantDetailTab = variantTabOf(url),
+) => seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}?tab=${tab}`))
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   viewer: await viewerOf(ctx, url, req),
@@ -435,14 +446,8 @@ export const routes: Record<string, RouteEntry> = {
                 alt: image.alt || image.attachment?.name || row.name,
                 primary: image.primary,
                 actions: {
-                  primary: inLocale(
-                    url,
-                    `/admin/products/${row.id}/media/${image.id}/primary?tab=media`,
-                  ),
-                  remove: inLocale(
-                    url,
-                    `/admin/products/${row.id}/media/${image.id}/remove?tab=media`,
-                  ),
+                  primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary?tab=media`),
+                  remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove?tab=media`),
                   ...(index > 0
                     ? {
                         moveUp: inLocale(
@@ -525,12 +530,15 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const current = (await ctx.call('product.getVariant', { id: params.variantId }, url, req)) as Record<
+      const activeTab = variantTabOf(url)
+      const existing = (await ctx.call('product.getVariant', { id: params.variantId }, url, req)) as Record<
         string,
         unknown
       > | null
-      if (!current || current.templateId !== params.id) return text('Variant not found', { status: 404 })
+      if (!existing || existing.templateId !== params.id) return text('Variant not found', { status: 404 })
+      let savedPartial = false
       if (req.method === 'POST') {
+        const partial = isProductPartial(req, 'product-variant')
         const form = await readForm(req)
         const saved = await ctx.call(
           'product.saveVariant',
@@ -545,30 +553,72 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if (!(saved as { ok?: boolean }).ok)
+        if (!(saved as { ok?: boolean }).ok) {
+          if (partial)
+            return json(
+              { ok: false, message: _('product_backend.error.invalid'), errors: errorsOf(saved) },
+              { status: 422 },
+            )
           return seeOther(
             inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
           )
-        await ctx.call(
+        }
+        const cost = await ctx.call(
           'product.setCost',
           { productId: params.variantId, standardPrice: form.standardPrice || '0' },
           url,
           req,
         )
-        if (form.uomId)
-          await ctx.call(
+        if (!(cost as { ok?: boolean }).ok) {
+          if (partial)
+            return json(
+              { ok: false, message: _('product_backend.error.invalid'), errors: errorsOf(cost) },
+              { status: 422 },
+            )
+          return seeOther(
+            inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+          )
+        }
+        if (form.uomId) {
+          const productUom = await ctx.call(
             'product.addProductUom',
             { productId: params.variantId, uomId: form.uomId, barcode: form.uomBarcode || null },
             url,
             req,
           )
-        return seeOther(inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}`))
+          if (!(productUom as { ok?: boolean }).ok) {
+            if (partial)
+              return json(
+                {
+                  ok: false,
+                  message: _('product_backend.error.invalid'),
+                  errors: errorsOf(productUom),
+                },
+                { status: 422 },
+              )
+            return seeOther(
+              inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+            )
+          }
+        }
+        if (!partial) return seeVariant(params.id, params.variantId, url, activeTab)
+        savedPartial = true
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [options, mediaRows] = await Promise.all([
+      if (req.method !== 'GET' && !savedPartial) return text('GET or POST', { status: 405 })
+      const [current, template, options, mediaRows] = await Promise.all([
+        ctx.call('product.getVariant', { id: params.variantId }, url, req) as Promise<Record<
+          string,
+          unknown
+        > | null>,
+        ctx.call('product.getTemplate', { id: params.id }, url, req) as Promise<{
+          id: string
+          name: string
+        } | null>,
         optionsFor(ctx, url, req),
         variantMediaFor(ctx, url, req, params.variantId),
       ])
+      if (!current || current.templateId !== params.id || !template)
+        return text('Variant not found', { status: 404 })
       return page({
         body: ctx.document({
           lang,
@@ -580,7 +630,10 @@ export const routes: Record<string, RouteEntry> = {
             current,
             {
               status: 'ready',
-              uploadAction: inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}/media`),
+              uploadAction: inLocale(
+                url,
+                `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
+              ),
               images: mediaRows.map((image, index) => ({
                 id: image.id,
                 src: `/files/${image.attachmentId}`,
@@ -589,17 +642,17 @@ export const routes: Record<string, RouteEntry> = {
                 actions: {
                   primary: inLocale(
                     url,
-                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary`,
+                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary?tab=media`,
                   ),
                   remove: inLocale(
                     url,
-                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove`,
+                    `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove?tab=media`,
                   ),
                   ...(index > 0
                     ? {
                         moveUp: inLocale(
                           url,
-                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up`,
+                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up?tab=media`,
                         ),
                       }
                     : {}),
@@ -607,7 +660,7 @@ export const routes: Record<string, RouteEntry> = {
                     ? {
                         moveDown: inLocale(
                           url,
-                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down`,
+                          `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down?tab=media`,
                         ),
                       }
                     : {}),
@@ -618,9 +671,20 @@ export const routes: Record<string, RouteEntry> = {
               }),
             },
             options.uoms,
+            template,
+            await ctx.joint(url, req, 'product_backend:variant.collaboration', {
+              resModel: 'product.Product',
+              resId: params.variantId,
+              lang,
+            }),
             await frameFor(ctx, url, req),
             invalidErrors(url, _),
             localeSuffix(url),
+            await ctx.joint(url, req, 'product_backend:variant.editor', {
+              productId: params.variantId,
+              lang,
+            }),
+            activeTab,
           ),
         }),
       })

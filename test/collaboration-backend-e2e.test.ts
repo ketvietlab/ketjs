@@ -167,6 +167,84 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   )
 })
 
+test('Product Variant form keeps its own Chatter, activities and partial-save workspace', async (t) => {
+  const { e2e, call, member } = await boot(t)
+  const path = '/admin/products/tpl-collab/variants/variant-collab?tab=general&lang=vi'
+  const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
+  assert.equal(page.status, 200)
+  const html = await page.text()
+  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="record-aside"/)
+  assert.match(html, /data-island="mail\.chatter"/)
+  assert.match(html, /data-island="activity\.record"/)
+  assert.match(html, /&quot;resModel&quot;:&quot;product\.Product&quot;/)
+  assert.match(html, /data-island="product\.editor"/)
+  assert.match(html, /data-scope="product-variant"/)
+  assert.match(html, /id="product-variant-form"/)
+
+  await member.call('product_variant_mail_backend.follow', { targetId: 'variant-collab' })
+  await call('product_variant_mail_backend.post', {
+    id: 'message-product-variant',
+    targetId: 'variant-collab',
+    kind: 'note',
+    body: 'Variant-only note',
+  })
+  const timeline = (
+    await member.call<{ total: number; following: boolean; messages: Row[] }>(
+      'product_variant_mail_backend.timeline',
+      { targetId: 'variant-collab' },
+    )
+  ).value
+  assert.equal(timeline.total, 1)
+  assert.equal(timeline.following, true)
+  assert.equal(timeline.messages[0]!.body, 'Variant-only note')
+
+  await call('activity.saveType', {
+    id: 'variant-review',
+    name: 'Review variant',
+    category: 'todo',
+    defaultDelayDays: 0,
+    chainingPolicy: 'none',
+    sequence: 10,
+    active: true,
+  })
+  await call('product_variant_activity_backend.schedule', {
+    id: 'activity-product-variant',
+    targetId: 'variant-collab',
+    typeId: 'variant-review',
+    assigneeUserId: 'admin',
+    summary: 'Check barcode',
+    dueDate: '2026-08-20',
+  })
+  const activities = (
+    await call<{ activities: Row[] }>('product_variant_activity_backend.list', {
+      targetId: 'variant-collab',
+      today: '2026-08-20',
+    })
+  ).value.activities
+  assert.equal(activities.length, 1)
+  assert.equal(activities[0]!.summary, 'Check barcode')
+
+  const partial = await e2e.client.post(
+    path,
+    new URLSearchParams({
+      defaultCode: 'COLLAB-UPDATED',
+      barcode: '8938500000001',
+      weight: '1.25',
+      volume: '0.5',
+      standardPrice: '80',
+      uomId: 'unit',
+      uomBarcode: '8938500000002',
+    }),
+    { headers: { accept: 'text/html', 'x-ket-partial': 'product-variant' } },
+  )
+  assert.equal(partial.status, 200)
+  const partialHtml = await partial.text()
+  assert.match(partialHtml, /data-ui="record-header"/)
+  assert.match(partialHtml, /data-ui="record-body"/)
+  assert.match(partialHtml, /COLLAB-UPDATED/)
+})
+
 test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer screen joint', async (t) => {
   const { e2e, call, member } = await boot(t)
   const transferPage = await e2e.client.get('/admin/transfers/pick-collab?lang=vi', {

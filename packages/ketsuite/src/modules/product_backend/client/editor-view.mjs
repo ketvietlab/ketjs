@@ -52,7 +52,10 @@ const editorHostFor = (props) => {
   if (typeof document === 'undefined') return null
   return Array.from(document.querySelectorAll('ket-island[data-island="product.editor"]')).find((element) => {
     try {
-      return JSON.parse(element.getAttribute('data-props') ?? '{}').templateId === props.templateId
+      const hostProps = JSON.parse(element.getAttribute('data-props') ?? '{}')
+      return props.productId
+        ? hostProps.productId === props.productId
+        : hostProps.templateId === props.templateId
     } catch {
       return false
     }
@@ -65,6 +68,7 @@ export function createProductEditorView(runtime, props) {
   const state = signal('idle')
   const message = signal('')
   const host = editorHostFor(props)
+  const scope = props.productId ? 'product-variant' : 'product-detail'
   if (host) host.hidden = true
 
   const showState = (nextState, nextMessage) => {
@@ -76,7 +80,7 @@ export function createProductEditorView(runtime, props) {
   if (typeof document !== 'undefined') {
     document.addEventListener('submit', async (event) => {
       const form = event.target
-      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== 'product-detail') return
+      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
       event.preventDefault()
       if (state() === 'saving') return
 
@@ -95,7 +99,7 @@ export function createProductEditorView(runtime, props) {
           headers: {
             accept: 'text/html',
             'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            'x-ket-partial': 'product-detail',
+            'x-ket-partial': scope,
           },
           body,
         })
