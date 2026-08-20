@@ -32,8 +32,14 @@ export class IslandError extends Error {
 export type IslandProps = Record<string, unknown>
 /** One mounted island instance. Signals and other local state live in this closure. */
 export type IslandView = () => TemplateResult
+/** Optional lifecycle around a mounted island. A plain IslandView remains valid. */
+export type IslandController = {
+  view: IslandView
+  update?(props: Readonly<IslandProps>): void
+  dispose?(): void
+}
 /** Create one isolated instance from serializable server props. */
-export type IslandFactory = (props: IslandProps) => IslandView
+export type IslandFactory = (props: IslandProps) => IslandView | IslandController
 export type IslandDefinition = {
   view: IslandFactory
   /** The only surrounding scope keys that may cross into the island. */
@@ -44,6 +50,9 @@ export type IslandDefinition = {
   export?: string
 }
 export type IslandRegistry = Record<string, IslandFactory>
+
+const controllerOf = (created: IslandView | IslandController): IslandController =>
+  typeof created === 'function' ? { view: created } : created
 
 const jsonProps = (name: string, props: IslandProps): { raw: string; revived: IslandProps } => {
   const seen = new WeakSet<object>()
@@ -90,11 +99,16 @@ const jsonProps = (name: string, props: IslandProps): { raw: string; revived: Is
  */
 export function renderIsland(name: string, factory: IslandFactory, props: IslandProps): string {
   const { raw, revived } = jsonProps(name, props)
-  return (
-    `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(raw)}">` +
-    renderToString(factory(revived)()) +
-    `</${ISLAND_TAG}>`
-  )
+  const controller = controllerOf(factory(revived))
+  try {
+    return (
+      `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(raw)}">` +
+      renderToString(controller.view()) +
+      `</${ISLAND_TAG}>`
+    )
+  } finally {
+    controller.dispose?.()
+  }
 }
 
 type IslandElement = HostNode & {
@@ -145,8 +159,19 @@ export function hydrateIslands(
         throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
       }
     }
-    const mounted = mountHydrated(host, element, factory(props))
-    out.push({ name, element, dispose: mounted.dispose })
+    const controller = controllerOf(factory(props))
+    const mounted = mountHydrated(host, element, controller.view)
+    let disposed = false
+    out.push({
+      name,
+      element,
+      dispose: () => {
+        if (disposed) return
+        disposed = true
+        mounted.dispose()
+        controller.dispose?.()
+      },
+    })
   }
   return out
 }

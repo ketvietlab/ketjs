@@ -139,6 +139,23 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (3)', 'and stops when disposed')
 })
 
+test('island: a controller owns browser cleanup and server instances are finalized', () => {
+  let disposed = 0
+  const factory = () => ({
+    view: () => html`<button>controlled</button>`,
+    dispose: () => disposed++,
+  })
+  const markup = renderIsland('controlled', factory, {})
+  assert.equal(disposed, 1, 'the short-lived SSR controller is finalized')
+
+  const container = parseFragment(markup)
+  const live = hydrateIslands(domHost(document), container as never, { controlled: factory })
+  assert.equal(disposed, 1)
+  live[0]!.dispose()
+  live[0]!.dispose()
+  assert.equal(disposed, 2, 'browser cleanup runs once even if disposal is repeated')
+})
+
 test('island: the server publishes a tenant-specific browser bootstrap and view runtime', async () => {
   const shell = defineTheme({
     name: 'island_shell',

@@ -180,11 +180,17 @@ test('mount: a click drives a signal drives the DOM, end to end', () => {
 
 test('mount: hydrating then going reactive keeps the server DOM', () => {
   const n = signal(5)
-  const view = () => html`<p>giá trị ${n()}</p>`
+  let renders = 0
+  const view = () => {
+    renders++
+    return html`<p>giá trị ${n()}</p>`
+  }
   const container = parseFragment(renderToString(view()))
   const p = container.querySelectorAll('p')[0]!
+  renders = 0
 
   mountHydrated(domHost(document), container as unknown as HostNode, view)
+  assert.equal(renders, 1, 'the initial reactive pass hydrates and subscribes at once')
   assert.equal(container.querySelectorAll('p')[0], p, 'the server node survives')
 
   n.set(6)
