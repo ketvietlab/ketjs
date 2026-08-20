@@ -52,6 +52,8 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 | `bootRuntime`, `bootApp`, `serveApp` | Boot datastore/runtime services or a complete HTTP app. |
 | `bootWorker`, `serveWorker` | Boot or continuously serve configured durable queues. |
 | `page`, `fragment`, `document` | Create rendered response bodies. |
+| `navigablePage`, `isNavigationRequest` | Negotiate a full document or lazy named navigation slots. |
+| `NAVIGATION_HEADER`, `NAVIGATION_VERSION`, `NAVIGATION_TYPE` | Fragment navigation protocol constants. |
 | `json`, `text`, `bytes`, `streamed`, `raw` | Create typed non-page response bodies. |
 | `withHeaders` | Add headers without discarding a response body's type. |
 | `multipart` | Parse bounded multipart input. |
@@ -108,7 +110,7 @@ types are exported from the same entrypoint.
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
 | `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `ketjs-view` rendering helpers. |
-| `renderIsland`, `hydrateIslands`, `ISLAND_TAG` | Server-render and hydrate named islands. |
+| `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Server-render, hydrate, and reconcile named islands. |
 | `reachOf`, `functionsOf`, `formatReach`, `formatInventory` | Inspect function and data/effect permission reach. |
 | `agentTools`, `agentDescriptor`, `compositionSchema` | Describe the composed application for tooling and agents. |
 | `generateDts` | Generate manifest-derived TypeScript declarations. |
@@ -158,8 +160,11 @@ The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOption
 | `mount`, `mountHydrated` | Mount component-style view functions. |
 | `renderToString`, `trustedMarkup`, `isMarkup` | Server rendering and explicit trusted markup. |
 | `HydrationMismatch`, `HOLE_MARKER` | Hydration diagnostics and protocol marker. |
-| `renderIsland`, `hydrateIslands`, `ISLAND_TAG` | Island serialization and browser hydration. |
+| `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Island serialization, hydration, reconciliation, and disposal. |
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
+
+The view entrypoint also exports `IslandDefinition`, `IslandFactory`, `IslandController`,
+`IslandManager`, and their related prop/instance types.
 
 TypeScript projects using automatic JSX can configure:
 
