@@ -6,12 +6,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import { callFn, compose, defineModule, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
-import type { Adapter } from 'ketjs'
+import type { Adapter, Ctx } from 'ketjs'
 import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
+import { executeNightAudit } from '../packages/ketsuite/src/modules/hospitality_core/night-audit.ts'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const databaseCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 4 : 8))
@@ -29,7 +30,57 @@ const keys = Array.from(
   { length: databaseCount },
   (_, index) => `hospitality_bench_${String(index).padStart(3, '0')}`,
 )
-const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
+const nightAuditEffects = [
+  'read:hospitality_core.Property',
+  'read:hospitality_core.Stay',
+  'write:hospitality_core.Stay',
+  'read:hospitality_core.Folio',
+  'write:hospitality_core.Folio',
+  'read:hospitality_core.ExtraLine',
+  'read:hospitality_core.Charge',
+  'write:hospitality_core.Charge',
+  'read:hospitality_core.NightAuditRun',
+  'write:hospitality_core.NightAuditRun',
+  'read:product.Product',
+  'read:product.Template',
+  'read:product.ProductUom',
+  'read:uom.Unit',
+]
+const benchmarkAudit = defineModule({
+  name: 'hospitality_benchmark_audit',
+  depends: ['hospitality_core'],
+  functions: {
+    prepare: {
+      input: { runId: 'id', propertyId: 'id', auditDate: 'date' },
+      effects: ['write:hospitality_core.NightAuditRun'],
+      handler: (ctx: Ctx, args) =>
+        ctx.db.insertIfAbsent('hospitality_core.NightAuditRun', {
+          id: args.runId,
+          propertyId: args.propertyId,
+          auditDate: args.auditDate,
+          state: 'queued',
+          inHouseCount: 0,
+          servicePosted: 0,
+          rentPosted: 0,
+          existingCount: 0,
+          totalAmount: '0',
+          attempt: 0,
+          requestedAt: '2026-09-02T01:00:00.000Z',
+        }),
+    },
+    execute: {
+      input: { runId: 'id', propertyId: 'id', auditDate: 'date' },
+      effects: nightAuditEffects,
+      handler: (ctx: Ctx, args) =>
+        executeNightAudit(ctx, {
+          runId: String(args.runId),
+          propertyId: String(args.propertyId),
+          auditDate: String(args.auditDate),
+        }),
+    },
+  },
+})
+const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore, benchmarkAudit]
 const manifest = compose(modules, { headless: true })
 registerFunctions(modules)
 
@@ -286,6 +337,47 @@ try {
         if (!(posted.value as { ok: boolean }).ok || !(retry.value as { existing: boolean }).existing)
           throw new Error(`${key}: service materialisation was not idempotent`)
       }
+      await call(key, 'hospitality_core.saveRoomType', {
+        id: 'audit-type',
+        propertyId: 'property',
+        code: 'AUDIT',
+        name: 'Long-stay audit room',
+        baseRate: '7000000',
+      })
+      await call(key, 'hospitality_core.saveRoom', {
+        id: 'audit-room',
+        propertyId: 'property',
+        roomTypeId: 'audit-type',
+        code: 'AUDIT-ROOM',
+        name: 'Audit room',
+      })
+      const longStay = await call(key, 'hospitality_core.createReservation', {
+        id: 'audit-long-stay',
+        propertyId: 'property',
+        roomTypeId: 'audit-type',
+        partnerId: 'guest',
+        bookingType: 'weekly',
+        billingMode: 'recurring',
+        checkIn: '2026-06-01T14:00:00.000Z',
+        checkOut: '2026-09-30T12:00:00.000Z',
+        rate: '7000000',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      })
+      if (!(longStay.value as { ok: boolean }).ok) throw new Error(`${key}: long stay failed`)
+      const longStayCheckIn = await call(key, 'hospitality_core.checkIn', {
+        stayId: 'audit-long-stay:stay',
+        roomId: 'audit-room',
+        assignmentId: 'audit-long-stay:assignment',
+        at: '2026-06-01T14:00:00.000Z',
+      })
+      if (!(longStayCheckIn.value as { ok: boolean }).ok) throw new Error(`${key}: long-stay check-in failed`)
+      const longStayService = await call(key, 'hospitality_core.saveExtraLine', {
+        id: 'audit-long-stay-breakfast',
+        stayId: 'audit-long-stay:stay',
+        productId: 'service-product',
+        recurrence: 'per_night',
+      })
+      if (!(longStayService.value as { ok: boolean }).ok) throw new Error(`${key}: long-stay service failed`)
     }),
   )
   const serviceMs = performance.now() - serviceStarted
@@ -320,6 +412,16 @@ try {
           sourceKey: `${key}:service:${index}`,
           occurredAt: '2026-09-02T08:00:00.000Z',
         })
+        if (index % 2 === 1) {
+          const nightlyService = await call(key, 'hospitality_core.saveExtraLine', {
+            id: `audit-extra:${index}`,
+            stayId: `reservation:${index}:stay`,
+            productId: 'service-product',
+            recurrence: 'per_night',
+          })
+          if (!(nightlyService.value as { ok: boolean }).ok)
+            throw new Error(`${key}: audit service intention failed`)
+        }
         if (index % 2 === 0)
           await call(key, 'hospitality_core.checkOut', {
             stayId: `reservation:${index}:stay`,
@@ -329,6 +431,76 @@ try {
     }),
   )
   const transitionMs = performance.now() - transitionStarted
+
+  const auditDate = '2026-09-02'
+  const auditStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      const run = {
+        runId: `property:${auditDate}`,
+        propertyId: 'property',
+        auditDate,
+      }
+      await call(key, 'hospitality_benchmark_audit.prepare', run)
+      if (driver !== 'postgres' || key !== keys[0]) {
+        await call(key, 'hospitality_benchmark_audit.execute', run)
+        return
+      }
+      const contender = open(key)
+      await contender.open()
+      try {
+        await Promise.all([
+          callWith(adapters.get(key)!, key, 'hospitality_benchmark_audit.execute', run),
+          callWith(contender, key, 'hospitality_benchmark_audit.execute', run),
+        ])
+      } finally {
+        await contender.close()
+      }
+    }),
+  )
+  const auditMs = performance.now() - auditStarted
+  const expectedAuditServices = 1 + Math.floor(transitionCount / 2)
+  const auditResults = await Promise.all(
+    keys.map(async (key) => {
+      const run = (
+        await adapters.get(key)!.all(
+          `SELECT state, attempt, "servicePosted", "rentPosted", "totalAmount"
+             FROM hospitality_core_night_audit_run
+            WHERE id = ${driver === 'postgres' ? '$1' : '?'}`,
+          [`property:${auditDate}`],
+        )
+      )[0]!
+      const charges = (
+        await adapters
+          .get(key)!
+          .all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_charge WHERE "nightAuditRunId" = ${
+              driver === 'postgres' ? '$1' : '?'
+            }`,
+            [`property:${auditDate}`],
+          )
+      )[0]!
+      return {
+        state: run.state,
+        attempt: Number(run.attempt),
+        services: Number(run.servicePosted),
+        rent: Number(run.rentPosted),
+        charges: Number(charges.n),
+      }
+    }),
+  )
+  if (
+    !auditResults.every(
+      (result) =>
+        result.state === 'completed' &&
+        result.services === expectedAuditServices &&
+        result.rent === 13 &&
+        result.charges === expectedAuditServices + 13,
+    )
+  )
+    throw new Error(`night audit mismatch: ${JSON.stringify(auditResults)}`)
+  if (driver === 'postgres' && auditResults[0]?.attempt !== 2)
+    throw new Error(`concurrent night audit lost an attempt: ${JSON.stringify(auditResults[0])}`)
 
   const collisionKey = keys[0]!
   const usedRooms = new Set(transitionRooms.filter((room): room is number => room !== undefined))
@@ -492,7 +664,7 @@ try {
           from: '2026-09-01T00:00:00.000Z',
           to: '2026-09-04T00:00:00.000Z',
         })
-        if ((reservations.value as unknown[]).length !== reservationsPerDatabase)
+        if ((reservations.value as unknown[]).length !== reservationsPerDatabase + 1)
           throw new Error(`${key}: reservation query returned the wrong count`)
         const images = await call(key, 'hospitality_core.listContentImages', {
           roomTypeId: `type:${pass % 12}`,
@@ -534,6 +706,12 @@ try {
     const serviceChargeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_charge!
     if (serviceChargeColumns.serviceDate !== 'date')
       throw new Error(`PostgreSQL serviceDate is ${serviceChargeColumns.serviceDate}, expected date`)
+    const stayColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_stay!
+    if (stayColumns.nextBillDate !== 'date')
+      throw new Error(`PostgreSQL nextBillDate is ${stayColumns.nextBillDate}, expected date`)
+    const auditColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_night_audit_run!
+    if (auditColumns.auditDate !== 'date')
+      throw new Error(`PostgreSQL auditDate is ${auditColumns.auditDate}, expected date`)
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
@@ -584,7 +762,8 @@ try {
     }),
   )
   const idempotentServiceCountsMatch = serviceChargeCounts.every(
-    ({ key, count }) => count === serviceIntentionsPerDatabase + (key === collisionKey ? 1 : 0),
+    ({ key, count }) =>
+      count === serviceIntentionsPerDatabase + expectedAuditServices + (key === collisionKey ? 1 : 0),
   )
   if (!idempotentServiceCountsMatch) throw new Error('service materialisation created duplicate charges')
   console.log(
@@ -616,6 +795,13 @@ try {
         checkInChargeCheckoutCycles: totalTransitions,
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
+        nightAudits: databaseCount,
+        auditCharges: databaseCount * (expectedAuditServices + 13),
+        auditMs: Number(auditMs.toFixed(1)),
+        auditChargesPerSecond: Math.round((databaseCount * (expectedAuditServices + 13) * 1_000) / auditMs),
+        concurrentNightAuditSingleOccurrence: auditResults.every(
+          (result) => result.charges === expectedAuditServices + 13,
+        ),
         concurrentRoomClaimSingleWinner,
         concurrentInventoryClaimSingleWinner,
         concurrentServicePostSingleCharge,
@@ -636,7 +822,7 @@ try {
                 `SELECT COUNT(*) AS n FROM hospitality_core_room WHERE "companyId" = ${driver === 'postgres' ? '$1' : '?'}`,
                 [key],
               )
-            return Number(rows[0]!.n) === roomsPerDatabase
+            return Number(rows[0]!.n) === roomsPerDatabase + 1
           }),
         ).then((matches) => matches.every(Boolean)),
       },
