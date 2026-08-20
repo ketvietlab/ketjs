@@ -13,6 +13,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     propertyCharges: { hasMany: 'hospitality_core.PropertyCharge', by: 'propertyId' },
     extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'propertyId' },
     nightAudits: { hasMany: 'hospitality_core.NightAuditRun', by: 'propertyId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'propertyId' },
     contentImages: { hasMany: 'hospitality_core.ContentImage', by: 'propertyId' },
     cancellationPolicy: {
       belongsTo: 'hospitality_core.CancellationPolicy',
@@ -118,6 +119,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     guests: { hasMany: 'hospitality_core.StayGuest', by: 'stayId' },
     charges: { hasMany: 'hospitality_core.Charge', by: 'stayId' },
     documents: { hasMany: 'hospitality_core.GuestDocument', by: 'stayId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'stayId' },
     extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'stayId' },
   },
   'hospitality_core.NightAuditRun': {
@@ -133,6 +135,14 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.StayGuest': {
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'stayGuestId' },
+  },
+  'hospitality_core.StayNotice': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    stayGuest: { belongsTo: 'hospitality_core.StayGuest', by: 'stayGuestId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    document: { belongsTo: 'hospitality_core.GuestDocument', by: 'documentId' },
   },
   'hospitality_core.Charge': {
     folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
@@ -156,6 +166,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
     frontAttachment: { belongsTo: 'storage.Attachment', by: 'frontAttachmentId' },
     backAttachment: { belongsTo: 'storage.Attachment', by: 'backAttachmentId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'documentId' },
   },
   'hospitality_core.CleaningTask': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },

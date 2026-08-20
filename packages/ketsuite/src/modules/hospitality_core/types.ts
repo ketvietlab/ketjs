@@ -50,6 +50,9 @@ export const CLEANING_TASK_TYPES = ['checkout_clean', 'daily_clean', 'maintenanc
 export const CLEANING_TASK_PRIORITIES = ['normal', 'urgent'] as const
 export const CLEANING_TASK_STATES = ['todo', 'in_progress', 'done', 'cancelled'] as const
 export const NIGHT_AUDIT_STATES = ['queued', 'running', 'completed', 'failed'] as const
+export const STAY_NOTICE_STATES = ['attention', 'ready', 'submitted', 'confirmed'] as const
+export const STAY_NOTICE_REASONS = ['tourism', 'business', 'family', 'other'] as const
+export const STAY_NOTICE_CHANNELS = ['online', 'vneid', 'email', 'phone', 'software'] as const
 
 export type AccommodationType = (typeof ACCOMMODATION_TYPES)[number]
 export type RoomStatus = (typeof ROOM_STATUSES)[number]
@@ -77,3 +80,6 @@ export type CleaningTaskType = (typeof CLEANING_TASK_TYPES)[number]
 export type CleaningTaskPriority = (typeof CLEANING_TASK_PRIORITIES)[number]
 export type CleaningTaskState = (typeof CLEANING_TASK_STATES)[number]
 export type NightAuditState = (typeof NIGHT_AUDIT_STATES)[number]
+export type StayNoticeState = (typeof STAY_NOTICE_STATES)[number]
+export type StayNoticeReason = (typeof STAY_NOTICE_REASONS)[number]
+export type StayNoticeChannel = (typeof STAY_NOTICE_CHANNELS)[number]

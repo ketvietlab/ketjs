@@ -7,7 +7,7 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 const scope: Scope = { company: 'default', companies: ['default'], branches: null }
 
 test('hospitality e2e: authenticated booking and front-desk flow crosses real HTTP', async (t) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestApp(ketsuite)
   t.after(() => e2e.close())
   const seed = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
 
@@ -56,6 +56,8 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     name: 'Ket Hotel',
     accommodationType: 'hotel',
     timezone: 'Asia/Ho_Chi_Minh',
+    street1: '123 Nguyễn Huệ',
+    locality: 'Thành phố Hồ Chí Minh',
   })
   await seed('hospitality_core.saveRoomType', {
     id: 'deluxe',
@@ -113,6 +115,17 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   )
   assert.equal(booked.value.ok, true)
   assert.equal(booked.writes.length, 9, 'booking, room-night inventory and change signal commit together')
+  const guestDocument = await e2e.client.call<Row>('hospitality_core.saveGuestDocument', {
+    id: 'booking-1-document',
+    stayId: 'booking-1:stay',
+    partnerId: 'guest',
+    type: 'cccd',
+    number: '079203001234',
+    fullName: 'Nguyễn An',
+    dateOfBirth: '1990-05-12T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  assert.equal(guestDocument.value.ok, true)
 
   const rateSaved = await e2e.client.post(
     '/admin/hospitality/rate-plans?lang=vi',
@@ -215,6 +228,48 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     { ok: checkedIn.value.ok, state: checkedIn.value.state, roomId: checkedIn.value.roomId },
     { ok: true, state: 'checked_in', roomId: '101' },
   )
+  assert.equal(await e2e.drainJobs(), 1)
+
+  const stayNotice = await e2e.client.get(
+    '/admin/hospitality/stay-notices?lang=vi&property=hotel&notice=booking-1%3Astay%3Anotice%3Abooking-1%3Aguest',
+  )
+  assert.equal(stayNotice.status, 200)
+  const stayNoticeHtml = await stayNotice.text()
+  assert.match(stayNoticeHtml, /Thông báo lưu trú/)
+  assert.match(stayNoticeHtml, /•••• 1234/)
+  assert.match(stayNoticeHtml, /Ghi nhận đã gửi/)
+  assert.doesNotMatch(stayNoticeHtml, /079203001234|hospitality_core\./)
+
+  const submission = await e2e.client.post(
+    '/admin/hospitality/stay-notices?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'record-submission',
+      id: 'booking-1:stay:notice:booking-1:guest',
+      stayId: 'booking-1:stay',
+      property: 'hotel',
+      state: 'all',
+      reason: 'tourism',
+      channel: 'online',
+      evidenceRef: 'DVC-E2E-0001',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(submission.status, 303, await submission.clone().text())
+  assert.match(submission.headers.get('location') ?? '', /status=submitted/)
+  const confirmation = await e2e.client.post(
+    '/admin/hospitality/stay-notices?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'confirm',
+      id: 'booking-1:stay:notice:booking-1:guest',
+      stayId: 'booking-1:stay',
+      property: 'hotel',
+      state: 'all',
+      receiptRef: 'DVC-E2E-0001',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(confirmation.status, 303, await confirmation.clone().text())
+  assert.match(confirmation.headers.get('location') ?? '', /status=confirmed/)
 
   const auditQueued = await e2e.client.post(
     '/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20',
@@ -244,6 +299,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
     ['/admin/hospitality/services?lang=vi&property=hotel', 'Dịch vụ &amp; phụ phí'],
     ['/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20', 'Chốt ngày vận hành'],
+    ['/admin/hospitality/stay-notices?lang=vi&property=hotel', 'Thông báo lưu trú'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
       'Tồn kho &amp; hạn chế bán',
@@ -279,12 +335,27 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const englishAuditHtml = await englishAudit.text()
   assert.match(englishAuditHtml, /Night audit/)
   assert.doesNotMatch(englishAuditHtml, /hospitality_core\./)
+  const englishStayNotices = await e2e.client.get('/admin/hospitality/stay-notices?lang=en&property=hotel')
+  assert.equal(englishStayNotices.status, 200)
+  const englishStayNoticesHtml = await englishStayNotices.text()
+  assert.match(englishStayNoticesHtml, /Stay notices/)
+  assert.match(englishStayNoticesHtml, /Confirmed/)
+  assert.doesNotMatch(englishStayNoticesHtml, /079203001234|hospitality_core\./)
 
   await e2e.fixture.withTenant('', async ({ adapter }) => {
     const stays = await adapter.all('SELECT state, "currentRoomId" FROM hospitality_core_stay WHERE id = ?', [
       'booking-1:stay',
     ])
     assert.deepEqual({ ...stays[0] }, { state: 'checked_in', currentRoomId: '101' })
+    const notices = await adapter.all(
+      'SELECT state, "packageHash", "submittedBy", "confirmedBy", "receiptRef" FROM hospitality_core_stay_notice WHERE id = ?',
+      ['booking-1:stay:notice:booking-1:guest'],
+    )
+    assert.equal(notices[0]?.state, 'confirmed')
+    assert.match(String(notices[0]?.packageHash), /^[a-f0-9]{64}$/)
+    assert.equal(notices[0]?.submittedBy, 'admin')
+    assert.equal(notices[0]?.confirmedBy, 'admin')
+    assert.equal(notices[0]?.receiptRef, 'DVC-E2E-0001')
   })
 
   const checkedOut = await e2e.client.call<Row>('hospitality_core.checkOut', {
