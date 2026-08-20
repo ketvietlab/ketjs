@@ -6,7 +6,8 @@ const runtime = { html, signal }
 
 export const islands: Record<string, IslandDefinition> = {
   'stock.editor': {
-    props: { pickingId: 'id?', lotId: 'id?', lang: 'text?' },
+    props: { identity: 'text', pickingId: 'id?', lotId: 'id?', lang: 'text?' },
+    key: ['identity'],
     client: 'stock.mjs',
     export: 'editor',
     view: (props: IslandProps) => createStockEditorView(runtime, props),
