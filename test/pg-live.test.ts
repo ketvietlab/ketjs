@@ -33,7 +33,9 @@ import {
   inventory,
   partner,
   product,
+  pricing,
   purchase,
+  sale,
   stock,
   uom,
 } from 'ketsuite'
@@ -611,6 +613,36 @@ test('live pg: concurrent RFQs assign one gapless purchase sequence', live, asyn
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `PO${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test('live pg: concurrent quotations assign one gapless sales sequence', live, async () => {
+  await withPg(async (a) => {
+    const saleModules = [partner, company, uom, product, pricing, stock, account, sale]
+    const saleManifest = compose(saleModules, { headless: true })
+    const saleSchema = schemaFromManifest(saleManifest)
+    for (const tableName of Object.keys(saleSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, saleSchema), a)) await a.exec(sql)
+    registerFunctions(saleModules)
+    const options = { adapter: a, manifest: saleManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
+    await callFn('partner.savePartner', { id: 'customer', kind: 'company', name: 'Customer' }, options)
+    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+    await callFn('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, options)
+    const created = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        callFn(
+          'sale.createOrder',
+          { id: `so-${index + 1}`, partnerId: 'customer', warehouseId: 'wh' },
+          options,
+        ),
+      ),
+    )
+    assert.deepEqual(
+      created.map((result) => String((result.value as { name: string }).name)).sort(),
+      Array.from({ length: 8 }, (_, index) => `S${String(index + 1).padStart(5, '0')}`),
     )
   })
 })
