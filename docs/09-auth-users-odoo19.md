@@ -25,6 +25,7 @@ Cụm này cung cấp:
 - invitation 144 giờ, reset 4 giờ, token digest-only và single-use bằng CAS;
 - PostgreSQL rate limit dùng chung nhiều pod và security audit append-only;
 - named Mail integration joint, không tạo SMTP/outbox/template giả;
+- bootstrap một lần qua `ket provision user.provisionAdmin`, password chỉ đi qua stdin;
 - UI Users, Roles, permission presets, membership, profile, active sessions và token acceptance;
 - toàn bộ domain error qua message catalog tiếng Việt/Anh.
 
@@ -209,6 +210,53 @@ mutation có thể làm mất superuser lấy cùng một `SecurityGuard` row lo
 transaction, nên hai pod vô hiệu hóa hai admin đồng thời vẫn để lại đúng một
 superuser hoạt động.
 
+## Provisioning lần đầu
+
+`user.provisionAdmin` là function `internal + provision`; nó không có generic HTTP
+endpoint, agent tool hoặc route UI. Chỉ lệnh `ket provision` gọi được function này
+với actor hệ thống cố định. JSON đầu vào gồm tên/mã/currency của company và
+login/tên/email/password của admin; toàn bộ JSON chỉ được đọc từ stdin bằng
+`--input -`, vì vậy password không xuất hiện trong argv hoặc command history.
+
+```mermaid
+sequenceDiagram
+  participant Operator
+  participant CLI as ket provision
+  participant Guard as SecurityGuard row lock
+  participant DB as Tenant database
+
+  Operator->>CLI: stdin JSON + explicit tenant when required
+  CLI->>CLI: require internal + provision function
+  CLI->>Guard: lock provision-admin
+  CLI->>DB: recheck User count + Company count = 0
+  alt database is empty
+    CLI->>DB: one transaction: Company Partner
+    CLI->>DB: Company + root Branch
+    CLI->>DB: superuser + both memberships + audit
+    DB-->>CLI: commit IDs
+    CLI-->>Operator: ok: true
+  else already provisioned
+    CLI-->>Operator: ok: false + user.error.provisionExists
+  end
+```
+
+Hai invocation từ nhiều pod được serialize trên cùng guard row và recheck điều
+kiện empty database sau khi lấy lock, nên chỉ một invocation có thể thắng. Mọi row
+Partner, Company, Branch, User, membership và audit nằm trong một transaction;
+lỗi ở bất kỳ insert muộn nào rollback cả guard row lẫn các row đã tạo. Khi app dùng
+tenant databases, CLI từ chối chạy nếu thiếu `--tenant NAME` và chỉ migrate/call
+trên adapter của tenant đã chọn.
+
+Ví dụ vận hành:
+
+```sh
+printf '%s' '{"companyName":"Ket Viet","companyCode":"KET","currency":"VND","adminLogin":"admin@example.com","adminName":"Administrator","adminEmail":"admin@example.com","adminPassword":"..."}' \
+  | ket provision user.provisionAdmin --input -
+```
+
+Trong vận hành thật, dùng secret source hoặc prompt để sinh stdin thay vì ghi JSON
+literal vào shell history như ví dụ minh họa.
+
 ## Interface công khai
 
 ### Domain functions
@@ -226,6 +274,7 @@ superuser hoạt động.
 | `user.consumeAuthToken` | internal | Invitation/reset single-use sau trusted auth route |
 | `user.resolveSessionContext` | internal | Reconcile live User, version và membership mỗi request |
 | `user.recordSecurityEvent` | internal | Append audit từ trusted auth/context routes |
+| `user.provisionAdmin` | internal + provision | Bootstrap nguyên tử Company, root Branch và superuser đầu tiên |
 
 ### Engine/session primitives
 
@@ -280,8 +329,11 @@ internal-function protection.
 
 `test/pg-live.test.ts` dùng PostgreSQL và hai adapter độc lập để mô phỏng nhiều
 pod, kiểm tra unique login/assignment, single-use token và rate-limit counter dưới
-concurrency. Engine/session regressions nằm trong `engine-primitives.test.ts` và
-`session.test.ts`.
+concurrency, đồng thời dùng bốn adapter tranh bootstrap để xác nhận chỉ một kết quả
+thắng. `test/odoo19-user-provision.test.ts` kiểm tra empty database, second run,
+actor, mã i18n và rollback toàn transaction. `test/odoo19-user-provision-cli.test.ts`
+kiểm tra stdin secret hygiene, exit code và tenant selection. Engine/session
+regressions nằm trong `engine-primitives.test.ts` và `session.test.ts`.
 
 Theo `AGENT.md`, local chỉ chạy test đúng phạm vi thay đổi. Full suite chạy trên CI
 khi PR target `develop`.
