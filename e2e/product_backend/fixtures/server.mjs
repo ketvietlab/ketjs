@@ -68,6 +68,26 @@ const seed = async () => {
     active: true,
   })
   await call('product.saveCategory', { id: 'workwear', name: 'Đồng phục vận hành' })
+  await call('product.saveAttribute', {
+    id: 'color',
+    name: 'Màu sắc',
+    sequence: 10,
+    displayType: 'pills',
+    createVariant: 'always',
+    active: true,
+  })
+  await call('product.saveAttributeValue', {
+    id: 'color-blue',
+    attributeId: 'color',
+    name: 'Xanh nghiệp vụ',
+    sequence: 10,
+  })
+  await call('product.saveAttributeValue', {
+    id: 'color-orange',
+    attributeId: 'color',
+    name: 'Cam cảnh báo',
+    sequence: 20,
+  })
 
   for (let index = 1; index <= 32; index += 1) {
     const suffix = String(index).padStart(2, '0')
