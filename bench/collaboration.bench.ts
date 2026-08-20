@@ -139,6 +139,11 @@ try {
       markers: ['record-workspace', 'journal-entry-create-form', 'journal-entry-collab'],
     },
     {
+      label: 'Accounting payments',
+      path: '/admin/payments?lang=vi',
+      markers: ['record-workspace', 'payment-register-form', 'payment-collab'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],

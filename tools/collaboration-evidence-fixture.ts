@@ -240,6 +240,32 @@ export async function collaborationEvidenceApp(
       debit: '0',
       credit: '1800000',
     })
+    await call('account.saveAccount', {
+      id: 'account-bank-collab',
+      code: '1121',
+      name: 'Tiền gửi ngân hàng',
+      accountType: 'asset_cash',
+    })
+    await call('account.saveJournal', {
+      id: 'account-bank-journal-collab',
+      name: 'Ngân hàng',
+      code: 'BNK',
+      type: 'bank',
+      defaultAccountId: 'account-bank-collab',
+    })
+    await call('account.registerPayment', {
+      id: 'payment-collab',
+      name: 'PAY/COLLAB/2026',
+      paymentType: 'inbound',
+      partnerType: 'customer',
+      partnerId: 'member-party',
+      journalId: 'account-bank-journal-collab',
+      destinationAccountId: 'account-receivable-collab',
+      amount: '1250000',
+      date: '2026-08-20T00:00:00.000Z',
+      memo: 'Khách hàng thanh toán một phần',
+      paymentReference: 'BANK/COLLAB/2026',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
