@@ -1,6 +1,11 @@
 import { asc, defineFn, desc, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
-import { CLEANING_TASK_PRIORITIES, CLEANING_TASK_STATES, CLEANING_TASK_TYPES } from './types.ts'
+import {
+  CLEANING_TASK_PRIORITIES,
+  CLEANING_TASK_STATES,
+  CLEANING_TASK_TYPES,
+  ROOM_STATUSES,
+} from './types.ts'
 
 type Issue = { field: string; code: string; messageKey: string }
 const issue = (field: string, code: string): Issue => ({
@@ -69,6 +74,25 @@ const taskDetailOutput = {
   stay: 'json?',
 }
 
+const housekeepingRoomOutput = {
+  id: 'id',
+  propertyId: 'id',
+  roomTypeId: 'id',
+  buildingId: 'id?',
+  floorId: 'id?',
+  code: 'text',
+  name: 'text',
+  capacity: 'int',
+  status: 'text',
+  note: 'text?',
+  active: 'bool',
+  property: 'json?',
+  roomType: 'json?',
+  building: 'json?',
+  floor: 'json?',
+  currentStay: 'json?',
+}
+
 export const housekeeping: Record<string, FnSpec> = {
   createCleaningTask: defineFn({
     input: {
@@ -87,33 +111,45 @@ export const housekeeping: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = await record(ctx, 'hospitality_core.CleaningTask', args.id)
-      if (existing) return success(existing.id, { state: existing.state })
-      const room = await record(ctx, 'hospitality_core.Room', args.roomId)
-      if (!room) return failure(issue('roomId', 'room_missing'))
       if (!includes(CLEANING_TASK_TYPES, args.taskType)) return failure(issue('taskType', 'cleaning_type'))
       const priority = args.priority ?? 'normal'
       if (!includes(CLEANING_TASK_PRIORITIES, priority))
         return failure(issue('priority', 'cleaning_priority'))
-      if (args.stayId) {
-        const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
-        if (!stay) return failure(issue('stayId', 'stay_missing'))
-        if (stay.propertyId !== room.propertyId) return failure(issue('stayId', 'property_mismatch'))
-      }
-      await ctx.db.insert('hospitality_core.CleaningTask', {
-        id: args.id,
-        code: args.code,
-        propertyId: room.propertyId,
-        roomId: room.id,
-        stayId: args.stayId,
-        taskType: args.taskType,
-        priority,
-        state: 'todo',
-        assigneeId: args.assigneeId,
-        requestedAt: args.requestedAt ?? new Date().toISOString(),
-        notes: args.notes,
+      return ctx.tx(async (tx) => {
+        const existing = await record(tx, 'hospitality_core.CleaningTask', args.id)
+        if (existing) return success(existing.id, { state: existing.state })
+        const room = await record(tx, 'hospitality_core.Room', args.roomId)
+        if (!room) return failure(issue('roomId', 'room_missing'))
+        const locked = await tx.db.compareAndSet(
+          'hospitality_core.Room',
+          { id: room.id },
+          { status: room.status },
+          { status: room.status },
+        )
+        if (!('matched' in locked) || !locked.matched) return failure(issue('roomId', 'transition_conflict'))
+        const outOfService = room.status === 'maintenance' || room.status === 'out_of_order'
+        if ((args.taskType === 'maintenance') !== outOfService)
+          return failure(issue('taskType', 'cleaning_room_status'))
+        if (args.stayId) {
+          const stay = await record(tx, 'hospitality_core.Stay', args.stayId)
+          if (!stay) return failure(issue('stayId', 'stay_missing'))
+          if (stay.propertyId !== room.propertyId) return failure(issue('stayId', 'property_mismatch'))
+        }
+        await tx.db.insert('hospitality_core.CleaningTask', {
+          id: args.id,
+          code: args.code,
+          propertyId: room.propertyId,
+          roomId: room.id,
+          stayId: args.stayId,
+          taskType: args.taskType,
+          priority,
+          state: 'todo',
+          assigneeId: args.assigneeId,
+          requestedAt: args.requestedAt ?? new Date().toISOString(),
+          notes: args.notes,
+        })
+        return success(args.id, { state: 'todo' })
       })
-      return success(args.id, { state: 'todo' })
     },
   }),
 
@@ -152,8 +188,65 @@ export const housekeeping: Record<string, FnSpec> = {
     },
   }),
 
+  getHousekeepingRoom: defineFn({
+    input: { id: 'id' },
+    output: housekeepingRoomOutput,
+    effects: [
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Stay',
+      'read:partner.Partner',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const R = ctx.table('hospitality_core.Room')
+      const room = await ctx.db.one(
+        from(R).where(eq(R.id, args.id)).preload('property', 'roomType', 'building', 'floor'),
+      )
+      if (!room) return null
+      const S = ctx.table('hospitality_core.Stay')
+      const currentStay = await ctx.db.one(
+        from(S).where(eq(S.currentRoomId, args.id), eq(S.state, 'checked_in')).preload('partner').limit(1),
+      )
+      return { ...room, currentStay }
+    },
+  }),
+
+  roomStatusSummary: defineFn({
+    input: { propertyId: 'id' },
+    output: {
+      available: 'int',
+      occupied: 'int',
+      dirty: 'int',
+      cleaning: 'int',
+      maintenance: 'int',
+      outOfOrder: 'int',
+    },
+    effects: ['read:hospitality_core.Room'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const R = ctx.table('hospitality_core.Room')
+      const grouped = await ctx.db.group(
+        from(R).where(eq(R.propertyId, args.propertyId), eq(R.active, true)).groupBy({ col: R.status }),
+      )
+      const counts = Object.fromEntries(ROOM_STATUSES.map((status) => [status, 0])) as Record<string, number>
+      for (const row of grouped) counts[String(row.key[0])] = row.count
+      return {
+        available: counts.available ?? 0,
+        occupied: counts.occupied ?? 0,
+        dirty: counts.dirty ?? 0,
+        cleaning: counts.cleaning ?? 0,
+        maintenance: counts.maintenance ?? 0,
+        outOfOrder: counts.out_of_order ?? 0,
+      }
+    },
+  }),
+
   listCleaningTasks: defineFn({
-    input: { propertyId: 'id?', state: 'text?', assigneeId: 'id?', limit: 'int?' },
+    input: { propertyId: 'id?', roomId: 'id?', state: 'text?', assigneeId: 'id?', limit: 'int?' },
     output: taskOutput,
     effects: ['read:hospitality_core.CleaningTask', 'read:hospitality_core.Room'],
     agent: true,
@@ -161,6 +254,7 @@ export const housekeeping: Record<string, FnSpec> = {
       const T = ctx.table('hospitality_core.CleaningTask')
       let query = from(T).preload('room')
       if (args.propertyId) query = query.where(eq(T.propertyId, args.propertyId))
+      if (args.roomId) query = query.where(eq(T.roomId, args.roomId))
       if (args.state) query = query.where(eq(T.state, args.state))
       if (args.assigneeId) query = query.where(eq(T.assigneeId, args.assigneeId))
       query =
