@@ -168,7 +168,20 @@ export function compose(
       if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
       if (def.scope === 'company+branch')
         fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (def.timestamps) {
+        fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
+        fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
+      }
       for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
+        if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
+          diag.add({
+            code: 'E_TIMESTAMP_FIELD_RESERVED',
+            module: m.name,
+            message: `${key}.${fname} is supplied by timestamps: true`,
+            hint: `remove the explicit field or disable timestamps`,
+          })
+          continue
+        }
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` })
@@ -218,7 +231,13 @@ export function compose(
         }
         indexes[indexName] = { fields: [...index.fields], unique: index.unique === true, by: m.name }
       }
-      manifest.models[key] = { owner: m.name, scope: def.scope, fields, indexes }
+      manifest.models[key] = {
+        owner: m.name,
+        scope: def.scope,
+        timestamps: def.timestamps === true,
+        fields,
+        indexes,
+      }
     }
   }
 

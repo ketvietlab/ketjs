@@ -84,7 +84,12 @@ export const ketsuite = defineApp({
   },
   serve: {
     openStore,
-    defaults: { sqliteFile: '.ket/ketsuite.db', defaultLocale: 'vi', fallbackLocale: 'vi' },
+    defaults: {
+      sqliteFile: '.ket/ketsuite.db',
+      defaultLocale: 'vi',
+      fallbackLocale: 'vi',
+      defaultTimezone: 'Asia/Ho_Chi_Minh',
+    },
     bootstrap: [
       'website',
       'theme_paper',

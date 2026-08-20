@@ -27,6 +27,7 @@ export type UserRow = {
   login: string
   name: string
   email?: string | null
+  timezone?: string | null
   partnerId?: string | null
   defaultCompanyId?: string | null
   defaultBranchId?: string | null
@@ -527,6 +528,32 @@ export const profileScreen = (
             code(row.login),
             badge(_(`user_backend.access.${row.accessKind}`), 'info'),
           ]),
+        }),
+      }),
+      section({
+        title: _('user_backend.profile.timezone'),
+        body: surface({
+          body: recordForm({
+            action: localized('/admin/profile/timezone', locale),
+            submit: _('user_backend.profile.saveTimezone'),
+            submitVariant: 'primary',
+            fields: [
+              {
+                name: 'timezone',
+                label: _('user_backend.profile.timezone'),
+                type: 'select',
+                value: row.timezone ?? '',
+                options: [
+                  { value: 'UTC', label: 'UTC' },
+                  { value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh' },
+                  { value: 'Asia/Singapore', label: 'Asia/Singapore' },
+                  { value: 'Europe/London', label: 'Europe/London' },
+                  { value: 'America/New_York', label: 'America/New_York' },
+                ],
+                required: true,
+              },
+            ],
+          }),
         }),
       }),
       section({

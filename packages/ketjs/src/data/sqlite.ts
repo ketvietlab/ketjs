@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { assertAdapter } from './adapter.ts'
 import type { Adapter, FieldBase, Row } from '../types.ts'
+import { dateBucket } from './time.ts'
 
 // Binding rules belong to the adapter, not to the layers above it: SQLite has no
 // boolean and no JSON, Postgres has both. Normalising here means every call path —
@@ -41,6 +42,9 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
     },
     async open() {
       db = new DatabaseSync(path)
+      db.function('ket_date_bucket', (value, interval, timezone) =>
+        dateBucket(value, String(interval) as Parameters<typeof dateBucket>[1], String(timezone)),
+      )
       db.exec('PRAGMA journal_mode = WAL')
       db.exec('PRAGMA foreign_keys = ON')
     },

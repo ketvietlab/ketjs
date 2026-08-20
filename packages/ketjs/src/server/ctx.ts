@@ -231,6 +231,15 @@ export function createContext(o: {
     }
     return out
   }
+
+  const timestamped = (model: string, row: Row, action: 'insert' | 'update'): Row => {
+    if (!manifest.models[model]?.timestamps) return row
+    const now = new Date().toISOString()
+    const clean = { ...row }
+    delete clean.createdAt
+    delete clean.updatedAt
+    return action === 'insert' ? { ...clean, createdAt: now, updatedAt: now } : { ...clean, updatedAt: now }
+  }
   // Placeholders are dialect-specific. The query builder already knew this; these
   // direct helpers did not, which is a bug only a second dialect could reveal.
   let n = 0
@@ -305,6 +314,23 @@ export function createContext(o: {
       const rows = await adapter.all(text, params)
       return Number((rows[0] as { count: number }).count)
     },
+    async group(q) {
+      if (q.kind !== 'group')
+        throw new KetError({ code: 'E_NOT_A_GROUP', message: 'db.group requires query.groupBy(...)' })
+      checkQuery(q)
+      const grouped = scoped(q)
+      const { text, params } = grouped.toSQL(dialect)
+      const rows = await adapter.all(text, params)
+      return rows.map((row) => {
+        const aggregates: Record<string, unknown> = {}
+        for (const aggregate of grouped.aggregates) aggregates[aggregate.as] = row[aggregate.as]
+        return {
+          key: grouped.groups.map((_, index) => row[`__group${index}`]),
+          count: Number(row.__count),
+          aggregates,
+        }
+      })
+    },
     async del(q) {
       // A select passed to del renders as a select and deletes nothing — and the
       // effect check sees 'read', so a function that correctly declared 'write'
@@ -371,7 +397,7 @@ export function createContext(o: {
           hint: `fields: ${known.join(', ')}`,
         })
       }
-      const stamped = encodeRow(model, stamp(model, row))
+      const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
       writes.push({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -393,7 +419,7 @@ export function createContext(o: {
           hint: `fields: ${known.join(', ')}`,
         })
       }
-      const stamped = encodeRow(model, stamp(model, row))
+      const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
       writes.push({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -415,7 +441,7 @@ export function createContext(o: {
           ? where
           : { ...where, companyId: requireCompany(model) },
       )
-      const patch2 = encodeRow(model, patch)
+      const patch2 = encodeRow(model, timestamped(model, patch, 'update'))
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
       fresh()

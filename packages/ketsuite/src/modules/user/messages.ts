@@ -39,6 +39,7 @@ export const messages = {
     'error.required': 'Trường này là bắt buộc.',
     'error.loginUnique': 'Tên đăng nhập đã được sử dụng.',
     'error.accessKind': 'Loại truy cập không hợp lệ.',
+    'error.timezone': 'Múi giờ phải là tên IANA hợp lệ.',
     'error.passwordLength': 'Mật khẩu phải có ít nhất 8 ký tự.',
     'error.adminPassword':
       'Quản trị viên không được đặt mật khẩu cho người dùng khác; hãy phát hành lời mời.',
@@ -95,6 +96,7 @@ export const messages = {
     'error.required': 'This field is required.',
     'error.loginUnique': 'That login is already in use.',
     'error.accessKind': 'The access kind is invalid.',
+    'error.timezone': 'Timezone must be a valid IANA name.',
     'error.passwordLength': 'The password must contain at least 8 characters.',
     'error.adminPassword':
       "An administrator cannot set another user's password; issue an invitation instead.",

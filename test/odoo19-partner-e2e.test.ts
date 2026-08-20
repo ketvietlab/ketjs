@@ -103,6 +103,11 @@ test('e2e partner 19: directory, defaults, roles and accounting bridge cross rea
     assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]/, path)
   }
 
+  const keptSearch = await (await e2e.client.get('/admin/partners?role=customer&archived=1&lang=en')).text()
+  assert.match(keptSearch, /name="role" value="customer"/)
+  assert.match(keptSearch, /name="archived" value="1"/)
+  assert.match(keptSearch, /name="lang" value="en"/)
+
   const english = await e2e.client.get('/admin/partners?lang=en', { headers: { accept: 'text/html' } })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Partner directory|Partners/)

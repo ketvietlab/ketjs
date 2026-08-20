@@ -118,6 +118,21 @@ const CHROME: ListChrome = {
     value: 'x',
     placeholder: 'Tìm',
     facets: [{ label: 'Tìm: x', without: '/admin/pages' }],
+    menus: [
+      {
+        id: 'filters',
+        label: 'Bộ lọc',
+        items: [{ id: 'active', label: 'Đang hoạt động', path: '?preset=active', active: true }],
+        customFilter: {
+          fields: [{ value: 'name', label: 'Tên' }],
+          operators: [{ value: 'contains', label: 'chứa' }],
+          fieldLabel: 'Trường',
+          operatorLabel: 'Điều kiện',
+          valueLabel: 'Giá trị',
+          applyLabel: 'Áp dụng',
+        },
+      },
+    ],
   },
   pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
   views: [
@@ -319,6 +334,18 @@ const componentContract = [
         label: 'Name',
         cell: (row) => row.name,
         sort: { href: '?sort=name', direction: 'asc', label: 'Sort by name' },
+      },
+    ],
+    groups: [
+      {
+        id: 'goods',
+        label: 'Goods',
+        count: 1,
+        depth: 0,
+        open: true,
+        href: '?open=goods',
+        rows: [{ id: 'r', name: 'Record' }],
+        pager: { label: '1-1 / 2', next: '?groupPage=goods:2' },
       },
     ],
   }),
