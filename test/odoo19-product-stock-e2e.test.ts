@@ -619,6 +619,93 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     true,
   )
 
+  const missingLotUpdate = await e2e.client.post(
+    '/admin/lots/missing-lot?lang=vi',
+    new URLSearchParams({ productId: 'p1', name: 'Không được tạo' }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(missingLotUpdate.status, 404)
+  assert.equal(
+    (await call<Row[]>('stock.listLots', {})).value.some((row) => row.id === 'missing-lot'),
+    false,
+  )
+
+  await call('stock.createLot', {
+    id: 'lot-http',
+    productId: 'p1',
+    name: 'LOT/HTTP/001',
+    ref: 'HTTP-REF',
+  })
+  const lotPage = await e2e.client.get('/admin/lots/lot-http?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const lotHtml = await lotPage.text()
+  assert.match(lotHtml, /data-ui="record-workspace"/)
+  assert.match(lotHtml, /id="lot-detail-form"/)
+  assert.match(lotHtml, /data-scope="stock-lot"/)
+  assert.match(lotHtml, /data-island="mail\.chatter"/)
+  assert.match(lotHtml, /data-island="activity\.record"/)
+  assert.match(lotHtml, /Lô \/ Sê-ri/)
+  await e2e.client.form<string>('/admin/lots/lot-http?lang=vi', {
+    productId: 'p1',
+    name: 'LOT/HTTP/001',
+    ref: 'HTTP-REF-UPDATED',
+    note: 'Cập nhật qua HTTP.',
+  })
+  assert.equal(
+    String((await call<Row[]>('stock.listLots', {})).value.find((row) => row.id === 'lot-http')?.ref),
+    'HTTP-REF-UPDATED',
+  )
+  await call('stock.saveLot', {
+    id: 'lot-http',
+    productId: 'p1',
+    name: 'LOT/HTTP/001',
+    ref: 'HTTP-REF-UPDATED',
+    note: 'Lô đã lưu trữ.',
+    active: false,
+  })
+  const archivedLotPage = await e2e.client.get('/admin/lots/lot-http?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const archivedLotHtml = await archivedLotPage.text()
+  assert.match(archivedLotHtml, /Đã lưu trữ/)
+  assert.match(archivedLotHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/lots/lot-http?lang=vi', {
+    productId: 'p1',
+    name: 'LOT/HTTP/001',
+    ref: 'HTTP-REF-ARCHIVED',
+    note: 'Cập nhật nhưng vẫn lưu trữ.',
+  })
+  const archivedLot = (await call<Row[]>('stock.listLots', {})).value.find((row) => row.id === 'lot-http')
+  assert.equal(archivedLot?.active, false)
+  assert.equal(archivedLot?.ref, 'HTTP-REF-ARCHIVED')
+
+  await call('product.saveVariant', {
+    id: 'p2',
+    templateId: 'tpl',
+    defaultCode: 'AO-ALT',
+    combinationKey: 'alternate',
+  })
+  await call('stock.adjustInventory', {
+    id: 'lot-guard-adjustment',
+    productId: 'p1',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory',
+    countedQuantity: '1',
+    lotId: 'lot-http',
+    productUomId: 'unit',
+  })
+  assert.equal(
+    (
+      await call<Row>('stock.saveLot', {
+        id: 'lot-http',
+        productId: 'p2',
+        name: 'LOT/HTTP/001',
+      })
+    ).value.ok,
+    false,
+  )
+
   for (const path of ['/admin/inventory', '/admin/transfers/pick1', '/admin/forecast']) {
     const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
     assert.equal(page.status, 200, path)
