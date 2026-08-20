@@ -1269,6 +1269,13 @@
     color: var(--admin-danger);
   }
 
+  [data-ui="qr-code"] {
+    display: block;
+    max-inline-size: 100%;
+    block-size: auto;
+    image-rendering: pixelated;
+  }
+
   /* ── People ────────────────────────────────────────────────────────────────
      Initials, not a photograph: nothing stores one yet, and a broken image in
      every row is worse than no image. This stays as the fallback either way. */

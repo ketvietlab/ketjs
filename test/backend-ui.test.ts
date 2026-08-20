@@ -40,6 +40,7 @@ import {
   notice,
   pagesScreen,
   person,
+  qrCode,
   recordList,
   recordActions,
   recordForm,
@@ -144,6 +145,7 @@ const CHROME: ListChrome = {
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
 const componentContract = [
+  qrCode([[true]], 'QR code'),
   actionGroup({
     label: 'Actions',
     actions: [
