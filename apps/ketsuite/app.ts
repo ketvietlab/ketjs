@@ -70,6 +70,8 @@ export const ketsuite = defineApp({
     suite.stockLotActivityBackend,
     suite.stockMailInbound,
     suite.accountBackend,
+    suite.accountMailBackend,
+    suite.accountActivityBackend,
     suite.purchaseBackend,
     suite.saleBackend,
     suite.saleMailBackend,
