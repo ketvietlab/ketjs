@@ -701,7 +701,7 @@ export const cataloguePage = (_: Translator): TemplateResult => {
     <nav data-ui="catalogue-nav">${each(
       CASES,
       (c) => c.id,
-      (c) => html`<a href="#${c.id}">${c.label}</a>`,
+      (c) => html`<a href=${`#${c.id}`}>${c.label}</a>`,
     )}</nav>
     ${each(
       CASES,

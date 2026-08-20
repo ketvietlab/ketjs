@@ -434,6 +434,14 @@ test('design tokens: status surfaces stay fixed across light and dark themes', (
   }
 })
 
+test('design density: desktop controls share the 28px operational height', () => {
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+})
+
 test('form: required, help and error states are visible and semantically connected', () => {
   const html = renderToString(
     recordForm({
@@ -626,6 +634,9 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
   }
   const html = renderToString(cataloguePage(_))
   assert.equal([...html.matchAll(/data-ui="catalogue-case"/g)].length, CASES.length)
+  for (const entry of CASES) {
+    assert.match(html, new RegExp(`href="#${entry.id}"`))
+  }
   assert.ok(
     CASES.every((c) => c.note.length > 10),
     'every case says what it is testing',

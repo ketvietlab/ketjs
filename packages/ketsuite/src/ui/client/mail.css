@@ -1,11 +1,12 @@
 @layer components {
   [data-ui="chatter"] {
     display: grid;
-    gap: var(--admin-gap-md);
+    min-inline-size: 0;
+    gap: var(--admin-gap-sm);
     max-inline-size: 52rem;
-    padding: var(--admin-gap-lg);
+    padding: var(--admin-gap-md);
     border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-lg);
+    border-radius: var(--admin-radius);
     background: var(--admin-surface);
     box-shadow: var(--admin-shadow-card);
   }
@@ -21,7 +22,7 @@
 
   [data-ui="chatter-title"] {
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.875rem;
   }
 
   [data-ui="chatter-heading"],
@@ -49,7 +50,7 @@
   [data-ui="chatter-composer"] {
     display: grid;
     gap: var(--admin-gap-sm);
-    padding: var(--admin-gap-md);
+    padding: var(--admin-gap);
     border-radius: var(--admin-radius);
     background: var(--admin-surface-subtle);
   }
@@ -70,14 +71,15 @@
   }
 
   [data-ui="chatter-body"] {
-    min-block-size: 6rem;
+    min-block-size: 5rem;
     resize: vertical;
-    padding: 0.75rem;
+    padding: 0.5rem;
     border: 1px solid var(--admin-line-strong);
     border-radius: var(--admin-radius-sm);
     background: var(--admin-surface);
     color: var(--admin-ink);
     font: inherit;
+    font-size: 0.8125rem;
   }
 
   [data-ui="chatter-timeline"] {
@@ -86,7 +88,7 @@
   }
 
   [data-ui="chatter-message"] {
-    padding: var(--admin-gap-md);
+    padding: var(--admin-gap);
     border-inline-start: 3px solid var(--admin-accent);
     border-radius: 0 var(--admin-radius-sm) var(--admin-radius-sm) 0;
     background: var(--admin-surface-subtle);
@@ -104,7 +106,7 @@
 
   [data-ui="chatter-message-body"] {
     margin: var(--admin-gap-xs) 0 0;
-    line-height: 1.55;
+    line-height: 1.45;
     white-space: pre-wrap;
   }
 
@@ -159,8 +161,8 @@
 
   [data-ui="mail-indicator"] {
     display: inline-flex;
-    min-inline-size: 3.25rem;
-    block-size: 2rem;
+    min-inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
     order: 1;
     align-items: center;
     justify-content: center;
@@ -184,8 +186,8 @@
   }
 
   [data-ui="mail-indicator-icon"] {
-    inline-size: 1rem;
-    block-size: 1rem;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
     flex: 0 0 auto;
   }
 
@@ -197,5 +199,12 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
     text-align: center;
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="mail-indicator"] {
+      min-inline-size: 2.75rem;
+      block-size: 2.75rem;
+    }
   }
 }

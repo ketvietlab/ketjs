@@ -10,11 +10,12 @@ Các thông số đã chốt:
 
 | Vai trò | Giá trị |
 |---|---:|
-| Sidebar desktop | `228px` |
-| Topbar desktop | `52px` |
-| Data row | `44px` |
-| Control compact desktop | `32px` |
-| Touch target mobile | `44px` |
+| Sidebar desktop | `224px` |
+| Topbar desktop | `44px` |
+| Data row | `36px` |
+| Control desktop | `28px` |
+| Icon trong control | `14px` |
+| Touch target action mobile | `44px` |
 | Body / compact UI | `14px` / `13px` |
 | Breakpoint mobile shell | `< 768px` |
 
@@ -337,16 +338,18 @@ Mỗi cụm quyết định chỉ có **một primary**. `recordForm` bắt bu�
 | `destructive` | huỷ nghiệp vụ hoặc xoá dữ liệu |
 
 Các form liên quan đặt trong `formCluster`, là block flow hợp lệ; không đặt `<form>`
-trong `inline`/phrasing content. Ở desktop, input và nút liền kề dùng
-`layout: 'inline'`, chung baseline và chỉ wrap theo **cả cụm** khi không đủ chỗ. Mọi
-`form-control`, kể cả `date`/`datetime-local`, có `inline-size: 100%` và
-`min-inline-size: 0` để native picker không tự nới grid. Mobile xếp mỗi form thành một
-hàng và giữ touch target `44px`.
+trong `inline`/phrasing content. Form bản ghi desktop dùng nhịp **label | control** trên
+cùng một hàng: label nằm trong rail hẹp, control chiếm phần còn lại; helper và lỗi bám
+theo cột control. Input và nút liền kề dùng `layout: 'inline'`, chung baseline và chỉ
+wrap theo **cả cụm** khi không đủ chỗ. Mọi `form-control`, kể cả
+`date`/`datetime-local`, có `inline-size: 100%`, `min-inline-size: 0` và chiều cao
+`28px` để native picker không tự nới grid. Mobile hẹp xếp label trên control; action
+giữ touch target `44px`.
 
 `mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
 sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
-chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide với hit area `40px`, tooltip
-và accessible label; mobile tăng lên `44px` theo quality gate.
+chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `28px`,
+tooltip và accessible label; mobile tăng vùng bấm lên `44px` theo quality gate.
 
 Status surface (`neutral`, `info`, `positive`, `warning`, `danger`) giữ surface sáng và
 màu chữ cố định ở cả light/dark như KétViệt Design System. Chỉ canvas, surface, border,
