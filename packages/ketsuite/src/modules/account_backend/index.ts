@@ -3,7 +3,7 @@ import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage, badge, code, formatMoney } from '../../ui/index.ts'
+import { backendPage, code, formatMoney } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -26,6 +26,7 @@ import {
 } from './screens.ts'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
+import { paymentsScreen } from './payments-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -635,7 +636,7 @@ export default defineModule({
               },
               {
                 name: 'amount',
-                label: tr('account_backend.field.amount'),
+                label: tr('account_backend.field.paymentAmount'),
                 type: 'decimal',
                 value: 0,
                 required: true,
@@ -923,18 +924,19 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/payments',
+            `/admin/payments${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listPayments', {}, url, req)) as AnyRow[]
         return document(ctx, url, req, 'account_backend.payments.title', (_, tr, shell) =>
-          entityScreen(tr, {
-            title: tr('account_backend.payments.title'),
+          paymentsScreen(tr, {
             frame: shell,
-            action: '/admin/payments',
-            submit: tr('account_backend.action.registerPayment'),
+            action: `/admin/payments${localeSuffix(url)}`,
             rows,
+            openItems: openItems.length,
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
             fields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               {
@@ -992,31 +994,6 @@ export default defineModule({
                     label: `${String((line.move as AnyRow)?.name ?? line.moveId)} · ${String(line.accountId)} · ${formatMoney(tr, line.amountResidual, (line.move as AnyRow)?.currency)}`,
                   })),
                 ],
-              },
-            ],
-            columns: [
-              {
-                key: 'name',
-                label: tr('account_backend.field.name'),
-                cell: (row) => String(row.name),
-                priority: 'primary',
-              },
-              {
-                key: 'type',
-                label: tr('account_backend.field.paymentType'),
-                cell: (row) => labelOf(tr, 'paymentType', row.paymentType),
-              },
-              {
-                key: 'amount',
-                label: tr('account_backend.field.amount'),
-                cell: (row) => formatMoney(tr, row.amount, row.currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'state',
-                label: tr('account_backend.field.state'),
-                cell: (row) => badge(labelOf(tr, 'paymentStatus', row.state), 'neutral', String(row.state)),
               },
             ],
           }),
@@ -1285,6 +1262,18 @@ const vi: Record<string, string> = {
   'vendorBill.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải trả.',
   'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'payments.title': 'Thanh toán',
+  'payment.kicker': 'Ngân hàng và tiền mặt',
+  'payment.subtitle': 'Ghi nhận tiền thu, tiền chi và đối soát công nợ mở.',
+  'payment.summary.total': 'Tổng thanh toán',
+  'payment.summary.inbound': 'Tiền thu',
+  'payment.summary.outbound': 'Tiền chi',
+  'payment.summary.open': 'Khoản mở',
+  'payment.create.title': 'Ghi nhận thanh toán',
+  'payment.create.hint': 'Chọn luồng tiền, đối tác, sổ tiền và tài khoản công nợ phù hợp.',
+  'payment.list.title': 'Thanh toán đã ghi nhận',
+  'payment.list.hint': 'Theo dõi chiều thanh toán, giá trị và trạng thái ghi sổ.',
+  'payment.empty': 'Chưa có thanh toán',
+  'payment.emptyHint': 'Ghi nhận khoản thu hoặc chi đầu tiên để bắt đầu theo dõi dòng tiền.',
   'trialBalance.title': 'Bảng cân đối thử',
   'generalLedger.title': 'Sổ cái',
   'partnerStatement.title': 'Sổ đối tác',
@@ -1314,6 +1303,7 @@ const vi: Record<string, string> = {
   'field.taxScope': 'Phạm vi hàng hoá',
   'field.amountType': 'Cách tính thuế',
   'field.amount': 'Số tiền / tỷ lệ',
+  'field.paymentAmount': 'Số tiền',
   'field.priceInclude': 'Đã gồm trong giá',
   'field.includeBaseAmount': 'Cộng vào cơ sở tính thuế',
   'field.note': 'Ghi chú',
@@ -1422,6 +1412,18 @@ const en: Record<string, string> = {
   'vendorBill.emptyHint': 'Create the first bill to start tracking accounts payable.',
   'error.invalid': 'The form is invalid. Check required fields and try again.',
   'payments.title': 'Payments',
+  'payment.kicker': 'Bank and cash',
+  'payment.subtitle': 'Record receipts, disbursements, and reconciliation against open items.',
+  'payment.summary.total': 'Total payments',
+  'payment.summary.inbound': 'Receipts',
+  'payment.summary.outbound': 'Disbursements',
+  'payment.summary.open': 'Open items',
+  'payment.create.title': 'Register a payment',
+  'payment.create.hint': 'Choose the cash direction, partner, liquidity journal, and matching account.',
+  'payment.list.title': 'Recorded payments',
+  'payment.list.hint': 'Review payment direction, value, and posting status.',
+  'payment.empty': 'No payments yet',
+  'payment.emptyHint': 'Register the first receipt or disbursement to start tracking cash flow.',
   'trialBalance.title': 'Trial balance',
   'generalLedger.title': 'General ledger',
   'partnerStatement.title': 'Partner ledger',
@@ -1451,6 +1453,7 @@ const en: Record<string, string> = {
   'field.taxScope': 'Tax scope',
   'field.amountType': 'Tax computation',
   'field.amount': 'Amount / rate',
+  'field.paymentAmount': 'Amount',
   'field.priceInclude': 'Included in price',
   'field.includeBaseAmount': 'Affects tax base',
   'field.note': 'Note',
