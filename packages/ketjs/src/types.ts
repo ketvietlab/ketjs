@@ -131,6 +131,20 @@ export type FnSpec = {
    * whatever a public storefront reads.
    */
   anonymous?: boolean
+  /**
+   * Whether the generic `/_ket/fn/*` transport may call this function.
+   *
+   * `internal` functions remain callable by trusted application/module routes and
+   * in-process code, but they are absent from the public HTTP and agent surfaces.
+   * Authentication checks and one-time credential issuance belong here: their
+   * route owns rate limiting, origin checks and response shaping.
+   */
+  exposure?: 'http' | 'internal'
+  /**
+   * Allow the one-shot `ket provision` command to invoke this internal function.
+   * Provisioning is opt-in and never makes a function HTTP- or agent-callable.
+   */
+  provision?: boolean
   input?: Record<string, string>
   output?: Record<string, string>
   effects?: string[]
@@ -150,6 +164,8 @@ export type FnSpec = {
 export type FnMeta = {
   by: string
   anonymous: boolean
+  exposure: 'http' | 'internal'
+  provision: boolean
   input: Record<string, string>
   output: Record<string, string>
   effects: string[]
@@ -406,7 +422,10 @@ export type Scope = {
    */
   companies?: string[] | null
 
-  /** Null means every branch of the company — ordinary, not privileged. */
+  /** The branch a new company+branch row is stamped with. */
+  branch?: string | null
+
+  /** Branches this request may read. Null means every branch of its companies. */
   branches?: string[] | null
 }
 

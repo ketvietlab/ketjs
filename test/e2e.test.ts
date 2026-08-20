@@ -197,6 +197,7 @@ test('e2e: the server resolves the company, so two of them see different rows on
     // The one place a request's identity is decided — a header here, a session later.
     resolveScope: (_url, req) => ({
       company: (req.headers['x-ket-company'] as string | undefined) ?? null,
+      branch: 'main',
       branches: null,
     }),
   })
