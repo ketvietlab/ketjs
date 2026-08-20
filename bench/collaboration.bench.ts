@@ -19,6 +19,11 @@ try {
       markers: ['mail.chatter', 'activity.record'],
     },
     {
+      label: 'Product variant',
+      path: '/admin/products/tpl-collab/variants/variant-collab?lang=vi',
+      markers: ['mail.chatter', 'activity.record', 'product-variant-form'],
+    },
+    {
       label: 'Transfer collaboration',
       path: '/admin/transfers/pick-collab?lang=vi',
       markers: ['mail.chatter', 'activity.record'],

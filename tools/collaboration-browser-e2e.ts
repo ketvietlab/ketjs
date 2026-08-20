@@ -234,6 +234,11 @@ try {
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="failed"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
+      name: 'product-variant-chatter',
+      path: '/admin/products/tpl-collab/variants/variant-collab?tab=general&lang=vi',
+      ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
+    },
+    {
       name: 'transfer-chatter',
       path: '/admin/transfers/pick-collab?lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
@@ -552,6 +557,80 @@ try {
       await waitFor(
         cdp,
         `[...document.querySelectorAll('[data-ui="activity-item"][data-state="done"]')].some((item) => item.textContent.includes('Hoạt động từ Browser E2E'))`,
+      )
+    }
+    if (screen.name === 'product-variant-chatter') {
+      const generalPadding = await evaluate(
+        cdp,
+        `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`,
+      )
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/products/tpl-collab/variants/variant-collab?tab=media&lang=vi`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="tab"][data-active="true"]')?.textContent.includes('Hình ảnh')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`),
+        generalPadding,
+      )
+      await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+      await waitFor(cdp, `document.querySelector('form[data-scope="product-variant"]')`)
+      await waitFor(
+        cdp,
+        `document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            editorIdle: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true,
+            controllerCollapsed: document.querySelector('[data-ui="record-controller"]').getBoundingClientRect().height === 0,
+            tabs: document.querySelectorAll('[data-ui="record-navigation"] [data-ui="tab"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="record-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          editorIdle: true,
+          controllerCollapsed: true,
+          tabs: 2,
+          gridRowsAtLeast28: true,
+          collaborationNarrower: true,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          globalThis.__variantSaveNodes = {
+            chatter: document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: document.querySelector('[data-ui="sidebar-foot"]')
+          }
+          document.querySelector('form[data-scope="product-variant"]').requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__variantSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__variantSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__variantSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            formReady: Boolean(document.querySelector('form[data-scope="product-variant"]:not([aria-busy="true"])')),
+            editorVisible: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === false
+          })`,
+        ),
+        { chatter: true, activity: true, sidebar: true, formReady: true, editorVisible: true },
       )
     }
     if (screen.name === 'transfer-chatter') {
