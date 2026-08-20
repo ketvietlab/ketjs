@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { page, text } from 'ketjs'
+import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
+import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   branchFormScreen,
@@ -28,6 +29,7 @@ const inLocale = (url: URL, path: string): string => {
 }
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
+  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
   menuFilter: url.searchParams.get('menu')?.trim() || null,
@@ -43,15 +45,7 @@ const document = async (
   req: Req,
   title: string,
   body: Parameters<ServeContext['document']>[0]['body'],
-) =>
-  page({
-    body: ctx.document({
-      lang: ctx.localeOf(url, req),
-      title,
-      head: await ctx.styles(req),
-      body,
-    }),
-  })
+) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
