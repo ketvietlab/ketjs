@@ -83,6 +83,13 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     name: 'Phòng 102',
   })
   await seed('hospitality_core.saveRoom', {
+    id: '103',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    code: '103',
+    name: 'Phòng 103',
+  })
+  await seed('hospitality_core.saveRoom', {
     id: 'archived-room',
     propertyId: 'hotel',
     roomTypeId: 'deluxe',
@@ -635,6 +642,61 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(createdTaskHtml, /Đã tạo công việc buồng phòng/)
   assert.match(createdTaskHtml, /HK-MANUAL-001/)
   assert.doesNotMatch(createdTaskHtml, /hospitality_core\./)
+
+  const roomBoard = await e2e.client.get('/admin/hospitality/housekeeping/rooms?lang=vi&property=hotel')
+  const roomBoardHtml = await roomBoard.text()
+  assert.equal(roomBoard.status, 200, roomBoardHtml)
+  assert.match(roomBoardHtml, /Bảng trạng thái phòng/)
+  assert.match(roomBoardHtml, /Phòng 103/)
+  assert.doesNotMatch(roomBoardHtml, /Phòng đã lưu trữ/)
+  assert.doesNotMatch(roomBoardHtml, /hospitality_core\./)
+
+  const roomPath = '/admin/hospitality/housekeeping/rooms/103'
+  const roomDetail = await e2e.client.get(`${roomPath}?lang=en`)
+  const roomDetailHtml = await roomDetail.text()
+  assert.equal(roomDetail.status, 200, roomDetailHtml)
+  assert.match(roomDetailHtml, /Room 103/)
+  assert.match(roomDetailHtml, /Take room out of service/)
+  assert.doesNotMatch(roomDetailHtml, /hospitality_core\./)
+
+  const maintainedRoom = await e2e.client.post(
+    `${roomPath}?lang=en`,
+    new URLSearchParams({
+      operation: 'set-status',
+      lang: 'en',
+      expectedStatus: 'available',
+      status: 'maintenance',
+      note: 'Air-conditioning inspection.',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(maintainedRoom.status, 303, await maintainedRoom.clone().text())
+  assert.match(maintainedRoom.headers.get('location') ?? '', /status=updated/)
+  const maintainedPage = await e2e.client.get(maintainedRoom.headers.get('location')!)
+  const maintainedHtml = await maintainedPage.text()
+  assert.match(maintainedHtml, /Room status updated/)
+  assert.match(maintainedHtml, /Air-conditioning inspection/)
+  assert.match(maintainedHtml, /Return room to housekeeping/)
+
+  const releasedRoom = await e2e.client.post(
+    `${roomPath}?lang=vi`,
+    new URLSearchParams({
+      operation: 'set-status',
+      lang: 'vi',
+      expectedStatus: 'maintenance',
+      status: 'dirty',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(releasedRoom.status, 303, await releasedRoom.clone().text())
+  const releasedPage = await e2e.client.get(releasedRoom.headers.get('location')!)
+  const releasedHtml = await releasedPage.text()
+  assert.match(releasedHtml, /Đã cập nhật trạng thái phòng/)
+  assert.match(releasedHtml, /Chưa vệ sinh/)
+  const preselectedQueue = await e2e.client.get(
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103',
+  )
+  assert.match(await preselectedQueue.text(), /<option(?=[^>]*value="103")(?=[^>]*selected)[^>]*>/)
 
   for (const [path, title] of [
     ['/admin/hospitality/housekeeping?lang=vi', 'Việc dọn phòng'],

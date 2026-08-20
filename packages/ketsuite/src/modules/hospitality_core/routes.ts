@@ -13,6 +13,7 @@ import {
   folioDetailScreen,
   foliosScreen,
   frontDeskScreen,
+  housekeepingRoomDetailScreen,
   housekeepingRoomsScreen,
   policiesScreen,
   propertiesScreen,
@@ -44,6 +45,7 @@ import type {
   ReservationQuote,
   ReservationIntakeValues,
   RoomRow,
+  RoomStatusSummary,
   RoomTypeRow,
   StayRow,
   TapeChart,
@@ -57,7 +59,7 @@ import type {
   StayNoticeRow,
 } from './screens.ts'
 import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
-import { CLEANING_TASK_STATES, STAY_NOTICE_STATES } from './types.ts'
+import { CLEANING_TASK_STATES, ROOM_STATUSES, STAY_NOTICE_STATES } from './types.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -258,6 +260,42 @@ const renderCleaningTaskDetail = async (
     cleaningTaskDetailScreen(
       _,
       task,
+      lang,
+      timezone,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
+const renderHousekeepingRoomDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+) => {
+  const room = (await ctx.call('hospitality_core.getHousekeepingRoom', { id }, url, req)) as RoomRow | null
+  if (room?.active !== true) return text('Not found', { status: 404 })
+  const tasks = (await ctx.call(
+    'hospitality_core.listCleaningTasks',
+    { roomId: id, limit: 20 },
+    url,
+    req,
+  )) as CleaningTaskRow[]
+  const timezone = await propertyTimezone(ctx, room.propertyId, url, req)
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.housekeeping.rooms.detail.title', { code: room.code }),
+    housekeepingRoomDetailScreen(
+      _,
+      room,
+      tasks,
       lang,
       timezone,
       await frame(ctx, url, req),
@@ -1388,6 +1426,9 @@ export const routes: Record<string, RouteEntry> = {
             summary,
             id: taskId,
             code: `HK-${taskId.slice(0, 12).toUpperCase()}`,
+            selectedRoomId: rooms.some((room) => room.id === url.searchParams.get('room'))
+              ? url.searchParams.get('room')!
+              : undefined,
           },
           lang,
           timezone,
@@ -1442,17 +1483,67 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/housekeeping/rooms':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const propertyId = await selectedProperty(ctx, url, req)
-      const rows = (await ctx.call('hospitality_core.listRooms', { propertyId }, url, req)) as RoomRow[]
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const requestedState = url.searchParams.get('state')?.trim()
+      const state = ROOM_STATUSES.includes(requestedState as (typeof ROOM_STATUSES)[number])
+        ? requestedState!
+        : 'all'
+      const [rows, summary] = propertyId
+        ? ((await Promise.all([
+            ctx.call(
+              'hospitality_core.listRooms',
+              { propertyId, status: state === 'all' ? undefined : state, limit: 500 },
+              url,
+              req,
+            ),
+            ctx.call('hospitality_core.roomStatusSummary', { propertyId }, url, req),
+          ])) as [RoomRow[], RoomStatusSummary])
+        : [[], { available: 0, occupied: 0, dirty: 0, cleaning: 0, maintenance: 0, outOfOrder: 0 }]
       return document(
         ctx,
         url,
         req,
         _('hospitality_core.screen.housekeepingRooms.title'),
-        housekeepingRoomsScreen(_, rows, await frame(ctx, url, req)),
+        housekeepingRoomsScreen(
+          _,
+          { rows, properties, propertyId, state, summary },
+          lang,
+          await frame(ctx, url, req),
+        ),
       )
+    },
+
+  '/admin/hospitality/housekeeping/rooms/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderHousekeepingRoomDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      if (form.operation !== 'set-status') return text('unknown action', { status: 400 })
+      const result = (await ctx.call(
+        'hospitality_core.setRoomStatus',
+        {
+          id: params.id,
+          expectedStatus: form.expectedStatus?.trim() || undefined,
+          status: form.status?.trim() || '',
+          note: form.note?.trim() || undefined,
+        },
+        url,
+        req,
+      )) as OperationResult
+      if (!result.ok)
+        return renderHousekeepingRoomDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams({ status: 'updated' })
+      const lang = url.searchParams.get('lang')?.trim() || form.lang?.trim()
+      if (lang) query.set('lang', lang)
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/content':
