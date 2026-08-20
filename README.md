@@ -2,6 +2,11 @@
 
 A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
 
+> [!WARNING]
+> **Ket is under active development. It has not been released and is not stable.**
+> APIs, data formats, CLI behavior, and deployment assumptions may change without
+> notice. Do not use Ket for production workloads yet.
+
 A zero-dependency fullstack framework for Node, built on five pillars:
 
 1. **Lego** — modules compose through extension points the base module *publishes*, not through arbitrary patching
