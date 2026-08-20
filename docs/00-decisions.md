@@ -1404,9 +1404,11 @@ build step and a supply chain between this repo and twelve strings. `audit:zero-
 is not a slogan to work around; it is the reason a Ket app is one `node` away from
 running.
 
-`MenuDef.icon` therefore became a *name*, not a glyph. The theme decides what a name
-draws, and a name this build does not carry falls back to a monogram — a module
-naming an icon we never vendored loses its icon, not its row.
+`MenuDef.icon` therefore became a *name*, not a glyph. Every entry may name one: the
+declaring module owns the semantic choice and the theme owns the drawing. An app
+name this build does not carry falls back to a monogram; a nested entry falls back
+to the existing dot. A module naming an icon we never vendored loses its icon, not
+its row.
 
 **A glyph with no size is the size of its container,** which the search icon
 demonstrated at about 300px tall. `[data-ui="icon"]` now defaults to `1em`, and the

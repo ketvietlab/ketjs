@@ -90,9 +90,9 @@ export type MenuDef = {
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**
-   * For an app: the glyph shown beside it, by name. The theme decides what a
-   * name draws and what an unknown one falls back to — a module naming an icon
-   * this build does not carry loses its icon, not its row.
+   * The glyph shown beside this entry, by semantic name. The declaring module
+   * owns the choice; the theme owns the drawing and fallback. An unknown name
+   * loses its glyph, not its row.
    */
   icon?: string
 }

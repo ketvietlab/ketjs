@@ -265,6 +265,15 @@
     color: var(--admin-ink-secondary);
   }
 
+  [data-ui="menu-icon"] {
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--admin-ink-secondary);
+  }
+
   [data-ui="app-entry"][data-active="true"] [data-ui="app-icon"] {
     color: var(--admin-focus-border);
   }
@@ -295,6 +304,7 @@
   }
 
   [data-ui="app-icon"] > [data-ui="icon"],
+  [data-ui="menu-icon"] > [data-ui="icon"],
   [data-ui="sidebar-brand-chevron"] > [data-ui="icon"],
   [data-ui="sidebar-search-icon"] > [data-ui="icon"],
   [data-ui="menu-section-chevron"] > [data-ui="icon"],
@@ -404,6 +414,10 @@
 
   [data-ui="menu-item"][data-active="true"] [data-ui="menu-dot"] {
     background: var(--admin-focus-border);
+  }
+
+  [data-ui="menu-item"][data-active="true"] [data-ui="menu-icon"] {
+    color: var(--admin-focus-border);
   }
 
   /* ── List chrome ───────────────────────────────────────────────────────────
