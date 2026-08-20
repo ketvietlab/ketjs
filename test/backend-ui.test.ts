@@ -8,6 +8,7 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
+  attachmentPanel,
   activityContractCases,
   calendarContractCases,
   appsScreen,
@@ -36,14 +37,15 @@ import {
   loadingState,
   mailContractCases,
   metric,
+  modalSheet,
   mediaPanel,
   notice,
   pagesScreen,
   person,
-  qrCode,
   recordList,
   recordActions,
   recordForm,
+  qrCode,
   recordToggle,
   recordWorkspace,
   scheduleBoard,
@@ -182,6 +184,12 @@ const componentContract = [
     body: surface({ body: 'Product form', padding: 'compact' }),
     aside: surface({ body: 'Collaboration', padding: 'compact' }),
     asideLabel: 'Collaboration',
+  }),
+  modalSheet({
+    title: 'Follow-up',
+    closeHref: '/admin/crm/followups',
+    closeLabel: 'Close',
+    body: surface({ body: 'Follow-up workspace', padding: 'compact' }),
   }),
   stack([
     notice({
@@ -367,6 +375,22 @@ const componentContract = [
         state: 'checked_in',
       },
     ],
+  }),
+  attachmentPanel({
+    items: [
+      {
+        id: 'attachment',
+        name: 'customer-note.pdf',
+        href: '/files/attachment',
+        size: 1024,
+        mimetype: 'application/pdf',
+      },
+    ],
+    uploadAction: '/records/r/attachments',
+    emptyTitle: 'No attachments',
+    emptyHint: 'Upload a supporting file.',
+    chooseLabel: 'Choose file',
+    uploadLabel: 'Upload',
   }),
 ]
 
