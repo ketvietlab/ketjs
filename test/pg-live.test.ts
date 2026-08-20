@@ -33,6 +33,7 @@ import {
   inventory,
   partner,
   product,
+  purchase,
   stock,
   uom,
 } from 'ketsuite'
@@ -562,6 +563,54 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
     assert.deepEqual(
       posted.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `MISC/2026/${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test('live pg: concurrent RFQs assign one gapless purchase sequence', live, async () => {
+  await withPg(async (a) => {
+    const purchaseModules = [partner, company, uom, product, stock, account, purchase]
+    const purchaseManifest = compose(purchaseModules, { headless: true })
+    const purchaseSchema = schemaFromManifest(purchaseManifest)
+    for (const tableName of Object.keys(purchaseSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, purchaseSchema), a)) await a.exec(sql)
+    registerFunctions(purchaseModules)
+    const options = { adapter: a, manifest: purchaseManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
+    await callFn('partner.savePartner', { id: 'vendor', kind: 'company', name: 'Vendor' }, options)
+    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+    await callFn('stock.saveLocation', { id: 'supplier', name: 'Vendors', usage: 'supplier' }, options)
+    await callFn('stock.saveLocation', { id: 'stock', name: 'Stock', usage: 'internal' }, options)
+    await callFn(
+      'stock.savePickingType',
+      {
+        id: 'incoming',
+        name: 'Receipts',
+        code: 'incoming',
+        defaultLocationSrcId: 'supplier',
+        defaultLocationDestId: 'stock',
+      },
+      options,
+    )
+
+    const created = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        callFn(
+          'purchase.createOrder',
+          {
+            id: `po-${index + 1}`,
+            partnerId: 'vendor',
+            partnerRef: `V-${index + 1}`,
+            pickingTypeId: 'incoming',
+          },
+          options,
+        ),
+      ),
+    )
+    assert.deepEqual(
+      created.map((result) => String((result.value as { name: string }).name)).sort(),
+      Array.from({ length: 8 }, (_, index) => `PO${String(index + 1).padStart(5, '0')}`),
     )
   })
 })
