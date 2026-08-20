@@ -8,9 +8,10 @@
 // So the split is: `user.authenticate` decides whether the password is right and
 // what the account may see, and this decides what to do about it.
 
-import { json, page, text, withHeaders } from 'ketjs'
+import { json, page, sha256, text, withHeaders } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { loginScreen } from './login.ts'
+import { authTokenScreen } from '../../ui/auth.tsx'
 
 type Verdict = {
   ok: boolean
@@ -19,6 +20,7 @@ type Verdict = {
   defaultCompanyId?: string | null
   branches?: string[]
   defaultBranchId?: string | null
+  securityVersion?: number
 }
 type Req = Parameters<Route>[1]
 
@@ -75,6 +77,8 @@ const seeOther = (to: string, cookie?: string) =>
   withHeaders(text('', { status: 303 }), { location: to, ...(cookie ? { 'set-cookie': cookie } : {}) })
 
 const needSessions = () => text('this deployment has not turned sessions on', { status: 501 })
+const networkFingerprint = (req: Req): string =>
+  sha256(`${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`)
 
 export const routes: Record<string, RouteEntry> = {
   // The three a stranger has to be able to reach. /whoami answering 401 is the
@@ -119,7 +123,11 @@ export const routes: Record<string, RouteEntry> = {
 
       const verdict = (await ctx.call(
         'user.authenticate',
-        { login: login ?? '', password: password ?? '' },
+        {
+          login: login ?? '',
+          password: password ?? '',
+          networkFingerprint: networkFingerprint(req),
+        },
         url,
         req,
       )) as Verdict
@@ -138,6 +146,7 @@ export const routes: Record<string, RouteEntry> = {
         company: verdict.defaultCompanyId ?? null,
         branches: verdict.branches ?? [],
         branch: verdict.defaultBranchId ?? null,
+        securityVersion: verdict.securityVersion ?? 0,
       })
       return html
         ? seeOther(safeNext(next), cookie)
@@ -160,7 +169,16 @@ export const routes: Record<string, RouteEntry> = {
     handler: (ctx: ServeContext) => async (url, req) => {
       const sessions = await ctx.sessionsOf(url, req)
       if (!sessions) return needSessions()
-      if (req.method === 'POST' && crossSite(req)) return json({ ok: false }, { status: 403 })
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return json({ ok: false }, { status: 403 })
+      const record = await sessions.of(req)
+      if (record)
+        await ctx.call(
+          'user.recordSecurityEvent',
+          { event: 'session.logout', userId: record.userId, networkFingerprint: networkFingerprint(req) },
+          url,
+          req,
+        )
       await sessions.end(req)
       // Clearing the cookie as well as the record: leaving the browser holding an
       // id that no longer resolves means every later request pays a lookup to
@@ -192,4 +210,46 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
   },
+  ...Object.fromEntries(
+    (['invitation', 'reset'] as const).map((kind) => [
+      `/auth/${kind}`,
+      {
+        anonymous: true,
+        handler:
+          (ctx: ServeContext): Route =>
+          async (url, req) => {
+            const locale = ctx.localeOf(url, req)
+            const _ = ctx.translate(locale)
+            const render = async (token: string, errors?: string[], complete = false) =>
+              page({
+                body: ctx.document({
+                  lang: locale,
+                  title: _(`user.token.${kind}Title`),
+                  head: await ctx.styles(req),
+                  body: authTokenScreen(_, { kind, token, errors, complete }),
+                }),
+              })
+            if (req.method === 'GET') return render(url.searchParams.get('token') ?? '')
+            if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+            if (crossSite(req)) return text('Forbidden', { status: 403 })
+            const form = await body(req)
+            if (form.password !== form.confirmPassword)
+              return render(form.token ?? '', [_('user.token.mismatch')])
+            const result = (await ctx.call(
+              'user.consumeAuthToken',
+              { token: form.token ?? '', kind, realm: 'backend', password: form.password ?? '' },
+              url,
+              req,
+            )) as { ok?: boolean; userId?: string; errors?: Array<{ code?: string }> }
+            if (!result.ok || !result.userId)
+              return render(
+                form.token ?? '',
+                (result.errors ?? []).map((error) => _(error.code ?? 'user.error.tokenInvalid')),
+              )
+            await (await ctx.sessionsOf(url, req))?.endUser(result.userId)
+            return render('', undefined, true)
+          },
+      },
+    ]),
+  ),
 }

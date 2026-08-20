@@ -17,7 +17,14 @@ const ledger = defineModule({
   models: {
     Balance: {
       scope: 'shared',
-      fields: { id: 'id', account: 'text', amount: 'decimal', version: 'int', active: 'bool' },
+      fields: {
+        id: 'id',
+        account: 'text',
+        amount: 'decimal',
+        version: 'int',
+        active: 'bool',
+        marker: 'text?',
+      },
       indexes: { account_unique: { fields: ['account'], unique: true } },
     },
   },
@@ -32,6 +39,7 @@ const ledger = defineModule({
           amount: a.amount,
           version: 0,
           active: true,
+          marker: null,
         }),
     }),
     advance: defineFn({
@@ -41,8 +49,8 @@ const ledger = defineModule({
         ctx.db.compareAndSet(
           'ledger.Balance',
           { id: a.id },
-          { version: a.version, active: true },
-          { amount: a.amount, version: Number(a.version) + 1 },
+          { version: a.version, active: true, marker: null },
+          { amount: a.amount, version: Number(a.version) + 1, marker: 'claimed' },
         ),
     }),
   },

@@ -228,7 +228,7 @@ test('roles: granting a function nobody ships is refused rather than stored', as
   assert.equal(bad.ok, false)
   // A grant for a removed or misspelt function looks like access, and becomes
   // access again the day the name comes back.
-  assert.match(JSON.stringify(bad.errors), /không có hàm/)
+  assert.match(JSON.stringify(bad.errors), /user\.error\.functionMissing/)
   await b.close()
 })
 
