@@ -8,6 +8,7 @@ import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
+import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
@@ -58,6 +59,13 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
 }
 const selectionOptions = (_: Translator, group: string, values: readonly string[]) =>
   values.map((value) => ({ value, label: selectionLabel(_, group, value) }))
+
+const completeLocationName = (row: AnyRow, nameById: Map<string, string>) =>
+  String(row.parentPath)
+    .split('/')
+    .filter(Boolean)
+    .map((id) => nameById.get(id) ?? id)
+    .join(' / ')
 
 const generatedNames: Record<string, string> = {
   stock: 'Stock',
@@ -505,12 +513,6 @@ export const routes: Record<string, RouteEntry> = {
       const data = await common(ctx, url, req)
       const nameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
-      const completeName = (row: AnyRow) =>
-        String(row.parentPath)
-          .split('/')
-          .filter(Boolean)
-          .map((id) => nameById.get(id) ?? id)
-          .join(' / ')
       return page({
         body: ctx.document({
           lang,
@@ -521,14 +523,14 @@ export const routes: Record<string, RouteEntry> = {
             {
               rows: data.locations.map((row) => ({
                 id: String(row.id),
-                completeName: completeName(row),
+                completeName: completeLocationName(row, nameById),
                 usage: String(row.usage),
                 warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
               })),
               warehouses: options(data.warehouses),
               parents: data.locations.map((row) => ({
                 value: String(row.id),
-                label: completeName(row),
+                label: completeLocationName(row, nameById),
               })),
               action: inLocale(url, '/admin/locations'),
               errors: invalid(url, _),
@@ -564,60 +566,40 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.pickingTypes',
-        data.pickingTypes.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: String(row.code),
-          detail: `${String(row.defaultLocationSrcId)} → ${String(row.defaultLocationDestId)}`,
-        })),
-        [
-          surface({
-            body: recordForm({
-              action: inLocale(url, '/admin/picking-types'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name'), required: true },
-                {
-                  name: 'code',
-                  label: _('stock_backend.field.code'),
-                  type: 'select',
-                  options: selectionOptions(_, 'pickingType', ['incoming', 'outgoing', 'internal']),
-                },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  options: options(data.warehouses),
-                },
-                {
-                  name: 'defaultLocationSrcId',
-                  label: _('stock_backend.field.sourceLocation'),
-                  type: 'select',
-                  options: options(data.locations),
-                },
-                {
-                  name: 'defaultLocationDestId',
-                  label: _('stock_backend.field.destinationLocation'),
-                  type: 'select',
-                  options: options(data.locations),
-                },
-                {
-                  name: 'createBackorder',
-                  label: _('stock_backend.field.backorder'),
-                  type: 'select',
-                  options: selectionOptions(_, 'backorder', ['ask', 'always', 'never']),
-                },
-              ],
-            }),
-          }),
-        ],
+      const rawLocationNameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const completeLocationNameById = new Map(
+        data.locations.map((row) => [String(row.id), completeLocationName(row, rawLocationNameById)]),
       )
+      const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.pickingTypes'),
+          head: await ctx.styles(req),
+          body: pickingTypesScreen(
+            _,
+            {
+              rows: data.pickingTypes.map((row) => ({
+                id: String(row.id),
+                name: String(row.name),
+                code: String(row.code),
+                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+                source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
+                destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
+                createBackorder: String(row.createBackorder ?? 'ask'),
+              })),
+              warehouses: options(data.warehouses),
+              locations: data.locations.map((row) => ({
+                value: String(row.id),
+                label: completeLocationNameById.get(String(row.id)) ?? String(row.name),
+              })),
+              action: inLocale(url, '/admin/picking-types'),
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/lots':
