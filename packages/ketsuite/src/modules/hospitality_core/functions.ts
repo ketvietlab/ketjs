@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from 'ketjs'
+import { asc, defineFn, eq, from, inArray } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { resolveAddress, validateAddress } from '../address/format.ts'
 import { appendContentChange } from './content.ts'
@@ -69,6 +69,15 @@ const isOneOf = (values: readonly string[], value: unknown): boolean => values.i
 const record = async (ctx: Ctx, model: string, id: unknown): Promise<Row | null> => {
   const table = ctx.table(model)
   return ctx.db.one(from(table).where(eq(table.id, id)))
+}
+
+class RoomStatusGuard extends Error {
+  readonly problem: Issue
+
+  constructor(problem: Issue) {
+    super(problem.code)
+    this.problem = problem
+  }
 }
 
 const duplicate = async (
@@ -701,7 +710,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listRooms: defineFn({
-    input: { propertyId: 'id?', status: 'text?', includeArchived: 'bool?' },
+    input: { propertyId: 'id?', status: 'text?', includeArchived: 'bool?', limit: 'int?' },
     output: {
       id: 'id',
       propertyId: 'id',
@@ -731,6 +740,7 @@ export const functions: Record<string, FnSpec> = {
       if (args.propertyId) query = query.where(eq(R.propertyId, args.propertyId))
       if (args.status) query = query.where(eq(R.status, args.status))
       if (args.includeArchived !== true) query = query.where(eq(R.active, true))
+      if (args.limit != null) query = query.limit(Math.max(1, Math.min(500, Number(args.limit))))
       return ctx.db.all(query)
     },
   }),
@@ -796,19 +806,69 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   setRoomStatus: defineFn({
-    input: { id: 'id', status: 'text', note: 'text?' },
+    input: { id: 'id', expectedStatus: 'text?', status: 'text', note: 'text?' },
     output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
-    effects: ['read:hospitality_core.Room', 'write:hospitality_core.Room'],
+    effects: [
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.CleaningTask',
+      'write:hospitality_core.Room',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      if (!(await record(ctx, 'hospitality_core.Room', args.id))) return failure(issue('id', 'room_missing'))
       if (!isOneOf(ROOM_STATUSES, args.status)) return failure(issue('status', 'room_status'))
-      await ctx.db.update('hospitality_core.Room', { id: args.id }, {
-        status: args.status,
-        ...(args.note !== undefined ? { note: args.note } : {}),
-      } as Row)
-      return { ok: true, id: args.id, status: args.status, errors: [] }
+      if (args.expectedStatus && !isOneOf(ROOM_STATUSES, args.expectedStatus))
+        return failure(issue('expectedStatus', 'room_status'))
+      if (args.status === 'occupied' || args.status === 'cleaning')
+        return failure(issue('status', 'room_status_managed'))
+      if (args.status === 'available') return failure(issue('status', 'room_status_available_managed'))
+      const note = args.note === undefined ? undefined : cleanText(args.note)
+
+      try {
+        return await ctx.tx(async (tx) => {
+          const room = await record(tx, 'hospitality_core.Room', args.id)
+          if (!room) return failure(issue('id', 'room_missing'))
+          if (room.active !== true) return failure(issue('id', 'room_archived'))
+          if (args.expectedStatus && room.status !== args.expectedStatus)
+            return failure(issue('status', 'transition_conflict'))
+          if (room.status === args.status) return { ok: true, id: args.id, status: args.status, errors: [] }
+          if ((args.status === 'maintenance' || args.status === 'out_of_order') && !note)
+            return failure(issue('note', 'room_status_note_required'))
+          if (room.status === 'occupied') return failure(issue('status', 'room_occupied'))
+          if (room.status === 'cleaning') return failure(issue('status', 'room_cleaning'))
+
+          const S = tx.table('hospitality_core.Stay')
+          const currentStay = await tx.db.one(
+            from(S).where(eq(S.currentRoomId, args.id), eq(S.state, 'checked_in')).limit(1),
+          )
+          if (currentStay) return failure(issue('status', 'room_occupied'))
+
+          const changed = await tx.db.compareAndSet(
+            'hospitality_core.Room',
+            { id: args.id },
+            { status: room.status },
+            {
+              status: args.status,
+              ...(note !== undefined ? { note: note || null } : {}),
+            },
+          )
+          if (!('matched' in changed) || !changed.matched)
+            return failure(issue('status', 'transition_conflict'))
+
+          const T = tx.table('hospitality_core.CleaningTask')
+          const activeTask = await tx.db.one(
+            from(T)
+              .where(eq(T.roomId, args.id), inArray(T.state, ['todo', 'in_progress']))
+              .limit(1),
+          )
+          if (activeTask) throw new RoomStatusGuard(issue('status', 'room_task_open'))
+          return { ok: true, id: args.id, status: args.status, errors: [] }
+        })
+      } catch (error) {
+        if (error instanceof RoomStatusGuard) return failure(error.problem)
+        throw error
+      }
     },
   }),
 

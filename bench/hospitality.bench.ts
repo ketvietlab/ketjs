@@ -571,6 +571,71 @@ try {
   )
   const housekeepingMs = performance.now() - housekeepingStarted
 
+  const roomStatusStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      const released = await call(key, 'hospitality_core.setRoomStatus', {
+        id: 'room:0',
+        expectedStatus: 'maintenance',
+        status: 'dirty',
+      })
+      if (!(released.value as { ok: boolean }).ok) throw new Error(`${key}: room release failed`)
+      const serviced = await call(key, 'hospitality_core.setRoomStatus', {
+        id: 'room:0',
+        expectedStatus: 'dirty',
+        status: 'maintenance',
+        note: 'Benchmark maintenance evidence',
+      })
+      if (!(serviced.value as { ok: boolean }).ok) throw new Error(`${key}: room service transition failed`)
+    }),
+  )
+  const roomStatusMs = performance.now() - roomStatusStarted
+  let concurrentRoomStatusTaskSingleWinner = true
+  if (driver === 'postgres') {
+    const key = keys[0]!
+    const released = await call(key, 'hospitality_core.setRoomStatus', {
+      id: 'room:0',
+      expectedStatus: 'maintenance',
+      status: 'dirty',
+    })
+    if (!(released.value as { ok: boolean }).ok) throw new Error(`${key}: room race setup failed`)
+    const contender = open(key)
+    await contender.open()
+    try {
+      const [statusAttempt, taskAttempt] = await Promise.all([
+        callWith(adapters.get(key)!, key, 'hospitality_core.setRoomStatus', {
+          id: 'room:0',
+          expectedStatus: 'dirty',
+          status: 'maintenance',
+          note: 'Concurrent maintenance evidence',
+        }),
+        callWith(contender, key, 'hospitality_core.createCleaningTask', {
+          id: 'room-status-race-task',
+          code: 'HK-ROOM-RACE',
+          roomId: 'room:0',
+          taskType: 'inspection',
+        }),
+      ])
+      const statusWon = (statusAttempt.value as { ok: boolean }).ok
+      const taskWon = (taskAttempt.value as { ok: boolean }).ok
+      concurrentRoomStatusTaskSingleWinner = statusWon !== taskWon
+      if (taskWon) {
+        await call(key, 'hospitality_core.cancelCleaningTask', { id: 'room-status-race-task' })
+        const restored = await call(key, 'hospitality_core.setRoomStatus', {
+          id: 'room:0',
+          expectedStatus: 'dirty',
+          status: 'maintenance',
+          note: 'Concurrent maintenance evidence',
+        })
+        if (!(restored.value as { ok: boolean }).ok) concurrentRoomStatusTaskSingleWinner = false
+      }
+    } finally {
+      await contender.close()
+    }
+  }
+  if (!concurrentRoomStatusTaskSingleWinner)
+    throw new Error('room status and task creation did not serialize to one winner')
+
   const stayNoticeStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1004,6 +1069,28 @@ try {
   ).then((matches) => matches.every(Boolean))
   if (!housekeepingLifecycleMatch)
     throw new Error('housekeeping task lifecycle did not restore every cleaned checkout room')
+  const roomStatusLifecycleMatch = await Promise.all(
+    keys.map(async (key) => {
+      const room = await adapters
+        .get(key)!
+        .all(
+          `SELECT status, note FROM hospitality_core_room WHERE id = ${driver === 'postgres' ? '$1' : '?'}`,
+          ['room:0'],
+        )
+      const summary = await call(key, 'hospitality_core.roomStatusSummary', { propertyId: 'property' })
+      const counts = summary.value as { maintenance: number }
+      return (
+        room[0]?.status === 'maintenance' &&
+        room[0]?.note ===
+          (driver === 'postgres' && key === keys[0]
+            ? 'Concurrent maintenance evidence'
+            : 'Benchmark maintenance evidence') &&
+        counts.maintenance > 0
+      )
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!roomStatusLifecycleMatch)
+    throw new Error('room status lifecycle or exact per-property summary did not persist')
   const housekeepingMoveTasksMatch = await Promise.all(
     keys.map(async (key) => {
       const rows = await adapters
@@ -1120,6 +1207,11 @@ try {
           (databaseCount * housekeepingTaskCount * 1_000) / housekeepingMs,
         ),
         housekeepingLifecycleMatch,
+        roomStatusTransitions: databaseCount * 2,
+        roomStatusMs: Number(roomStatusMs.toFixed(1)),
+        roomStatusTransitionsPerSecond: Math.round((databaseCount * 2 * 1_000) / roomStatusMs),
+        roomStatusLifecycleMatch,
+        concurrentRoomStatusTaskSingleWinner,
         folioCorrectionsMatch,
         concurrentFolioCorrectionSingleAdjustment,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
