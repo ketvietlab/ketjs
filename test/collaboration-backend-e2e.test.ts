@@ -247,6 +247,14 @@ test('Product Variant form keeps its own Chatter, activities and partial-save wo
 
 test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer screen joint', async (t) => {
   const { e2e, call, member } = await boot(t)
+  const unconfiguredInventory = await e2e.client.get('/admin/inventory?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const unconfiguredInventoryHtml = await unconfiguredInventory.text()
+  assert.match(unconfiguredInventoryHtml, /Inventory configuration is incomplete/)
+  assert.doesNotMatch(unconfiguredInventoryHtml, /id="inventory-adjustment-form"/)
+  assert.doesNotMatch(unconfiguredInventoryHtml, /data-island="mail\.chatter"/)
+
   await call('stock.addMove', {
     id: 'move-collab',
     name: 'Collaborative product',

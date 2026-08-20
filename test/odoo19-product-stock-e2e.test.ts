@@ -319,6 +319,23 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
   await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' })
+  await call('product.saveTemplate', {
+    id: 'service-template',
+    name: 'Dịch vụ tư vấn',
+    type: 'service',
+    uomId: 'unit',
+    listPrice: '100',
+  })
+  await call('product.saveVariant', {
+    id: 'service-variant',
+    templateId: 'service-template',
+    defaultCode: 'SERVICE',
+    combinationKey: '',
+  })
+  assert.deepEqual(
+    (await call<Row[]>('stock.listStorableProducts')).value.map((row) => row.id),
+    ['tpl'],
+  )
   await call('stock.saveWarehouse', { id: 'wh', name: 'Kho chính', code: 'WH' })
   await call('stock.saveLocation', { id: 'inventory', name: 'Inventory', usage: 'inventory' })
 
@@ -374,6 +391,28 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     (await call<Row>('stock.forecast', { productId: 'p1', warehouseId: 'wh' })).value.forecast,
     '2',
   )
+
+  const inventoryPage = await e2e.client.get('/admin/inventory?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const inventoryHtml = await inventoryPage.text()
+  assert.match(inventoryHtml, /data-ui="record-workspace"/)
+  assert.match(inventoryHtml, /id="inventory-adjustment-form"/)
+  assert.match(inventoryHtml, /data-scope="inventory-adjustment"/)
+  assert.match(inventoryHtml, /Áo thun · AO/)
+  assert.match(inventoryHtml, /Tồn kho hiện tại/)
+  assert.doesNotMatch(inventoryHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/inventory?lang=vi', {
+    productId: 'p1',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory',
+    countedQuantity: '6',
+    productUomId: 'unit',
+  })
+  const appliedInventoryPage = await e2e.client.get('/admin/inventory?applied=1&lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await appliedInventoryPage.text(), /Đã áp dụng kiểm kê/)
 
   // Exercise the same partial flow through the rendered backend form, including
   // the Odoo `ask` backorder choice rather than bypassing it with a direct call.
