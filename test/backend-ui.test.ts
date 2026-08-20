@@ -11,6 +11,7 @@ import {
   activityContractCases,
   calendarContractCases,
   appsScreen,
+  backendPage,
   badge,
   breadcrumbs,
   button,
@@ -434,6 +435,48 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
     'Settings belongs below the systray divider',
   )
+})
+
+test('backend shell: fragment navigation emits only replaceable slots', () => {
+  const html = renderToString(
+    appsScreen(_, [app({ state: 'installed' })], {
+      navigation: true,
+      menu: MENU,
+      extras: { 'sidebar.foot': 'persistent foot' },
+      indicators: [{ id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' }],
+    }),
+  )
+  assert.match(html, /^<ket-fragments data-title=/)
+  assert.deepEqual(
+    [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
+    ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
+  )
+  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+})
+
+test('backend responder: a fragment request never renders document infrastructure', async () => {
+  let styles = 0
+  let documents = 0
+  const result = await backendPage(
+    {
+      styles: async () => {
+        styles++
+        throw new Error('fragment navigation must not resolve styles')
+      },
+      document: () => {
+        documents++
+        throw new Error('fragment navigation must not render a document')
+      },
+    } as never,
+    { headers: { 'x-ket-navigation': 'fragment-v1' } } as never,
+    {
+      lang: 'vi',
+      title: 'Ứng dụng',
+      body: appsScreen(_, [app()], { navigation: true, menu: MENU }),
+    },
+  )
+  assert.equal(result.type, 'text/vnd.ket.fragments+html')
+  assert.deepEqual({ styles, documents }, { styles: 0, documents: 0 })
 })
 
 test('design tokens: every admin role used by components is declared', () => {

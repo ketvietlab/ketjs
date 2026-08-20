@@ -46,8 +46,8 @@ export function page(o: { body: Html; status?: number }): RouteResult {
 }
 
 /** A fragment: no doctype, for a partial response or an island. */
-export function fragment(body: Html, o: { status?: number } = {}): RouteResult {
-  return made(renderToString(body), 'text/html', o.status)
+export function fragment(body: Html, o: { status?: number; type?: string } = {}): RouteResult {
+  return made(renderToString(body), o.type ?? 'text/html', o.status)
 }
 
 /** Whether this browser asks for the progressive-navigation representation. */
