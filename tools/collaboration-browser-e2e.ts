@@ -211,6 +211,7 @@ const saleOrderEvidenceDir = resolve('docs/assets/sales-order-detail')
 const salesOrderListEvidenceDir = resolve('docs/assets/sales-order-list')
 const invoicingPolicyEvidenceDir = resolve('docs/assets/sales-invoicing-policy')
 const accountingInvoiceEvidenceDir = resolve('docs/assets/accounting-customer-invoice')
+const customerInvoicesEvidenceDir = resolve('docs/assets/accounting-customer-invoices')
 const vendorBillsEvidenceDir = resolve('docs/assets/accounting-vendor-bills')
 const journalEntriesEvidenceDir = resolve('docs/assets/accounting-journal-entries')
 const paymentsEvidenceDir = resolve('docs/assets/accounting-payments')
@@ -236,6 +237,7 @@ try {
   await mkdir(salesOrderListEvidenceDir, { recursive: true })
   await mkdir(invoicingPolicyEvidenceDir, { recursive: true })
   await mkdir(accountingInvoiceEvidenceDir, { recursive: true })
+  await mkdir(customerInvoicesEvidenceDir, { recursive: true })
   await mkdir(vendorBillsEvidenceDir, { recursive: true })
   await mkdir(journalEntriesEvidenceDir, { recursive: true })
   await mkdir(paymentsEvidenceDir, { recursive: true })
@@ -362,6 +364,11 @@ try {
       name: 'accounting-customer-invoice',
       path: '/admin/customer-invoices/invoice-collab?lang=vi',
       ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]')`,
+    },
+    {
+      name: 'accounting-customer-invoices',
+      path: '/admin/customer-invoices?lang=vi',
+      ready: `document.querySelector('#customer-invoice-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-vendor-bills',
@@ -2141,6 +2148,66 @@ try {
         )
         await evaluate(cdp, `scrollTo(0, 0)`)
         if (!noArtifacts) await capture(cdp, join(vendorBillsEvidenceDir, `vendor-bills-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-customer-invoices') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#customer-invoice-create-form')),
+        invoice: document.querySelector('[data-ui="table"]')?.textContent.includes('invoice-collab'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#customer-invoice-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        { workspace: true, form: true, invoice: true, chatter: false, rowsAtLeast28: true, overflow: false },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Current customer invoices') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(customerInvoicesEvidenceDir, `customer-invoices-${lang}-mobile.png`))
       }
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
