@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from 'ketjs'
 import type { MultipartPart, Route, RouteEntry, ServeContext } from 'ketjs'
 
-type Attachment = {
+export type Attachment = {
   id: string
   name: string
   kind: string
@@ -14,6 +14,13 @@ type Attachment = {
   mimetype: string
   size: number
   public: boolean
+}
+
+export type UploadDefaults = {
+  resModel?: string
+  resId?: string
+  resField?: string
+  public?: boolean
 }
 
 const field = async (part: MultipartPart): Promise<string> => {
@@ -50,75 +57,88 @@ const disposition = (name: string, showInline: boolean): string => {
   return `${showInline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`
 }
 
+/**
+ * Store one multipart upload and create its transactional attachment row.
+ *
+ * Feature bridges may provide trusted target metadata. This keeps streaming,
+ * limits, checksums and object-key construction in storage instead of copying
+ * an upload implementation into every domain that owns an attachment.
+ */
+export const receiveAttachment = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  defaults: UploadDefaults = {},
+): Promise<Attachment> => {
+  const type = String(req.headers['content-type'] ?? '')
+  const dir = await mkdtemp(join(tmpdir(), 'ket-upload-'))
+  const spool = localStorage({ dir })
+  try {
+    let uploadPart: { filename: string; type: string; size: number; checksum: string } | null = null
+    const fields: Record<string, string> = {}
+    for await (const part of multipart(req, type, { maxBytes: ctx.config.uploadMax, maxParts: 64 })) {
+      if (part.filename !== undefined) {
+        if (uploadPart)
+          throw new KetError({
+            code: 'E_UPLOAD_FILES',
+            message: 'only one file may be uploaded per request',
+          })
+        const stored = await spool.put('body', part.body, { type: safeType(part.type) })
+        if (!stored.etag)
+          throw new KetError({
+            code: 'E_UPLOAD_CHECKSUM',
+            message: 'the upload spool returned no checksum',
+            hint: 'its temporary metadata could not be read back — check disk health and open file limits',
+          })
+        uploadPart = {
+          filename: part.filename || 'upload',
+          type: safeType(part.type),
+          size: stored.size,
+          checksum: stored.etag,
+        }
+      } else fields[part.name] = await field(part)
+    }
+    if (!uploadPart) throw new KetError({ code: 'E_UPLOAD_FILE', message: 'multipart request has no file' })
+    const scope = await ctx.scopeOf(url, req)
+    if (!scope.company) throw new KetError({ code: 'E_UPLOAD_SCOPE', message: 'upload requires a company' })
+    const key = `blobs/${scope.company}/${uploadPart.checksum.slice(0, 2)}/${uploadPart.checksum}`
+    const storage = await ctx.storageOf(url, req)
+    // Write even when the key is already present. Trusting head() lets the sweep
+    // collect the object between the probe and the row insert, leaving an
+    // attachment whose bytes are gone for good; re-writing also refreshes mtime.
+    const source = await spool.get('body')
+    if (!source) throw new Error('temporary upload disappeared')
+    await storage.put(key, source.body, { type: uploadPart.type, size: uploadPart.size })
+    const id = randomUUID()
+    return (await ctx.call(
+      'storage.createAttachment',
+      {
+        id,
+        name: fields.name || uploadPart.filename,
+        ...(defaults.resModel || fields.resModel ? { resModel: defaults.resModel ?? fields.resModel } : {}),
+        ...(defaults.resId || fields.resId ? { resId: defaults.resId ?? fields.resId } : {}),
+        ...(defaults.resField || fields.resField ? { resField: defaults.resField ?? fields.resField } : {}),
+        kind: 'stored',
+        storeKey: key,
+        mimetype: uploadPart.type,
+        size: uploadPart.size,
+        checksum: uploadPart.checksum,
+        public: defaults.public ?? (fields.public === 'true' || fields.public === '1'),
+        createdAt: new Date().toISOString(),
+      },
+      url,
+      req,
+    )) as Attachment
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
 const upload =
   (ctx: ServeContext): Route =>
   async (url, req) => {
     if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
-    const type = String(req.headers['content-type'] ?? '')
-    const dir = await mkdtemp(join(tmpdir(), 'ket-upload-'))
-    const spool = localStorage({ dir })
-    try {
-      let uploadPart: { filename: string; type: string; size: number; checksum: string } | null = null
-      const fields: Record<string, string> = {}
-      for await (const part of multipart(req, type, { maxBytes: ctx.config.uploadMax, maxParts: 64 })) {
-        if (part.filename !== undefined) {
-          if (uploadPart)
-            throw new KetError({
-              code: 'E_UPLOAD_FILES',
-              message: 'only one file may be uploaded per request',
-            })
-          const stored = await spool.put('body', part.body, { type: safeType(part.type) })
-          if (!stored.etag)
-            throw new KetError({
-              code: 'E_UPLOAD_CHECKSUM',
-              message: 'the upload spool returned no checksum',
-              hint: 'its temporary metadata could not be read back — check disk health and open file limits',
-            })
-          uploadPart = {
-            filename: part.filename || 'upload',
-            type: safeType(part.type),
-            size: stored.size,
-            checksum: stored.etag,
-          }
-        } else fields[part.name] = await field(part)
-      }
-      if (!uploadPart)
-        return json({ code: 'E_UPLOAD_FILE', message: 'multipart request has no file' }, { status: 400 })
-      const scope = await ctx.scopeOf(url, req)
-      if (!scope.company)
-        return json({ code: 'E_UPLOAD_SCOPE', message: 'upload requires a company' }, { status: 400 })
-      const key = `blobs/${scope.company}/${uploadPart.checksum.slice(0, 2)}/${uploadPart.checksum}`
-      const storage = await ctx.storageOf(url, req)
-      // Write even when the key is already present. Trusting head() lets the sweep
-      // collect the object between the probe and the row insert, leaving an
-      // attachment whose bytes are gone for good; re-writing also refreshes mtime.
-      const source = await spool.get('body')
-      if (!source) throw new Error('temporary upload disappeared')
-      await storage.put(key, source.body, { type: uploadPart.type, size: uploadPart.size })
-      const id = randomUUID()
-      const created = await ctx.call(
-        'storage.createAttachment',
-        {
-          id,
-          name: fields.name || uploadPart.filename,
-          ...(fields.resModel ? { resModel: fields.resModel } : {}),
-          ...(fields.resId ? { resId: fields.resId } : {}),
-          ...(fields.resField ? { resField: fields.resField } : {}),
-          kind: 'stored',
-          storeKey: key,
-          mimetype: uploadPart.type,
-          size: uploadPart.size,
-          checksum: uploadPart.checksum,
-          public: fields.public === 'true' || fields.public === '1',
-          createdAt: new Date().toISOString(),
-        },
-        url,
-        req,
-      )
-      return json(created, { status: 201 })
-    } finally {
-      await rm(dir, { recursive: true, force: true })
-    }
+    return json(await receiveAttachment(ctx, url, req), { status: 201 })
   }
 
 const download =

@@ -16,6 +16,28 @@ import type { Manifest, Row, FieldBase } from '../types.ts'
 export type FieldError = { field: string; message: string }
 export type Validator = (value: unknown, changes: Row) => true | string
 
+const PLAIN_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
+
+/**
+ * A finite number as plain decimal text.
+ *
+ * `String(1e-7)` is `"1e-7"` and `String(1e21)` is `"1e+21"` — literals the decimal
+ * contract refuses on the way in, so writing them out would make the round trip
+ * exact in one direction only. The exponent is expanded here instead.
+ */
+export const decimalText = (v: number | string): string => {
+  const s = String(v).trim()
+  if (PLAIN_DECIMAL.test(s)) return s
+  const m = /^([+-]?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(s)
+  if (!m) return s
+  const sign = m[1] ?? ''
+  const digits = (m[2] as string) + (m[3] ?? '')
+  const point = (m[2] as string).length + Number(m[4])
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`
+}
+
 const castValue = (
   base: FieldBase,
   v: unknown,
@@ -37,7 +59,16 @@ const castValue = (
       if (!Number.isInteger(n)) return { ok: false, message: `expected an integer, got ${n}` }
       return { ok: true, value: n }
     }
-    case 'decimal':
+    case 'decimal': {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v)) return { ok: false, message: `expected a decimal, got ${JSON.stringify(v)}` }
+        return { ok: true, value: decimalText(v) }
+      }
+      if (typeof v !== 'string' || !PLAIN_DECIMAL.test(v.trim())) {
+        return { ok: false, message: `expected a decimal string, got ${JSON.stringify(v)}` }
+      }
+      return { ok: true, value: v.trim().replace(/^\+/, '') }
+    }
     case 'float': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
       if (typeof n !== 'number' || !Number.isFinite(n))

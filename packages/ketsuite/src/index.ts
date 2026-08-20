@@ -20,7 +20,12 @@ export type { Unit } from './modules/uom/convert.ts'
 
 // product vertical
 export { default as product } from './modules/product/index.ts'
+export { default as productMedia } from './modules/product_media/index.ts'
 export { default as productBackend } from './modules/product_backend/index.ts'
+export { default as pricing } from './modules/pricing/index.ts'
+export { default as stock } from './modules/stock/index.ts'
+export { default as stockBackend } from './modules/stock_backend/index.ts'
+export { default as pricingBackend } from './modules/pricing_backend/index.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as storage } from './modules/storage/index.ts'
@@ -31,6 +36,8 @@ export { PARTNER_KINDS, PARTNER_ROLES, ADDRESS_USES } from './modules/partner/ty
 export type { PartnerKind, PartnerRole, AddressUse } from './modules/partner/types.ts'
 export { PRODUCT_TYPES } from './modules/product/types.ts'
 export type { ProductType } from './modules/product/types.ts'
+export { mediaPanel } from './ui/media.tsx'
+export type { MediaItem, MediaLabels, MediaPanelProps } from './ui/media.tsx'
 
 // commerce — demo-grade scaffolding, kept until the vertical is written for real
 export { default as catalog } from './modules/catalog/index.ts'

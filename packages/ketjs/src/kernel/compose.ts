@@ -184,7 +184,40 @@ export function compose(
         }
         fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
       }
-      manifest.models[key] = { owner: m.name, scope: def.scope, fields }
+      const indexes: ComposedModel['indexes'] = {}
+      for (const [indexName, index] of Object.entries(def.indexes ?? {})) {
+        if (!/^[a-z][a-z0-9_]*$/.test(indexName)) {
+          diag.add({
+            code: 'E_INDEX_NAME',
+            module: m.name,
+            message: `${key} index name ${JSON.stringify(indexName)} must be lowercase snake_case`,
+          })
+          continue
+        }
+        if (!index.fields.length) {
+          diag.add({ code: 'E_INDEX_EMPTY', module: m.name, message: `${key}.${indexName} has no fields` })
+          continue
+        }
+        const unknown = index.fields.filter((field) => !fields[field])
+        if (unknown.length) {
+          diag.add({
+            code: 'E_INDEX_UNKNOWN_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} references unknown field(s): ${unknown.join(', ')}`,
+          })
+          continue
+        }
+        if (new Set(index.fields).size !== index.fields.length) {
+          diag.add({
+            code: 'E_INDEX_DUPLICATE_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} repeats a field`,
+          })
+          continue
+        }
+        indexes[indexName] = { fields: [...index.fields], unique: index.unique === true, by: m.name }
+      }
+      manifest.models[key] = { owner: m.name, scope: def.scope, fields, indexes }
     }
   }
 
@@ -416,6 +449,18 @@ export function compose(
       manifest.fills.push({ joint: key, by: m.name, template: value })
     }
   }
+  for (const [key, joint] of Object.entries(manifest.joints)) {
+    if (joint.multiple) continue
+    const fillers = manifest.fills.filter((fill) => fill.joint === key).map((fill) => fill.by)
+    if (fillers.length > 1) {
+      diag.add({
+        code: 'E_JOINT_CARDINALITY',
+        module: joint.owner,
+        message: `joint "${key}" accepts one fill but ${fillers.length} modules fill it`,
+        hint: `fillers: ${fillers.join(', ')}; set multiple:true or keep one contributor`,
+      })
+    }
+  }
   // Omissions travel the same road as fills: a declared joint, and a declared
   // dependency on whoever published it.
   for (const m of order) {
@@ -644,9 +689,30 @@ export function compose(
     }
   }
 
+  // Joint and island props use the scalar vocabulary or a declared view-model key.
+  // Views are composed first so a contract may name one regardless of module order.
+  const validContractType = (spec: unknown): spec is string => {
+    if (typeof spec !== 'string') return false
+    if (parseType(spec).ok) return true
+    const view = spec.endsWith('?') ? spec.slice(0, -1) : spec
+    return manifest.views[view] !== undefined
+  }
+  for (const [key, joint] of Object.entries(manifest.joints)) {
+    for (const [name, spec] of Object.entries(joint.props)) {
+      if (!validContractType(spec)) {
+        diag.add({
+          code: 'E_JOINT_PROP_TYPE',
+          module: joint.owner,
+          message: `joint "${key}" prop "${name}" has unknown type "${spec}"`,
+          hint: 'use a scalar type or a composed view-model key',
+        })
+      }
+    }
+  }
+
   // --- islands -------------------------------------------------------------
   for (const m of order) {
-    for (const name of Object.keys(m.islands)) {
+    for (const [name, def] of Object.entries(m.islands)) {
       const existing = manifest.islands[name]
       if (existing) {
         diag.add({
@@ -656,7 +722,68 @@ export function compose(
         })
         continue
       }
-      manifest.islands[name] = { by: m.name }
+      if (!def || typeof def !== 'object' || typeof def.view !== 'function') {
+        diag.add({
+          code: 'E_ISLAND_SHAPE',
+          module: m.name,
+          message: `island "${name}" needs a view factory`,
+          hint: 'declare { view: props => () => html`...`, props, client? }',
+        })
+        continue
+      }
+      for (const [prop, spec] of Object.entries(def.props ?? {})) {
+        if (!validContractType(spec)) {
+          diag.add({
+            code: 'E_ISLAND_PROP_TYPE',
+            module: m.name,
+            message: `island "${name}" prop "${prop}" has unknown type "${spec}"`,
+            hint: 'use a scalar type or a composed view-model key',
+          })
+        }
+      }
+      const client = def.client
+      if (client !== undefined && (typeof client !== 'string' || client.length === 0)) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT',
+          module: m.name,
+          message: `island "${name}" client must be a non-empty relative path`,
+        })
+      }
+      if (typeof client === 'string' && client && !m.assets) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT_WITHOUT_ASSETS',
+          module: m.name,
+          message: `island "${name}" declares client module "${client}" but "${m.name}" has no assets directory`,
+          hint: 'declare module assets and place the prebuilt browser module inside it',
+        })
+      }
+      if (
+        typeof client === 'string' &&
+        client &&
+        (client.startsWith('/') ||
+          client.includes('\\') ||
+          client.includes('?') ||
+          client.includes('#') ||
+          client.split('/').includes('..'))
+      ) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT_PATH',
+          module: m.name,
+          message: `island "${name}" client path must stay inside the module assets directory`,
+        })
+      }
+      manifest.islands[name] = {
+        by: m.name,
+        props: { ...(def.props ?? {}) },
+        ...(typeof client === 'string' && client
+          ? {
+              client: {
+                src: `/_ket/asset/${m.name}/${client}`,
+                export: def.export ?? 'default',
+              },
+            }
+          : {}),
+      }
     }
   }
 

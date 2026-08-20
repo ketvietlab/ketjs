@@ -24,7 +24,7 @@ import {
   table,
 } from 'ketjs'
 import type { Adapter } from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory, uom } from 'ketsuite'
+import { catalog, checkout, defaultTheme as theme, inventory, product, stock, uom } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
@@ -376,7 +376,7 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
       // refuses to drop those tables on the way to a uom-only schema.
       for (const t of [
         'uom_unit',
-        'uom_category',
+        'uom_precision',
         'catalog_product',
         'checkout_order',
         'ket_migration',
@@ -390,40 +390,109 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
       await migrateOne(a, m)
 
       const cols = (await a.introspect())['uom_unit']!
-      assert.equal(cols['factor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
+      assert.equal(cols['relativeFactor'], 'numeric')
+      assert.equal(cols['absoluteFactor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
       assert.equal(cols['rounding'], 'numeric')
 
       registerFunctions([uom])
-      await a.run('INSERT INTO uom_category (id, name) VALUES ($1, $2)', ['weight', 'Khối lượng'])
+      await callFn(
+        'uom.saveUnit',
+        { id: 'root', name: 'Reference', relativeFactor: '1' },
+        { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
+      )
 
       // Values a double cannot hold. The point of the column type is that these
       // come back as themselves rather than as the nearest binary approximation.
-      const awkward = [0.1, 0.001, 0.07, 12345.6789]
+      const awkward = ['0.1', '0.001', '0.07', '12345.6789']
       for (const [i, factor] of awkward.entries()) {
         await callFn(
           'uom.saveUnit',
-          { id: `u${i}`, name: `u${i}`, categoryId: 'weight', type: 'smaller', factor, rounding: 0.001 },
+          { id: `u${i}`, name: `u${i}`, relativeUomId: 'root', relativeFactor: factor },
           { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
         )
       }
       const rows = (
         await callFn(
           'uom.listUnits',
-          { categoryId: 'weight' },
+          { rootId: 'root' },
           { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
         )
-      ).value as Array<{ id: string; factor: number }>
+      ).value as Array<{ id: string; absoluteFactor: number }>
       for (const [i, factor] of awkward.entries()) {
-        assert.equal(rows.find((r) => r.id === `u${i}`)!.factor, factor)
+        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, Number(factor))
       }
 
       // And the driver hands NUMERIC over as a string, which is what keeps it exact
       // before the framework turns it into a number.
-      const raw = (await a.all('SELECT factor FROM uom_unit WHERE id = $1', ['u0']))[0]!
-      assert.equal(typeof raw.factor, 'string')
-      assert.equal(raw.factor, '0.1')
+      const raw = (
+        await a.all('SELECT "relativeFactor", "absoluteFactor" FROM uom_unit WHERE id = $1', ['u0'])
+      )[0]!
+      assert.equal(typeof raw.relativeFactor, 'string')
+      assert.equal(raw.relativeFactor, '0.1')
+      assert.equal(raw.absoluteFactor, '0.1')
     })
   } finally {
     await pool.close()
   }
+})
+
+test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
+  await withPg(async (a) => {
+    const stockModules = [uom, product, stock]
+    const stockManifest = compose(stockModules, { headless: true })
+    const stockSchema = schemaFromManifest(stockManifest)
+    for (const tableName of Object.keys(stockSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, stockSchema), a)) await a.exec(sql)
+    registerFunctions(stockModules)
+    const options = { adapter: a, manifest: stockManifest, scope: SCOPE }
+    await callFn('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' }, options)
+    await callFn('product.saveTemplate', { id: 'tpl', name: 'Áo', type: 'goods', uomId: 'unit' }, options)
+    await callFn('product.saveVariant', { id: 'p1', templateId: 'tpl', combinationKey: '' }, options)
+    await callFn('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, options)
+    await callFn('stock.saveLocation', { id: 'inventory', name: 'Inventory', usage: 'inventory' }, options)
+    await callFn('stock.saveLocation', { id: 'stock', name: 'Stock', usage: 'internal' }, options)
+    await callFn('stock.saveLocation', { id: 'customer', name: 'Customer', usage: 'customer' }, options)
+    await callFn(
+      'stock.adjustInventory',
+      {
+        id: 'adj',
+        productId: 'p1',
+        locationId: 'stock',
+        inventoryLocationId: 'inventory',
+        countedQuantity: '8',
+        productUomId: 'unit',
+      },
+      options,
+    )
+    await callFn(
+      'stock.addMove',
+      {
+        id: 'move',
+        name: 'Áo',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '8',
+        locationId: 'stock',
+        locationDestId: 'customer',
+      },
+      options,
+    )
+
+    const attempts = await Promise.allSettled(
+      Array.from({ length: 8 }, () => callFn('stock.reserveMove', { id: 'move' }, options)),
+    )
+    assert.ok(attempts.some((attempt) => attempt.status === 'fulfilled'))
+    const quant = (
+      await a.all('SELECT quantity, "reservedQuantity" FROM stock_quant WHERE "locationId" = $1', ['stock'])
+    )[0]!
+    assert.equal(quant.quantity, '8')
+    assert.equal(quant.reservedQuantity, '8', 'the mirror never exceeds on-hand quantity')
+    const lines = await a.all('SELECT quantity FROM stock_move_line WHERE "moveId" = $1', ['move'])
+    assert.equal(
+      lines.reduce((sum, line) => sum + Number(line.quantity), 0),
+      8,
+      'MoveLine remains the reservation authority',
+    )
+  })
 })

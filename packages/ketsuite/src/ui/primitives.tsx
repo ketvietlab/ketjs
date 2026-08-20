@@ -5,7 +5,7 @@
 // stylesheet's contract drifting one screen at a time.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 
 /** The data-ui names this file emits. See ui/hooks.ts. */
 export const HOOKS = [
@@ -22,7 +22,7 @@ export const HOOKS = [
 ] as const
 
 /** Small values on one line, allowed to wrap without a caller writing a container. */
-export const inline = (items: readonly unknown[]): TemplateResult => (
+export const inline = (items: readonly JSXChild[]): TemplateResult => (
   <span data-ui="inline">
     {each(
       items,

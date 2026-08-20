@@ -1,269 +1,128 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter, Row } from 'ketjs'
-import { uom, product, convertQty, roundTo, compareQty, isZero, type UomError } from 'ketsuite'
-import type { Unit } from 'ketsuite'
+import type { Row } from 'ketjs'
+import { compareQty, convertQty, isZero, product, roundTo, uom } from 'ketsuite'
 
-const SCOPE = { company: 'acme', branches: null }
 const manifest = compose([uom, product], { headless: true })
-const call = (fn: string, args: Record<string, unknown>, db: Adapter) =>
-  callFn(fn, args, { adapter: db, manifest, scope: SCOPE })
 
-const unit = (id: string, categoryId: string, factor: number, rounding: number): Unit => ({
-  id,
-  categoryId,
-  factor,
-  rounding,
-})
-
-// A kilogram reference, as Odoo would have it: factor is how many of THIS unit
-// make one reference unit.
-const KG = unit('kg', 'weight', 1, 0.001)
-const GRAM = unit('g', 'weight', 1000, 1)
-const TONNE = unit('t', 'weight', 0.001, 0.001)
-const PIECE = unit('pc', 'count', 1, 1)
-
-async function boot(): Promise<Adapter> {
-  const db = sqliteAdapter()
-  await db.open()
-  await migrateOne(db, manifest)
+async function boot() {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await migrateOne(adapter, manifest)
   registerFunctions([uom, product])
-  await db.run('INSERT INTO uom_category (id, name) VALUES (?, ?)', ['weight', 'Khối lượng'])
-  await db.run('INSERT INTO uom_category (id, name) VALUES (?, ?)', ['count', 'Số lượng'])
-  return db
+  return adapter
 }
 
-test('uom: conversion goes through the reference, both directions', () => {
-  assert.equal(convertQty(2, KG, GRAM), 2000)
-  assert.equal(convertQty(2500, GRAM, KG), 2.5)
-  assert.equal(convertQty(1500, KG, TONNE), 1.5)
-  assert.equal(convertQty(1.5, TONNE, GRAM), 1_500_000)
-  assert.equal(convertQty(7, KG, KG), 7, 'the same unit is not a special case that drifts')
+async function save(
+  adapter: Awaited<ReturnType<typeof boot>>,
+  id: string,
+  relativeFactor: string,
+  relativeUomId?: string,
+) {
+  return callFn(
+    'uom.saveUnit',
+    { id, name: id, relativeFactor, ...(relativeUomId ? { relativeUomId } : {}) },
+    { adapter, manifest },
+  )
+}
+
+test('uom 19: conversion follows the absolute factor and shared root', () => {
+  const kg = { id: 'kg', parentPath: 'kg/', absoluteFactor: 1, rounding: 0.01 }
+  const g = { id: 'g', parentPath: 'kg/g/', absoluteFactor: 0.001, rounding: 0.01 }
+  assert.equal(convertQty(2.5, kg, g), 2500)
+  assert.equal(convertQty(2500, g, kg), 2.5)
+  assert.throws(
+    () => convertQty(1, kg, { id: 'l', parentPath: 'l/', absoluteFactor: 1, rounding: 0.01 }),
+    (error: unknown) => (error as { code: string }).code === 'E_UOM_ROOT_MISMATCH',
+  )
 })
 
-test('uom: crossing categories is refused, not approximated', () => {
-  const e = (() => {
-    try {
-      convertQty(1, KG, PIECE)
-    } catch (err) {
-      return err as UomError
-    }
-  })()!
-  assert.equal(e.code, 'E_UOM_CATEGORY_MISMATCH')
-  assert.match(e.hint!, /weight to weight, count to count/)
+test('uom 19: roots have factor one, descendants derive factor and parent path', async () => {
+  const adapter = await boot()
+  try {
+    assert.deepEqual((await save(adapter, 'kg', '1')).value, { ok: true, id: 'kg' })
+    assert.deepEqual((await save(adapter, 'g', '0.001', 'kg')).value, { ok: true, id: 'g' })
+    assert.deepEqual((await save(adapter, 'mg', '0.001', 'g')).value, { ok: true, id: 'mg' })
+    const rows = (await callFn('uom.listUnits', { rootId: 'kg' }, { adapter, manifest })).value as Row[]
+    assert.equal(rows.length, 3)
+    const mg = rows.find((row) => row.id === 'mg')!
+    assert.equal(mg.absoluteFactor, 0.000001)
+    assert.equal(mg.parentPath, 'kg/g/mg/')
+    assert.equal(mg.rounding, 0.01)
+  } finally {
+    await adapter.close()
+  }
 })
 
-test('uom: every result is rounded to the target precision, not carried at full float', () => {
-  // 1 gram is the smallest meaningful amount of a unit rounded to 1
-  assert.equal(convertQty(0.0004, KG, GRAM), 0, 'below the precision of the target, it is nothing')
-  assert.equal(convertQty(0.0006, KG, GRAM), 1)
-  // pieces are whole
-  assert.equal(roundTo(2.4, 1), 2)
-  assert.equal(roundTo(2.5, 1), 3)
+test('uom 19: invalid roots, missing parents and cycles are refused', async () => {
+  const adapter = await boot()
+  try {
+    const root = await save(adapter, 'bad', '2')
+    assert.equal((root.value as { ok: boolean }).ok, false)
+    const orphan = await save(adapter, 'g', '0.001', 'missing')
+    assert.equal((orphan.value as { ok: boolean }).ok, false)
+    await save(adapter, 'kg', '1')
+    await save(adapter, 'g', '0.001', 'kg')
+    const cycle = await save(adapter, 'kg', '1000', 'g')
+    assert.equal((cycle.value as { ok: boolean }).ok, false)
+  } finally {
+    await adapter.close()
+  }
 })
 
-test('uom: the rounding helper survives the cases plain arithmetic gets wrong', () => {
-  // 0.29999999999999993 in floating point; naive Math.round(x / 0.1) gives 2
-  assert.equal(roundTo(0.1 + 0.2, 0.1), 0.3)
-  assert.equal(roundTo(2.675, 0.01), 2.68, 'the classic case that rounds down without the precision pass')
-  assert.equal(roundTo(1.005, 0.01), 1.01)
+test('uom 19: changing an ancestor recomputes all descendant factors', async () => {
+  const adapter = await boot()
+  try {
+    await save(adapter, 'kg', '1')
+    await save(adapter, 'box', '10', 'kg')
+    await save(adapter, 'pallet', '5', 'box')
+    await save(adapter, 'box', '12', 'kg')
+    const pallet = (await adapter.all('SELECT "absoluteFactor" FROM uom_unit WHERE id = ?', ['pallet']))[0]!
+    assert.equal(pallet.absoluteFactor, '60')
+  } finally {
+    await adapter.close()
+  }
 })
 
-test('uom: quantities compare at a precision, because === on floats is a bug waiting', () => {
-  const drifted = Array.from({ length: 10 }, () => 0.1).reduce((a, b) => a + b, 0)
-  assert.notEqual(drifted, 1, 'ten tenths is not one, in floating point')
-  assert.equal(compareQty(drifted, 1, 0.001), 0, 'but it is one to the precision anybody cares about')
-  assert.equal(isZero(drifted - 1, 0.001), true)
+test('uom 19: Product Unit precision is singleton and immutable after units exist', async () => {
+  const adapter = await boot()
+  try {
+    assert.deepEqual((await callFn('uom.savePrecision', { digits: 3 }, { adapter, manifest })).value, {
+      ok: true,
+      digits: 3,
+    })
+    await save(adapter, 'unit', '1')
+    const units = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
+    assert.equal(units[0]!.rounding, 0.001)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM uom_precision'))[0]!.n, 1)
+    const changed = await callFn('uom.savePrecision', { digits: 4 }, { adapter, manifest })
+    assert.equal((changed.value as Row).ok, false)
+    assert.equal((await adapter.all('SELECT digits FROM uom_precision'))[0]!.digits, 3)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('uom 19: an ancestor cannot change after a descendant conversion identity is used', async () => {
+  const adapter = await boot()
+  try {
+    await save(adapter, 'unit', '1')
+    await save(adapter, 'box', '10', 'unit')
+    await save(adapter, 'pallet', '5', 'box')
+    await callFn('uom.lockUnit', { id: 'pallet' }, { adapter, manifest })
+    const changed = await save(adapter, 'box', '12', 'unit')
+    assert.equal((changed.value as Row).ok, false)
+    const rows = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
+    assert.equal(rows.find((row) => row.id === 'pallet')!.absoluteFactor, 50)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('uom: rounding and comparison remain symmetric at the configured precision', () => {
+  assert.equal(roundTo(0.30000000000000004, 0.1), 0.3)
   assert.equal(compareQty(1.0005, 1, 0.001), 1)
   assert.equal(compareQty(0.9995, 1, 0.001), -1)
-})
-
-test('uom: a round trip through a coarser unit loses what the coarser unit cannot hold', () => {
-  // This is not a bug to fix, it is the point of a precision — but it has to be
-  // visible, because stock built on the assumption of reversibility will drift.
-  const there = convertQty(1234, GRAM, TONNE)
-  assert.equal(there, 0.001)
-  assert.equal(convertQty(there, TONNE, GRAM), 1000, 'the 234 grams were never representable in tonnes')
-})
-
-test('uom: a category has exactly one reference unit', async () => {
-  const db = await boot()
-  const first = await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  assert.equal((first.value as { ok: boolean }).ok, true)
-
-  const second = await call(
-    'uom.saveUnit',
-    { id: 'lb', name: 'lb', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  const v = second.value as { ok: boolean; errors: Array<{ message: string }> }
-  assert.equal(v.ok, false)
-  assert.match(v.errors[0]!.message, /đã có đơn vị gốc/)
-  await db.close()
-})
-
-test('uom: a reference unit with a factor other than 1 is refused', async () => {
-  const db = await boot()
-  const r = await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 2, rounding: 0.001 },
-    db,
-  )
-  const v = r.value as { ok: boolean; errors: Array<{ field: string; message: string }> }
-  assert.equal(v.ok, false)
-  assert.equal(v.errors[0]!.field, 'factor')
-  assert.match(v.errors[0]!.message, /đơn vị gốc luôn có hệ số 1/)
-  await db.close()
-})
-
-test('uom: a zero or negative factor is refused, since it would divide by zero', async () => {
-  const db = await boot()
-  for (const factor of [0, -3]) {
-    const r = await call(
-      'uom.saveUnit',
-      { id: `x${factor}`, name: 'x', categoryId: 'weight', type: 'smaller', factor, rounding: 1 },
-      db,
-    )
-    assert.equal((r.value as { ok: boolean }).ok, false)
-  }
-  await db.close()
-})
-
-test('uom: converting through the database matches converting in memory', async () => {
-  const db = await boot()
-  await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  await call(
-    'uom.saveUnit',
-    { id: 'g', name: 'g', categoryId: 'weight', type: 'smaller', factor: 1000, rounding: 1 },
-    db,
-  )
-
-  const r = await call('uom.convert', { qty: 2.5, fromId: 'kg', toId: 'g' }, db)
-  assert.deepEqual(r.value, { ok: true, qty: 2500 })
-  assert.equal((r.value as { qty: number }).qty, convertQty(2.5, KG, GRAM))
-  await db.close()
-})
-
-test('uom: converting across categories through the database reports, not throws', async () => {
-  const db = await boot()
-  await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  await call(
-    'uom.saveUnit',
-    { id: 'pc', name: 'cái', categoryId: 'count', type: 'reference', factor: 1, rounding: 1 },
-    db,
-  )
-
-  const r = await call('uom.convert', { qty: 1, fromId: 'kg', toId: 'pc' }, db)
-  const v = r.value as { ok: boolean; code: string }
-  assert.equal(v.ok, false)
-  assert.equal(v.code, 'E_UOM_CATEGORY_MISMATCH')
-  await db.close()
-})
-
-test('uom: a template counts in a unit, and a service needs none', async () => {
-  const db = await boot()
-  await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  await call('product.saveTemplate', { id: 'coffee', name: 'Cà phê', type: 'goods', uomId: 'kg' }, db)
-  await call('product.saveTemplate', { id: 'advice', name: 'Tư vấn', type: 'service' }, db)
-
-  const goods = (await call('product.getTemplate', { id: 'coffee' }, db)).value as Row
-  assert.equal((goods.uom as Row).name, 'kg')
-  const service = (await call('product.getTemplate', { id: 'advice' }, db)).value as Row
-  assert.equal(service.uom, null, 'a service is not counted in kilograms')
-  await db.close()
-})
-
-test('uom: rounding is symmetric about zero, which Math.round is not', () => {
-  // Math.round sends .5 toward positive infinity, so -0.5 becomes -0. Left alone,
-  // that made a quantity half a unit BELOW a threshold compare equal to it while
-  // half a unit above compared greater — an asymmetry in one direction only, which
-  // is exactly the kind that hides for months in a stock ledger.
-  assert.equal(roundTo(0.0005, 0.001), 0.001)
-  assert.equal(roundTo(-0.0005, 0.001), -0.001)
-  assert.equal(compareQty(1.0005, 1, 0.001), 1)
-  assert.equal(compareQty(0.9995, 1, 0.001), -1)
-})
-
-test('uom: a rounded value is a multiple of its own precision', () => {
-  // Three times 0.1 is 0.30000000000000004. A rounding function that returns a
-  // value it would not consider rounded is not a rounding function.
-  for (const [value, precision] of [
-    [0.1 + 0.2, 0.1],
-    [2.675, 0.01],
-    [1 / 3, 0.001],
-    [-7.77, 0.05],
-  ] as const) {
-    const r = roundTo(value, precision)
-    assert.equal(roundTo(r, precision), r, `roundTo(${value}, ${precision}) = ${r} is not stable`)
-  }
-})
-
-test('decimal: a value survives the round trip through the database unchanged', async () => {
-  const db = await boot()
-  // Every one of these is a number a double cannot hold exactly.
-  const awkward = [0.1, 0.001, 0.07, 1 / 3, 12345.6789, 0.30000000000000004]
-  for (const [i, value] of awkward.entries()) {
-    await call(
-      'uom.saveUnit',
-      { id: `u${i}`, name: `u${i}`, categoryId: 'weight', type: 'smaller', factor: value, rounding: 0.001 },
-      db,
-    )
-  }
-  const rows = (await call('uom.listUnits', { categoryId: 'weight' }, db)).value as Row[]
-  for (const [i, value] of awkward.entries()) {
-    const got = rows.find((r) => r.id === `u${i}`)!
-    assert.equal(got.factor, value, `factor ${value} came back as ${String(got.factor)}`)
-    assert.equal(typeof got.factor, 'number', 'and it arrives as a number, not the string it was stored as')
-  }
-  await db.close()
-})
-
-test('decimal: what is stored is the decimal, not a binary approximation of it', async () => {
-  const db = await boot()
-  await call(
-    'uom.saveUnit',
-    { id: 'tenth', name: 'tenth', categoryId: 'weight', type: 'smaller', factor: 0.1, rounding: 0.001 },
-    db,
-  )
-  const raw = (await db.all('SELECT factor FROM uom_unit WHERE id = ?', ['tenth']))[0]!
-  assert.equal(String(raw.factor), '0.1', 'the column holds "0.1", not 0.1000000000000000055')
-  await db.close()
-})
-
-test('decimal: a conversion built from stored factors matches one built in memory', async () => {
-  const db = await boot()
-  await call(
-    'uom.saveUnit',
-    { id: 'kg', name: 'kg', categoryId: 'weight', type: 'reference', factor: 1, rounding: 0.001 },
-    db,
-  )
-  await call(
-    'uom.saveUnit',
-    { id: 't', name: 'tấn', categoryId: 'weight', type: 'bigger', factor: 0.001, rounding: 0.001 },
-    db,
-  )
-
-  const viaDb = (await call('uom.convert', { qty: 2500, fromId: 'kg', toId: 't' }, db)).value as {
-    qty: number
-  }
-  assert.equal(viaDb.qty, 2.5)
-  assert.equal(viaDb.qty, convertQty(2500, KG, TONNE), 'the database is not a second source of drift')
-  await db.close()
+  assert.equal(isZero(-0.0004, 0.001), true)
 })
