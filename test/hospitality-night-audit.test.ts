@@ -179,7 +179,7 @@ test('hospitality night audit: queue worker catches up rent and nightly services
       env: { KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
       log: () => {},
     })
-    assert.equal(await worker.drain(), 1)
+    assert.equal(await worker.drain(), 2, 'night audit and post-check-in stay-notice preparation both run')
 
     const inspector = sqliteAdapter(file)
     await inspector.open()

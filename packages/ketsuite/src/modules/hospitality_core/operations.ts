@@ -595,6 +595,7 @@ export const operations: Record<string, FnSpec> = {
       'write:hospitality_core.Reservation',
       'write:hospitality_core.Folio',
       'write:hospitality_core.RoomAssignment',
+      'enqueue:hospitality_core.prepareStayNotices',
     ],
     idempotent: true,
     agent: true,
@@ -607,6 +608,11 @@ export const operations: Record<string, FnSpec> = {
           const rent = await initializeRecurringRent(ctx, stay, property)
           if (rent.ok !== true) return rent
         }
+        await ctx.jobs.enqueue(
+          'hospitality_core.prepareStayNotices',
+          { stayId: stay.id },
+          { uniqueKey: `stay-notices:${String(stay.id)}` },
+        )
         return success(stay.id, { roomId: stay.currentRoomId, state: stay.state })
       }
       if (stay.state !== 'draft') return failure(issue('state', 'stay_cannot_check_in'))
@@ -673,6 +679,11 @@ export const operations: Record<string, FnSpec> = {
             state: 'active',
           })
           await tx.db.update('hospitality_core.Folio', { id: stay.folioId }, { state: 'open' })
+          await tx.jobs.enqueue(
+            'hospitality_core.prepareStayNotices',
+            { stayId: stay.id },
+            { uniqueKey: `stay-notices:${String(stay.id)}` },
+          )
           return success(stay.id, { roomId: room!.id, state: 'checked_in' })
         }),
       )
@@ -843,13 +854,22 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.StayGuest',
       'read:partner.Partner',
       'write:hospitality_core.StayGuest',
+      'enqueue:hospitality_core.prepareStayNotices',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      const existing = await record(ctx, 'hospitality_core.StayGuest', args.id)
-      if (existing) return success(existing.id)
       const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
+      const existing = await record(ctx, 'hospitality_core.StayGuest', args.id)
+      if (existing) {
+        if (stay?.state === 'checked_in')
+          await ctx.jobs.enqueue(
+            'hospitality_core.prepareStayNotices',
+            { stayId: stay.id },
+            { uniqueKey: `stay-notices:${String(stay.id)}` },
+          )
+        return success(existing.id)
+      }
       const errors: Issue[] = []
       if (!stay) errors.push(issue('stayId', 'stay_missing'))
       if (!text(args.displayName)) errors.push(issue('displayName', 'required'))
@@ -869,14 +889,22 @@ export const operations: Record<string, FnSpec> = {
         if (duplicate) return success(duplicate.id)
       }
       if (errors.length || !stay) return failure(...errors)
-      await ctx.db.insert('hospitality_core.StayGuest', {
-        id: args.id,
-        stayId: args.stayId,
-        propertyId: stay.propertyId,
-        partnerId: args.partnerId,
-        displayName: text(args.displayName),
-        primary: args.primary === true,
-        primaryKey: args.primary === true ? 'primary' : null,
+      await ctx.tx(async (tx) => {
+        await tx.db.insert('hospitality_core.StayGuest', {
+          id: args.id,
+          stayId: args.stayId,
+          propertyId: stay.propertyId,
+          partnerId: args.partnerId,
+          displayName: text(args.displayName),
+          primary: args.primary === true,
+          primaryKey: args.primary === true ? 'primary' : null,
+        })
+        if (stay.state === 'checked_in')
+          await tx.jobs.enqueue(
+            'hospitality_core.prepareStayNotices',
+            { stayId: stay.id },
+            { uniqueKey: `stay-notices:${String(stay.id)}` },
+          )
       })
       return success(args.id)
     },
@@ -993,6 +1021,7 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.GuestDocument',
       'read:storage.Attachment',
       'write:hospitality_core.GuestDocument',
+      'enqueue:hospitality_core.prepareStayNotices',
     ],
     idempotent: true,
     agent: true,
@@ -1029,8 +1058,16 @@ export const operations: Record<string, FnSpec> = {
         ocrState,
         ocrRaw: args.ocrRaw,
       }
-      if (existing) await ctx.db.update('hospitality_core.GuestDocument', { id: args.id }, values)
-      else await ctx.db.insert('hospitality_core.GuestDocument', { id: args.id, ...values })
+      await ctx.tx(async (tx) => {
+        if (existing) await tx.db.update('hospitality_core.GuestDocument', { id: args.id }, values)
+        else await tx.db.insert('hospitality_core.GuestDocument', { id: args.id, ...values })
+        if (stay?.state === 'checked_in')
+          await tx.jobs.enqueue(
+            'hospitality_core.prepareStayNotices',
+            { stayId: stay.id },
+            { uniqueKey: `stay-notices:${String(stay.id)}` },
+          )
+      })
       return success(args.id)
     },
   }),
