@@ -164,6 +164,12 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
       assert.match(html, /data-island="mail\.chatter"/)
       assert.match(html, /data-island="activity\.record"/)
     }
+    if (path === '/admin/accounting') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /Nghiệp vụ hằng ngày/)
+      assert.match(html, /Báo cáo tài chính/)
+      assert.doesNotMatch(html, /data-island="mail\.chatter"/)
+    }
     if (path === '/admin/vendor-bills') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="vendor-bill-create-form"/)
