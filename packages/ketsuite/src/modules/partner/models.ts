@@ -60,13 +60,17 @@ export const models: Record<string, ModelDef> = {
       partnerId: 'ref:partner.Partner',
       // 'contact' | 'invoice' | 'delivery' | 'other'
       use: 'text',
-      street: 'text',
+      street1: 'text',
       street2: 'text?',
-      city: 'text',
-      zip: 'text?',
-      /** Province or state, as free text until there is a reason for a table. */
-      state: 'text?',
-      country: 'text',
+      locality: 'text?',
+      postalCode: 'text?',
+      /** ISO alpha-2 remains available when a country has no installed catalog. */
+      countryCode: 'text',
+      countryId: 'ref:address.Country?',
+      /** Deepest selected node; its parents provide every higher level. */
+      divisionId: 'ref:address.Division?',
+      /** Explicit fallback for countries without a packaged administrative catalog. */
+      divisionText: 'text?',
     },
   },
 

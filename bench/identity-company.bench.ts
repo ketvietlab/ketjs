@@ -14,7 +14,7 @@ type Suite = typeof shippedSuite
 const suite = process.env.KET_BENCH_KETSUITE_MODULE
   ? ((await import(pathToFileURL(process.env.KET_BENCH_KETSUITE_MODULE).href)) as Suite)
   : shippedSuite
-const modules = [suite.partner, suite.company, suite.user]
+const modules = [suite.address, suite.partner, suite.company, suite.user]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'company-a', branch: 'root:company-a', branches: null }
 const adapter = postgresAdapter(url)

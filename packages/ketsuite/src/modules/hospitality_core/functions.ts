@@ -1,5 +1,6 @@
 import { asc, defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
+import { resolveAddress, validateAddress } from '../address/format.ts'
 import {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
@@ -30,6 +31,38 @@ const normalized = <T extends Record<string, unknown>>(
   values: T,
 ): Record<string, unknown> & T => ({ ...raw, ...values })
 const isClock = (value: unknown): boolean => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value))
+const countryCodeOf = (value: unknown): string => {
+  const country = cleanText(value)
+  if (/^vi(?:ệ|e)t\s*nam$/iu.test(country)) return 'VN'
+  return country.toUpperCase()
+}
+
+const propertyPresentation = async (ctx: Ctx, row: Row): Promise<Row> => {
+  let oneLine = [row.street1, row.street2, row.divisionText, row.locality, row.postalCode, row.countryCode]
+    .filter(Boolean)
+    .join(', ')
+  let divisions: Row[] = []
+  if (row.countryId) {
+    const resolved = await resolveAddress(ctx, {
+      street1: row.street1,
+      street2: row.street2,
+      locality: row.locality,
+      postalCode: row.postalCode,
+      countryId: row.countryId,
+      divisionId: row.divisionId,
+    })
+    if (resolved.value) {
+      oneLine = resolved.value.oneLine
+      divisions = resolved.value.divisions
+    }
+  }
+  return {
+    ...row,
+    addressLine: oneLine,
+    city: divisions.at(-1)?.officialName ?? row.locality ?? row.divisionText ?? null,
+    country: row.countryCode ?? null,
+  }
+}
 const isOneOf = (values: readonly string[], value: unknown): boolean => values.includes(String(value))
 
 const record = async (ctx: Ctx, model: string, id: unknown): Promise<Row | null> => {
@@ -82,11 +115,14 @@ const writable = (name: string): string[] =>
       'defaultCheckOut',
       'enforceTimes',
       'starRating',
-      'street',
+      'street1',
       'street2',
-      'city',
-      'state',
-      'country',
+      'locality',
+      'postalCode',
+      'countryCode',
+      'countryId',
+      'divisionId',
+      'divisionText',
       'latitude',
       'longitude',
       'description',
@@ -146,12 +182,19 @@ export const functions: Record<string, FnSpec> = {
       starRating: 'int',
       city: 'text?',
       country: 'text?',
+      addressLine: 'text?',
       active: 'bool',
       rooms: 'int',
       availableRooms: 'int',
       attentionRooms: 'int',
     },
-    effects: ['read:hospitality_core.Property', 'read:hospitality_core.Room'],
+    effects: [
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
+    ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const P = ctx.table('hospitality_core.Property')
@@ -170,17 +213,19 @@ export const functions: Record<string, FnSpec> = {
         if (attention.has(String(room.status))) count.attentionRooms++
         counts.set(key, count)
       }
-      return properties.map((property) => {
-        const count = counts.get(String(property.id)) ?? {
-          rooms: 0,
-          availableRooms: 0,
-          attentionRooms: 0,
-        }
-        return {
-          ...property,
-          ...count,
-        }
-      })
+      return Promise.all(
+        properties.map(async (property) => {
+          const count = counts.get(String(property.id)) ?? {
+            rooms: 0,
+            availableRooms: 0,
+            attentionRooms: 0,
+          }
+          return {
+            ...(await propertyPresentation(ctx, property)),
+            ...count,
+          }
+        }),
+      )
     },
   }),
 
@@ -197,11 +242,19 @@ export const functions: Record<string, FnSpec> = {
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
       starRating: 'int',
-      street: 'text?',
+      street1: 'text?',
       street2: 'text?',
+      locality: 'text?',
+      postalCode: 'text?',
+      countryCode: 'text?',
+      countryId: 'id?',
+      divisionId: 'id?',
+      divisionText: 'text?',
+      street: 'text?',
       city: 'text?',
       state: 'text?',
       country: 'text?',
+      addressLine: 'text?',
       latitude: 'decimal?',
       longitude: 'decimal?',
       description: 'text?',
@@ -223,13 +276,17 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.RoomType',
       'read:hospitality_core.Room',
       'read:hospitality_core.PropertyContact',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
     ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const P = ctx.table('hospitality_core.Property')
-      return ctx.db.one(
+      const row = await ctx.db.one(
         from(P).where(eq(P.id, args.id)).preload('buildings', 'floors', 'roomTypes', 'rooms', 'contacts'),
       )
+      return row ? propertyPresentation(ctx, row) : null
     },
   }),
 
@@ -246,10 +303,18 @@ export const functions: Record<string, FnSpec> = {
       enforceTimes: 'bool?',
       starRating: 'int?',
       street: 'text?',
+      street1: 'text?',
       street2: 'text?',
       city: 'text?',
+      locality: 'text?',
+      zip: 'text?',
+      postalCode: 'text?',
       state: 'text?',
       country: 'text?',
+      countryCode: 'text?',
+      countryId: 'id?',
+      divisionId: 'id?',
+      divisionText: 'text?',
       latitude: 'decimal?',
       longitude: 'decimal?',
       description: 'text?',
@@ -259,7 +324,13 @@ export const functions: Record<string, FnSpec> = {
       defaultCancellationPolicyId: 'id?',
     },
     output: result,
-    effects: ['read:hospitality_core.Property', 'write:hospitality_core.Property'],
+    effects: [
+      'read:hospitality_core.Property',
+      'write:hospitality_core.Property',
+      'read:address.Country',
+      'read:address.CurrentCatalog',
+      'read:address.Division',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
@@ -270,6 +341,13 @@ export const functions: Record<string, FnSpec> = {
         defaultCheckIn: cleanText(raw.defaultCheckIn) || '14:00',
         defaultCheckOut: cleanText(raw.defaultCheckOut) || '12:00',
         starRating: Number(raw.starRating ?? 0),
+        street1: cleanText(raw.street1 ?? raw.street) || null,
+        locality: cleanText(raw.locality ?? raw.city) || null,
+        postalCode: cleanText(raw.postalCode ?? raw.zip) || null,
+        divisionText: cleanText(raw.divisionText ?? raw.state) || null,
+        countryCode: countryCodeOf(raw.countryId ?? raw.countryCode ?? raw.country) || null,
+        countryId: null as string | null,
+        divisionId: raw.divisionId ? String(raw.divisionId) : null,
       })
       const errors: Issue[] = []
       if (!args.code) errors.push(issue('code', 'required'))
@@ -284,6 +362,26 @@ export const functions: Record<string, FnSpec> = {
         errors.push(issue('minimumGuestAge', 'non_negative'))
       if (await duplicate(ctx, 'hospitality_core.Property', 'code', args.code, args.id))
         errors.push(issue('code', 'unique'))
+      if (args.countryCode && !/^[A-Z]{2}$/.test(args.countryCode))
+        errors.push(issue('countryId', 'address.error.countryCode'))
+      if (args.countryCode) {
+        const C = ctx.table('address.Country')
+        const installed = await ctx.db.one(from(C).where(eq(C.id, args.countryCode)))
+        if (installed) {
+          const checked = await validateAddress(ctx, {
+            street1: args.street1,
+            street2: args.street2,
+            locality: args.locality,
+            postalCode: args.postalCode,
+            countryId: args.countryCode,
+            divisionId: args.divisionId,
+          })
+          if (checked.issues.length) return { ok: false, errors: checked.issues }
+          args.countryId = args.countryCode
+        } else if (args.divisionId) {
+          return { ok: false, errors: [{ field: 'divisionId', code: 'address.error.catalogNotInstalled' }] }
+        }
+      }
       if (errors.length) return failure(...errors)
       return save(ctx, 'hospitality_core.Property', args, writable('Property'), {
         enforceTimes: true,

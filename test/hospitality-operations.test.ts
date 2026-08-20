@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
 import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
-const modules = [partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>

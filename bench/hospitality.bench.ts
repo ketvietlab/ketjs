@@ -10,6 +10,7 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'k
 import { postgresAdapter } from 'ketjs-postgres'
 import type { Adapter } from 'ketjs'
 import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
@@ -28,7 +29,7 @@ const keys = Array.from(
   { length: databaseCount },
   (_, index) => `hospitality_bench_${String(index).padStart(3, '0')}`,
 )
-const modules = [partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 registerFunctions(modules)
 

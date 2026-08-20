@@ -11,6 +11,8 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   },
   'partner.Address': {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    country: { belongsTo: 'address.Country', by: 'countryId' },
+    division: { belongsTo: 'address.Division', by: 'divisionId' },
   },
   'partner.AddressDefault': {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
