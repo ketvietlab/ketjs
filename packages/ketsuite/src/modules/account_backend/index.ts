@@ -25,6 +25,7 @@ import {
   reportScreen,
 } from './screens.ts'
 import { moveDetailScreen } from './move-detail-screen.tsx'
+import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -868,19 +869,22 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
-        if (req.method === 'POST') return createInvoice(ctx, url, req, '/admin/vendor-bills')
+        if (req.method === 'POST')
+          return createInvoice(ctx, url, req, `/admin/vendor-bills${localeSuffix(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
         const rows = all.filter((move) =>
           ['in_invoice', 'in_refund', 'in_receipt'].includes(String(move.moveType)),
         )
         return document(ctx, url, req, 'account_backend.vendorBills.title', (_, tr, shell) =>
-          movesScreen(tr, {
-            title: tr('account_backend.vendorBills.title'),
+          vendorBillsScreen(tr, {
             frame: shell,
-            action: '/admin/vendor-bills',
+            action: `/admin/vendor-bills${localeSuffix(url)}`,
             fields: invoiceFields(tr, data, ['in_invoice', 'in_refund', 'in_receipt']),
             rows,
+            locale: localeSuffix(url),
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
         )
       },
@@ -1253,6 +1257,19 @@ const vi: Record<string, string> = {
   'entries.title': 'Bút toán',
   'customerInvoices.title': 'Hoá đơn khách hàng',
   'vendorBills.title': 'Hoá đơn nhà cung cấp',
+  'vendorBill.kicker': 'Công nợ nhà cung cấp',
+  'vendorBill.subtitle': 'Ghi nhận, kiểm tra và theo dõi thanh toán hoá đơn mua hàng.',
+  'vendorBill.summary.total': 'Tổng hoá đơn',
+  'vendorBill.summary.draft': 'Bản nháp',
+  'vendorBill.summary.posted': 'Đã ghi sổ',
+  'vendorBill.summary.unpaid': 'Chưa thanh toán',
+  'vendorBill.create.title': 'Tạo hoá đơn nhà cung cấp',
+  'vendorBill.create.hint': 'Nhập chứng từ, nhà cung cấp, dòng chi phí và tài khoản phải trả.',
+  'vendorBill.list.title': 'Hoá đơn hiện có',
+  'vendorBill.list.hint': 'Mở một chứng từ để kiểm tra dòng bút toán, ghi sổ hoặc theo dõi thanh toán.',
+  'vendorBill.empty': 'Chưa có hoá đơn nhà cung cấp',
+  'vendorBill.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải trả.',
+  'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'payments.title': 'Thanh toán',
   'trialBalance.title': 'Bảng cân đối thử',
   'generalLedger.title': 'Sổ cái',
@@ -1366,6 +1383,19 @@ const en: Record<string, string> = {
   'entries.title': 'Journal entries',
   'customerInvoices.title': 'Customer invoices',
   'vendorBills.title': 'Vendor bills',
+  'vendorBill.kicker': 'Vendor payable',
+  'vendorBill.subtitle': 'Record, review, and track payment of purchase invoices.',
+  'vendorBill.summary.total': 'Total bills',
+  'vendorBill.summary.draft': 'Draft',
+  'vendorBill.summary.posted': 'Posted',
+  'vendorBill.summary.unpaid': 'Unpaid',
+  'vendorBill.create.title': 'Create a vendor bill',
+  'vendorBill.create.hint': 'Enter the document, vendor, expense line, and payable account.',
+  'vendorBill.list.title': 'Current vendor bills',
+  'vendorBill.list.hint': 'Open a document to review journal items, post it, or track payment.',
+  'vendorBill.empty': 'No vendor bills yet',
+  'vendorBill.emptyHint': 'Create the first bill to start tracking accounts payable.',
+  'error.invalid': 'The form is invalid. Check required fields and try again.',
   'payments.title': 'Payments',
   'trialBalance.title': 'Trial balance',
   'generalLedger.title': 'General ledger',

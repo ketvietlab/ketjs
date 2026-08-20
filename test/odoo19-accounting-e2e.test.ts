@@ -164,6 +164,11 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
       assert.match(html, /data-island="mail\.chatter"/)
       assert.match(html, /data-island="activity\.record"/)
     }
+    if (path === '/admin/vendor-bills') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /id="vendor-bill-create-form"/)
+      assert.doesNotMatch(html, /data-island="mail\.chatter"/)
+    }
   }
 
   const english = await e2e.client.get('/admin/accounts?lang=en', {

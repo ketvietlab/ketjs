@@ -180,6 +180,37 @@ export async function collaborationEvidenceApp(
       lineAccountId: 'account-revenue-collab',
       counterpartAccountId: 'account-receivable-collab',
     })
+    await call('account.saveAccount', {
+      id: 'account-payable-collab',
+      code: '331',
+      name: 'Phải trả nhà cung cấp',
+      accountType: 'liability_payable',
+    })
+    await call('account.saveAccount', {
+      id: 'account-expense-collab',
+      code: '642',
+      name: 'Chi phí vận hành',
+      accountType: 'expense',
+    })
+    await call('account.saveJournal', {
+      id: 'account-purchase-collab',
+      name: 'Mua hàng',
+      code: 'PUR',
+      type: 'purchase',
+    })
+    await call('account.createInvoice', {
+      id: 'vendor-bill-collab',
+      journalId: 'account-purchase-collab',
+      moveType: 'in_invoice',
+      partnerId: 'member-party',
+      invoiceDate: '2026-08-20T00:00:00.000Z',
+      ref: 'BILL/COLLAB/2026',
+      description: 'Chi phí vận hành tháng 8',
+      quantity: '1',
+      priceUnit: '3200000',
+      lineAccountId: 'account-expense-collab',
+      counterpartAccountId: 'account-payable-collab',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
