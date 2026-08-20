@@ -339,6 +339,29 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   await call('stock.saveWarehouse', { id: 'wh', name: 'Kho chính', code: 'WH' })
   await call('stock.saveLocation', { id: 'inventory', name: 'Inventory', usage: 'inventory' })
 
+  const warehousesPage = await e2e.client.get('/admin/warehouses?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const warehousesHtml = await warehousesPage.text()
+  assert.match(warehousesHtml, /data-ui="record-workspace"/)
+  assert.match(warehousesHtml, /id="warehouse-create-form"/)
+  assert.match(warehousesHtml, /data-scope="warehouse-create"/)
+  assert.match(warehousesHtml, /name="receptionSteps" value="one_step"/)
+  assert.match(warehousesHtml, /name="deliverySteps" value="pick_pack_ship"/)
+  assert.match(warehousesHtml, /Lô hàng đến/)
+  assert.match(warehousesHtml, /Kho chính/)
+  assert.doesNotMatch(warehousesHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/warehouses?lang=vi', {
+    name: 'Kho phụ form',
+    code: 'WH2',
+    receptionSteps: 'two_steps',
+    deliverySteps: 'pick_ship',
+  })
+  assert.equal(
+    (await call<Row[]>('stock.listWarehouses', {})).value.some((row) => row.code === 'WH2'),
+    true,
+  )
+
   const adjustment = (
     await call<Row>('stock.adjustInventory', {
       id: 'adjust:1',
