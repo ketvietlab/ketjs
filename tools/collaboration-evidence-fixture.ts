@@ -1,8 +1,13 @@
 import { createTestApp } from 'ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
-export async function collaborationEvidenceApp() {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+export async function collaborationEvidenceApp(
+  options: { databaseUrl?: string; app?: typeof ketsuite } = {},
+) {
+  const e2e = await createTestApp(options.app ?? ketsuite, {
+    worker: false,
+    ...(options.databaseUrl ? { env: { DATABASE_URL: options.databaseUrl } } : {}),
+  })
   const scope = { company: 'acme', branches: null }
   const call = <T = unknown>(
     name: string,
@@ -342,10 +347,11 @@ export async function collaborationEvidenceApp() {
     // Evidence-only provider outcomes. The real state machine is exercised by
     // test/mail-transport.test.ts; this fixture keeps the screenshot deterministic.
     await e2e.fixture.withTenant('', async ({ adapter }) => {
+      const p = (position: number) => (adapter.name === 'postgres' ? `$${position}` : '?')
       await adapter.run(
         `UPDATE mail_transport_delivery
-         SET state = 'sent', attempts = 1, providerMessageId = ?, acceptedAt = ?, sentAt = ?, updatedAt = ?
-         WHERE id = ?`,
+         SET state = 'sent', attempts = 1, "providerMessageId" = ${p(1)}, "acceptedAt" = ${p(2)}, "sentAt" = ${p(3)}, "updatedAt" = ${p(4)}
+         WHERE id = ${p(5)}`,
         [
           'memory:delivery-ops-sent',
           '2026-08-20T09:00:00.000Z',
@@ -356,8 +362,8 @@ export async function collaborationEvidenceApp() {
       )
       await adapter.run(
         `UPDATE mail_transport_delivery
-         SET state = 'failed', attempts = 5, lastError = ?, updatedAt = ?
-         WHERE id = ?`,
+         SET state = 'failed', attempts = 5, "lastError" = ${p(1)}, "updatedAt" = ${p(2)}
+         WHERE id = ${p(3)}`,
         ['550 5.1.1 Recipient mailbox does not exist', '2026-08-20T09:02:00.000Z', 'delivery-ops-failed'],
       )
     })
