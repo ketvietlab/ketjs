@@ -1,12 +1,51 @@
-import { asc, defineFn, deleteFrom, eq, from, like } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, bucketEq, compileListFilter, defineFn, deleteFrom, desc, eq, from, isNull, like } from 'ketjs'
+import type { Ctx, FnSpec, ListState, Row } from 'ketjs'
 import { PRODUCT_TYPES } from './types.ts'
+import { emptyProductListState, productListSearch } from './search.ts'
 
-const templateQuery = (ctx: Ctx, args: { type?: string | null; search?: string | null }) => {
+const listStateOf = (value: unknown): ListState | null =>
+  value && typeof value === 'object' ? (value as ListState) : null
+
+const templateQuery = (
+  ctx: Ctx,
+  args: {
+    type?: string | null
+    search?: string | null
+    state?: unknown
+    path?: unknown
+    timezone?: string | null
+  },
+) => {
   const T = ctx.table('product.Template')
-  let query = from(T).where(eq(T.active, true)).orderBy(asc(T.name))
+  const state = listStateOf(args.state)
+  const normalized = state ?? emptyProductListState()
+  let query = from(T)
+  if (!normalized.includeArchived) query = query.where(eq(T.active, true))
   if (args.type != null) query = query.where(eq(T.type, args.type))
   if (args.search) query = query.where(like(T.name, `%${args.search}%`))
+  const compiled = compileListFilter(productListSearch(T), normalized, { timezone: args.timezone ?? 'UTC' })
+  if (compiled) query = query.where(compiled)
+  const path = Array.isArray(args.path) ? args.path : []
+  const spec = productListSearch(T)
+  for (let index = 0; index < path.length; index++) {
+    const selected = normalized.groupBy[index]
+    const field = spec.groupable?.find((candidate) => candidate.key === selected?.key)
+    if (!field) continue
+    const value = path[index]
+    query = query.where(
+      value == null
+        ? isNull(field.col)
+        : selected?.interval
+          ? bucketEq(field.col, selected.interval, args.timezone ?? 'UTC', String(value))
+          : eq(field.col, value),
+    )
+  }
+  const sorts = normalized.sort.length ? normalized.sort : [{ key: 'name', dir: 'asc' as const }]
+  const sortable = new Map((spec.sortable ?? []).map((field) => [field.key, field.col]))
+  for (const sort of sorts) {
+    const col = sortable.get(sort.key)
+    if (col) query = query.orderBy(sort.dir === 'desc' ? desc(col) : asc(col))
+  }
   return query
 }
 
@@ -49,7 +88,16 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listTemplates: defineFn({
-    input: { withVariants: 'bool?', type: 'text?', search: 'text?', limit: 'int?', offset: 'int?' },
+    input: {
+      withVariants: 'bool?',
+      type: 'text?',
+      search: 'text?',
+      state: 'json?',
+      path: 'json?',
+      timezone: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     output: {
       id: 'id',
       name: 'text',
@@ -61,6 +109,8 @@ export const functions: Record<string, FnSpec> = {
       saleOk: 'bool',
       purchaseOk: 'bool',
       active: 'bool?',
+      createdAt: 'datetime?',
+      updatedAt: 'datetime?',
       variants: 'json?',
     },
     effects: ['read:product.Template', 'read:product.Product', 'read:product.TemplateUom'],
@@ -75,11 +125,34 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   countTemplates: defineFn({
-    input: { type: 'text?', search: 'text?' },
+    input: { type: 'text?', search: 'text?', state: 'json?', timezone: 'text?' },
     output: { count: 'int' },
     effects: ['read:product.Template'],
     agent: true,
     handler: async (ctx, args) => ({ count: await ctx.db.count(templateQuery(ctx, args)) }),
+  }),
+
+  groupTemplates: defineFn({
+    input: { state: 'json', path: 'json?', timezone: 'text?', limit: 'int?', offset: 'int?' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const state = listStateOf(args.state)
+      if (!state) return []
+      const path = Array.isArray(args.path) ? args.path : []
+      const T = ctx.table('product.Template')
+      const spec = productListSearch(T)
+      let query = templateQuery(ctx, { state, path, timezone: String(args.timezone ?? 'UTC') })
+      const selected = state.groupBy[path.length]
+      const field = spec.groupable?.find((candidate) => candidate.key === selected?.key)
+      if (!field) return []
+      query = query
+        .groupBy({ col: field.col, interval: selected?.interval, timezone: String(args.timezone ?? 'UTC') })
+        .orderGroupsBy({ by: 'key', dir: 'asc' })
+      if (args.limit != null) query = query.limit(Number(args.limit))
+      if (args.offset != null) query = query.offset(Number(args.offset))
+      return ctx.db.group(query)
+    },
   }),
 
   getTemplate: defineFn({

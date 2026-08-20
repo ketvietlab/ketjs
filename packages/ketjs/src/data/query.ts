@@ -8,10 +8,18 @@ import type { Col, Expr } from './expr.ts'
 import { tableNameFor } from './migrate.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Manifest } from '../types.ts'
+import { assertTimezone } from './time.ts'
+import type { GroupInterval } from './time.ts'
 
 export type Dialect = 'sqlite' | 'postgres'
 export type Sql = { text: string; params: unknown[]; touches: string[] }
 export type Order = { col: Col; dir: 'asc' | 'desc' }
+export type GroupSpec = { col: Col; interval?: GroupInterval; timezone?: string }
+export type AggregateSpec =
+  | { fn: 'count'; as: string }
+  | { fn: 'countDistinct' | 'sum' | 'avg' | 'min' | 'max'; col: Col; as: string }
+export type GroupOrder = { by: 'key' | 'count' | string; dir: 'asc' | 'desc' }
+export type GroupRow = { key: unknown[]; count: number; aggregates: Record<string, unknown> }
 
 export type Table<T = Record<string, Col>> = T & { readonly $model: string; readonly $columns: string[] }
 
@@ -33,7 +41,7 @@ export function table(manifest: Manifest, model: string): Table {
   return Object.freeze(t) as Table
 }
 
-export type QueryKind = 'select' | 'count' | 'delete'
+export type QueryKind = 'select' | 'count' | 'delete' | 'group'
 
 /** Related rows a query has asked for. Never populated by touching a property. */
 export type Preload = { name: string }
@@ -47,6 +55,9 @@ export class Query {
   readonly limitN: number | null
   readonly offsetN: number | null
   readonly preloads: readonly Preload[]
+  readonly groups: readonly GroupSpec[]
+  readonly aggregates: readonly AggregateSpec[]
+  readonly groupOrder: readonly GroupOrder[]
 
   constructor(init: {
     kind: QueryKind
@@ -57,6 +68,9 @@ export class Query {
     limitN?: number | null
     offsetN?: number | null
     preloads?: readonly Preload[]
+    groups?: readonly GroupSpec[]
+    aggregates?: readonly AggregateSpec[]
+    groupOrder?: readonly GroupOrder[]
   }) {
     this.kind = init.kind
     this.model = init.model
@@ -66,6 +80,9 @@ export class Query {
     this.limitN = init.limitN ?? null
     this.offsetN = init.offsetN ?? null
     this.preloads = init.preloads ?? []
+    this.groups = init.groups ?? []
+    this.aggregates = init.aggregates ?? []
+    this.groupOrder = init.groupOrder ?? []
     Object.freeze(this)
   }
 
@@ -79,6 +96,9 @@ export class Query {
       limitN: this.limitN,
       offsetN: this.offsetN,
       preloads: this.preloads,
+      groups: this.groups,
+      aggregates: this.aggregates,
+      groupOrder: this.groupOrder,
       ...patch,
     })
   }
@@ -103,6 +123,36 @@ export class Query {
   count(): Query {
     return this.with({ kind: 'count', columns: null, order: [] })
   }
+  groupBy(...groups: GroupSpec[]): Query {
+    if (!groups.length) throw new KetError({ code: 'E_GROUP_EMPTY', message: 'groupBy requires a field' })
+    for (const group of groups) {
+      if (group.col.model !== this.model)
+        throw new KetError({
+          code: 'E_GROUP_MODEL',
+          message: `cannot group ${this.model} by ${group.col.model}`,
+        })
+      if (group.interval && group.timezone) assertTimezone(group.timezone)
+    }
+    return this.with({ kind: 'group', columns: null, groups: [...this.groups, ...groups] })
+  }
+  aggregate(...aggregates: AggregateSpec[]): Query {
+    for (const aggregate of aggregates) {
+      if (aggregate.fn !== 'count' && aggregate.col.model !== this.model)
+        throw new KetError({
+          code: 'E_GROUP_MODEL',
+          message: `cannot aggregate ${aggregate.col.model} on ${this.model}`,
+        })
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(aggregate.as) || aggregate.as === 'count')
+        throw new KetError({
+          code: 'E_AGGREGATE_ALIAS',
+          message: `invalid aggregate alias "${aggregate.as}"`,
+        })
+    }
+    return this.with({ aggregates: [...this.aggregates, ...aggregates] })
+  }
+  orderGroupsBy(...order: GroupOrder[]): Query {
+    return this.with({ groupOrder: [...this.groupOrder, ...order] })
+  }
 
   /**
    * Ask for a declared relation alongside the rows. Two queries, not one per row:
@@ -117,6 +167,8 @@ export class Query {
   get touches(): string[] {
     const s = exprTouches(this.condition)
     s.add(this.model)
+    for (const group of this.groups) s.add(group.col.model)
+    for (const aggregate of this.aggregates) if (aggregate.fn !== 'count') s.add(aggregate.col.model)
     return [...s].sort()
   }
 
@@ -141,23 +193,82 @@ export class Query {
       }
       if (e.op === 'not') return `NOT (${render(e.expr)})`
       if (e.op === 'null') return `${colSql(e.col)} IS ${e.negated ? 'NOT ' : ''}NULL`
-      if (e.op === 'like') return `${colSql(e.col)} LIKE ${bind(e.value)}`
+      if (e.op === 'bucket') {
+        const column = colSql(e.col)
+        if (dialect === 'postgres') {
+          const format =
+            e.interval === 'quarter'
+              ? 'YYYY-"Q"Q'
+              : e.interval === 'year'
+                ? 'YYYY'
+                : e.interval === 'month'
+                  ? 'YYYY-MM'
+                  : 'YYYY-MM-DD'
+          return `TO_CHAR(DATE_TRUNC('${e.interval}', ${column} AT TIME ZONE ${bind(e.timezone)}), '${format}') = ${bind(e.value)}`
+        }
+        return `ket_date_bucket(${column}, ${bind(e.interval)}, ${bind(e.timezone)}) = ${bind(e.value)}`
+      }
+      if (e.op === 'like')
+        return `${colSql(e.col)} ${e.insensitive && dialect === 'postgres' ? 'ILIKE' : 'LIKE'} ${bind(e.value)}${e.escape ? ` ESCAPE '\\'` : ''}`
       if (e.op === 'in') {
         if (!e.values.length) return '1 = 0'
         return `${colSql(e.col)} IN (${e.values.map(bind).join(', ')})`
       }
-      return `${colSql(e.col)} ${e.cmp} ${bind(e.value)}`
+      const compared = e.numeric && dialect === 'sqlite' ? `CAST(${colSql(e.col)} AS REAL)` : colSql(e.col)
+      return `${compared} ${e.cmp} ${bind(e.value)}`
     }
 
     const t = q(tableNameFor(this.model))
     let text: string
     if (this.kind === 'delete') text = `DELETE FROM ${t}`
     else if (this.kind === 'count') text = `SELECT COUNT(*) AS count FROM ${t}`
-    else
+    else if (this.kind === 'group') {
+      const groupSql = this.groups.map((group) => {
+        const column = colSql(group.col)
+        if (!group.interval) return column
+        const timezone = group.timezone ?? 'UTC'
+        if (dialect === 'postgres') {
+          if (group.interval === 'quarter')
+            return `TO_CHAR(DATE_TRUNC('quarter', ${column} AT TIME ZONE ${bind(timezone)}), 'YYYY-"Q"Q')`
+          const format =
+            group.interval === 'year' ? 'YYYY' : group.interval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'
+          return `TO_CHAR(DATE_TRUNC('${group.interval}', ${column} AT TIME ZONE ${bind(timezone)}), '${format}')`
+        }
+        return `ket_date_bucket(${column}, ${bind(group.interval)}, ${bind(timezone)})`
+      })
+      const aggregateSql = this.aggregates.map((aggregate) => {
+        if (aggregate.fn === 'count') return `COUNT(*) AS ${q(aggregate.as)}`
+        const fn = aggregate.fn === 'countDistinct' ? 'COUNT' : aggregate.fn.toUpperCase()
+        const body =
+          aggregate.fn === 'countDistinct' ? `DISTINCT ${colSql(aggregate.col)}` : colSql(aggregate.col)
+        return `${fn}(${body}) AS ${q(aggregate.as)}`
+      })
+      text = `SELECT ${groupSql.map((sql, i) => `${sql} AS ${q(`__group${i}`)}`).join(', ')}, COUNT(*) AS ${q('__count')}${aggregateSql.length ? `, ${aggregateSql.join(', ')}` : ''} FROM ${t}`
+    } else
       text = `SELECT ${this.columns ? this.columns.map((c) => `${t}.${q(c)}`).join(', ') : `${t}.*`} FROM ${t}`
 
     if (this.condition) text += ` WHERE ${render(this.condition)}`
-    if (this.order.length)
+    if (this.kind === 'group') {
+      text += ` GROUP BY ${this.groups.map((_, i) => String(i + 1)).join(', ')}`
+      if (this.groupOrder.length) {
+        const aliases = new Set(this.aggregates.map((a) => a.as))
+        text += ` ORDER BY ${this.groupOrder
+          .map((order) => {
+            const by =
+              order.by === 'key'
+                ? q('__group0')
+                : order.by === 'count'
+                  ? q('__count')
+                  : aliases.has(order.by)
+                    ? q(order.by)
+                    : null
+            if (!by)
+              throw new KetError({ code: 'E_GROUP_ORDER', message: `unknown group order "${order.by}"` })
+            return `${by} ${order.dir.toUpperCase()}`
+          })
+          .join(', ')}`
+      }
+    } else if (this.order.length)
       text += ` ORDER BY ${this.order.map((o) => `${colSql(o.col)} ${o.dir.toUpperCase()}`).join(', ')}`
     if (this.limitN != null) text += ` LIMIT ${bind(this.limitN)}`
     if (this.offsetN != null) text += ` OFFSET ${bind(this.offsetN)}`
@@ -175,6 +286,9 @@ export class Query {
       limit: this.limitN,
       offset: this.offsetN,
       preloads: this.preloads.map((p) => p.name),
+      groups: this.groups,
+      aggregates: this.aggregates,
+      groupOrder: this.groupOrder,
       touches: this.touches,
     }
   }

@@ -17,6 +17,11 @@ export const HOOKS = [
   'facet',
   'facet-label',
   'facet-remove',
+  'search-menu',
+  'search-menu-open',
+  'search-menu-content',
+  'search-menu-item',
+  'custom-filter',
   'pager',
   'pager-range',
   'pager-step',
@@ -35,6 +40,26 @@ export type Pager = {
 }
 
 export type ViewKind = { id: string; label: string; icon: string; path: string; active: boolean }
+export type SearchMenuItem = {
+  id: string
+  label: string
+  path?: string
+  active?: boolean
+  children?: SearchMenuItem[]
+}
+export type SearchMenu = {
+  id: string
+  label: string
+  items: SearchMenuItem[]
+  customFilter?: {
+    fields: Array<{ value: string; label: string }>
+    operators: Array<{ value: string; label: string }>
+    fieldLabel: string
+    operatorLabel: string
+    valueLabel: string
+    applyLabel: string
+  }
+}
 
 export type ListChrome = {
   create?: { label: string; path: string } | null
@@ -43,7 +68,8 @@ export type ListChrome = {
     value?: string
     placeholder: string
     facets?: Facet[]
-    keep?: Record<string, string>
+    keep?: Record<string, string | string[]>
+    menus?: SearchMenu[]
   } | null
   pager?: Pager | null
   views?: ViewKind[]
@@ -61,7 +87,15 @@ export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult 
         Object.entries(search.keep ?? {}),
         ([key]) => key,
         ([key, value]) => (
-          <input type="hidden" name={key} value={value} />
+          <>
+            {each(
+              Array.isArray(value) ? value : [value],
+              (item, index) => `${key}:${index}:${item}`,
+              (item) => (
+                <input type="hidden" name={key} value={item} />
+              ),
+            )}
+          </>
         ),
       )}
       {each(
@@ -84,9 +118,73 @@ export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult 
         placeholder={search.placeholder}
         aria-label={search.placeholder}
       />
+      {each(
+        search.menus ?? [],
+        (menu) => menu.id,
+        (menu) => searchMenu(menu),
+      )}
     </form>
   )
 }
+
+const menuItems = (items: SearchMenuItem[]): TemplateResult => (
+  <>
+    {each(
+      items,
+      (item) => item.id,
+      (item) =>
+        item.children?.length ? (
+          <div data-ui="search-menu-item" data-nested="true">
+            <span>{item.label}</span>
+            {menuItems(item.children)}
+          </div>
+        ) : (
+          <a data-ui="search-menu-item" data-active={String(item.active === true)} href={item.path ?? '#'}>
+            <span>{item.active ? '✓' : ''}</span>
+            {item.label}
+          </a>
+        ),
+    )}
+  </>
+)
+
+const searchMenu = (menu: SearchMenu): TemplateResult => (
+  <details data-ui="search-menu">
+    <summary data-ui="search-menu-open">
+      {menu.label}
+      {icon('chevron-down')}
+    </summary>
+    <div data-ui="search-menu-content">
+      {menuItems(menu.items)}
+      {!!menu.customFilter && (
+        <fieldset data-ui="custom-filter">
+          <select name="filterField" aria-label={menu.customFilter.fieldLabel}>
+            {each(
+              menu.customFilter.fields,
+              (field) => field.value,
+              (field) => (
+                <option value={field.value}>{field.label}</option>
+              ),
+            )}
+          </select>
+          <select name="filterOp" aria-label={menu.customFilter.operatorLabel}>
+            {each(
+              menu.customFilter.operators,
+              (operator) => operator.value,
+              (operator) => (
+                <option value={operator.value}>{operator.label}</option>
+              ),
+            )}
+          </select>
+          <input name="filterValue" aria-label={menu.customFilter.valueLabel} />
+          <button type="submit" name="applyFilter" value="1">
+            {menu.customFilter.applyLabel}
+          </button>
+        </fieldset>
+      )}
+    </div>
+  </details>
+)
 
 export const listChrome = (_: Translator, title: string, chrome: ListChrome): TemplateResult => (
   <>

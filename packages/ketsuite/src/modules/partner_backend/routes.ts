@@ -245,6 +245,11 @@ export const routes: Record<string, RouteEntry> = {
                 name: 'q',
                 value: search ?? '',
                 placeholder: _('partner_backend.chrome.search'),
+                keep: {
+                  ...(role ? { role } : {}),
+                  ...(includeArchived ? { archived: '1' } : {}),
+                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                },
                 facets: role
                   ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
                   : [],

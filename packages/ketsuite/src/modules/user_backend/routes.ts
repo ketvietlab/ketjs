@@ -722,4 +722,27 @@ export const routes: Record<string, RouteEntry> = {
       if (!(await sessions.update(record, context))) return seeOther('/login')
       return seeOther(inLocale(url, '/admin/profile'))
     },
+
+  '/admin/profile/timezone':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const sessions = await ctx.sessionsOf(url, req)
+      const record = await sessions?.of(req)
+      if (!record)
+        return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.unauthorized'), { status: 401 })
+      const form = await readForm(req)
+      const result = (await ctx.callUnchecked(
+        'user.setTimezone',
+        { timezone: form.timezone ?? '' },
+        url,
+        req,
+      )) as {
+        ok?: boolean
+      }
+      return result.ok
+        ? seeOther(inLocale(url, '/admin/profile'))
+        : seeOther(inLocale(url, '/admin/profile?invalid=timezone'))
+    },
 }

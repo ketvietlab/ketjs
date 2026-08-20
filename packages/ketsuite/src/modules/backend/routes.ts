@@ -5,6 +5,7 @@
 // because it needs the running server. Dispatch checks the live manifest, so these
 // stop answering the moment the module is switched off.
 
+import { isTimezone } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
@@ -31,6 +32,7 @@ export const viewerOf = async (
   if (!record) return null
   const user = (await ctx.callUnchecked('user.getUser', { id: record.userId }, url, req)) as {
     name?: string
+    timezone?: string | null
   } | null
   const live = await ctx.live(req)
   const labels = live.functions['company.contextLabels']
@@ -63,8 +65,12 @@ export const viewerOf = async (
     profilePath: live.routes['/admin/profile']
       ? `/admin/profile${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
       : null,
+    timezone: user?.timezone && isTimezone(user.timezone) ? user.timezone : ctx.config.defaultTimezone,
   }
 }
+
+export const timezoneOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<string> =>
+  (await viewerOf(ctx, url, req))?.timezone ?? ctx.config.defaultTimezone
 
 /**
  * The shell every backend screen sits in. The stylesheets come from ctx.styles(),
