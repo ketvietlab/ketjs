@@ -104,6 +104,7 @@ export const postCharge = async (
         folioId: args.folioId,
         stayId: args.stayId,
         extraLineId: args.extraLineId,
+        nightAuditRunId: args.nightAuditRunId,
         productId: args.productId,
         uomId: args.uomId,
         description: text(args.description),

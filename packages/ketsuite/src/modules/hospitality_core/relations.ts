@@ -12,6 +12,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     contacts: { hasMany: 'hospitality_core.PropertyContact', by: 'propertyId' },
     propertyCharges: { hasMany: 'hospitality_core.PropertyCharge', by: 'propertyId' },
     extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'propertyId' },
+    nightAudits: { hasMany: 'hospitality_core.NightAuditRun', by: 'propertyId' },
     contentImages: { hasMany: 'hospitality_core.ContentImage', by: 'propertyId' },
     cancellationPolicy: {
       belongsTo: 'hospitality_core.CancellationPolicy',
@@ -119,6 +120,10 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     documents: { hasMany: 'hospitality_core.GuestDocument', by: 'stayId' },
     extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'stayId' },
   },
+  'hospitality_core.NightAuditRun': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    charges: { hasMany: 'hospitality_core.Charge', by: 'nightAuditRunId' },
+  },
   'hospitality_core.RoomAssignment': {
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
@@ -133,6 +138,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     extraLine: { belongsTo: 'hospitality_core.ExtraLine', by: 'extraLineId' },
+    nightAuditRun: { belongsTo: 'hospitality_core.NightAuditRun', by: 'nightAuditRunId' },
     product: { belongsTo: 'product.Product', by: 'productId' },
     uom: { belongsTo: 'uom.Unit', by: 'uomId' },
   },

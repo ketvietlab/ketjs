@@ -3497,6 +3497,12 @@
     font-variant-numeric: tabular-nums;
     line-height: 1.25;
   }
+  @media (max-width: 29.9375rem) {
+    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"] {
+      font-size: var(--admin-size-lg);
+      overflow-wrap: anywhere;
+    }
+  }
   [data-ui="metric-detail"] {
     color: var(--admin-ink-secondary);
     font-size: var(--admin-size-sm);

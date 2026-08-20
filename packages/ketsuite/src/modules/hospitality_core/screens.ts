@@ -81,6 +81,33 @@ export type ContentCompleteness = {
   percent: number
 }
 
+export type NightAuditPreview = {
+  propertyId: string
+  auditDate: string
+  inHouseCount: number
+  serviceDue: number
+  rentDue: number
+  existingCount: number
+  estimatedAmount: string | number
+}
+
+export type NightAuditRow = {
+  id: string
+  propertyId: string
+  auditDate: string
+  state: string
+  inHouseCount: number
+  servicePosted: number
+  rentPosted: number
+  existingCount: number
+  totalAmount: string | number
+  attempt: number
+  requestedAt: string
+  startedAt?: string | null
+  completedAt?: string | null
+  error?: string | null
+}
+
 export type AmenityRow = { id: string; code: string; name: string; scope: string }
 export type PolicyRow = {
   id: string
@@ -887,6 +914,214 @@ const feedback = (_: Translator, state?: string | null): TemplateResult | null =
       tone: 'danger',
     })
   return null
+}
+
+const nightAuditFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
+  if (state === 'queued')
+    return notice({
+      title: _('hospitality_core.nightAudit.feedback.queued'),
+      message: _('hospitality_core.nightAudit.feedback.queuedHint'),
+      tone: 'positive',
+    })
+  if (state === 'invalid')
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: _('hospitality_core.nightAudit.feedback.invalidHint'),
+      tone: 'danger',
+    })
+  return null
+}
+
+const nightAuditColumns = (_: Translator, locale: string): Array<Column<NightAuditRow>> => [
+  {
+    key: 'date',
+    label: _('hospitality_core.nightAudit.col.date'),
+    cell: (row) =>
+      new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+        new Date(`${row.auditDate}T12:00:00Z`),
+      ),
+    kind: 'date',
+    priority: 'primary',
+  },
+  {
+    key: 'status',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(
+        _(`hospitality_core.nightAudit.state.${row.state}`),
+        row.state === 'completed'
+          ? 'positive'
+          : row.state === 'failed'
+            ? 'danger'
+            : row.state === 'running'
+              ? 'warning'
+              : 'info',
+      ),
+    kind: 'status',
+  },
+  {
+    key: 'inHouse',
+    label: _('hospitality_core.nightAudit.metric.inHouse'),
+    cell: (row) => String(row.inHouseCount),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'services',
+    label: _('hospitality_core.nightAudit.metric.services'),
+    cell: (row) => String(row.servicePosted),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'rent',
+    label: _('hospitality_core.nightAudit.metric.rent'),
+    cell: (row) => String(row.rentPosted),
+    align: 'end',
+    kind: 'number',
+  },
+  {
+    key: 'amount',
+    label: _('hospitality_core.col.amount'),
+    cell: (row) => formatMoney(_, row.totalAmount),
+    align: 'end',
+    kind: 'currency',
+  },
+  {
+    key: 'attempt',
+    label: _('hospitality_core.nightAudit.col.attempt'),
+    cell: (row) => String(row.attempt),
+    align: 'end',
+    kind: 'number',
+  },
+]
+
+export const nightAuditScreen = (
+  _: Translator,
+  data: {
+    properties: Choice[]
+    propertyId?: string
+    auditDate: string
+    today: string
+    preview?: NightAuditPreview
+    runs: NightAuditRow[]
+  },
+  locale: string,
+  frame: Frame,
+  state?: string | null,
+): TemplateResult => {
+  if (!data.propertyId)
+    return framed(
+      _,
+      _('hospitality_core.screen.nightAudit.title'),
+      frame,
+      emptyState(
+        _('hospitality_core.nightAudit.empty.property'),
+        _('hospitality_core.nightAudit.empty.propertyHint'),
+      ),
+    )
+  const lang: Record<string, string> = { lang: locale }
+  return framed(
+    _,
+    _('hospitality_core.screen.nightAudit.title'),
+    frame,
+    stack([
+      nightAuditFeedback(_, state),
+      formCluster({
+        label: _('hospitality_core.nightAudit.section.selection'),
+        forms: [
+          recordForm({
+            action: '/admin/hospitality/night-audit',
+            method: 'get',
+            layout: 'inline',
+            submit: _('hospitality_core.action.select'),
+            submitVariant: 'secondary',
+            hidden: { ...lang, auditDate: data.auditDate },
+            fields: [
+              {
+                name: 'property',
+                label: _('hospitality_core.menu.properties'),
+                type: 'select',
+                value: data.propertyId,
+                options: choices(data.properties),
+                required: true,
+              },
+            ],
+          }),
+          datePicker({
+            action: '/admin/hospitality/night-audit',
+            label: _('hospitality_core.nightAudit.field.auditDate'),
+            fields: [
+              {
+                name: 'auditDate',
+                label: _('hospitality_core.nightAudit.field.auditDate'),
+                value: data.auditDate,
+                max: data.today,
+                required: true,
+              },
+            ],
+            hidden: { ...lang, property: data.propertyId },
+            submit: _('hospitality_core.nightAudit.action.preview'),
+          }),
+        ],
+      }),
+      data.preview
+        ? cardGrid({
+            items: [
+              {
+                id: 'in-house',
+                label: _('hospitality_core.nightAudit.metric.inHouse'),
+                value: data.preview.inHouseCount,
+              },
+              {
+                id: 'services',
+                label: _('hospitality_core.nightAudit.metric.servicesDue'),
+                value: data.preview.serviceDue,
+              },
+              {
+                id: 'rent',
+                label: _('hospitality_core.nightAudit.metric.rentDue'),
+                value: data.preview.rentDue,
+              },
+              {
+                id: 'night-audit-amount',
+                label: _('hospitality_core.nightAudit.metric.estimated'),
+                value: formatMoney(_, data.preview.estimatedAmount),
+              },
+            ],
+            id: (item) => item.id,
+            card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+          })
+        : null,
+      section({
+        title: _('hospitality_core.nightAudit.section.run'),
+        description: _('hospitality_core.nightAudit.section.runHint'),
+        body: recordForm({
+          action: '/admin/hospitality/night-audit',
+          method: 'post',
+          submit: _('hospitality_core.nightAudit.action.run'),
+          submitVariant: 'primary',
+          hidden: {
+            ...lang,
+            operation: 'request-night-audit',
+            propertyId: data.propertyId,
+            auditDate: data.auditDate,
+          },
+          fields: [],
+        }),
+      }),
+      section({
+        title: _('hospitality_core.nightAudit.section.history'),
+        description: _('hospitality_core.nightAudit.section.historyHint'),
+        body: data.runs.length
+          ? dataTable(_, { columns: nightAuditColumns(_, locale), rows: data.runs, id: (row) => row.id })
+          : emptyState(
+              _('hospitality_core.nightAudit.empty.runs'),
+              _('hospitality_core.nightAudit.empty.runsHint'),
+            ),
+      }),
+    ]),
+  )
 }
 
 const propertyChargeColumns = (_: Translator): Array<Column<PropertyChargeRow>> => [

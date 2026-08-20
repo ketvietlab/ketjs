@@ -1798,3 +1798,27 @@ Property fees are separate provider-visible content. Their create/update writes 
 ContentChange in the same transaction so each private OTA connection can rebuild
 its current payload independently. Storage is not involved: services and fees are
 structured database records, while Storage continues to own only binary media.
+
+## D59 — Hospitality closes a business date on its own worker
+
+A night audit is an operational close for one Property and one local calendar
+date, not an accounting period close. The web process only validates and enqueues
+`hospitality_core.nightAudit` on the maintenance queue. Posting per-night service
+occurrences and recurring weekly/monthly room rent happens on the hospitality
+worker, so a failing hotel job cannot hold an HTTP request open. Deployment owns
+the daily trigger; KetSuite does not add a distributed cron scheduler.
+
+`NightAuditRun` is unique by company, property and business date and records the
+attempt count plus the cumulative occurrences attached to that run. Each Charge still
+has its own stable source key, so a crash after one folio write, two workers racing
+on PostgreSQL or an operator rerunning a completed date converges without duplicate
+money. A run may therefore catch up several missed rent periods and can be retried
+after late service intentions are added.
+
+Long-stay schedules use fixed seven- and thirty-day periods to preserve the source
+system's weekly/monthly contract. Check-in can post the first period immediately,
+or leave it for night audit through `Property.longStayBillOnCheckIn`. Calendar
+dates are normalized at the adapter boundary because SQLite returns date text while
+PostgreSQL may return Date objects. Charges and folio totals remain operational
+records; invoices, tax documents and accounting moves consume them in a later
+integration rather than being created by night audit.
