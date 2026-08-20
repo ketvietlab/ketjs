@@ -25,7 +25,7 @@ import {
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
-import { ACCOMMODATION_TYPES, CHARGE_TYPES, ROOM_STATUSES } from './types.ts'
+import { ACCOMMODATION_TYPES, CHARGE_TYPES, ROOM_STATUSES, ROOM_VIEW_TYPES } from './types.ts'
 
 export type PropertyRow = {
   id: string
@@ -144,11 +144,59 @@ export type RoomTypeRow = {
   description?: string | null
   defaultCapacity: number
   maxAdults?: number
+  maxChildren?: number
+  maxInfants?: number
+  maxExtraBeds?: number
   sizeSqm?: string | number | null
+  viewType?: string | null
+  sharedBathroom?: boolean
   baseRate: string | number
   published: boolean
+  active: boolean
   rooms?: unknown[]
 }
+
+export type RoomTypeDetail = Omit<
+  RoomTypeRow,
+  'propertyId' | 'maxAdults' | 'maxChildren' | 'maxInfants' | 'maxExtraBeds' | 'viewType' | 'sharedBathroom'
+> & {
+  propertyId: string
+  maxAdults: number
+  maxChildren: number
+  maxInfants: number
+  maxExtraBeds: number
+  viewType?: string | null
+  sharedBathroom: boolean
+  color?: string | null
+  cancellationPolicyId?: string | null
+  property?: { id?: string; code?: string; name?: string } | null
+  rooms?: RoomRow[]
+  beds?: Array<{ id?: string; type?: string; quantity?: number }>
+  ratePlans?: Array<{ id?: string; code?: string; name?: string; active?: boolean }>
+  cancellationPolicy?: { id?: string; code?: string; name?: string } | null
+}
+
+export type RoomTypeFormValues = Pick<
+  RoomTypeDetail,
+  | 'id'
+  | 'propertyId'
+  | 'code'
+  | 'name'
+  | 'publicName'
+  | 'description'
+  | 'defaultCapacity'
+  | 'maxAdults'
+  | 'maxChildren'
+  | 'maxInfants'
+  | 'maxExtraBeds'
+  | 'sizeSqm'
+  | 'viewType'
+  | 'sharedBathroom'
+  | 'baseRate'
+  | 'color'
+  | 'cancellationPolicyId'
+  | 'published'
+>
 
 export type ContentImageRow = {
   id: string
@@ -1917,18 +1965,440 @@ export const housekeepingRoomDetailScreen = (
   )
 }
 
-export const roomTypesScreen = (_: Translator, rows: RoomTypeRow[], frame: Frame): TemplateResult =>
-  framed(
+const roomTypeFormFields = (
+  _: Translator,
+  values: RoomTypeFormValues,
+  properties: readonly PropertyRow[],
+  policies: readonly PolicyRow[],
+  creating: boolean,
+): FormField[] => [
+  {
+    name: 'propertyId',
+    label: _('hospitality_core.roomType.field.property'),
+    type: 'select',
+    value: values.propertyId,
+    options: choices(properties),
+    required: true,
+    disabled: !creating,
+  },
+  {
+    name: 'code',
+    label: _('hospitality_core.roomType.field.code'),
+    value: values.code,
+    required: true,
+    help: _('hospitality_core.roomType.field.codeHint'),
+  },
+  {
+    name: 'name',
+    label: _('hospitality_core.roomType.field.name'),
+    value: values.name,
+    required: true,
+  },
+  {
+    name: 'publicName',
+    label: _('hospitality_core.roomType.field.publicName'),
+    value: values.publicName,
+  },
+  {
+    name: 'defaultCapacity',
+    label: _('hospitality_core.roomType.field.defaultCapacity'),
+    type: 'number',
+    value: values.defaultCapacity,
+    required: true,
+    step: '1',
+  },
+  {
+    name: 'maxAdults',
+    label: _('hospitality_core.roomType.field.maxAdults'),
+    type: 'number',
+    value: values.maxAdults,
+    required: true,
+    step: '1',
+  },
+  {
+    name: 'maxChildren',
+    label: _('hospitality_core.roomType.field.maxChildren'),
+    type: 'number',
+    value: values.maxChildren,
+    required: true,
+    step: '1',
+  },
+  {
+    name: 'maxInfants',
+    label: _('hospitality_core.roomType.field.maxInfants'),
+    type: 'number',
+    value: values.maxInfants,
+    required: true,
+    step: '1',
+  },
+  {
+    name: 'maxExtraBeds',
+    label: _('hospitality_core.roomType.field.maxExtraBeds'),
+    type: 'number',
+    value: values.maxExtraBeds,
+    required: true,
+    step: '1',
+  },
+  {
+    name: 'sizeSqm',
+    label: _('hospitality_core.roomType.field.sizeSqm'),
+    type: 'decimal',
+    value: values.sizeSqm,
+  },
+  {
+    name: 'viewType',
+    label: _('hospitality_core.roomType.field.viewType'),
+    type: 'select',
+    value: values.viewType,
+    options: [
+      { value: '', label: _('hospitality_core.roomType.value.noViewType') },
+      ...ROOM_VIEW_TYPES.map((value) => ({
+        value,
+        label: _(`hospitality_core.roomType.view.${value}`),
+      })),
+    ],
+  },
+  {
+    name: 'sharedBathroom',
+    label: _('hospitality_core.roomType.field.sharedBathroom'),
+    type: 'checkbox',
+    value: values.sharedBathroom,
+  },
+  {
+    name: 'baseRate',
+    label: _('hospitality_core.roomType.field.baseRate'),
+    type: 'decimal',
+    value: values.baseRate,
+    required: true,
+    help: _('hospitality_core.roomType.field.baseRateHint'),
+  },
+  {
+    name: 'color',
+    label: _('hospitality_core.roomType.field.color'),
+    type: 'color',
+    value: values.color || '#2563eb',
+  },
+  {
+    name: 'cancellationPolicyId',
+    label: _('hospitality_core.roomType.field.cancellationPolicy'),
+    type: 'select',
+    value: values.cancellationPolicyId,
+    options: [{ value: '', label: _('hospitality_core.roomType.value.inheritPolicy') }, ...choices(policies)],
+  },
+  {
+    name: 'published',
+    label: _('hospitality_core.roomType.field.published'),
+    type: 'checkbox',
+    value: values.published,
+    help: _('hospitality_core.roomType.field.publishedHint'),
+  },
+  {
+    name: 'description',
+    label: _('hospitality_core.roomType.field.description'),
+    type: 'textarea',
+    value: values.description,
+    span: 'full',
+  },
+]
+
+const roomTypeForm = (
+  _: Translator,
+  values: RoomTypeFormValues,
+  properties: readonly PropertyRow[],
+  policies: readonly PolicyRow[],
+  locale: string,
+  action: string,
+  submit: string,
+  cancelHref: string,
+  creating: boolean,
+): TemplateResult =>
+  recordForm({
+    action,
+    fields: roomTypeFormFields(_, values, properties, policies, creating),
+    hidden: {
+      lang: locale,
+      ...(!creating ? { propertyId: values.propertyId } : {}),
+    },
+    submit,
+    submitVariant: 'primary',
+    cancelHref,
+    cancelLabel: _('hospitality_core.action.cancel'),
+  })
+
+const roomTypeFeedback = (
+  _: Translator,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'created' || status === 'saved')
+    return notice({
+      title: _(`hospitality_core.roomType.feedback.${status}`),
+      message: _('hospitality_core.roomType.feedback.savedHint'),
+      tone: 'positive',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const roomTypesScreen = (
+  _: Translator,
+  rows: RoomTypeRow[],
+  properties: PropertyRow[],
+  propertyId: string | undefined,
+  locale: string,
+  frame: Frame,
+): TemplateResult => {
+  const propertyQuery = propertyId ? `&property=${encodeURIComponent(propertyId)}` : ''
+  return framed(
     _,
     _('hospitality_core.screen.roomTypes.title'),
     frame,
-    rows.length
-      ? dataTable(_, { columns: roomTypeColumns(_), rows, id: (row) => row.id })
-      : emptyState(
-          _('hospitality_core.screen.roomTypes.empty'),
-          _('hospitality_core.screen.roomTypes.emptyHint'),
-        ),
+    stack([
+      recordForm({
+        action: '/admin/hospitality/room-types',
+        method: 'get',
+        layout: 'inline',
+        fields: [
+          {
+            name: 'property',
+            label: _('hospitality_core.roomType.field.property'),
+            type: 'select',
+            value: propertyId,
+            options: choices(properties),
+          },
+        ],
+        hidden: { lang: locale },
+        submit: _('hospitality_core.action.apply'),
+        submitVariant: 'secondary',
+      }),
+      properties.length
+        ? linkButton({
+            label: _('hospitality_core.roomType.action.create'),
+            href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
+            variant: 'primary',
+          })
+        : notice({
+            title: _('hospitality_core.roomType.empty.noProperty'),
+            message: _('hospitality_core.roomType.empty.noPropertyHint'),
+            tone: 'warning',
+          }),
+      cardGrid({
+        items: [
+          { id: 'types', label: _('hospitality_core.roomType.metric.types'), value: rows.length },
+          {
+            id: 'published',
+            label: _('hospitality_core.roomType.metric.published'),
+            value: rows.filter((row) => row.published).length,
+          },
+          {
+            id: 'rooms',
+            label: _('hospitality_core.metric.rooms'),
+            value: rows.reduce((sum, row) => sum + (row.rooms?.length ?? 0), 0),
+          },
+        ],
+        id: (item) => item.id,
+        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+      }),
+      rows.length
+        ? dataTable(_, {
+            columns: roomTypeColumns(_),
+            rows,
+            id: (row) => row.id,
+            rowHref: (row) =>
+              `/admin/hospitality/room-types/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+          })
+        : emptyState(
+            _('hospitality_core.screen.roomTypes.empty'),
+            _('hospitality_core.screen.roomTypes.emptyHint'),
+          ),
+    ]),
   )
+}
+
+export const newRoomTypeScreen = (
+  _: Translator,
+  values: RoomTypeFormValues,
+  properties: PropertyRow[],
+  policies: PolicyRow[],
+  locale: string,
+  frame: Frame,
+  errors: readonly string[] = [],
+): TemplateResult =>
+  framed(
+    _,
+    _('hospitality_core.roomType.create.title'),
+    frame,
+    stack([
+      roomTypeFeedback(_, null, errors),
+      section({
+        title: _('hospitality_core.roomType.create.title'),
+        description: _('hospitality_core.roomType.create.hint'),
+        body: roomTypeForm(
+          _,
+          values,
+          properties,
+          policies,
+          locale,
+          `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}`,
+          _('hospitality_core.roomType.action.create'),
+          `/admin/hospitality/room-types?property=${encodeURIComponent(values.propertyId)}&lang=${encodeURIComponent(locale)}`,
+          true,
+        ),
+      }),
+    ]),
+  )
+
+export const roomTypeDetailScreen = (
+  _: Translator,
+  roomType: RoomTypeDetail,
+  properties: PropertyRow[],
+  policies: PolicyRow[],
+  locale: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+  attempted?: RoomTypeFormValues,
+): TemplateResult => {
+  const query = `lang=${encodeURIComponent(locale)}`
+  const values = attempted ?? roomType
+  const propertyName = roomType.property?.name ?? roomType.property?.code ?? roomType.propertyId
+  return framed(
+    _,
+    roomType.name,
+    frame,
+    stack([
+      roomTypeFeedback(_, status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.roomType.detail.kicker'),
+        title: roomType.name,
+        subtitle: `${roomType.code} · ${propertyName}`,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(
+            _(roomType.published ? 'hospitality_core.value.published' : 'hospitality_core.value.draft'),
+            roomType.published ? 'positive' : 'neutral',
+          ),
+          badge(
+            _(roomType.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+            roomType.active ? 'positive' : 'neutral',
+          ),
+        ],
+        summary: [
+          {
+            id: 'rooms',
+            label: _('hospitality_core.metric.rooms'),
+            value: roomType.rooms?.length ?? 0,
+            href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+          },
+          {
+            id: 'rates',
+            label: _('hospitality_core.menu.ratePlans'),
+            value: roomType.ratePlans?.length ?? 0,
+            href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+          },
+          {
+            id: 'beds',
+            label: _('hospitality_core.roomType.metric.beds'),
+            value: (roomType.beds ?? []).reduce((sum, bed) => sum + Number(bed.quantity ?? 0), 0),
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.roomType.action.back'),
+          href: `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.roomType.section.information'),
+            description: _('hospitality_core.roomType.section.informationHint'),
+            body: definitionList({
+              title: roomType.publicName || roomType.name,
+              items: [
+                {
+                  key: 'property',
+                  term: _('hospitality_core.roomType.field.property'),
+                  value: propertyName,
+                },
+                {
+                  key: 'capacity',
+                  term: _('hospitality_core.roomType.field.defaultCapacity'),
+                  value: _('hospitality_core.roomType.value.capacity', {
+                    default: roomType.defaultCapacity,
+                    adults: roomType.maxAdults,
+                    children: roomType.maxChildren,
+                  }),
+                },
+                {
+                  key: 'rate',
+                  term: _('hospitality_core.roomType.field.baseRate'),
+                  value: formatMoney(_, roomType.baseRate),
+                },
+                {
+                  key: 'policy',
+                  term: _('hospitality_core.roomType.field.cancellationPolicy'),
+                  value:
+                    roomType.cancellationPolicy?.name ??
+                    roomType.cancellationPolicy?.code ??
+                    _('hospitality_core.roomType.value.inheritPolicy'),
+                },
+              ],
+            }),
+          }),
+          section({
+            title: _('hospitality_core.roomType.section.settings'),
+            description: _('hospitality_core.roomType.section.settingsHint'),
+            body: roomTypeForm(
+              _,
+              values,
+              properties,
+              policies,
+              locale,
+              `/admin/hospitality/room-types/${encodeURIComponent(roomType.id)}?${query}`,
+              _('hospitality_core.roomType.action.save'),
+              `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+              false,
+            ),
+          }),
+          section({
+            title: _('hospitality_core.roomType.section.next'),
+            description: _('hospitality_core.roomType.section.nextHint'),
+            body: stack(
+              [
+                linkButton({
+                  label: _('hospitality_core.menu.rooms'),
+                  href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.ratePlans'),
+                  href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.inventory'),
+                  href: `/admin/hospitality/inventory?property=${encodeURIComponent(roomType.propertyId)}&roomType=${encodeURIComponent(roomType.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.content'),
+                  href: `/admin/hospitality/content?property=${encodeURIComponent(roomType.propertyId)}&target=room_type%3A${encodeURIComponent(roomType.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+              ],
+              'compact',
+            ),
+          }),
+        ]),
+      }),
+    ]),
+  )
+}
 
 export const amenitiesScreen = (_: Translator, rows: AmenityRow[], frame: Frame): TemplateResult =>
   framed(

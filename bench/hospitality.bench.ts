@@ -271,6 +271,69 @@ try {
   if (!propertySettingsMatch)
     throw new Error('property workspace settings, address preservation or default policy did not persist')
 
+  const roomTypeSettingsStarted = performance.now()
+  const roomTypeSettingsResults = await Promise.all(
+    keys.map(async (key) => {
+      const saved = await call(key, 'hospitality_core.saveRoomType', {
+        id: 'type:0',
+        propertyId: 'property',
+        code: 'T00',
+        name: 'Benchmark river deluxe',
+        publicName: `River Deluxe ${key}`,
+        description: 'Synthetic room type workspace benchmark',
+        defaultCapacity: 3,
+        maxAdults: 2,
+        maxChildren: 1,
+        maxInfants: 1,
+        maxExtraBeds: 1,
+        sizeSqm: '31.5',
+        viewType: 'river',
+        sharedBathroom: false,
+        baseRate: '925000.50',
+        color: '#0f766e',
+        cancellationPolicyId: 'property-default-policy',
+        published: true,
+      })
+      if (!(saved.value as { ok: boolean }).ok)
+        return { key, match: false, saved: saved.value, value: null, expectedRooms: null }
+      const detail = await call(key, 'hospitality_core.getRoomType', { id: 'type:0' })
+      const value = detail.value as Record<string, unknown>
+      const property = value.property as Record<string, unknown> | null
+      const policy = value.cancellationPolicy as Record<string, unknown> | null
+      const rooms = value.rooms as unknown[]
+      const expectedRooms = Math.ceil(roomsPerDatabase / 12)
+      return {
+        key,
+        match:
+          value.publicName === `River Deluxe ${key}` &&
+          Number(value.defaultCapacity) === 3 &&
+          value.viewType === 'river' &&
+          value.color === '#0f766e' &&
+          property?.id === 'property' &&
+          policy?.id === 'property-default-policy' &&
+          rooms.length === expectedRooms,
+        value: {
+          publicName: value.publicName,
+          defaultCapacity: value.defaultCapacity,
+          viewType: value.viewType,
+          color: value.color,
+          propertyId: property?.id,
+          policyId: policy?.id,
+          rooms: rooms.length,
+        },
+        expectedRooms,
+      }
+    }),
+  )
+  const roomTypeSettingsMatch = roomTypeSettingsResults.every((result) => result.match)
+  const roomTypeSettingsMs = performance.now() - roomTypeSettingsStarted
+  if (!roomTypeSettingsMatch)
+    throw new Error(
+      `room type workspace settings, property, policy or room preloads did not persist: ${JSON.stringify(
+        roomTypeSettingsResults.filter((result) => !result.match),
+      )}`,
+    )
+
   const contentImagesPerTarget = 3
   const contentStarted = performance.now()
   await Promise.all(
@@ -1179,7 +1242,7 @@ try {
       return Number(rows[0]!.n)
     }),
   )
-  const minimumContentChanges = 2 + 12 + 13 * contentImagesPerTarget + 3
+  const minimumContentChanges = 3 + 12 + 13 * contentImagesPerTarget + 3
   const durableContentChangesPresent = contentChangeCounts.every((count) => count >= minimumContentChanges)
   if (!durableContentChangesPresent)
     throw new Error('property, room-type or media changes were not recorded durably')
@@ -1209,6 +1272,10 @@ try {
         propertySettingsMs: Number(propertySettingsMs.toFixed(1)),
         propertySettingsPerSecond: Math.round((databaseCount * 1_000) / propertySettingsMs),
         propertySettingsMatch,
+        roomTypeSettingsUpdates: databaseCount,
+        roomTypeSettingsMs: Number(roomTypeSettingsMs.toFixed(1)),
+        roomTypeSettingsPerSecond: Math.round((databaseCount * 1_000) / roomTypeSettingsMs),
+        roomTypeSettingsMatch,
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),

@@ -9,6 +9,7 @@ import {
   CANCELLATION_POLICY_TYPES,
   CONTACT_TYPES,
   ROOM_STATUSES,
+  ROOM_VIEW_TYPES,
 } from './types.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
@@ -646,6 +647,53 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  getRoomType: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      propertyId: 'id',
+      code: 'text',
+      name: 'text',
+      publicName: 'text?',
+      description: 'text?',
+      defaultCapacity: 'int',
+      maxAdults: 'int',
+      maxChildren: 'int',
+      maxInfants: 'int',
+      maxExtraBeds: 'int',
+      sizeSqm: 'decimal?',
+      viewType: 'text?',
+      sharedBathroom: 'bool',
+      baseRate: 'decimal',
+      color: 'text?',
+      cancellationPolicyId: 'id?',
+      published: 'bool',
+      active: 'bool',
+      property: 'json?',
+      rooms: 'json?',
+      beds: 'json?',
+      ratePlans: 'json?',
+      cancellationPolicy: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Bed',
+      'read:hospitality_core.RatePlan',
+      'read:hospitality_core.CancellationPolicy',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const T = ctx.table('hospitality_core.RoomType')
+      return ctx.db.one(
+        from(T)
+          .where(eq(T.id, args.id))
+          .preload('property', 'rooms', 'beds', 'ratePlans', 'cancellationPolicy'),
+      )
+    },
+  }),
+
   saveRoomType: defineFn({
     input: {
       id: 'id',
@@ -678,6 +726,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
+      const current = await record(ctx, 'hospitality_core.RoomType', raw.id)
       const args = normalized(raw, {
         code: cleanCode(raw.code),
         name: cleanText(raw.name),
@@ -691,6 +740,8 @@ export const functions: Record<string, FnSpec> = {
       const errors: Issue[] = []
       if (!(await record(ctx, 'hospitality_core.Property', args.propertyId)))
         errors.push(issue('propertyId', 'property_missing'))
+      if (current && current.propertyId !== args.propertyId)
+        errors.push(issue('propertyId', 'property_mismatch'))
       if (
         args.cancellationPolicyId &&
         !(await record(ctx, 'hospitality_core.CancellationPolicy', args.cancellationPolicyId))
@@ -707,7 +758,14 @@ export const functions: Record<string, FnSpec> = {
       ] as const)
         if (!Number.isInteger(args[field]) || args[field] < 0) errors.push(issue(field, 'non_negative'))
       if (args.defaultCapacity < 1) errors.push(issue('defaultCapacity', 'capacity'))
+      if (args.maxAdults < 1) errors.push(issue('maxAdults', 'capacity'))
+      if (args.defaultCapacity > args.maxAdults + args.maxChildren)
+        errors.push(issue('defaultCapacity', 'capacity_total'))
       if (Number(args.baseRate) < 0) errors.push(issue('baseRate', 'non_negative'))
+      if (args.sizeSqm != null && Number(args.sizeSqm) <= 0) errors.push(issue('sizeSqm', 'positive'))
+      if (args.viewType && !isOneOf(ROOM_VIEW_TYPES, args.viewType))
+        errors.push(issue('viewType', 'view_type'))
+      if (args.color && !/^#[0-9a-f]{6}$/i.test(String(args.color))) errors.push(issue('color', 'color'))
       if (
         await duplicate(ctx, 'hospitality_core.RoomType', 'code', args.code, args.id, [
           'propertyId',

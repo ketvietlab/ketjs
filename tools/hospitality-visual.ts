@@ -139,7 +139,13 @@ try {
     defaultCapacity: 2,
     maxAdults: 2,
     maxChildren: 1,
+    maxInfants: 1,
+    maxExtraBeds: 1,
+    sizeSqm: '29.5',
+    viewType: 'city',
     baseRate: '1450000',
+    color: '#2563eb',
+    cancellationPolicyId: 'flexible',
     published: true,
   })
   await call('hospitality_core.saveRoomType', {
@@ -152,8 +158,20 @@ try {
     defaultCapacity: 3,
     maxAdults: 2,
     maxChildren: 2,
+    maxInfants: 1,
+    maxExtraBeds: 1,
+    sizeSqm: '48',
+    viewType: 'river',
     baseRate: '2650000',
+    color: '#0f766e',
+    cancellationPolicyId: 'flexible',
     published: true,
+  })
+  await call('hospitality_core.saveBed', {
+    id: 'deluxe-king-bed',
+    roomTypeId: roomType,
+    type: 'king',
+    quantity: 1,
   })
   for (const image of [
     {

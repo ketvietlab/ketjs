@@ -182,6 +182,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const propertyLocation = createdProperty.headers.get('location') ?? ''
   assert.match(propertyLocation, /^\/admin\/hospitality\/properties\/[^?]+\?status=created&lang=vi$/)
   const propertyDetailPath = propertyLocation.split('?')[0]!
+  const createdPropertyId = propertyDetailPath.split('/').at(-1)!
   const createdPropertyPage = await e2e.client.get(propertyLocation)
   const createdPropertyHtml = await createdPropertyPage.text()
   assert.match(createdPropertyHtml, /Đã tạo cơ sở lưu trú/)
@@ -218,6 +219,133 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(updatedPropertyHtml, /Ket Riverside Hotel/)
   assert.match(updatedPropertyHtml, /value="5"/)
   assert.doesNotMatch(updatedPropertyHtml, /hospitality_core\./)
+
+  const roomTypeList = await e2e.client.get('/admin/hospitality/room-types?property=hotel&lang=en')
+  const roomTypeListHtml = await roomTypeList.text()
+  assert.equal(roomTypeList.status, 200, roomTypeListHtml)
+  assert.match(roomTypeListHtml, /Create room type/)
+  assert.match(roomTypeListHtml, /\/admin\/hospitality\/room-types\/deluxe\?lang=en/)
+  assert.doesNotMatch(roomTypeListHtml, /hospitality_core\./)
+
+  const newRoomType = await e2e.client.get(
+    `/admin/hospitality/room-types/new?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
+  )
+  const newRoomTypeHtml = await newRoomType.text()
+  assert.equal(newRoomType.status, 200, newRoomTypeHtml)
+  assert.match(newRoomTypeHtml, /Tạo loại phòng/)
+  assert.match(newRoomTypeHtml, /type="color"[^>]*name="color"[^>]*value="#2563eb"/)
+  assert.doesNotMatch(newRoomTypeHtml, /hospitality_core\./)
+
+  const invalidRoomType = await e2e.client.post(
+    '/admin/hospitality/room-types/new?lang=en',
+    new URLSearchParams({
+      propertyId: 'hotel',
+      code: 'BAD-RATE',
+      name: 'Invalid rate room',
+      defaultCapacity: '4',
+      maxAdults: '2',
+      maxChildren: '1',
+      maxInfants: '0',
+      maxExtraBeds: '0',
+      baseRate: '1',
+      viewType: 'space',
+      color: 'blue',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const invalidRoomTypeHtml = await invalidRoomType.text()
+  assert.equal(invalidRoomType.status, 200, invalidRoomTypeHtml)
+  assert.match(invalidRoomTypeHtml, /Default guests cannot exceed/)
+  assert.match(invalidRoomTypeHtml, /View type is invalid/)
+  assert.match(invalidRoomTypeHtml, /#RRGGBB/)
+
+  const invalidDecimalRoomType = await e2e.client.post(
+    '/admin/hospitality/room-types/new?lang=en',
+    new URLSearchParams({
+      propertyId: 'hotel',
+      code: 'BAD-DECIMAL',
+      name: 'Invalid decimal room',
+      defaultCapacity: '2',
+      maxAdults: '2',
+      maxChildren: '0',
+      maxInfants: '0',
+      maxExtraBeds: '0',
+      baseRate: 'invalid',
+      color: '#2563eb',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const invalidDecimalRoomTypeHtml = await invalidDecimalRoomType.text()
+  assert.equal(invalidDecimalRoomType.status, 200, invalidDecimalRoomTypeHtml)
+  assert.match(invalidDecimalRoomTypeHtml, /valid decimal number/)
+
+  const createdRoomType = await e2e.client.post(
+    `/admin/hospitality/room-types/new?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      code: 'RIVER-DLX',
+      name: 'Deluxe ven sông',
+      publicName: 'Deluxe River View',
+      description: 'Phòng hướng sông với khu vực làm việc riêng.',
+      defaultCapacity: '3',
+      maxAdults: '2',
+      maxChildren: '1',
+      maxInfants: '1',
+      maxExtraBeds: '1',
+      sizeSqm: '31.5',
+      viewType: 'river',
+      baseRate: '1850000.50',
+      color: '#0f766e',
+      published: '1',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(createdRoomType.status, 303, await createdRoomType.clone().text())
+  const roomTypeLocation = createdRoomType.headers.get('location') ?? ''
+  assert.match(roomTypeLocation, /^\/admin\/hospitality\/room-types\/[^?]+\?status=created&lang=vi$/)
+  const roomTypeDetailPath = roomTypeLocation.split('?')[0]!
+  const createdRoomTypePage = await e2e.client.get(roomTypeLocation)
+  const createdRoomTypeHtml = await createdRoomTypePage.text()
+  assert.match(createdRoomTypeHtml, /Đã tạo loại phòng/)
+  assert.match(createdRoomTypeHtml, /Deluxe River View/)
+  assert.match(createdRoomTypeHtml, /value="river" selected/)
+  assert.match(createdRoomTypeHtml, /type="color"[^>]*value="#0f766e"/)
+  assert.doesNotMatch(createdRoomTypeHtml, /hospitality_core\./)
+
+  const updatedRoomType = await e2e.client.post(
+    `${roomTypeDetailPath}?lang=en`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      code: 'RIVER-DLX',
+      name: 'River Deluxe',
+      publicName: 'River Deluxe Suite',
+      description: 'An updated river-facing room type.',
+      defaultCapacity: '2',
+      maxAdults: '2',
+      maxChildren: '1',
+      maxInfants: '1',
+      maxExtraBeds: '1',
+      sizeSqm: '32',
+      viewType: 'river',
+      baseRate: '1950000',
+      color: '#115e59',
+      published: '1',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(updatedRoomType.status, 303, await updatedRoomType.clone().text())
+  const updatedRoomTypePage = await e2e.client.get(updatedRoomType.headers.get('location')!)
+  const updatedRoomTypeHtml = await updatedRoomTypePage.text()
+  assert.match(updatedRoomTypeHtml, /Room type saved/)
+  assert.match(updatedRoomTypeHtml, /River Deluxe Suite/)
+  assert.match(updatedRoomTypeHtml, /value="1950000"/)
+  assert.doesNotMatch(updatedRoomTypeHtml, /hospitality_core\./)
 
   const directQuote = await e2e.client.post(
     '/admin/hospitality/reservations',
