@@ -35,6 +35,15 @@
     margin: 0;
     font-size: 0.875rem;
   }
+  [data-ui="activity-schedule-trigger"] {
+    flex: 0 0 auto;
+  }
+  [data-ui="activity-schedule-trigger"][data-active="true"],
+  [data-ui="activity-action-trigger"][data-active="true"] {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+  }
   [data-ui="activity-schedule"] {
     display: grid;
     gap: var(--admin-gap-sm);
@@ -95,6 +104,16 @@
     font-size: 0.8125rem;
   }
   [data-ui="activity-submit"] {
+    flex: 0 0 auto;
+  }
+  [data-ui="activity-schedule-actions"] > div {
+    display: inline-flex;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="activity-schedule-close"] {
+    flex: 0 0 auto;
+  }
+  [data-ui="activity-action-trigger"] {
     flex: 0 0 auto;
   }
   [data-ui="activity-cancel"] {
@@ -158,11 +177,13 @@
   [data-ui="activity-complete"],
   [data-ui="activity-reschedule"] {
     display: grid;
-    min-inline-size: min(100%, 15rem);
-    flex: 1 1 16rem;
+    min-inline-size: 0;
     grid-template-columns: minmax(8rem, 1fr) auto;
     align-items: end;
     gap: var(--admin-gap-sm);
+    margin-block-start: var(--admin-gap-sm);
+    padding-block-start: var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-line);
   }
   [data-ui="activity-action-field"] {
     display: grid;

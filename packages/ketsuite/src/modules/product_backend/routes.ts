@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { page, text, withHeaders } from 'ketjs'
+import { json, page, text, withHeaders } from 'ketjs'
 import type { RouteEntry, Route, ServeContext } from 'ketjs'
 import {
   attributesScreen,
   newProductScreen,
+  PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
   variantScreen,
   VIEWS,
 } from './screens.ts'
-import type { TemplateRow, View } from './screens.ts'
+import type { ProductDetailTab, TemplateRow, View } from './screens.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import type { Extras } from '../../ui/index.ts'
@@ -35,8 +36,18 @@ const inLocale = (url: URL, path: string): string => {
   if (lang) target.searchParams.set('lang', lang)
   return `${target.pathname}${target.search}`
 }
-const seeProduct = (id: string, url: URL) =>
-  withHeaders(text('', { status: 303 }), { location: inLocale(url, `/admin/products/${id}`) })
+const productTabOf = (url: URL): ProductDetailTab => {
+  const asked = url.searchParams.get('tab')
+  return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
+    ? (asked as ProductDetailTab)
+    : 'general'
+}
+const isProductPartial = (req: Parameters<Route>[1]): boolean =>
+  req.headers['x-ket-partial'] === 'product-detail'
+const seeProduct = (id: string, url: URL, tab: ProductDetailTab = productTabOf(url)) =>
+  withHeaders(text('', { status: 303 }), {
+    location: inLocale(url, `/admin/products/${id}?tab=${tab}`),
+  })
 const seeVariant = (templateId: string, productId: string, url: URL) =>
   seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}`))
 
@@ -333,7 +344,10 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const hasStock = await stockEnabled(ctx, req)
+      const activeTab = productTabOf(url)
+      let savedPartial = false
       if (req.method === 'POST') {
+        const partial = isProductPartial(req)
         const form = await readForm(req)
         const result = await ctx.call(
           'product.saveTemplate',
@@ -351,20 +365,37 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if (!(result as { ok?: boolean }).ok)
+        if (!(result as { ok?: boolean }).ok) {
+          if (partial)
+            return json(
+              { ok: false, message: _('product_backend.error.invalid'), errors: errorsOf(result) },
+              { status: 422 },
+            )
           return seeOther(
             inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`),
           )
+        }
         if (hasStock) {
           const stockResult = await configureStock(ctx, url, req, params.id, form)
-          if (!(stockResult as { ok?: boolean }).ok)
+          if (!(stockResult as { ok?: boolean }).ok) {
+            if (partial)
+              return json(
+                {
+                  ok: false,
+                  message: _('product_backend.error.invalid'),
+                  errors: errorsOf(stockResult),
+                },
+                { status: 422 },
+              )
             return seeOther(
               inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`),
             )
+          }
         }
-        return seeProduct(params.id, url)
+        if (!partial) return seeProduct(params.id, url)
+        savedPartial = true
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      if (req.method !== 'GET' && !savedPartial) return text('GET or POST', { status: 405 })
       const row = (await ctx.call('product.getTemplate', { id: params.id }, url, req)) as {
         id: string
         name: string
@@ -397,20 +428,36 @@ export const routes: Record<string, RouteEntry> = {
             { ...row, ...(stockConfig as Record<string, unknown> | null) },
             {
               status: 'ready',
-              uploadAction: inLocale(url, `/admin/products/${row.id}/media`),
+              uploadAction: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
               images: mediaRows.map((image, index) => ({
                 id: image.id,
                 src: `/files/${image.attachmentId}`,
                 alt: image.alt || image.attachment?.name || row.name,
                 primary: image.primary,
                 actions: {
-                  primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary`),
-                  remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove`),
+                  primary: inLocale(
+                    url,
+                    `/admin/products/${row.id}/media/${image.id}/primary?tab=media`,
+                  ),
+                  remove: inLocale(
+                    url,
+                    `/admin/products/${row.id}/media/${image.id}/remove?tab=media`,
+                  ),
                   ...(index > 0
-                    ? { moveUp: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-up`) }
+                    ? {
+                        moveUp: inLocale(
+                          url,
+                          `/admin/products/${row.id}/media/${image.id}/move-up?tab=media`,
+                        ),
+                      }
                     : {}),
                   ...(index + 1 < mediaRows.length
-                    ? { moveDown: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-down`) }
+                    ? {
+                        moveDown: inLocale(
+                          url,
+                          `/admin/products/${row.id}/media/${image.id}/move-down?tab=media`,
+                        ),
+                      }
                     : {}),
                 },
               })),
@@ -418,7 +465,16 @@ export const routes: Record<string, RouteEntry> = {
                 templateId: row.id,
               }),
             },
-            { ...options, variants, stockEnabled: hasStock, errors: invalidErrors(url, _) },
+            {
+              ...options,
+              variants,
+              stockEnabled: hasStock,
+              errors: invalidErrors(url, _),
+              editor: await ctx.joint(url, req, 'product_backend:template.editor', {
+                templateId: row.id,
+                lang,
+              }),
+            },
             await ctx.joint(url, req, 'product_backend:template.collaboration', {
               resModel: 'product.Template',
               resId: row.id,
@@ -426,6 +482,7 @@ export const routes: Record<string, RouteEntry> = {
             }),
             await frameFor(ctx, url, req),
             localeSuffix(url),
+            activeTab,
           ),
         }),
       })

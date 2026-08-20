@@ -1,4 +1,5 @@
 import { defineModule } from 'ketjs'
+import { islands } from './islands.ts'
 import { routes } from './routes.ts'
 import { menus } from './menus.ts'
 
@@ -26,6 +27,8 @@ export default defineModule({
   title: 'Sản phẩm trong quản trị',
   summary: 'Màn hình danh mục sản phẩm và lối vào từ thanh điều hướng.',
   category: 'Hệ thống',
+  assets: new URL('./client/', import.meta.url),
+  islands,
   routes,
   menus,
   joints: {
@@ -35,6 +38,7 @@ export default defineModule({
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
+    'template.editor': { props: { templateId: 'id', lang: 'text?' } },
   },
   messages: {
     vi: {
@@ -76,6 +80,15 @@ export default defineModule({
       'media.choose': 'Chọn ảnh',
       'media.add': 'Thêm ảnh',
       'detail.information': 'Thông tin sản phẩm',
+      'detail.kicker': 'Sản phẩm',
+      'summary.variants': 'Biến thể',
+      'summary.images': 'Hình ảnh',
+      'summary.tracking': 'Truy xuất',
+      'tabs.label': 'Nội dung sản phẩm',
+      'tabs.general': 'Thông tin chung',
+      'tabs.variants': 'Thuộc tính & biến thể',
+      'tabs.media': 'Hình ảnh',
+      'collaboration.label': 'Trao đổi và hoạt động của sản phẩm',
       'action.create': 'Tạo mới',
       'action.save': 'Lưu',
       'action.cancel': 'Hủy',
@@ -84,6 +97,7 @@ export default defineModule({
       'error.invalid': 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra lại.',
       'field.name': 'Tên',
       'field.type': 'Loại',
+      'field.productKind': 'Loại hàng hoá',
       'field.uom': 'Đơn vị tính',
       'field.category': 'Danh mục',
       'field.listPrice': 'Giá bán',
@@ -163,6 +177,15 @@ export default defineModule({
       'media.choose': 'Choose image',
       'media.add': 'Add image',
       'detail.information': 'Product information',
+      'detail.kicker': 'Product',
+      'summary.variants': 'Variants',
+      'summary.images': 'Images',
+      'summary.tracking': 'Tracking',
+      'tabs.label': 'Product sections',
+      'tabs.general': 'General information',
+      'tabs.variants': 'Attributes & variants',
+      'tabs.media': 'Images',
+      'collaboration.label': 'Product conversation and activities',
       'action.create': 'Create',
       'action.save': 'Save',
       'action.cancel': 'Cancel',
@@ -171,6 +194,7 @@ export default defineModule({
       'error.invalid': 'The submitted data is invalid. Please review it.',
       'field.name': 'Name',
       'field.type': 'Type',
+      'field.productKind': 'Product type',
       'field.uom': 'Unit of measure',
       'field.category': 'Category',
       'field.listPrice': 'Sales price',
@@ -213,6 +237,7 @@ export default defineModule({
     },
   },
   fills: {
+    'product_backend:template.editor': `{% island "product.editor" %}`,
     // KTL, addressing joints by name — the same language a storefront theme uses.
     'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },

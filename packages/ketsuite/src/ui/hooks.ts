@@ -23,6 +23,7 @@ import { HOOKS as schedule } from './schedule.tsx'
 import { HOOKS as mail } from './mail.ts'
 import { HOOKS as activity } from './activity.ts'
 import { HOOKS as calendar } from './calendar.ts'
+import { HOOKS as record } from './record.tsx'
 
 const ALL = [
   ...icons,
@@ -43,6 +44,7 @@ const ALL = [
   ...mail,
   ...activity,
   ...calendar,
+  ...record,
 ]
 
 /** Sorted and de-duplicated: two files may legitimately share `title`. */
@@ -73,6 +75,7 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['mail', mail],
           ['activity', activity],
           ['calendar', calendar],
+          ['record', record],
         ] as Array<[string, readonly string[]]>
       )
         .filter(([, list]) => (list as readonly string[]).includes(h))
