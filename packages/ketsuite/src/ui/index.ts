@@ -27,6 +27,7 @@ export {
   initials,
   actionButton,
   code,
+  qrCode,
 } from './primitives.tsx'
 export type { Tone } from './primitives.tsx'
 export { notice, emptyState, errorState, loadingState } from './state.tsx'

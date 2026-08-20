@@ -103,6 +103,19 @@ export { default as accountPartner } from './modules/account_partner/index.ts'
 export { default as accountPartnerBackend } from './modules/account_partner_backend/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as companyBackend } from './modules/company_backend/index.ts'
+export { default as hr } from './modules/hr/index.ts'
+export { default as attendance } from './modules/attendance/index.ts'
+export { default as hrBackend } from './modules/hr_backend/index.ts'
+export { default as attendanceBackend } from './modules/attendance_backend/index.ts'
+export {
+  LEAVE_PORTIONS,
+  LEAVE_STATES,
+  ROSTER_STATES,
+  SHIFT_STATES,
+} from './modules/hr/types.ts'
+export type { LeavePortion, LeaveState, RosterState, ShiftState } from './modules/hr/types.ts'
+export { PERIOD_STATES, PUNCH_KINDS, PUNCH_SOURCES, REQUEST_STATES } from './modules/attendance/types.ts'
+export type { PeriodState, PunchKind, PunchSource, RequestState } from './modules/attendance/types.ts'
 export { default as storage } from './modules/storage/index.ts'
 export { default as hospitalityCore } from './modules/hospitality_core/index.ts'
 export {
