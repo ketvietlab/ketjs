@@ -788,41 +788,39 @@ export const routes: Record<string, RouteEntry> = {
             ),
           }
         })
-      return page({
-        body: ctx.document({
-          lang,
-          title: String(current.name),
-          head: await ctx.styles(req),
-          body: lotDetailScreen(
-            _,
-            {
-              lot: {
-                id: String(current.id),
-                name: String(current.name),
-                productId: String(current.productId),
-                productLabel,
-                ref: String(current.ref ?? ''),
-                note: String(current.note ?? ''),
-                active: current.active !== false,
-              },
-              rows: inventoryRows,
-              products: productOptions,
-              action: here,
-              collaboration: await ctx.joint(url, req, 'stock_backend:lot.collaboration', {
-                resModel: 'stock.Lot',
-                resId: String(current.id),
-                lang,
-              }),
-              editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
-                identity: `lot:${String(current.id)}`,
-                lotId: String(current.id),
-                lang,
-              }),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      const body = lotDetailScreen(
+        _,
+        {
+          lot: {
+            id: String(current.id),
+            name: String(current.name),
+            productId: String(current.productId),
+            productLabel,
+            ref: String(current.ref ?? ''),
+            note: String(current.note ?? ''),
+            active: current.active !== false,
+          },
+          rows: inventoryRows,
+          products: productOptions,
+          action: here,
+          collaboration: await ctx.joint(url, req, 'stock_backend:lot.collaboration', {
+            resModel: 'stock.Lot',
+            resId: String(current.id),
+            lang,
+          }),
+          editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
+            identity: `lot:${String(current.id)}`,
+            lotId: String(current.id),
+            lang,
+          }),
+          errors: invalid(url, _),
+        },
+        await frame(ctx, url, req),
+      )
+      return backendPage(ctx, req, {
+        lang,
+        title: String(current.name),
+        body,
       })
     },
 
