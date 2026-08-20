@@ -25,6 +25,7 @@ export type { AppRegistry, AppInfo, AppState } from './kernel/apps.ts'
 export type { Placement, LayoutError } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
+export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
 export { project } from './server/project.ts'
@@ -59,6 +60,21 @@ export {
 export { signRequest, presignUrl, sha256 } from './server/storage/index.ts'
 export type { Storage, Stored, OpenStorage, S3StorageOptions, StorageEffect } from './server/storage/index.ts'
 export type { SigV4Credentials } from './server/storage/index.ts'
+export {
+  effectTransport,
+  memoryTransport,
+  unavailableTransport,
+  validateOutboundMessage,
+} from './server/transport/index.ts'
+export type {
+  MemoryTransport,
+  OpenTransport,
+  OutboundMessage,
+  OutboundTransport,
+  TransportAddress,
+  TransportEffect,
+  TransportReceipt,
+} from './server/transport/index.ts'
 export { multipart } from './server/multipart.ts'
 export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
 export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'

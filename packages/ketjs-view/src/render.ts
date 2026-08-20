@@ -502,7 +502,10 @@ function hydrateInstance(
       }
       return
     }
-    if (value == null || value === false) {
+    // SSR emits no node for an empty string, just as it emits none for null/false.
+    // Requiring a text node here makes any initially-empty conditional fail only
+    // in a real HTML parser, where zero-length text nodes cannot survive.
+    if (value == null || value === false || value === '') {
       part.kind = null
       return
     }

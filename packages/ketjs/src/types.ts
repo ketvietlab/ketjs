@@ -24,7 +24,7 @@ export type RouteEntry =
       handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
 
-export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'datetime'
+export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'date' | 'datetime'
 export type FieldBase = Scalar | 'ref'
 
 export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
@@ -480,6 +480,7 @@ export type JobContext = Ctx & {
   job: JobExecution
   signal: AbortSignal
   storage: import('./server/storage/types.ts').Storage
+  transport: import('./server/transport/types.ts').OutboundTransport
 }
 
 // The adapter contract is asynchronous because a network database has no other

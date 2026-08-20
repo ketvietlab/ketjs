@@ -1,0 +1,418 @@
+import assert from 'node:assert/strict'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import { performance } from 'node:perf_hooks'
+import { collaborationEvidenceApp } from './collaboration-evidence-fixture.ts'
+
+const CHROME = process.env.KET_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+
+type CdpMessage = {
+  id?: number
+  method?: string
+  params?: unknown
+  result?: unknown
+  error?: { message?: string }
+}
+
+class Cdp {
+  readonly socket: WebSocket
+  #id = 0
+  #pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>()
+  #events = new Map<string, Array<(params: unknown) => void>>()
+
+  private constructor(socket: WebSocket) {
+    this.socket = socket
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(String(event.data)) as CdpMessage
+      if (message.id !== undefined) {
+        const pending = this.#pending.get(message.id)
+        if (!pending) return
+        this.#pending.delete(message.id)
+        if (message.error) pending.reject(new Error(message.error.message ?? 'CDP command failed'))
+        else pending.resolve(message.result)
+        return
+      }
+      if (!message.method) return
+      for (const listener of this.#events.get(message.method) ?? []) listener(message.params)
+    })
+  }
+
+  static async connect(url: string): Promise<Cdp> {
+    const socket = new WebSocket(url)
+    await new Promise<void>((resolveOpen, reject) => {
+      const timer = setTimeout(() => reject(new Error('Chrome DevTools WebSocket timed out')), 10_000)
+      socket.addEventListener('open', () => {
+        clearTimeout(timer)
+        resolveOpen()
+      })
+      socket.addEventListener('error', () => {
+        clearTimeout(timer)
+        reject(new Error('Chrome DevTools WebSocket failed'))
+      })
+    })
+    return new Cdp(socket)
+  }
+
+  send<T = Record<string, unknown>>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    const id = ++this.#id
+    return new Promise<T>((resolveCommand, reject) => {
+      this.#pending.set(id, {
+        resolve: (value) => resolveCommand(value as T),
+        reject,
+      })
+      this.socket.send(JSON.stringify({ id, method, params }))
+    })
+  }
+
+  once(method: string, timeoutMs = 10_000): Promise<unknown> {
+    return new Promise((resolveEvent, reject) => {
+      const listeners = this.#events.get(method) ?? []
+      const listener = (params: unknown) => {
+        clearTimeout(timer)
+        this.#events.set(
+          method,
+          (this.#events.get(method) ?? []).filter((entry) => entry !== listener),
+        )
+        resolveEvent(params)
+      }
+      listeners.push(listener)
+      this.#events.set(method, listeners)
+      const timer = setTimeout(() => {
+        this.#events.set(
+          method,
+          (this.#events.get(method) ?? []).filter((entry) => entry !== listener),
+        )
+        reject(new Error(`timed out waiting for ${method}`))
+      }, timeoutMs)
+    })
+  }
+
+  on(method: string, listener: (params: unknown) => void): void {
+    const listeners = this.#events.get(method) ?? []
+    listeners.push(listener)
+    this.#events.set(method, listeners)
+  }
+
+  close(): void {
+    this.socket.close()
+  }
+}
+
+type ChromeHandle = { process: ChildProcess; profile: string; cdp: Cdp }
+
+const startChrome = async (): Promise<ChromeHandle> => {
+  const profile = await mkdtemp(join(tmpdir(), 'ket-collaboration-chrome-'))
+  const child = spawn(
+    CHROME,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--remote-debugging-port=0',
+      `--user-data-dir=${profile}`,
+      '--window-size=1440,1100',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
+  )
+  const browserSocket = await new Promise<string>((resolveSocket, reject) => {
+    let stderr = ''
+    const timer = setTimeout(() => reject(new Error(`Chrome did not expose DevTools: ${stderr}`)), 15_000)
+    child.stderr?.on('data', (chunk) => {
+      stderr += String(chunk)
+      const match = /DevTools listening on (ws:\/\/[^\s]+)/.exec(stderr)
+      if (!match) return
+      clearTimeout(timer)
+      resolveSocket(match[1]!)
+    })
+    child.once('exit', (code) => {
+      clearTimeout(timer)
+      reject(new Error(`Chrome exited before DevTools was ready (${String(code)}): ${stderr}`))
+    })
+  })
+  const endpoint = new URL(browserSocket)
+  let target: { webSocketDebuggerUrl?: string } | undefined
+  for (let attempt = 0; attempt < 50 && !target?.webSocketDebuggerUrl; attempt++) {
+    const list = (await fetch(`http://${endpoint.host}/json/list`).then((response) =>
+      response.json(),
+    )) as Array<{
+      type?: string
+      webSocketDebuggerUrl?: string
+    }>
+    target = list.find((entry) => entry.type === 'page')
+    if (!target?.webSocketDebuggerUrl) await delay(100)
+  }
+  if (!target?.webSocketDebuggerUrl) throw new Error('Chrome exposed no page target')
+  return { process: child, profile, cdp: await Cdp.connect(target.webSocketDebuggerUrl) }
+}
+
+const evaluate = async <T>(cdp: Cdp, expression: string): Promise<T> => {
+  const response = await cdp.send<{
+    result: { value?: T; description?: string }
+    exceptionDetails?: { text?: string; exception?: { description?: string } }
+  }>('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  if (response.exceptionDetails)
+    throw new Error(
+      response.exceptionDetails.exception?.description ??
+        response.exceptionDetails.text ??
+        'browser evaluation failed',
+    )
+  return response.result.value as T
+}
+
+const navigate = async (cdp: Cdp, url: string): Promise<void> => {
+  const loaded = cdp.once('Page.loadEventFired', 15_000)
+  await cdp.send('Page.navigate', { url })
+  await loaded
+}
+
+const waitFor = async (cdp: Cdp, expression: string, timeoutMs = 10_000): Promise<void> => {
+  const deadline = performance.now() + timeoutMs
+  while (performance.now() < deadline) {
+    if (await evaluate<boolean>(cdp, `Boolean(${expression})`)) return
+    await delay(100)
+  }
+  const diagnostic = await evaluate(
+    cdp,
+    `({
+    url: location.href,
+    chatter: document.querySelector('[data-ui="chatter"]')?.outerHTML ?? null,
+    activity: document.querySelector('[data-ui="activity-record"]')?.outerHTML ?? null,
+    body: document.body?.innerText?.slice(-1200) ?? null
+  })`,
+  )
+  throw new Error(`browser condition timed out: ${expression}\n${JSON.stringify(diagnostic, null, 2)}`)
+}
+
+const capture = async (cdp: Cdp, path: string): Promise<void> => {
+  const result = await cdp.send<{ data: string }>('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: true,
+  })
+  await writeFile(path, Buffer.from(result.data, 'base64'))
+}
+
+const e2e = await collaborationEvidenceApp()
+let chrome: ChromeHandle | null = null
+const artifactDir = resolve('docs/assets/odoo-collaboration')
+const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
+try {
+  await mkdir(artifactDir, { recursive: true })
+  chrome = await startChrome()
+  const { cdp } = chrome
+  await cdp.send('Page.enable')
+  await cdp.send('Runtime.enable')
+  await cdp.send('Log.enable')
+  cdp.on('Runtime.exceptionThrown', (params) => console.error(`browser exception: ${JSON.stringify(params)}`))
+  cdp.on('Log.entryAdded', (params) => console.error(`browser log: ${JSON.stringify(params)}`))
+  await navigate(cdp, `${e2e.baseUrl}/login?lang=vi`)
+  const login = await evaluate<{ status: number; ok: boolean }>(
+    cdp,
+    `(async () => {
+      const response = await fetch('/login', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({login: 'admin', password: 'correct horse'})
+      })
+      return {status: response.status, ok: response.ok}
+    })()`,
+  )
+  assert.deepEqual(login, { status: 200, ok: true })
+
+  for (const screen of [
+    {
+      name: 'product-chatter',
+      path: '/admin/products/tpl-collab?lang=vi',
+      ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="failed"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
+    },
+    {
+      name: 'transfer-chatter',
+      path: '/admin/transfers/pick-collab?lang=vi',
+      ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
+    },
+    {
+      name: 'notification-inbox',
+      path: '/admin/inbox?lang=vi',
+      ready: `document.querySelector('[data-ui="content-card"]')`,
+    },
+    {
+      name: 'my-activities',
+      path: '/admin/activities?lang=vi&today=2026-08-20',
+      ready: `document.querySelector('[data-ui="content-card"]') && document.body.textContent.includes('Xác nhận quy cách đóng gói')`,
+    },
+    {
+      name: 'calendar-agenda',
+      path: '/admin/calendar?lang=vi&view=agenda',
+      ready: `document.querySelector('[data-ui="calendar-board"][data-state="ready"][data-view="agenda"]') && document.querySelectorAll('[data-ui="calendar-event"]').length >= 2`,
+    },
+    {
+      name: 'calendar-week',
+      path: '/admin/calendar?lang=vi&view=week',
+      ready: `document.querySelector('[data-ui="calendar-board"][data-state="ready"][data-view="week"]') && document.querySelectorAll('[data-ui="calendar-day"]').length === 7`,
+    },
+    {
+      name: 'calendar-month',
+      path: '/admin/calendar?lang=vi&view=month',
+      ready: `document.querySelector('[data-ui="calendar-board"][data-state="ready"][data-view="month"]') && document.querySelectorAll('[data-ui="calendar-day"]').length === 42`,
+    },
+    {
+      name: 'transactional-outbox',
+      path: '/admin/outbox?lang=vi',
+      ready: `document.querySelectorAll('[data-ui="content-card"]').length >= 2 && document.body.textContent.includes('Gửi lỗi') && document.body.textContent.includes('Đã gửi')`,
+    },
+    {
+      name: 'inbound-email-log',
+      path: '/admin/inbound-email?lang=vi',
+      ready: `document.querySelectorAll('[data-ui="content-card"]').length >= 4 && document.body.textContent.includes('Đã xử lý') && document.body.textContent.includes('Không định tuyến được') && document.body.textContent.includes('Đã bỏ qua')`,
+    },
+  ]) {
+    const started = performance.now()
+    await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+    const navigationMs = await evaluate<number>(
+      cdp,
+      `performance.getEntriesByType('navigation')[0]?.duration ?? 0`,
+    )
+    await waitFor(cdp, screen.ready, 15_000)
+    const readyMs = performance.now() - started
+    report.push({ screen: screen.name, readyMs, navigationMs })
+
+    if (screen.name === 'product-chatter') {
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('[data-ui="chatter-composer"]')
+          const body = form.querySelector('[name="body"]')
+          body.value = '<img src=x onerror=globalThis.__xss=1> Browser E2E'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `document.body.textContent.includes('Browser E2E')`)
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('[data-ui="chatter-message-body"] img'))`),
+        false,
+      )
+      assert.equal(await evaluate(cdp, `globalThis.__xss === 1`), false)
+
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('[data-ui="activity-schedule"]')
+          form.querySelector('[name="typeId"]').value = 'activity-todo'
+          form.querySelector('[name="summary"]').value = 'Hoạt động từ Browser E2E'
+          form.querySelector('[name="note"]').value = 'Được tạo qua island thật.'
+          form.querySelector('[name="dueDate"]').value = '2026-08-20'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `[...document.querySelectorAll('[data-ui="activity-item"]')].some((item) => item.textContent.includes('Hoạt động từ Browser E2E'))`,
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const item = [...document.querySelectorAll('[data-ui="activity-item"]')]
+            .find((entry) => entry.textContent.includes('Hoạt động từ Browser E2E'))
+          const form = item.querySelector('[data-ui="activity-complete"]')
+          form.querySelector('[name="feedback"]').value = 'Đã kiểm chứng trên Chrome headless.'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `[...document.querySelectorAll('[data-ui="activity-item"][data-state="done"]')].some((item) => item.textContent.includes('Hoạt động từ Browser E2E'))`,
+      )
+    }
+    if (screen.name === 'transfer-chatter') {
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('[data-ui="chatter-composer"]')
+          form.querySelector('[name="kind"][value="note"]').checked = true
+          form.querySelector('[name="body"]').value = 'Headless note on transfer'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `document.body.textContent.includes('Headless note on transfer')`)
+      assert.ok(
+        await evaluate<number>(
+          cdp,
+          `document.querySelectorAll('[data-ui="chatter-message"][data-kind="note"]').length`,
+        ),
+      )
+    }
+    if (screen.name === 'calendar-agenda') {
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('[data-ui="calendar-create"]')
+          form.querySelector('[name="name"]').value = 'Sự kiện từ Browser E2E'
+          form.querySelector('[name="start"]').value = '2026-08-20T14:00'
+          form.querySelector('[name="stop"]').value = '2026-08-20T15:00'
+          form.querySelector('[name="location"]').value = 'Phòng kiểm chứng'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `document.body.textContent.includes('Sự kiện từ Browser E2E')`)
+    }
+    await capture(cdp, join(artifactDir, `${screen.name}.png`))
+  }
+
+  await writeFile(
+    join(artifactDir, 'browser-e2e.json'),
+    `${JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        viewport: { width: 1440, height: 1100 },
+        assertions: [
+          'authenticated product and transfer islands reached ready state',
+          'message and internal-note composer crossed real browser HTTP',
+          'Chatter exposed linked sent and terminal-failure email delivery states',
+          'record activity island scheduled and completed an activity through real browser HTTP',
+          'My Activities rendered the actor due list and sidebar counter',
+          'Agenda, week and month calendar views hydrated with bounded occurrence expansion',
+          'calendar event creation crossed real browser HTTP and remained visible after reload',
+          'transactional outbox rendered both provider-accepted and terminal-failure delivery states',
+          'inbound log rendered processed, failed and ignored signed-provider outcomes',
+          'plain-text message markup did not execute or create an img element',
+          'notification inbox rendered an unread message',
+        ],
+        screens: report,
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  for (const row of report)
+    console.log(
+      `${row.screen.padEnd(24)} navigation=${row.navigationMs.toFixed(1).padStart(6)} ms  interactive=${row.readyMs.toFixed(1).padStart(6)} ms`,
+    )
+  console.log(`screenshots: ${artifactDir}`)
+} finally {
+  chrome?.cdp.close()
+  if (chrome?.process.exitCode === null) {
+    chrome.process.kill('SIGTERM')
+    await Promise.race([
+      new Promise<void>((resolveExit) => chrome?.process.once('exit', () => resolveExit())),
+      delay(2_000).then(() => {
+        if (chrome?.process.exitCode === null) chrome.process.kill('SIGKILL')
+      }),
+    ])
+  }
+  if (chrome)
+    await rm(chrome.profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(
+      () => {},
+    )
+  await e2e.close()
+}

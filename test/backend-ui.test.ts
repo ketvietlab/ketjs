@@ -8,6 +8,8 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
+  activityContractCases,
+  calendarContractCases,
   appsScreen,
   badge,
   breadcrumbs,
@@ -29,6 +31,7 @@ import {
   kanbanGrid,
   linkButton,
   loadingState,
+  mailContractCases,
   metric,
   mediaPanel,
   notice,
@@ -288,6 +291,9 @@ const everything = [
   settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
   errorState('E_X', 'msg', 'hint'),
   ...componentContract,
+  ...mailContractCases(),
+  ...activityContractCases(),
+  ...calendarContractCases(),
 ]
   .map((r) => renderToString(r))
   .join('')
@@ -304,7 +310,14 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
 })
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
@@ -320,7 +333,14 @@ test('sidebar: every KetSuite app declares a glyph carried by the design system'
 })
 
 test('design tokens: every admin role used by components is declared', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
   const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))

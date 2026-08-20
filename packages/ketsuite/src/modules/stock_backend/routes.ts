@@ -19,6 +19,9 @@ const frame = async (ctx: ServeContext, url: URL, req: Req) => ({
   extras: {
     'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
     'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+    'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', {
+      lang: ctx.localeOf(url, req),
+    }),
   },
 })
 
@@ -468,6 +471,11 @@ export const routes: Record<string, RouteEntry> = {
               ]),
             ]
           : []),
+        await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+          resModel: 'stock.Picking',
+          resId: String(current.id),
+          lang,
+        }),
       ])
     },
 

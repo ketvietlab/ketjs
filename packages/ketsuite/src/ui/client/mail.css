@@ -1,0 +1,199 @@
+@layer components {
+  [data-ui="chatter"] {
+    display: grid;
+    gap: var(--admin-gap-md);
+    max-inline-size: 52rem;
+    padding: var(--admin-gap-lg);
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="chatter-head"],
+  [data-ui="chatter-compose-actions"],
+  [data-ui="chatter-message-head"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chatter-title"] {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  [data-ui="chatter-heading"],
+  [data-ui="chatter-author"],
+  [data-ui="chatter-loading"],
+  [data-ui="chatter-empty"],
+  [data-ui="mail-indicator-icon"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="chatter-followers"],
+  [data-ui="chatter-time"] {
+    color: var(--admin-ink-muted);
+    font-size: 0.75rem;
+  }
+
+  [data-ui="chatter-follow"],
+  [data-ui="chatter-send"],
+  [data-ui="chatter-more"],
+  [data-ui="chatter-error"] button {
+    min-block-size: 2.25rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  [data-ui="chatter-send"] {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+  }
+
+  [data-ui="chatter-composer"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-md);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-subtle);
+  }
+
+  [data-ui="chatter-kinds"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chatter-kind"],
+  [data-ui="chatter-attachment"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="chatter-body"] {
+    min-block-size: 6rem;
+    resize: vertical;
+    padding: 0.75rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+  }
+
+  [data-ui="chatter-timeline"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chatter-message"] {
+    padding: var(--admin-gap-md);
+    border-inline-start: 3px solid var(--admin-accent);
+    border-radius: 0 var(--admin-radius-sm) var(--admin-radius-sm) 0;
+    background: var(--admin-surface-subtle);
+  }
+
+  [data-ui="chatter-message"][data-kind="note"] {
+    border-inline-start-color: var(--admin-warning);
+    background: var(--admin-warning-soft);
+    color: var(--admin-status-fixed-ink);
+  }
+
+  [data-ui="chatter-message"][data-kind="note"] [data-ui="chatter-time"] {
+    color: var(--admin-status-fixed-ink-secondary);
+  }
+
+  [data-ui="chatter-message-body"] {
+    margin: var(--admin-gap-xs) 0 0;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  [data-ui="chatter-attachments"] {
+    margin: var(--admin-gap-sm) 0 0;
+    padding-inline-start: 1.25rem;
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="chatter-deliveries"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-xs);
+    margin: var(--admin-gap-sm) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-ui="chatter-delivery"] {
+    display: inline-flex;
+    gap: var(--admin-gap-xs);
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  [data-ui="chatter-delivery"][data-state="sent"] {
+    background: var(--admin-success-soft);
+    color: var(--admin-success);
+  }
+
+  [data-ui="chatter-delivery"][data-state="failed"] {
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+
+  [data-ui="chatter-error"] {
+    padding: var(--admin-gap-sm);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+
+  [data-ui="mail-indicator"] {
+    position: relative;
+    display: grid;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    text-decoration: none;
+  }
+
+  [data-ui="mail-indicator"]:hover {
+    background: var(--admin-surface-hover);
+    color: var(--admin-ink);
+  }
+
+  [data-ui="mail-indicator-count"] {
+    position: absolute;
+    inset-block-start: -0.125rem;
+    inset-inline-end: -0.125rem;
+    min-inline-size: 1rem;
+    padding-inline: 0.1875rem;
+    border-radius: 0.5rem;
+    background: var(--admin-danger);
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1rem;
+    text-align: center;
+  }
+}

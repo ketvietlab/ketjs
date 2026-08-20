@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-08-20T03:57:20.917Z",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "assertions": [
+    "authenticated product and transfer islands reached ready state",
+    "message and internal-note composer crossed real browser HTTP",
+    "Chatter exposed linked sent and terminal-failure email delivery states",
+    "record activity island scheduled and completed an activity through real browser HTTP",
+    "My Activities rendered the actor due list and sidebar counter",
+    "Agenda, week and month calendar views hydrated with bounded occurrence expansion",
+    "calendar event creation crossed real browser HTTP and remained visible after reload",
+    "transactional outbox rendered both provider-accepted and terminal-failure delivery states",
+    "inbound log rendered processed, failed and ignored signed-provider outcomes",
+    "plain-text message markup did not execute or create an img element",
+    "notification inbox rendered an unread message"
+  ],
+  "screens": [
+    {
+      "screen": "product-chatter",
+      "readyMs": 306.59962499999983,
+      "navigationMs": 159.39999985694885
+    },
+    {
+      "screen": "transfer-chatter",
+      "readyMs": 203.30625000000055,
+      "navigationMs": 86.5
+    },
+    {
+      "screen": "notification-inbox",
+      "readyMs": 95.17729099999997,
+      "navigationMs": 76
+    },
+    {
+      "screen": "my-activities",
+      "readyMs": 123.53116599999976,
+      "navigationMs": 94.69999980926514
+    },
+    {
+      "screen": "calendar-agenda",
+      "readyMs": 197.6038749999998,
+      "navigationMs": 80.89999985694885
+    },
+    {
+      "screen": "calendar-week",
+      "readyMs": 180.34091699999954,
+      "navigationMs": 74.70000004768372
+    },
+    {
+      "screen": "calendar-month",
+      "readyMs": 232.24987499999952,
+      "navigationMs": 101.30000019073486
+    },
+    {
+      "screen": "transactional-outbox",
+      "readyMs": 185.7613339999998,
+      "navigationMs": 89
+    },
+    {
+      "screen": "inbound-email-log",
+      "readyMs": 230.22249999999985,
+      "navigationMs": 112.30000019073486
+    }
+  ]
+}

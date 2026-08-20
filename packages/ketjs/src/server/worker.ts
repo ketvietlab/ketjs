@@ -12,6 +12,7 @@ import { jobDefinition } from './jobs.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
 import { bootRuntime } from './runtime.ts'
 import { effectStorage, namespacedStorage, storageFromConfig } from './storage/index.ts'
+import { effectTransport, unavailableTransport } from './transport/index.ts'
 import type { DurableJob, Queue } from './queue.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
 import type { Adapter, JobContext, Manifest } from '../types.ts'
@@ -121,6 +122,7 @@ export async function bootWorker(
   const env = options.env ?? process.env
   const { config, manifest } = await bootRuntime(spec, { env })
   const baseStorage = await (spec.serve?.openStorage ?? storageFromConfig)(config)
+  const baseTransport = await (spec.serve?.openTransport ?? unavailableTransport)(config)
   const storageFor = (tenant: string) => namespacedStorage(baseStorage, tenant || spec.name)
 
   const source = await tenantSource(spec, manifest, config)
@@ -249,6 +251,7 @@ export async function bootWorker(
         },
         signal: controller.signal,
         storage: effectStorage(storageFor(tenant.key), meta.effects, job.job),
+        transport: effectTransport(baseTransport, meta.effects, job.job),
       }) as JobContext
       await definition.handler(context, job.args)
       if (timedOut || controller.signal.aborted) {
@@ -469,6 +472,7 @@ export async function bootWorker(
         for (const controller of controllers.values()) controller.abort(new Error('worker shutting down'))
       await unsubscribe?.()
       await source.close()
+      await baseTransport.close?.()
     },
   }
 }

@@ -1,0 +1,370 @@
+import { createTestApp } from 'ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/app.ts'
+
+export async function collaborationEvidenceApp() {
+  const e2e = await createTestApp(ketsuite, { worker: false })
+  const scope = { company: 'acme', branches: null }
+  const call = <T = unknown>(
+    name: string,
+    input: Record<string, unknown> = {},
+    actor: string | null = null,
+  ) => e2e.fixture.call<T>(name, input, { scope, actor })
+  try {
+    for (const [id, kind, name] of [
+      ['acme-party', 'company', 'ACME Distribution'],
+      ['admin-party', 'person', 'Nguyễn Quản Trị'],
+      ['member-party', 'person', 'Trần Điều Phối'],
+    ])
+      await call('partner.savePartner', {
+        id,
+        kind,
+        name,
+        email: `${id}@example.test`,
+      })
+    await call('company.saveCompany', {
+      id: 'acme',
+      partnerId: 'acme-party',
+      currency: 'VND',
+    })
+    for (const [id, partnerId, name] of [
+      ['admin', 'admin-party', 'Nguyễn Quản Trị'],
+      ['member', 'member-party', 'Trần Điều Phối'],
+    ]) {
+      await call('user.createUser', {
+        id,
+        partnerId,
+        login: id,
+        password: 'correct horse',
+        name,
+        defaultCompanyId: 'acme',
+        superuser: true,
+      })
+      await call('user.grantCompany', {
+        id: `${id}:acme`,
+        userId: id,
+        companyId: 'acme',
+      })
+    }
+
+    await call('uom.saveUnit', { id: 'unit', name: 'Đơn vị', relativeFactor: '1' })
+    await call('product.saveTemplate', {
+      id: 'tpl-collab',
+      name: 'Áo khoác vận hành',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '1250000',
+      description: 'Sản phẩm mẫu dùng để kiểm chứng Chatter trên Product.',
+    })
+    await call('product.saveVariant', {
+      id: 'variant-collab',
+      templateId: 'tpl-collab',
+      defaultCode: 'OPS-JACKET',
+      combinationKey: '',
+    })
+    await call('stock.saveWarehouse', { id: 'wh', name: 'Kho Thành Phẩm', code: 'TP' })
+    await call('stock.createPicking', {
+      id: 'pick-collab',
+      name: 'TP/OUT/2026/0084',
+      pickingTypeId: 'wh:outgoing',
+      scheduledDate: '2026-08-21T02:00:00.000Z',
+    })
+    await call('stock.addMove', {
+      id: 'move-collab',
+      name: 'Áo khoác vận hành',
+      pickingId: 'pick-collab',
+      productId: 'variant-collab',
+      productUomId: 'unit',
+      productUomQty: '12',
+    })
+
+    await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'admin')
+    await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'admin')
+    await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'member')
+    await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'member')
+
+    await call('activity.saveType', {
+      id: 'activity-todo',
+      name: 'Việc cần làm',
+      category: 'todo',
+      icon: 'check',
+      defaultDelayDays: 0,
+      chainingPolicy: 'none',
+      sequence: 10,
+      active: true,
+    })
+    await call('activity.saveType', {
+      id: 'activity-call',
+      name: 'Gọi điện',
+      category: 'call',
+      icon: 'phone',
+      defaultDelayDays: 1,
+      chainingPolicy: 'none',
+      sequence: 20,
+      active: true,
+    })
+    await call(
+      'product_activity_backend.schedule',
+      {
+        id: 'activity-product-seed',
+        targetId: 'tpl-collab',
+        typeId: 'activity-todo',
+        assigneeUserId: 'admin',
+        summary: 'Xác nhận quy cách đóng gói',
+        note: 'Đối chiếu mã vạch với tài liệu đã duyệt.',
+        dueDate: '2026-08-20',
+      },
+      'admin',
+    )
+    await call(
+      'stock_activity_backend.schedule',
+      {
+        id: 'activity-stock-seed',
+        targetId: 'pick-collab',
+        typeId: 'activity-call',
+        assigneeUserId: 'admin',
+        summary: 'Gọi đơn vị vận chuyển',
+        note: 'Xác nhận giờ lấy hàng tại cổng số 2.',
+        dueDate: '2026-08-21',
+      },
+      'admin',
+    )
+
+    await call(
+      'calendar.saveEvent',
+      {
+        id: 'calendar-ops-review',
+        name: 'Họp điều phối vận hành',
+        description: 'Rà soát lịch xuất kho và tình trạng chuẩn bị hàng.',
+        location: 'Phòng điều hành',
+        allDay: false,
+        startAt: '2026-08-20T03:00:00.000Z',
+        stopAt: '2026-08-20T04:00:00.000Z',
+        timezone: 'Asia/Ho_Chi_Minh',
+        privacy: 'public',
+        showAs: 'busy',
+        attendees: [{ partnerId: 'member-party' }],
+        reminders: [],
+        recurrence: { frequency: 'daily', interval: 1, count: 3 },
+      },
+      'admin',
+    )
+    await call(
+      'calendar.saveEvent',
+      {
+        id: 'calendar-inventory-window',
+        name: 'Khóa sổ kiểm kê tháng 8',
+        description: 'Khoảng thời gian dành cho đối soát tồn kho.',
+        allDay: true,
+        startDate: '2026-08-22',
+        stopDate: '2026-08-24',
+        timezone: 'Asia/Ho_Chi_Minh',
+        privacy: 'public',
+        showAs: 'busy',
+        attendees: [],
+        reminders: [],
+      },
+      'admin',
+    )
+
+    await call('storage.createAttachment', {
+      id: 'ops-spec',
+      name: 'quy-cach-dong-goi.pdf',
+      resModel: 'mail.Message',
+      resId: 'product-message-1',
+      kind: 'url',
+      url: 'https://cdn.example.test/quy-cach-dong-goi.pdf',
+      mimetype: 'application/pdf',
+      size: 184320,
+      public: false,
+      createdAt: '2026-08-20T08:10:00.000Z',
+    })
+    await call(
+      'product_mail_backend.post',
+      {
+        id: 'product-message-1',
+        targetId: 'tpl-collab',
+        kind: 'comment',
+        body: 'Đã cập nhật quy cách đóng gói cho lô hàng tháng 8.',
+        attachmentIds: ['ops-spec'],
+      },
+      'member',
+    )
+    await call(
+      'product_mail_backend.post',
+      {
+        id: 'product-message-2',
+        targetId: 'tpl-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: kiểm tra lại mã vạch trước khi phát hành.',
+      },
+      'admin',
+    )
+    await call(
+      'stock_mail_backend.post',
+      {
+        id: 'stock-message-1',
+        targetId: 'pick-collab',
+        kind: 'comment',
+        body: 'Đội kho đã chuẩn bị đủ 12 sản phẩm, chờ bàn giao vận chuyển.',
+      },
+      'member',
+    )
+    await call(
+      'stock_mail_backend.post',
+      {
+        id: 'stock-message-2',
+        targetId: 'pick-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: ưu tiên lấy hàng ở kệ A-03.',
+      },
+      'admin',
+    )
+    await call(
+      'mail_transport.saveTemplate',
+      {
+        id: 'template-ops-update',
+        name: 'Cập nhật vận hành',
+        fromAddress: 'van-hanh@acme.example.test',
+        fromName: 'KetSuite Operations',
+        replyTo: 'dieu-phoi@acme.example.test',
+        subjectTemplate: '{{ document.name }} — {{ status }}',
+        textTemplate: 'Xin chào {{ recipient.name }}, {{ document.name }} hiện ở trạng thái {{ status }}.',
+        htmlTemplate:
+          '<p>Xin chào <strong>{{ recipient.name }}</strong>,</p><p>{{ document.name }} hiện ở trạng thái {{ status }}.</p>',
+        allowedKeys: ['document.name', 'recipient.name', 'status'],
+        active: true,
+      },
+      'admin',
+    )
+    await call(
+      'mail_transport.queueTemplate',
+      {
+        id: 'delivery-ops-sent',
+        templateId: 'template-ops-update',
+        context: {
+          document: { name: 'TP/OUT/2026/0084' },
+          recipient: { name: 'Trần Điều Phối' },
+          status: 'sẵn sàng bàn giao',
+        },
+        to: [{ address: 'member-party@example.test', name: 'Trần Điều Phối' }],
+        messageId: 'stock-message-1',
+      },
+      'admin',
+    )
+    await call(
+      'mail_transport.queueTemplate',
+      {
+        id: 'delivery-ops-failed',
+        templateId: 'template-ops-update',
+        context: {
+          document: { name: 'Áo khoác vận hành' },
+          recipient: { name: 'Bộ phận mua hàng' },
+          status: 'chờ duyệt quy cách',
+        },
+        to: [{ address: 'invalid-mailbox@example.test', name: 'Bộ phận mua hàng' }],
+        messageId: 'product-message-1',
+      },
+      'admin',
+    )
+    // Evidence-only provider outcomes. The real state machine is exercised by
+    // test/mail-transport.test.ts; this fixture keeps the screenshot deterministic.
+    await e2e.fixture.withTenant('', async ({ adapter }) => {
+      await adapter.run(
+        `UPDATE mail_transport_delivery
+         SET state = 'sent', attempts = 1, providerMessageId = ?, acceptedAt = ?, sentAt = ?, updatedAt = ?
+         WHERE id = ?`,
+        [
+          'memory:delivery-ops-sent',
+          '2026-08-20T09:00:00.000Z',
+          '2026-08-20T09:00:00.000Z',
+          '2026-08-20T09:00:00.000Z',
+          'delivery-ops-sent',
+        ],
+      )
+      await adapter.run(
+        `UPDATE mail_transport_delivery
+         SET state = 'failed', attempts = 5, lastError = ?, updatedAt = ?
+         WHERE id = ?`,
+        ['550 5.1.1 Recipient mailbox does not exist', '2026-08-20T09:02:00.000Z', 'delivery-ops-failed'],
+      )
+    })
+    await call(
+      'mail_inbound.receiveReply',
+      {
+        provider: 'evidence',
+        providerEventId: 'reply-accepted',
+        kind: 'message',
+        fromAddress: 'carrier@example.test',
+        recipients: ['operations@acme.example.test'],
+        subject: 'Re: TP/OUT/2026/0084',
+        text: 'Đơn vị vận chuyển xác nhận lấy hàng lúc 15:30.',
+        references: ['memory:delivery-ops-sent'],
+        attachments: [],
+        receivedAt: '2026-08-20T09:10:00.000Z',
+      },
+      null,
+    )
+    await call(
+      'mail_inbound.receiveReply',
+      {
+        provider: 'evidence',
+        providerEventId: 'reply-invalid-token',
+        kind: 'message',
+        fromAddress: 'unknown@example.test',
+        recipients: ['reply@acme.example.test'],
+        text: 'Email không được phép định tuyến bằng reference dự phòng.',
+        replyToken: 'invalid-reply-token',
+        references: ['memory:delivery-ops-sent'],
+        attachments: [],
+        receivedAt: '2026-08-20T09:11:00.000Z',
+      },
+      null,
+    )
+    await call(
+      'mail_inbound.receiveReply',
+      {
+        provider: 'evidence',
+        providerEventId: 'bounce-unmatched',
+        kind: 'bounce',
+        recipients: ['bounce@acme.example.test'],
+        text: '550 unknown provider reference',
+        references: ['missing-provider-message'],
+        attachments: [],
+        receivedAt: '2026-08-20T09:12:00.000Z',
+      },
+      null,
+    )
+    await call(
+      'mail_inbound.saveAlias',
+      {
+        id: 'alias-receipts',
+        localPart: 'receipts',
+        name: 'Thông báo nhập kho',
+        bridge: 'stock.receipt',
+        defaults: { pickingTypeId: 'wh:incoming' },
+        active: true,
+      },
+      'admin',
+    )
+    await call(
+      'stock_mail_inbound.receive',
+      {
+        provider: 'evidence',
+        providerEventId: 'stock-asn-0085',
+        kind: 'message',
+        fromAddress: 'supplier@example.test',
+        recipients: ['receipts@acme.example.test'],
+        subject: 'ASN nhà cung cấp 2026-0085',
+        text: 'Lô bổ sung 8 áo khoác sẽ đến kho vào sáng mai.',
+        alias: 'receipts',
+        attachments: [],
+        receivedAt: '2026-08-20T09:13:00.000Z',
+      },
+      null,
+    )
+    return e2e
+  } catch (error) {
+    await e2e.close()
+    throw error
+  }
+}

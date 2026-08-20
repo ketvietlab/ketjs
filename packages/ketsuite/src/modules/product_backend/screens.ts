@@ -1,4 +1,4 @@
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import {
   framed,
@@ -180,6 +180,7 @@ export const productDetailScreen = (
     stockEnabled?: boolean
     errors?: string[]
   },
+  collaboration: JSXChild,
   frame: Frame = {},
   locale = '',
 ): TemplateResult =>
@@ -341,6 +342,7 @@ export const productDetailScreen = (
           ],
         }),
       }),
+      collaboration,
     ]),
   )
 

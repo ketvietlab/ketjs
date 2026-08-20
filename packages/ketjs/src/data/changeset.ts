@@ -11,6 +11,7 @@
 //      dry-run wants to report.
 
 import { KetError } from '../kernel/errors.ts'
+import { isDateText } from '../kernel/types.ts'
 import type { Manifest, Row, FieldBase } from '../types.ts'
 
 export type FieldError = { field: string; message: string }
@@ -84,6 +85,10 @@ const castValue = (
       if (v instanceof Date) return { ok: true, value: v.toISOString() }
       if (typeof v === 'string' && !Number.isNaN(Date.parse(v))) return { ok: true, value: v }
       return { ok: false, message: `expected a date, got ${JSON.stringify(v)}` }
+    case 'date':
+      return isDateText(v)
+        ? { ok: true, value: v }
+        : { ok: false, message: `expected a calendar date (YYYY-MM-DD), got ${JSON.stringify(v)}` }
     case 'json':
       return typeof v === 'object'
         ? { ok: true, value: v }
