@@ -10,6 +10,7 @@ import {
   framed,
   linkButton,
   metric,
+  recordActions,
   recordForm,
   section,
   stack,
@@ -305,23 +306,21 @@ export const moveDetailScreen = (
               }),
             }),
             surface({
-              body: stack(
-                [
-                  recordForm({
-                    action: movePath(move),
-                    submit: _('account_backend.action.post'),
-                    hidden: { action: 'post' },
-                    fields: [],
-                  }),
-                  recordForm({
-                    action: movePath(move),
-                    submit: _('account_backend.action.cancel'),
-                    hidden: { action: 'cancel' },
-                    fields: [],
-                  }),
+              body: recordActions({
+                action: movePath(move),
+                actions: [
+                  {
+                    value: 'post',
+                    label: _('account_backend.action.post'),
+                    variant: 'primary',
+                  },
+                  {
+                    value: 'cancel',
+                    label: _('account_backend.action.cancel'),
+                    variant: 'destructive',
+                  },
                 ],
-                'compact',
-              ),
+              }),
             }),
           ]
         : []),
