@@ -119,9 +119,62 @@ export type { AdapterPool, PoolOptions } from './data/pool.ts'
 export { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
 export type { MigrationResult } from './data/fleet.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
-export type { Dialect, Sql, Table, Order } from './data/query.ts'
-export { eq, ne, gt, lt, gte, lte, like, inArray, isNull, isNotNull, and, or, not } from './data/expr.ts'
+export type {
+  Dialect,
+  Sql,
+  Table,
+  Order,
+  GroupSpec,
+  AggregateSpec,
+  GroupOrder,
+  GroupRow,
+} from './data/query.ts'
+export { dateBucket, isTimezone, assertTimezone, localDateTimeToUtc, localDayRange } from './data/time.ts'
+export type { GroupInterval } from './data/time.ts'
+export {
+  eq,
+  ne,
+  gt,
+  lt,
+  gte,
+  lte,
+  numericCompare,
+  like,
+  ilike,
+  inArray,
+  isNull,
+  isNotNull,
+  bucketEq,
+  and,
+  or,
+  not,
+} from './data/expr.ts'
 export type { Col, Expr } from './data/expr.ts'
+export {
+  defineListSearch,
+  parseListState,
+  encodeListState,
+  validateListState,
+  compileListFilter,
+} from './data/list-search.ts'
+export type {
+  ListFieldType,
+  FilterOperator,
+  FilterRule,
+  FilterGroup,
+  FilterNode,
+  SearchFieldSpec,
+  FilterFieldSpec,
+  GroupFieldSpec,
+  SortFieldSpec,
+  PresetFilterSpec,
+  ListSearchSpec,
+  ListGroup,
+  ListSort,
+  ListState,
+  ParsedListState,
+  ListSearchLimits,
+} from './data/list-search.ts'
 export { changeset, Changeset } from './data/changeset.ts'
 export type { FieldError, Validator } from './data/changeset.ts'
 export {

@@ -4,6 +4,8 @@
 // query you can inspect can be checked against a function's declared effects before
 // it runs, handed to an agent as data, and rendered for two dialects from one shape.
 
+import type { GroupInterval } from './time.ts'
+
 export type Col = { readonly model: string; readonly name: string }
 
 export type Expr =
@@ -15,10 +17,24 @@ export type Expr =
       readonly col: Col
       readonly cmp: '=' | '<>' | '>' | '<' | '>=' | '<='
       readonly value: unknown
+      readonly numeric?: boolean
     }
-  | { readonly op: 'like'; readonly col: Col; readonly value: string }
+  | {
+      readonly op: 'like'
+      readonly col: Col
+      readonly value: string
+      readonly insensitive?: boolean
+      readonly escape?: boolean
+    }
   | { readonly op: 'in'; readonly col: Col; readonly values: unknown[] }
   | { readonly op: 'null'; readonly col: Col; readonly negated: boolean }
+  | {
+      readonly op: 'bucket'
+      readonly col: Col
+      readonly interval: GroupInterval
+      readonly timezone: string
+      readonly value: string
+    }
 
 const isCol = (c: unknown): c is Col =>
   !!c && typeof c === 'object' && typeof (c as Col).model === 'string' && typeof (c as Col).name === 'string'
@@ -35,10 +51,31 @@ export const gt = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), c
 export const lt = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<', value })
 export const gte = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '>=', value })
 export const lte = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<=', value })
+export const numericCompare = (c: Col, cmp: '=' | '<>' | '>' | '<' | '>=' | '<=', value: unknown): Expr => ({
+  op: 'cmp',
+  col: col(c),
+  cmp,
+  value,
+  numeric: true,
+})
 export const like = (c: Col, value: string): Expr => ({ op: 'like', col: col(c), value })
+export const ilike = (c: Col, value: string, escapePattern = false): Expr => ({
+  op: 'like',
+  col: col(c),
+  value,
+  insensitive: true,
+  escape: escapePattern,
+})
 export const inArray = (c: Col, values: unknown[]): Expr => ({ op: 'in', col: col(c), values: [...values] })
 export const isNull = (c: Col): Expr => ({ op: 'null', col: col(c), negated: false })
 export const isNotNull = (c: Col): Expr => ({ op: 'null', col: col(c), negated: true })
+export const bucketEq = (c: Col, interval: GroupInterval, timezone: string, value: string): Expr => ({
+  op: 'bucket',
+  col: col(c),
+  interval,
+  timezone,
+  value,
+})
 
 export const and = (...parts: Expr[]): Expr => ({ op: 'and', parts })
 export const or = (...parts: Expr[]): Expr => ({ op: 'or', parts })

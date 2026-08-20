@@ -42,6 +42,22 @@ export const sales = defineModule({
 `sales.Order` maps to a physical table derived by `tableNameFor()`. Application code should use the
 qualified model name, not depend on the physical naming convention.
 
+## Server-maintained timestamps
+
+Set `timestamps: true` on a model to add optional `createdAt` and `updatedAt` datetime fields:
+
+```ts
+Order: {
+  scope: 'company',
+  timestamps: true,
+  fields: { id: 'id', number: 'text' },
+}
+```
+
+Every insert stamps both fields and every update stamps `updatedAt`. Values supplied by callers are
+ignored on every write path. The fields are optional so adding timestamps is a non-destructive
+migration: existing rows remain null instead of receiving invented history.
+
 ## Field types
 
 Append `?` to make a field optional.

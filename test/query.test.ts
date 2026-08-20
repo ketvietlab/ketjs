@@ -23,6 +23,7 @@ import {
   schemaFromManifest,
   sqliteAdapter,
   table,
+  dateBucket,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
@@ -55,6 +56,122 @@ test('query: one shape renders for both dialects', () => {
   assert.match(q.toSQL('sqlite').text, /"id" = \? LIMIT \?/)
   assert.match(q.toSQL('postgres').text, /"id" = \$1 LIMIT \$2/)
   assert.deepEqual(q.toSQL('postgres').params, ['p1', 5])
+})
+
+test('query: grouping and aggregates render without interpolating values', () => {
+  const q = from(P)
+    .where(eq(P.active!, true))
+    .groupBy({ col: P.priceCents! })
+    .aggregate({ fn: 'sum', col: P.priceCents!, as: 'total' })
+    .orderGroupsBy({ by: 'count', dir: 'desc' })
+    .limit(10)
+  const sql = q.toSQL('sqlite')
+  assert.match(sql.text, /COUNT\(\*\) AS "__count"/)
+  assert.match(sql.text, /SUM\(.*"priceCents"\) AS "total"/)
+  assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC LIMIT \?/)
+  assert.deepEqual(sql.params, [true, 10])
+})
+
+test('query: date buckets use the viewer timezone and ISO Monday weeks', () => {
+  assert.equal(dateBucket('2026-08-20T18:30:00.000Z', 'day', 'Asia/Ho_Chi_Minh'), '2026-08-21')
+  assert.equal(dateBucket('2026-08-20T18:30:00.000Z', 'month', 'UTC'), '2026-08')
+  assert.equal(dateBucket('2026-01-01T00:00:00.000Z', 'week', 'UTC'), '2025-12-29')
+})
+
+test('query: db.group returns normalized keys, counts and aggregates', async () => {
+  const grouped = defineModule({
+    name: 'grouped',
+    models: {
+      Item: { scope: 'shared', fields: { id: 'id', kind: 'text?', amount: 'int' } },
+    },
+    functions: {
+      add: {
+        input: { id: 'id', kind: 'text?', amount: 'int' },
+        effects: ['write:grouped.Item'],
+        handler: (ctx, args) => ctx.db.insert('grouped.Item', args),
+      },
+      summary: {
+        effects: ['read:grouped.Item'],
+        handler: (ctx) => {
+          const I = ctx.table('grouped.Item')
+          return ctx.db.group(
+            from(I)
+              .groupBy({ col: I.kind! })
+              .aggregate({ fn: 'sum', col: I.amount!, as: 'amount' })
+              .orderGroupsBy({ by: 'key', dir: 'asc' }),
+          )
+        },
+      },
+    },
+  })
+  const m = compose([grouped])
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(m)), adapter)) await adapter.exec(sql)
+  registerFunctions([grouped])
+  for (const row of [
+    { id: '1', kind: 'a', amount: 2 },
+    { id: '2', kind: 'a', amount: 3 },
+    { id: '3', kind: null, amount: 7 },
+  ])
+    await callFn('grouped.add', row, { adapter, manifest: m })
+  const result = await callFn('grouped.summary', {}, { adapter, manifest: m })
+  assert.deepEqual(result.value, [
+    { key: [null], count: 1, aggregates: { amount: 7 } },
+    { key: ['a'], count: 2, aggregates: { amount: 5 } },
+  ])
+  await adapter.close()
+})
+
+test('models: timestamps are optional for legacy rows and server-maintained on writes', async () => {
+  const timed = defineModule({
+    name: 'timed',
+    models: { Item: { scope: 'shared', timestamps: true, fields: { id: 'id', title: 'text' } } },
+    functions: {
+      save: {
+        input: { id: 'id', title: 'text', createdAt: 'datetime?', updatedAt: 'datetime?' },
+        effects: ['read:timed.Item', 'write:timed.Item'],
+        handler: async (ctx, args) => {
+          const rows = await ctx.db.select('timed.Item', { id: args.id })
+          return rows.length
+            ? ctx.db.update('timed.Item', { id: args.id }, args)
+            : ctx.db.insert('timed.Item', args)
+        },
+      },
+      get: {
+        input: { id: 'id' },
+        effects: ['read:timed.Item'],
+        handler: (ctx, args) => ctx.db.select('timed.Item', { id: args.id }),
+      },
+    },
+  })
+  const m = compose([timed])
+  assert.equal(m.models['timed.Item']!.fields.createdAt!.optional, true)
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  for (const sql of renderSql(planMigration(null, schemaFromManifest(m)), adapter)) await adapter.exec(sql)
+  registerFunctions([timed])
+  await callFn(
+    'timed.save',
+    { id: 'x', title: 'First', createdAt: '2000-01-01T00:00:00Z' },
+    { adapter, manifest: m },
+  )
+  const first = (
+    (await callFn('timed.get', { id: 'x' }, { adapter, manifest: m })).value as Record<string, unknown>[]
+  )[0]!
+  assert.notEqual(first.createdAt, '2000-01-01T00:00:00Z')
+  assert.equal(first.createdAt, first.updatedAt)
+  await callFn(
+    'timed.save',
+    { id: 'x', title: 'Second', updatedAt: '2000-01-01T00:00:00Z' },
+    { adapter, manifest: m },
+  )
+  const second = (
+    (await callFn('timed.get', { id: 'x' }, { adapter, manifest: m })).value as Record<string, unknown>[]
+  )[0]!
+  assert.equal(second.createdAt, first.createdAt)
+  assert.notEqual(second.updatedAt, '2000-01-01T00:00:00Z')
+  await adapter.close()
 })
 
 test('query: values are always parameterised, never interpolated', () => {

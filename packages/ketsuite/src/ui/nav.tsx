@@ -65,6 +65,7 @@ export type Viewer = {
   branchName?: string | null
   contextPath?: string | null
   profilePath?: string | null
+  timezone?: string
 }
 
 export type Indicator = {
