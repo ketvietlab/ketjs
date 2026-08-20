@@ -563,6 +563,115 @@ test('live pg: concurrent company roots and user memberships stay unique', live,
   })
 })
 
+test('live pg: identity login, role edges, throttles and token CAS survive concurrency', live, async () => {
+  await withPg(async (a) => {
+    const identityModules = [partner, company, user]
+    const identityManifest = compose(identityModules, { headless: true })
+    const identitySchema = schemaFromManifest(identityManifest)
+    for (const tableName of Object.keys(identitySchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, identitySchema), a)) await a.exec(sql)
+    registerFunctions(identityModules)
+    const options = { adapter: a, manifest: identityManifest, scope: SCOPE }
+
+    const users = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        callFn(
+          'user.createUser',
+          {
+            id: `root-${index}`,
+            login: index % 2 ? ' ROOT@EXAMPLE.COM ' : 'root@example.com',
+            password: 'correct horse',
+            name: `Root ${index}`,
+            superuser: true,
+          },
+          options,
+        ),
+      ),
+    )
+    assert.equal(users.filter((result) => (result.value as { ok: boolean }).ok).length, 1)
+    const root = String((await a.all('SELECT id FROM user_user'))[0]!.id)
+    await callFn(
+      'user.createUser',
+      {
+        id: 'backup-root',
+        login: 'backup-root@example.com',
+        password: 'correct horse',
+        name: 'Backup root',
+        superuser: true,
+      },
+      options,
+    )
+
+    await callFn('user.createUser', { id: 'invited', login: 'invited', name: 'Invited' }, options)
+    await callFn('user.saveRole', { id: 'manager', name: 'Manager' }, options)
+    await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        callFn(
+          'user.assignRole',
+          { id: `assignment-${index}`, userId: 'invited', roleId: 'manager' },
+          options,
+        ),
+      ),
+    )
+    assert.equal((await a.all('SELECT id FROM user_assignment')).length, 1)
+
+    const issued = await callFn(
+      'user.issueAuthToken',
+      { userId: 'invited', kind: 'invitation', realm: 'backend' },
+      { ...options, actor: root },
+    )
+    const token = String((issued.value as { token: string }).token)
+    const consumed = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        callFn(
+          'user.consumeAuthToken',
+          { token, kind: 'invitation', realm: 'backend', password: 'accepted password' },
+          options,
+        ),
+      ),
+    )
+    assert.equal(consumed.filter((result) => (result.value as { ok: boolean }).ok).length, 1)
+
+    const secondPod = postgresAdapter(URL)
+    await secondPod.open()
+    try {
+      for (let index = 0; index < 3; index++)
+        await callFn(
+          'user.authenticate',
+          { login: 'root@example.com', password: 'wrong password', networkFingerprint: 'shared-network' },
+          { ...options, adapter: index % 2 ? secondPod : a },
+        )
+      const blocked = await callFn(
+        'user.authenticate',
+        { login: 'root@example.com', password: 'correct horse', networkFingerprint: 'shared-network' },
+        { ...options, adapter: secondPod },
+      )
+      assert.equal((blocked.value as { ok: boolean }).ok, false)
+    } finally {
+      await secondPod.close()
+    }
+
+    const archived = await Promise.all(
+      [root, 'backup-root'].map((id) =>
+        callFn('user.archiveUser', { id, active: false }, { ...options, actor: root }),
+      ),
+    )
+    assert.equal(archived.filter((result) => (result.value as { ok: boolean }).ok).length, 1)
+    assert.equal(
+      Number(
+        (
+          await a.all(
+            `SELECT COUNT(*) AS count FROM user_user
+             WHERE active = TRUE AND superuser = TRUE AND "accessKind" = 'internal'`,
+          )
+        )[0]!.count,
+      ),
+      1,
+    )
+  })
+})
+
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {
     const stockModules = [uom, product, stock]

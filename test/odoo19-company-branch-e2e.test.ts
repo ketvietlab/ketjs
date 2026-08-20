@@ -37,6 +37,13 @@ const bootCompany = async (t: TestContext) => {
     name: 'Administrator',
     superuser: true,
   })
+  await fixture('user.createUser', {
+    id: 'backup-admin',
+    login: 'backup-admin',
+    password: 'correct horse',
+    name: 'Backup administrator',
+    superuser: true,
+  })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
   await fixture('user.grantCompany', { id: 'admin:globex', userId: 'admin', companyId: 'globex' })
   await fixture('user.grantBranch', {

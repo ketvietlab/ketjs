@@ -20,7 +20,8 @@ const call = (
   fn: string,
   args: Record<string, unknown> = {},
   scope: Scope = SCOPE,
-) => callFn(fn, args, { ...o, scope }).then((r) => r.value as Record<string, unknown>)
+  actor?: string,
+) => callFn(fn, args, { ...o, scope, actor }).then((r) => r.value as Record<string, unknown>)
 
 // ── the party model, and what splitting addresses out removed ────────────────
 
@@ -265,11 +266,11 @@ test('user: no function hands back the password hash, because none declares it',
   ] as const) {
     const got = JSON.stringify(await call(o, fn, args))
     assert.ok(!got.includes('scrypt'), `${fn} leaked the hash`)
-    assert.ok(!got.includes('password'), `${fn} leaked the field`)
+    assert.ok(!got.includes('passwordHash'), `${fn} leaked the hash field`)
   }
   // The row does hold it — the projection is what keeps it in.
-  const raw = await o.adapter.all('SELECT password FROM user_user', [])
-  assert.match(String(raw[0]!.password), /^scrypt\$/)
+  const raw = await o.adapter.all('SELECT "passwordHash" FROM user_user', [])
+  assert.match(String(raw[0]!.passwordHash), /^scrypt\$/)
   await o.adapter.close()
 })
 
@@ -287,7 +288,7 @@ test('user: a short password is refused, and a duplicate login too', async () =>
     name: 'B',
   })
   assert.equal(dup.ok, false)
-  assert.match(JSON.stringify(dup.errors), /đã tồn tại/)
+  assert.match(JSON.stringify(dup.errors), /user\.error\.loginUnique/)
   await o.adapter.close()
 })
 
@@ -350,17 +351,30 @@ test('user: changing a password takes the old one, even for your own account', a
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
   assert.equal(
-    (await call(o, 'user.setPassword', { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' }))
-      .ok,
+    (
+      await call(
+        o,
+        'user.setPassword',
+        { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' },
+        SCOPE,
+        'u1',
+      )
+    ).ok,
     false,
   )
   assert.equal(
     (
-      await call(o, 'user.setPassword', {
-        id: 'u1',
-        currentPassword: 'correct horse',
-        newPassword: 'battery staple',
-      })
+      await call(
+        o,
+        'user.setPassword',
+        {
+          id: 'u1',
+          currentPassword: 'correct horse',
+          newPassword: 'battery staple',
+        },
+        SCOPE,
+        'u1',
+      )
     ).ok,
     true,
   )

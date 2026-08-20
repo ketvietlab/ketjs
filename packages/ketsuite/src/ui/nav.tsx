@@ -56,6 +56,7 @@ export type Viewer = {
   branches?: string[] | null
   branchName?: string | null
   contextPath?: string | null
+  profilePath?: string | null
 }
 
 export type Indicator = {
@@ -216,7 +217,9 @@ export const sidebar = (
               {initials(viewer.name)}
             </span>
             <span data-ui="viewer-who">
-              <span data-ui="viewer-name">{viewer.name}</span>
+              <span data-ui="viewer-name">
+                {viewer.profilePath ? <a href={viewer.profilePath}>{viewer.name}</a> : viewer.name}
+              </span>
               {viewer.companies.length > 1 && (
                 <span data-ui="viewer-company">{viewer.companyName ?? viewer.company}</span>
               )}

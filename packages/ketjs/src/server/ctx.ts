@@ -420,10 +420,15 @@ export function createContext(o: {
         wk = Object.keys(where3)
       fresh()
       const sets = pk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
-      const conds = wk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
+      const boundWhere = wk.filter((k) => where3[k] !== null)
+      const conds = wk
+        .map((k) =>
+          where3[k] === null ? `${adapter.quoteIdent(k)} IS NULL` : `${adapter.quoteIdent(k)} = ${ph()}`,
+        )
+        .join(' AND ')
       const sql =
         `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...wk.map((k) => where3[k])])
+      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...boundWhere.map((k) => where3[k])])
     },
     async compareAndSet(model, where, expected, patch) {
       const result = await db.update(model, { ...expected, ...where }, patch)

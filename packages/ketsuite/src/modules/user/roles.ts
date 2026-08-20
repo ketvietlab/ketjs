@@ -9,6 +9,12 @@
 import { asc, defineFn, deleteFrom, eq, from, inArray } from 'ketjs'
 import type { Ctx, FnSpec } from 'ketjs'
 
+const error = (field: string, code: string, params?: Record<string, unknown>) => ({
+  field,
+  code,
+  ...(params ? { params } : {}),
+})
+
 /**
  * Every function key this user may call, across all their roles.
  *
@@ -22,7 +28,7 @@ export async function permittedFor(ctx: Ctx, userId: string): Promise<string[] |
   // otherwise the functions that grant the first role are themselves behind the
   // check, and nobody can ever be granted anything.
   const U = ctx.table('user.User')
-  const who = await ctx.db.one(from(U).where(eq(U.id, userId)))
+  const who = await ctx.db.one(from(U).select(U.superuser).where(eq(U.id, userId)))
   if (who?.superuser) return null
   const A = ctx.table('user.Assignment')
   const roleIds = (await ctx.db.all(from(A).select(A.roleId).where(eq(A.userId, userId)))).map((r) =>
@@ -39,6 +45,73 @@ export async function permittedFor(ctx: Ctx, userId: string): Promise<string[] |
 }
 
 export const roleFunctions: Record<string, FnSpec> = {
+  permissionCatalogue: defineFn({
+    input: {},
+    output: { key: 'text', module: 'text', task: 'text' },
+    effects: [],
+    handler: (ctx: Ctx) =>
+      Object.entries(ctx.manifest.functions)
+        .filter(([, fn]) => fn.exposure !== 'internal' && fn.provision !== true && !fn.anonymous)
+        .map(([key]) => {
+          const action = key.split('.').at(-1) ?? key
+          const task = /^(list|get|count|report|forecast|permitted)/.test(action)
+            ? 'read'
+            : /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply)/.test(action)
+              ? 'manage'
+              : 'operate'
+          return { key, module: key.split('.')[0] ?? '', task }
+        })
+        .sort(
+          (a, b) =>
+            a.module.localeCompare(b.module) || a.task.localeCompare(b.task) || a.key.localeCompare(b.key),
+        ),
+  }),
+
+  applyPreset: defineFn({
+    input: { module: 'text', level: 'text' },
+    output: { ok: 'bool', roleId: 'id?', granted: 'int?', errors: 'json?' },
+    effects: ['read:user.User', 'read:user.Role', 'write:user.Role', 'read:user.Grant', 'write:user.Grant'],
+    idempotent: true,
+    handler: async (ctx: Ctx, a) => {
+      if (ctx.actor) {
+        const U = ctx.table('user.User')
+        const actor = await ctx.db.one(from(U).where(eq(U.id, ctx.actor), eq(U.active, true)))
+        if (!actor?.superuser) return { ok: false, errors: [error('level', 'user.error.superuserRequired')] }
+      }
+      const moduleName = String(a.module)
+      const level = String(a.level)
+      if (!['user', 'manager'].includes(level))
+        return { ok: false, errors: [error('level', 'user.error.presetLevel')] }
+      if (!ctx.manifest.modules[moduleName])
+        return { ok: false, errors: [error('module', 'user.error.moduleMissing')] }
+      const roleId = `preset:${moduleName}:${level}`
+      await ctx.db.insertIfAbsent('user.Role', {
+        id: roleId,
+        name: `${moduleName} · ${level === 'manager' ? 'Manager' : 'User'}`,
+        description: `preset:${moduleName}:${level}`,
+      })
+      const keys = Object.entries(ctx.manifest.functions)
+        .filter(([key, fn]) => {
+          if (!key.startsWith(`${moduleName}.`) || fn.anonymous) return false
+          if (fn.exposure === 'internal') return level === 'manager' && key === 'user.issueAuthToken'
+          if (level === 'manager') return true
+          const action = key.split('.').at(-1) ?? key
+          return !/^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply)/.test(action)
+        })
+        .map(([key]) => key)
+      let granted = 0
+      for (const key of keys) {
+        const result = await ctx.db.insertIfAbsent('user.Grant', {
+          id: `preset:${moduleName}:${level}:${key}`,
+          roleId,
+          fnKey: key,
+        })
+        if ('dryRun' in result || result.inserted) granted++
+      }
+      return { ok: true, roleId, granted }
+    },
+  }),
+
   listRoles: defineFn({
     input: {},
     output: { id: 'id', name: 'text', description: 'text?' },
@@ -64,10 +137,19 @@ export const roleFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       const R = ctx.table('user.Role')
       const existing = await ctx.db.one(from(R).where(eq(R.id, a.id)))
+      const owner = await ctx.db.one(from(R).where(eq(R.name, String(a.name).trim())))
+      if (owner && owner.id !== a.id)
+        return { ok: false, errors: [error('name', 'user.error.roleNameUnique')] }
       const cs = ctx.change('user.Role', a, existing).cast(['id', 'name', 'description']).required(['name'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
-      await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
-      return { ok: true, id: a.id }
+      if (existing) {
+        await ctx.db.commit(cs, { id: a.id })
+        return { ok: true, id: a.id }
+      }
+      const inserted = await ctx.db.insertIfAbsent('user.Role', cs.changes)
+      return 'dryRun' in inserted || inserted.inserted
+        ? { ok: true, id: a.id }
+        : { ok: false, errors: [error('name', 'user.error.roleNameUnique')] }
     },
   }),
 
@@ -88,18 +170,23 @@ export const roleFunctions: Record<string, FnSpec> = {
       if (!ctx.manifest.functions[key]) {
         return {
           ok: false,
-          errors: [{ field: 'fnKey', message: `không có hàm "${key}" trong bản triển khai này` }],
+          errors: [error('fnKey', 'user.error.functionMissing', { key })],
         }
       }
       const R = ctx.table('user.Role')
       if (!(await ctx.db.one(from(R).where(eq(R.id, a.roleId))))) {
-        return { ok: false, errors: [{ field: 'roleId', message: 'không có vai trò nào mang id này' }] }
+        return { ok: false, errors: [error('roleId', 'user.error.roleMissing')] }
       }
       const G = ctx.table('user.Grant')
       const held = await ctx.db.one(from(G).where(eq(G.roleId, a.roleId), eq(G.fnKey, key)))
       if (held) return { ok: true, id: String(held.id) }
-      await ctx.db.insert('user.Grant', { id: a.id, roleId: a.roleId, fnKey: key })
-      return { ok: true, id: a.id }
+      const inserted = await ctx.db.insertIfAbsent('user.Grant', { id: a.id, roleId: a.roleId, fnKey: key })
+      return 'dryRun' in inserted || inserted.inserted
+        ? { ok: true, id: a.id }
+        : {
+            ok: true,
+            id: String((await ctx.db.one(from(G).where(eq(G.roleId, a.roleId), eq(G.fnKey, key))))?.id),
+          }
     },
   }),
 
@@ -124,16 +211,25 @@ export const roleFunctions: Record<string, FnSpec> = {
       const U = ctx.table('user.User')
       const R = ctx.table('user.Role')
       if (!(await ctx.db.one(from(U).where(eq(U.id, a.userId))))) {
-        return { ok: false, errors: [{ field: 'userId', message: 'không có người dùng nào mang id này' }] }
+        return { ok: false, errors: [error('userId', 'user.error.userMissing')] }
       }
       if (!(await ctx.db.one(from(R).where(eq(R.id, a.roleId))))) {
-        return { ok: false, errors: [{ field: 'roleId', message: 'không có vai trò nào mang id này' }] }
+        return { ok: false, errors: [error('roleId', 'user.error.roleMissing')] }
       }
       const A = ctx.table('user.Assignment')
       const held = await ctx.db.one(from(A).where(eq(A.userId, a.userId), eq(A.roleId, a.roleId)))
       if (held) return { ok: true, id: String(held.id) }
-      await ctx.db.insert('user.Assignment', { id: a.id, userId: a.userId, roleId: a.roleId })
-      return { ok: true, id: a.id }
+      const inserted = await ctx.db.insertIfAbsent('user.Assignment', {
+        id: a.id,
+        userId: a.userId,
+        roleId: a.roleId,
+      })
+      return 'dryRun' in inserted || inserted.inserted
+        ? { ok: true, id: a.id }
+        : {
+            ok: true,
+            id: String((await ctx.db.one(from(A).where(eq(A.userId, a.userId), eq(A.roleId, a.roleId))))?.id),
+          }
     },
   }),
 

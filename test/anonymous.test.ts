@@ -55,11 +55,10 @@ test('anonymous: cannot read business data', async () => {
   await b.close()
 })
 
-test('anonymous: may check a password, because there is no session until it does', async () => {
+test('anonymous: cannot bypass the trusted login route to call authentication', async () => {
   const b = await boot()
   const r = await post(b.port, 'user.authenticate', { login: 'nobody', password: 'x' })
-  assert.equal(r.code, undefined, 'not refused')
-  assert.equal(r.ok, true, 'the call succeeded; the verdict inside it is what says no')
+  assert.equal(r.code, 'E_FUNCTION_INTERNAL')
   await b.close()
 })
 

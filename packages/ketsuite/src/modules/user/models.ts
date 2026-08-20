@@ -20,7 +20,7 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       login: 'text',
       /** scrypt, parameters encoded in the value. Never in any declared output. */
-      password: 'text',
+      passwordHash: 'text?',
       /** Optional: an internal operator needs no entry in the address book. */
       partnerId: 'ref:partner.Partner?',
       name: 'text',
@@ -30,6 +30,11 @@ export const models: Record<string, ModelDef> = {
       defaultCompanyId: 'ref:company.Company?',
       /** The operational branch a company+branch row is stamped with. */
       defaultBranchId: 'ref:company.Branch?',
+      /** Backend and website identities share a table, never a cookie realm. */
+      accessKind: 'text',
+      /** Incrementing this invalidates every session and outstanding token. */
+      securityVersion: 'int',
+      lastLoginAt: 'datetime?',
       /**
        * Exempt from the permission check entirely.
        *
@@ -42,6 +47,7 @@ export const models: Record<string, ModelDef> = {
       superuser: 'bool',
       active: 'bool',
     },
+    indexes: { login: { fields: ['login'], unique: true } },
   },
 
   /**
@@ -61,6 +67,7 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       description: 'text?',
     },
+    indexes: { name: { fields: ['name'], unique: true } },
   },
 
   /** One row per granted function. Additive, like Salesforce permission sets. */
@@ -72,6 +79,7 @@ export const models: Record<string, ModelDef> = {
       /** A function key, e.g. "partner.listPartners". */
       fnKey: 'text',
     },
+    indexes: { role_function: { fields: ['roleId', 'fnKey'], unique: true } },
   },
 
   /** One row per (user, role). A user's permissions are the union of their roles. */
@@ -82,6 +90,7 @@ export const models: Record<string, ModelDef> = {
       userId: 'ref:user.User',
       roleId: 'ref:user.Role',
     },
+    indexes: { user_role: { fields: ['userId', 'roleId'], unique: true } },
   },
 
   /**
@@ -110,5 +119,58 @@ export const models: Record<string, ModelDef> = {
       branchId: 'ref:company.Branch',
     },
     indexes: { user_branch: { fields: ['userId', 'branchId'], unique: true } },
+  },
+
+  /** Invitation/reset secrets are never stored; only this SHA-256 digest is. */
+  AuthToken: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      kind: 'text',
+      realm: 'text',
+      digest: 'text',
+      securityVersion: 'int',
+      expiresAt: 'datetime',
+      consumedAt: 'datetime?',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      digest: { fields: ['digest'], unique: true },
+      user_kind: { fields: ['userId', 'kind'], unique: true },
+    },
+  },
+
+  /** PostgreSQL-backed counters keep cooldowns consistent across every pod. */
+  AuthThrottle: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      failures: 'int',
+      blockedUntil: 'datetime?',
+      updatedAt: 'datetime',
+    },
+  },
+
+  /** Security events are append-only domain rows, never free-form server logs. */
+  SecurityAudit: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User?',
+      event: 'text',
+      occurredAt: 'datetime',
+      networkFingerprint: 'text?',
+      metadata: 'json?',
+    },
+  },
+
+  /** A row lock serializes identity invariants that span more than one User row. */
+  SecurityGuard: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      updatedAt: 'datetime',
+    },
   },
 }

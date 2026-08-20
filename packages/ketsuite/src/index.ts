@@ -93,6 +93,7 @@ export type {
   StayState,
 } from './modules/hospitality_core/types.ts'
 export { default as user } from './modules/user/index.ts'
+export { default as userBackend } from './modules/user_backend/index.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
 export { permittedFor } from './modules/user/roles.ts'
 export { resolveUserSession } from './modules/user/session-context.ts'

@@ -450,6 +450,16 @@ export const routes: Record<string, RouteEntry> = {
         if (!result.ok || !result.context) return render(translatedErrors(result, _))
         if (!(await sessions.update(record, result.context)))
           return render([_('company_backend.context.conflict')])
+        await ctx.call(
+          'user.recordSecurityEvent',
+          {
+            event: 'context.switch',
+            userId: record.userId,
+            metadata: { company: result.context.company, branch: result.context.branch },
+          },
+          url,
+          req,
+        )
         return seeOther(inLocale(url, '/admin/context'))
       },
   },

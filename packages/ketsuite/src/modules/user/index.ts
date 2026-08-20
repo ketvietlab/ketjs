@@ -22,6 +22,11 @@ export default defineModule({
   functions,
   messages,
   routes,
+  joints: {
+    'auth.mail': {
+      props: { userId: 'id', kind: 'text', token: 'text', expiresAt: 'datetime' },
+    },
+  },
 })
 
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'

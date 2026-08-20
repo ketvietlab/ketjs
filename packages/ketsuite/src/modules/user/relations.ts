@@ -6,6 +6,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     memberships: { hasMany: 'user.Membership', by: 'userId' },
     branchMemberships: { hasMany: 'user.BranchMembership', by: 'userId' },
     assignments: { hasMany: 'user.Assignment', by: 'userId' },
+    authTokens: { hasMany: 'user.AuthToken', by: 'userId' },
   },
   'user.Membership': {
     user: { belongsTo: 'user.User', by: 'userId' },
@@ -24,5 +25,8 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'user.Assignment': {
     user: { belongsTo: 'user.User', by: 'userId' },
     role: { belongsTo: 'user.Role', by: 'roleId' },
+  },
+  'user.AuthToken': {
+    user: { belongsTo: 'user.User', by: 'userId' },
   },
 }
