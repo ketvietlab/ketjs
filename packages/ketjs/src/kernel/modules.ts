@@ -260,7 +260,11 @@ async function resolveApp(
 ): Promise<{ spec: AppSpec; sources: Map<string, ModuleSource | null> }> {
   const inline = new Map<string, KetModule>()
   const stringRefs = new Set<string>()
-  const refs = declaration.theme ? [...declaration.modules, declaration.theme] : [...declaration.modules]
+  const refs = [
+    ...declaration.modules,
+    ...(declaration.theme ? [declaration.theme] : []),
+    ...(declaration.themes ?? []),
+  ]
 
   for (const ref of refs) {
     if (typeof ref === 'string') {
@@ -330,25 +334,33 @@ async function resolveApp(
 
   for (const ref of declaration.modules) await load(moduleName(ref))
   if (declaration.theme) await load(moduleName(declaration.theme))
+  for (const theme of declaration.themes ?? []) await load(moduleName(theme))
 
   // topoSort remains the one authority for missing dependencies and cycles. It
   // also makes registration order independent of filesystem/readdir order.
   const ordered = topoSort([...resolved.values()])
   const themeName = declaration.theme ? moduleName(declaration.theme) : null
   const theme = themeName ? resolved.get(themeName) : undefined
-  if (theme && theme.kind !== 'theme')
-    fail(
-      'E_APP_THEME_KIND',
-      `app "${declaration.name}" selects "${theme.name}" as its theme, but it is a ${theme.kind}`,
-      'export it with defineTheme(), or move it into modules',
-    )
-  const modules = themeName ? ordered.filter((module) => module.name !== themeName) : ordered
-  const { modules: _moduleRefs, theme: _themeRef, ...app } = declaration
+  const selectedThemes = [
+    ...(theme ? [theme] : []),
+    ...(declaration.themes ?? []).map((ref) => resolved.get(moduleName(ref))!),
+  ]
+  for (const selected of selectedThemes)
+    if (selected.kind !== 'theme')
+      fail(
+        'E_APP_THEME_KIND',
+        `app "${declaration.name}" selects "${selected.name}" as a theme, but it is a ${selected.kind}`,
+        'export it with defineTheme(), or move it into modules',
+      )
+  const selectedNames = new Set(selectedThemes.map((selected) => selected.name))
+  const modules = ordered.filter((module) => !selectedNames.has(module.name))
+  const { modules: _moduleRefs, theme: _themeRef, themes: _themeRefs, ...app } = declaration
   return {
     spec: {
       ...app,
       modules,
       ...(theme ? { theme } : {}),
+      ...(selectedThemes.length ? { themes: selectedThemes.filter((item) => item !== theme) } : {}),
     },
     sources,
   }
@@ -370,7 +382,7 @@ export async function resolveWorkspace(
   for (const app of declaration.apps) {
     const { spec, sources } = await resolveApp(app, catalog, imports)
     apps.push(spec)
-    for (const module of spec.theme ? [...spec.modules, spec.theme] : spec.modules) {
+    for (const module of [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]) {
       const source = sources.get(module.name)
       const label = source?.entry ?? 'workspace'
       const key = `${module.name}\0${module.version}\0${label}`

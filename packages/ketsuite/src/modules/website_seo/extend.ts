@@ -10,4 +10,10 @@ export const extend: Record<string, Record<string, string>> = {
     noindex: 'bool?',
     ogImage: 'text?',
   },
+  'website.Entry': {
+    metaDescription: 'text?',
+    canonical: 'text?',
+    noindex: 'bool?',
+    ogImage: 'text?',
+  },
 }

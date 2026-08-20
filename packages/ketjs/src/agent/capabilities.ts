@@ -74,6 +74,8 @@ export type CompositionSchema = {
   regions: Record<string, { providedBy: string[] }>
   joints: Record<string, { owner: string; props: Record<string, string>; filledBy: string[] }>
   tokens: string[]
+  contentTypes: Manifest['contentTypes']
+  taxonomies: Manifest['taxonomies']
 }
 
 export function compositionSchema(manifest: Manifest): CompositionSchema {
@@ -91,7 +93,14 @@ export function compositionSchema(manifest: Manifest): CompositionSchema {
   }
   const regions: CompositionSchema['regions'] = {}
   for (const [name, by] of Object.entries(manifest.regions.provided)) regions[name] = { providedBy: by }
-  return { sections, regions, joints, tokens: Object.keys(manifest.tokens) }
+  return {
+    sections,
+    regions,
+    joints,
+    tokens: Object.keys(manifest.tokens),
+    contentTypes: manifest.contentTypes,
+    taxonomies: manifest.taxonomies,
+  }
 }
 
 // What an agent is allowed to read to orient itself, in one call.

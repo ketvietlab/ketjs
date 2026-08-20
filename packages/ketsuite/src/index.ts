@@ -10,7 +10,13 @@ export { default as website } from './modules/website/index.ts'
 export { default as websiteMenu } from './modules/website_menu/index.ts'
 export { default as websiteSeo } from './modules/website_seo/index.ts'
 export { default as websiteSearch } from './modules/website_search/index.ts'
+export { default as websiteForm } from './modules/website_form/index.ts'
+export { default as websiteBackend } from './modules/website_backend/index.ts'
+export { default as websiteHospitality } from './modules/website_hospitality/index.ts'
+export { default as websiteRetail } from './modules/website_retail/index.ts'
 export { default as paperTheme } from './themes/paper/index.ts'
+export { default as hospitalityTheme } from './themes/hospitality/index.ts'
+export { default as retailTheme } from './themes/retail/index.ts'
 export type { SectionPlacement } from './modules/website/types.ts'
 
 // units of measure — product depends on it
