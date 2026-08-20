@@ -213,6 +213,38 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.match(mediaHtml, /action="\/admin\/products\/tpl\/media\?tab=media&amp;lang=vi"/)
   assert.ok((mediaHtml.match(/<img /g) ?? []).length >= 3)
 
+  const variantPage = await e2e.client.get('/admin/products/tpl/variants/p1?tab=general&lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(variantPage.status, 200)
+  const variantHtml = await variantPage.text()
+  assert.match(variantHtml, /data-ui="record-workspace"/)
+  assert.match(variantHtml, /data-scope="product-variant"/)
+  assert.match(variantHtml, /id="product-variant-form"/)
+  assert.match(variantHtml, /data-island="mail\.chatter"/)
+  assert.match(variantHtml, /data-island="activity\.record"/)
+  assert.match(variantHtml, /&quot;resModel&quot;:&quot;product\.Product&quot;/)
+  assert.match(
+    variantHtml,
+    /data-ui="tab" data-active="true" href="\/admin\/products\/tpl\/variants\/p1\?tab=general&amp;lang=vi"/,
+  )
+
+  const variantPartial = await e2e.client.post(
+    '/admin/products/tpl/variants/p1?tab=general&lang=vi',
+    new URLSearchParams({
+      defaultCode: 'AO-UPDATED',
+      barcode: '8938500000100',
+      weight: '0.25',
+      volume: '0.1',
+      standardPrice: '61.50',
+      uomId: 'unit',
+      uomBarcode: '8938500000101',
+    }),
+    { headers: { accept: 'text/html', 'x-ket-partial': 'product-variant' } },
+  )
+  assert.equal(variantPartial.status, 200)
+  assert.match(await variantPartial.text(), /AO-UPDATED/)
+
   const pricingPage = await e2e.client.get('/admin/pricelists/retail?lang=vi', {
     headers: { accept: 'text/html' },
   })
