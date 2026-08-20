@@ -14,6 +14,7 @@ import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 import { joints } from './joints.ts'
 import { menus } from './menus.ts'
+import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
 export default defineModule({
   name: 'backend',
@@ -31,6 +32,8 @@ export default defineModule({
   assets: new URL('./design/', import.meta.url),
   styles: ['tokens.css', 'admin.css'],
   routes,
+  models: savedSearchModels,
+  functions: savedSearchFunctions,
   menus,
   joints,
   messages,
@@ -44,7 +47,7 @@ export { joints } from './joints.ts'
 export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
-export { routes, viewerOf } from './routes.ts'
+export { routes, viewerOf, timezoneOf } from './routes.ts'
 
 /**
  * The kit, re-exported.
@@ -115,6 +118,7 @@ export type {
   Cell,
   Column,
   DataTable,
+  TableGroup,
   Tone,
   Frame,
   Extras,
@@ -122,6 +126,8 @@ export type {
   ListChrome,
   Pager,
   ViewKind,
+  SearchMenu,
+  SearchMenuItem,
   Indicator,
   Viewer,
   CardMeta,

@@ -556,6 +556,101 @@
     text-decoration: none;
   }
 
+  [data-ui="search-menu"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  [data-ui="search-menu-open"] {
+    display: inline-flex;
+    min-block-size: 1.75rem;
+    align-items: center;
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    list-style: none;
+  }
+
+  [data-ui="search-menu-open"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="search-menu-open"] > [data-ui="icon"] {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  [data-ui="search-menu-content"] {
+    position: absolute;
+    z-index: 20;
+    inset-block-start: calc(100% + 0.375rem);
+    inset-inline-end: 0;
+    display: grid;
+    min-inline-size: 14rem;
+    max-block-size: 24rem;
+    padding: 0.375rem;
+    overflow: auto;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+
+  [data-ui="search-menu-item"] {
+    display: flex;
+    min-block-size: 2rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  a[data-ui="search-menu-item"]:hover,
+  a[data-ui="search-menu-item"][data-active="true"] {
+    background: var(--admin-accent-soft);
+  }
+
+  [data-ui="search-menu-item"][data-nested="true"] {
+    display: grid;
+    block-size: auto;
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  [data-ui="custom-filter"] {
+    display: grid;
+    gap: 0.375rem;
+    margin: 0.375rem 0 0;
+    padding: 0.5rem 0 0;
+    border: 0;
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="custom-filter"] select,
+  [data-ui="custom-filter"] input,
+  [data-ui="custom-filter"] button {
+    min-block-size: 2rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+  }
+
+  [data-ui="custom-filter"] button {
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    cursor: pointer;
+  }
+
   [data-ui="pager"] {
     display: inline-flex;
     align-items: center;
@@ -584,6 +679,26 @@
     border-color: var(--admin-line);
     color: var(--admin-ink-muted);
     cursor: default;
+  }
+
+  [data-ui="group-pager"] > td {
+    text-align: end;
+  }
+
+  [data-ui="group-pager"] > td > span,
+  [data-ui="group-pager"] > td > a {
+    display: inline-grid;
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
+    place-items: center;
+    color: var(--admin-ink-secondary);
+    text-decoration: none;
+  }
+
+  [data-ui="group-pager"] > td > span:first-child {
+    display: inline;
+    margin-inline-end: var(--admin-gap-xs);
+    font-size: 0.75rem;
   }
 
   [data-ui="view-switch"] {
@@ -949,6 +1064,46 @@
 
   [data-ui="row"] {
     block-size: var(--admin-row-height);
+  }
+
+  [data-ui="group-row"] td {
+    padding: 0;
+    border-block-end: 1px solid var(--admin-line);
+    background: var(--admin-surface-subtle);
+  }
+
+  [data-ui="group-link"] {
+    display: flex;
+    min-block-size: var(--admin-row-height);
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: var(--admin-gap);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  [data-ui="group-indent"] {
+    inline-size: calc(var(--group-depth) * 1rem);
+    flex: 0 0 auto;
+  }
+
+  [data-ui="group-link"] > [data-ui="icon"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  [data-ui="group-count"] {
+    min-inline-size: 1.5rem;
+    margin-inline-start: auto;
+    padding: 0.125rem 0.375rem;
+    border-radius: 999px;
+    background: var(--admin-surface-hover);
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   [data-ui="row"]:last-child td {

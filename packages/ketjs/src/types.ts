@@ -36,6 +36,7 @@ export type ComposedIndex = { fields: string[]; unique: boolean; by: string }
 export type ComposedModel = {
   owner: string
   scope: ModelScope
+  timestamps: boolean
   fields: Record<string, Field>
   indexes: Record<string, ComposedIndex>
 }
@@ -58,6 +59,8 @@ export type ModelScope = 'shared' | 'company' | 'company+branch'
 
 export type ModelDef = {
   scope: ModelScope
+  /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
+  timestamps?: boolean
   fields: Record<string, string>
   /** Named database indexes. Names are local to the model and remain stable across migrations. */
   indexes?: Record<string, IndexDef>
@@ -455,6 +458,7 @@ export type Ctx = {
     all(q: import('./data/query.ts').Query): Promise<Row[]>
     one(q: import('./data/query.ts').Query): Promise<Row | null>
     count(q: import('./data/query.ts').Query): Promise<number>
+    group(q: import('./data/query.ts').Query): Promise<import('./data/query.ts').GroupRow[]>
     del(q: import('./data/query.ts').Query): Promise<{ changes: number }>
     /** Write a changeset. An invalid one is refused with its structured errors. */
     commit(
