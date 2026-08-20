@@ -9,6 +9,9 @@ export const HOOKS = [
   'form-field',
   'form-label',
   'form-control',
+  'form-options',
+  'form-option',
+  'form-option-input',
   'form-help',
   'form-required',
   'form-error',
@@ -29,6 +32,7 @@ export type FormField = {
     | 'date'
     | 'datetime-local'
     | 'select'
+    | 'radio'
     | 'checkbox'
     | 'textarea'
   value?: string | number | boolean | null
@@ -113,6 +117,8 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
 
 /** A native, server-rendered form. Domain modules provide data, never markup. */
 export type RecordFormOptions = {
+  /** Optional DOM id lets controls in a dense record header belong to this form. */
+  id?: string | null
   action: string
   fields: readonly FormField[]
   submit: string
@@ -121,6 +127,8 @@ export type RecordFormOptions = {
   submitSize?: ActionSize
   layout?: 'default' | 'inline'
   method?: 'get' | 'post'
+  /** Optional behavior scope for a progressively enhanced form. */
+  scope?: string | null
   errors?: readonly string[]
   hidden?: Record<string, string>
 } & (
@@ -130,10 +138,12 @@ export type RecordFormOptions = {
 
 export const recordForm = (o: RecordFormOptions): TemplateResult => (
   <form
+    id={o.id ?? undefined}
     data-ui="record-form"
     data-layout={o.layout ?? 'default'}
     data-has-fields={String(o.fields.length > 0)}
     data-submit-variant={o.submitVariant}
+    data-scope={o.scope ?? null}
     method={o.method ?? 'post'}
     action={o.action}
   >
@@ -171,6 +181,56 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
               )}
             </span>
           )
+          if (field.type === 'radio')
+            return (
+              <div
+                data-ui="form-field"
+                data-span={field.span ?? 'half'}
+                data-kind="radio"
+                data-invalid={String(!!field.error)}
+              >
+                <span data-ui="form-label" id={`${id}-label`}>
+                  {field.label}
+                  {field.required && (
+                    <span data-ui="form-required" aria-hidden="true">
+                      {' *'}
+                    </span>
+                  )}
+                </span>
+                <div data-ui="form-options" role="radiogroup" aria-labelledby={`${id}-label`}>
+                  {each(
+                    field.options ?? [],
+                    (option) => option.value,
+                    (option) => (
+                      <label data-ui="form-option">
+                        <input
+                          data-ui="form-option-input"
+                          type="radio"
+                          name={field.name}
+                          value={option.value}
+                          checked={String(field.value ?? '') === option.value}
+                          required={field.required === true}
+                          disabled={field.disabled === true}
+                          aria-invalid={field.error ? 'true' : null}
+                          aria-describedby={describedBy}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ),
+                  )}
+                </div>
+                {!!field.help && (
+                  <small data-ui="form-help" id={helpId ?? undefined}>
+                    {field.help}
+                  </small>
+                )}
+                {!!field.error && (
+                  <small data-ui="form-error" id={errorId ?? undefined}>
+                    {field.error}
+                  </small>
+                )}
+              </div>
+            )
           return (
             <label
               data-ui="form-field"

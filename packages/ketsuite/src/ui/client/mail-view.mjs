@@ -11,6 +11,7 @@ const LABELS = {
     attachment: 'Tệp đính kèm',
     send: 'Gửi',
     sending: 'Đang gửi…',
+    close: 'Đóng',
     loading: 'Đang tải trao đổi…',
     empty: 'Chưa có trao đổi nào.',
     loadMore: 'Tải thêm',
@@ -38,6 +39,7 @@ const LABELS = {
     attachment: 'Attachment',
     send: 'Send',
     sending: 'Sending…',
+    close: 'Close',
     loading: 'Loading conversation…',
     empty: 'No messages yet.',
     loadMore: 'Load more',
@@ -102,6 +104,7 @@ export function createChatterView(runtime, props, seed = {}) {
   const labels = labelsOf(props)
   const status = signal(seed.status ?? 'loading')
   const busy = signal(false)
+  const composerKind = signal(seed.composerKind ?? null)
   const error = signal(seed.error ?? '')
   const page = signal(
     seed.page ?? {
@@ -161,6 +164,7 @@ export function createChatterView(runtime, props, seed = {}) {
       })
       form.reset()
       await load()
+      composerKind.set(null)
     } catch (cause) {
       error.set(errorText(cause))
       status.set('error')
@@ -201,6 +205,10 @@ export function createChatterView(runtime, props, seed = {}) {
   return () => {
     const data = page()
     return html`<section data-ui="chatter" data-state=${status()} aria-label=${labels.title}>
+      <div data-ui="chatter-kinds" role="toolbar" aria-label=${labels.title}>
+        <button data-ui="chatter-kind" data-kind="comment" data-active=${composerKind() === 'comment'} data-control="action" data-variant="secondary" data-size="compact" type="button" aria-pressed=${composerKind() === 'comment'} on:click=${() => composerKind.set(composerKind() === 'comment' ? null : 'comment')} disabled=${busy()}>${labels.comment}</button>
+        <button data-ui="chatter-kind" data-kind="note" data-active=${composerKind() === 'note'} data-control="action" data-variant="secondary" data-size="compact" type="button" aria-pressed=${composerKind() === 'note'} on:click=${() => composerKind.set(composerKind() === 'note' ? null : 'note')} disabled=${busy()}>${labels.note}</button>
+      </div>
       <header data-ui="chatter-head">
         <div data-ui="chatter-heading">
           <h2 data-ui="chatter-title">${labels.title}</h2>
@@ -210,17 +218,17 @@ export function createChatterView(runtime, props, seed = {}) {
           ${data.following ? labels.unfollow : labels.follow}
         </button>
       </header>
-      <form data-ui="chatter-composer" on:submit=${post}>
-        <div data-ui="chatter-kinds" role="group" aria-label=${labels.title}>
-          <label data-ui="chatter-kind"><input type="radio" name="kind" value="comment" checked>${labels.comment}</label>
-          <label data-ui="chatter-kind"><input type="radio" name="kind" value="note">${labels.note}</label>
-        </div>
+      ${composerKind() ? html`<form data-ui="chatter-composer" on:submit=${post}>
+        <input type="hidden" name="kind" value=${composerKind()}>
         <textarea data-ui="chatter-body" name="body" placeholder=${labels.placeholder} required disabled=${busy()}></textarea>
         <div data-ui="chatter-compose-actions">
           <label data-ui="chatter-attachment">${labels.attachment}<input type="file" name="attachment" disabled=${busy()}></label>
-          <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
+          <div>
+            <button data-ui="chatter-compose-close" data-control="action" data-variant="tertiary" data-size="compact" type="button" on:click=${() => composerKind.set(null)} disabled=${busy()}>${labels.close}</button>
+            <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
+          </div>
         </div>
-      </form>
+      </form>` : ''}
       ${error() ? html`<div data-ui="chatter-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
       <div data-ui="chatter-timeline" aria-live="polite">
         ${status() === 'loading' ? html`<p data-ui="chatter-loading">${labels.loading}</p>` : ''}

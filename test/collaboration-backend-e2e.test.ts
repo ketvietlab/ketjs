@@ -89,6 +89,8 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.match(html, /data-island="mail\.chatter"/)
   assert.match(html, /&quot;resModel&quot;:&quot;product\.Template&quot;/)
   assert.match(html, /data-ui="chatter" data-state="loading"/)
+  assert.match(html, /data-ui="chatter-kind" data-kind="comment"/)
+  assert.doesNotMatch(html, /data-ui="chatter-composer"/)
   assert.match(html, /data-island="mail\.inbox-indicator"/)
 
   const bootstrap = await e2e.client.get('/_ket/islands.js')
@@ -265,6 +267,8 @@ test('Activity backend E2E: Product scheduling, due state, atomic completion and
   const productHtml = await productPage.text()
   assert.match(productHtml, /data-island="activity\.record"/)
   assert.match(productHtml, /data-ui="activity-record" data-state="loading"/)
+  assert.match(productHtml, /data-ui="activity-schedule-trigger"/)
+  assert.doesNotMatch(productHtml, /data-ui="activity-schedule"/)
   const bootstrap = await e2e.client.get('/_ket/islands.js')
   assert.match(await bootstrap.text(), /\/_ket\/asset\/activity_backend\/activity\.mjs/)
 

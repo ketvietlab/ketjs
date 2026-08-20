@@ -8,14 +8,18 @@ import {
   contentCard,
   dataTable,
   inline,
+  icon,
   kanbanCard,
   kanbanGrid,
   linkButton,
   mediaPanel,
   recordForm,
+  recordToggle,
+  recordWorkspace,
   section,
   stack,
   surface,
+  tabs,
 } from '../../ui/index.ts'
 import type { Column, DataTable, FormOption, Frame } from '../../ui/index.ts'
 
@@ -39,7 +43,13 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const key = `product_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
 }
-const localized = (path: string, locale: string): string => `${path}${locale}`
+const localized = (path: string, locale: string): string => {
+  if (!locale) return path
+  const target = new URL(path, 'http://ket.local')
+  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
+}
 
 export type TemplateRow = {
   id: string
@@ -53,6 +63,9 @@ export type TemplateRow = {
 /** The two ways to look at the same rows. More can be added; each is a real page. */
 export const VIEWS = ['list', 'kanban'] as const
 export type View = (typeof VIEWS)[number]
+
+export const PRODUCT_DETAIL_TABS = ['general', 'variants', 'media'] as const
+export type ProductDetailTab = (typeof PRODUCT_DETAIL_TABS)[number]
 
 /**
  * The catalogue's columns, as data — so a module that adds a field to
@@ -179,153 +192,146 @@ export const productDetailScreen = (
     variants: Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
     stockEnabled?: boolean
     errors?: string[]
+    editor?: JSXChild
   },
   collaboration: JSXChild,
   frame: Frame = {},
   locale = '',
-): TemplateResult =>
-  framed(
-    _,
-    row.name,
-    frame,
-    stack([
-      section({
-        title: _('product_backend.media.title'),
-        description: _('product_backend.media.description'),
-        body: mediaPanel({
-          ...media,
-          labels: mediaLabels(_),
-        }),
+  activeTab: ProductDetailTab = 'general',
+): TemplateResult => {
+  const images = media.images ?? []
+  const primaryImage = images.find((image) => image.primary) ?? images[0]
+  const unit = management.uoms.find((option) => option.value === row.uomId)?.label
+  const category = management.categories.find((option) => option.value === row.categoryId)?.label
+  const reference =
+    management.variants.length === 1 && management.variants[0]?.defaultCode
+      ? `${_('product_backend.field.defaultCode')}: ${management.variants[0].defaultCode}`
+      : null
+  const subtitle = [reference, category, unit].filter(Boolean).join(' · ')
+  const tabHref = (tab: ProductDetailTab) => localized(`/admin/products/${row.id}?tab=${tab}`, locale)
+  const productFormId = 'product-detail-form'
+  const productToggle = (name: string, label: string, checked: boolean) =>
+    recordToggle({
+      name,
+      label,
+      checked,
+      form: activeTab === 'general' ? productFormId : null,
+      disabled: activeTab !== 'general',
+    })
+  const general = recordForm({
+    id: productFormId,
+    action: localized(`/admin/products/${row.id}?tab=general`, locale),
+    submit: _('product_backend.action.save'),
+    submitVariant: 'primary',
+    scope: 'product-detail',
+    errors: management.errors,
+    fields: [
+      {
+        name: 'type',
+        label: _('product_backend.field.productKind'),
+        type: 'radio',
+        value: row.type,
+        required: true,
+        span: 'full',
+        options: ['goods', 'service'].map((value) => ({
+          value,
+          label: selectionLabel(_, 'type', value),
+        })),
+      },
+      { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
+      {
+        name: 'uomId',
+        label: _('product_backend.field.uom'),
+        type: 'select',
+        value: row.uomId,
+        options: [{ value: '', label: '—' }, ...management.uoms],
+      },
+      {
+        name: 'categoryId',
+        label: _('product_backend.field.category'),
+        type: 'select',
+        value: row.categoryId,
+        options: [{ value: '', label: '—' }, ...management.categories],
+      },
+      {
+        name: 'listPrice',
+        label: _('product_backend.field.listPrice'),
+        type: 'decimal',
+        value: row.listPrice,
+      },
+      ...(management.stockEnabled
+        ? [
+            {
+              name: 'tracking',
+              label: _('product_backend.field.tracking'),
+              type: 'select' as const,
+              value: row.tracking ?? 'none',
+              options: ['none', 'lot', 'serial'].map((value) => ({
+                value,
+                label: selectionLabel(_, 'tracking', value),
+              })),
+            },
+          ]
+        : []),
+      {
+        name: 'description',
+        label: _('product_backend.field.description'),
+        type: 'textarea',
+        value: row.description,
+        span: 'full',
+      },
+    ],
+  })
+
+  const variants = stack([
+    section({
+      title: _('product_backend.variants.title'),
+      actions: recordForm({
+        action: localized(`/admin/products/${row.id}/variants/generate?tab=variants`, locale),
+        submit: _('product_backend.variants.generate'),
+        submitVariant: 'secondary',
+        fields: [],
       }),
-      section({
-        title: _('product_backend.detail.information'),
-        body: surface({
-          body: recordForm({
-            action: localized(`/admin/products/${row.id}`, locale),
-            submit: _('product_backend.action.save'),
-            submitVariant: 'primary',
-            errors: management.errors,
-            fields: [
-              { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
-              {
-                name: 'type',
-                label: _('product_backend.field.type'),
-                type: 'select',
-                value: row.type,
-                options: [
-                  { value: 'goods', label: _('product_backend.type.goods') },
-                  { value: 'service', label: _('product_backend.type.service') },
-                ],
-              },
-              {
-                name: 'uomId',
-                label: _('product_backend.field.uom'),
-                type: 'select',
-                value: row.uomId,
-                options: [{ value: '', label: '—' }, ...management.uoms],
-              },
-              {
-                name: 'categoryId',
-                label: _('product_backend.field.category'),
-                type: 'select',
-                value: row.categoryId,
-                options: [{ value: '', label: '—' }, ...management.categories],
-              },
-              {
-                name: 'listPrice',
-                label: _('product_backend.field.listPrice'),
-                type: 'decimal',
-                value: row.listPrice,
-              },
-              {
-                name: 'saleOk',
-                label: _('product_backend.field.saleOk'),
-                type: 'checkbox',
-                value: row.saleOk,
-              },
-              {
-                name: 'purchaseOk',
-                label: _('product_backend.field.purchaseOk'),
-                type: 'checkbox',
-                value: row.purchaseOk,
-              },
-              ...(management.stockEnabled
-                ? [
-                    {
-                      name: 'isStorable',
-                      label: _('product_backend.field.isStorable'),
-                      type: 'checkbox' as const,
-                      value: row.isStorable,
-                    },
-                    {
-                      name: 'tracking',
-                      label: _('product_backend.field.tracking'),
-                      type: 'select' as const,
-                      value: row.tracking ?? 'none',
-                      options: ['none', 'lot', 'serial'].map((value) => ({
-                        value,
-                        label: selectionLabel(_, 'tracking', value),
-                      })),
-                    },
-                  ]
-                : []),
-              {
-                name: 'description',
-                label: _('product_backend.field.description'),
-                type: 'textarea',
-                value: row.description,
-                span: 'full',
-              },
-            ],
-          }),
-        }),
-      }),
-      section({
-        title: _('product_backend.variants.title'),
-        actions: recordForm({
-          action: localized(`/admin/products/${row.id}/variants/generate`, locale),
-          submit: _('product_backend.variants.generate'),
-          submitVariant: 'secondary',
-          fields: [],
-        }),
-        body:
-          management.variants.length === 0
-            ? emptyState(_('product_backend.variants.empty'), _('product_backend.variants.generate'))
-            : dataTable(_, {
-                rows: management.variants,
-                id: (variant) => variant.id,
-                columns: [
-                  {
-                    key: 'code',
-                    label: _('product_backend.field.defaultCode'),
-                    cell: (variant) =>
-                      linkButton({
-                        label: variant.defaultCode || variant.id,
-                        href: localized(`/admin/products/${row.id}/variants/${variant.id}`, locale),
-                        variant: 'tertiary',
-                      }),
+      body:
+        management.variants.length === 0
+          ? emptyState(_('product_backend.variants.empty'), _('product_backend.variants.generate'))
+          : dataTable(_, {
+              rows: management.variants,
+              id: (variant) => variant.id,
+              columns: [
+                {
+                  key: 'code',
+                  label: _('product_backend.field.defaultCode'),
+                  cell: (variant) =>
+                    linkButton({
+                      label: variant.defaultCode || variant.id,
+                      href: localized(`/admin/products/${row.id}/variants/${variant.id}`, locale),
+                      variant: 'tertiary',
+                    }),
+                },
+                {
+                  key: 'barcode',
+                  label: _('product_backend.field.barcode'),
+                  cell: (variant) => variant.barcode ?? '—',
+                },
+                {
+                  key: 'active',
+                  label: _('product_backend.col.state'),
+                  cell: (variant) => {
+                    const state = variant.active === false ? 'archived' : 'active'
+                    return badge(selectionLabel(_, 'state', state), 'neutral', state)
                   },
-                  {
-                    key: 'barcode',
-                    label: _('product_backend.field.barcode'),
-                    cell: (variant) => variant.barcode ?? '—',
-                  },
-                  {
-                    key: 'active',
-                    label: _('product_backend.col.state'),
-                    cell: (variant) => {
-                      const state = variant.active === false ? 'archived' : 'active'
-                      return badge(selectionLabel(_, 'state', state), 'neutral', state)
-                    },
-                  },
-                ],
-              }),
-      }),
-      section({
-        title: _('product_backend.attributes.lines'),
-        description: _('product_backend.attributes.linesHint'),
+                },
+              ],
+            }),
+    }),
+    section({
+      title: _('product_backend.attributes.lines'),
+      description: _('product_backend.attributes.linesHint'),
+      body: surface({
+        padding: 'compact',
         body: recordForm({
-          action: localized(`/admin/products/${row.id}/attribute-lines`, locale),
+          action: localized(`/admin/products/${row.id}/attribute-lines?tab=variants`, locale),
           submit: _('product_backend.action.add'),
           submitVariant: 'secondary',
           fields: [
@@ -345,9 +351,87 @@ export const productDetailScreen = (
           ],
         }),
       }),
-      collaboration,
-    ]),
+    }),
+  ])
+
+  const mediaTab = section({
+    title: _('product_backend.media.title'),
+    description: _('product_backend.media.description'),
+    body: mediaPanel({ ...media, labels: mediaLabels(_) }),
+  })
+
+  return framed(
+    _,
+    _('product_backend.detail.kicker'),
+    frame,
+    recordWorkspace({
+      kicker: _('product_backend.detail.kicker'),
+      title: row.name,
+      subtitle,
+      image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
+      imageFallback: icon('package'),
+      badges: [
+        productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
+        productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
+        ...(management.stockEnabled
+          ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
+          : []),
+      ],
+      summary: [
+        {
+          id: 'variants',
+          label: _('product_backend.summary.variants'),
+          value: management.variants.length,
+          href: tabHref('variants'),
+        },
+        {
+          id: 'media',
+          label: _('product_backend.summary.images'),
+          value: images.length,
+          href: tabHref('media'),
+        },
+        ...(management.stockEnabled
+          ? [
+              {
+                id: 'tracking',
+                label: _('product_backend.summary.tracking'),
+                value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
+              },
+            ]
+          : []),
+      ],
+      navigation: tabs({
+        label: _('product_backend.tabs.label'),
+        items: [
+          {
+            id: 'general',
+            label: _('product_backend.tabs.general'),
+            href: tabHref('general'),
+            active: activeTab === 'general',
+          },
+          {
+            id: 'variants',
+            label: _('product_backend.tabs.variants'),
+            href: tabHref('variants'),
+            active: activeTab === 'variants',
+            count: management.variants.length,
+          },
+          {
+            id: 'media',
+            label: _('product_backend.tabs.media'),
+            href: tabHref('media'),
+            active: activeTab === 'media',
+            count: images.length,
+          },
+        ],
+      }),
+      controller: management.editor,
+      body: activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general,
+      aside: collaboration,
+      asideLabel: _('product_backend.collaboration.label'),
+    }),
   )
+}
 
 export const newProductScreen = (
   _: Translator,

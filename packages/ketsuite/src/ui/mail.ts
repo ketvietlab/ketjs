@@ -16,6 +16,7 @@ export const HOOKS = [
   'chatter-compose-actions',
   'chatter-attachment',
   'chatter-send',
+  'chatter-compose-close',
   'chatter-error',
   'chatter-timeline',
   'chatter-loading',
@@ -44,6 +45,7 @@ export const mailContractCases = (): TemplateResult[] => [
   createChatterView(runtime, props, { status: 'ready' })(),
   createChatterView(runtime, props, {
     status: 'ready',
+    composerKind: 'comment',
     page: {
       threadId: 'thread',
       displayName: 'Product',

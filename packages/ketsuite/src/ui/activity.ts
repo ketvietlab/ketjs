@@ -6,6 +6,7 @@ export const HOOKS = [
   'activity-record',
   'activity-head',
   'activity-title',
+  'activity-schedule-trigger',
   'activity-schedule',
   'activity-field',
   'activity-type',
@@ -15,6 +16,7 @@ export const HOOKS = [
   'activity-schedule-actions',
   'activity-attachment',
   'activity-submit',
+  'activity-schedule-close',
   'activity-error',
   'activity-list',
   'activity-loading',
@@ -28,6 +30,7 @@ export const HOOKS = [
   'activity-meta',
   'activity-attachments',
   'activity-actions',
+  'activity-action-trigger',
   'activity-action-field',
   'activity-action-label',
   'activity-complete',
@@ -41,6 +44,17 @@ export const HOOKS = [
 
 const runtime = { each, html, signal }
 const props = { resModel: 'product.Template', resId: 'contract', lang: 'en' }
+const activeActivity = {
+  id: 'activity',
+  summary: 'Follow up',
+  note: 'Call first',
+  typeName: 'To do',
+  state: 'overdue',
+  dueDate: '2026-08-19',
+  assigneeName: 'Author',
+  active: true,
+  attachments: [{ id: 'attachment', name: 'brief.pdf', href: '/files/attachment' }],
+}
 
 export const activityContractCases = (): TemplateResult[] => [
   createRecordActivityView(runtime, props)(),
@@ -48,20 +62,15 @@ export const activityContractCases = (): TemplateResult[] => [
   createRecordActivityView(runtime, props, { status: 'ready' })(),
   createRecordActivityView(runtime, props, {
     status: 'ready',
+    scheduleOpen: true,
+    itemAction: 'complete:activity',
     types: [{ id: 'todo', name: 'To do' }],
-    activities: [
-      {
-        id: 'activity',
-        summary: 'Follow up',
-        note: 'Call first',
-        typeName: 'To do',
-        state: 'overdue',
-        dueDate: '2026-08-19',
-        assigneeName: 'Author',
-        active: true,
-        attachments: [{ id: 'attachment', name: 'brief.pdf', href: '/files/attachment' }],
-      },
-    ],
+    activities: [activeActivity],
+  })(),
+  createRecordActivityView(runtime, props, {
+    status: 'ready',
+    itemAction: 'reschedule:activity',
+    activities: [activeActivity],
   })(),
   createActivityIndicatorView(runtime, { lang: 'en' }, { count: 3, overdue: 2 })(),
 ]

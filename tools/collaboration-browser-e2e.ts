@@ -202,6 +202,8 @@ const e2e = await collaborationEvidenceApp()
 let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/assets/odoo-collaboration')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
+const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
+const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
 try {
   await mkdir(artifactDir, { recursive: true })
   chrome = await startChrome()
@@ -271,7 +273,7 @@ try {
       path: '/admin/inbound-email?lang=vi',
       ready: `document.querySelectorAll('[data-ui="content-card"]').length >= 4 && document.body.textContent.includes('Đã xử lý') && document.body.textContent.includes('Không định tuyến được') && document.body.textContent.includes('Đã bỏ qua')`,
     },
-  ]) {
+  ].filter((screen) => !onlyScreen || screen.name === onlyScreen)) {
     const started = performance.now()
     await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
     const navigationMs = await evaluate<number>(
@@ -376,6 +378,118 @@ try {
     }
 
     if (screen.name === 'product-chatter') {
+      const generalPadding = await evaluate(
+        cdp,
+        `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`,
+      )
+      await navigate(cdp, `${e2e.baseUrl}/admin/products/tpl-collab?tab=variants&lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="tab"][data-active="true"]')?.textContent.includes('Thuộc tính')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`),
+        generalPadding,
+      )
+      await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+      await waitFor(cdp, `document.querySelector('form[data-scope="product-detail"]')`)
+      await waitFor(
+        cdp,
+        `document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true`,
+      )
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1920,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+      await waitFor(cdp, `document.querySelector('[data-ui="record-aside"]')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const workspace = document.querySelector('[data-ui="record-workspace"]')
+            const aside = document.querySelector('[data-ui="record-aside"]')
+            const gap = parseFloat(getComputedStyle(workspace).columnGap)
+            const available = workspace.getBoundingClientRect().width - gap
+            const width = aside.getBoundingClientRect().width
+            return { atLeast32Rem: width >= 512, oneThird: Math.abs(width / available - 1 / 3) <= 0.01 }
+          })()`,
+        ),
+        { atLeast32Rem: true, oneThird: true },
+      )
+      await cdp.send('Emulation.clearDeviceMetricsOverride')
+      await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+      await waitFor(
+        cdp,
+        `document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            editorIdle: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true,
+            controllerCollapsed: document.querySelector('[data-ui="record-controller"]').getBoundingClientRect().height === 0,
+            headerToggles: document.querySelectorAll('[data-ui="record-header"] [data-ui="record-toggle"]').length,
+            bodyType: document.querySelectorAll('[data-ui="record-body"] [name="type"]').length,
+            bodyToggles: document.querySelectorAll('[data-ui="record-body"] input[type="checkbox"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="record-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            statusesAligned: (() => {
+              const items = Array.from(document.querySelectorAll('[data-ui="record-badges"] > *'))
+              return items.length === 3 && items.every((item) => Math.abs(item.getBoundingClientRect().top - items[0].getBoundingClientRect().top) <= 1)
+            })(),
+            statusesSpaced: (() => {
+              const boxes = Array.from(document.querySelectorAll('[data-ui="record-badges"] > *'), (item) => item.getBoundingClientRect())
+              return boxes.slice(1).every((box, index) => box.left - boxes[index].right >= 8)
+            })()
+          })`,
+        ),
+        {
+          editorIdle: true,
+          controllerCollapsed: true,
+          headerToggles: 3,
+          bodyType: 2,
+          bodyToggles: 0,
+          gridRowsAtLeast28: true,
+          collaborationNarrower: true,
+          statusesAligned: true,
+          statusesSpaced: true,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          globalThis.__productSaveNodes = {
+            chatter: document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: document.querySelector('[data-ui="sidebar-foot"]')
+          }
+          document.querySelector('form[data-scope="product-detail"]').requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__productSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__productSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__productSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            formReady: Boolean(document.querySelector('form[data-scope="product-detail"]:not([aria-busy="true"])')),
+            editorVisible: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === false
+          })`,
+        ),
+        { chatter: true, activity: true, sidebar: true, formReady: true, editorVisible: true },
+      )
+
+      await evaluate(cdp, `document.querySelector('[data-ui="chatter-kind"][data-kind="comment"]').click()`)
+      await waitFor(cdp, `document.querySelector('[data-ui="chatter-composer"]')`)
       await evaluate(
         cdp,
         `(() => {
@@ -393,6 +507,8 @@ try {
       )
       assert.equal(await evaluate(cdp, `globalThis.__xss === 1`), false)
 
+      await evaluate(cdp, `document.querySelector('[data-ui="activity-schedule-trigger"]').click()`)
+      await waitFor(cdp, `document.querySelector('[data-ui="activity-schedule"]')`)
       await evaluate(
         cdp,
         `(() => {
@@ -414,6 +530,19 @@ try {
         `(() => {
           const item = [...document.querySelectorAll('[data-ui="activity-item"]')]
             .find((entry) => entry.textContent.includes('Hoạt động từ Browser E2E'))
+          item.querySelector('[data-ui="activity-action-trigger"][data-action="complete"]').click()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `[...document.querySelectorAll('[data-ui="activity-item"]')].some((item) => item.textContent.includes('Hoạt động từ Browser E2E') && item.querySelector('[data-ui="activity-complete"]'))`,
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const item = [...document.querySelectorAll('[data-ui="activity-item"]')]
+            .find((entry) => entry.textContent.includes('Hoạt động từ Browser E2E'))
           const form = item.querySelector('[data-ui="activity-complete"]')
           form.querySelector('[name="feedback"]').value = 'Đã kiểm chứng trên Chrome headless.'
           form.requestSubmit()
@@ -426,11 +555,12 @@ try {
       )
     }
     if (screen.name === 'transfer-chatter') {
+      await evaluate(cdp, `document.querySelector('[data-ui="chatter-kind"][data-kind="note"]').click()`)
+      await waitFor(cdp, `document.querySelector('[data-ui="chatter-composer"]')`)
       await evaluate(
         cdp,
         `(() => {
           const form = document.querySelector('[data-ui="chatter-composer"]')
-          form.querySelector('[name="kind"][value="note"]').checked = true
           form.querySelector('[name="body"]').value = 'Headless note on transfer'
           form.requestSubmit()
           return true
@@ -484,42 +614,44 @@ try {
       )
       await waitFor(cdp, `document.body.textContent.includes('Sự kiện từ Browser E2E')`)
     }
-    await capture(cdp, join(artifactDir, `${screen.name}.png`))
+    if (!noArtifacts) await capture(cdp, join(artifactDir, `${screen.name}.png`))
   }
 
-  await writeFile(
-    join(artifactDir, 'browser-e2e.json'),
-    `${JSON.stringify(
-      {
-        generatedAt: new Date().toISOString(),
-        viewport: { width: 1440, height: 1100 },
-        assertions: [
-          'authenticated product and transfer islands reached ready state',
-          'message and internal-note composer crossed real browser HTTP',
-          'Chatter exposed linked sent and terminal-failure email delivery states',
-          'record activity island scheduled and completed an activity through real browser HTTP',
-          'My Activities rendered the actor due list and sidebar counter',
-          'My Activities kept inputs, date pickers and semantic actions on one contained baseline',
-          'KétViệt sidebar systray order, divider, account menu and settings link stayed functional',
-          'Agenda, week and month calendar views hydrated with bounded occurrence expansion',
-          'calendar date-time pickers kept equal dimensions and stayed inside their form grid',
-          'calendar event creation crossed real browser HTTP and remained visible after reload',
-          'transactional outbox rendered both provider-accepted and terminal-failure delivery states',
-          'inbound log rendered processed, failed and ignored signed-provider outcomes',
-          'plain-text message markup did not execute or create an img element',
-          'notification inbox rendered an unread message',
-        ],
-        screens: report,
-      },
-      null,
-      2,
-    )}\n`,
-  )
+  if (!noArtifacts)
+    await writeFile(
+      join(artifactDir, 'browser-e2e.json'),
+      `${JSON.stringify(
+        {
+          generatedAt: new Date().toISOString(),
+          viewport: { width: 1440, height: 1100 },
+          assertions: [
+            'authenticated product and transfer islands reached ready state',
+            'Product save replaced only its record header/body and preserved Chatter, Activity and sidebar DOM identity',
+            'message and internal-note composer crossed real browser HTTP',
+            'Chatter exposed linked sent and terminal-failure email delivery states',
+            'record activity island scheduled and completed an activity through real browser HTTP',
+            'My Activities rendered the actor due list and sidebar counter',
+            'My Activities kept inputs, date pickers and semantic actions on one contained baseline',
+            'KétViệt sidebar systray order, divider, account menu and settings link stayed functional',
+            'Agenda, week and month calendar views hydrated with bounded occurrence expansion',
+            'calendar date-time pickers kept equal dimensions and stayed inside their form grid',
+            'calendar event creation crossed real browser HTTP and remained visible after reload',
+            'transactional outbox rendered both provider-accepted and terminal-failure delivery states',
+            'inbound log rendered processed, failed and ignored signed-provider outcomes',
+            'plain-text message markup did not execute or create an img element',
+            'notification inbox rendered an unread message',
+          ],
+          screens: report,
+        },
+        null,
+        2,
+      )}\n`,
+    )
   for (const row of report)
     console.log(
       `${row.screen.padEnd(24)} navigation=${row.navigationMs.toFixed(1).padStart(6)} ms  interactive=${row.readyMs.toFixed(1).padStart(6)} ms`,
     )
-  console.log(`screenshots: ${artifactDir}`)
+  if (!noArtifacts) console.log(`screenshots: ${artifactDir}`)
 } finally {
   chrome?.cdp.close()
   if (chrome?.process.exitCode === null) {
