@@ -16,19 +16,13 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import {
-  accountingDashboard,
-  entityScreen,
-  labelOf,
-  movesScreen,
-  optionsOf,
-  reportScreen,
-} from './screens.ts'
+import { accountingDashboard, entityScreen, movesScreen, optionsOf, reportScreen } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
+import { taxesScreen } from './taxes-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -566,18 +560,19 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/taxes',
+            `/admin/taxes${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         return document(ctx, url, req, 'account_backend.taxes.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return entityScreen(tr, {
-            title: tr('account_backend.taxes.title'),
+          return taxesScreen(tr, {
             frame: shell,
-            action: '/admin/taxes',
-            submit: tr('account_backend.action.create'),
+            action: `/admin/taxes${localeSuffix(url)}`,
             rows: data.taxes,
+            currency,
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
             fields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               { name: 'description', label: tr('account_backend.field.description') },
@@ -601,7 +596,7 @@ export default defineModule({
               },
               {
                 name: 'amount',
-                label: tr('account_backend.field.paymentAmount'),
+                label: tr('account_backend.field.amount'),
                 type: 'decimal',
                 value: 0,
                 required: true,
@@ -613,41 +608,6 @@ export default defineModule({
                 type: 'checkbox',
               },
               { name: 'sequence', label: tr('account_backend.field.sequence'), type: 'number', value: 10 },
-            ],
-            columns: [
-              {
-                key: 'name',
-                label: tr('account_backend.field.name'),
-                cell: (row) => String(row.name),
-                priority: 'primary',
-              },
-              {
-                key: 'use',
-                label: tr('account_backend.field.typeTaxUse'),
-                cell: (row) => labelOf(tr, 'taxUse', row.typeTaxUse),
-              },
-              {
-                key: 'computation',
-                label: tr('account_backend.field.amountType'),
-                cell: (row) => labelOf(tr, 'taxAmountType', row.amountType),
-              },
-              {
-                key: 'amount',
-                label: tr('account_backend.field.amount'),
-                cell: (row) =>
-                  row.amountType === 'fixed'
-                    ? formatMoney(tr, row.amount, currency)
-                    : row.amountType === 'group'
-                      ? '—'
-                      : `${String(row.amount)}%`,
-                align: 'end',
-                kind: 'number',
-              },
-              {
-                key: 'included',
-                label: tr('account_backend.field.priceInclude'),
-                cell: (row) => (row.priceInclude ? tr('account_backend.yes') : tr('account_backend.no')),
-              },
             ],
           })
         })
@@ -1222,6 +1182,18 @@ const vi: Record<string, string> = {
   'journal.empty': 'Chưa có sổ nhật ký',
   'journal.emptyHint': 'Tạo sổ đầu tiên để bắt đầu phân loại chứng từ.',
   'taxes.title': 'Thuế',
+  'tax.kicker': 'Cấu hình thuế',
+  'tax.subtitle': 'Quản lý phạm vi và cách tính thuế theo selection code Odoo 19.',
+  'tax.summary.total': 'Tổng sắc thuế',
+  'tax.summary.sale': 'Bán hàng',
+  'tax.summary.purchase': 'Mua hàng',
+  'tax.summary.included': 'Đã gồm trong giá',
+  'tax.create.title': 'Tạo thuế',
+  'tax.create.hint': 'Chọn phạm vi sử dụng, cách tính và nhập số tiền hoặc tỷ lệ.',
+  'tax.list.title': 'Thuế hiện có',
+  'tax.list.hint': 'Kiểm tra phạm vi, phép tính, giá trị và chính sách bao gồm trong giá.',
+  'tax.empty': 'Chưa có thuế',
+  'tax.emptyHint': 'Tạo sắc thuế đầu tiên để áp dụng trên chứng từ.',
   'terms.title': 'Điều khoản thanh toán',
   'entries.title': 'Bút toán',
   'entry.kicker': 'Sổ cái',
@@ -1396,6 +1368,18 @@ const en: Record<string, string> = {
   'journal.empty': 'No journals yet',
   'journal.emptyHint': 'Create the first journal to start classifying documents.',
   'taxes.title': 'Taxes',
+  'tax.kicker': 'Tax configuration',
+  'tax.subtitle': 'Manage tax scope and computation with Odoo 19 selection codes.',
+  'tax.summary.total': 'Total taxes',
+  'tax.summary.sale': 'Sales',
+  'tax.summary.purchase': 'Purchases',
+  'tax.summary.included': 'Price included',
+  'tax.create.title': 'Create a tax',
+  'tax.create.hint': 'Choose the use, computation, and enter an amount or rate.',
+  'tax.list.title': 'Current taxes',
+  'tax.list.hint': 'Review use, computation, value, and price-included behavior.',
+  'tax.empty': 'No taxes yet',
+  'tax.emptyHint': 'Create the first tax to apply it on documents.',
   'terms.title': 'Payment terms',
   'entries.title': 'Journal entries',
   'entry.kicker': 'General ledger',

@@ -154,6 +154,11 @@ try {
       markers: ['record-workspace', 'journal-create-form', 'account-bank-journal-collab'],
     },
     {
+      label: 'Accounting taxes',
+      path: '/admin/taxes?lang=vi',
+      markers: ['record-workspace', 'tax-create-form', 'VAT 10%'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
