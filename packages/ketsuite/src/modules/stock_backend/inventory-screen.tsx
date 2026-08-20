@@ -12,6 +12,7 @@ import {
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
   section as Section,
+  stack,
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, FormOption, Frame } from '../../ui/index.ts'
@@ -194,16 +195,16 @@ export const inventoryScreen = (
           value: locationCount,
         },
       ]}
-      body={
-        <div data-ui="stack" data-gap="loose">
-          {options.applied
+      body={stack(
+        [
+          options.applied
             ? notice({
                 tone: 'positive',
                 title: _('stock_backend.inventory.applied.title'),
                 message: _('stock_backend.inventory.applied.message'),
                 icon: icon('check-circle'),
               })
-            : null}
+            : null,
           <Section
             title={_('stock_backend.adjustment.title')}
             description={_('stock_backend.adjustment.hint')}
@@ -224,14 +225,15 @@ export const inventoryScreen = (
                 })
               )
             }
-          />
+          />,
           <Section
             title={_('stock_backend.inventory.balances.title')}
             description={_('stock_backend.inventory.balances.hint')}
             body={balances}
-          />
-        </div>
-      }
+          />,
+        ],
+        'loose',
+      )}
     />,
   )
 }

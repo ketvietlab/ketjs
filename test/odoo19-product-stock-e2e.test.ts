@@ -261,8 +261,11 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
     { headers: { accept: 'text/html', 'x-ket-partial': 'product-detail' } },
   )
   assert.equal(partialSave.status, 200)
-  assert.match(partialSave.headers.get('content-type') ?? '', /^text\/html/)
-  assert.match(await partialSave.text(), /data-ui="record-body"/)
+  assert.match(partialSave.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
+  const partialSaveHtml = await partialSave.text()
+  assert.match(partialSaveHtml, /data-ket-slot="product\.record-header"/)
+  assert.match(partialSaveHtml, /data-ket-slot="product\.record-body"/)
+  assert.doesNotMatch(partialSaveHtml, /data-island=|data-ui="sidebar"|<!doctype/)
 
   const variantsPage = await e2e.client.get('/admin/products/tpl?tab=variants&lang=vi', {
     headers: { accept: 'text/html' },
@@ -311,7 +314,10 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
     { headers: { accept: 'text/html', 'x-ket-partial': 'product-variant' } },
   )
   assert.equal(variantPartial.status, 200)
-  assert.match(await variantPartial.text(), /AO-UPDATED/)
+  assert.match(variantPartial.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
+  const variantPartialHtml = await variantPartial.text()
+  assert.match(variantPartialHtml, /AO-UPDATED/)
+  assert.doesNotMatch(variantPartialHtml, /data-island=|data-ui="sidebar"|<!doctype/)
 
   const attributesPage = await e2e.client.get('/admin/product-attributes?lang=vi', {
     headers: { accept: 'text/html' },

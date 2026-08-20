@@ -367,7 +367,7 @@ export type Manifest = {
   regions: { required: string[]; provided: Record<string, string[]> }
   islands: Record<
     string,
-    { by: string; props: Record<string, string>; client?: { src: string; export: string } }
+    { by: string; props: Record<string, string>; key?: string[]; client?: { src: string; export: string } }
   >
   sections: Record<string, SectionDef & { by: string }>
   relations: Record<string, Record<string, ComposedRelation>>

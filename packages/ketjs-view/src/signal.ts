@@ -87,7 +87,20 @@ function runEffect(eff: Effect): void {
 
 function makeEffect(fn: () => unknown, computed: boolean): () => void {
   const eff: Effect = { fn, deps: new Set(), disposed: false, cleanup: null, computed }
-  runEffect(eff)
+  try {
+    runEffect(eff)
+  } catch (error) {
+    // An effect that fails during its eager first run never reaches its caller, so
+    // nobody can dispose it. Roll its subscriptions back here or a later signal
+    // write would revive a half-created render/hydration effect.
+    eff.disposed = true
+    pending.delete(eff)
+    for (const dep of eff.deps) dep.delete(eff)
+    eff.deps.clear()
+    eff.cleanup?.()
+    eff.cleanup = null
+    throw error
+  }
   return () => {
     eff.disposed = true
     pending.delete(eff)

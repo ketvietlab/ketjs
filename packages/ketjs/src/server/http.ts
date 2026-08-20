@@ -3,6 +3,7 @@
 
 import { createServer } from 'node:http'
 import { pipeline } from 'node:stream/promises'
+import { isNavigationRequest, navigablePage } from './respond.ts'
 import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
@@ -19,6 +20,7 @@ import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import { compileRoutes } from '../kernel/routes.ts'
 import type { RouteParams } from '../kernel/routes.ts'
+import { html, trustedMarkup } from 'ketjs-view'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
@@ -65,6 +67,8 @@ export type ServeOpts = {
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, HttpRoute>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
+  /** Theme region returned for progressive GET navigation. */
+  pageRegion?: string
 }
 
 /**
@@ -110,11 +114,10 @@ const contentType = (type: string): string => {
 const islandScript = '<script type="module" src="/_ket/islands.js"></script>'
 const viewRuntimeUrl = '/_ket/view/index.js'
 
-const bootstrapDocument = (body: string, clients: ThemeRuntime['clients']): string => {
+const bootstrapDocument = (body: string): string => {
   if (
-    !body.includes('<ket-island') ||
-    body.includes('src="/_ket/islands.js"') ||
-    !Object.keys(clients).length
+    (!body.includes('<ket-island') && !body.includes('data-ket-slot=')) ||
+    body.includes('src="/_ket/islands.js"')
   )
     return body
   const closingBody = body.lastIndexOf('</body>')
@@ -124,37 +127,183 @@ const bootstrapDocument = (body: string, clients: ThemeRuntime['clients']): stri
 }
 
 const browserBootstrap = (clients: ThemeRuntime['clients']): string => `import {
+  createIslandManager,
   domHost,
-  hydrateIslands,
 } from ${JSON.stringify(viewRuntimeUrl)}
 
 const definitions = ${JSON.stringify(clients)}
 const registry = Object.create(null)
-const placed = new Set(Array.from(document.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')))
-for (const [name, definition] of Object.entries(definitions)) {
-  if (!placed.has(name)) continue
+const loading = new Map()
+const loadFactory = async (name) => {
+  if (registry[name]) return registry[name]
+  const definition = definitions[name]
+  if (!definition) return null
+  if (loading.has(name)) return loading.get(name)
+  const pending = (async () => {
   const module = await import(definition.src)
   const factory = module[definition.export]
   if (typeof factory !== 'function') {
     throw new TypeError('island "' + name + '" does not export a factory named "' + definition.export + '"')
   }
   registry[name] = factory
+    return factory
+  })()
+  loading.set(name, pending)
+  try { return await pending } finally { loading.delete(name) }
 }
-hydrateIslands(domHost(), document, registry, { strict: false })
+const loadPlaced = async (root, requireKnown = false) => {
+  const names = new Set(Array.from(root.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')).filter(Boolean))
+  if (requireKnown) {
+    const unknown = Array.from(names).find((name) => !definitions[name])
+    if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
+  }
+  await Promise.all(Array.from(names, loadFactory))
+}
+
+await loadPlaced(document)
+const islands = createIslandManager(domHost(), registry, { strict: false })
+islands.hydrate(document)
+
+const event = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }))
+const hardNavigate = (target) => window.location.assign(String(target))
+const fragmentsType = 'text/vnd.ket.fragments+html'
+const slotSelector = (name) => '[data-ket-slot="' + name + '"]'
+
+const applyFragments = async (markup) => {
+  const parsed = new DOMParser().parseFromString(markup, 'text/html')
+  const envelope = parsed.querySelector('ket-fragments')
+  if (!envelope) throw new Error('navigation response has no ket-fragments envelope')
+  const templates = Array.from(envelope.querySelectorAll('template[data-ket-slot]'))
+  if (!templates.length) throw new Error('navigation response has no slots')
+  const names = new Set()
+  for (const template of templates) {
+    const name = template.getAttribute('data-ket-slot')
+    if (!name || names.has(name)) throw new Error('navigation response has a missing or duplicate slot')
+    names.add(name)
+    if (document.querySelectorAll(slotSelector(name)).length !== 1)
+      throw new Error('current document does not have exactly one slot named "' + name + '"')
+  }
+  await Promise.all(templates.map((template) => loadPlaced(template.content, true)))
+  const changed = []
+  for (const template of templates) {
+    const name = template.getAttribute('data-ket-slot')
+    const slot = document.querySelector(slotSelector(name))
+    islands.reconcile(slot, template.content)
+    changed.push(slot)
+  }
+  const title = envelope.getAttribute('data-title')
+  if (title !== null) document.title = title
+  return changed
+}
+
+let active = null
+const saveScroll = () => {
+  const state = { ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }
+  history.replaceState(state, '', location.href)
+}
+const focusAfterNavigation = (url, changed, scroll) => {
+  if (url.hash) {
+    const target = document.getElementById(decodeURIComponent(url.hash.slice(1)))
+    if (target) {
+      target.focus?.({ preventScroll: true })
+      target.scrollIntoView()
+      return
+    }
+  }
+  const [x, y] = scroll ?? [0, 0]
+  window.scrollTo(x, y)
+  const target = changed.find((slot) => slot.matches?.('[data-ket-slot$="content"], main')) ?? changed[0]
+  if (!target) return
+  const hadTabIndex = target.hasAttribute('tabindex')
+  if (!hadTabIndex) target.setAttribute('tabindex', '-1')
+  target.focus?.({ preventScroll: true })
+  if (!hadTabIndex) target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true })
+}
+
+const navigate = async (asked, mode = 'push', scroll = null) => {
+  const target = new URL(asked, location.href)
+  if (mode === 'push') saveScroll()
+  active?.abort()
+  const controller = new AbortController()
+  active = controller
+  document.documentElement.setAttribute('data-ket-navigating', '')
+  document.documentElement.setAttribute('aria-busy', 'true')
+  event('ket:navigation-start', { url: target.href, mode })
+  let fallback = target.href
+  try {
+    const response = await fetch(target, {
+      credentials: 'same-origin',
+      headers: {
+        accept: fragmentsType + ', text/html;q=0.9',
+        'x-ket-navigation': 'fragment-v1',
+      },
+      signal: controller.signal,
+    })
+    fallback = response.url || fallback
+    if (!response.ok || !response.headers.get('content-type')?.toLowerCase().startsWith(fragmentsType))
+      throw new Error('server did not return a navigation fragment')
+    const changed = await applyFragments(await response.text())
+    const finalUrl = new URL(response.url || target.href)
+    if (mode === 'push') history.pushState({ __ketScroll: [0, 0] }, '', finalUrl.href)
+    focusAfterNavigation(finalUrl, changed, scroll)
+    event('ket:navigation-complete', { url: finalUrl.href, mode })
+  } catch (caught) {
+    if (controller.signal.aborted) return
+    event('ket:navigation-error', { url: fallback, mode, error: caught })
+    hardNavigate(fallback)
+  } finally {
+    if (active === controller) {
+      active = null
+      document.documentElement.removeAttribute('data-ket-navigating')
+      document.documentElement.removeAttribute('aria-busy')
+    }
+  }
+}
+
+const optedOut = (element) => Boolean(element.closest?.('[data-ket-reload]'))
+const navigationEnabled = Boolean(document.querySelector('[data-ket-slot]'))
+document.addEventListener('click', (click) => {
+  if (!navigationEnabled) return
+  if (click.defaultPrevented || click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey) return
+  const anchor = click.target.closest?.('a[href]')
+  if (!anchor || optedOut(anchor) || anchor.hasAttribute('download')) return
+  if (anchor.target && anchor.target !== '_self') return
+  const target = new URL(anchor.href, location.href)
+  if (target.origin !== location.origin) return
+  if (target.pathname === location.pathname && target.search === location.search && target.hash !== location.hash) return
+  click.preventDefault()
+  void navigate(target)
+})
+
+document.addEventListener('submit', (submit) => {
+  if (!navigationEnabled) return
+  if (submit.defaultPrevented) return
+  const form = submit.target
+  if (!(form instanceof HTMLFormElement) || optedOut(form) || String(form.method || 'get').toLowerCase() !== 'get') return
+  const target = new URL(form.action || location.href, location.href)
+  if (target.origin !== location.origin || (form.target && form.target !== '_self')) return
+  target.search = ''
+  for (const [name, value] of new FormData(form, submit.submitter))
+    target.searchParams.append(name, typeof value === 'string' ? value : value.name)
+  submit.preventDefault()
+  void navigate(target)
+})
+
+if (navigationEnabled) {
+  history.scrollRestoration = 'manual'
+  if (!history.state?.__ketScroll) history.replaceState({ ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }, '', location.href)
+  window.addEventListener('popstate', (pop) => void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0]))
+}
+globalThis.__ketNavigation = { applyFragments, navigate, islands }
 `
 
-const send = async (
-  res: ServerResponse,
-  result: RouteResult,
-  islandClients?: () => Promise<ThemeRuntime['clients']>,
-): Promise<void> => {
+const send = async (res: ServerResponse, result: RouteResult): Promise<void> => {
   if (typeof result.body === 'string' || result.body instanceof Uint8Array) {
     const body =
       typeof result.body === 'string' &&
       (result.type ?? 'text/html').toLowerCase().startsWith('text/html') &&
-      result.body.includes('<ket-island') &&
-      islandClients
-        ? bootstrapDocument(result.body, await islandClients())
+      (result.body.includes('<ket-island') || result.body.includes('data-ket-slot='))
+        ? bootstrapDocument(result.body)
         : result.body
     res.writeHead(result.status ?? 200, {
       'content-type': contentType(result.type ?? 'text/html'),
@@ -217,7 +366,9 @@ export async function createKetServer(o: ServeOpts) {
   const mounts: AssetMount[] = [
     {
       prefix: '/_ket/view/',
-      dir: fileURLToPath(new URL('.', import.meta.resolve('ketjs-view'))),
+      // `tsx` resolves the workspace package to src/index.ts while production
+      // resolves its export to dist/index.js. Both entries share this dist root.
+      dir: fileURLToPath(new URL('../dist/', import.meta.resolve('ketjs-view'))),
     },
     ...configuredMounts,
   ]
@@ -272,7 +423,7 @@ export async function createKetServer(o: ServeOpts) {
       const route = matchRoute(url.pathname)
       if (route) {
         const r = await route.value(url, req, route.params)
-        return await send(res, r, () => resolveIslandClients(url, req))
+        return await send(res, r)
       }
 
       if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
@@ -280,10 +431,6 @@ export async function createKetServer(o: ServeOpts) {
       if (url.pathname === '/_ket/islands.js') {
         const theme = await resolveTheme(url, req)
         const clients = await resolveIslandClients(url, req, theme)
-        if (!Object.keys(clients).length) {
-          res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
-          return res.end('no client islands')
-        }
         res.writeHead(200, {
           'content-type': 'text/javascript; charset=utf-8',
           'cache-control': 'no-cache',
@@ -356,12 +503,26 @@ export async function createKetServer(o: ServeOpts) {
           return res.end('not found')
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
-        const html = bootstrapDocument(
-          theme.renderRegion('layout', scope),
-          await resolveIslandClients(url, req, theme),
-        )
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        return res.end(html)
+        const pageRegion = o.pageRegion
+        if (pageRegion && isNavigationRequest(req)) {
+          const page = scope['page'] as { title?: unknown } | undefined
+          return send(
+            res,
+            navigablePage(req, {
+              title: String(page?.title ?? ''),
+              document: () => html``,
+              slots: {
+                [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
+              },
+            }),
+          )
+        }
+        const fullHtml = bootstrapDocument(theme.renderRegion('layout', scope))
+        res.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
+        })
+        return res.end(fullHtml)
       }
       return json(res, 404, { code: 'E_NOT_FOUND', message: `no route for ${url.pathname}` })
     } catch (e) {

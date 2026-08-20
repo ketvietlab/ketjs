@@ -84,7 +84,9 @@ export function createJoints(
         hint: `available islands: ${Object.keys(o.islands ?? {}).join(', ') || '(none)'}`,
       })
     }
-    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope))
+    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope), {
+      key: definition.key,
+    })
   }
 
   for (const fill of manifest.fills) {

@@ -101,6 +101,7 @@ Routes return branded `RouteResult` values. Create them with public helpers:
 | --- | --- | --- |
 | `page({ body })` | Escaped `TemplateResult` document | `text/html` with doctype |
 | `fragment(body)` | Escaped HTML fragment | `text/html` |
+| `navigablePage(request, options)` | Full document or named navigation slots | Negotiated |
 | `json(value)` | JSON serialization | `application/json` |
 | `text(value)` | String | `text/plain` |
 | `bytes(value, { type })` | `Uint8Array` | Required non-markup type |
@@ -135,6 +136,60 @@ routes: {
 Template holes are escaped. A plain object that resembles `RouteResult` is not assignable because the
 type is branded. `raw()` is the deliberate, searchable escape hatch for already-trusted markup; never
 pass request data to it.
+
+## Fragment navigation
+
+Use `navigablePage()` when one GET route can return either a complete document or replaceable slots:
+
+```ts
+import { navigablePage } from 'ketjs'
+
+return navigablePage(request, {
+  title: 'Orders',
+  document: () => ctx.document({ lang: 'en', title: 'Orders', body: screen }),
+  slots: {
+    'backend.sidebar-main': () => sidebar,
+    'backend.topbar': () => topbar,
+    'backend.content': () => screen,
+  },
+})
+```
+
+The callbacks are lazy. A normal request calls only `document`; a navigation request calls only the
+declared slot renderers. Keep stable shell joints and global islands outside replaceable slots so the
+server does not construct them during internal navigation.
+
+The protocol is intentionally small:
+
+```http
+X-Ket-Navigation: fragment-v1
+Accept: text/vnd.ket.fragments+html
+```
+
+```html
+<ket-fragments data-title="Orders">
+  <template data-ket-slot="backend.content">...</template>
+</ket-fragments>
+```
+
+Fragment responses use `text/vnd.ket.fragments+html` and include
+`Vary: X-Ket-Navigation`. `isNavigationRequest(request)` checks the request representation. Slot names
+are lowercase dotted names, and each returned slot must occur exactly once in both the response and
+current document.
+
+The generated browser runtime enhances same-origin GET links and GET forms by default when the page
+contains a slot. POST forms stay native unless a module enhances them. Modifier clicks, downloads,
+external URLs, hash-only links, and elements under `data-ket-reload` are left alone. The runtime owns
+history, back/forward restoration, request cancellation, title, scroll, hash focus, and `aria-busy`,
+and emits `ket:navigation-start`, `ket:navigation-complete`, and `ket:navigation-error`.
+
+An invalid MIME type, missing or duplicate slot, login redirect, unknown island, failed island update,
+or any reconciliation error falls back to a full navigation. Without JavaScript, every link and form
+continues to use ordinary document navigation.
+
+For themed website pages, set `serve.pages.region` to the built-in theme region that carries the page
+body, for example `website.page`. Themes without that declared slot keep full navigation and remain
+backward compatible.
 
 ## Headers and cookies
 
