@@ -646,14 +646,56 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     name: 'Tuyến HTTP hai bước',
     sequence: '15',
   })
-  assert.match(createdRoutePage, /Quy tắc tuyến cung ứng/)
+  assert.match(createdRoutePage, /data-ui="record-workspace"/)
+  assert.match(createdRoutePage, /id="stock-route-detail-form"/)
+  assert.match(createdRoutePage, /data-scope="stock-route"/)
+  assert.match(createdRoutePage, /id="stock-route-rule-form"/)
+  assert.match(createdRoutePage, /data-scope="stock-route-rule"/)
+  assert.match(createdRoutePage, /Chưa có quy tắc/)
+  assert.doesNotMatch(createdRoutePage, /data-island="mail\.chatter"/)
+  const createdRoute = (await call<Row[]>('stock.listRoutes', {})).value.find(
+    (row) => row.name === 'Tuyến HTTP hai bước' && row.sequence === 15,
+  )
+  assert.ok(createdRoute)
+  const routeDetailPath = `/admin/stock-routes/${String(createdRoute.id)}?lang=vi`
+
+  const updatedRoutePage = await e2e.client.form<string>(routeDetailPath, {
+    intent: 'route',
+    name: 'Tuyến HTTP ưu tiên',
+    sequence: '12',
+  })
+  assert.match(updatedRoutePage, /Tuyến HTTP ưu tiên/)
+  const updatedRoute = (await call<Row[]>('stock.listRoutes', {})).value.find(
+    (row) => row.id === createdRoute.id,
+  )
+  assert.equal(updatedRoute?.sequence, 12)
+  const invalidRouteDetailPage = await e2e.client.form<string>(routeDetailPath, {
+    intent: 'route',
+    name: '',
+    sequence: '12',
+  })
+  assert.match(invalidRouteDetailPage, /Dữ liệu chưa hợp lệ/)
+
+  const routeWithRulePage = await e2e.client.form<string>(routeDetailPath, {
+    intent: 'rule',
+    name: 'Đẩy hàng ra khu xuất',
+    action: 'push',
+    sequence: '25',
+    locationSrcId: 'wh:stock',
+    locationDestId: 'wh:output',
+    pickingTypeId: 'wh:outgoing',
+    procureMethod: 'mts_else_mto',
+  })
+  assert.match(routeWithRulePage, /Đẩy hàng ra khu xuất/)
+  assert.match(routeWithRulePage, /Đẩy hàng sang vị trí khác/)
+  assert.match(routeWithRulePage, /Ưu tiên tồn kho, thiếu thì cung ứng/)
   assert.equal(
-    (await call<Row[]>('stock.listRoutes', {})).value.some(
-      (row) => row.name === 'Tuyến HTTP hai bước' && row.sequence === 15,
+    (await call<Row[]>('stock.listRules', { routeId: createdRoute.id })).value.some(
+      (row) => row.name === 'Đẩy hàng ra khu xuất' && row.sequence === 25,
     ),
     true,
   )
-  assert.match(await (await e2e.client.get('/admin/stock-routes?lang=vi')).text(), /Tuyến HTTP hai bước/)
+  assert.match(await (await e2e.client.get('/admin/stock-routes?lang=vi')).text(), /Tuyến HTTP ưu tiên/)
 
   const invalidRoutePage = await e2e.client.form<string>('/admin/stock-routes?lang=vi', {
     name: '',
