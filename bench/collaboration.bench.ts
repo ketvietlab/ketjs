@@ -144,6 +144,11 @@ try {
       markers: ['record-workspace', 'payment-register-form', 'payment-collab'],
     },
     {
+      label: 'Accounting chart of accounts',
+      path: '/admin/accounts?lang=vi',
+      markers: ['record-workspace', 'account-create-form', 'account-receivable-collab'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
