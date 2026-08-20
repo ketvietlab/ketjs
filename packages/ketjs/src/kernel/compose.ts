@@ -766,6 +766,28 @@ export function compose(
           })
         }
       }
+      if (def.key !== undefined && !Array.isArray(def.key)) {
+        diag.add({
+          code: 'E_ISLAND_KEY',
+          module: m.name,
+          message: `island "${name}" key must be an array of required scalar prop names`,
+        })
+      } else if (Array.isArray(def.key)) {
+        if (new Set(def.key).size !== def.key.length) {
+          diag.add({ code: 'E_ISLAND_KEY', module: m.name, message: `island "${name}" repeats a key prop` })
+        }
+        for (const field of def.key) {
+          const spec = (def.props ?? {})[field]
+          const parsed = spec === undefined ? null : parseType(spec)
+          if (!parsed?.ok || parsed.optional || parsed.base === 'json') {
+            diag.add({
+              code: 'E_ISLAND_KEY',
+              module: m.name,
+              message: `island "${name}" key prop "${field}" must be a declared, required scalar`,
+            })
+          }
+        }
+      }
       const client = def.client
       if (client !== undefined && (typeof client !== 'string' || client.length === 0)) {
         diag.add({
@@ -800,6 +822,7 @@ export function compose(
       manifest.islands[name] = {
         by: m.name,
         props: { ...(def.props ?? {}) },
+        ...(def.key === undefined ? {} : { key: [...def.key] }),
         ...(typeof client === 'string' && client
           ? {
               client: {

@@ -129,7 +129,9 @@ export function createTheme(
         hint: `available islands: ${Object.keys(islands).join(', ') || '(none)'}`,
       })
     }
-    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope))
+    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope), {
+      key: definition.key,
+    })
   }
 
   const renderRegion = (name: string, scope: Scope): string => {
