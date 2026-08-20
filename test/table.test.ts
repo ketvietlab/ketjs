@@ -90,6 +90,27 @@ test('table: choosing a column keeps the page you are on', () => {
   assert.equal(colsHref(url)([]), '/admin/products?q=xoai&page=3', 'and the last one off leaves a clean URL')
 })
 
+test('table: an open group renders its own pager without client state', () => {
+  const html = render({
+    rows: [],
+    groups: [
+      {
+        id: 'goods',
+        label: 'Goods',
+        count: 40,
+        depth: 0,
+        open: true,
+        href: '/products',
+        rows,
+        pager: { label: '1-30 / 40', next: '/products?groupPage=goods:2' },
+      },
+    ],
+  })
+  assert.match(html, /data-ui="group-pager"/)
+  assert.match(html, /1-30 \/ 40/)
+  assert.match(html, /href="\/products\?groupPage=goods:2"/)
+})
+
 test('table: reading the chosen columns out of the URL survives junk', () => {
   assert.deepEqual(colsOf(new URL('/p', 'http://x')), [])
   assert.deepEqual(colsOf(new URL('/p?cols=', 'http://x')), [])

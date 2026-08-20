@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, eq, from, inArray } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
 import { roleFunctions } from './roles.ts'
@@ -220,6 +220,7 @@ export const functions: Record<string, FnSpec> = {
       login: 'text',
       name: 'text',
       email: 'text?',
+      timezone: 'text?',
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
@@ -248,6 +249,7 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       email: 'text?',
       lang: 'text?',
+      timezone: 'text?',
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
@@ -283,6 +285,7 @@ export const functions: Record<string, FnSpec> = {
       password: 'text?',
       name: 'text',
       email: 'text?',
+      timezone: 'text?',
       partnerId: 'id?',
       defaultCompanyId: 'id?',
       defaultBranchId: 'id?',
@@ -304,6 +307,7 @@ export const functions: Record<string, FnSpec> = {
       if (!String(a.name).trim()) errors.push(issue('name', 'user.error.required'))
       if (!['internal', 'portal', 'public'].includes(accessKind))
         errors.push(issue('accessKind', 'user.error.accessKind'))
+      if (a.timezone && !isTimezone(String(a.timezone))) errors.push(issue('timezone', 'user.error.timezone'))
       if (password && password.length < 8) errors.push(issue('password', 'user.error.passwordLength'))
       if (password && ctx.actor) errors.push(issue('password', 'user.error.adminPassword'))
       if (await ctx.db.one(from(U).where(eq(U.login, login))))
@@ -317,6 +321,7 @@ export const functions: Record<string, FnSpec> = {
         passwordHash: password ? await hashPassword(password) : null,
         name: String(a.name).trim(),
         email: a.email || null,
+        timezone: a.timezone && isTimezone(String(a.timezone)) ? String(a.timezone) : null,
         partnerId: a.partnerId || null,
         defaultCompanyId: a.defaultCompanyId || null,
         defaultBranchId: a.defaultBranchId || null,
@@ -472,6 +477,7 @@ export const functions: Record<string, FnSpec> = {
       login: 'text',
       name: 'text',
       email: 'text?',
+      timezone: 'text?',
       partnerId: 'id?',
       accessKind: 'text',
       active: 'bool',
@@ -490,6 +496,7 @@ export const functions: Record<string, FnSpec> = {
       if (!String(a.name).trim()) errors.push(issue('name', 'user.error.required'))
       if (!['internal', 'portal', 'public'].includes(accessKind))
         errors.push(issue('accessKind', 'user.error.accessKind'))
+      if (a.timezone && !isTimezone(String(a.timezone))) errors.push(issue('timezone', 'user.error.timezone'))
       const owner = await ctx.db.one(from(U).where(eq(U.login, login)))
       if (owner && owner.id !== a.id) errors.push(issue('login', 'user.error.loginUnique'))
       if (a.superuser === true && row.superuser !== true && ctx.actor && !(await superuser(ctx, ctx.actor)))
@@ -511,6 +518,7 @@ export const functions: Record<string, FnSpec> = {
             login,
             name: String(a.name).trim(),
             email: a.email || null,
+            timezone: a.timezone === undefined ? (held.timezone ?? null) : a.timezone || null,
             partnerId: a.partnerId || null,
             accessKind,
             active: a.active,
@@ -535,6 +543,22 @@ export const functions: Record<string, FnSpec> = {
         if (!held) return invalid([issue('id', 'user.error.userMissing')])
         return update(tx, held)
       })
+    },
+  }),
+
+  setTimezone: defineFn({
+    exposure: 'internal',
+    input: { timezone: 'text' },
+    output: { ok: 'bool', timezone: 'text?', errors: 'json?' },
+    effects: ['read:user.User', 'write:user.User'],
+    handler: async (ctx: Ctx, a) => {
+      if (!ctx.actor) return invalid([issue('userId', 'user.error.userMissing')])
+      const timezone = String(a.timezone).trim()
+      if (!isTimezone(timezone)) return invalid([issue('timezone', 'user.error.timezone')])
+      const user = await ctx.db.select('user.User', { id: ctx.actor })
+      if (!user.length) return invalid([issue('userId', 'user.error.userMissing')])
+      await ctx.db.update('user.User', { id: ctx.actor }, { timezone })
+      return { ok: true, timezone }
     },
   }),
 

@@ -31,6 +31,8 @@ export type RuntimeConfig = {
   autoInstall: boolean
   defaultLocale: string
   fallbackLocale: string
+  /** IANA timezone used when the authenticated user has not chosen one. */
+  defaultTimezone: string
   /** Until there is authentication, the company a request acts as comes from here. */
   defaultCompany: string
   /**
@@ -66,6 +68,15 @@ export function readConfig(
   env: Record<string, string | undefined> = process.env,
   defaults: Partial<RuntimeConfig> = {},
 ): RuntimeConfig {
+  const defaultTimezone = env.KET_TIMEZONE ?? defaults.defaultTimezone ?? 'UTC'
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: defaultTimezone }).format()
+  } catch {
+    throw new KetError({
+      code: 'E_TIMEZONE_CONFIG',
+      message: `KET_TIMEZONE must be an IANA timezone, got "${defaultTimezone}"`,
+    })
+  }
   const storageKind = env.KET_STORAGE ?? defaults.storageKind ?? 'local'
   if (storageKind !== 'local' && storageKind !== 's3')
     throw new KetError({
@@ -89,6 +100,7 @@ export function readConfig(
     bootstrapApps: list(env.KET_APPS) ?? defaults.bootstrapApps ?? null,
     defaultLocale: env.KET_LOCALE ?? defaults.defaultLocale ?? 'en',
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
+    defaultTimezone,
     defaultCompany: env.KET_COMPANY ?? defaults.defaultCompany ?? 'default',
     secret: env.KET_SECRET ?? defaults.secret ?? null,
     webhookSecret: env.KET_WEBHOOK_SECRET ?? defaults.webhookSecret ?? null,

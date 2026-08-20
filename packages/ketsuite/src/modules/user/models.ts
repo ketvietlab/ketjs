@@ -26,6 +26,8 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       email: 'text?',
       lang: 'text?',
+      /** IANA timezone used for datetime filters and grouped list buckets. */
+      timezone: 'text?',
       /** The company a new row is stamped with when this user acts (D32). */
       defaultCompanyId: 'ref:company.Company?',
       /** The operational branch a company+branch row is stamped with. */

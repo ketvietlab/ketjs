@@ -154,7 +154,7 @@ export const productsScreen = (
     _,
     _('product_backend.screen.title'),
     frame,
-    rows.length === 0
+    rows.length === 0 && !table.groups?.length
       ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
       : view === 'kanban'
         ? kanban(_, rows, locale)
@@ -165,6 +165,32 @@ export const productsScreen = (
             rowHref: (r) => localized(`/admin/products/${r.id}`, locale),
             ...table,
           }),
+  )
+
+export const favoriteScreen = (
+  _: Translator,
+  frame: Frame,
+  returnTo: string,
+  locale = '',
+  errors?: string[],
+): TemplateResult =>
+  framed(
+    _,
+    _('product_backend.favorite.create'),
+    frame,
+    surface({
+      body: recordForm({
+        action: localized('/admin/products/favorites/new', locale),
+        submit: _('product_backend.favorite.save'),
+        submitVariant: 'primary',
+        errors,
+        hidden: { returnTo },
+        fields: [
+          { name: 'name', label: _('product_backend.favorite.name'), required: true },
+          { name: 'default', label: _('product_backend.favorite.default'), type: 'checkbox' },
+        ],
+      }),
+    }),
   )
 
 export type { MenuNode }

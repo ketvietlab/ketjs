@@ -1294,9 +1294,16 @@ hook, no component that has to be told what page it is on. The consequences are 
 point: the back button works, a bookmark works, and a link somebody pastes into chat
 opens the same list they were looking at. None of that needed code.
 
-Every control in the chrome is a link or a `method="get"` form. There is no
-`<button>` in it and a test asserts there is none, because the moment one appears
-the state has moved into the client and all three of those properties are gone.
+Every applied control in the chrome is a link or a `method="get"` form. A custom
+filter editor may use buttons and temporary draft state, but Apply must navigate to
+a canonical URL before the table changes. The table never owns a second client-side
+copy of search, filter, grouping, sorting, paging, or open-group state.
+
+Filter and Group By tokens name only fields declared by a per-list allowlist. Same-group
+preset filters are OR-ed, different groups are AND-ed, and a custom filter is a bounded
+nested AND/OR tree. Group headers and their counts come from database grouping, not from
+loading a page and grouping it in memory. Open paths and group pages are URL values, so an
+expanded grouped list remains reloadable and shareable.
 
 **What that cost, and where it bit.** A GET form replaces the whole query string, so
 searching while looking at the cards threw you back to the list. The fix is

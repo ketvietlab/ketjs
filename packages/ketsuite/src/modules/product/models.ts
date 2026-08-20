@@ -22,6 +22,7 @@ export const models: Record<string, ModelDef> = {
 
   Template: {
     scope: 'shared',
+    timestamps: true,
     fields: {
       id: 'id',
       name: 'text',
@@ -41,6 +42,7 @@ export const models: Record<string, ModelDef> = {
   /** One sellable combination of a template. Odoo calls this product.product. */
   Product: {
     scope: 'shared',
+    timestamps: true,
     fields: {
       id: 'id',
       templateId: 'ref:product.Template',

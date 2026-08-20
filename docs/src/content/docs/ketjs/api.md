@@ -87,10 +87,13 @@ adapters and operational tooling, not a requirement for ordinary modules.
 | `sqliteAdapter` | Built-in SQLite adapter. |
 | `assertAdapter`, `ADAPTER_METHODS` | Validate a custom adapter contract. |
 | `createAdapterPool` | Lease bounded per-key adapters, including tenant databases. |
-| `from`, `deleteFrom`, `table`, `Query` | Build parameterized queries. |
-| `eq`, `ne`, `gt`, `lt`, `gte`, `lte`, `like` | Comparison expressions. |
+| `from`, `deleteFrom`, `table`, `Query` | Build parameterized select, delete, and grouped queries. |
+| `eq`, `ne`, `gt`, `lt`, `gte`, `lte`, `like`, `ilike` | Comparison expressions. |
 | `inArray`, `isNull`, `isNotNull`, `and`, `or`, `not` | Set, null, and boolean expressions. |
 | `asc`, `desc` | Ordering expressions. |
+| `defineListSearch`, `parseListState`, `encodeListState` | Declare allowlisted URL-driven list state. |
+| `compileListFilter`, `validateListState` | Validate and compile nested list filters. |
+| `dateBucket`, `localDateTimeToUtc`, `localDayRange` | Build timezone-aware bucket and UTC range values. |
 | `changeset`, `Changeset` | Cast and validate create/update input. |
 | `schemaFromManifest`, `planMigration`, `renderSql` | Derive and render schema migration plans. |
 | `tableNameFor` | Resolve the physical table name for a manifest model. |

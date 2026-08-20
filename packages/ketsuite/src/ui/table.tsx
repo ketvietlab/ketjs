@@ -31,6 +31,23 @@ export type DataTable<R> = {
   caption?: string | null
   shown?: readonly string[]
   colsHref?: (keys: readonly string[]) => string
+  groups?: readonly TableGroup<R>[]
+}
+
+export type TableGroup<R> = {
+  id: string
+  label: string
+  count: number
+  depth: number
+  open: boolean
+  href: string
+  children?: readonly TableGroup<R>[]
+  rows?: readonly R[]
+  pager?: {
+    label: string
+    prev?: string
+    next?: string
+  }
 }
 
 export const HOOKS = [
@@ -45,11 +62,16 @@ export const HOOKS = [
   'table-caption',
   'sort-link',
   'sort-icon',
+  'group-pager',
   'col-config',
   'col-config-open',
   'col-config-menu',
   'col-toggle',
   'col-toggle-mark',
+  'group-row',
+  'group-link',
+  'group-indent',
+  'group-count',
 ] as const
 
 export const visibleColumns = <R,>(table: DataTable<R>): ReadonlyArray<Column<R>> =>
@@ -133,34 +155,100 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
           </tr>
         </thead>
         <tbody>
-          {each(table.rows, table.id, (row) => (
-            <tr data-ui="row" data-row={table.id(row)}>
-              {each(
-                columns,
-                (column) => column.key,
-                (column) => (
-                  <td
-                    data-ui="cell"
-                    data-col={column.key}
-                    data-align={column.align ?? 'start'}
-                    data-kind={column.kind ?? 'text'}
-                    data-priority={column.priority ?? 'secondary'}
-                  >
-                    {table.rowHref && column === columns[0] ? (
-                      <a data-ui="row-link" href={table.rowHref(row)}>
-                        {column.cell(row)}
-                      </a>
-                    ) : (
-                      column.cell(row)
-                    )}
-                  </td>
-                ),
-              )}
-              {configurable && <td data-ui="cell-actions" />}
-            </tr>
-          ))}
+          {table.groups?.length
+            ? groupRows(table, columns, configurable)
+            : rowViews(table.rows, table, columns, configurable)}
         </tbody>
       </table>
     </div>
   )
+}
+
+const rowViews = <R,>(
+  rows: readonly R[],
+  table: DataTable<R>,
+  columns: ReadonlyArray<Column<R>>,
+  configurable: boolean,
+): TemplateResult => (
+  <>
+    {each(rows, table.id, (row) => (
+      <tr data-ui="row" data-row={table.id(row)}>
+        {each(
+          columns,
+          (column) => column.key,
+          (column) => (
+            <td
+              data-ui="cell"
+              data-col={column.key}
+              data-align={column.align ?? 'start'}
+              data-kind={column.kind ?? 'text'}
+              data-priority={column.priority ?? 'secondary'}
+            >
+              {table.rowHref && column === columns[0] ? (
+                <a data-ui="row-link" href={table.rowHref(row)}>
+                  {column.cell(row)}
+                </a>
+              ) : (
+                column.cell(row)
+              )}
+            </td>
+          ),
+        )}
+        {configurable && <td data-ui="cell-actions" />}
+      </tr>
+    ))}
+  </>
+)
+
+const groupRows = <R,>(
+  table: DataTable<R>,
+  columns: ReadonlyArray<Column<R>>,
+  configurable: boolean,
+): TemplateResult => {
+  const visit = (groups: readonly TableGroup<R>[]): TemplateResult => (
+    <>
+      {each(
+        groups,
+        (group) => group.id,
+        (group) => (
+          <>
+            <tr data-ui="group-row" data-depth={String(group.depth)}>
+              <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+                <a data-ui="group-link" href={group.href} aria-expanded={String(group.open)}>
+                  <span data-ui="group-indent" style={`--group-depth:${group.depth}`} />
+                  {icon(group.open ? 'chevron-down' : 'chevron-right')}
+                  <span>{group.label}</span>
+                  <span data-ui="group-count">{String(group.count)}</span>
+                </a>
+              </td>
+            </tr>
+            {group.open && !!group.children?.length && visit(group.children)}
+            {group.open && !!group.rows?.length && rowViews(group.rows, table, columns, configurable)}
+            {group.open && group.pager && (
+              <tr data-ui="group-pager">
+                <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+                  <span>{group.pager.label}</span>
+                  {group.pager.prev ? (
+                    <a href={group.pager.prev} aria-label="Previous page">
+                      {icon('chevron-left')}
+                    </a>
+                  ) : (
+                    <span aria-disabled="true">{icon('chevron-left')}</span>
+                  )}
+                  {group.pager.next ? (
+                    <a href={group.pager.next} aria-label="Next page">
+                      {icon('chevron-right')}
+                    </a>
+                  ) : (
+                    <span aria-disabled="true">{icon('chevron-right')}</span>
+                  )}
+                </td>
+              </tr>
+            )}
+          </>
+        ),
+      )}
+    </>
+  )
+  return visit(table.groups ?? [])
 }
