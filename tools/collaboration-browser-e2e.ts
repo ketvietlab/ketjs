@@ -274,6 +274,11 @@ try {
       ready: `document.querySelector('#location-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
+      name: 'operation-type-list',
+      path: '/admin/picking-types?lang=vi',
+      ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -908,6 +913,55 @@ try {
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho / Kệ A-01')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+    }
+    if (screen.name === 'operation-type-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            completeLocations: document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho'),
+            codeRadios: document.querySelectorAll('#picking-type-create-form [name="code"]').length,
+            sourceOptions: document.querySelectorAll('#picking-type-create-form [name="defaultLocationSrcId"] option').length > 1,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#picking-type-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          completeLocations: true,
+          codeRadios: 3,
+          sourceOptions: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#picking-type-create-form')
+          form.querySelector('[name="name"]').value = 'Điều chuyển Browser'
+          form.querySelector('[name="code"][value="internal"]').checked = true
+          form.querySelector('[name="warehouseId"]').value = 'wh'
+          form.querySelector('[name="defaultLocationSrcId"]').value = 'wh:stock'
+          form.querySelector('[name="defaultLocationDestId"]').value = 'wh:output'
+          form.querySelector('[name="createBackorder"]').value = 'ask'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]')?.textContent.includes('Điều chuyển Browser')`,
       )
       assert.equal(
         await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
