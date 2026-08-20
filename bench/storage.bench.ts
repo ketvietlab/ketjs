@@ -9,6 +9,7 @@ import { bootApp, defineApp, s3Storage, sha256, signRequest, sqliteAdapter } fro
 import { postgresAdapter } from 'ketjs-postgres'
 import type { Adapter, BootedApp } from 'ketjs'
 import { company, partner, storage as storageModule } from 'ketsuite'
+import { address } from 'ketsuite'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const tenantCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 4 : 8))
@@ -78,7 +79,7 @@ try {
   await prepare()
   const app = defineApp({
     name: 'storage_benchmark',
-    modules: [partner, company, storageModule],
+    modules: [address, partner, company, storageModule],
     headless: true,
     serve: {
       bootstrap: ['storage'],

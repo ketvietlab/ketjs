@@ -42,6 +42,7 @@ import {
   uom,
   user,
 } from 'ketsuite'
+import { address } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }
@@ -455,7 +456,7 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
 
 test('live pg: concurrent partner defaults, roles and terms stay unique', live, async () => {
   await withPg(async (a) => {
-    const partnerModules = [partner]
+    const partnerModules = [address, partner]
     const partnerManifest = compose(partnerModules, { headless: true })
     const partnerSchema = schemaFromManifest(partnerManifest)
     for (const tableName of Object.keys(partnerSchema.tables))
@@ -505,7 +506,7 @@ test('live pg: concurrent partner defaults, roles and terms stay unique', live, 
 
 test('live pg: concurrent company roots and user memberships stay unique', live, async () => {
   await withPg(async (a) => {
-    const identityModules = [partner, company, user]
+    const identityModules = [address, partner, company, user]
     const identityManifest = compose(identityModules, { headless: true })
     const identitySchema = schemaFromManifest(identityManifest)
     for (const tableName of Object.keys(identitySchema.tables))
@@ -566,7 +567,7 @@ test('live pg: concurrent company roots and user memberships stay unique', live,
 
 test('live pg: identity login, role edges, throttles and token CAS survive concurrency', live, async () => {
   await withPg(async (a) => {
-    const identityModules = [partner, company, user]
+    const identityModules = [address, partner, company, user]
     const identityManifest = compose(identityModules, { headless: true })
     const identitySchema = schemaFromManifest(identityManifest)
     for (const tableName of Object.keys(identitySchema.tables))
@@ -675,7 +676,7 @@ test('live pg: identity login, role edges, throttles and token CAS survive concu
 
 test('live pg: concurrent admin provisioning creates exactly one complete bootstrap', live, async () => {
   await withPg(async (a) => {
-    const identityModules = [partner, company, user]
+    const identityModules = [address, partner, company, user]
     const identityManifest = compose(identityModules, { headless: true })
     const identitySchema = schemaFromManifest(identityManifest)
     for (const tableName of Object.keys(identitySchema.tables))
@@ -786,7 +787,7 @@ test('live pg: concurrent stock reservations never over-reserve one quant', live
 
 test('live pg: concurrent accounting posts assign one gapless journal sequence', live, async () => {
   await withPg(async (a) => {
-    const accountModules = [partner, company, uom, product, account]
+    const accountModules = [address, partner, company, uom, product, account]
     const accountManifest = compose(accountModules, { headless: true })
     const accountSchema = schemaFromManifest(accountManifest)
     for (const tableName of Object.keys(accountSchema.tables))
@@ -844,7 +845,7 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
 
 test('live pg: concurrent RFQs assign one gapless purchase sequence', live, async () => {
   await withPg(async (a) => {
-    const purchaseModules = [partner, company, uom, product, stock, account, purchase]
+    const purchaseModules = [address, partner, company, uom, product, stock, account, purchase]
     const purchaseManifest = compose(purchaseModules, { headless: true })
     const purchaseSchema = schemaFromManifest(purchaseManifest)
     for (const tableName of Object.keys(purchaseSchema.tables))
@@ -892,7 +893,7 @@ test('live pg: concurrent RFQs assign one gapless purchase sequence', live, asyn
 
 test('live pg: concurrent quotations assign one gapless sales sequence', live, async () => {
   await withPg(async (a) => {
-    const saleModules = [partner, company, uom, product, pricing, stock, account, sale]
+    const saleModules = [address, partner, company, uom, product, pricing, stock, account, sale]
     const saleManifest = compose(saleModules, { headless: true })
     const saleSchema = schemaFromManifest(saleManifest)
     for (const tableName of Object.keys(saleSchema.tables))
@@ -922,7 +923,7 @@ test('live pg: concurrent quotations assign one gapless sales sequence', live, a
 
 test('live pg: concurrent POS orders assign one session-unique gapless sequence', live, async () => {
   await withPg(async (a) => {
-    const posModules = [partner, company, user, uom, product, pricing, stock, account, pos]
+    const posModules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
     const posManifest = compose(posModules, { headless: true }),
       posSchema = schemaFromManifest(posManifest)
     for (const tableName of Object.keys(posSchema.tables))
@@ -981,7 +982,7 @@ test('live pg: concurrent POS orders assign one session-unique gapless sequence'
 
 test('live pg: OAuth provider, identity and transaction races settle atomically', live, async () => {
   await withPg(async (a) => {
-    const oauthModules = [partner, company, user, oauth]
+    const oauthModules = [address, partner, company, user, oauth]
     const oauthManifest = compose(oauthModules, { headless: true })
     const oauthSchema = schemaFromManifest(oauthManifest)
     for (const tableName of Object.keys(oauthSchema.tables))

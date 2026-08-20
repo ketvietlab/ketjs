@@ -1,0 +1,8002 @@
+[
+  {
+    "code": "50511043",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Tây",
+    "shortName": "Sơn Tây"
+  },
+  {
+    "code": "50511044",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Tây Thượng",
+    "shortName": "Sơn Tây Thượng"
+  },
+  {
+    "code": "50511045",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Tây Hạ",
+    "shortName": "Sơn Tây Hạ"
+  },
+  {
+    "code": "50513038",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Hạ",
+    "shortName": "Sơn Hạ"
+  },
+  {
+    "code": "50513039",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Linh",
+    "shortName": "Sơn Linh"
+  },
+  {
+    "code": "50513040",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Hà",
+    "shortName": "Sơn Hà"
+  },
+  {
+    "code": "50513041",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Thủy",
+    "shortName": "Sơn Thủy"
+  },
+  {
+    "code": "50513042",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Kỳ",
+    "shortName": "Sơn Kỳ"
+  },
+  {
+    "code": "50515020",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tư Nghĩa",
+    "shortName": "Tư Nghĩa"
+  },
+  {
+    "code": "50515021",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vệ Giang",
+    "shortName": "Vệ Giang"
+  },
+  {
+    "code": "50515022",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nghĩa Giang",
+    "shortName": "Nghĩa Giang"
+  },
+  {
+    "code": "50515023",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Giang",
+    "shortName": "Trà Giang"
+  },
+  {
+    "code": "50517024",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nghĩa Hành",
+    "shortName": "Nghĩa Hành"
+  },
+  {
+    "code": "50517025",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đình Cương",
+    "shortName": "Đình Cương"
+  },
+  {
+    "code": "50517026",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thiện Tín",
+    "shortName": "Thiện Tín"
+  },
+  {
+    "code": "50517027",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Giang",
+    "shortName": "Phước Giang"
+  },
+  {
+    "code": "50519046",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Minh Long",
+    "shortName": "Minh Long"
+  },
+  {
+    "code": "50519047",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Mai",
+    "shortName": "Sơn Mai"
+  },
+  {
+    "code": "50521028",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Phụng",
+    "shortName": "Long Phụng"
+  },
+  {
+    "code": "50521029",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỏ Cày",
+    "shortName": "Mỏ Cày"
+  },
+  {
+    "code": "50521030",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mộ Đức",
+    "shortName": "Mộ Đức"
+  },
+  {
+    "code": "50521031",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lân Phong",
+    "shortName": "Lân Phong"
+  },
+  {
+    "code": "50523006",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trà Câu",
+    "shortName": "Trà Câu"
+  },
+  {
+    "code": "50523007",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nguyễn Nghiêm",
+    "shortName": "Nguyễn Nghiêm"
+  },
+  {
+    "code": "50523008",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đức Phổ",
+    "shortName": "Đức Phổ"
+  },
+  {
+    "code": "50523009",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Khánh Cường",
+    "shortName": "Khánh Cường"
+  },
+  {
+    "code": "50523010",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Sa Huỳnh",
+    "shortName": "Sa Huỳnh"
+  },
+  {
+    "code": "50525048",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Vì",
+    "shortName": "Ba Vì"
+  },
+  {
+    "code": "50525049",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Tô",
+    "shortName": "Ba Tô"
+  },
+  {
+    "code": "50525050",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Dinh",
+    "shortName": "Ba Dinh"
+  },
+  {
+    "code": "50525051",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Tơ",
+    "shortName": "Ba Tơ"
+  },
+  {
+    "code": "50525052",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Vinh",
+    "shortName": "Ba Vinh"
+  },
+  {
+    "code": "50525053",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Động",
+    "shortName": "Ba Động"
+  },
+  {
+    "code": "50525054",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đặng Thùy Trâm",
+    "shortName": "Đặng Thùy Trâm"
+  },
+  {
+    "code": "50525055",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Xa",
+    "shortName": "Ba Xa"
+  },
+  {
+    "code": "60101057",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Kon Tum",
+    "shortName": "Kon Tum"
+  },
+  {
+    "code": "60101058",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đăk Cấm",
+    "shortName": "Đăk Cấm"
+  },
+  {
+    "code": "60101059",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đăk BLa",
+    "shortName": "Đăk BLa"
+  },
+  {
+    "code": "60101060",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngọk Bay",
+    "shortName": "Ngọk Bay"
+  },
+  {
+    "code": "60101061",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Chim",
+    "shortName": "Ia Chim"
+  },
+  {
+    "code": "60101062",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Rơ Wa",
+    "shortName": "Đăk Rơ Wa"
+  },
+  {
+    "code": "60103078",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xốp",
+    "shortName": "Xốp"
+  },
+  {
+    "code": "60103079",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngọc Linh",
+    "shortName": "Ngọc Linh"
+  },
+  {
+    "code": "60103080",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Plô",
+    "shortName": "Đăk Plô"
+  },
+  {
+    "code": "60103081",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Pék",
+    "shortName": "Đăk Pék"
+  },
+  {
+    "code": "60103082",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Môn",
+    "shortName": "Đăk Môn"
+  },
+  {
+    "code": "60103093",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Long",
+    "shortName": "Đăk Long"
+  },
+  {
+    "code": "60105075",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bờ Y",
+    "shortName": "Bờ Y"
+  },
+  {
+    "code": "60105076",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sa Loong",
+    "shortName": "Sa Loong"
+  },
+  {
+    "code": "60105077",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dục Nông",
+    "shortName": "Dục Nông"
+  },
+  {
+    "code": "60107068",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngọk Tụ",
+    "shortName": "Ngọk Tụ"
+  },
+  {
+    "code": "60107069",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Tô",
+    "shortName": "Đăk Tô"
+  },
+  {
+    "code": "60107070",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kon Đào",
+    "shortName": "Kon Đào"
+  },
+  {
+    "code": "60108087",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Kôi",
+    "shortName": "Đăk Kôi"
+  },
+  {
+    "code": "60108088",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kon Braih",
+    "shortName": "Kon Braih"
+  },
+  {
+    "code": "60108089",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Rve",
+    "shortName": "Đăk Rve"
+  },
+  {
+    "code": "60109090",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Măng Đen",
+    "shortName": "Măng Đen"
+  },
+  {
+    "code": "60109091",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Măng Bút",
+    "shortName": "Măng Bút"
+  },
+  {
+    "code": "60109092",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kon Plông",
+    "shortName": "Kon Plông"
+  },
+  {
+    "code": "60111063",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Pxi",
+    "shortName": "Đăk Pxi"
+  },
+  {
+    "code": "60111064",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Mar",
+    "shortName": "Đăk Mar"
+  },
+  {
+    "code": "60111065",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Ui",
+    "shortName": "Đăk Ui"
+  },
+  {
+    "code": "60111066",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngọk Réo",
+    "shortName": "Ngọk Réo"
+  },
+  {
+    "code": "60111067",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Hà",
+    "shortName": "Đăk Hà"
+  },
+  {
+    "code": "60113083",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sa Thầy",
+    "shortName": "Sa Thầy"
+  },
+  {
+    "code": "60113084",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sa Bình",
+    "shortName": "Sa Bình"
+  },
+  {
+    "code": "60113085",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ya Ly",
+    "shortName": "Ya Ly"
+  },
+  {
+    "code": "60113094",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Rờ Kơi",
+    "shortName": "Rờ Kơi"
+  },
+  {
+    "code": "60113095",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mô Rai",
+    "shortName": "Mô Rai"
+  },
+  {
+    "code": "60114086",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Tơi",
+    "shortName": "Ia Tơi"
+  },
+  {
+    "code": "60114096",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Đal",
+    "shortName": "Ia Đal"
+  },
+  {
+    "code": "60115071",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Sao",
+    "shortName": "Đăk Sao"
+  },
+  {
+    "code": "60115072",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Tờ Kan",
+    "shortName": "Đăk Tờ Kan"
+  },
+  {
+    "code": "60115073",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tu Mơ Rông",
+    "shortName": "Tu Mơ Rông"
+  },
+  {
+    "code": "60115074",
+    "parentCode": "22",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Măng Ri",
+    "shortName": "Măng Ri"
+  },
+  {
+    "code": "51101001",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Nha Trang",
+    "shortName": "Nha Trang"
+  },
+  {
+    "code": "51101002",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bắc Nha Trang",
+    "shortName": "Bắc Nha Trang"
+  },
+  {
+    "code": "51101003",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tây Nha Trang",
+    "shortName": "Tây Nha Trang"
+  },
+  {
+    "code": "51101004",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Nam Nha Trang",
+    "shortName": "Nam Nha Trang"
+  },
+  {
+    "code": "51103018",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đại Lãnh",
+    "shortName": "Đại Lãnh"
+  },
+  {
+    "code": "51103019",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tu Bông",
+    "shortName": "Tu Bông"
+  },
+  {
+    "code": "51103020",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vạn Thắng",
+    "shortName": "Vạn Thắng"
+  },
+  {
+    "code": "51103021",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vạn Ninh",
+    "shortName": "Vạn Ninh"
+  },
+  {
+    "code": "51103022",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vạn Hưng",
+    "shortName": "Vạn Hưng"
+  },
+  {
+    "code": "51105010",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bắc Ninh Hoà",
+    "shortName": "Bắc Ninh Hoà"
+  },
+  {
+    "code": "51105011",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ninh Hoà",
+    "shortName": "Ninh Hoà"
+  },
+  {
+    "code": "51105012",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Định",
+    "shortName": "Tân Định"
+  },
+  {
+    "code": "51105013",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Ninh Hoà",
+    "shortName": "Đông Ninh Hoà"
+  },
+  {
+    "code": "51105014",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoà Thắng",
+    "shortName": "Hoà Thắng"
+  },
+  {
+    "code": "51105015",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Ninh Hoà",
+    "shortName": "Nam Ninh Hoà"
+  },
+  {
+    "code": "51105016",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Ninh Hoà",
+    "shortName": "Tây Ninh Hoà"
+  },
+  {
+    "code": "51105017",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Trí",
+    "shortName": "Hoà Trí"
+  },
+  {
+    "code": "51107023",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Diên Khánh",
+    "shortName": "Diên Khánh"
+  },
+  {
+    "code": "51107024",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Diên Lạc",
+    "shortName": "Diên Lạc"
+  },
+  {
+    "code": "51107025",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Diên Điền",
+    "shortName": "Diên Điền"
+  },
+  {
+    "code": "51107026",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Diên Lâm",
+    "shortName": "Diên Lâm"
+  },
+  {
+    "code": "51107027",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Diên Thọ",
+    "shortName": "Diên Thọ"
+  },
+  {
+    "code": "51107028",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Suối Hiệp",
+    "shortName": "Suối Hiệp"
+  },
+  {
+    "code": "51109005",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bắc Cam Ranh",
+    "shortName": "Bắc Cam Ranh"
+  },
+  {
+    "code": "51109006",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cam Ranh",
+    "shortName": "Cam Ranh"
+  },
+  {
+    "code": "51109007",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cam Linh",
+    "shortName": "Cam Linh"
+  },
+  {
+    "code": "51109008",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ba Ngòi",
+    "shortName": "Ba Ngòi"
+  },
+  {
+    "code": "51109009",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Cam Ranh",
+    "shortName": "Nam Cam Ranh"
+  },
+  {
+    "code": "51111033",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bắc Khánh Vĩnh",
+    "shortName": "Bắc Khánh Vĩnh"
+  },
+  {
+    "code": "51111034",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trung Khánh Vĩnh",
+    "shortName": "Trung Khánh Vĩnh"
+  },
+  {
+    "code": "51111035",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Khánh Vĩnh",
+    "shortName": "Tây Khánh Vĩnh"
+  },
+  {
+    "code": "51111036",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Khánh Vĩnh",
+    "shortName": "Nam Khánh Vĩnh"
+  },
+  {
+    "code": "51111037",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Khánh Vĩnh",
+    "shortName": "Khánh Vĩnh"
+  },
+  {
+    "code": "51113038",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Khánh Sơn",
+    "shortName": "Khánh Sơn"
+  },
+  {
+    "code": "51113039",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Khánh Sơn",
+    "shortName": "Tây Khánh Sơn"
+  },
+  {
+    "code": "51113040",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đông Khánh Sơn",
+    "shortName": "Đông Khánh Sơn"
+  },
+  {
+    "code": "51115041",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "special_zone",
+    "officialName": "Đặc khu Trường Sa",
+    "shortName": "Trường Sa"
+  },
+  {
+    "code": "51117029",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cam Lâm",
+    "shortName": "Cam Lâm"
+  },
+  {
+    "code": "51117030",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Suối Dầu",
+    "shortName": "Suối Dầu"
+  },
+  {
+    "code": "51117031",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cam Hiệp",
+    "shortName": "Cam Hiệp"
+  },
+  {
+    "code": "51117032",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cam An",
+    "shortName": "Cam An"
+  },
+  {
+    "code": "70501042",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phan Rang",
+    "shortName": "Phan Rang"
+  },
+  {
+    "code": "70501043",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Hải",
+    "shortName": "Đông Hải"
+  },
+  {
+    "code": "70501045",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bảo An",
+    "shortName": "Bảo An"
+  },
+  {
+    "code": "70501046",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đô Vinh",
+    "shortName": "Đô Vinh"
+  },
+  {
+    "code": "70503059",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ninh Sơn",
+    "shortName": "Ninh Sơn"
+  },
+  {
+    "code": "70503060",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lâm Sơn",
+    "shortName": "Lâm Sơn"
+  },
+  {
+    "code": "70503061",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Anh Dũng",
+    "shortName": "Anh Dũng"
+  },
+  {
+    "code": "70503062",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Sơn",
+    "shortName": "Mỹ Sơn"
+  },
+  {
+    "code": "70505044",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ninh Chử",
+    "shortName": "Ninh Chử"
+  },
+  {
+    "code": "70505054",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ninh Hải",
+    "shortName": "Ninh Hải"
+  },
+  {
+    "code": "70505055",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Hải",
+    "shortName": "Xuân Hải"
+  },
+  {
+    "code": "70505056",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Hải",
+    "shortName": "Vĩnh Hải"
+  },
+  {
+    "code": "70507047",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ninh Phước",
+    "shortName": "Ninh Phước"
+  },
+  {
+    "code": "70507048",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Hữu",
+    "shortName": "Phước Hữu"
+  },
+  {
+    "code": "70507049",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Hậu",
+    "shortName": "Phước Hậu"
+  },
+  {
+    "code": "70509063",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bác Ái Đông",
+    "shortName": "Bác Ái Đông"
+  },
+  {
+    "code": "70509064",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bác Ái",
+    "shortName": "Bác Ái"
+  },
+  {
+    "code": "70509065",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bác Ái Tây",
+    "shortName": "Bác Ái Tây"
+  },
+  {
+    "code": "70511057",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận Bắc",
+    "shortName": "Thuận Bắc"
+  },
+  {
+    "code": "70511058",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Công Hải",
+    "shortName": "Công Hải"
+  },
+  {
+    "code": "70513050",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận Nam",
+    "shortName": "Thuận Nam"
+  },
+  {
+    "code": "70513051",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cà Ná",
+    "shortName": "Cà Ná"
+  },
+  {
+    "code": "70513052",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Hà",
+    "shortName": "Phước Hà"
+  },
+  {
+    "code": "70513053",
+    "parentCode": "23",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Dinh",
+    "shortName": "Phước Dinh"
+  },
+  {
+    "code": "50701001",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Quy Nhơn",
+    "shortName": "Quy Nhơn"
+  },
+  {
+    "code": "50701002",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Quy Nhơn Đông",
+    "shortName": "Quy Nhơn Đông"
+  },
+  {
+    "code": "50701003",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Quy Nhơn Tây",
+    "shortName": "Quy Nhơn Tây"
+  },
+  {
+    "code": "50701004",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Quy Nhơn Nam",
+    "shortName": "Quy Nhơn Nam"
+  },
+  {
+    "code": "50701005",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Quy Nhơn Bắc",
+    "shortName": "Quy Nhơn Bắc"
+  },
+  {
+    "code": "50701127",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhơn Châu",
+    "shortName": "Nhơn Châu"
+  },
+  {
+    "code": "50703054",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Hoà",
+    "shortName": "An Hoà"
+  },
+  {
+    "code": "50703055",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Lão",
+    "shortName": "An Lão"
+  },
+  {
+    "code": "50703056",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Vinh",
+    "shortName": "An Vinh"
+  },
+  {
+    "code": "50703057",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Toàn",
+    "shortName": "An Toàn"
+  },
+  {
+    "code": "50705012",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bồng Sơn",
+    "shortName": "Bồng Sơn"
+  },
+  {
+    "code": "50705013",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoài Nhơn",
+    "shortName": "Hoài Nhơn"
+  },
+  {
+    "code": "50705014",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Quan",
+    "shortName": "Tam Quan"
+  },
+  {
+    "code": "50705015",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoài Nhơn Đông",
+    "shortName": "Hoài Nhơn Đông"
+  },
+  {
+    "code": "50705016",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoài Nhơn Tây",
+    "shortName": "Hoài Nhơn Tây"
+  },
+  {
+    "code": "50705017",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoài Nhơn Nam",
+    "shortName": "Hoài Nhơn Nam"
+  },
+  {
+    "code": "50705018",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoài Nhơn Bắc",
+    "shortName": "Hoài Nhơn Bắc"
+  },
+  {
+    "code": "50707042",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoài Ân",
+    "shortName": "Hoài Ân"
+  },
+  {
+    "code": "50707043",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ân Tường",
+    "shortName": "Ân Tường"
+  },
+  {
+    "code": "50707044",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kim Sơn",
+    "shortName": "Kim Sơn"
+  },
+  {
+    "code": "50707045",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vạn Đức",
+    "shortName": "Vạn Đức"
+  },
+  {
+    "code": "50707046",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ân Hảo",
+    "shortName": "Ân Hảo"
+  },
+  {
+    "code": "50709026",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Mỹ",
+    "shortName": "Phù Mỹ"
+  },
+  {
+    "code": "50709027",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Lương",
+    "shortName": "An Lương"
+  },
+  {
+    "code": "50709028",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Dương",
+    "shortName": "Bình Dương"
+  },
+  {
+    "code": "50709029",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Mỹ Đông",
+    "shortName": "Phù Mỹ Đông"
+  },
+  {
+    "code": "50709030",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Mỹ Tây",
+    "shortName": "Phù Mỹ Tây"
+  },
+  {
+    "code": "50709031",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Mỹ Nam",
+    "shortName": "Phù Mỹ Nam"
+  },
+  {
+    "code": "50709032",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Mỹ Bắc",
+    "shortName": "Phù Mỹ Bắc"
+  },
+  {
+    "code": "50711050",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Thạnh",
+    "shortName": "Vĩnh Thạnh"
+  },
+  {
+    "code": "50711051",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Thịnh",
+    "shortName": "Vĩnh Thịnh"
+  },
+  {
+    "code": "50711052",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Quang",
+    "shortName": "Vĩnh Quang"
+  },
+  {
+    "code": "50711053",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Sơn",
+    "shortName": "Vĩnh Sơn"
+  },
+  {
+    "code": "50713019",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phù Cát",
+    "shortName": "Phù Cát"
+  },
+  {
+    "code": "50713020",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân An",
+    "shortName": "Xuân An"
+  },
+  {
+    "code": "50713021",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngô Mây",
+    "shortName": "Ngô Mây"
+  },
+  {
+    "code": "50713022",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cát Tiến",
+    "shortName": "Cát Tiến"
+  },
+  {
+    "code": "50713023",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đề Gi",
+    "shortName": "Đề Gi"
+  },
+  {
+    "code": "50713024",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Hội",
+    "shortName": "Hoà Hội"
+  },
+  {
+    "code": "50713025",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hội Sơn",
+    "shortName": "Hội Sơn"
+  },
+  {
+    "code": "50715037",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Sơn",
+    "shortName": "Tây Sơn"
+  },
+  {
+    "code": "50715038",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Khê",
+    "shortName": "Bình Khê"
+  },
+  {
+    "code": "50715039",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Phú",
+    "shortName": "Bình Phú"
+  },
+  {
+    "code": "50715040",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Hiệp",
+    "shortName": "Bình Hiệp"
+  },
+  {
+    "code": "50715041",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình An",
+    "shortName": "Bình An"
+  },
+  {
+    "code": "50717006",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Định",
+    "shortName": "Bình Định"
+  },
+  {
+    "code": "50717007",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Nhơn",
+    "shortName": "An Nhơn"
+  },
+  {
+    "code": "50717008",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Nhơn Đông",
+    "shortName": "An Nhơn Đông"
+  },
+  {
+    "code": "50717009",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Nhơn Nam",
+    "shortName": "An Nhơn Nam"
+  },
+  {
+    "code": "50717010",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Nhơn Bắc",
+    "shortName": "An Nhơn Bắc"
+  },
+  {
+    "code": "50717011",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Nhơn Tây",
+    "shortName": "An Nhơn Tây"
+  },
+  {
+    "code": "50719033",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Phước",
+    "shortName": "Tuy Phước"
+  },
+  {
+    "code": "50719034",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Phước Đông",
+    "shortName": "Tuy Phước Đông"
+  },
+  {
+    "code": "50719035",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Phước Tây",
+    "shortName": "Tuy Phước Tây"
+  },
+  {
+    "code": "50719036",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Phước Bắc",
+    "shortName": "Tuy Phước Bắc"
+  },
+  {
+    "code": "50721047",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vân Canh",
+    "shortName": "Vân Canh"
+  },
+  {
+    "code": "50721048",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Canh Vinh",
+    "shortName": "Canh Vinh"
+  },
+  {
+    "code": "50721049",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Canh Liên",
+    "shortName": "Canh Liên"
+  },
+  {
+    "code": "60301058",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Pleiku",
+    "shortName": "Pleiku"
+  },
+  {
+    "code": "60301059",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hội Phú",
+    "shortName": "Hội Phú"
+  },
+  {
+    "code": "60301060",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thống Nhất",
+    "shortName": "Thống Nhất"
+  },
+  {
+    "code": "60301061",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Diên Hồng",
+    "shortName": "Diên Hồng"
+  },
+  {
+    "code": "60301062",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Phú",
+    "shortName": "An Phú"
+  },
+  {
+    "code": "60301063",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Biển Hồ",
+    "shortName": "Biển Hồ"
+  },
+  {
+    "code": "60301064",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Gào",
+    "shortName": "Gào"
+  },
+  {
+    "code": "60303087",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kbang",
+    "shortName": "Kbang"
+  },
+  {
+    "code": "60303088",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kông Bơ La",
+    "shortName": "Kông Bơ La"
+  },
+  {
+    "code": "60303089",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tơ Tung",
+    "shortName": "Tơ Tung"
+  },
+  {
+    "code": "60303090",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Lang",
+    "shortName": "Sơn Lang"
+  },
+  {
+    "code": "60303091",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Rong",
+    "shortName": "Đak Rong"
+  },
+  {
+    "code": "60303135",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krong",
+    "shortName": "Krong"
+  },
+  {
+    "code": "60305116",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mang Yang",
+    "shortName": "Mang Yang"
+  },
+  {
+    "code": "60305117",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lơ Pang",
+    "shortName": "Lơ Pang"
+  },
+  {
+    "code": "60305118",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kon Chiêng",
+    "shortName": "Kon Chiêng"
+  },
+  {
+    "code": "60305119",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hra",
+    "shortName": "Hra"
+  },
+  {
+    "code": "60305120",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ayun",
+    "shortName": "Ayun"
+  },
+  {
+    "code": "60307065",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Ly",
+    "shortName": "Ia Ly"
+  },
+  {
+    "code": "60307066",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư Păh",
+    "shortName": "Chư Păh"
+  },
+  {
+    "code": "60307067",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Khươl",
+    "shortName": "Ia Khươl"
+  },
+  {
+    "code": "60307068",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Phí",
+    "shortName": "Ia Phí"
+  },
+  {
+    "code": "60309121",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Grai",
+    "shortName": "Ia Grai"
+  },
+  {
+    "code": "60309122",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Krái",
+    "shortName": "Ia Krái"
+  },
+  {
+    "code": "60309123",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Hrung",
+    "shortName": "Ia Hrung"
+  },
+  {
+    "code": "60309133",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Chia",
+    "shortName": "Ia Chia"
+  },
+  {
+    "code": "60309134",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia O",
+    "shortName": "Ia O"
+  },
+  {
+    "code": "60311082",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Khê",
+    "shortName": "An Khê"
+  },
+  {
+    "code": "60311083",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Bình",
+    "shortName": "An Bình"
+  },
+  {
+    "code": "60311084",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cửu An",
+    "shortName": "Cửu An"
+  },
+  {
+    "code": "60313092",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kông Chro",
+    "shortName": "Kông Chro"
+  },
+  {
+    "code": "60313093",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ya Ma",
+    "shortName": "Ya Ma"
+  },
+  {
+    "code": "60313094",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư Krey",
+    "shortName": "Chư Krey"
+  },
+  {
+    "code": "60313095",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã SRó",
+    "shortName": "SRó"
+  },
+  {
+    "code": "60313096",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Song",
+    "shortName": "Đăk Song"
+  },
+  {
+    "code": "60313097",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chơ Long",
+    "shortName": "Chơ Long"
+  },
+  {
+    "code": "60315124",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Cơ",
+    "shortName": "Đức Cơ"
+  },
+  {
+    "code": "60315125",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Dơk",
+    "shortName": "Ia Dơk"
+  },
+  {
+    "code": "60315126",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Krêl",
+    "shortName": "Ia Krêl"
+  },
+  {
+    "code": "60315130",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Pnôn",
+    "shortName": "Ia Pnôn"
+  },
+  {
+    "code": "60315131",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Nan",
+    "shortName": "Ia Nan"
+  },
+  {
+    "code": "60315132",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Dom",
+    "shortName": "Ia Dom"
+  },
+  {
+    "code": "60317069",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư Prông",
+    "shortName": "Chư Prông"
+  },
+  {
+    "code": "60317070",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bàu Cạn",
+    "shortName": "Bàu Cạn"
+  },
+  {
+    "code": "60317071",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Boòng",
+    "shortName": "Ia Boòng"
+  },
+  {
+    "code": "60317072",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Lâu",
+    "shortName": "Ia Lâu"
+  },
+  {
+    "code": "60317073",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Pia",
+    "shortName": "Ia Pia"
+  },
+  {
+    "code": "60317074",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Tôr",
+    "shortName": "Ia Tôr"
+  },
+  {
+    "code": "60317128",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Púch",
+    "shortName": "Ia Púch"
+  },
+  {
+    "code": "60317129",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Mơ",
+    "shortName": "Ia Mơ"
+  },
+  {
+    "code": "60319075",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư Sê",
+    "shortName": "Chư Sê"
+  },
+  {
+    "code": "60319076",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bờ Ngoong",
+    "shortName": "Bờ Ngoong"
+  },
+  {
+    "code": "60319077",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Ko",
+    "shortName": "Ia Ko"
+  },
+  {
+    "code": "60319078",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Albá",
+    "shortName": "Albá"
+  },
+  {
+    "code": "60320104",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Pờ Tó",
+    "shortName": "Pờ Tó"
+  },
+  {
+    "code": "60320105",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Pa",
+    "shortName": "Ia Pa"
+  },
+  {
+    "code": "60320106",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Tul",
+    "shortName": "Ia Tul"
+  },
+  {
+    "code": "60321098",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ayun Pa",
+    "shortName": "Ayun Pa"
+  },
+  {
+    "code": "60321099",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Rbol",
+    "shortName": "Ia Rbol"
+  },
+  {
+    "code": "60321100",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Sao",
+    "shortName": "Ia Sao"
+  },
+  {
+    "code": "60323107",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Túc",
+    "shortName": "Phú Túc"
+  },
+  {
+    "code": "60323108",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Dreh",
+    "shortName": "Ia Dreh"
+  },
+  {
+    "code": "60323109",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Rsai",
+    "shortName": "Ia Rsai"
+  },
+  {
+    "code": "60323110",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Uar",
+    "shortName": "Uar"
+  },
+  {
+    "code": "60325111",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Đoa",
+    "shortName": "Đak Đoa"
+  },
+  {
+    "code": "60325112",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kon Gang",
+    "shortName": "Kon Gang"
+  },
+  {
+    "code": "60325113",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Băng",
+    "shortName": "Ia Băng"
+  },
+  {
+    "code": "60325114",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã KDang",
+    "shortName": "KDang"
+  },
+  {
+    "code": "60325115",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Sơmei",
+    "shortName": "Đak Sơmei"
+  },
+  {
+    "code": "60327085",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Pơ",
+    "shortName": "Đak Pơ"
+  },
+  {
+    "code": "60327086",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ya Hội",
+    "shortName": "Ya Hội"
+  },
+  {
+    "code": "60329101",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Thiện",
+    "shortName": "Phú Thiện"
+  },
+  {
+    "code": "60329102",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư A Thai",
+    "shortName": "Chư A Thai"
+  },
+  {
+    "code": "60329103",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Hiao",
+    "shortName": "Ia Hiao"
+  },
+  {
+    "code": "60331079",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chư Pưh",
+    "shortName": "Chư Pưh"
+  },
+  {
+    "code": "60331080",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Le",
+    "shortName": "Ia Le"
+  },
+  {
+    "code": "60331081",
+    "parentCode": "24",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Hrú",
+    "shortName": "Ia Hrú"
+  },
+  {
+    "code": "50901069",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tuy Hòa",
+    "shortName": "Tuy Hòa"
+  },
+  {
+    "code": "50901070",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Yên",
+    "shortName": "Phú Yên"
+  },
+  {
+    "code": "50901071",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Kiến",
+    "shortName": "Bình Kiến"
+  },
+  {
+    "code": "50903099",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Lãnh",
+    "shortName": "Xuân Lãnh"
+  },
+  {
+    "code": "50903100",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Mỡ",
+    "shortName": "Phú Mỡ"
+  },
+  {
+    "code": "50903101",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Phước",
+    "shortName": "Xuân Phước"
+  },
+  {
+    "code": "50903102",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đồng Xuân",
+    "shortName": "Đồng Xuân"
+  },
+  {
+    "code": "50905072",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Thọ",
+    "shortName": "Xuân Thọ"
+  },
+  {
+    "code": "50905073",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Cảnh",
+    "shortName": "Xuân Cảnh"
+  },
+  {
+    "code": "50905074",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Lộc",
+    "shortName": "Xuân Lộc"
+  },
+  {
+    "code": "50905075",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xuân Đài",
+    "shortName": "Xuân Đài"
+  },
+  {
+    "code": "50905076",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Sông Cầu",
+    "shortName": "Sông Cầu"
+  },
+  {
+    "code": "50907080",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy An Bắc",
+    "shortName": "Tuy An Bắc"
+  },
+  {
+    "code": "50907081",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy An Đông",
+    "shortName": "Tuy An Đông"
+  },
+  {
+    "code": "50907082",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ô Loan",
+    "shortName": "Ô Loan"
+  },
+  {
+    "code": "50907083",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy An Nam",
+    "shortName": "Tuy An Nam"
+  },
+  {
+    "code": "50907084",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy An Tây",
+    "shortName": "Tuy An Tây"
+  },
+  {
+    "code": "50909091",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Hòa",
+    "shortName": "Sơn Hòa"
+  },
+  {
+    "code": "50909092",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vân Hòa",
+    "shortName": "Vân Hòa"
+  },
+  {
+    "code": "50909093",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Sơn",
+    "shortName": "Tây Sơn"
+  },
+  {
+    "code": "50909094",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Suối Trai",
+    "shortName": "Suối Trai"
+  },
+  {
+    "code": "50911077",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Xuân",
+    "shortName": "Hòa Xuân"
+  },
+  {
+    "code": "50911078",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Hòa",
+    "shortName": "Đông Hòa"
+  },
+  {
+    "code": "50911079",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hòa Hiệp",
+    "shortName": "Hòa Hiệp"
+  },
+  {
+    "code": "50912087",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tây Hòa",
+    "shortName": "Tây Hòa"
+  },
+  {
+    "code": "50912088",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Thịnh",
+    "shortName": "Hòa Thịnh"
+  },
+  {
+    "code": "50912089",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Mỹ",
+    "shortName": "Hòa Mỹ"
+  },
+  {
+    "code": "50912090",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Thành",
+    "shortName": "Sơn Thành"
+  },
+  {
+    "code": "50913095",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Ly",
+    "shortName": "Ea Ly"
+  },
+  {
+    "code": "50913096",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Bá",
+    "shortName": "Ea Bá"
+  },
+  {
+    "code": "50913097",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Bình",
+    "shortName": "Đức Bình"
+  },
+  {
+    "code": "50913098",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sông Hinh",
+    "shortName": "Sông Hinh"
+  },
+  {
+    "code": "50915085",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Hòa 1",
+    "shortName": "Phú Hòa 1"
+  },
+  {
+    "code": "50915086",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Hòa 2",
+    "shortName": "Phú Hòa 2"
+  },
+  {
+    "code": "60501001",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Phú",
+    "shortName": "Hoà Phú"
+  },
+  {
+    "code": "60501002",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Buôn Ma Thuột",
+    "shortName": "Buôn Ma Thuột"
+  },
+  {
+    "code": "60501003",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân An",
+    "shortName": "Tân An"
+  },
+  {
+    "code": "60501004",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Lập",
+    "shortName": "Tân Lập"
+  },
+  {
+    "code": "60501005",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thành Nhất",
+    "shortName": "Thành Nhất"
+  },
+  {
+    "code": "60501006",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ea Kao",
+    "shortName": "Ea Kao"
+  },
+  {
+    "code": "60503027",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Khăl",
+    "shortName": "Ea Khăl"
+  },
+  {
+    "code": "60503028",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Drăng",
+    "shortName": "Ea Drăng"
+  },
+  {
+    "code": "60503029",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Wy",
+    "shortName": "Ea Wy"
+  },
+  {
+    "code": "60503030",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea H’leo",
+    "shortName": "Ea H’leo"
+  },
+  {
+    "code": "60503031",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Hiao",
+    "shortName": "Ea Hiao"
+  },
+  {
+    "code": "60505010",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Súp",
+    "shortName": "Ea Súp"
+  },
+  {
+    "code": "60505011",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Rốk",
+    "shortName": "Ea Rốk"
+  },
+  {
+    "code": "60505012",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Bung",
+    "shortName": "Ea Bung"
+  },
+  {
+    "code": "60505013",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Rvê",
+    "shortName": "Ia Rvê"
+  },
+  {
+    "code": "60505014",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ia Lốp",
+    "shortName": "Ia Lốp"
+  },
+  {
+    "code": "60507032",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Năng",
+    "shortName": "Krông Năng"
+  },
+  {
+    "code": "60507033",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dliê Ya",
+    "shortName": "Dliê Ya"
+  },
+  {
+    "code": "60507034",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tam Giang",
+    "shortName": "Tam Giang"
+  },
+  {
+    "code": "60507035",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Xuân",
+    "shortName": "Phú Xuân"
+  },
+  {
+    "code": "60509007",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Drông",
+    "shortName": "Ea Drông"
+  },
+  {
+    "code": "60509008",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Buôn Hồ",
+    "shortName": "Buôn Hồ"
+  },
+  {
+    "code": "60509009",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cư Bao",
+    "shortName": "Cư Bao"
+  },
+  {
+    "code": "60511015",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Wer",
+    "shortName": "Ea Wer"
+  },
+  {
+    "code": "60511016",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Nuôl",
+    "shortName": "Ea Nuôl"
+  },
+  {
+    "code": "60511017",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Buôn Đôn",
+    "shortName": "Buôn Đôn"
+  },
+  {
+    "code": "60513018",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Kiết",
+    "shortName": "Ea Kiết"
+  },
+  {
+    "code": "60513019",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea M’Droh",
+    "shortName": "Ea M’Droh"
+  },
+  {
+    "code": "60513020",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Phú",
+    "shortName": "Quảng Phú"
+  },
+  {
+    "code": "60513021",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cuôr Đăng",
+    "shortName": "Cuôr Đăng"
+  },
+  {
+    "code": "60513022",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư M’gar",
+    "shortName": "Cư M’gar"
+  },
+  {
+    "code": "60513023",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Tul",
+    "shortName": "Ea Tul"
+  },
+  {
+    "code": "60515042",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Kar",
+    "shortName": "Ea Kar"
+  },
+  {
+    "code": "60515043",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Ô",
+    "shortName": "Ea Ô"
+  },
+  {
+    "code": "60515044",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Knốp",
+    "shortName": "Ea Knốp"
+  },
+  {
+    "code": "60515045",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư Yang",
+    "shortName": "Cư Yang"
+  },
+  {
+    "code": "60515046",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Păl",
+    "shortName": "Ea Păl"
+  },
+  {
+    "code": "60517047",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã M’Drắk",
+    "shortName": "M’Drắk"
+  },
+  {
+    "code": "60517048",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Riêng",
+    "shortName": "Ea Riêng"
+  },
+  {
+    "code": "60517049",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư M’ta",
+    "shortName": "Cư M’ta"
+  },
+  {
+    "code": "60517050",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Á",
+    "shortName": "Krông Á"
+  },
+  {
+    "code": "60517051",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư Prao",
+    "shortName": "Cư Prao"
+  },
+  {
+    "code": "60517052",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Trang",
+    "shortName": "Ea Trang"
+  },
+  {
+    "code": "60519036",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Pắc",
+    "shortName": "Krông Pắc"
+  },
+  {
+    "code": "60519037",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Knuếc",
+    "shortName": "Ea Knuếc"
+  },
+  {
+    "code": "60519038",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Tiến",
+    "shortName": "Tân Tiến"
+  },
+  {
+    "code": "60519039",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Phê",
+    "shortName": "Ea Phê"
+  },
+  {
+    "code": "60519040",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Kly",
+    "shortName": "Ea Kly"
+  },
+  {
+    "code": "60519041",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vụ Bổn",
+    "shortName": "Vụ Bổn"
+  },
+  {
+    "code": "60523066",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Ana",
+    "shortName": "Krông Ana"
+  },
+  {
+    "code": "60523067",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dur Kmăl",
+    "shortName": "Dur Kmăl"
+  },
+  {
+    "code": "60523068",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Na",
+    "shortName": "Ea Na"
+  },
+  {
+    "code": "60525053",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Sơn",
+    "shortName": "Hoà Sơn"
+  },
+  {
+    "code": "60525054",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dang Kang",
+    "shortName": "Dang Kang"
+  },
+  {
+    "code": "60525055",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Bông",
+    "shortName": "Krông Bông"
+  },
+  {
+    "code": "60525056",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Yang Mao",
+    "shortName": "Yang Mao"
+  },
+  {
+    "code": "60525057",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư Pui",
+    "shortName": "Cư Pui"
+  },
+  {
+    "code": "60531058",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Liên Sơn Lắk",
+    "shortName": "Liên Sơn Lắk"
+  },
+  {
+    "code": "60531059",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk Liêng",
+    "shortName": "Đắk Liêng"
+  },
+  {
+    "code": "60531060",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Ka",
+    "shortName": "Nam Ka"
+  },
+  {
+    "code": "60531061",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk Phơi",
+    "shortName": "Đắk Phơi"
+  },
+  {
+    "code": "60531062",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Nô",
+    "shortName": "Krông Nô"
+  },
+  {
+    "code": "60537063",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Ning",
+    "shortName": "Ea Ning"
+  },
+  {
+    "code": "60537064",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dray Bhăng",
+    "shortName": "Dray Bhăng"
+  },
+  {
+    "code": "60537065",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ea Ktur",
+    "shortName": "Ea Ktur"
+  },
+  {
+    "code": "60539024",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Pơng Drang",
+    "shortName": "Pơng Drang"
+  },
+  {
+    "code": "60539025",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Búk",
+    "shortName": "Krông Búk"
+  },
+  {
+    "code": "60539026",
+    "parentCode": "25",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư Pơng",
+    "shortName": "Cư Pơng"
+  },
+  {
+    "code": "60603099",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk Wil",
+    "shortName": "Đắk Wil"
+  },
+  {
+    "code": "60603100",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Dong",
+    "shortName": "Nam Dong"
+  },
+  {
+    "code": "60603101",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cư Jút",
+    "shortName": "Cư Jút"
+  },
+  {
+    "code": "60605106",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Đà",
+    "shortName": "Nam Đà"
+  },
+  {
+    "code": "60605107",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Krông Nô",
+    "shortName": "Krông Nô"
+  },
+  {
+    "code": "60605108",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nâm Nung",
+    "shortName": "Nâm Nung"
+  },
+  {
+    "code": "60605109",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Phú",
+    "shortName": "Quảng Phú"
+  },
+  {
+    "code": "60607102",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận An",
+    "shortName": "Thuận An"
+  },
+  {
+    "code": "60607103",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Lập",
+    "shortName": "Đức Lập"
+  },
+  {
+    "code": "60607104",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk Mil",
+    "shortName": "Đắk Mil"
+  },
+  {
+    "code": "60607105",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk Sắk",
+    "shortName": "Đắk Sắk"
+  },
+  {
+    "code": "60609110",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đắk song",
+    "shortName": "Đắk song"
+  },
+  {
+    "code": "60609111",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức An",
+    "shortName": "Đức An"
+  },
+  {
+    "code": "60609112",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận Hạnh",
+    "shortName": "Thuận Hạnh"
+  },
+  {
+    "code": "60609113",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trường Xuân",
+    "shortName": "Trường Xuân"
+  },
+  {
+    "code": "60611118",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kiến Đức",
+    "shortName": "Kiến Đức"
+  },
+  {
+    "code": "60611119",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhân Cơ",
+    "shortName": "Nhân Cơ"
+  },
+  {
+    "code": "60611120",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Tín",
+    "shortName": "Quảng Tín"
+  },
+  {
+    "code": "60613096",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bắc Gia Nghĩa",
+    "shortName": "Bắc Gia Nghĩa"
+  },
+  {
+    "code": "60613097",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Nam Gia Nghĩa",
+    "shortName": "Nam Gia Nghĩa"
+  },
+  {
+    "code": "60613098",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Gia Nghĩa",
+    "shortName": "Đông Gia Nghĩa"
+  },
+  {
+    "code": "60615114",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tà Đùng",
+    "shortName": "Tà Đùng"
+  },
+  {
+    "code": "60615115",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Khê",
+    "shortName": "Quảng Khê"
+  },
+  {
+    "code": "60615122",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Hoà",
+    "shortName": "Quảng Hoà"
+  },
+  {
+    "code": "60615123",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Sơn",
+    "shortName": "Quảng Sơn"
+  },
+  {
+    "code": "60617116",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Tân",
+    "shortName": "Quảng Tân"
+  },
+  {
+    "code": "60617117",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Đức",
+    "shortName": "Tuy Đức"
+  },
+  {
+    "code": "60617124",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Trực",
+    "shortName": "Quảng Trực"
+  },
+  {
+    "code": "70301001",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xuân Hương - Đà Lạt",
+    "shortName": "Xuân Hương - Đà Lạt"
+  },
+  {
+    "code": "70301002",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cam Ly - Đà Lạt",
+    "shortName": "Cam Ly - Đà Lạt"
+  },
+  {
+    "code": "70301003",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Lâm Viên - Đà Lạt",
+    "shortName": "Lâm Viên - Đà Lạt"
+  },
+  {
+    "code": "70301004",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xuân Trường - Đà Lạt",
+    "shortName": "Xuân Trường - Đà Lạt"
+  },
+  {
+    "code": "70303006",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường 1 Bảo Lộc",
+    "shortName": "1 Bảo Lộc"
+  },
+  {
+    "code": "70303007",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường 2 Bảo Lộc",
+    "shortName": "2 Bảo Lộc"
+  },
+  {
+    "code": "70303008",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường 3 Bảo Lộc",
+    "shortName": "3 Bảo Lộc"
+  },
+  {
+    "code": "70303009",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường B' Lao",
+    "shortName": "B' Lao"
+  },
+  {
+    "code": "70305005",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Langbiang - Đà Lạt",
+    "shortName": "Langbiang - Đà Lạt"
+  },
+  {
+    "code": "70305010",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lạc Dương",
+    "shortName": "Lạc Dương"
+  },
+  {
+    "code": "70307011",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đơn Dương",
+    "shortName": "Đơn Dương"
+  },
+  {
+    "code": "70307012",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ka Đô",
+    "shortName": "Ka Đô"
+  },
+  {
+    "code": "70307013",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quảng Lập",
+    "shortName": "Quảng Lập"
+  },
+  {
+    "code": "70307014",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã D'Ran",
+    "shortName": "D'Ran"
+  },
+  {
+    "code": "70309015",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiệp Thạnh",
+    "shortName": "Hiệp Thạnh"
+  },
+  {
+    "code": "70309016",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Trọng",
+    "shortName": "Đức Trọng"
+  },
+  {
+    "code": "70309017",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hội",
+    "shortName": "Tân Hội"
+  },
+  {
+    "code": "70309018",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tà Hine",
+    "shortName": "Tà Hine"
+  },
+  {
+    "code": "70309019",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tà Năng",
+    "shortName": "Tà Năng"
+  },
+  {
+    "code": "70309121",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ninh Gia",
+    "shortName": "Ninh Gia"
+  },
+  {
+    "code": "70311020",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đinh Văn - Lâm Hà",
+    "shortName": "Đinh Văn - Lâm Hà"
+  },
+  {
+    "code": "70311021",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Sơn - Lâm Hà",
+    "shortName": "Phú Sơn - Lâm Hà"
+  },
+  {
+    "code": "70311022",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Hà - Lâm Hà",
+    "shortName": "Nam Hà - Lâm Hà"
+  },
+  {
+    "code": "70311023",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Ban - Lâm Hà",
+    "shortName": "Nam Ban - Lâm Hà"
+  },
+  {
+    "code": "70311024",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hà - Lâm Hà",
+    "shortName": "Tân Hà - Lâm Hà"
+  },
+  {
+    "code": "70311025",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phúc Thọ - Lâm Hà",
+    "shortName": "Phúc Thọ - Lâm Hà"
+  },
+  {
+    "code": "70313037",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Lâm 1",
+    "shortName": "Bảo Lâm 1"
+  },
+  {
+    "code": "70313038",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Lâm 2",
+    "shortName": "Bảo Lâm 2"
+  },
+  {
+    "code": "70313039",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Lâm 3",
+    "shortName": "Bảo Lâm 3"
+  },
+  {
+    "code": "70313040",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Lâm 4",
+    "shortName": "Bảo Lâm 4"
+  },
+  {
+    "code": "70313041",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Lâm 5",
+    "shortName": "Bảo Lâm 5"
+  },
+  {
+    "code": "70315030",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Di Linh",
+    "shortName": "Di Linh"
+  },
+  {
+    "code": "70315031",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Ninh",
+    "shortName": "Hoà Ninh"
+  },
+  {
+    "code": "70315032",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Bắc",
+    "shortName": "Hoà Bắc"
+  },
+  {
+    "code": "70315033",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đinh Trang Thượng",
+    "shortName": "Đinh Trang Thượng"
+  },
+  {
+    "code": "70315034",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Thuận",
+    "shortName": "Bảo Thuận"
+  },
+  {
+    "code": "70315035",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Điền",
+    "shortName": "Sơn Điền"
+  },
+  {
+    "code": "70315036",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Gia Hiệp",
+    "shortName": "Gia Hiệp"
+  },
+  {
+    "code": "70317042",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Huoai",
+    "shortName": "Đạ Huoai"
+  },
+  {
+    "code": "70317043",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Huoai 2",
+    "shortName": "Đạ Huoai 2"
+  },
+  {
+    "code": "70317044",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Huoai 3",
+    "shortName": "Đạ Huoai 3"
+  },
+  {
+    "code": "70317045",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Tẻh",
+    "shortName": "Đạ Tẻh"
+  },
+  {
+    "code": "70317046",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Tẻh 2",
+    "shortName": "Đạ Tẻh 2"
+  },
+  {
+    "code": "70317047",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đạ Tẻh 3",
+    "shortName": "Đạ Tẻh 3"
+  },
+  {
+    "code": "70317048",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cát Tiên",
+    "shortName": "Cát Tiên"
+  },
+  {
+    "code": "70317049",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cát Tiên 2",
+    "shortName": "Cát Tiên 2"
+  },
+  {
+    "code": "70317050",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cát Tiên 3",
+    "shortName": "Cát Tiên 3"
+  },
+  {
+    "code": "70323026",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đam Rông 1",
+    "shortName": "Đam Rông 1"
+  },
+  {
+    "code": "70323027",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đam Rông 2",
+    "shortName": "Đam Rông 2"
+  },
+  {
+    "code": "70323028",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đam Rông 3",
+    "shortName": "Đam Rông 3"
+  },
+  {
+    "code": "70323029",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đam Rông 4",
+    "shortName": "Đam Rông 4"
+  },
+  {
+    "code": "71501051",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hàm Thắng",
+    "shortName": "Hàm Thắng"
+  },
+  {
+    "code": "71501052",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Thuận",
+    "shortName": "Bình Thuận"
+  },
+  {
+    "code": "71501053",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Mũi Né",
+    "shortName": "Mũi Né"
+  },
+  {
+    "code": "71501054",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Thuỷ",
+    "shortName": "Phú Thuỷ"
+  },
+  {
+    "code": "71501055",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phan Thiết",
+    "shortName": "Phan Thiết"
+  },
+  {
+    "code": "71501056",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tiến Thành",
+    "shortName": "Tiến Thành"
+  },
+  {
+    "code": "71501059",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuyên Quang",
+    "shortName": "Tuyên Quang"
+  },
+  {
+    "code": "71503061",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Hảo",
+    "shortName": "Vĩnh Hảo"
+  },
+  {
+    "code": "71503062",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Liên Hương",
+    "shortName": "Liên Hương"
+  },
+  {
+    "code": "71503063",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuy Phong",
+    "shortName": "Tuy Phong"
+  },
+  {
+    "code": "71503064",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phan Rí Cửa",
+    "shortName": "Phan Rí Cửa"
+  },
+  {
+    "code": "71505065",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bắc Bình",
+    "shortName": "Bắc Bình"
+  },
+  {
+    "code": "71505066",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hồng Thái",
+    "shortName": "Hồng Thái"
+  },
+  {
+    "code": "71505067",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hải Ninh",
+    "shortName": "Hải Ninh"
+  },
+  {
+    "code": "71505068",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phan Sơn",
+    "shortName": "Phan Sơn"
+  },
+  {
+    "code": "71505069",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sông Lũy",
+    "shortName": "Sông Lũy"
+  },
+  {
+    "code": "71505070",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lương Sơn",
+    "shortName": "Lương Sơn"
+  },
+  {
+    "code": "71505071",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Thắng",
+    "shortName": "Hoà Thắng"
+  },
+  {
+    "code": "71507072",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đông Giang",
+    "shortName": "Đông Giang"
+  },
+  {
+    "code": "71507073",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã La Dạ",
+    "shortName": "La Dạ"
+  },
+  {
+    "code": "71507074",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Thuận Bắc",
+    "shortName": "Hàm Thuận Bắc"
+  },
+  {
+    "code": "71507075",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Thuận",
+    "shortName": "Hàm Thuận"
+  },
+  {
+    "code": "71507076",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hồng Sơn",
+    "shortName": "Hồng Sơn"
+  },
+  {
+    "code": "71507077",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Liêm",
+    "shortName": "Hàm Liêm"
+  },
+  {
+    "code": "71509078",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Thạnh",
+    "shortName": "Hàm Thạnh"
+  },
+  {
+    "code": "71509079",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Kiệm",
+    "shortName": "Hàm Kiệm"
+  },
+  {
+    "code": "71509080",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thành",
+    "shortName": "Tân Thành"
+  },
+  {
+    "code": "71509081",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Thuận Nam",
+    "shortName": "Hàm Thuận Nam"
+  },
+  {
+    "code": "71509082",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Lập",
+    "shortName": "Tân Lập"
+  },
+  {
+    "code": "71511086",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bắc Ruộng",
+    "shortName": "Bắc Ruộng"
+  },
+  {
+    "code": "71511087",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nghị Đức",
+    "shortName": "Nghị Đức"
+  },
+  {
+    "code": "71511088",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đồng Kho",
+    "shortName": "Đồng Kho"
+  },
+  {
+    "code": "71511089",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tánh Linh",
+    "shortName": "Tánh Linh"
+  },
+  {
+    "code": "71511090",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Suối Kiết",
+    "shortName": "Suối Kiết"
+  },
+  {
+    "code": "71513057",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường La Gi",
+    "shortName": "La Gi"
+  },
+  {
+    "code": "71513058",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Hội",
+    "shortName": "Phước Hội"
+  },
+  {
+    "code": "71513060",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hải",
+    "shortName": "Tân Hải"
+  },
+  {
+    "code": "71514083",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Minh",
+    "shortName": "Tân Minh"
+  },
+  {
+    "code": "71514084",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Tân",
+    "shortName": "Hàm Tân"
+  },
+  {
+    "code": "71514085",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sơn Mỹ",
+    "shortName": "Sơn Mỹ"
+  },
+  {
+    "code": "71515091",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Thành",
+    "shortName": "Nam Thành"
+  },
+  {
+    "code": "71515092",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Linh",
+    "shortName": "Đức Linh"
+  },
+  {
+    "code": "71515093",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoài Đức",
+    "shortName": "Hoài Đức"
+  },
+  {
+    "code": "71515094",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Tân",
+    "shortName": "Trà Tân"
+  },
+  {
+    "code": "71517095",
+    "parentCode": "26",
+    "level": 2,
+    "kind": "special_zone",
+    "officialName": "Đặc khu Phú Quý",
+    "shortName": "Phú Quý"
+  },
+  {
+    "code": "70901061",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Ninh",
+    "shortName": "Tân Ninh"
+  },
+  {
+    "code": "70901062",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Minh",
+    "shortName": "Bình Minh"
+  },
+  {
+    "code": "70903085",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Lập",
+    "shortName": "Tân Lập"
+  },
+  {
+    "code": "70903086",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Biên",
+    "shortName": "Tân Biên"
+  },
+  {
+    "code": "70903087",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Bình",
+    "shortName": "Thạnh Bình"
+  },
+  {
+    "code": "70903088",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Vong",
+    "shortName": "Trà Vong"
+  },
+  {
+    "code": "70905079",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Đông",
+    "shortName": "Tân Đông"
+  },
+  {
+    "code": "70905080",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Châu",
+    "shortName": "Tân Châu"
+  },
+  {
+    "code": "70905081",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Phú",
+    "shortName": "Tân Phú"
+  },
+  {
+    "code": "70905082",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hội",
+    "shortName": "Tân Hội"
+  },
+  {
+    "code": "70905083",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thành",
+    "shortName": "Tân Thành"
+  },
+  {
+    "code": "70905084",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hoà",
+    "shortName": "Tân Hoà"
+  },
+  {
+    "code": "70907063",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Ninh Thạnh",
+    "shortName": "Ninh Thạnh"
+  },
+  {
+    "code": "70907076",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Ninh",
+    "shortName": "Lộc Ninh"
+  },
+  {
+    "code": "70907077",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cầu Khởi",
+    "shortName": "Cầu Khởi"
+  },
+  {
+    "code": "70907078",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dương Minh Châu",
+    "shortName": "Dương Minh Châu"
+  },
+  {
+    "code": "70909089",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Vinh",
+    "shortName": "Phước Vinh"
+  },
+  {
+    "code": "70909090",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Hội",
+    "shortName": "Hoà Hội"
+  },
+  {
+    "code": "70909091",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ninh Điền",
+    "shortName": "Ninh Điền"
+  },
+  {
+    "code": "70909092",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Thành",
+    "shortName": "Châu Thành"
+  },
+  {
+    "code": "70909093",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hảo Đước",
+    "shortName": "Hảo Đước"
+  },
+  {
+    "code": "70911064",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Hoa",
+    "shortName": "Long Hoa"
+  },
+  {
+    "code": "70911065",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoà Thành",
+    "shortName": "Hoà Thành"
+  },
+  {
+    "code": "70911066",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thanh Điền",
+    "shortName": "Thanh Điền"
+  },
+  {
+    "code": "70913094",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Chữ",
+    "shortName": "Long Chữ"
+  },
+  {
+    "code": "70913095",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Thuận",
+    "shortName": "Long Thuận"
+  },
+  {
+    "code": "70913096",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bến Cầu",
+    "shortName": "Bến Cầu"
+  },
+  {
+    "code": "70915069",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Gò Dầu",
+    "shortName": "Gò Dầu"
+  },
+  {
+    "code": "70915070",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Gia Lộc",
+    "shortName": "Gia Lộc"
+  },
+  {
+    "code": "70915073",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Đức",
+    "shortName": "Thạnh Đức"
+  },
+  {
+    "code": "70915074",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Thạnh",
+    "shortName": "Phước Thạnh"
+  },
+  {
+    "code": "70915075",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Truông Mít",
+    "shortName": "Truông Mít"
+  },
+  {
+    "code": "70917067",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trảng Bàng",
+    "shortName": "Trảng Bàng"
+  },
+  {
+    "code": "70917068",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Tịnh",
+    "shortName": "An Tịnh"
+  },
+  {
+    "code": "70917071",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Thuận",
+    "shortName": "Hưng Thuận"
+  },
+  {
+    "code": "70917072",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Chỉ",
+    "shortName": "Phước Chỉ"
+  },
+  {
+    "code": "80101058",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long An",
+    "shortName": "Long An"
+  },
+  {
+    "code": "80101059",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân An",
+    "shortName": "Tân An"
+  },
+  {
+    "code": "80101060",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Khánh Hậu",
+    "shortName": "Khánh Hậu"
+  },
+  {
+    "code": "80103001",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Điền",
+    "shortName": "Hưng Điền"
+  },
+  {
+    "code": "80103002",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Thạnh",
+    "shortName": "Vĩnh Thạnh"
+  },
+  {
+    "code": "80103003",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hưng",
+    "shortName": "Tân Hưng"
+  },
+  {
+    "code": "80103004",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Châu",
+    "shortName": "Vĩnh Châu"
+  },
+  {
+    "code": "80105005",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuyên Bình",
+    "shortName": "Tuyên Bình"
+  },
+  {
+    "code": "80105006",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Hưng",
+    "shortName": "Vĩnh Hưng"
+  },
+  {
+    "code": "80105007",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Khánh Hưng",
+    "shortName": "Khánh Hưng"
+  },
+  {
+    "code": "80107011",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Hoà",
+    "shortName": "Bình Hoà"
+  },
+  {
+    "code": "80107012",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mộc Hoá",
+    "shortName": "Mộc Hoá"
+  },
+  {
+    "code": "80109013",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hậu Thạnh",
+    "shortName": "Hậu Thạnh"
+  },
+  {
+    "code": "80109014",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhơn Hoà Lập",
+    "shortName": "Nhơn Hoà Lập"
+  },
+  {
+    "code": "80109015",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhơn Ninh",
+    "shortName": "Nhơn Ninh"
+  },
+  {
+    "code": "80109016",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thạnh",
+    "shortName": "Tân Thạnh"
+  },
+  {
+    "code": "80111017",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Thành",
+    "shortName": "Bình Thành"
+  },
+  {
+    "code": "80111018",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Phước",
+    "shortName": "Thạnh Phước"
+  },
+  {
+    "code": "80111019",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Hóa",
+    "shortName": "Thạnh Hóa"
+  },
+  {
+    "code": "80111020",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Tây",
+    "shortName": "Tân Tây"
+  },
+  {
+    "code": "80113025",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Quý",
+    "shortName": "Mỹ Quý"
+  },
+  {
+    "code": "80113026",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đông Thành",
+    "shortName": "Đông Thành"
+  },
+  {
+    "code": "80113027",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Huệ",
+    "shortName": "Đức Huệ"
+  },
+  {
+    "code": "80115028",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Ninh",
+    "shortName": "An Ninh"
+  },
+  {
+    "code": "80115029",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiệp Hoà",
+    "shortName": "Hiệp Hoà"
+  },
+  {
+    "code": "80115030",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hậu Nghĩa",
+    "shortName": "Hậu Nghĩa"
+  },
+  {
+    "code": "80115031",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hoà Khánh",
+    "shortName": "Hoà Khánh"
+  },
+  {
+    "code": "80115032",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Lập",
+    "shortName": "Đức Lập"
+  },
+  {
+    "code": "80115033",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Hạnh",
+    "shortName": "Mỹ Hạnh"
+  },
+  {
+    "code": "80115034",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đức Hoà",
+    "shortName": "Đức Hoà"
+  },
+  {
+    "code": "80117035",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Lợi",
+    "shortName": "Thạnh Lợi"
+  },
+  {
+    "code": "80117036",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Đức",
+    "shortName": "Bình Đức"
+  },
+  {
+    "code": "80117037",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lương Hoà",
+    "shortName": "Lương Hoà"
+  },
+  {
+    "code": "80117038",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bến Lức",
+    "shortName": "Bến Lức"
+  },
+  {
+    "code": "80117039",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Yên",
+    "shortName": "Mỹ Yên"
+  },
+  {
+    "code": "80119021",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thủ Thừa",
+    "shortName": "Thủ Thừa"
+  },
+  {
+    "code": "80119022",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ An",
+    "shortName": "Mỹ An"
+  },
+  {
+    "code": "80119023",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Thạnh",
+    "shortName": "Mỹ Thạnh"
+  },
+  {
+    "code": "80119024",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Long",
+    "shortName": "Tân Long"
+  },
+  {
+    "code": "80121054",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận Mỹ",
+    "shortName": "Thuận Mỹ"
+  },
+  {
+    "code": "80121055",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Lục Long",
+    "shortName": "An Lục Long"
+  },
+  {
+    "code": "80121056",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tầm Vu",
+    "shortName": "Tầm Vu"
+  },
+  {
+    "code": "80121057",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Công",
+    "shortName": "Vĩnh Công"
+  },
+  {
+    "code": "80123051",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vàm Cỏ",
+    "shortName": "Vàm Cỏ"
+  },
+  {
+    "code": "80123052",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Trụ",
+    "shortName": "Tân Trụ"
+  },
+  {
+    "code": "80123053",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhựt Tảo",
+    "shortName": "Nhựt Tảo"
+  },
+  {
+    "code": "80125040",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Cang",
+    "shortName": "Long Cang"
+  },
+  {
+    "code": "80125041",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Rạch Kiến",
+    "shortName": "Rạch Kiến"
+  },
+  {
+    "code": "80125042",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Lệ",
+    "shortName": "Mỹ Lệ"
+  },
+  {
+    "code": "80125043",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Lân",
+    "shortName": "Tân Lân"
+  },
+  {
+    "code": "80125044",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cần Đước",
+    "shortName": "Cần Đước"
+  },
+  {
+    "code": "80125045",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hựu",
+    "shortName": "Long Hựu"
+  },
+  {
+    "code": "80127046",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Lý",
+    "shortName": "Phước Lý"
+  },
+  {
+    "code": "80127047",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Lộc",
+    "shortName": "Mỹ Lộc"
+  },
+  {
+    "code": "80127048",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cần Giuộc",
+    "shortName": "Cần Giuộc"
+  },
+  {
+    "code": "80127049",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Vĩnh Tây",
+    "shortName": "Phước Vĩnh Tây"
+  },
+  {
+    "code": "80127050",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Tập",
+    "shortName": "Tân Tập"
+  },
+  {
+    "code": "80129008",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tuyên Thạnh",
+    "shortName": "Tuyên Thạnh"
+  },
+  {
+    "code": "80129009",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Hiệp",
+    "shortName": "Bình Hiệp"
+  },
+  {
+    "code": "80129010",
+    "parentCode": "27",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Kiến Tường",
+    "shortName": "Kiến Tường"
+  },
+  {
+    "code": "70701079",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thuận Lợi",
+    "shortName": "Thuận Lợi"
+  },
+  {
+    "code": "70701080",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đồng Tâm",
+    "shortName": "Đồng Tâm"
+  },
+  {
+    "code": "70701081",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Lợi",
+    "shortName": "Tân Lợi"
+  },
+  {
+    "code": "70701082",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đồng Phú",
+    "shortName": "Đồng Phú"
+  },
+  {
+    "code": "70703071",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Bình",
+    "shortName": "Phước Bình"
+  },
+  {
+    "code": "70703072",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Long",
+    "shortName": "Phước Long"
+  },
+  {
+    "code": "70705060",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Thành",
+    "shortName": "Lộc Thành"
+  },
+  {
+    "code": "70705061",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Ninh",
+    "shortName": "Lộc Ninh"
+  },
+  {
+    "code": "70705062",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Hưng",
+    "shortName": "Lộc Hưng"
+  },
+  {
+    "code": "70705063",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Tấn",
+    "shortName": "Lộc Tấn"
+  },
+  {
+    "code": "70705064",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Thạnh",
+    "shortName": "Lộc Thạnh"
+  },
+  {
+    "code": "70705065",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Quang",
+    "shortName": "Lộc Quang"
+  },
+  {
+    "code": "70706066",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Tiến",
+    "shortName": "Tân Tiến"
+  },
+  {
+    "code": "70706067",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thiện Hưng",
+    "shortName": "Thiện Hưng"
+  },
+  {
+    "code": "70706068",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Phước",
+    "shortName": "Hưng Phước"
+  },
+  {
+    "code": "70707083",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Sơn",
+    "shortName": "Phước Sơn"
+  },
+  {
+    "code": "70707084",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nghĩa Trung",
+    "shortName": "Nghĩa Trung"
+  },
+  {
+    "code": "70707085",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bù Đăng",
+    "shortName": "Bù Đăng"
+  },
+  {
+    "code": "70707086",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thọ Sơn",
+    "shortName": "Thọ Sơn"
+  },
+  {
+    "code": "70707087",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Nhau",
+    "shortName": "Đak Nhau"
+  },
+  {
+    "code": "70707088",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bom Bo",
+    "shortName": "Bom Bo"
+  },
+  {
+    "code": "70709058",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Long",
+    "shortName": "Bình Long"
+  },
+  {
+    "code": "70709059",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Lộc",
+    "shortName": "An Lộc"
+  },
+  {
+    "code": "70710051",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Minh Hưng",
+    "shortName": "Minh Hưng"
+  },
+  {
+    "code": "70710052",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chơn Thành",
+    "shortName": "Chơn Thành"
+  },
+  {
+    "code": "70710053",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nha Bích",
+    "shortName": "Nha Bích"
+  },
+  {
+    "code": "70711077",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đồng Xoài",
+    "shortName": "Đồng Xoài"
+  },
+  {
+    "code": "70711078",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Phước",
+    "shortName": "Bình Phước"
+  },
+  {
+    "code": "70713054",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Quan",
+    "shortName": "Tân Quan"
+  },
+  {
+    "code": "70713055",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hưng",
+    "shortName": "Tân Hưng"
+  },
+  {
+    "code": "70713056",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Khai",
+    "shortName": "Tân Khai"
+  },
+  {
+    "code": "70713057",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Minh Đức",
+    "shortName": "Minh Đức"
+  },
+  {
+    "code": "70715069",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Nghĩa",
+    "shortName": "Phú Nghĩa"
+  },
+  {
+    "code": "70715070",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đa Kia",
+    "shortName": "Đa Kia"
+  },
+  {
+    "code": "70715094",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bù Gia Mập",
+    "shortName": "Bù Gia Mập"
+  },
+  {
+    "code": "70715095",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đăk Ơ",
+    "shortName": "Đăk Ơ"
+  },
+  {
+    "code": "70716073",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Tân",
+    "shortName": "Bình Tân"
+  },
+  {
+    "code": "70716074",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hà",
+    "shortName": "Long Hà"
+  },
+  {
+    "code": "70716075",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Riềng",
+    "shortName": "Phú Riềng"
+  },
+  {
+    "code": "70716076",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Trung",
+    "shortName": "Phú Trung"
+  },
+  {
+    "code": "71301001",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Biên Hoà",
+    "shortName": "Biên Hoà"
+  },
+  {
+    "code": "71301002",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trấn Biên",
+    "shortName": "Trấn Biên"
+  },
+  {
+    "code": "71301003",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Hiệp",
+    "shortName": "Tam Hiệp"
+  },
+  {
+    "code": "71301004",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Bình",
+    "shortName": "Long Bình"
+  },
+  {
+    "code": "71301005",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trảng Dài",
+    "shortName": "Trảng Dài"
+  },
+  {
+    "code": "71301006",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hố Nai",
+    "shortName": "Hố Nai"
+  },
+  {
+    "code": "71301007",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Hưng",
+    "shortName": "Long Hưng"
+  },
+  {
+    "code": "71301089",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Phước",
+    "shortName": "Tam Phước"
+  },
+  {
+    "code": "71301090",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Tân",
+    "shortName": "Phước Tân"
+  },
+  {
+    "code": "71302024",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Lộc",
+    "shortName": "Bình Lộc"
+  },
+  {
+    "code": "71302025",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bảo Vinh",
+    "shortName": "Bảo Vinh"
+  },
+  {
+    "code": "71302026",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xuân Lập",
+    "shortName": "Xuân Lập"
+  },
+  {
+    "code": "71302027",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Khánh",
+    "shortName": "Long Khánh"
+  },
+  {
+    "code": "71302028",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hàng Gòn",
+    "shortName": "Hàng Gòn"
+  },
+  {
+    "code": "71303044",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tà Lài",
+    "shortName": "Tà Lài"
+  },
+  {
+    "code": "71303045",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nam Cát Tiên",
+    "shortName": "Nam Cát Tiên"
+  },
+  {
+    "code": "71303046",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Phú",
+    "shortName": "Tân Phú"
+  },
+  {
+    "code": "71303047",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Lâm",
+    "shortName": "Phú Lâm"
+  },
+  {
+    "code": "71303092",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đak Lua",
+    "shortName": "Đak Lua"
+  },
+  {
+    "code": "71305023",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thống Nhất",
+    "shortName": "Thống Nhất"
+  },
+  {
+    "code": "71305040",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã La Ngà",
+    "shortName": "La Ngà"
+  },
+  {
+    "code": "71305041",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Định Quán",
+    "shortName": "Định Quán"
+  },
+  {
+    "code": "71305042",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Vinh",
+    "shortName": "Phú Vinh"
+  },
+  {
+    "code": "71305043",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Hoà",
+    "shortName": "Phú Hoà"
+  },
+  {
+    "code": "71305091",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thanh Sơn",
+    "shortName": "Thanh Sơn"
+  },
+  {
+    "code": "71307048",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trị An",
+    "shortName": "Trị An"
+  },
+  {
+    "code": "71307049",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân An",
+    "shortName": "Tân An"
+  },
+  {
+    "code": "71307050",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Triều",
+    "shortName": "Tân Triều"
+  },
+  {
+    "code": "71307093",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Lý",
+    "shortName": "Phú Lý"
+  },
+  {
+    "code": "71308016",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Viễn",
+    "shortName": "An Viễn"
+  },
+  {
+    "code": "71308017",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Minh",
+    "shortName": "Bình Minh"
+  },
+  {
+    "code": "71308018",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trảng Bom",
+    "shortName": "Trảng Bom"
+  },
+  {
+    "code": "71308019",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bàu Hàm",
+    "shortName": "Bàu Hàm"
+  },
+  {
+    "code": "71308020",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Thịnh",
+    "shortName": "Hưng Thịnh"
+  },
+  {
+    "code": "71309021",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dầu Giây",
+    "shortName": "Dầu Giây"
+  },
+  {
+    "code": "71309022",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Gia Kiệm",
+    "shortName": "Gia Kiệm"
+  },
+  {
+    "code": "71311029",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Quế",
+    "shortName": "Xuân Quế"
+  },
+  {
+    "code": "71311030",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Đường",
+    "shortName": "Xuân Đường"
+  },
+  {
+    "code": "71311031",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cẩm Mỹ",
+    "shortName": "Cẩm Mỹ"
+  },
+  {
+    "code": "71311032",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Sông Ray",
+    "shortName": "Sông Ray"
+  },
+  {
+    "code": "71311033",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Đông",
+    "shortName": "Xuân Đông"
+  },
+  {
+    "code": "71313034",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Định",
+    "shortName": "Xuân Định"
+  },
+  {
+    "code": "71313035",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Phú",
+    "shortName": "Xuân Phú"
+  },
+  {
+    "code": "71313036",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Lộc",
+    "shortName": "Xuân Lộc"
+  },
+  {
+    "code": "71313037",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Hoà",
+    "shortName": "Xuân Hoà"
+  },
+  {
+    "code": "71313038",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Thành",
+    "shortName": "Xuân Thành"
+  },
+  {
+    "code": "71313039",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Bắc",
+    "shortName": "Xuân Bắc"
+  },
+  {
+    "code": "71315011",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Thái",
+    "shortName": "Phước Thái"
+  },
+  {
+    "code": "71315012",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Phước",
+    "shortName": "Long Phước"
+  },
+  {
+    "code": "71315013",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình An",
+    "shortName": "Bình An"
+  },
+  {
+    "code": "71315014",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Thành",
+    "shortName": "Long Thành"
+  },
+  {
+    "code": "71315015",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Phước",
+    "shortName": "An Phước"
+  },
+  {
+    "code": "71317008",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đại Phước",
+    "shortName": "Đại Phước"
+  },
+  {
+    "code": "71317009",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhơn Trạch",
+    "shortName": "Nhơn Trạch"
+  },
+  {
+    "code": "71317010",
+    "parentCode": "28",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước An",
+    "shortName": "Phước An"
+  },
+  {
+    "code": "70101063",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Sài Gòn",
+    "shortName": "Sài Gòn"
+  },
+  {
+    "code": "70101064",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Định",
+    "shortName": "Tân Định"
+  },
+  {
+    "code": "70101065",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bến Thành",
+    "shortName": "Bến Thành"
+  },
+  {
+    "code": "70101066",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cầu Ông Lãnh",
+    "shortName": "Cầu Ông Lãnh"
+  },
+  {
+    "code": "70105067",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bàn Cờ",
+    "shortName": "Bàn Cờ"
+  },
+  {
+    "code": "70105068",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xuân Hoà",
+    "shortName": "Xuân Hoà"
+  },
+  {
+    "code": "70105069",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Nhiêu Lộc",
+    "shortName": "Nhiêu Lộc"
+  },
+  {
+    "code": "70107070",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Xóm Chiếu",
+    "shortName": "Xóm Chiếu"
+  },
+  {
+    "code": "70107071",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Khánh Hội",
+    "shortName": "Khánh Hội"
+  },
+  {
+    "code": "70107072",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Vĩnh Hội",
+    "shortName": "Vĩnh Hội"
+  },
+  {
+    "code": "70109073",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chợ Quán",
+    "shortName": "Chợ Quán"
+  },
+  {
+    "code": "70109074",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Đông",
+    "shortName": "An Đông"
+  },
+  {
+    "code": "70109075",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chợ Lớn",
+    "shortName": "Chợ Lớn"
+  },
+  {
+    "code": "70111076",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Tây",
+    "shortName": "Bình Tây"
+  },
+  {
+    "code": "70111077",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Tiên",
+    "shortName": "Bình Tiên"
+  },
+  {
+    "code": "70111078",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Phú",
+    "shortName": "Bình Phú"
+  },
+  {
+    "code": "70111079",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Lâm",
+    "shortName": "Phú Lâm"
+  },
+  {
+    "code": "70113080",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Thuận",
+    "shortName": "Tân Thuận"
+  },
+  {
+    "code": "70113081",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Thuận",
+    "shortName": "Phú Thuận"
+  },
+  {
+    "code": "70113082",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Mỹ",
+    "shortName": "Tân Mỹ"
+  },
+  {
+    "code": "70113083",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Hưng",
+    "shortName": "Tân Hưng"
+  },
+  {
+    "code": "70115084",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chánh Hưng",
+    "shortName": "Chánh Hưng"
+  },
+  {
+    "code": "70115085",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Định",
+    "shortName": "Phú Định"
+  },
+  {
+    "code": "70115086",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Đông",
+    "shortName": "Bình Đông"
+  },
+  {
+    "code": "70119087",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Diên Hồng",
+    "shortName": "Diên Hồng"
+  },
+  {
+    "code": "70119088",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Vườn Lài",
+    "shortName": "Vườn Lài"
+  },
+  {
+    "code": "70119089",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoà Hưng",
+    "shortName": "Hoà Hưng"
+  },
+  {
+    "code": "70121090",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Minh Phụng",
+    "shortName": "Minh Phụng"
+  },
+  {
+    "code": "70121091",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Thới",
+    "shortName": "Bình Thới"
+  },
+  {
+    "code": "70121092",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoà Bình",
+    "shortName": "Hoà Bình"
+  },
+  {
+    "code": "70121093",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Thọ",
+    "shortName": "Phú Thọ"
+  },
+  {
+    "code": "70123094",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Hưng Thuận",
+    "shortName": "Đông Hưng Thuận"
+  },
+  {
+    "code": "70123095",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trung Mỹ Tây",
+    "shortName": "Trung Mỹ Tây"
+  },
+  {
+    "code": "70123096",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Thới Hiệp",
+    "shortName": "Tân Thới Hiệp"
+  },
+  {
+    "code": "70123097",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thới An",
+    "shortName": "Thới An"
+  },
+  {
+    "code": "70123098",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Phú Đông",
+    "shortName": "An Phú Đông"
+  },
+  {
+    "code": "70125109",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hạnh Thông",
+    "shortName": "Hạnh Thông"
+  },
+  {
+    "code": "70125110",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Nhơn",
+    "shortName": "An Nhơn"
+  },
+  {
+    "code": "70125111",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Gò Vấp",
+    "shortName": "Gò Vấp"
+  },
+  {
+    "code": "70125112",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Hội Đông",
+    "shortName": "An Hội Đông"
+  },
+  {
+    "code": "70125113",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thông Tây Hội",
+    "shortName": "Thông Tây Hội"
+  },
+  {
+    "code": "70125114",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Hội Tây",
+    "shortName": "An Hội Tây"
+  },
+  {
+    "code": "70127118",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Sơn Hoà",
+    "shortName": "Tân Sơn Hoà"
+  },
+  {
+    "code": "70127119",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Sơn Nhất",
+    "shortName": "Tân Sơn Nhất"
+  },
+  {
+    "code": "70127120",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Hoà",
+    "shortName": "Tân Hoà"
+  },
+  {
+    "code": "70127121",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bảy Hiền",
+    "shortName": "Bảy Hiền"
+  },
+  {
+    "code": "70127122",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Bình",
+    "shortName": "Tân Bình"
+  },
+  {
+    "code": "70127123",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Sơn",
+    "shortName": "Tân Sơn"
+  },
+  {
+    "code": "70128124",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tây Thạnh",
+    "shortName": "Tây Thạnh"
+  },
+  {
+    "code": "70128125",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Sơn Nhì",
+    "shortName": "Tân Sơn Nhì"
+  },
+  {
+    "code": "70128126",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Thọ Hoà",
+    "shortName": "Phú Thọ Hoà"
+  },
+  {
+    "code": "70128127",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Phú",
+    "shortName": "Tân Phú"
+  },
+  {
+    "code": "70128128",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Thạnh",
+    "shortName": "Phú Thạnh"
+  },
+  {
+    "code": "70129104",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Gia Định",
+    "shortName": "Gia Định"
+  },
+  {
+    "code": "70129105",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Thạnh",
+    "shortName": "Bình Thạnh"
+  },
+  {
+    "code": "70129106",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Lợi Trung",
+    "shortName": "Bình Lợi Trung"
+  },
+  {
+    "code": "70129107",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thạnh Mỹ Tây",
+    "shortName": "Thạnh Mỹ Tây"
+  },
+  {
+    "code": "70129108",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Quới",
+    "shortName": "Bình Quới"
+  },
+  {
+    "code": "70131115",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đức Nhuận",
+    "shortName": "Đức Nhuận"
+  },
+  {
+    "code": "70131116",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cầu Kiệu",
+    "shortName": "Cầu Kiệu"
+  },
+  {
+    "code": "70131117",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Nhuận",
+    "shortName": "Phú Nhuận"
+  },
+  {
+    "code": "70134099",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Lạc",
+    "shortName": "An Lạc"
+  },
+  {
+    "code": "70134100",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Tạo",
+    "shortName": "Tân Tạo"
+  },
+  {
+    "code": "70134101",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Tân",
+    "shortName": "Bình Tân"
+  },
+  {
+    "code": "70134102",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Trị Đông",
+    "shortName": "Bình Trị Đông"
+  },
+  {
+    "code": "70134103",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Hưng Hoà",
+    "shortName": "Bình Hưng Hoà"
+  },
+  {
+    "code": "70135151",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Củ Chi",
+    "shortName": "Củ Chi"
+  },
+  {
+    "code": "70135152",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân An Hội",
+    "shortName": "Tân An Hội"
+  },
+  {
+    "code": "70135153",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thái Mỹ",
+    "shortName": "Thái Mỹ"
+  },
+  {
+    "code": "70135154",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Nhơn Tây",
+    "shortName": "An Nhơn Tây"
+  },
+  {
+    "code": "70135155",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhuận Đức",
+    "shortName": "Nhuận Đức"
+  },
+  {
+    "code": "70135156",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Hoà Đông",
+    "shortName": "Phú Hoà Đông"
+  },
+  {
+    "code": "70135157",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Mỹ",
+    "shortName": "Bình Mỹ"
+  },
+  {
+    "code": "70137158",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đông Thạnh",
+    "shortName": "Đông Thạnh"
+  },
+  {
+    "code": "70137159",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hóc Môn",
+    "shortName": "Hóc Môn"
+  },
+  {
+    "code": "70137160",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Thới Sơn",
+    "shortName": "Xuân Thới Sơn"
+  },
+  {
+    "code": "70137161",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bà Điểm",
+    "shortName": "Bà Điểm"
+  },
+  {
+    "code": "70139141",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Lộc",
+    "shortName": "Vĩnh Lộc"
+  },
+  {
+    "code": "70139142",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Vĩnh Lộc",
+    "shortName": "Tân Vĩnh Lộc"
+  },
+  {
+    "code": "70139143",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Lợi",
+    "shortName": "Bình Lợi"
+  },
+  {
+    "code": "70139144",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Nhựt",
+    "shortName": "Tân Nhựt"
+  },
+  {
+    "code": "70139145",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Chánh",
+    "shortName": "Bình Chánh"
+  },
+  {
+    "code": "70139146",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Long",
+    "shortName": "Hưng Long"
+  },
+  {
+    "code": "70139147",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Hưng",
+    "shortName": "Bình Hưng"
+  },
+  {
+    "code": "70141162",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhà Bè",
+    "shortName": "Nhà Bè"
+  },
+  {
+    "code": "70141163",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiệp Phước",
+    "shortName": "Hiệp Phước"
+  },
+  {
+    "code": "70143148",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Khánh",
+    "shortName": "Bình Khánh"
+  },
+  {
+    "code": "70143149",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Thới Đông",
+    "shortName": "An Thới Đông"
+  },
+  {
+    "code": "70143150",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cần Giờ",
+    "shortName": "Cần Giờ"
+  },
+  {
+    "code": "70143168",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh An",
+    "shortName": "Thạnh An"
+  },
+  {
+    "code": "70145129",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hiệp Bình",
+    "shortName": "Hiệp Bình"
+  },
+  {
+    "code": "70145130",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thủ Đức",
+    "shortName": "Thủ Đức"
+  },
+  {
+    "code": "70145131",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Bình",
+    "shortName": "Tam Bình"
+  },
+  {
+    "code": "70145132",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Linh Xuân",
+    "shortName": "Linh Xuân"
+  },
+  {
+    "code": "70145133",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tăng Nhơn Phú",
+    "shortName": "Tăng Nhơn Phú"
+  },
+  {
+    "code": "70145134",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Bình",
+    "shortName": "Long Bình"
+  },
+  {
+    "code": "70145135",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Phước",
+    "shortName": "Long Phước"
+  },
+  {
+    "code": "70145136",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Trường",
+    "shortName": "Long Trường"
+  },
+  {
+    "code": "70145137",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cát Lái",
+    "shortName": "Cát Lái"
+  },
+  {
+    "code": "70145138",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Trưng",
+    "shortName": "Bình Trưng"
+  },
+  {
+    "code": "70145139",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Long",
+    "shortName": "Phước Long"
+  },
+  {
+    "code": "70145140",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Khánh",
+    "shortName": "An Khánh"
+  },
+  {
+    "code": "71101036",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Dương",
+    "shortName": "Bình Dương"
+  },
+  {
+    "code": "71101037",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chánh Hiệp",
+    "shortName": "Chánh Hiệp"
+  },
+  {
+    "code": "71101038",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thủ Dầu Một",
+    "shortName": "Thủ Dầu Một"
+  },
+  {
+    "code": "71101039",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Lợi",
+    "shortName": "Phú Lợi"
+  },
+  {
+    "code": "71101046",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú An",
+    "shortName": "Phú An"
+  },
+  {
+    "code": "71103045",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hoà Lợi",
+    "shortName": "Hoà Lợi"
+  },
+  {
+    "code": "71103167",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thới Hoà",
+    "shortName": "Thới Hoà"
+  },
+  {
+    "code": "71105040",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Vĩnh Tân",
+    "shortName": "Vĩnh Tân"
+  },
+  {
+    "code": "71105041",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Cơ",
+    "shortName": "Bình Cơ"
+  },
+  {
+    "code": "71105042",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Uyên",
+    "shortName": "Tân Uyên"
+  },
+  {
+    "code": "71105043",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Hiệp",
+    "shortName": "Tân Hiệp"
+  },
+  {
+    "code": "71105044",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Khánh",
+    "shortName": "Tân Khánh"
+  },
+  {
+    "code": "71107031",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thuận An",
+    "shortName": "Thuận An"
+  },
+  {
+    "code": "71107032",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thuận Giao",
+    "shortName": "Thuận Giao"
+  },
+  {
+    "code": "71107033",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Hoà",
+    "shortName": "Bình Hoà"
+  },
+  {
+    "code": "71107034",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Lái Thiêu",
+    "shortName": "Lái Thiêu"
+  },
+  {
+    "code": "71107035",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Phú",
+    "shortName": "An Phú"
+  },
+  {
+    "code": "71109028",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Hoà",
+    "shortName": "Đông Hoà"
+  },
+  {
+    "code": "71109029",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Dĩ An",
+    "shortName": "Dĩ An"
+  },
+  {
+    "code": "71109030",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Đông Hiệp",
+    "shortName": "Tân Đông Hiệp"
+  },
+  {
+    "code": "71111053",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Long",
+    "shortName": "An Long"
+  },
+  {
+    "code": "71111054",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Thành",
+    "shortName": "Phước Thành"
+  },
+  {
+    "code": "71111055",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Hoà",
+    "shortName": "Phước Hoà"
+  },
+  {
+    "code": "71111056",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Giáo",
+    "shortName": "Phú Giáo"
+  },
+  {
+    "code": "71113047",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tây Nam",
+    "shortName": "Tây Nam"
+  },
+  {
+    "code": "71113059",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Minh Thạnh",
+    "shortName": "Minh Thạnh"
+  },
+  {
+    "code": "71113060",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hoà",
+    "shortName": "Long Hoà"
+  },
+  {
+    "code": "71113061",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Dầu Tiếng",
+    "shortName": "Dầu Tiếng"
+  },
+  {
+    "code": "71113062",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thanh An",
+    "shortName": "Thanh An"
+  },
+  {
+    "code": "71115048",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Nguyên",
+    "shortName": "Long Nguyên"
+  },
+  {
+    "code": "71115049",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bến Cát",
+    "shortName": "Bến Cát"
+  },
+  {
+    "code": "71115050",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Chánh Phú Hoà",
+    "shortName": "Chánh Phú Hoà"
+  },
+  {
+    "code": "71115057",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trừ Văn Thố",
+    "shortName": "Trừ Văn Thố"
+  },
+  {
+    "code": "71115058",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bàu Bàng",
+    "shortName": "Bàu Bàng"
+  },
+  {
+    "code": "71117051",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bắc Tân Uyên",
+    "shortName": "Bắc Tân Uyên"
+  },
+  {
+    "code": "71117052",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thường Tân",
+    "shortName": "Thường Tân"
+  },
+  {
+    "code": "71701001",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Vũng Tàu",
+    "shortName": "Vũng Tàu"
+  },
+  {
+    "code": "71701002",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Thắng",
+    "shortName": "Tam Thắng"
+  },
+  {
+    "code": "71701003",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Rạch Dừa",
+    "shortName": "Rạch Dừa"
+  },
+  {
+    "code": "71701004",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Thắng",
+    "shortName": "Phước Thắng"
+  },
+  {
+    "code": "71701164",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Sơn",
+    "shortName": "Long Sơn"
+  },
+  {
+    "code": "71703005",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bà Rịa",
+    "shortName": "Bà Rịa"
+  },
+  {
+    "code": "71703006",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Hương",
+    "shortName": "Long Hương"
+  },
+  {
+    "code": "71703008",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tam Long",
+    "shortName": "Tam Long"
+  },
+  {
+    "code": "71705013",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngãi Giao",
+    "shortName": "Ngãi Giao"
+  },
+  {
+    "code": "71705014",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Giã",
+    "shortName": "Bình Giã"
+  },
+  {
+    "code": "71705015",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Kim Long",
+    "shortName": "Kim Long"
+  },
+  {
+    "code": "71705016",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Đức",
+    "shortName": "Châu Đức"
+  },
+  {
+    "code": "71705017",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuân Sơn",
+    "shortName": "Xuân Sơn"
+  },
+  {
+    "code": "71705018",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nghĩa Thành",
+    "shortName": "Nghĩa Thành"
+  },
+  {
+    "code": "71707019",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hồ Tràm",
+    "shortName": "Hồ Tràm"
+  },
+  {
+    "code": "71707020",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Xuyên Mộc",
+    "shortName": "Xuyên Mộc"
+  },
+  {
+    "code": "71707021",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Hội",
+    "shortName": "Hòa Hội"
+  },
+  {
+    "code": "71707022",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bàu Lâm",
+    "shortName": "Bàu Lâm"
+  },
+  {
+    "code": "71707165",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Hiệp",
+    "shortName": "Hòa Hiệp"
+  },
+  {
+    "code": "71707166",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Châu",
+    "shortName": "Bình Châu"
+  },
+  {
+    "code": "71709007",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Mỹ",
+    "shortName": "Phú Mỹ"
+  },
+  {
+    "code": "71709009",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Thành",
+    "shortName": "Tân Thành"
+  },
+  {
+    "code": "71709010",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Phước",
+    "shortName": "Tân Phước"
+  },
+  {
+    "code": "71709011",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Hải",
+    "shortName": "Tân Hải"
+  },
+  {
+    "code": "71709012",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Pha",
+    "shortName": "Châu Pha"
+  },
+  {
+    "code": "71712023",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Hải",
+    "shortName": "Phước Hải"
+  },
+  {
+    "code": "71712024",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hải",
+    "shortName": "Long Hải"
+  },
+  {
+    "code": "71712025",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đất Đỏ",
+    "shortName": "Đất Đỏ"
+  },
+  {
+    "code": "71712026",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Điền",
+    "shortName": "Long Điền"
+  },
+  {
+    "code": "71713027",
+    "parentCode": "29",
+    "level": 2,
+    "kind": "special_zone",
+    "officialName": "Đặc khu Côn Đảo",
+    "shortName": "Côn Đảo"
+  },
+  {
+    "code": "80901008",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thanh Đức",
+    "shortName": "Thanh Đức"
+  },
+  {
+    "code": "80901009",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Châu",
+    "shortName": "Long Châu"
+  },
+  {
+    "code": "80901010",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phước Hậu",
+    "shortName": "Phước Hậu"
+  },
+  {
+    "code": "80901011",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Hạnh",
+    "shortName": "Tân Hạnh"
+  },
+  {
+    "code": "80901012",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Tân Ngãi",
+    "shortName": "Tân Ngãi"
+  },
+  {
+    "code": "80903005",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Bình",
+    "shortName": "An Bình"
+  },
+  {
+    "code": "80903006",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hồ",
+    "shortName": "Long Hồ"
+  },
+  {
+    "code": "80903007",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Quới",
+    "shortName": "Phú Quới"
+  },
+  {
+    "code": "80905001",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cái Nhum",
+    "shortName": "Cái Nhum"
+  },
+  {
+    "code": "80905002",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Long Hội",
+    "shortName": "Tân Long Hội"
+  },
+  {
+    "code": "80905003",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhơn Phú",
+    "shortName": "Nhơn Phú"
+  },
+  {
+    "code": "80905004",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Phước",
+    "shortName": "Bình Phước"
+  },
+  {
+    "code": "80907033",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bình Minh",
+    "shortName": "Bình Minh"
+  },
+  {
+    "code": "80907034",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cái Vồn",
+    "shortName": "Cái Vồn"
+  },
+  {
+    "code": "80907035",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Đông Thành",
+    "shortName": "Đông Thành"
+  },
+  {
+    "code": "80908030",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Quới",
+    "shortName": "Tân Quới"
+  },
+  {
+    "code": "80908031",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Lược",
+    "shortName": "Tân Lược"
+  },
+  {
+    "code": "80908032",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Thuận",
+    "shortName": "Mỹ Thuận"
+  },
+  {
+    "code": "80909025",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Hiệp",
+    "shortName": "Hòa Hiệp"
+  },
+  {
+    "code": "80909026",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tam Bình",
+    "shortName": "Tam Bình"
+  },
+  {
+    "code": "80909027",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngãi Tứ",
+    "shortName": "Ngãi Tứ"
+  },
+  {
+    "code": "80909028",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Song Phú",
+    "shortName": "Song Phú"
+  },
+  {
+    "code": "80909029",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cái Ngang",
+    "shortName": "Cái Ngang"
+  },
+  {
+    "code": "80911020",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lục Sỹ Thành",
+    "shortName": "Lục Sỹ Thành"
+  },
+  {
+    "code": "80911021",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Ôn",
+    "shortName": "Trà Ôn"
+  },
+  {
+    "code": "80911022",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Côn",
+    "shortName": "Trà Côn"
+  },
+  {
+    "code": "80911023",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Xuân",
+    "shortName": "Vĩnh Xuân"
+  },
+  {
+    "code": "80911024",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Bình",
+    "shortName": "Hòa Bình"
+  },
+  {
+    "code": "80913013",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quới Thiện",
+    "shortName": "Quới Thiện"
+  },
+  {
+    "code": "80913014",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trung Thành",
+    "shortName": "Trung Thành"
+  },
+  {
+    "code": "80913015",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trung Ngãi",
+    "shortName": "Trung Ngãi"
+  },
+  {
+    "code": "80913016",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quới An",
+    "shortName": "Quới An"
+  },
+  {
+    "code": "80913017",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trung Hiệp",
+    "shortName": "Trung Hiệp"
+  },
+  {
+    "code": "80913018",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiếu Phụng",
+    "shortName": "Hiếu Phụng"
+  },
+  {
+    "code": "80913019",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiếu Thành",
+    "shortName": "Hiếu Thành"
+  },
+  {
+    "code": "81101077",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường An Hội",
+    "shortName": "An Hội"
+  },
+  {
+    "code": "81101078",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Khương",
+    "shortName": "Phú Khương"
+  },
+  {
+    "code": "81101079",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Bến Tre",
+    "shortName": "Bến Tre"
+  },
+  {
+    "code": "81101080",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Sơn Đông",
+    "shortName": "Sơn Đông"
+  },
+  {
+    "code": "81103081",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Phú Tân",
+    "shortName": "Phú Tân"
+  },
+  {
+    "code": "81103082",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Túc",
+    "shortName": "Phú Túc"
+  },
+  {
+    "code": "81103083",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Giao Long",
+    "shortName": "Giao Long"
+  },
+  {
+    "code": "81103084",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tiên Thủy",
+    "shortName": "Tiên Thủy"
+  },
+  {
+    "code": "81103085",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Phú",
+    "shortName": "Tân Phú"
+  },
+  {
+    "code": "81105086",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Phụng",
+    "shortName": "Phú Phụng"
+  },
+  {
+    "code": "81105087",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Chợ Lách",
+    "shortName": "Chợ Lách"
+  },
+  {
+    "code": "81105088",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vĩnh Thành",
+    "shortName": "Vĩnh Thành"
+  },
+  {
+    "code": "81105089",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Khánh Trung",
+    "shortName": "Hưng Khánh Trung"
+  },
+  {
+    "code": "81107093",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đồng Khởi",
+    "shortName": "Đồng Khởi"
+  },
+  {
+    "code": "81107094",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỏ Cày",
+    "shortName": "Mỏ Cày"
+  },
+  {
+    "code": "81107095",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thành Thới",
+    "shortName": "Thành Thới"
+  },
+  {
+    "code": "81107096",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Định",
+    "shortName": "An Định"
+  },
+  {
+    "code": "81107097",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hương Mỹ",
+    "shortName": "Hương Mỹ"
+  },
+  {
+    "code": "81108090",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Mỹ Trung",
+    "shortName": "Phước Mỹ Trung"
+  },
+  {
+    "code": "81108091",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thành Bình",
+    "shortName": "Tân Thành Bình"
+  },
+  {
+    "code": "81108092",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhuận Phú Tân",
+    "shortName": "Nhuận Phú Tân"
+  },
+  {
+    "code": "81109111",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Nhượng",
+    "shortName": "Hưng Nhượng"
+  },
+  {
+    "code": "81109112",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Giồng Trôm",
+    "shortName": "Giồng Trôm"
+  },
+  {
+    "code": "81109113",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hào",
+    "shortName": "Tân Hào"
+  },
+  {
+    "code": "81109114",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phước Long",
+    "shortName": "Phước Long"
+  },
+  {
+    "code": "81109115",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lương Phú",
+    "shortName": "Lương Phú"
+  },
+  {
+    "code": "81109116",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Hòa",
+    "shortName": "Châu Hòa"
+  },
+  {
+    "code": "81109117",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lương Hòa",
+    "shortName": "Lương Hòa"
+  },
+  {
+    "code": "81111118",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thới Thuận",
+    "shortName": "Thới Thuận"
+  },
+  {
+    "code": "81111119",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Phước",
+    "shortName": "Thạnh Phước"
+  },
+  {
+    "code": "81111120",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Đại",
+    "shortName": "Bình Đại"
+  },
+  {
+    "code": "81111121",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Trị",
+    "shortName": "Thạnh Trị"
+  },
+  {
+    "code": "81111122",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lộc Thuận",
+    "shortName": "Lộc Thuận"
+  },
+  {
+    "code": "81111123",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Hưng",
+    "shortName": "Châu Hưng"
+  },
+  {
+    "code": "81111124",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Thuận",
+    "shortName": "Phú Thuận"
+  },
+  {
+    "code": "81113104",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thủy",
+    "shortName": "Tân Thủy"
+  },
+  {
+    "code": "81113105",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bảo Thạnh",
+    "shortName": "Bảo Thạnh"
+  },
+  {
+    "code": "81113106",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ba Tri",
+    "shortName": "Ba Tri"
+  },
+  {
+    "code": "81113107",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Xuân",
+    "shortName": "Tân Xuân"
+  },
+  {
+    "code": "81113108",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Chánh Hòa",
+    "shortName": "Mỹ Chánh Hòa"
+  },
+  {
+    "code": "81113109",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Ngãi Trung",
+    "shortName": "An Ngãi Trung"
+  },
+  {
+    "code": "81113110",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Hiệp",
+    "shortName": "An Hiệp"
+  },
+  {
+    "code": "81115098",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đại Điền",
+    "shortName": "Đại Điền"
+  },
+  {
+    "code": "81115099",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Quới Điền",
+    "shortName": "Quới Điền"
+  },
+  {
+    "code": "81115100",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Phú",
+    "shortName": "Thạnh Phú"
+  },
+  {
+    "code": "81115101",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Qui",
+    "shortName": "An Qui"
+  },
+  {
+    "code": "81115102",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Hải",
+    "shortName": "Thạnh Hải"
+  },
+  {
+    "code": "81115103",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thạnh Phong",
+    "shortName": "Thạnh Phong"
+  },
+  {
+    "code": "81701036",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Long Đức",
+    "shortName": "Long Đức"
+  },
+  {
+    "code": "81701037",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trà Vinh",
+    "shortName": "Trà Vinh"
+  },
+  {
+    "code": "81701038",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Nguyệt Hóa",
+    "shortName": "Nguyệt Hóa"
+  },
+  {
+    "code": "81701039",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Hòa Thuận",
+    "shortName": "Hòa Thuận"
+  },
+  {
+    "code": "81703040",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Trường",
+    "shortName": "An Trường"
+  },
+  {
+    "code": "81703041",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân An",
+    "shortName": "Tân An"
+  },
+  {
+    "code": "81703042",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Càng Long",
+    "shortName": "Càng Long"
+  },
+  {
+    "code": "81703043",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhị Long",
+    "shortName": "Nhị Long"
+  },
+  {
+    "code": "81703044",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Bình Phú",
+    "shortName": "Bình Phú"
+  },
+  {
+    "code": "81705045",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Song Lộc",
+    "shortName": "Song Lộc"
+  },
+  {
+    "code": "81705046",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Châu Thành",
+    "shortName": "Châu Thành"
+  },
+  {
+    "code": "81705047",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hưng Mỹ",
+    "shortName": "Hưng Mỹ"
+  },
+  {
+    "code": "81705048",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hòa Minh",
+    "shortName": "Hòa Minh"
+  },
+  {
+    "code": "81705049",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hòa",
+    "shortName": "Long Hòa"
+  },
+  {
+    "code": "81707050",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cầu Kè",
+    "shortName": "Cầu Kè"
+  },
+  {
+    "code": "81707051",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phong Thạnh",
+    "shortName": "Phong Thạnh"
+  },
+  {
+    "code": "81707052",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Phú Tân",
+    "shortName": "An Phú Tân"
+  },
+  {
+    "code": "81707053",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tam Ngãi",
+    "shortName": "Tam Ngãi"
+  },
+  {
+    "code": "81709054",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hòa",
+    "shortName": "Tân Hòa"
+  },
+  {
+    "code": "81709055",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hùng Hòa",
+    "shortName": "Hùng Hòa"
+  },
+  {
+    "code": "81709056",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tiểu Cần",
+    "shortName": "Tiểu Cần"
+  },
+  {
+    "code": "81709057",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tập Ngãi",
+    "shortName": "Tập Ngãi"
+  },
+  {
+    "code": "81711058",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Mỹ Long",
+    "shortName": "Mỹ Long"
+  },
+  {
+    "code": "81711059",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Vinh Kim",
+    "shortName": "Vinh Kim"
+  },
+  {
+    "code": "81711060",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Cầu Ngang",
+    "shortName": "Cầu Ngang"
+  },
+  {
+    "code": "81711061",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Nhị Trường",
+    "shortName": "Nhị Trường"
+  },
+  {
+    "code": "81711062",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hiệp Mỹ",
+    "shortName": "Hiệp Mỹ"
+  },
+  {
+    "code": "81713063",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Lưu Nghiệp Anh",
+    "shortName": "Lưu Nghiệp Anh"
+  },
+  {
+    "code": "81713064",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đại An",
+    "shortName": "Đại An"
+  },
+  {
+    "code": "81713065",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Hàm Giang",
+    "shortName": "Hàm Giang"
+  },
+  {
+    "code": "81713066",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Trà Cú",
+    "shortName": "Trà Cú"
+  },
+  {
+    "code": "81713067",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hiệp",
+    "shortName": "Long Hiệp"
+  },
+  {
+    "code": "81713068",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tập Sơn",
+    "shortName": "Tập Sơn"
+  },
+  {
+    "code": "81715072",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Thành",
+    "shortName": "Long Thành"
+  },
+  {
+    "code": "81715073",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đông Hải",
+    "shortName": "Đông Hải"
+  },
+  {
+    "code": "81715074",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Vĩnh",
+    "shortName": "Long Vĩnh"
+  },
+  {
+    "code": "81715075",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Đôn Châu",
+    "shortName": "Đôn Châu"
+  },
+  {
+    "code": "81715076",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Ngũ Lạc",
+    "shortName": "Ngũ Lạc"
+  },
+  {
+    "code": "81716069",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Duyên Hải",
+    "shortName": "Duyên Hải"
+  },
+  {
+    "code": "81716070",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Trường Long Hòa",
+    "shortName": "Trường Long Hòa"
+  },
+  {
+    "code": "81716071",
+    "parentCode": "30",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Hữu",
+    "shortName": "Long Hữu"
+  },
+  {
+    "code": "80301089",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Cao Lãnh",
+    "shortName": "Cao Lãnh"
+  },
+  {
+    "code": "80301090",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Mỹ Ngãi",
+    "shortName": "Mỹ Ngãi"
+  },
+  {
+    "code": "80301091",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Mỹ Trà",
+    "shortName": "Mỹ Trà"
+  },
+  {
+    "code": "80303098",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Sa Đéc",
+    "shortName": "Sa Đéc"
+  },
+  {
+    "code": "80305058",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hồng",
+    "shortName": "Tân Hồng"
+  },
+  {
+    "code": "80305059",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Thành",
+    "shortName": "Tân Thành"
+  },
+  {
+    "code": "80305060",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tân Hộ Cơ",
+    "shortName": "Tân Hộ Cơ"
+  },
+  {
+    "code": "80305061",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Phước",
+    "shortName": "An Phước"
+  },
+  {
+    "code": "80307064",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "ward",
+    "officialName": "Phường Thường Lạc",
+    "shortName": "Thường Lạc"
+  },
+  {
+    "code": "80307065",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Thường Phước",
+    "shortName": "Thường Phước"
+  },
+  {
+    "code": "80307066",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Khánh",
+    "shortName": "Long Khánh"
+  },
+  {
+    "code": "80307067",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Long Phú Thuận",
+    "shortName": "Long Phú Thuận"
+  },
+  {
+    "code": "80309068",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã An Hoà",
+    "shortName": "An Hoà"
+  },
+  {
+    "code": "80309069",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tam Nông",
+    "shortName": "Tam Nông"
+  },
+  {
+    "code": "80309070",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Phú Thọ",
+    "shortName": "Phú Thọ"
+  },
+  {
+    "code": "80309071",
+    "parentCode": "31",
+    "level": 2,
+    "kind": "commune",
+    "officialName": "Xã Tràm Chim",
+    "shortName": "Tràm Chim"
+  }
+]

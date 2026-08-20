@@ -17,8 +17,10 @@ Cụm Partner quản lý:
 - điều khoản thanh toán và tài khoản công nợ khi Accounting được cài;
 - giao diện danh sách, tạo mới, chi tiết, archive/restore và thiết lập kế toán.
 
-Country và state vẫn là text. Email và VAT không bị ép unique. Mail, chatter,
-activity, danh mục địa lý và cơ chế record rule của Odoo không thuộc phạm vi này.
+Country và đơn vị hành chính nay tham chiếu module `address`; `divisionText` và
+input text cũ chỉ là fallback tương thích khi catalog của quốc gia chưa được cài.
+Email và VAT không bị ép unique. Mail, chatter, activity và cơ chế record rule của
+Odoo không thuộc phạm vi này.
 
 ## Thiết kế module
 
@@ -95,9 +97,11 @@ không được dùng làm định danh đăng nhập và không bị ép unique
 
 ### Address và default address
 
-Mỗi Address thuộc đúng một Partner và không được chuyển chủ sau khi tạo. `street`,
-`city` và `country` là bắt buộc. Khi `isDefault` được chọn, service ghi mapping
-`AddressDefault` trong cùng transaction với Address.
+Mỗi Address thuộc đúng một Partner và không được chuyển chủ sau khi tạo. Storage
+canonical dùng `street1`, `street2`, `locality`, `postalCode`, `countryId` và
+`divisionId`. Policy của Country quyết định các cấp địa giới bắt buộc; Division
+phải thuộc catalog đang hoạt động của Country. Khi `isDefault` được chọn, service
+ghi mapping `AddressDefault` trong cùng transaction với Address.
 
 ```mermaid
 sequenceDiagram
@@ -226,5 +230,5 @@ không an toàn cạnh tranh.
   Branch không được mô hình hóa bằng `Partner.parentId`.
 - Sale, Purchase, POS và Accounting tham chiếu Partner/Address/Role qua các interface
   trên thay vì bổ sung field ngược vào core.
-- Danh mục country/state có thể được port sau bằng module riêng và bridge, không cần
-  thay đổi ý nghĩa Partner.
+- Catalog Country/Division được mở rộng bằng bundle ISO trong cùng module `address`;
+  không tạo một module source cho mỗi quốc gia.

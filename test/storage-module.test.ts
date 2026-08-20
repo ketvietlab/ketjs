@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { bootApp, bootWorker, callFn, defineApp, localStorage, namespacedStorage } from 'ketjs'
 import { company, partner, storage as storageModule } from 'ketsuite'
+import { address } from 'ketsuite'
 
 test('storage module: upload, safe download, deduplication and queued GC work end to end', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-storage-module-'))
@@ -12,7 +13,7 @@ test('storage module: upload, safe download, deduplication and queued GC work en
   const storageDir = join(dir, 'objects')
   const app = defineApp({
     name: 'storageapp',
-    modules: [partner, company, storageModule],
+    modules: [address, partner, company, storageModule],
     worker: { queues: { maintenance: 1 } },
     serve: {
       bootstrap: ['storage'],
@@ -106,7 +107,7 @@ test('storage module: a stranger sees only attachments explicitly marked public'
   const storageDir = join(dir, 'objects')
   const app = defineApp({
     name: 'publicfiles',
-    modules: [partner, company, storageModule],
+    modules: [address, partner, company, storageModule],
     serve: {
       bootstrap: ['storage'],
       sessions: { anonymous: { company: 'acme' } },

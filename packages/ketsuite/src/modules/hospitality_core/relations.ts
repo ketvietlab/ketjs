@@ -2,6 +2,8 @@ import type { RelationDef } from 'ketjs'
 
 export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.Property': {
+    countryRef: { belongsTo: 'address.Country', by: 'countryId' },
+    divisionRef: { belongsTo: 'address.Division', by: 'divisionId' },
     buildings: { hasMany: 'hospitality_core.Building', by: 'propertyId' },
     floors: { hasMany: 'hospitality_core.Floor', by: 'propertyId' },
     roomTypes: { hasMany: 'hospitality_core.RoomType', by: 'propertyId' },

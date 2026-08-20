@@ -182,6 +182,13 @@ export const companyFormScreen = (
       section({
         title: _('company_backend.detail.identity'),
         description: _('company_backend.detail.identityHint'),
+        actions: existing
+          ? linkButton({
+              label: _('company_backend.action.manageAddress'),
+              href: localized(`/admin/partners/${row.partnerId}`, locale),
+              variant: 'secondary',
+            })
+          : undefined,
         body: surface({
           body: recordForm({
             action: localized(existing ? `/admin/companies/${row.id}` : '/admin/companies/new', locale),
