@@ -25,9 +25,9 @@ export const addCalendarDays = (key: string, count: number): string => {
   return new Date(Date.UTC(year!, month! - 1, day! + count)).toISOString().slice(0, 10)
 }
 
-export const zonedMidnight = (key: string, timezone: string): Date => {
+export const zonedDateTime = (key: string, hour: number, minute: number, timezone: string): Date => {
   const [year, month, day] = key.split('-').map(Number)
-  const desired = Date.UTC(year!, month! - 1, day!)
+  const desired = Date.UTC(year!, month! - 1, day!, hour, minute)
   let guess = desired
   for (let attempt = 0; attempt < 2; attempt++) {
     const actual = partsIn(new Date(guess), timezone, true)
@@ -43,6 +43,8 @@ export const zonedMidnight = (key: string, timezone: string): Date => {
   }
   return new Date(guess)
 }
+
+export const zonedMidnight = (key: string, timezone: string): Date => zonedDateTime(key, 0, 0, timezone)
 
 export const calendarRange = (
   value: string | null | undefined,

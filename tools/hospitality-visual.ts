@@ -2,7 +2,7 @@
 // The target must be an explicit, new SQLite file; this tool never replaces data.
 
 import { existsSync } from 'node:fs'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import { bootWorker, callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter } from 'ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
@@ -18,8 +18,9 @@ await migrateOne(adapter, manifest)
 registerFunctions(modules)
 
 const scope = { company: 'default', companies: ['default'], branches: null }
+let visualActor: string | null = null
 const call = async (name: string, args: Record<string, unknown>) => {
-  const result = await callFn(name, args, { adapter, manifest, scope })
+  const result = await callFn(name, args, { adapter, manifest, scope, actor: visualActor })
   const value = result.value as { ok?: boolean; errors?: unknown }
   if (value?.ok === false) throw new Error(`${name}: ${JSON.stringify(value.errors)}`)
   return result.value
@@ -47,6 +48,7 @@ try {
     defaultCompanyId: 'default',
     superuser: true,
   })
+  visualActor = 'visual-admin'
   await call('user.grantCompany', {
     id: 'visual-admin:default',
     userId: 'visual-admin',
@@ -365,6 +367,67 @@ try {
     roomId: '104',
     assignmentId: 'assignment-long-stay',
     at: '2026-07-01T14:00:00.000Z',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-binh',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-binh',
+    type: 'cccd',
+    number: '079201004201',
+    fullName: 'Trần Gia Bình',
+    dateOfBirth: '1988-04-20T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-chi',
+    stayId: 'res-depart:stay',
+    partnerId: 'guest-chi',
+    type: 'passport',
+    number: 'P8842001',
+    fullName: 'Lê Thùy Chi',
+    dateOfBirth: '1992-09-12T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  await call('hospitality_core.addStayGuest', {
+    id: 'res-house:companion',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-an',
+    displayName: 'Nguyễn Minh An',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-an',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-an',
+    type: 'cccd',
+    number: '079202007530',
+    fullName: 'Nguyễn Minh An',
+    dateOfBirth: '1995-11-08T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  const worker = await bootWorker(ketsuite, {
+    env: { KET_SQLITE: path, KET_COMPANY: 'default', KET_QUEUE_NOTIFY: '0' },
+    log: () => {},
+  })
+  try {
+    await worker.drain()
+  } finally {
+    await worker.close()
+  }
+  await call('hospitality_core.recordStayNoticeSubmission', {
+    id: 'res-house:stay:notice:res-house:guest',
+    reason: 'business',
+    channel: 'online',
+    evidenceRef: 'DVC-4201',
+  })
+  await call('hospitality_core.confirmStayNotice', {
+    id: 'res-house:stay:notice:res-house:guest',
+    receiptRef: 'DVC-4201',
+  })
+  await call('hospitality_core.recordStayNoticeSubmission', {
+    id: 'res-depart:stay:notice:res-depart:guest',
+    reason: 'tourism',
+    channel: 'vneid',
+    evidenceRef: 'VNEID-8842',
   })
   await call('hospitality_core.saveExtraLine', {
     id: 'extra-minibar',
