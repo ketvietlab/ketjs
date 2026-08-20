@@ -14,7 +14,7 @@ export default defineModule({
   menus: {
     attendance: {
       label: 'menu.app',
-      icon: 'clock',
+      icon: 'calendar',
       path: '/admin/attendance',
       sequence: 41,
       needs: 'attendance.period.report',
@@ -28,7 +28,7 @@ export default defineModule({
     },
     'attendance.mine': {
       label: 'menu.mine',
-      icon: 'clock',
+      icon: 'check-circle',
       path: '/my/work',
       sequence: 42,
       needs: 'attendance.punch.self',

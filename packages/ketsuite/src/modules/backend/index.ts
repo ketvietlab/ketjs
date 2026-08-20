@@ -80,6 +80,7 @@ export {
   definitionList,
   actionButton,
   code,
+  qrCode,
   inline,
   button,
   linkButton,
