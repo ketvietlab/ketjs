@@ -1,11 +1,14 @@
 # Odoo 19 collaboration port plan
 
-Status: implementation in progress — PR 0 through PR 4 complete on the port branch
+Status: implemented and verified — required PR 0 through PR 7 acceptance is
+complete; the PR 8 optional-integration disposition is recorded
 
 Baseline:
 
 - source: Odoo 19 Community semantics and data model
-- target: KetSuite at `origin/develop` commit `10eb9dda7f679e4b19cdacd5cca0e1574f926d77`
+- original target baseline: KetSuite at `origin/develop` commit
+  `10eb9dda7f679e4b19cdacd5cca0e1574f926d77`
+- final integration baseline: the current `origin/develop` at PR publication
 - worktree: `/Users/kieuduy/dev/ketjs-odoo-collaboration-plan`
 - branch: `codex/odoo-collaboration-port-plan`
 
@@ -15,6 +18,11 @@ owns accountable follow-up, Calendar owns timed events and attendees, and Email 
 a transport for messages and notifications. KetSuite should preserve those
 boundaries while keeping its own explicit module, effect, permission and durable
 job contracts.
+
+The implemented component and sequence diagrams are in
+[the collaboration design document](08-odoo-collaboration-design.md). Production
+snapshot/delta/freeze operations are in
+[the cutover runbook](07-odoo-collaboration-cutover.md).
 
 ## 1. Scope
 
