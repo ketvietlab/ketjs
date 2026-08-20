@@ -138,6 +138,9 @@ const renderUser = async (
     sessionRows(ctx, url, req, id),
   ])
   if (!row) return text(_('user_backend.error.notFound'), { status: 404 })
+  const externalIdentities = await ctx.joint(url, req, 'user_backend:user.external-identities', {
+    userId: id,
+  })
   return document(
     ctx,
     url,
@@ -146,7 +149,12 @@ const renderUser = async (
     userFormScreen(
       _,
       row,
-      { ...options, sessions, ...state },
+      {
+        ...options,
+        sessions,
+        ...state,
+        integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
+      },
       await frameFor(ctx, url, req),
       localeSuffix(url),
     ),
@@ -653,6 +661,8 @@ export const routes: Record<string, RouteEntry> = {
           await sessionRows(ctx, url, req, row.id),
           await frameFor(ctx, url, req),
           localeSuffix(url),
+          undefined,
+          await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
         ),
       )
     },
@@ -703,6 +713,7 @@ export const routes: Record<string, RouteEntry> = {
             await frameFor(ctx, url, req),
             localeSuffix(url),
             translatedErrors(ctx, url, req, result),
+            await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
           ),
         )
       }
