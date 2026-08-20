@@ -2636,6 +2636,29 @@
     [data-ui="record-toggle"] {
       font-size: var(--admin-size-xs);
     }
+    [data-ui="record-navigation"] {
+      padding-inline: var(--admin-gap-sm);
+    }
+    [data-ui="record-navigation"] [data-ui="tabs"] {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: visible;
+    }
+    [data-ui="record-navigation"] [data-ui="tabs"]:has(> [data-ui="tab"]:nth-child(3)) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    [data-ui="record-navigation"] [data-ui="tab"] {
+      gap: 0;
+      justify-content: center;
+      padding-inline: var(--admin-gap-xs);
+      font-size: var(--admin-size-xs);
+      line-height: 1.15;
+      text-align: center;
+      white-space: normal;
+    }
+    [data-ui="record-navigation"] [data-ui="tab"] > span {
+      display: none;
+    }
     [data-ui="record-body"] {
       padding: var(--admin-gap);
     }

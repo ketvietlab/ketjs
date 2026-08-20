@@ -232,6 +232,21 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.match(productHtml, /action="\/admin\/products\/tpl\?tab=general&amp;lang=vi"/)
   assert.doesNotMatch(productHtml, /data-ui="media" data-state="ready"/)
 
+  const invalidDetailSave = await e2e.client.post(
+    '/admin/products/tpl?tab=general&lang=vi',
+    new URLSearchParams({
+      name: 'Tên không được lưu dở dang',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '999.00',
+      isStorable: '0',
+      tracking: 'serial',
+    }),
+    { headers: { accept: 'application/json', 'x-ket-partial': 'product-detail' } },
+  )
+  assert.equal(invalidDetailSave.status, 422)
+  assert.equal(((await call<Row>('product.getTemplate', { id: 'tpl' })).value as Row).name, 'Áo thun')
+
   const partialSave = await e2e.client.post(
     '/admin/products/tpl?tab=general&lang=vi',
     new URLSearchParams({

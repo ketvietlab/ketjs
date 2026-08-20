@@ -1,17 +1,28 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import {
+  callFn,
+  compose,
+  localStorage,
+  migrateOne,
+  namespacedStorage,
+  registerFunctions,
+  sqliteAdapter,
+} from 'ketjs'
 import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const runtime = mkdtempSync(join(tmpdir(), 'ketjs-product-list-e2e-'))
 const database = join(runtime, 'product.sqlite')
+const storage = join(runtime, 'storage')
 const modules = [...ketsuite.modules, ...(ketsuite.theme ? [ketsuite.theme] : [])]
 const manifest = compose(modules)
 const adapter = sqliteAdapter(database)
+const objects = namespacedStorage(localStorage({ dir: storage }), ketsuite.name)
 const scope = {
   company: 'default',
   companies: ['default'],
@@ -23,6 +34,42 @@ const call = async (name, input) => {
   const result = await callFn(name, input, { adapter, manifest, scope })
   if (result.value?.ok === false) throw new Error(`${name}: ${JSON.stringify(result.value.errors)}`)
   return result.value
+}
+
+const attachment = async ({ id, source, resId, alt, primary = false, sequence }) => {
+  const bytes = readFileSync(source)
+  const attachmentId = `${id}-attachment`
+  const checksum = createHash('sha256').update(bytes).digest('hex')
+  const storeKey = `blobs/default/${checksum.slice(0, 2)}/${checksum}`
+  await objects.put(
+    storeKey,
+    (async function* () {
+      yield bytes
+    })(),
+    { type: 'image/png', size: bytes.length },
+  )
+  await call('storage.createAttachment', {
+    id: attachmentId,
+    name: `${id}.png`,
+    resModel: 'product.Template',
+    resId,
+    resField: 'media',
+    kind: 'stored',
+    storeKey,
+    mimetype: 'image/png',
+    size: bytes.length,
+    checksum,
+    public: false,
+    createdAt: '2026-08-20T08:00:00.000Z',
+  })
+  await call('product_media.attachMedia', {
+    id,
+    attachmentId,
+    templateId: resId,
+    alt,
+    primary,
+    sequence,
+  })
 }
 
 const seed = async () => {
@@ -41,11 +88,18 @@ const seed = async () => {
     partnerId: 'ket-company',
     currency: 'VND',
   })
+  await call('partner.savePartner', {
+    id: 'product-list-admin-partner',
+    kind: 'person',
+    name: 'Quản trị sản phẩm',
+    email: 'product-admin@ket.local',
+  })
   await call('user.createUser', {
     id: 'product-list-admin',
     login: 'admin',
     password: 'product-demo',
     name: 'Quản trị sản phẩm',
+    partnerId: 'product-list-admin-partner',
     defaultCompanyId: 'default',
     defaultBranchId: 'root:default',
     superuser: true,
@@ -88,6 +142,45 @@ const seed = async () => {
     name: 'Cam cảnh báo',
     sequence: 20,
   })
+  await call('product.saveTemplate', {
+    id: 'tpl-review',
+    name: 'Áo khoác vận hành KETSUITE',
+    type: 'goods',
+    categoryId: 'workwear',
+    uomId: 'unit',
+    description: 'Sản phẩm fixture dùng để kiểm tra đủ ba tab chi tiết.',
+    listPrice: '1299000',
+    saleOk: true,
+    purchaseOk: true,
+  })
+  await call('stock.configureProduct', {
+    templateId: 'tpl-review',
+    isStorable: true,
+    tracking: 'lot',
+  })
+  await call('product.saveVariant', {
+    id: 'variant-review',
+    templateId: 'tpl-review',
+    defaultCode: 'JACKET-REVIEW',
+    barcode: '8938500000017',
+    weight: '0.65',
+    volume: '0.004',
+  })
+  await attachment({
+    id: 'media-primary',
+    source: join(root, 'e2e/product_backend/fixtures/product-primary.png'),
+    resId: 'tpl-review',
+    alt: 'Áo khoác vận hành màu xanh',
+    primary: true,
+    sequence: 10,
+  })
+  await attachment({
+    id: 'media-secondary',
+    source: join(root, 'e2e/product_backend/fixtures/product-secondary.png'),
+    resId: 'tpl-review',
+    alt: 'Áo khoác vận hành màu cam',
+    sequence: 20,
+  })
 
   for (let index = 1; index <= 32; index += 1) {
     const suffix = String(index).padStart(2, '0')
@@ -116,6 +209,7 @@ const child = spawn(
     env: {
       ...process.env,
       KET_SQLITE: database,
+      KET_STORAGE_DIR: storage,
       KET_SECRET: 'product-list-e2e-secret',
       KET_LOCALE: 'vi',
       KET_FALLBACK_LOCALE: 'vi',
