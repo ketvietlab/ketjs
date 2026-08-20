@@ -65,6 +65,11 @@ try {
       markers: ['picking-type-create-form', 'record-workspace', 'Loại hoạt động đã cấu hình'],
     },
     {
+      label: 'Route list',
+      path: '/admin/stock-routes?lang=vi',
+      markers: ['stock-route-create-form', 'record-workspace', 'Tuyến cung ứng đã cấu hình'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],

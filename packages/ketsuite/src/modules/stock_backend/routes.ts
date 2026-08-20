@@ -11,6 +11,7 @@ import { locationsScreen } from './locations-screen.tsx'
 import { lotDetailScreen } from './lot-screen.tsx'
 import { lotsScreen } from './lots-screen.tsx'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
+import { stockRoutesScreen } from './stock-routes-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
@@ -61,6 +62,21 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
 }
 const selectionOptions = (_: Translator, group: string, values: readonly string[]) =>
   values.map((value) => ({ value, label: selectionLabel(_, group, value) }))
+
+const localizedGeneratedRouteName = (_: Translator, row: AnyRow): string => {
+  const raw = String(row.name)
+  const separator = raw.lastIndexOf(': ')
+  const suffix = separator >= 0 ? raw.slice(separator + 2) : ''
+  const group = String(row.id).endsWith(':receipt-route')
+    ? 'receptionSteps'
+    : String(row.id).endsWith(':delivery-route')
+      ? 'deliverySteps'
+      : ''
+  const generated =
+    (group === 'receptionSteps' && ['one_step', 'two_steps', 'three_steps'].includes(suffix)) ||
+    (group === 'deliverySteps' && ['ship_only', 'pick_ship', 'pick_pack_ship'].includes(suffix))
+  return generated ? `${raw.slice(0, separator)}: ${selectionLabel(_, group, suffix)}` : raw
+}
 
 const completeLocationName = (row: AnyRow, nameById: Map<string, string>) =>
   String(row.parentPath)
@@ -844,33 +860,37 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(inLocale(url, '/admin/stock-routes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('stock.listRoutes', {}, url, req)) as AnyRow[]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.routes',
-        rows.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: 'route',
-          detail: String(row.sequence),
-          href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
-        })),
-        [
-          surface({
-            body: recordForm({
+      const [rows, rules] = (await Promise.all([
+        ctx.call('stock.listRoutes', {}, url, req),
+        ctx.call('stock.listRules', {}, url, req),
+      ])) as [AnyRow[], AnyRow[]]
+      const ruleCountByRoute = new Map<string, number>()
+      for (const rule of rules) {
+        const routeId = String(rule.routeId)
+        ruleCountByRoute.set(routeId, (ruleCountByRoute.get(routeId) ?? 0) + 1)
+      }
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.routes'),
+          head: await ctx.styles(req),
+          body: stockRoutesScreen(
+            _,
+            {
+              rows: rows.map((row) => ({
+                id: String(row.id),
+                name: localizedGeneratedRouteName(_, row),
+                sequence: Number(row.sequence),
+                ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
+                href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
+              })),
               action: inLocale(url, '/admin/stock-routes'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name'), required: true },
-                { name: 'sequence', label: _('stock_backend.field.sequence'), type: 'number', value: 10 },
-              ],
-            }),
-          }),
-        ],
-      )
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/stock-routes/{id}':
