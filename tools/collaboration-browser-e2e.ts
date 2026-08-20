@@ -219,6 +219,7 @@ const journalsEvidenceDir = resolve('docs/assets/accounting-journals')
 const taxesEvidenceDir = resolve('docs/assets/accounting-taxes')
 const paymentTermsEvidenceDir = resolve('docs/assets/accounting-payment-terms')
 const trialBalanceEvidenceDir = resolve('docs/assets/accounting-trial-balance')
+const generalLedgerEvidenceDir = resolve('docs/assets/accounting-general-ledger')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -242,6 +243,7 @@ try {
   await mkdir(taxesEvidenceDir, { recursive: true })
   await mkdir(paymentTermsEvidenceDir, { recursive: true })
   await mkdir(trialBalanceEvidenceDir, { recursive: true })
+  await mkdir(generalLedgerEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -398,6 +400,11 @@ try {
       name: 'accounting-trial-balance',
       path: '/admin/trial-balance?lang=vi',
       ready: `document.querySelector('#trial-balance-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-general-ledger',
+      path: '/admin/general-ledger?accountId=account-bank-collab&lang=vi',
+      ready: `document.querySelector('#general-ledger-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -2566,6 +2573,73 @@ try {
         await evaluate(cdp, `scrollTo(0, 0)`)
         if (!noArtifacts)
           await capture(cdp, join(trialBalanceEvidenceDir, `trial-balance-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-general-ledger') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#general-ledger-filter-form')),
+        rows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+        entry: document.querySelector('[data-ui="table"]')?.textContent.includes('Khách hàng thanh toán một phần'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#general-ledger-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          rows: true,
+          entry: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(generalLedgerEvidenceDir, 'general-ledger-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Account movements') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(generalLedgerEvidenceDir, 'general-ledger-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(generalLedgerEvidenceDir, `general-ledger-${lang}-mobile.png`))
       }
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,

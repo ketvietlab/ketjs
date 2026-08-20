@@ -169,6 +169,11 @@ try {
       markers: ['record-workspace', 'trial-balance-filter-form', 'Tổng Nợ'],
     },
     {
+      label: 'Accounting general ledger',
+      path: '/admin/general-ledger?accountId=account-bank-collab&lang=vi',
+      markers: ['record-workspace', 'general-ledger-filter-form', 'Khách hàng thanh toán một phần'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
