@@ -154,10 +154,16 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
   ]
   for (const [path, expected] of pages) {
     const response = await e2e.client.get(path, { headers: { accept: 'text/html' } })
-    assert.equal(response.status, 200, path)
     const html = await response.text()
+    assert.equal(response.status, 200, `${path}: ${html}`)
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /account_backend\.[A-Za-z]/, path)
+    if (path === '/admin/customer-invoices/invoice-1') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /data-ui="record-aside"/)
+      assert.match(html, /data-island="mail\.chatter"/)
+      assert.match(html, /data-island="activity\.record"/)
+    }
   }
 
   const english = await e2e.client.get('/admin/accounts?lang=en', {

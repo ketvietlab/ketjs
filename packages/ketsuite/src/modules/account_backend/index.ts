@@ -20,11 +20,11 @@ import {
   accountingDashboard,
   entityScreen,
   labelOf,
-  moveDetailScreen,
   movesScreen,
   optionsOf,
   reportScreen,
 } from './screens.ts'
+import { moveDetailScreen } from './move-detail-screen.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -62,6 +62,10 @@ const resultRedirect = (result: unknown, ok: string, fail = ok) =>
     : seeOther(`${fail}${fail.includes('?') ? '&' : '?'}invalid=1`)
 
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
+const localeSuffix = (url: URL) => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -280,7 +284,7 @@ const accountMoveRoute =
                 url,
                 req,
               )
-      return resultRedirect(result, url.pathname)
+      return resultRedirect(result, `${url.pathname}${localeSuffix(url)}`)
     }
     if (req.method !== 'GET') return text('GET or POST', { status: 405 })
     const [move, accounts] = (await Promise.all([
@@ -289,12 +293,27 @@ const accountMoveRoute =
     ])) as [AnyRow | null, AnyRow[]]
     if (!move)
       return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+    const lang = ctx.localeOf(url, req)
+    const collaboration = await ctx.joint(url, req, 'account_backend:move.collaboration', {
+      resModel: 'account.Move',
+      resId: String(move.id),
+      lang,
+    })
     return document(
       ctx,
       url,
       req,
       String(move.name),
-      (_, tr, shell) => moveDetailScreen(tr, move, (move.lines as AnyRow[]) ?? [], shell, choices(accounts)),
+      (_, tr, shell) =>
+        moveDetailScreen(
+          tr,
+          move,
+          (move.lines as AnyRow[]) ?? [],
+          shell,
+          choices(accounts),
+          `${url.pathname}${localeSuffix(url)}`,
+          collaboration,
+        ),
       false,
     )
   }
@@ -307,6 +326,12 @@ export default defineModule({
   depends: ['account', 'backend'],
   install: 'auto',
   app: true,
+  joints: {
+    'move.collaboration': {
+      props: { resModel: 'text', resId: 'id', lang: 'text' },
+      multiple: true,
+    },
+  },
   title: 'Kế toán trong quản trị',
   summary: 'Giao diện sổ cái, hoá đơn, thanh toán và báo cáo.',
   category: 'Tài chính',
@@ -1234,6 +1259,9 @@ const vi: Record<string, string> = {
   'partnerStatement.title': 'Sổ đối tác',
   'lines.title': 'Dòng bút toán',
   'lines.add': 'Thêm dòng bút toán',
+  'move.kicker': 'Chứng từ kế toán',
+  'move.actions': 'Hành động trên chứng từ',
+  'move.collaboration': 'Trao đổi và hoạt động của chứng từ',
   'terms.lines': 'Số mốc thanh toán',
   'action.create': 'Tạo mới',
   'action.createTerm': 'Tạo điều khoản',
@@ -1344,6 +1372,9 @@ const en: Record<string, string> = {
   'partnerStatement.title': 'Partner ledger',
   'lines.title': 'Journal items',
   'lines.add': 'Add journal item',
+  'move.kicker': 'Accounting document',
+  'move.actions': 'Document actions',
+  'move.collaboration': 'Document conversation and activities',
   'terms.lines': 'Due milestones',
   'action.create': 'Create',
   'action.createTerm': 'Create term',
