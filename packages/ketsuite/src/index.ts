@@ -94,6 +94,8 @@ export type {
 } from './modules/hospitality_core/types.ts'
 export { default as user } from './modules/user/index.ts'
 export { default as userBackend } from './modules/user_backend/index.ts'
+export { default as oauth } from './modules/oauth/index.ts'
+export { default as oauthBackend } from './modules/oauth_backend/index.ts'
 export { default as mail } from './modules/mail/index.ts'
 export { default as mailBackend } from './modules/mail_backend/index.ts'
 export { default as mailTransport } from './modules/mail_transport/index.ts'
@@ -115,6 +117,14 @@ export { default as odooCollaborationImport } from './modules/odoo_collaboration
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
 export { permittedFor } from './modules/user/roles.ts'
 export { resolveUserSession } from './modules/user/session-context.ts'
+export {
+  discoverOidc,
+  exchangeOidcCode,
+  oidcAuthorizationUrl,
+  OauthProtocolError,
+  pkceChallenge,
+  verifyOidcIdToken,
+} from './modules/oauth/protocol.ts'
 export { PARTNER_KINDS, PARTNER_ROLES, ADDRESS_USES } from './modules/partner/types.ts'
 export type { PartnerKind, PartnerRole, AddressUse } from './modules/partner/types.ts'
 export { PRODUCT_TYPES } from './modules/product/types.ts'
