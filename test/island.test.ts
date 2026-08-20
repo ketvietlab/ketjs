@@ -236,6 +236,29 @@ test('island manager: changed props update a controller or remount a plain view'
   assert.equal(disposed, 1, 'the replaced browser controller is disposed once')
 })
 
+test('island manager: duplicate identities remount and warn instead of preserving ambiguously', () => {
+  const factory = (props: IslandProps) => () => html`<b>${props.label}</b>`
+  const first = parseFragment(renderIsland('label', factory, { id: 'one', label: 'A' }, { key: ['id'] }))
+  const manager = createIslandManager(domHost(document), { label: factory })
+  manager.hydrate(first as never)
+  const oldIsland = first.querySelectorAll(ISLAND_TAG)[0]!
+  const markup = renderIsland('label', factory, { id: 'one', label: 'A' }, { key: ['id'] })
+  const next = parseFragment(markup + markup)
+  const warnings: string[] = []
+  const previousWarn = console.warn
+  console.warn = (message) => warnings.push(String(message))
+  try {
+    manager.reconcile(first as never, next as never)
+  } finally {
+    console.warn = previousWarn
+  }
+
+  assert.equal(first.querySelectorAll(ISLAND_TAG).length, 2)
+  assert.notEqual(first.querySelectorAll(ISLAND_TAG)[0], oldIsland)
+  assert.deepEqual(warnings.length, 1)
+  assert.match(warnings[0]!, /duplicate key.*remounting ambiguous instances/)
+})
+
 test('island: the server publishes a tenant-specific browser bootstrap and view runtime', async () => {
   const shell = defineTheme({
     name: 'island_shell',
@@ -270,6 +293,7 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     assert.match(bootstrapSource, /\/_ket\/asset\/website_search\/search\.mjs/)
     assert.match(bootstrapSource, /createIslandManager/)
     assert.match(bootstrapSource, /x-ket-navigation/)
+    assert.match(bootstrapSource, /navigation fragment contains unknown island/)
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)
