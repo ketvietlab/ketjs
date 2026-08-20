@@ -11,11 +11,14 @@ import {
   formCluster,
   formatMoney,
   framed,
+  icon,
+  linkButton,
   metric,
   mediaPanel,
   notice,
   person,
   recordForm,
+  recordWorkspace,
   scheduleBoard,
   section,
   stack,
@@ -200,6 +203,21 @@ export type ReservationRow = {
   state: string
   partner?: { name?: string } | null
   roomType?: { name?: string } | null
+}
+
+export type ReservationDetail = ReservationRow & {
+  propertyId: string
+  folioId: string
+  stayId?: string | null
+  bookingType: string
+  billingMode: string
+  rate: string | number
+  quantity: string | number
+  cancelReason?: string | null
+  createdAt: string
+  updatedAt: string
+  folio?: { code?: string; state?: string } | null
+  stay?: StayRow | null
 }
 
 export type ReservationQuote = {
@@ -2138,7 +2156,18 @@ const reservationColumns = (
   locale: string,
   timezone: string,
 ): Array<Column<ReservationRow>> => [
-  { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
+  {
+    key: 'code',
+    label: _('hospitality_core.col.code'),
+    cell: (row) =>
+      linkButton({
+        label: row.code,
+        href: `/admin/hospitality/reservations/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+        variant: 'tertiary',
+        size: 'compact',
+      }),
+    kind: 'identifier',
+  },
   {
     key: 'guest',
     label: _('hospitality_core.col.guest'),
@@ -2536,6 +2565,241 @@ export const reservationsScreen = (
               _('hospitality_core.screen.reservations.empty'),
               _('hospitality_core.screen.reservations.emptyHint'),
             ),
+      }),
+    ]),
+  )
+}
+
+const reservationDetailFeedback = (
+  _: Translator,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'checked-in')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.checkedIn'),
+      message: _('hospitality_core.reservation.feedback.checkedInHint'),
+      tone: 'positive',
+    })
+  if (status === 'checked-out')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.checkedOut'),
+      message: _('hospitality_core.reservation.feedback.checkedOutHint'),
+      tone: 'positive',
+    })
+  if (status === 'cancelled')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.cancelled'),
+      message: _('hospitality_core.reservation.feedback.cancelledHint'),
+      tone: 'warning',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const reservationDetailScreen = (
+  _: Translator,
+  reservation: ReservationDetail,
+  rooms: RoomRow[],
+  locale: string,
+  timezone: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult => {
+  const guest = guestName(reservation)
+  const room = reservation.stay?.currentRoom
+  const backHref = `/admin/hospitality/reservations?property=${encodeURIComponent(reservation.propertyId)}&lang=${encodeURIComponent(locale)}`
+  const action = `/admin/hospitality/reservations/${encodeURIComponent(reservation.id)}?lang=${encodeURIComponent(locale)}`
+  const actions: TemplateResult[] = []
+
+  if (reservation.state === 'confirmed' && reservation.stayId) {
+    actions.push(
+      section({
+        title: _('hospitality_core.reservation.action.checkIn'),
+        description: _('hospitality_core.reservation.action.checkInHint'),
+        body: rooms.length
+          ? recordForm({
+              action,
+              method: 'post',
+              submit: _('hospitality_core.reservation.action.checkIn'),
+              submitVariant: 'primary',
+              hidden: { operation: 'check-in', lang: locale },
+              fields: [
+                {
+                  name: 'roomId',
+                  label: _('hospitality_core.reservation.field.room'),
+                  type: 'select',
+                  required: true,
+                  options: rooms.map((candidate) => ({
+                    value: candidate.id,
+                    label: `${candidate.code} · ${candidate.name}`,
+                  })),
+                },
+              ],
+            })
+          : emptyState(
+              _('hospitality_core.reservation.empty.availableRooms'),
+              _('hospitality_core.reservation.empty.availableRoomsHint'),
+            ),
+      }),
+    )
+  }
+
+  if (reservation.state === 'checked_in' && reservation.stayId) {
+    actions.push(
+      section({
+        title: _('hospitality_core.reservation.action.checkOut'),
+        description: _('hospitality_core.reservation.action.checkOutHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.reservation.action.checkOut'),
+          submitVariant: 'primary',
+          hidden: { operation: 'check-out', lang: locale },
+          fields: [],
+        }),
+      }),
+    )
+  }
+
+  if (reservation.state === 'draft' || reservation.state === 'confirmed') {
+    actions.push(
+      section({
+        title: _('hospitality_core.reservation.action.cancel'),
+        description: _('hospitality_core.reservation.action.cancelHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.reservation.action.cancel'),
+          submitVariant: 'destructive',
+          hidden: { operation: 'cancel', lang: locale },
+          fields: [
+            {
+              name: 'reason',
+              label: _('hospitality_core.reservation.field.cancelReason'),
+              type: 'textarea',
+              help: _('hospitality_core.reservation.field.cancelReasonHint'),
+            },
+          ],
+        }),
+      }),
+    )
+  }
+
+  return framed(
+    _,
+    _('hospitality_core.reservation.detail.title', { code: reservation.code }),
+    frame,
+    stack([
+      reservationDetailFeedback(_, status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.reservation.detail.kicker'),
+        title: reservation.code,
+        subtitle: guest,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(
+            _(`hospitality_core.reservationState.${reservation.state}`),
+            workflowTone(reservation.state),
+            reservation.state,
+          ),
+          badge(_(`hospitality_core.provider.${reservation.provider}`), 'neutral'),
+        ],
+        summary: [
+          {
+            id: 'room-type',
+            label: _('hospitality_core.col.roomType'),
+            value: reservation.roomType?.name ?? reservation.roomTypeId,
+          },
+          {
+            id: 'guests',
+            label: _('hospitality_core.col.guests'),
+            value: reservation.adults + reservation.children,
+          },
+          {
+            id: 'total',
+            label: _('hospitality_core.col.amount'),
+            value: formatMoney(_, reservation.amountTotal),
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.reservation.action.back'),
+          href: backHref,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.reservation.detail.stay'),
+            description: _('hospitality_core.reservation.detail.stayHint'),
+            body: definitionList({
+              title: reservation.code,
+              items: [
+                {
+                  key: 'guest',
+                  term: _('hospitality_core.reservation.field.guest'),
+                  value: guest,
+                },
+                {
+                  key: 'room',
+                  term: _('hospitality_core.reservation.field.room'),
+                  value: room?.name ?? room?.code ?? _('hospitality_core.reservation.value.unassigned'),
+                },
+                {
+                  key: 'check-in',
+                  term: _('hospitality_core.col.checkIn'),
+                  value: dateTime(reservation.checkIn, locale, timezone),
+                },
+                {
+                  key: 'check-out',
+                  term: _('hospitality_core.col.checkOut'),
+                  value: dateTime(reservation.checkOut, locale, timezone),
+                },
+                {
+                  key: 'booking-type',
+                  term: _('hospitality_core.reservation.field.bookingType'),
+                  value: _(`hospitality_core.bookingType.${reservation.bookingType}`),
+                },
+                {
+                  key: 'billing',
+                  term: _('hospitality_core.reservation.field.billingMode'),
+                  value: _(`hospitality_core.billing.${reservation.billingMode}`),
+                },
+                {
+                  key: 'rate',
+                  term: _('hospitality_core.reservation.field.rate'),
+                  value: formatMoney(_, reservation.rate),
+                },
+                {
+                  key: 'quantity',
+                  term: _('hospitality_core.reservation.quote.quantity'),
+                  value: String(reservation.quantity),
+                },
+                {
+                  key: 'folio',
+                  term: _('hospitality_core.reservation.field.folio'),
+                  value: reservation.folio?.code ?? reservation.folioId,
+                },
+                ...(reservation.cancelReason
+                  ? [
+                      {
+                        key: 'cancel-reason',
+                        term: _('hospitality_core.reservation.field.cancelReason'),
+                        value: reservation.cancelReason,
+                      },
+                    ]
+                  : []),
+              ],
+            }),
+          }),
+          ...actions,
+        ]),
       }),
     ]),
   )
