@@ -279,6 +279,11 @@ try {
       ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
+      name: 'lot-detail-chatter',
+      path: '/admin/lots/lot-collab?lang=vi',
+      ready: `document.querySelector('#lot-detail-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -314,6 +319,13 @@ try {
       ready: `document.querySelectorAll('[data-ui="content-card"]').length >= 4 && document.body.textContent.includes('Đã xử lý') && document.body.textContent.includes('Không định tuyến được') && document.body.textContent.includes('Đã bỏ qua')`,
     },
   ].filter((screen) => !onlyScreen || screen.name === onlyScreen)) {
+    if (screen.name === 'lot-detail-chatter')
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1920,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
     const started = performance.now()
     await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
     const navigationMs = await evaluate<number>(
@@ -968,6 +980,111 @@ try {
         false,
       )
     }
+    if (screen.name === 'lot-detail-chatter') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            aside: Boolean(document.querySelector('[data-ui="record-aside"]')),
+            editorIdle: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === true,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-detail-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            collaborationAtLeast32rem: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width >= 512,
+            collaborationAboutThird: (() => {
+              const aside = document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width
+              const sheet = document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width
+              const ratio = aside / (aside + sheet)
+              return ratio >= 0.31 && ratio <= 0.36
+            })(),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          aside: true,
+          editorIdle: true,
+          formRowsAtLeast28: true,
+          collaborationNarrower: true,
+          collaborationAtLeast32rem: true,
+          collaborationAboutThird: true,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          globalThis.__lotSaveNodes = {
+            chatter: document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: document.querySelector('[data-ui="sidebar-foot"]')
+          }
+          const form = document.querySelector('#lot-detail-form')
+          form.querySelector('[name="ref"]').value = 'NCC-LOT-84-BROWSER'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__lotSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__lotSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__lotSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            editorVisible: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === false,
+            savedReference: document.querySelector('#lot-detail-form [name="ref"]')?.value === 'NCC-LOT-84-BROWSER',
+            formReady: document.querySelector('#lot-detail-form')?.getAttribute('aria-busy') !== 'true'
+          })`,
+        ),
+        {
+          chatter: true,
+          activity: true,
+          sidebar: true,
+          editorVisible: true,
+          savedReference: true,
+          formReady: true,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#lot-detail-form')
+          const product = form.querySelector('[name="productId"]')
+          product.add(new Option('Missing product', 'missing-product'))
+          product.value = 'missing-product'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="danger"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__lotSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__lotSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__lotSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            editorError: Boolean(document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="danger"]')),
+            formReady: document.querySelector('#lot-detail-form')?.getAttribute('aria-busy') !== 'true'
+          })`,
+        ),
+        {
+          chatter: true,
+          activity: true,
+          sidebar: true,
+          editorError: true,
+          formReady: true,
+        },
+      )
+    }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -1079,6 +1196,13 @@ try {
       await waitFor(cdp, `document.body.textContent.includes('Sự kiện từ Browser E2E')`)
     }
     if (!noArtifacts) await capture(cdp, join(artifactDir, `${screen.name}.png`))
+    if (screen.name === 'lot-detail-chatter')
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
   }
 
   if (!noArtifacts)
@@ -1096,6 +1220,7 @@ try {
             'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
             'Warehouse configuration rendered Odoo 19 shipment-step radios, created a warehouse and rendered no Chatter',
             'Location configuration rendered complete names, created a child location and rendered no Chatter',
+            'Lot detail kept its collaboration column near one third of the large viewport and at least 32rem wide',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',
