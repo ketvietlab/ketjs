@@ -8,6 +8,7 @@ import type { IslandDefinition, IslandProps } from 'ketjs-view'
 export const islands: Record<string, IslandDefinition> = {
   'website.search': {
     props: { label: 'text?' },
+    key: [],
     client: 'search.mjs',
     view: (props: IslandProps) => {
       const open = signal(false)

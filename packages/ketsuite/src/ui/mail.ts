@@ -40,9 +40,9 @@ const props = { resModel: 'product.Template', resId: 'contract', lang: 'en' }
 
 /** Every conditional shape this browser component can emit, for the UI/CSS contract test. */
 export const mailContractCases = (): TemplateResult[] => [
-  createChatterView(runtime, props)(),
-  createChatterView(runtime, props, { status: 'error', error: 'Request failed' })(),
-  createChatterView(runtime, props, { status: 'ready' })(),
+  createChatterView(runtime, props).view(),
+  createChatterView(runtime, props, { status: 'error', error: 'Request failed' }).view(),
+  createChatterView(runtime, props, { status: 'ready' }).view(),
   createChatterView(runtime, props, {
     status: 'ready',
     composerKind: 'comment',
@@ -67,6 +67,6 @@ export const mailContractCases = (): TemplateResult[] => [
         },
       ],
     },
-  })(),
-  createInboxIndicatorView(runtime, { lang: 'en' }, 2)(),
+  }).view(),
+  createInboxIndicatorView(runtime, { lang: 'en' }, 2).view(),
 ]

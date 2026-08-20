@@ -1,10 +1,11 @@
 // @ts-nocheck Shared dependency-free browser/SSR address form view.
-const callApi = async (name, input) => {
+const callApi = async (name, input, signal) => {
   const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
+    signal,
   })
   const payload = await response.json()
   if (!response.ok || payload.ok === false)
@@ -27,13 +28,22 @@ export function createAddressFormView(runtime, props) {
   const divisionId = signal(string(address.divisionId))
   const loading = signal(false)
   const error = signal('')
+  let activeRequest = null
+  let disposed = false
 
-  const children = async (parentId) =>
-    callApi('address.listDivisionChildren', {
-      countryCode: countryCode(),
-      parentId: parentId || null,
-      limit: 1000,
-    })
+  const children = async (parentId) => {
+    activeRequest?.abort()
+    activeRequest = new AbortController()
+    return callApi(
+      'address.listDivisionChildren',
+      {
+        countryCode: countryCode(),
+        parentId: parentId || null,
+        limit: 1000,
+      },
+      activeRequest.signal,
+    )
+  }
 
   const chooseCountry = async (event) => {
     countryCode.set(event.currentTarget.value)
@@ -46,6 +56,7 @@ export function createAddressFormView(runtime, props) {
     try {
       provinces.set(await children(null))
     } catch (caught) {
+      if (disposed || caught?.name === 'AbortError') return
       error.set(caught instanceof Error ? caught.message : labels.loadError)
     } finally {
       loading.set(false)
@@ -63,6 +74,7 @@ export function createAddressFormView(runtime, props) {
     try {
       divisions.set(await children(selected))
     } catch (caught) {
+      if (disposed || caught?.name === 'AbortError') return
       error.set(caught instanceof Error ? caught.message : labels.loadError)
     } finally {
       loading.set(false)
@@ -76,7 +88,8 @@ export function createAddressFormView(runtime, props) {
     </label>
   `
 
-  return () => html`
+  return {
+    view: () => html`
     <form data-ui="record-form" data-address-form method="post" action=${props.action}>
       <div data-ui="form-grid">
         ${field(
@@ -164,5 +177,10 @@ export function createAddressFormView(runtime, props) {
         <button data-ui="action" data-variant="secondary" type="submit" disabled=${loading() || provinces().length === 0}>${props.submitLabel}</button>
       </div>
     </form>
-  `
+  `,
+    dispose: () => {
+      disposed = true
+      activeRequest?.abort()
+    },
+  }
 }

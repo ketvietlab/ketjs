@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { page, text } from 'ketjs'
+import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { viewerOf } from '../backend/routes.ts'
+import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import {
@@ -40,6 +41,7 @@ import type {
 import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
+  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
   menuFilter: url.searchParams.get('menu')?.trim() || null,
@@ -57,7 +59,7 @@ const document = async (
   body: TemplateResult,
 ) => {
   const lang = ctx.localeOf(url, req)
-  return page({ body: ctx.document({ lang, title, head: await ctx.styles(req), body }) })
+  return backendPage(ctx, req, { lang, title, body })
 }
 
 const propertyTimezone = async (

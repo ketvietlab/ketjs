@@ -96,6 +96,15 @@
     white-space: nowrap;
   }
 
+  [data-ui="sidebar-main"] {
+    display: flex;
+    min-block-size: 0;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
   [data-ui="sidebar-header"] {
     flex-shrink: 0;
     padding: 0.75rem 0.75rem 0.5rem;
@@ -1593,6 +1602,10 @@
    sidebar to a row but left its flexing navigation at desktop height, producing
    more than 500px of empty space above every mobile screen. */
 @media (max-width: 47.9375rem) {
+  [data-ui="sidebar-main"] {
+    display: contents;
+  }
+
   [data-ui="sidebar"],
   body > [data-ui="shell"] > [data-ui="sidebar"] {
     display: grid;

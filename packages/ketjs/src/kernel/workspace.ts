@@ -74,6 +74,9 @@ export function defineApp(spec: AppDeclaration): AppDeclaration {
   if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
   if (spec.headless && spec.theme) throw new Error(`app "${spec.name}" is headless but installs a theme`)
   if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
+  const pageRegion = spec.serve?.pages?.region
+  if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
+    throw new Error(`app "${spec.name}" declares invalid page region "${pageRegion}"`)
   if (spec.worker && !Object.keys(spec.worker.queues).length)
     throw new Error(`app "${spec.name}" declares a worker with no queues`)
   for (const [queue, concurrency] of Object.entries(spec.worker?.queues ?? {})) {

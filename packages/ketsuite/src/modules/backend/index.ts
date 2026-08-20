@@ -55,6 +55,7 @@ export { routes, viewerOf } from './routes.ts'
  * naturally on a backend screen.
  */
 export {
+  backendPage,
   shell,
   formatMoney,
   framed,
@@ -144,4 +145,5 @@ export type {
   ScheduleRow,
   ScheduleTone,
   RecordSummaryItem,
+  RecordWorkspaceSlots,
 } from '../../ui/index.ts'

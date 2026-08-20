@@ -36,16 +36,17 @@ const errorText = async (response, fallback) => {
 
 const replaceProductParts = (markup) => {
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
-  const nextHeader = parsed.querySelector('[data-ui="record-header"]')
-  const nextBody = parsed.querySelector('[data-ui="record-body"]')
-  const currentHeader = document.querySelector('[data-ui="record-header"]')
-  const currentBody = document.querySelector('[data-ui="record-body"]')
+  const envelope = parsed.querySelector('ket-fragments')
+  const nextHeader = parsed.querySelector('template[data-ket-slot="product.record-header"]')
+  const nextBody = parsed.querySelector('template[data-ket-slot="product.record-body"]')
+  const currentHeader = document.querySelector('[data-ket-slot="product.record-header"]')
+  const currentBody = document.querySelector('[data-ket-slot="product.record-body"]')
   if (!nextHeader || !nextBody || !currentHeader || !currentBody)
     throw new Error('The refreshed Product fragment is incomplete.')
 
-  currentHeader.replaceWith(document.importNode(nextHeader, true))
-  currentBody.replaceWith(document.importNode(nextBody, true))
-  if (parsed.title) document.title = parsed.title
+  currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
+  currentBody.replaceChildren(document.importNode(nextBody.content, true))
+  if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
 }
 
 const editorHostFor = (props) => {
@@ -69,6 +70,8 @@ export function createProductEditorView(runtime, props) {
   const message = signal('')
   const host = editorHostFor(props)
   const scope = props.productId ? 'product-variant' : 'product-detail'
+  let activeRequest = null
+  let disposed = false
   if (host) host.hidden = true
 
   const showState = (nextState, nextMessage) => {
@@ -77,49 +80,62 @@ export function createProductEditorView(runtime, props) {
     message.set(nextMessage)
   }
 
-  if (typeof document !== 'undefined') {
-    document.addEventListener('submit', async (event) => {
-      const form = event.target
-      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
-      event.preventDefault()
-      if (state() === 'saving') return
+  const submit = async (event) => {
+    const form = event.target
+    if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
+    event.preventDefault()
+    if (state() === 'saving') return
 
-      const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
-      showState('saving', labels.saving)
-      form.setAttribute('aria-busy', 'true')
-      for (const submitter of submitters) submitter.disabled = true
+    const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
+    showState('saving', labels.saving)
+    form.setAttribute('aria-busy', 'true')
+    for (const submitter of submitters) submitter.disabled = true
 
-      try {
-        const body = new URLSearchParams()
-        for (const [name, value] of new FormData(form))
-          if (typeof value === 'string') body.append(name, value)
-        const response = await fetch(form.action, {
-          method: String(form.method || 'post').toUpperCase(),
-          credentials: 'same-origin',
-          headers: {
-            accept: 'text/html',
-            'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            'x-ket-partial': scope,
-          },
-          body,
-        })
-        if (!response.ok) throw new Error(await errorText(response, labels.failed))
-        replaceProductParts(await response.text())
-        showState('saved', labels.saved)
-      } catch (caught) {
-        showState('error', caught instanceof Error ? caught.message : labels.failed)
-      } finally {
-        form.removeAttribute('aria-busy')
-        for (const submitter of submitters) submitter.disabled = false
-      }
-    })
+    try {
+      activeRequest?.abort()
+      activeRequest = new AbortController()
+      const body = new URLSearchParams()
+      for (const [name, value] of new FormData(form)) if (typeof value === 'string') body.append(name, value)
+      const response = await fetch(form.action, {
+        method: String(form.method || 'post').toUpperCase(),
+        credentials: 'same-origin',
+        headers: {
+          accept: 'text/html',
+          'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'x-ket-partial': scope,
+        },
+        body,
+        signal: activeRequest.signal,
+      })
+      if (!response.ok) throw new Error(await errorText(response, labels.failed))
+      const markup = await response.text()
+      if (globalThis.__ketNavigation?.applyFragments) await globalThis.__ketNavigation.applyFragments(markup)
+      else replaceProductParts(markup)
+      if (disposed) return
+      showState('saved', labels.saved)
+    } catch (caught) {
+      if (disposed || caught?.name === 'AbortError') return
+      showState('error', caught instanceof Error ? caught.message : labels.failed)
+    } finally {
+      activeRequest = null
+      form.removeAttribute('aria-busy')
+      for (const submitter of submitters) submitter.disabled = false
+    }
   }
+  if (typeof document !== 'undefined') document.addEventListener('submit', submit)
 
-  return () => html`<aside
+  return {
+    view: () => html`<aside
     data-ui="notice"
     data-tone=${state() === 'saved' ? 'positive' : state() === 'error' ? 'danger' : 'info'}
     role=${state() === 'error' ? 'alert' : 'status'}
     aria-live="polite"
     hidden=${state() === 'idle'}
-  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`
+  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`,
+    dispose: () => {
+      disposed = true
+      activeRequest?.abort()
+      if (typeof document !== 'undefined') document.removeEventListener('submit', submit)
+    },
+  }
 }
