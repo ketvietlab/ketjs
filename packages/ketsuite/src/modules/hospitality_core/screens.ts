@@ -23,9 +23,9 @@ import {
   section,
   stack,
 } from '../../ui/index.ts'
-import type { Column, Frame } from '../../ui/index.ts'
+import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
-import { CHARGE_TYPES, ROOM_STATUSES } from './types.ts'
+import { ACCOMMODATION_TYPES, CHARGE_TYPES, ROOM_STATUSES } from './types.ts'
 
 export type PropertyRow = {
   id: string
@@ -38,10 +38,68 @@ export type PropertyRow = {
   addressLine?: string | null
   publicName?: string | null
   description?: string | null
+  active: boolean
   rooms: number
   availableRooms: number
   attentionRooms: number
 }
+
+export type PropertyDetail = {
+  id: string
+  code: string
+  name: string
+  publicName?: string | null
+  accommodationType: string
+  timezone: string
+  defaultCheckIn: string
+  defaultCheckOut: string
+  enforceTimes: boolean
+  longStayBillOnCheckIn?: boolean | null
+  starRating: number
+  street1?: string | null
+  street2?: string | null
+  locality?: string | null
+  postalCode?: string | null
+  countryCode?: string | null
+  countryId?: string | null
+  divisionId?: string | null
+  divisionText?: string | null
+  addressLine?: string | null
+  latitude?: string | number | null
+  longitude?: string | number | null
+  description?: string | null
+  houseRules?: string | null
+  childrenStayFree: boolean
+  minimumGuestAge?: number | null
+  defaultCancellationPolicyId?: string | null
+  defaultCancellationPolicy?: { code?: string; name?: string } | null
+  active: boolean
+  buildings?: Array<{ id?: string }>
+  floors?: Array<{ id?: string }>
+  roomTypes?: Array<{ id?: string }>
+  rooms?: RoomRow[]
+  contacts?: Array<{ id?: string }>
+}
+
+export type PropertyFormValues = Pick<
+  PropertyDetail,
+  | 'id'
+  | 'code'
+  | 'name'
+  | 'publicName'
+  | 'accommodationType'
+  | 'timezone'
+  | 'defaultCheckIn'
+  | 'defaultCheckOut'
+  | 'enforceTimes'
+  | 'longStayBillOnCheckIn'
+  | 'starRating'
+  | 'description'
+  | 'houseRules'
+  | 'childrenStayFree'
+  | 'minimumGuestAge'
+  | 'defaultCancellationPolicyId'
+>
 
 export type RoomRow = {
   id: string
@@ -764,10 +822,158 @@ const cleaningTaskColumns = (
   },
 ]
 
+const PROPERTY_TIMEZONES = [
+  'Asia/Ho_Chi_Minh',
+  'Asia/Bangkok',
+  'Asia/Singapore',
+  'Asia/Kuala_Lumpur',
+  'Asia/Jakarta',
+  'Asia/Manila',
+  'Asia/Tokyo',
+  'Asia/Seoul',
+  'Australia/Sydney',
+  'Europe/London',
+  'America/New_York',
+  'UTC',
+] as const
+
+const propertyFormFields = (
+  _: Translator,
+  values: PropertyFormValues,
+  policies: readonly PolicyRow[],
+): FormField[] => {
+  const timezones = [...new Set([values.timezone, ...PROPERTY_TIMEZONES])]
+  return [
+    { name: 'code', label: _('hospitality_core.property.field.code'), value: values.code, required: true },
+    { name: 'name', label: _('hospitality_core.property.field.name'), value: values.name, required: true },
+    {
+      name: 'publicName',
+      label: _('hospitality_core.property.field.publicName'),
+      value: values.publicName,
+      help: _('hospitality_core.property.field.publicNameHint'),
+    },
+    {
+      name: 'accommodationType',
+      label: _('hospitality_core.property.field.accommodationType'),
+      type: 'select',
+      value: values.accommodationType,
+      required: true,
+      options: ACCOMMODATION_TYPES.map((value) => ({
+        value,
+        label: _(`hospitality_core.accommodation.${value}`),
+      })),
+    },
+    {
+      name: 'starRating',
+      label: _('hospitality_core.property.field.starRating'),
+      type: 'number',
+      value: values.starRating,
+      required: true,
+      step: '1',
+      help: _('hospitality_core.property.field.starRatingHint'),
+    },
+    {
+      name: 'timezone',
+      label: _('hospitality_core.property.field.timezone'),
+      type: 'select',
+      value: values.timezone,
+      required: true,
+      options: timezones.map((value) => ({ value, label: value })),
+    },
+    {
+      name: 'defaultCheckIn',
+      label: _('hospitality_core.property.field.defaultCheckIn'),
+      type: 'time',
+      value: values.defaultCheckIn,
+      required: true,
+      step: '60',
+    },
+    {
+      name: 'defaultCheckOut',
+      label: _('hospitality_core.property.field.defaultCheckOut'),
+      type: 'time',
+      value: values.defaultCheckOut,
+      required: true,
+      step: '60',
+    },
+    {
+      name: 'enforceTimes',
+      label: _('hospitality_core.property.field.enforceTimes'),
+      type: 'checkbox',
+      value: values.enforceTimes,
+      help: _('hospitality_core.property.field.enforceTimesHint'),
+    },
+    {
+      name: 'longStayBillOnCheckIn',
+      label: _('hospitality_core.property.field.longStayBillOnCheckIn'),
+      type: 'checkbox',
+      value: values.longStayBillOnCheckIn === true,
+      help: _('hospitality_core.property.field.longStayBillOnCheckInHint'),
+    },
+    {
+      name: 'childrenStayFree',
+      label: _('hospitality_core.property.field.childrenStayFree'),
+      type: 'checkbox',
+      value: values.childrenStayFree,
+    },
+    {
+      name: 'minimumGuestAge',
+      label: _('hospitality_core.property.field.minimumGuestAge'),
+      type: 'number',
+      value: values.minimumGuestAge,
+      step: '1',
+    },
+    {
+      name: 'defaultCancellationPolicyId',
+      label: _('hospitality_core.property.field.defaultCancellationPolicy'),
+      type: 'select',
+      value: values.defaultCancellationPolicyId,
+      options: [
+        { value: '', label: _('hospitality_core.property.value.noDefaultPolicy') },
+        ...choices(policies),
+      ],
+    },
+    {
+      name: 'description',
+      label: _('hospitality_core.property.field.description'),
+      type: 'textarea',
+      value: values.description,
+      span: 'full',
+    },
+    {
+      name: 'houseRules',
+      label: _('hospitality_core.property.field.houseRules'),
+      type: 'textarea',
+      value: values.houseRules,
+      span: 'full',
+    },
+  ]
+}
+
+const propertyForm = (
+  _: Translator,
+  values: PropertyFormValues,
+  policies: readonly PolicyRow[],
+  locale: string,
+  action: string,
+  submit: string,
+  cancelHref: string,
+): TemplateResult =>
+  recordForm({
+    action,
+    fields: propertyFormFields(_, values, policies),
+    hidden: { id: values.id, lang: locale },
+    submit,
+    submitVariant: 'primary',
+    cancelHref,
+    cancelLabel: _('hospitality_core.action.cancel'),
+  })
+
 export const propertiesScreen = (
   _: Translator,
   rows: PropertyRow[],
   totals: { rooms: number; available: number; attention: number },
+  locale: string,
   frame: Frame,
 ): TemplateResult =>
   framed(
@@ -775,6 +981,11 @@ export const propertiesScreen = (
     _('hospitality_core.screen.properties.title'),
     frame,
     stack([
+      linkButton({
+        label: _('hospitality_core.property.action.create'),
+        href: `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
+        variant: 'primary',
+      }),
       cardGrid({
         items: [
           { id: 'properties', label: _('hospitality_core.metric.properties'), value: rows.length },
@@ -786,13 +997,211 @@ export const propertiesScreen = (
         card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
       }),
       rows.length
-        ? dataTable(_, { columns: propertyColumns(_), rows, id: (row) => row.id })
+        ? dataTable(_, {
+            columns: propertyColumns(_),
+            rows,
+            id: (row) => row.id,
+            rowHref: (row) =>
+              `/admin/hospitality/properties/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+          })
         : emptyState(
             _('hospitality_core.screen.properties.empty'),
             _('hospitality_core.screen.properties.emptyHint'),
           ),
     ]),
   )
+
+const propertyFeedback = (
+  _: Translator,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'created' || status === 'saved')
+    return notice({
+      title: _(`hospitality_core.property.feedback.${status}`),
+      message: _('hospitality_core.property.feedback.savedHint'),
+      tone: 'positive',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const newPropertyScreen = (
+  _: Translator,
+  values: PropertyFormValues,
+  policies: readonly PolicyRow[],
+  locale: string,
+  frame: Frame,
+  errors: readonly string[] = [],
+): TemplateResult =>
+  framed(
+    _,
+    _('hospitality_core.property.create.title'),
+    frame,
+    stack([
+      propertyFeedback(_, null, errors),
+      section({
+        title: _('hospitality_core.property.create.title'),
+        description: _('hospitality_core.property.create.hint'),
+        body: propertyForm(
+          _,
+          values,
+          policies,
+          locale,
+          `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
+          _('hospitality_core.property.action.create'),
+          `/admin/hospitality/properties?lang=${encodeURIComponent(locale)}`,
+        ),
+      }),
+    ]),
+  )
+
+export const propertyDetailScreen = (
+  _: Translator,
+  property: PropertyDetail,
+  policies: readonly PolicyRow[],
+  locale: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+  attempted?: PropertyFormValues,
+): TemplateResult => {
+  const query = `lang=${encodeURIComponent(locale)}`
+  const values = attempted ?? property
+  const rooms = property.rooms ?? []
+  return framed(
+    _,
+    property.name,
+    frame,
+    stack([
+      propertyFeedback(_, status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.property.detail.kicker'),
+        title: property.name,
+        subtitle: `${property.code} · ${property.publicName || property.name}`,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(_(`hospitality_core.accommodation.${property.accommodationType}`), 'info'),
+          badge(
+            _(property.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+            property.active ? 'positive' : 'neutral',
+          ),
+        ],
+        summary: [
+          {
+            id: 'rooms',
+            label: _('hospitality_core.metric.rooms'),
+            value: rooms.length,
+            href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
+          },
+          {
+            id: 'room-types',
+            label: _('hospitality_core.menu.roomTypes'),
+            value: property.roomTypes?.length ?? 0,
+            href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
+          },
+          {
+            id: 'buildings',
+            label: _('hospitality_core.property.metric.buildings'),
+            value: property.buildings?.length ?? 0,
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.property.action.back'),
+          href: `/admin/hospitality/properties?${query}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.property.section.information'),
+            description: _('hospitality_core.property.section.informationHint'),
+            body: definitionList({
+              title: property.publicName || property.name,
+              items: [
+                {
+                  key: 'address',
+                  term: _('hospitality_core.property.field.address'),
+                  value: property.addressLine || '—',
+                },
+                {
+                  key: 'timezone',
+                  term: _('hospitality_core.property.field.timezone'),
+                  value: property.timezone,
+                },
+                {
+                  key: 'check-in',
+                  term: _('hospitality_core.property.field.defaultCheckIn'),
+                  value: property.defaultCheckIn,
+                },
+                {
+                  key: 'check-out',
+                  term: _('hospitality_core.property.field.defaultCheckOut'),
+                  value: property.defaultCheckOut,
+                },
+                {
+                  key: 'policy',
+                  term: _('hospitality_core.property.field.defaultCancellationPolicy'),
+                  value:
+                    property.defaultCancellationPolicy?.name ??
+                    property.defaultCancellationPolicy?.code ??
+                    _('hospitality_core.property.value.noDefaultPolicy'),
+                },
+              ],
+            }),
+          }),
+          section({
+            title: _('hospitality_core.property.section.settings'),
+            description: _('hospitality_core.property.section.settingsHint'),
+            body: propertyForm(
+              _,
+              values,
+              policies,
+              locale,
+              `/admin/hospitality/properties/${encodeURIComponent(property.id)}?${query}`,
+              _('hospitality_core.property.action.save'),
+              `/admin/hospitality/properties?${query}`,
+            ),
+          }),
+          section({
+            title: _('hospitality_core.property.section.next'),
+            description: _('hospitality_core.property.section.nextHint'),
+            body: stack(
+              [
+                linkButton({
+                  label: _('hospitality_core.menu.roomTypes'),
+                  href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.rooms'),
+                  href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.inventory'),
+                  href: `/admin/hospitality/inventory?property=${encodeURIComponent(property.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+                linkButton({
+                  label: _('hospitality_core.menu.content'),
+                  href: `/admin/hospitality/content?property=${encodeURIComponent(property.id)}&${query}`,
+                  variant: 'secondary',
+                }),
+              ],
+              'compact',
+            ),
+          }),
+        ]),
+      }),
+    ]),
+  )
+}
 
 export const roomsScreen = (_: Translator, rows: RoomRow[], frame: Frame): TemplateResult =>
   framed(
