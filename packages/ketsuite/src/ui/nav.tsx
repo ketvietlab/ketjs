@@ -1,7 +1,7 @@
 // The sidebar: permitted apps, the open app's menu, operational indicators and viewer.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
@@ -98,8 +98,8 @@ export const sidebar = (
     viewer?: Viewer | null
     indicators?: Indicator[]
     menuFilter?: string | null
-    navItems?: unknown
-    footItems?: unknown
+    navItems?: JSXChild
+    footItems?: JSXChild
   },
 ): TemplateResult => {
   const { menu, viewer = null, indicators = [], navItems, footItems } = options

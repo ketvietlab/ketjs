@@ -9,7 +9,7 @@ import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { type Changeset, changeset } from '../data/changeset.ts'
+import { type Changeset, changeset, decimalText } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
@@ -113,18 +113,26 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'decimal')
       .map(([n]) => n)
 
+  const booleansOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'bool')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     if (!cols.length) return row
     const out: Row = { ...row }
-    for (const c of cols) if (out[c] != null) out[c] = String(out[c])
+    // decimalText, not String: a raw db.update never passes through a changeset, so
+    // this is the only place that can keep "1e-7" out of a decimal column.
+    for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
     return out
   }
 
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const cols = decimalsOf(model)
-    if (!cols.length) return rows
+    const bools = booleansOf(model)
     for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
+    for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
     return rows
   }
 
@@ -310,6 +318,7 @@ export function createContext(o: {
       const t = adapter.quoteIdent(tableNameFor(model))
       const open = scopeOf(model) === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
+      fresh()
       const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
       const params: unknown[] = keys.map((k) => where[k])
       if (!open) {
@@ -319,7 +328,6 @@ export function createContext(o: {
         conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
         params.push(...cs)
       }
-      fresh()
       const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
       return decodeRows(model, await adapter.all(sql, params))
     },
@@ -345,14 +353,39 @@ export function createContext(o: {
         ks.map((k) => stamped[k]),
       )
     },
+    async insertIfAbsent(model, row) {
+      need('write', model)
+      const known = Object.keys(manifest.models[model]?.fields ?? {})
+      const unknown = Object.keys(row).filter((k) => !known.includes(k))
+      if (unknown.length) {
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          message: `${model} has no field(s): ${unknown.join(', ')}`,
+          hint: `fields: ${known.join(', ')}`,
+        })
+      }
+      const stamped = encodeRow(model, stamp(model, row))
+      writes.push({ op: 'insert', model, row: stamped })
+      if (dryRun) return { dryRun: true }
+      const ks = Object.keys(stamped)
+      fresh()
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map((k) => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')}) ON CONFLICT DO NOTHING`
+      const result = await adapter.run(
+        sql,
+        ks.map((k) => stamped[k]),
+      )
+      return { changes: result.changes, inserted: result.changes === 1 }
+    },
     async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 =
+      const where3 = encodeRow(
+        model,
         scopeOf(model) === 'shared' || operation.crossCompany
           ? where
-          : { ...where, companyId: requireCompany(model) }
+          : { ...where, companyId: requireCompany(model) },
+      )
       const patch2 = encodeRow(model, patch)
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
@@ -362,6 +395,11 @@ export function createContext(o: {
       const sql =
         `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
       return adapter.run(sql, [...pk.map((k) => patch2[k]), ...wk.map((k) => where3[k])])
+    },
+    async compareAndSet(model, where, expected, patch) {
+      const result = await db.update(model, { ...expected, ...where }, patch)
+      if ('dryRun' in result) return result
+      return { changes: result.changes, matched: result.changes === 1 }
     },
   }
 

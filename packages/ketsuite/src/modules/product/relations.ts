@@ -10,6 +10,8 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     variants: { hasMany: 'product.Product', by: 'templateId' },
     category: { belongsTo: 'product.Category', by: 'categoryId' },
     uom: { belongsTo: 'uom.Unit', by: 'uomId' },
+    uoms: { hasMany: 'product.TemplateUom', by: 'templateId' },
+    attributeLines: { hasMany: 'product.TemplateAttributeLine', by: 'templateId' },
   },
   'product.Product': {
     template: { belongsTo: 'product.Template', by: 'templateId' },
@@ -25,8 +27,28 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'product.AttributeValue': {
     attribute: { belongsTo: 'product.Attribute', by: 'attributeId' },
   },
+  'product.TemplateUom': {
+    template: { belongsTo: 'product.Template', by: 'templateId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
+  },
+  'product.ProductUom': {
+    product: { belongsTo: 'product.Product', by: 'productId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
+  },
+  'product.Cost': {
+    product: { belongsTo: 'product.Product', by: 'productId' },
+  },
+  'product.TemplateAttributeLine': {
+    template: { belongsTo: 'product.Template', by: 'templateId' },
+    attribute: { belongsTo: 'product.Attribute', by: 'attributeId' },
+    values: { hasMany: 'product.TemplateAttributeValue', by: 'lineId' },
+  },
+  'product.TemplateAttributeValue': {
+    line: { belongsTo: 'product.TemplateAttributeLine', by: 'lineId' },
+    value: { belongsTo: 'product.AttributeValue', by: 'valueId' },
+  },
   'product.ProductValue': {
     product: { belongsTo: 'product.Product', by: 'productId' },
-    value: { belongsTo: 'product.AttributeValue', by: 'attributeValueId' },
+    value: { belongsTo: 'product.TemplateAttributeValue', by: 'templateAttributeValueId' },
   },
 }

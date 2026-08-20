@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import type { RouteResult } from './respond.ts'
 import { readFile } from 'node:fs/promises'
 import { join, normalize, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
 import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
@@ -34,6 +35,10 @@ export type ServeOpts = {
    */
   resolveDatastore?: (url: URL, req: IncomingMessage) => string | null
   theme?: ThemeRuntime | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime | null>)
+  /** Browser modules for islands available to this request. */
+  islandClients?:
+    | ThemeRuntime['clients']
+    | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['clients']>)
   port?: number
   /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
@@ -76,6 +81,7 @@ export type AssetMount = {
 const ASSET_MIME: Record<string, string> = {
   '.css': 'text/css',
   '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -101,15 +107,66 @@ const contentType = (type: string): string => {
   return textual && !lower.includes('charset=') ? `${type}; charset=utf-8` : type
 }
 
-const send = async (res: ServerResponse, result: RouteResult): Promise<void> => {
+const islandScript = '<script type="module" src="/_ket/islands.js"></script>'
+const viewRuntimeUrl = '/_ket/view/index.js'
+
+const bootstrapDocument = (body: string, clients: ThemeRuntime['clients']): string => {
+  if (
+    !body.includes('<ket-island') ||
+    body.includes('src="/_ket/islands.js"') ||
+    !Object.keys(clients).length
+  )
+    return body
+  const closingBody = body.lastIndexOf('</body>')
+  return closingBody < 0
+    ? body + islandScript
+    : body.slice(0, closingBody) + islandScript + body.slice(closingBody)
+}
+
+const browserBootstrap = (clients: ThemeRuntime['clients']): string => `import {
+  domHost,
+  hydrateIslands,
+} from ${JSON.stringify(viewRuntimeUrl)}
+
+const definitions = ${JSON.stringify(clients)}
+const registry = Object.create(null)
+const placed = new Set(Array.from(document.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')))
+for (const [name, definition] of Object.entries(definitions)) {
+  if (!placed.has(name)) continue
+  const module = await import(definition.src)
+  const factory = module[definition.export]
+  if (typeof factory !== 'function') {
+    throw new TypeError('island "' + name + '" does not export a factory named "' + definition.export + '"')
+  }
+  registry[name] = factory
+}
+hydrateIslands(domHost(), document, registry, { strict: false })
+`
+
+const send = async (
+  res: ServerResponse,
+  result: RouteResult,
+  islandClients?: () => Promise<ThemeRuntime['clients']>,
+): Promise<void> => {
+  if (typeof result.body === 'string' || result.body instanceof Uint8Array) {
+    const body =
+      typeof result.body === 'string' &&
+      (result.type ?? 'text/html').toLowerCase().startsWith('text/html') &&
+      result.body.includes('<ket-island') &&
+      islandClients
+        ? bootstrapDocument(result.body, await islandClients())
+        : result.body
+    res.writeHead(result.status ?? 200, {
+      'content-type': contentType(result.type ?? 'text/html'),
+      ...result.headers,
+    })
+    res.end(body)
+    return
+  }
   res.writeHead(result.status ?? 200, {
     'content-type': contentType(result.type ?? 'text/html'),
     ...result.headers,
   })
-  if (typeof result.body === 'string' || result.body instanceof Uint8Array) {
-    res.end(result.body)
-    return
-  }
   // pipeline owns backpressure and destroys the source when the client disappears.
   // Awaiting 'drain' by hand never settles on an abort — the response emits only
   // 'close' — which hung the handler and leaked one fd per cancelled download.
@@ -154,7 +211,27 @@ export async function createKetServer(o: ServeOpts) {
   // With one database the stream store lives in it. With a database per tenant it
   // does not: whose database a stream belongs to is a separate question, so the
   // default stays in memory and the caller passes a store when they have answered it.
-  const mounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
+  const configuredMounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
+  // Browser-safe ketjs-view output is framework infrastructure, like /_ket/fn:
+  // callers should not need to find and mount a transitive package themselves.
+  const mounts: AssetMount[] = [
+    {
+      prefix: '/_ket/view/',
+      dir: fileURLToPath(new URL('.', import.meta.resolve('ketjs-view'))),
+    },
+    ...configuredMounts,
+  ]
+
+  const resolveTheme = async (url: URL, req: IncomingMessage): Promise<ThemeRuntime | null> =>
+    !o.theme ? null : typeof o.theme === 'function' ? o.theme(url, req) : o.theme
+  const resolveIslandClients = async (
+    url: URL,
+    req: IncomingMessage,
+    theme?: ThemeRuntime | null,
+  ): Promise<ThemeRuntime['clients']> => {
+    if (typeof o.islandClients === 'function') return o.islandClients(url, req)
+    return o.islandClients ?? theme?.clients ?? {}
+  }
 
   const streams = await createStreams(
     o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()),
@@ -195,11 +272,24 @@ export async function createKetServer(o: ServeOpts) {
       const route = matchRoute(url.pathname)
       if (route) {
         const r = await route.value(url, req, route.params)
-        return await send(res, r)
+        return await send(res, r, () => resolveIslandClients(url, req))
       }
 
       if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
       if (url.pathname === '/_ket/agent') return json(res, 200, agentDescriptor(o.manifest))
+      if (url.pathname === '/_ket/islands.js') {
+        const theme = await resolveTheme(url, req)
+        const clients = await resolveIslandClients(url, req, theme)
+        if (!Object.keys(clients).length) {
+          res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+          return res.end('no client islands')
+        }
+        res.writeHead(200, {
+          'content-type': 'text/javascript; charset=utf-8',
+          'cache-control': 'no-cache',
+        })
+        return res.end(browserBootstrap(clients))
+      }
 
       // Resumable stream: the client reconnects with ?from=<cursor> and gets
       // exactly what it missed, never a duplicate and never a gap.
@@ -252,13 +342,16 @@ export async function createKetServer(o: ServeOpts) {
       }
 
       if (o.theme) {
-        const theme = typeof o.theme === 'function' ? await o.theme(url, req) : o.theme
+        const theme = await resolveTheme(url, req)
         if (!theme) {
           res.writeHead(404, { 'content-type': 'text/plain' })
           return res.end('not found')
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
-        const html = theme.renderRegion('layout', scope)
+        const html = bootstrapDocument(
+          theme.renderRegion('layout', scope),
+          await resolveIslandClients(url, req, theme),
+        )
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
         return res.end(html)
       }

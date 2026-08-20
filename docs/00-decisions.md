@@ -1485,7 +1485,6 @@ refreshes the tenant list, claims one bounded batch per turn and rotates the fir
 tenant. It does not reserve one PostgreSQL listener connection per tenant. If a
 future fleet needs sub-100ms wake-up across thousands of databases, that is a
 separate wake-up plane; durable ownership remains with the tenant database.
-
 ## D48 — Blob bytes are outside SQL; their authority is not
 
 **Metadata and bytes have different jobs.** `storage.Attachment` is a
@@ -1520,3 +1519,33 @@ a content-addressed blob another row may share. `storage.sweep` runs on the dura
 unreferenced objects older than a grace period. Its blob reads/removals are declared
 effects, so adding storage to a job does not become a new way around the operation
 boundary.
+
+## D49 — Product and stock follow Odoo 19 where the subset is real
+**Names and codes are compatibility boundaries.** UoM is a relative tree with one
+root, product variants have a stable combination key, pricelist applicability keeps
+Odoo's selection codes, and stock operations keep their warehouse and procurement
+codes. Unsupported accounting, purchasing, selling and valuation behaviour returns
+an explicit error; it is not approximated behind a familiar name.
+
+**A reservation has one source of truth.** Demand belongs to `stock.Move`, reserved
+detail belongs to `stock.MoveLine`, and `stock.Quant.reservedQuantity` is only a
+query-friendly mirror. Updating that mirror uses compare-and-set, so two workers can
+compete for the same quant without both winning. Inventory counts create completed
+moves instead of rewriting a quant directly, preserving the trail that explains the
+balance.
+
+**Warehouse is a boundary, not a label.** Locations, quants, picking types and
+warehouse routes determine which physical stock a flow may see. Forecast and
+reservation operate on a requested location, while replenishment selects product,
+category, then warehouse routes. Stock in one warehouse therefore cannot silently
+satisfy another warehouse's move.
+
+**Product media is metadata over storage, not a second blob system.** Product
+screens retain the named template and variant media joints and the unavailable,
+loading, ready and error states. The installed `product_media` bridge adds only
+company-scoped ordering, alt text and primary-image metadata; bytes, checksums,
+delivery and garbage collection stay with `storage.Attachment` and the `Storage`
+contract from D48. Upload, primary selection, reordering and removal use native
+forms, and the neutral UI component receives URLs and action endpoints instead of
+depending on a schema or object-store convention. Product and stock still own no
+blob column, resize pipeline, CDN rule or file-processing implementation.

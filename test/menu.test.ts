@@ -128,6 +128,13 @@ test('menu: the branch leading to the open page is marked, all the way up', () =
   assert.equal(tree[1]!.active, false, 'the other app is not')
 })
 
+test('menu: a detail subroute keeps the longest matching app branch active', () => {
+  const tree = buildMenu(compose([sales, admin]), { active: '/quotes/q-42' })
+  assert.equal(tree[0]!.active, true)
+  assert.equal(tree[0]!.children[0]!.children.find((n) => n.id === 'sales.quotes')!.active, true)
+  assert.equal(tree[1]!.active, false)
+})
+
 test('menu: labels resolve against the module that declared them', () => {
   const m = compose([sales, admin])
   const vi = m.messages?.['vi'] ?? {}

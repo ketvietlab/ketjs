@@ -8,6 +8,8 @@ export type HostNode = {
   attrs?: Record<string, string>
   children?: HostNode[]
   text?: string
+  /** Trusted markup in the counting host; real DOM hosts materialise actual nodes. */
+  rawHtml?: string
   parent: HostNode | null
 }
 
@@ -18,6 +20,8 @@ export type Host = {
   setText(node: HostNode, value: unknown): void
   setAttribute(node: HostNode, name: string, value: unknown): void
   insert(parent: HostNode, node: HostNode, before?: HostNode | null): void
+  /** Parse compiler-trusted markup and insert every resulting node. */
+  insertMarkup(parent: HostNode, html: string, before?: HostNode | null): HostNode[]
   move(parent: HostNode, node: HostNode, before?: HostNode | null): void
   remove(node: HostNode): void
   /** Attach a listener; returns the detach function. */
@@ -124,6 +128,13 @@ export function countingHost(): CountingHost {
       ops.insert++
       place(parent, node, before)
     },
+    insertMarkup(parent, html, before = null) {
+      const node: HostNode = { id: id++, rawHtml: html, parent: null }
+      ops.createElement++
+      ops.insert++
+      place(parent, node, before)
+      return [node]
+    },
     move(parent, node, before = null) {
       ops.move++
       place(parent, node, before)
@@ -133,9 +144,11 @@ export function countingHost(): CountingHost {
       detach(node)
     },
     text(node) {
+      if (node.rawHtml != null) return ''
       return node.text != null ? node.text : (node.children ?? []).map((c) => host.text(c)).join('')
     },
     html(node) {
+      if (node.rawHtml != null) return node.rawHtml
       if (node.text != null) return escapeHtml(node.text)
       const attrs = Object.entries(node.attrs ?? {})
         .map(([k, v]) => ` ${k}="${escapeHtml(v)}"`)
@@ -151,6 +164,8 @@ export function countingHost(): CountingHost {
 type DomLike = {
   createElement(tag: string): unknown
   createTextNode(data: string): unknown
+  /** Test hosts may supply their small parser instead of implementing <template>. */
+  parseHTML?(html: string): { childNodes: Iterable<unknown> }
 }
 
 export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).document as DomLike): Host {
@@ -177,6 +192,21 @@ export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).do
     },
     insert: (parent, node, before = null) => {
       el(parent).insertBefore(node, before)
+    },
+    insertMarkup: (parent, html, before = null) => {
+      let fragment: { childNodes: Iterable<unknown> }
+      if (doc.parseHTML) fragment = doc.parseHTML(html)
+      else {
+        const template = doc.createElement('template') as {
+          innerHTML: string
+          content: { childNodes: Iterable<unknown> }
+        }
+        template.innerHTML = html
+        fragment = template.content
+      }
+      const nodes = [...fragment.childNodes] as HostNode[]
+      for (const node of nodes) el(parent).insertBefore(node, before)
+      return nodes
     },
     move: (parent, node, before = null) => {
       el(parent).insertBefore(node, before)

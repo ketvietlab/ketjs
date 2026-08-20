@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { compileKtl } from 'ketjs/theme'
-import { compose, createTheme, makeDrop, sealScope, tokensToCss } from 'ketjs'
+import { compose, createTheme, defineModule, defineTheme, makeDrop, sealScope, tokensToCss } from 'ketjs'
 import { catalog, defaultTheme as theme, inventory } from 'ketsuite'
 
 const render = (src: string, scope: Record<string, unknown> = {}) =>
@@ -81,6 +81,19 @@ test('theme: a template pointing at an unpublished joint fails at build time', (
     () => createTheme(compose(mods as never), mods as never),
     /E_TEMPLATE_UNKNOWN_JOINT|no installed module publishes/,
   )
+})
+
+test('theme: omit removes fills from KTL rendering too', () => {
+  const owner = defineModule({ name: 'owner', joints: { slot: {} } })
+  const fill = defineModule({ name: 'fill', depends: ['owner'], fills: { 'owner:slot': '<b>visible</b>' } })
+  const omit = defineModule({ name: 'omit', depends: ['owner'], omits: ['owner:slot'] })
+  const shell = defineTheme({
+    name: 'shell',
+    depends: ['owner'],
+    templates: { layout: `<main>{% joint "owner:slot" %}</main>` },
+  })
+  const modules = [owner, fill, omit, shell]
+  assert.equal(createTheme(compose(modules), modules).renderRegion('layout', {}), '<main></main>')
 })
 
 test('tokens: become CSS custom properties inside a declared cascade layer', () => {

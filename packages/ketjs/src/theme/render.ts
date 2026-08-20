@@ -6,6 +6,7 @@ import type { Compiled, Filter, Scope } from './ktl/compile.ts'
 import { renderIsland } from 'ketjs-view'
 import type { IslandRegistry } from 'ketjs-view'
 import { sealScope } from './viewmodel.ts'
+import { contractProps } from './contracts.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { KetModule, Manifest } from '../types.ts'
 
@@ -13,6 +14,7 @@ export type ThemeRuntime = {
   renderRegion(name: string, scope: Scope): string
   templates: Record<string, Compiled>
   islands: IslandRegistry
+  clients: Record<string, { src: string; export: string }>
 }
 
 export function createTheme(
@@ -35,22 +37,53 @@ export function createTheme(
   const islands: IslandRegistry = {}
   for (const m of modules) {
     if (off.has(m.name)) continue
-    for (const [name, view] of Object.entries(m.islands)) islands[name] = view
+    for (const [name, def] of Object.entries(m.islands)) islands[name] = def.view
   }
+  const clients = Object.fromEntries(
+    Object.entries(manifest.islands)
+      .filter(([, island]) => island.client !== undefined)
+      .map(([name, island]) => [name, island.client as { src: string; export: string }]),
+  )
   const sources: Record<string, string> = {}
   for (const m of modules) {
     if (off.has(m.name)) continue // a removed theme contributes no templates
     for (const [name, src] of Object.entries(m.templates)) sources[name] = src
   }
 
-  const fillSources: Record<string, string[]> = {}
-  for (const fill of manifest.fills) (fillSources[fill.joint] ??= []).push(fill.template)
+  const fillSources: Record<string, Array<{ by: string; template: string }>> = {}
+  for (const fill of manifest.fills) (fillSources[fill.joint] ??= []).push(fill)
 
   const templates: Record<string, Compiled> = {}
   const fills: Record<string, Compiled[]> = {}
 
-  const renderJoint = (joint: string, scope: Scope): string =>
-    (fills[joint] ?? []).map((c) => c.render(scope)).join('')
+  const jointStack: string[] = []
+  const renderJoint = (joint: string, scope: Scope): string => {
+    const definition = manifest.joints[joint]
+    if (!definition) {
+      throw new KetError({
+        code: 'E_TEMPLATE_UNKNOWN_JOINT',
+        message: `renders joint "${joint}", which no installed module publishes`,
+      })
+    }
+    if (definition.omittedBy.length) return ''
+    if (jointStack.includes(joint)) {
+      throw new KetError({
+        code: 'E_JOINT_CYCLE',
+        message: `joint recursion: ${[...jointStack, joint].join(' -> ')}`,
+        hint: 'a fill may render another joint, but never itself through any chain',
+      })
+    }
+    if (jointStack.length >= 16) {
+      throw new KetError({ code: 'E_JOINT_TOO_DEEP', message: 'joint rendering exceeds 16 levels' })
+    }
+    jointStack.push(joint)
+    try {
+      const props = contractProps(manifest, 'joint', joint, definition.props, scope)
+      return (fills[joint] ?? []).map((compiled) => compiled.render(props)).join('')
+    } finally {
+      jointStack.pop()
+    }
+  }
 
   /**
    * A page's body is its layout: an ordered list of placements, each rendered by
@@ -86,8 +119,9 @@ export function createTheme(
   }
 
   const renderIslandAt = (name: string, scope: Scope): string => {
-    const view = islands[name]
-    if (!view || (atRuntime && !manifest.islands[name])) {
+    const factory = islands[name]
+    const definition = manifest.islands[name]
+    if (!factory || !definition) {
       if (atRuntime) return ''
       throw new KetError({
         code: 'E_UNKNOWN_ISLAND',
@@ -95,8 +129,7 @@ export function createTheme(
         hint: `available islands: ${Object.keys(islands).join(', ') || '(none)'}`,
       })
     }
-    // Props are whatever the theme's scope already exposes: drops, never live objects.
-    return renderIsland(name, view, { ...scope })
+    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope))
   }
 
   const renderRegion = (name: string, scope: Scope): string => {
@@ -150,8 +183,46 @@ export function createTheme(
     renderTemplate,
   }
 
-  for (const [joint, srcs] of Object.entries(fillSources)) {
-    fills[joint] = srcs.map((src, i) => compileKtl(src, { ...opts, name: `${joint}#${i}`, ...wiring }))
+  for (const [joint, sourcesForJoint] of Object.entries(fillSources)) {
+    fills[joint] = sourcesForJoint.map((fill, i) => {
+      const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...wiring })
+      const module = manifest.modules[fill.by]
+      for (const used of compiled.jointsUsed) {
+        const target = manifest.joints[used]
+        if (!target) {
+          throw new KetError({
+            code: 'E_FILL_UNKNOWN_JOINT',
+            module: fill.by,
+            message: `fill for "${joint}" renders unknown joint "${used}"`,
+          })
+        }
+        if (target.owner !== fill.by && !module?.depends?.includes(target.owner)) {
+          throw new KetError({
+            code: 'E_FILL_NOT_DEPENDED',
+            module: fill.by,
+            message: `fill for "${joint}" renders "${used}" without depending on "${target.owner}"`,
+          })
+        }
+      }
+      for (const used of compiled.islandsUsed) {
+        const target = manifest.islands[used]
+        if (!target) {
+          throw new KetError({
+            code: 'E_FILL_UNKNOWN_ISLAND',
+            module: fill.by,
+            message: `fill for "${joint}" places unknown island "${used}"`,
+          })
+        }
+        if (target.by !== fill.by && !module?.depends?.includes(target.by)) {
+          throw new KetError({
+            code: 'E_FILL_NOT_DEPENDED',
+            module: fill.by,
+            message: `fill for "${joint}" places "${used}" without depending on "${target.by}"`,
+          })
+        }
+      }
+      return compiled
+    })
   }
   for (const [name, src] of Object.entries(sources)) {
     templates[name] = compileKtl(src, { ...opts, name, ...wiring })
@@ -183,5 +254,5 @@ export function createTheme(
     }
   }
 
-  return { renderRegion, templates, islands }
+  return { renderRegion, templates, islands, clients }
 }

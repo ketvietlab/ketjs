@@ -125,6 +125,29 @@ re-render, 2 moves for a swap. It proves the algorithm touches the right nodes.
 It cannot prove the work *around* those touches is cheap — which is exactly the
 gap the browser benchmark closed.
 
+## Odoo 19 product, pricing and stock domain
+
+Measured on 2026-08-20 with Node 24.19.0 on Apple Silicon, after the complete
+Product/Media/Pricelist/Stock/Inventory admin flows passed the repository verify
+suite. The benchmark uses the public server-function boundary and a migrated
+SQLite datastore; it does not bypass validation or effect checks.
+
+| operation | sample | elapsed | throughput |
+|---|---:|---:|---:|
+| generate attribute combinations | 125 variants | 9.37 ms | 13,346 variants/s |
+| resolve deterministic pricelist rules | 1,000 prices | 83.01 ms | 12,047 prices/s |
+| reserve stock through move lines + quant CAS | 100 moves | 27.64 ms | 3,618 moves/s |
+
+The same revision also passed all 13 live PostgreSQL integration cases, including
+two real connections competing for one quant without over-reserving it. Reproduce
+the timings with `npm run bench` and the database checks with
+`node --test .build/test/pg-live.test.js` while the development PostgreSQL service
+is available.
+
+These are regression baselines, not capacity claims. Price resolution deliberately
+includes precedence/date/quantity checks; reservation deliberately includes the
+transaction and compare-and-set work that makes the result safe.
+
 ## Queue across tenant databases
 
 The queue benchmark uses the public worker and tenant-pool APIs, warms migrations

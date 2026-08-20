@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title description">
+  <title id="title">Mặt sau hộp sản phẩm mẫu</title>
+  <desc id="description">Nhãn dữ liệu sản phẩm trên nền trung tính ấm.</desc>
+  <rect width="640" height="640" fill="#f7f5f5"/>
+  <rect x="116" y="92" width="408" height="456" rx="24" fill="#ffffff" stroke="#dddcde" stroke-width="4"/>
+  <rect x="188" y="176" width="264" height="28" rx="8" fill="#5167c4"/>
+  <rect x="188" y="240" width="264" height="12" rx="6" fill="#cccccd"/>
+  <rect x="188" y="272" width="214" height="12" rx="6" fill="#dddcde"/>
+  <rect x="188" y="304" width="240" height="12" rx="6" fill="#dddcde"/>
+  <path d="M188 416h264M200 400v64m20-64v64m32-64v64m16-64v64m36-64v64m20-64v64m28-64v64m16-64v64m36-64v64m20-64v64" fill="none" stroke="#44464a" stroke-width="8"/>
+</svg>

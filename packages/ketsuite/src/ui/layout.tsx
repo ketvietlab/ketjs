@@ -1,7 +1,7 @@
 // The frame a screen sits in, and the shared arrangements inside it.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import { sidebar } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
@@ -33,11 +33,11 @@ export const HOOKS = [
 ] as const
 
 export type Extras = {
-  'topbar.end'?: unknown
-  'sidebar.foot'?: unknown
-  'apps.footer'?: unknown
-  'nav.items'?: unknown
-  'app-card.actions'?: Record<string, unknown>
+  'topbar.end'?: JSXChild
+  'sidebar.foot'?: JSXChild
+  'apps.footer'?: JSXChild
+  'nav.items'?: JSXChild
+  'app-card.actions'?: Record<string, JSXChild>
 }
 
 export type Frame = {
@@ -89,7 +89,7 @@ export const appCard = (options: {
   summary: string
   meta: CardMeta[]
   action: { label: string; action: string; disabled?: boolean }
-  extra?: unknown
+  extra?: JSXChild
 }): TemplateResult => (
   <article data-ui="app-card" data-state={options.state} data-app={options.key}>
     <h3 data-ui="app-title">{options.title}</h3>
@@ -121,7 +121,7 @@ export const cardGroups = <T,>(options: {
   groups: Array<{ key: string; title: string; items: readonly T[] }>
   id: (item: T) => unknown
   card: (item: T) => TemplateResult
-  footer?: unknown
+  footer?: JSXChild
 }): TemplateResult => (
   <div data-ui="app-groups">
     {each(
