@@ -119,6 +119,11 @@ try {
       markers: ['record-workspace', 'Đơn bán đã xác nhận', 'sales-order-collab'],
     },
     {
+      label: 'Sales invoicing policy',
+      path: '/admin/sales/invoicing-policies?lang=vi',
+      markers: ['record-workspace', 'invoicing-policy-form', 'Chính sách theo sản phẩm'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
