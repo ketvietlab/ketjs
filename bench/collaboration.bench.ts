@@ -3,11 +3,29 @@ import { performance } from 'node:perf_hooks'
 import { collaborationEvidenceApp } from '../tools/collaboration-evidence-fixture.ts'
 
 type Sample = { elapsed: number; bytes: number }
+type Summary = { mean: number; p50: number; p95: number; bytes: number }
 
 const percentile = (values: number[], point: number): number => {
   const ordered = [...values].sort((a, b) => a - b)
   return ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * point))] ?? 0
 }
+
+const summarize = (samples: Sample[]): Summary => {
+  const times = samples.map((sample) => sample.elapsed)
+  return {
+    mean: times.reduce((sum, value) => sum + value, 0) / times.length,
+    p50: percentile(times, 0.5),
+    p95: percentile(times, 0.95),
+    bytes: samples[0]?.bytes ?? 0,
+  }
+}
+
+const delta = (before: number, after: number): string => `${((after / before - 1) * 100).toFixed(1)}%`
+
+const report = (label: string, summary: Summary, suffix = ''): void =>
+  console.log(
+    `  ${label.padEnd(9)} mean=${summary.mean.toFixed(2).padStart(6)} ms  p50=${summary.p50.toFixed(2).padStart(6)} ms  p95=${summary.p95.toFixed(2).padStart(6)} ms  html=${String(summary.bytes).padStart(6)} B${suffix}`,
+  )
 
 const databaseUrl = process.env.KET_BENCH_PG?.trim()
 const e2e = await collaborationEvidenceApp(databaseUrl ? { databaseUrl } : {})
@@ -107,24 +125,48 @@ try {
       markers: ['Nhật ký email đến', 'Đã xử lý', 'Không định tuyến được', 'Đã bỏ qua'],
     },
   ]
-  console.log('collaboration screen HTTP benchmark (30 warm authenticated renders)')
+  console.log('collaboration screen HTTP benchmark (30 interleaved warm renders per response mode)')
   for (const screen of screens) {
     await e2e.client.get(screen.path)
-    const samples: Sample[] = []
+    await e2e.client.get(screen.path, { headers: { 'x-ket-navigation': 'fragment-v1' } })
+    const full: Sample[] = []
+    const fragment: Sample[] = []
+    const variants: Array<{
+      label: 'full' | 'fragment'
+      headers: Record<string, string>
+      samples: Sample[]
+    }> = [
+      { label: 'full', headers: { accept: 'text/html' }, samples: full },
+      {
+        label: 'fragment',
+        headers: { 'x-ket-navigation': 'fragment-v1' },
+        samples: fragment,
+      },
+    ]
     for (let index = 0; index < 30; index++) {
-      const started = performance.now()
-      const response = await e2e.client.get(screen.path, { headers: { accept: 'text/html' } })
-      const body = await response.text()
-      samples.push({ elapsed: performance.now() - started, bytes: Buffer.byteLength(body) })
-      assert.equal(response.status, 200)
-      for (const marker of screen.markers)
-        assert.ok(body.includes(marker), `${screen.label} omitted ${marker}`)
+      const ordered = index % 2 === 0 ? variants : [...variants].reverse()
+      for (const variant of ordered) {
+        const started = performance.now()
+        const response = await e2e.client.get(screen.path, { headers: variant.headers })
+        const body = await response.text()
+        variant.samples.push({ elapsed: performance.now() - started, bytes: Buffer.byteLength(body) })
+        assert.equal(response.status, 200)
+        if (variant.label === 'fragment') {
+          assert.match(response.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
+          assert.match(body, /^<ket-fragments /)
+        }
+        for (const marker of screen.markers)
+          assert.ok(body.includes(marker), `${screen.label} ${variant.label} omitted ${marker}`)
+      }
     }
-    const times = samples.map((sample) => sample.elapsed)
-    const mean = times.reduce((sum, value) => sum + value, 0) / times.length
-    const bytes = samples[0]?.bytes ?? 0
-    console.log(
-      `${screen.label.padEnd(24)} mean=${mean.toFixed(2).padStart(6)} ms  p50=${percentile(times, 0.5).toFixed(2).padStart(6)} ms  p95=${percentile(times, 0.95).toFixed(2).padStart(6)} ms  html=${String(bytes).padStart(6)} B`,
+    const fullSummary = summarize(full)
+    const fragmentSummary = summarize(fragment)
+    console.log(screen.label)
+    report('full', fullSummary)
+    report(
+      'fragment',
+      fragmentSummary,
+      `  delta mean=${delta(fullSummary.mean, fragmentSummary.mean)} p50=${delta(fullSummary.p50, fragmentSummary.p50)} bytes=${delta(fullSummary.bytes, fragmentSummary.bytes)}`,
     )
   }
 } finally {
