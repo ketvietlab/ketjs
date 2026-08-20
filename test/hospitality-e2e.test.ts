@@ -154,6 +154,29 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     )
     assert.equal(Number(count[0]?.n), 1, 'a retried confirmation keeps the same reservation')
   })
+  const directDetailVi = await e2e.client.get('/admin/hospitality/reservations/direct-web?lang=vi')
+  assert.equal(directDetailVi.status, 200)
+  const directDetailViHtml = await directDetailVi.text()
+  assert.match(directDetailViHtml, /WEB-001/)
+  assert.match(directDetailViHtml, /Nhận phòng/)
+  assert.doesNotMatch(directDetailViHtml, /hospitality_core\./)
+  const directDetailEn = await e2e.client.get('/admin/hospitality/reservations/direct-web?lang=en')
+  assert.equal(directDetailEn.status, 200)
+  const directDetailEnHtml = await directDetailEn.text()
+  assert.match(directDetailEnHtml, /Check in/)
+  assert.match(directDetailEnHtml, /Cancel reservation/)
+  assert.doesNotMatch(directDetailEnHtml, /hospitality_core\./)
+  const directCancelled = await e2e.client.post(
+    '/admin/hospitality/reservations/direct-web?lang=vi',
+    new URLSearchParams({ operation: 'cancel', lang: 'vi', reason: 'Khách đổi lịch' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(directCancelled.status, 303, await directCancelled.clone().text())
+  assert.match(directCancelled.headers.get('location') ?? '', /status=cancelled/)
+  const cancelledPage = await e2e.client.get(directCancelled.headers.get('location')!)
+  const cancelledHtml = await cancelledPage.text()
+  assert.match(cancelledHtml, /Đã hủy đặt phòng/)
+  assert.match(cancelledHtml, /Khách đổi lịch/)
 
   const contentUpload = new FormData()
   contentUpload.set(
@@ -297,16 +320,18 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(extraPosted.status, 303, await extraPosted.clone().text())
   assert.match(extraPosted.headers.get('location') ?? '', /status=saved/)
 
-  const checkedIn = await e2e.client.call<Row>('hospitality_core.checkIn', {
-    stayId: 'booking-1:stay',
-    roomId: '101',
-    assignmentId: 'booking-1:assignment',
-    at: '2026-08-20T14:05:00.000Z',
-  })
-  assert.deepEqual(
-    { ok: checkedIn.value.ok, state: checkedIn.value.state, roomId: checkedIn.value.roomId },
-    { ok: true, state: 'checked_in', roomId: '101' },
+  const checkedIn = await e2e.client.post(
+    '/admin/hospitality/reservations/booking-1?lang=vi',
+    new URLSearchParams({ operation: 'check-in', lang: 'vi', roomId: '101' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
+  assert.equal(checkedIn.status, 303, await checkedIn.clone().text())
+  assert.match(checkedIn.headers.get('location') ?? '', /status=checked-in/)
+  const checkedInPage = await e2e.client.get(checkedIn.headers.get('location')!)
+  const checkedInHtml = await checkedInPage.text()
+  assert.match(checkedInHtml, /Đã nhận phòng/)
+  assert.match(checkedInHtml, /Trả phòng/)
+  assert.doesNotMatch(checkedInHtml, /hospitality_core\./)
   assert.equal(await e2e.drainJobs(), 1)
 
   const stayNotice = await e2e.client.get(
@@ -437,12 +462,17 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     assert.equal(notices[0]?.receiptRef, 'DVC-E2E-0001')
   })
 
-  const checkedOut = await e2e.client.call<Row>('hospitality_core.checkOut', {
-    stayId: 'booking-1:stay',
-    at: '2026-08-21T12:00:00.000Z',
-  })
-  assert.equal(checkedOut.value.state, 'checked_out')
-  assert.equal(checkedOut.writes.length, 6)
+  const checkedOut = await e2e.client.post(
+    '/admin/hospitality/reservations/booking-1?lang=vi',
+    new URLSearchParams({ operation: 'check-out', lang: 'vi' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(checkedOut.status, 303, await checkedOut.clone().text())
+  assert.match(checkedOut.headers.get('location') ?? '', /status=checked-out/)
+  const checkedOutPage = await e2e.client.get(checkedOut.headers.get('location')!)
+  const checkedOutHtml = await checkedOutPage.text()
+  assert.match(checkedOutHtml, /Đã trả phòng/)
+  assert.doesNotMatch(checkedOutHtml, /hospitality_core\./)
 
   for (const [path, title] of [
     ['/admin/hospitality/housekeeping?lang=vi', 'Việc dọn phòng'],
