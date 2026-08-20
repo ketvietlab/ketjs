@@ -218,6 +218,7 @@ try {
     { id: '103', type: roomType, status: 'cleaning' },
     { id: '104', type: 'suite', status: 'available' },
     { id: '105', type: 'suite', status: 'maintenance' },
+    { id: '106', type: roomType, status: 'available' },
   ])
     await call('hospitality_core.saveRoom', {
       id: room.id,
