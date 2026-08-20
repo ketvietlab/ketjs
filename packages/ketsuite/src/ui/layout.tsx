@@ -2,8 +2,9 @@
 
 import { each } from 'ketjs-view'
 import type { JSXChild, TemplateResult } from 'ketjs-view'
-import type { MenuNode, Translator } from 'ketjs'
-import { sidebar } from './nav.tsx'
+import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from 'ketjs'
+import type { MenuNode, Route, ServeContext, Translator } from 'ketjs'
+import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
@@ -50,6 +51,27 @@ export type Frame = {
   extras?: Extras
   menu?: MenuNode[]
   chrome?: ListChrome | null
+  navigation?: boolean
+}
+
+const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResult => {
+  const { viewer = null, extras = {} } = frame
+  return (
+    <>
+      {frame.chrome ? listChrome(_, title, frame.chrome) : <h1 data-ui="title">{title}</h1>}
+      {!!viewer?.contextPath && (
+        <a
+          data-ui="context-switcher"
+          href={viewer.contextPath}
+          title={`${viewer.companyName ?? viewer.company ?? ''}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+        >
+          <span data-ui="context-company">{viewer.companyName ?? viewer.company}</span>
+          {!!viewer.branchName && <span data-ui="context-branch">{viewer.branchName}</span>}
+        </a>
+      )}
+      {extras['topbar.end'] ?? ''}
+    </>
+  )
 }
 
 export const shell = (
@@ -59,34 +81,57 @@ export const shell = (
   frame: Frame = {},
 ): TemplateResult => {
   const { viewer = null, extras = {}, menu = [], indicators = [] } = frame
+  const sidebarOptions = {
+    menu,
+    viewer,
+    indicators,
+    menuFilter: frame.menuFilter,
+    navItems: extras['nav.items'],
+    footItems: extras['sidebar.foot'],
+  }
+  if (frame.navigation)
+    return (
+      <ket-fragments data-title={title}>
+        <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
+        <template data-ket-slot="backend.topbar">{topbarContent(_, title, frame)}</template>
+        <template data-ket-slot="backend.content">{body}</template>
+      </ket-fragments>
+    )
   return (
     <div data-ui="shell">
-      {sidebar(_, {
-        menu,
-        viewer,
-        indicators,
-        menuFilter: frame.menuFilter,
-        navItems: extras['nav.items'],
-        footItems: extras['sidebar.foot'],
-      })}
+      {sidebar(_, sidebarOptions)}
       <main data-ui="main">
-        <header data-ui="topbar">
-          {frame.chrome ? listChrome(_, title, frame.chrome) : <h1 data-ui="title">{title}</h1>}
-          {!!viewer?.contextPath && (
-            <a
-              data-ui="context-switcher"
-              href={viewer.contextPath}
-              title={`${viewer.companyName ?? viewer.company ?? ''}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
-            >
-              <span data-ui="context-company">{viewer.companyName ?? viewer.company}</span>
-              {!!viewer.branchName && <span data-ui="context-branch">{viewer.branchName}</span>}
-            </a>
-          )}
-          {extras['topbar.end'] ?? ''}
+        <header data-ui="topbar" data-ket-slot="backend.topbar">
+          {topbarContent(_, title, frame)}
         </header>
-        <div data-ui="content">{body}</div>
+        <div data-ui="content" data-ket-slot="backend.content">
+          {body}
+        </div>
       </main>
     </div>
+  )
+}
+
+export const backendPage = async (
+  ctx: ServeContext,
+  req: Parameters<Route>[1],
+  options: { lang: string; title: string; body: TemplateResult; status?: number },
+) => {
+  if (isNavigationRequest(req))
+    return withHeaders(fragment(options.body, { status: options.status, type: NAVIGATION_TYPE }), {
+      vary: 'X-Ket-Navigation',
+    })
+  return withHeaders(
+    page({
+      body: ctx.document({
+        lang: options.lang,
+        title: options.title,
+        head: await ctx.styles(req),
+        body: options.body,
+      }),
+      status: options.status,
+    }),
+    { vary: 'X-Ket-Navigation' },
   )
 }
 

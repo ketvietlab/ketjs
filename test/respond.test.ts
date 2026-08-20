@@ -1,6 +1,19 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { page, fragment, json, text, raw, document, bootApp, defineApp, defineModule } from 'ketjs'
+import {
+  NAVIGATION_TYPE,
+  bootApp,
+  defineApp,
+  defineModule,
+  document,
+  fragment,
+  isNavigationRequest,
+  json,
+  navigablePage,
+  page,
+  raw,
+  text,
+} from 'ketjs'
 import { html } from 'ketjs-view'
 
 const stringBody = (body: ReturnType<typeof page>['body']): string => {
@@ -50,6 +63,37 @@ test('respond: head content is markup too', () => {
 
 test('respond: a fragment carries no doctype, so it can be swapped into a page', () => {
   assert.equal(fragment(html`<li>a</li>`).body, '<li>a</li>')
+})
+
+test('respond: a navigable page lazily chooses a document or named slot envelope', () => {
+  let documents = 0
+  let slots = 0
+  const options = {
+    title: 'A & B',
+    document: () => {
+      documents++
+      return document({ lang: 'en', body: html`<main data-ket-slot="page">full</main>` })
+    },
+    slots: {
+      page: () => {
+        slots++
+        return html`partial`
+      },
+    },
+  }
+
+  const full = navigablePage({ headers: {} }, options)
+  assert.match(stringBody(full.body), /^<!doctype html>/)
+  assert.deepEqual({ documents, slots }, { documents: 1, slots: 0 })
+  assert.equal(full.headers?.vary, 'X-Ket-Navigation')
+
+  const partialRequest = { headers: { 'x-ket-navigation': 'fragment-v1' } }
+  assert.equal(isNavigationRequest(partialRequest), true)
+  const partial = navigablePage(partialRequest, options)
+  assert.equal(partial.type, NAVIGATION_TYPE)
+  assert.match(stringBody(partial.body), /^<ket-fragments data-title="A &amp; B">/)
+  assert.match(stringBody(partial.body), /<template data-ket-slot="page">.*partial.*<\/template>/)
+  assert.deepEqual({ documents, slots }, { documents: 1, slots: 1 })
 })
 
 test('respond: every constructor names its own content type', () => {

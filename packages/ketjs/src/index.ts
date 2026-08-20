@@ -46,7 +46,22 @@ export { bootWorker, serveWorker } from './server/worker.ts'
 export type { BootedWorker, WorkerLog } from './server/worker.ts'
 export { defineJob, registerJobs } from './server/jobs.ts'
 export type { RouteParams } from './kernel/routes.ts'
-export { page, fragment, json, text, bytes, streamed, raw, document, withHeaders } from './server/respond.ts'
+export {
+  page,
+  fragment,
+  navigablePage,
+  isNavigationRequest,
+  NAVIGATION_HEADER,
+  NAVIGATION_VERSION,
+  NAVIGATION_TYPE,
+  json,
+  text,
+  bytes,
+  streamed,
+  raw,
+  document,
+  withHeaders,
+} from './server/respond.ts'
 export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
 export type { RuntimeConfig, OpenStore } from './server/config.ts'
@@ -126,6 +141,7 @@ export {
   mountHydrated,
   renderIsland,
   hydrateIslands,
+  createIslandManager,
   ISLAND_TAG,
 } from 'ketjs-view'
 export { createTheme } from './theme/render.ts'

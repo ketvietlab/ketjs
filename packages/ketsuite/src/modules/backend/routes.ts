@@ -5,11 +5,11 @@
 // because it needs the running server. Dispatch checks the live manifest, so these
 // stop answering the moment the module is switched off.
 
-import { page } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
 import type { Extras, Frame, Viewer } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 type Build = (
@@ -84,19 +84,25 @@ const screen =
     const extras: Extras = {
       'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-      'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
+      'sidebar.foot':
+        req.headers['x-ket-navigation'] === 'fragment-v1'
+          ? undefined
+          : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
       'apps.footer': await ctx.joint(url, req, 'backend:apps.footer'),
     }
-    return page({
-      body: ctx.document({
-        lang,
-        title: 'KetSuite',
-        head: await ctx.styles(req),
-        body: await build(ctx.translate(lang), {
-          url,
-          raw: req,
-          frame: { viewer, extras, menu, menuFilter },
-        }),
+    return backendPage(ctx, req, {
+      lang,
+      title: 'KetSuite',
+      body: await build(ctx.translate(lang), {
+        url,
+        raw: req,
+        frame: {
+          navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
+          viewer,
+          extras,
+          menu,
+          menuFilter,
+        },
       }),
     })
   }

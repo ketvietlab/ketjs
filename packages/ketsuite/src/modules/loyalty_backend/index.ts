@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { defineModule, page, text } from 'ketjs'
+import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -39,6 +40,7 @@ const frameFor = async (ctx: ServeContext, url: URL, req: Req, activePath = url.
   const menuUrl = new URL(url)
   menuUrl.pathname = activePath
   return {
+    navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
     viewer: await viewerOf(ctx, url, req),
     menu: await ctx.menu(menuUrl, req),
     extras: {
@@ -58,13 +60,10 @@ const document = async (
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return page({
-    body: ctx.document({
-      lang,
-      title: _(title),
-      head: await ctx.styles(req),
-      body: await body(_, await frameFor(ctx, url, req, activePath)),
-    }),
+  return backendPage(ctx, req, {
+    lang,
+    title: _(title),
+    body: await body(_, await frameFor(ctx, url, req, activePath)),
   })
 }
 

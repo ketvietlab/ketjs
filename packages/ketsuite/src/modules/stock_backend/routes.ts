@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { json, page, text } from 'ketjs'
+import { json, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
 import type { JSXChild } from 'ketjs-view'
-import { metric, recordForm, stack, surface } from '../../ui/index.ts'
+import { backendPage, metric, recordForm, stack, surface } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
@@ -22,14 +22,18 @@ type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
 
 const frame = async (ctx: ServeContext, url: URL, req: Req) => ({
+  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
   extras: {
     'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
     'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', {
-      lang: ctx.localeOf(url, req),
-    }),
+    'sidebar.foot':
+      req.headers['x-ket-navigation'] === 'fragment-v1'
+        ? undefined
+        : await ctx.joint(url, req, 'backend:sidebar.foot', {
+            lang: ctx.localeOf(url, req),
+          }),
   },
 })
 
@@ -44,13 +48,10 @@ const render = async (
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return page({
-    body: ctx.document({
-      lang,
-      title: _(titleKey),
-      head: await ctx.styles(req),
-      body: stockScreen(_, _(titleKey), rows, await frame(ctx, url, req), additions, showEmpty),
-    }),
+  return backendPage(ctx, req, {
+    lang,
+    title: _(titleKey),
+    body: stockScreen(_, _(titleKey), rows, await frame(ctx, url, req), additions, showEmpty),
   })
 }
 
@@ -230,28 +231,25 @@ export const routes: Record<string, RouteEntry> = {
             available: String(Number(quantity) - Number(reserved)),
           }
         })
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.inventory'),
-          head: await ctx.styles(req),
-          body: inventoryScreen(
-            _,
-            {
-              rows,
-              products: products.map(({ value, label }) => ({ value, label })),
-              locations: options(data.locations.filter((row) => row.usage === 'internal')),
-              inventoryLocations: options(data.locations.filter((row) => row.usage === 'inventory')),
-              units: options(data.units),
-              lots: options(data.lots),
-              action: inLocale(url, '/admin/inventory'),
-              locationsHref: inLocale(url, '/admin/locations'),
-              applied: url.searchParams.has('applied'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.inventory'),
+        body: inventoryScreen(
+          _,
+          {
+            rows,
+            products: products.map(({ value, label }) => ({ value, label })),
+            locations: options(data.locations.filter((row) => row.usage === 'internal')),
+            inventoryLocations: options(data.locations.filter((row) => row.usage === 'inventory')),
+            units: options(data.units),
+            lots: options(data.lots),
+            action: inLocale(url, '/admin/inventory'),
+            locationsHref: inLocale(url, '/admin/locations'),
+            applied: url.searchParams.has('applied'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -285,31 +283,28 @@ export const routes: Record<string, RouteEntry> = {
       ])) as [AnyRow[], Awaited<ReturnType<typeof common>>]
       const locationsById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const pickingTypesById = new Map(data.pickingTypes.map((row) => [String(row.id), String(row.name)]))
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.transfers'),
-          head: await ctx.styles(req),
-          body: transfersScreen(
-            _,
-            {
-              rows: pickings.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
-                source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
-                destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
-                scheduledDate: dateTimeLabel(row.scheduledDate, lang),
-                state: String(row.state),
-                href: inLocale(url, `/admin/transfers/${String(row.id)}`),
-              })),
-              pickingTypes: options(data.pickingTypes),
-              action: inLocale(url, '/admin/transfers'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.transfers'),
+        body: transfersScreen(
+          _,
+          {
+            rows: pickings.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
+              source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
+              destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
+              scheduledDate: dateTimeLabel(row.scheduledDate, lang),
+              state: String(row.state),
+              href: inLocale(url, `/admin/transfers/${String(row.id)}`),
+            })),
+            pickingTypes: options(data.pickingTypes),
+            action: inLocale(url, '/admin/transfers'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -434,42 +429,40 @@ export const routes: Record<string, RouteEntry> = {
           detail: `${String(line.quantity)} ${String(line.productUomId)}`,
         })),
       ])
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.transferDetail'),
-          head: await ctx.styles(req),
-          body: transferDetailScreen(
-            _,
-            {
-              transfer: {
-                id: String(current.id),
-                name: String(current.name),
-                state,
-                scheduledDate: dateTimeLabel(current.scheduledDate, lang),
-                pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
-              },
-              rows: moveRows,
-              products,
-              units: options(data.units),
-              lots: options(data.lots),
-              operationOptions,
-              backorderPolicy,
-              action: here,
-              collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
-                resModel: 'stock.Picking',
-                resId: String(current.id),
-                lang,
-              }),
-              editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
-                pickingId: String(current.id),
-                lang,
-              }),
-              errors: invalid(url, _),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.transferDetail'),
+        body: transferDetailScreen(
+          _,
+          {
+            transfer: {
+              id: String(current.id),
+              name: String(current.name),
+              state,
+              scheduledDate: dateTimeLabel(current.scheduledDate, lang),
+              pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
             },
-            await frame(ctx, url, req),
-          ),
-        }),
+            rows: moveRows,
+            products,
+            units: options(data.units),
+            lots: options(data.lots),
+            operationOptions,
+            backorderPolicy,
+            action: here,
+            collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+              resModel: 'stock.Picking',
+              resId: String(current.id),
+              lang,
+            }),
+            editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
+              identity: `picking:${String(current.id)}`,
+              pickingId: String(current.id),
+              lang,
+            }),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -496,27 +489,24 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.warehouses'),
-          head: await ctx.styles(req),
-          body: warehousesScreen(
-            _,
-            {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                receptionSteps: String(row.receptionSteps),
-                deliverySteps: String(row.deliverySteps),
-              })),
-              action: inLocale(url, '/admin/warehouses'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.warehouses'),
+        body: warehousesScreen(
+          _,
+          {
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              code: String(row.code),
+              receptionSteps: String(row.receptionSteps),
+              deliverySteps: String(row.deliverySteps),
+            })),
+            action: inLocale(url, '/admin/warehouses'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -545,31 +535,28 @@ export const routes: Record<string, RouteEntry> = {
       const data = await common(ctx, url, req)
       const nameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.locations'),
-          head: await ctx.styles(req),
-          body: locationsScreen(
-            _,
-            {
-              rows: data.locations.map((row) => ({
-                id: String(row.id),
-                completeName: completeLocationName(row, nameById),
-                usage: String(row.usage),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-              })),
-              warehouses: options(data.warehouses),
-              parents: data.locations.map((row) => ({
-                value: String(row.id),
-                label: completeLocationName(row, nameById),
-              })),
-              action: inLocale(url, '/admin/locations'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.locations'),
+        body: locationsScreen(
+          _,
+          {
+            rows: data.locations.map((row) => ({
+              id: String(row.id),
+              completeName: completeLocationName(row, nameById),
+              usage: String(row.usage),
+              warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+            })),
+            warehouses: options(data.warehouses),
+            parents: data.locations.map((row) => ({
+              value: String(row.id),
+              label: completeLocationName(row, nameById),
+            })),
+            action: inLocale(url, '/admin/locations'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -603,34 +590,31 @@ export const routes: Record<string, RouteEntry> = {
         data.locations.map((row) => [String(row.id), completeLocationName(row, rawLocationNameById)]),
       )
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.pickingTypes'),
-          head: await ctx.styles(req),
-          body: pickingTypesScreen(
-            _,
-            {
-              rows: data.pickingTypes.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-                source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
-                destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
-                createBackorder: String(row.createBackorder ?? 'ask'),
-              })),
-              warehouses: options(data.warehouses),
-              locations: data.locations.map((row) => ({
-                value: String(row.id),
-                label: completeLocationNameById.get(String(row.id)) ?? String(row.name),
-              })),
-              action: inLocale(url, '/admin/picking-types'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.pickingTypes'),
+        body: pickingTypesScreen(
+          _,
+          {
+            rows: data.pickingTypes.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              code: String(row.code),
+              warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+              source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
+              destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
+              createBackorder: String(row.createBackorder ?? 'ask'),
+            })),
+            warehouses: options(data.warehouses),
+            locations: data.locations.map((row) => ({
+              value: String(row.id),
+              label: completeLocationNameById.get(String(row.id)) ?? String(row.name),
+            })),
+            action: inLocale(url, '/admin/picking-types'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -687,31 +671,28 @@ export const routes: Record<string, RouteEntry> = {
       const number = new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
         maximumFractionDigits: 6,
       })
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.lots'),
-          head: await ctx.styles(req),
-          body: lotsScreen(
-            _,
-            {
-              rows: lots.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                product: productById.get(String(row.productId)) ?? String(row.productId),
-                reference: String(row.ref ?? ''),
-                onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
-                onHandValue: onHandByLot.get(String(row.id)) ?? 0,
-                active: row.active !== false,
-                href: inLocale(url, `/admin/lots/${String(row.id)}`),
-              })),
-              products: productOptions,
-              action: inLocale(url, '/admin/lots'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.lots'),
+        body: lotsScreen(
+          _,
+          {
+            rows: lots.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              product: productById.get(String(row.productId)) ?? String(row.productId),
+              reference: String(row.ref ?? ''),
+              onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
+              onHandValue: onHandByLot.get(String(row.id)) ?? 0,
+              active: row.active !== false,
+              href: inLocale(url, `/admin/lots/${String(row.id)}`),
+            })),
+            products: productOptions,
+            action: inLocale(url, '/admin/lots'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 
@@ -804,40 +785,39 @@ export const routes: Record<string, RouteEntry> = {
             ),
           }
         })
-      return page({
-        body: ctx.document({
-          lang,
-          title: String(current.name),
-          head: await ctx.styles(req),
-          body: lotDetailScreen(
-            _,
-            {
-              lot: {
-                id: String(current.id),
-                name: String(current.name),
-                productId: String(current.productId),
-                productLabel,
-                ref: String(current.ref ?? ''),
-                note: String(current.note ?? ''),
-                active: current.active !== false,
-              },
-              rows: inventoryRows,
-              products: productOptions,
-              action: here,
-              collaboration: await ctx.joint(url, req, 'stock_backend:lot.collaboration', {
-                resModel: 'stock.Lot',
-                resId: String(current.id),
-                lang,
-              }),
-              editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
-                lotId: String(current.id),
-                lang,
-              }),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      const body = lotDetailScreen(
+        _,
+        {
+          lot: {
+            id: String(current.id),
+            name: String(current.name),
+            productId: String(current.productId),
+            productLabel,
+            ref: String(current.ref ?? ''),
+            note: String(current.note ?? ''),
+            active: current.active !== false,
+          },
+          rows: inventoryRows,
+          products: productOptions,
+          action: here,
+          collaboration: await ctx.joint(url, req, 'stock_backend:lot.collaboration', {
+            resModel: 'stock.Lot',
+            resId: String(current.id),
+            lang,
+          }),
+          editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
+            identity: `lot:${String(current.id)}`,
+            lotId: String(current.id),
+            lang,
+          }),
+          errors: invalid(url, _),
+        },
+        await frame(ctx, url, req),
+      )
+      return backendPage(ctx, req, {
+        lang,
+        title: String(current.name),
+        body,
       })
     },
 
@@ -869,27 +849,24 @@ export const routes: Record<string, RouteEntry> = {
         const routeId = String(rule.routeId)
         ruleCountByRoute.set(routeId, (ruleCountByRoute.get(routeId) ?? 0) + 1)
       }
-      return page({
-        body: ctx.document({
-          lang,
-          title: _('stock_backend.routes'),
-          head: await ctx.styles(req),
-          body: stockRoutesScreen(
-            _,
-            {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: localizedGeneratedRouteName(_, row),
-                sequence: Number(row.sequence),
-                ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
-                href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
-              })),
-              action: inLocale(url, '/admin/stock-routes'),
-              errors: invalid(url, _),
-            },
-            await frame(ctx, url, req),
-          ),
-        }),
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.routes'),
+        body: stockRoutesScreen(
+          _,
+          {
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: localizedGeneratedRouteName(_, row),
+              sequence: Number(row.sequence),
+              ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
+              href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
+            })),
+            action: inLocale(url, '/admin/stock-routes'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
       })
     },
 

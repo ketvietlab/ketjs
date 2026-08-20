@@ -67,12 +67,13 @@ const addMonths = (date, amount) => {
 const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 const errorText = (error) =>
   error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Calendar request failed'
-const callApi = async (name, input) => {
+const callApi = async (name, input, signal) => {
   const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
+    signal,
   })
   const payload = await response.json()
   if (!response.ok || payload.ok === false)
@@ -110,21 +111,30 @@ export function createCalendarView(runtime, props, seed = {}) {
   const busy = signal(false)
   const error = signal(seed.error ?? '')
   const events = signal(seed.events ?? [])
+  let activeRequest = null
+  let disposed = false
 
   const load = async ({ quiet = false } = {}) => {
     if (!quiet) status.set('loading')
     try {
+      activeRequest?.abort()
+      activeRequest = new AbortController()
       const range = rangeOf(view(), cursor())
-      const result = await callApi('calendar.listAgenda', {
-        rangeStart: range.start,
-        rangeStop: range.stop,
-        timezone: timezone(),
-        limit: 1000,
-      })
+      const result = await callApi(
+        'calendar.listAgenda',
+        {
+          rangeStart: range.start,
+          rangeStop: range.stop,
+          timezone: timezone(),
+          limit: 1000,
+        },
+        activeRequest.signal,
+      )
       events.set(result.events ?? [])
       error.set('')
       status.set('ready')
     } catch (cause) {
+      if (disposed || cause?.name === 'AbortError') return
       error.set(errorText(cause))
       status.set('error')
     }
@@ -151,23 +161,28 @@ export function createCalendarView(runtime, props, seed = {}) {
       const allDay = values.get('allDay') === 'on'
       const start = String(values.get('start') ?? '')
       const stop = String(values.get('stop') ?? '')
-      await callApi('calendar.saveEvent', {
-        id: crypto.randomUUID(),
-        name: String(values.get('name') ?? ''),
-        location: String(values.get('location') ?? ''),
-        allDay,
-        ...(allDay
-          ? { startDate: start.slice(0, 10), stopDate: addDays(stop.slice(0, 10), 1) }
-          : { startAt: new Date(start).toISOString(), stopAt: new Date(stop).toISOString() }),
-        timezone: timezone(),
-        privacy: 'public',
-        showAs: 'busy',
-        attendees: [],
-        reminders: [],
-      })
+      await callApi(
+        'calendar.saveEvent',
+        {
+          id: crypto.randomUUID(),
+          name: String(values.get('name') ?? ''),
+          location: String(values.get('location') ?? ''),
+          allDay,
+          ...(allDay
+            ? { startDate: start.slice(0, 10), stopDate: addDays(stop.slice(0, 10), 1) }
+            : { startAt: new Date(start).toISOString(), stopAt: new Date(stop).toISOString() }),
+          timezone: timezone(),
+          privacy: 'public',
+          showAs: 'busy',
+          attendees: [],
+          reminders: [],
+        },
+        activeRequest?.signal,
+      )
       form.reset()
       await load({ quiet: true })
     } catch (cause) {
+      if (disposed || cause?.name === 'AbortError') return
       error.set(errorText(cause))
       status.set('error')
     } finally {
@@ -183,7 +198,7 @@ export function createCalendarView(runtime, props, seed = {}) {
     <span data-ui="calendar-event-organizer">${labels.organizer}: ${entry.organizerName}</span>
   </article>`
 
-  return () => {
+  const render = () => {
     const range = rangeOf(view(), cursor())
     return html`<section data-ui="calendar-board" data-state=${status()} data-view=${view()} aria-label=${labels.title}>
       <header data-ui="calendar-head">
@@ -240,5 +255,12 @@ export function createCalendarView(runtime, props, seed = {}) {
             )}</div>`
       }
     </section>`
+  }
+  return {
+    view: render,
+    dispose: () => {
+      disposed = true
+      activeRequest?.abort()
+    },
   }
 }

@@ -4,7 +4,15 @@ import { parseFragment, document } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
 import { compose, createKetServer, createTheme, defineModule, defineTheme, sqliteAdapter } from 'ketjs'
 import type { KetError } from 'ketjs'
-import { ISLAND_TAG, domHost, html, hydrateIslands, renderIsland, signal } from 'ketjs-view'
+import {
+  ISLAND_TAG,
+  createIslandManager,
+  domHost,
+  html,
+  hydrateIslands,
+  renderIsland,
+  signal,
+} from 'ketjs-view'
 import type { IslandDefinition, IslandProps } from 'ketjs-view'
 import { website, websiteSearch } from 'ketsuite'
 
@@ -42,6 +50,7 @@ test('island: a theme places behaviour it cannot write', () => {
   const out = rt.renderRegion('page', { title: 'Cửa hàng', qty: 2 })
   assert.match(out, /<h1>Cửa hàng<\/h1>/)
   assert.match(out, new RegExp(`<${ISLAND_TAG} data-island="cart.widget"`))
+  assert.match(out, /data-key="\{&quot;qty&quot;:2\}"/)
   assert.match(out, /Giỏ \(<!--k\[-->2<!--k-->\)/, 'the island was rendered on the server too')
   assert.ok(!out.includes('on:'), 'and its handler stayed behind')
   const serializedProps = /data-props="([^"]*)"/.exec(out)?.[1] ?? ''
@@ -108,6 +117,18 @@ test('island: prop contracts and browser module paths are validated while compos
       ]),
     /client path must stay inside/,
   )
+  assert.throws(
+    () =>
+      compose([
+        defineModule({
+          name: 'bad_key',
+          islands: {
+            bad: { props: { id: 'id?', payload: 'json' }, key: ['id', 'payload'], view: () => () => html`x` },
+          },
+        }),
+      ]),
+    /key prop .* must be a declared, required scalar/,
+  )
 })
 
 test('island: only the island hydrates; the rest of the page stays inert', () => {
@@ -139,12 +160,111 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (3)', 'and stops when disposed')
 })
 
+test('island: a controller owns browser cleanup and server instances are finalized', () => {
+  let disposed = 0
+  const factory = () => ({
+    view: () => html`<button>controlled</button>`,
+    dispose: () => disposed++,
+  })
+  const markup = renderIsland('controlled', factory, {})
+  assert.equal(disposed, 1, 'the short-lived SSR controller is finalized')
+
+  const container = parseFragment(markup)
+  const live = hydrateIslands(domHost(document), container as never, { controlled: factory })
+  assert.equal(disposed, 1)
+  live[0]!.dispose()
+  live[0]!.dispose()
+  assert.equal(disposed, 2, 'browser cleanup runs once even if disposal is repeated')
+})
+
+test('island manager: same identity preserves DOM and local reactive state', () => {
+  const factory = (props: IslandProps) => {
+    const clicks = signal(0)
+    return () =>
+      html`<button on:click=${() => clicks.set((value) => value + 1)}>${props.label}: ${clicks()}</button>`
+  }
+  const first = parseFragment(renderIsland('counter', factory, { id: 'one', label: 'A' }, { key: ['id'] }))
+  const manager = createIslandManager(domHost(document), { counter: factory })
+  manager.hydrate(first as never)
+  const island = first.querySelectorAll(ISLAND_TAG)[0]!
+  const button = first.querySelectorAll('button')[0]!
+  button.fire('click')
+
+  const next = parseFragment(renderIsland('counter', factory, { id: 'one', label: 'A' }, { key: ['id'] }))
+  manager.reconcile(first as never, next as never)
+  assert.equal(first.querySelectorAll(ISLAND_TAG)[0], island)
+  assert.equal(first.querySelectorAll('button')[0], button)
+  assert.match(button.innerHTML.replace(/<!--k\[?-->/g, ''), /A: 1/)
+})
+
+test('island manager: changed props update a controller or remount a plain view', () => {
+  let updates = 0
+  const controlled = (props: IslandProps) => {
+    const label = signal(String(props.label))
+    return {
+      view: () => html`<span>${label()}</span>`,
+      update: (next: Readonly<IslandProps>) => {
+        updates++
+        label.set(String(next.label))
+      },
+    }
+  }
+  const first = parseFragment(renderIsland('label', controlled, { id: 'one', label: 'A' }, { key: ['id'] }))
+  const manager = createIslandManager(domHost(document), { label: controlled })
+  manager.hydrate(first as never)
+  const island = first.querySelectorAll(ISLAND_TAG)[0]!
+  const next = parseFragment(renderIsland('label', controlled, { id: 'one', label: 'B' }, { key: ['id'] }))
+  manager.reconcile(first as never, next as never)
+  assert.equal(first.querySelectorAll(ISLAND_TAG)[0], island)
+  assert.equal(updates, 1)
+  assert.match(first.innerHTML.replace(/<!--k\[?-->/g, ''), />B</)
+
+  let disposed = 0
+  const plain = (props: IslandProps) => ({
+    view: () => html`<i>${props.label}</i>`,
+    dispose: () => disposed++,
+  })
+  const oldPlain = parseFragment(renderIsland('plain', plain, { id: 'one', label: 'A' }, { key: ['id'] }))
+  disposed = 0
+  const plainManager = createIslandManager(domHost(document), { plain })
+  plainManager.hydrate(oldPlain as never)
+  const oldIsland = oldPlain.querySelectorAll(ISLAND_TAG)[0]!
+  const nextPlain = parseFragment(renderIsland('plain', plain, { id: 'one', label: 'B' }, { key: ['id'] }))
+  disposed = 0
+  plainManager.reconcile(oldPlain as never, nextPlain as never)
+  assert.notEqual(oldPlain.querySelectorAll(ISLAND_TAG)[0], oldIsland)
+  assert.equal(disposed, 1, 'the replaced browser controller is disposed once')
+})
+
+test('island manager: duplicate identities remount and warn instead of preserving ambiguously', () => {
+  const factory = (props: IslandProps) => () => html`<b>${props.label}</b>`
+  const first = parseFragment(renderIsland('label', factory, { id: 'one', label: 'A' }, { key: ['id'] }))
+  const manager = createIslandManager(domHost(document), { label: factory })
+  manager.hydrate(first as never)
+  const oldIsland = first.querySelectorAll(ISLAND_TAG)[0]!
+  const markup = renderIsland('label', factory, { id: 'one', label: 'A' }, { key: ['id'] })
+  const next = parseFragment(markup + markup)
+  const warnings: string[] = []
+  const previousWarn = console.warn
+  console.warn = (message) => warnings.push(String(message))
+  try {
+    manager.reconcile(first as never, next as never)
+  } finally {
+    console.warn = previousWarn
+  }
+
+  assert.equal(first.querySelectorAll(ISLAND_TAG).length, 2)
+  assert.notEqual(first.querySelectorAll(ISLAND_TAG)[0], oldIsland)
+  assert.deepEqual(warnings.length, 1)
+  assert.match(warnings[0]!, /duplicate key.*remounting ambiguous instances/)
+})
+
 test('island: the server publishes a tenant-specific browser bootstrap and view runtime', async () => {
   const shell = defineTheme({
     name: 'island_shell',
     depends: ['website_search'],
     templates: {
-      layout: `<html><body>{% island "website.search" %}</body></html>`,
+      layout: `<html><body><main data-ket-slot="website.page">{% island "website.search" %}</main></body></html>`,
       'website.page': '<main></main>',
     },
   })
@@ -169,7 +289,11 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
 
     const bootstrap = await fetch(`${base}/_ket/islands.js`)
     assert.match(bootstrap.headers.get('content-type') ?? '', /^text\/javascript/)
-    assert.match(await bootstrap.text(), /\/_ket\/asset\/website_search\/search\.mjs/)
+    const bootstrapSource = await bootstrap.text()
+    assert.match(bootstrapSource, /\/_ket\/asset\/website_search\/search\.mjs/)
+    assert.match(bootstrapSource, /createIslandManager/)
+    assert.match(bootstrapSource, /x-ket-navigation/)
+    assert.match(bootstrapSource, /navigation fragment contains unknown island/)
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)

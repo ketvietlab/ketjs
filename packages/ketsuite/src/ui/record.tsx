@@ -38,6 +38,13 @@ export type RecordSummaryItem = {
   href?: string | null
 }
 
+export type RecordWorkspaceSlots = {
+  header: string
+  body: string
+  /** Present only when returning the two slots as a fragment response. */
+  fragmentTitle?: string
+}
+
 export const recordToggle = (options: {
   name: string
   label: string
@@ -66,7 +73,7 @@ const summaryContent = (item: RecordSummaryItem): TemplateResult => (
   </>
 )
 
-export const recordWorkspace = (options: {
+type RecordWorkspaceOptions = {
   kicker?: string | null
   title: string
   subtitle?: string | null
@@ -79,56 +86,76 @@ export const recordWorkspace = (options: {
   body: JSXChild
   aside?: JSXChild
   asideLabel?: string | null
-}): TemplateResult => (
-  <div data-ui="record-workspace" data-has-aside={String(options.aside !== undefined)}>
-    <section data-ui="record-sheet">
-      <header data-ui="record-header">
-        <div data-ui="record-identity">
-          <div data-ui="record-thumbnail" data-empty={String(!options.image)}>
-            {options.image ? <img src={options.image.src} alt={options.image.alt} /> : options.imageFallback}
-          </div>
-          <div>
-            {!!options.kicker && <p data-ui="record-kicker">{options.kicker}</p>}
-            <h1 data-ui="record-heading">{options.title}</h1>
-            {!!options.subtitle && <p data-ui="record-subtitle">{options.subtitle}</p>}
-          </div>
-        </div>
-        {!!options.summary?.length && (
-          <div data-ui="record-facts">
-            {each(
-              options.summary,
-              (item) => item.id,
-              (item) =>
-                item.href ? (
-                  <a data-ui="record-fact" href={item.href}>
-                    {summaryContent(item)}
-                  </a>
-                ) : (
-                  <div data-ui="record-fact">{summaryContent(item)}</div>
-                ),
-            )}
-          </div>
+  slots?: RecordWorkspaceSlots
+}
+
+const recordHeader = (options: RecordWorkspaceOptions): TemplateResult => (
+  <>
+    <div data-ui="record-identity">
+      <div data-ui="record-thumbnail" data-empty={String(!options.image)}>
+        {options.image ? <img src={options.image.src} alt={options.image.alt} /> : options.imageFallback}
+      </div>
+      <div>
+        {!!options.kicker && <p data-ui="record-kicker">{options.kicker}</p>}
+        <h1 data-ui="record-heading">{options.title}</h1>
+        {!!options.subtitle && <p data-ui="record-subtitle">{options.subtitle}</p>}
+      </div>
+    </div>
+    {!!options.summary?.length && (
+      <div data-ui="record-facts">
+        {each(
+          options.summary,
+          (item) => item.id,
+          (item) =>
+            item.href ? (
+              <a data-ui="record-fact" href={item.href}>
+                {summaryContent(item)}
+              </a>
+            ) : (
+              <div data-ui="record-fact">{summaryContent(item)}</div>
+            ),
         )}
-        {!!options.badges?.length && (
-          <div data-ui="record-badges">
-            {each(
-              options.badges,
-              (_, index) => index,
-              (item) => (
-                <>{item}</>
-              ),
-            )}
-          </div>
-        )}
-      </header>
-      {options.navigation !== undefined && <div data-ui="record-navigation">{options.navigation}</div>}
-      {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
-      <div data-ui="record-body">{options.body}</div>
-    </section>
-    {options.aside !== undefined && (
-      <aside data-ui="record-aside" aria-label={options.asideLabel ?? null}>
-        {options.aside}
-      </aside>
+      </div>
     )}
-  </div>
+    {!!options.badges?.length && (
+      <div data-ui="record-badges">
+        {each(
+          options.badges,
+          (_, index) => index,
+          (item) => (
+            <>{item}</>
+          ),
+        )}
+      </div>
+    )}
+  </>
 )
+
+export const recordWorkspace = (options: RecordWorkspaceOptions): TemplateResult => {
+  if (options.slots?.fragmentTitle !== undefined)
+    return (
+      <ket-fragments data-title={options.slots.fragmentTitle}>
+        <template data-ket-slot={options.slots.header}>{recordHeader(options)}</template>
+        <template data-ket-slot={options.slots.body}>{options.body}</template>
+      </ket-fragments>
+    )
+  return (
+    <div data-ui="record-workspace" data-has-aside={String(options.aside !== undefined)}>
+      <section data-ui="record-sheet">
+        <header data-ui="record-header" data-ket-slot={options.slots?.header}>
+          {recordHeader(options)}
+        </header>
+        {options.navigation !== undefined && <div data-ui="record-navigation">{options.navigation}</div>}
+        {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
+        <div data-ui="record-body" data-ket-slot={options.slots?.body}>
+          {options.body}
+        </div>
+      </section>
+      {options.aside !== undefined && (
+        <aside data-ui="record-aside" aria-label={options.asideLabel ?? null}>
+          {options.aside}
+        </aside>
+      )}
+    </div>
+  )
+}

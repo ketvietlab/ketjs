@@ -183,6 +183,12 @@ The module declares the island and prop contract; the theme only chooses placeme
 are composition errors against the full deployment. At runtime, an island from a disabled module
 renders empty.
 
+Built-in themes may mark one stable page boundary with `data-ket-slot` and expose the matching region
+through `serve.pages.region`. Internal GET navigation then replaces only that region. Keep global
+islands such as menu search outside it when their state should survive page changes. A third-party
+theme that declares no slot continues to receive complete documents; fragment navigation is not an
+implicit theme contract.
+
 ## Safe view models
 
 Modules expose theme-visible fields through `views`:

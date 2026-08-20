@@ -42,8 +42,8 @@ export default defineModule({
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
-    'template.editor': { props: { templateId: 'id', lang: 'text?' } },
-    'variant.editor': { props: { productId: 'id', lang: 'text?' } },
+    'template.editor': { props: { identity: 'text', templateId: 'id', lang: 'text?' } },
+    'variant.editor': { props: { identity: 'text', productId: 'id', lang: 'text?' } },
   },
   messages: {
     vi: {

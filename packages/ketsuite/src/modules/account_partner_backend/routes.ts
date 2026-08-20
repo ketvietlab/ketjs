@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { page, text } from 'ketjs'
+import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountingTermsScreen } from './screens.ts'
+import { backendPage } from '../../ui/index.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
@@ -34,29 +35,28 @@ const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, 
       .filter((row) => row.accountType === 'liability_payable')
       .map((row) => ({ value: String(row.id), label: `${row.code} · ${row.name}` })),
   }
-  return page({
-    body: ctx.document({
-      lang,
-      title: _('account_partner_backend.screen.title', { name: String(partner.name) }),
-      head: await ctx.styles(req),
-      body: accountingTermsScreen(
-        _,
-        partner as never,
-        terms as never,
-        options,
-        {
-          viewer: await viewerOf(ctx, url, req),
-          menu: await ctx.menu(url, req),
-          extras: {
-            'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-            'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-          },
+  const title = _('account_partner_backend.screen.title', { name: String(partner.name) })
+  return backendPage(ctx, req, {
+    lang,
+    title,
+    body: accountingTermsScreen(
+      _,
+      partner as never,
+      terms as never,
+      options,
+      {
+        navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
+        viewer: await viewerOf(ctx, url, req),
+        menu: await ctx.menu(url, req),
+        extras: {
+          'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
+          'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
         },
-        inLocale(url, `/admin/partners/${partnerId}/accounting`),
-        inLocale(url, `/admin/partners/${partnerId}`),
-        errors,
-      ),
-    }),
+      },
+      inLocale(url, `/admin/partners/${partnerId}/accounting`),
+      inLocale(url, `/admin/partners/${partnerId}`),
+      errors,
+    ),
   })
 }
 

@@ -1,4 +1,5 @@
 import { defineModule } from 'ketjs'
+import { fills } from './fills.ts'
 import { islands } from './islands.ts'
 
 export default defineModule({
@@ -22,5 +23,6 @@ export default defineModule({
     },
   },
   depends: ['website'],
+  fills,
   islands,
 })

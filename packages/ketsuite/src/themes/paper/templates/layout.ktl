@@ -8,7 +8,7 @@
 </head>
 <body class="ket">
   {% joint "website:page.body.start" %}
-  <main class="page">{% region "website.page" %}</main>
+  <main class="page" data-ket-slot="website.page">{% region "website.page" %}</main>
   {% joint "website:page.body.end" %}
 </body>
 </html>
