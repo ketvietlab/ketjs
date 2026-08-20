@@ -11,6 +11,7 @@ import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
 import { transfersScreen } from './transfers-screen.tsx'
+import { warehousesScreen } from './warehouses-screen.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
@@ -454,44 +455,28 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.warehouses',
-        rows.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: 'warehouse',
-          detail: `${String(row.code)} · ${selectionLabel(_, 'receptionSteps', row.receptionSteps)} / ${selectionLabel(_, 'deliverySteps', row.deliverySteps)}`,
-        })),
-        [
-          surface({
-            body: recordForm({
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.warehouses'),
+          head: await ctx.styles(req),
+          body: warehousesScreen(
+            _,
+            {
+              rows: rows.map((row) => ({
+                id: String(row.id),
+                name: String(row.name),
+                code: String(row.code),
+                receptionSteps: String(row.receptionSteps),
+                deliverySteps: String(row.deliverySteps),
+              })),
               action: inLocale(url, '/admin/warehouses'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
               errors: invalid(url, _),
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name'), required: true },
-                { name: 'code', label: _('stock_backend.field.code'), required: true },
-                {
-                  name: 'receptionSteps',
-                  label: _('stock_backend.field.receptionSteps'),
-                  type: 'select',
-                  options: selectionOptions(_, 'receptionSteps', ['one_step', 'two_steps', 'three_steps']),
-                },
-                {
-                  name: 'deliverySteps',
-                  label: _('stock_backend.field.deliverySteps'),
-                  type: 'select',
-                  options: selectionOptions(_, 'deliverySteps', ['ship_only', 'pick_ship', 'pick_pack_ship']),
-                },
-              ],
-            }),
-          }),
-        ],
-      )
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/locations':
