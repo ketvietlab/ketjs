@@ -24,6 +24,7 @@ import {
   optionsOf,
   reportScreen,
 } from './screens.ts'
+import { accountsScreen } from './accounts-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
@@ -462,18 +463,18 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/accounts',
+            `/admin/accounts${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listAccounts', {}, url, req)) as AnyRow[]
         return document(ctx, url, req, 'account_backend.accounts.title', (_, tr, shell) =>
-          entityScreen(tr, {
-            title: tr('account_backend.accounts.title'),
+          accountsScreen(tr, {
             frame: shell,
-            action: '/admin/accounts',
-            submit: tr('account_backend.action.create'),
+            action: `/admin/accounts${localeSuffix(url)}`,
             rows,
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
             fields: [
               { name: 'code', label: tr('account_backend.field.code'), required: true },
               { name: 'name', label: tr('account_backend.field.name'), required: true },
@@ -484,25 +485,6 @@ export default defineModule({
                 options: optionsOf(tr, 'accountType', ACCOUNT_TYPES),
               },
               { name: 'reconcile', label: tr('account_backend.field.reconcile'), type: 'checkbox' },
-            ],
-            columns: [
-              {
-                key: 'code',
-                label: tr('account_backend.field.code'),
-                cell: (row) => code(String(row.code)),
-                priority: 'primary',
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'type',
-                label: tr('account_backend.field.accountType'),
-                cell: (row) => labelOf(tr, 'accountType', row.accountType),
-              },
-              {
-                key: 'reconcile',
-                label: tr('account_backend.field.reconcile'),
-                cell: (row) => (row.reconcile ? tr('account_backend.yes') : tr('account_backend.no')),
-              },
             ],
           }),
         )
@@ -1231,6 +1213,18 @@ const vi: Record<string, string> = {
   'dashboard.records': 'Bản ghi',
   'dashboard.reports': 'Báo cáo tài chính',
   'accounts.title': 'Hệ thống tài khoản',
+  'account.kicker': 'Cấu hình sổ cái',
+  'account.subtitle': 'Quản lý hệ thống mã và loại tài khoản theo chuẩn Odoo 19.',
+  'account.summary.total': 'Tổng tài khoản',
+  'account.summary.asset': 'Tài sản',
+  'account.summary.liability': 'Nợ và vốn',
+  'account.summary.profit': 'Kết quả kinh doanh',
+  'account.create.title': 'Tạo tài khoản',
+  'account.create.hint': 'Mã phải duy nhất trong công ty; loại tài khoản quyết định hành vi báo cáo.',
+  'account.list.title': 'Hệ thống tài khoản hiện có',
+  'account.list.hint': 'Kiểm tra mã, loại và khả năng đối soát của từng tài khoản.',
+  'account.empty': 'Chưa có tài khoản',
+  'account.emptyHint': 'Tạo tài khoản đầu tiên để cấu hình sổ cái.',
   'journals.title': 'Sổ nhật ký',
   'taxes.title': 'Thuế',
   'terms.title': 'Điều khoản thanh toán',
@@ -1381,6 +1375,18 @@ const en: Record<string, string> = {
   'dashboard.records': 'Records',
   'dashboard.reports': 'Financial reports',
   'accounts.title': 'Chart of accounts',
+  'account.kicker': 'Ledger configuration',
+  'account.subtitle': 'Manage account codes and Odoo 19 account types.',
+  'account.summary.total': 'Total accounts',
+  'account.summary.asset': 'Assets',
+  'account.summary.liability': 'Liabilities & equity',
+  'account.summary.profit': 'Profit & loss',
+  'account.create.title': 'Create an account',
+  'account.create.hint': 'The code is unique per company; account type determines reporting behavior.',
+  'account.list.title': 'Current chart of accounts',
+  'account.list.hint': 'Review the code, type, and reconciliation behavior of each account.',
+  'account.empty': 'No accounts yet',
+  'account.emptyHint': 'Create the first account to configure the general ledger.',
   'journals.title': 'Journals',
   'taxes.title': 'Taxes',
   'terms.title': 'Payment terms',
