@@ -187,6 +187,7 @@ export const orderDetail = (
     lineFields: FormField[]
     invoiceFields: FormField[]
     integration?: JSXChild
+    printActions?: JSXChild
   },
 ): TemplateResult => {
   const lines = (o.order.lines as AnyRow[] | undefined) ?? [],
@@ -239,6 +240,7 @@ export const orderDetail = (
           contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
       }),
       ...(o.integration === undefined ? [] : [o.integration]),
+      ...(o.printActions === undefined ? [] : [surface({ body: o.printActions })]),
       ...(actions.length ? [surface({ body: recordActions({ action: o.actionPath, actions }) })] : []),
       section({
         title: _('sale_backend.lines.title'),
