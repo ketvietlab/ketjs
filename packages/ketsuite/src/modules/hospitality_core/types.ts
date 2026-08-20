@@ -22,6 +22,15 @@ export const AMENITY_SCOPES = ['property', 'room'] as const
 export const BED_TYPES = ['single', 'double', 'queen', 'king', 'sofa', 'bunk'] as const
 export const CANCELLATION_POLICY_TYPES = ['flexible', 'moderate', 'strict', 'non_refundable'] as const
 export const CONTACT_TYPES = ['general', 'frontdesk', 'reservation'] as const
+export const CONTENT_IMAGE_CATEGORIES = [
+  'exterior',
+  'lobby',
+  'room',
+  'bathroom',
+  'restaurant',
+  'pool',
+  'other',
+] as const
 export const BOOKING_TYPES = ['nightly', 'hourly', 'weekly', 'monthly'] as const
 export const RATE_TYPES = ['nightly', 'hourly', 'weekly', 'monthly'] as const
 export const MEAL_PLANS = ['RO', 'BB', 'HB', 'FB', 'AI'] as const
@@ -45,6 +54,7 @@ export type AmenityScope = (typeof AMENITY_SCOPES)[number]
 export type BedType = (typeof BED_TYPES)[number]
 export type CancellationPolicyType = (typeof CANCELLATION_POLICY_TYPES)[number]
 export type ContactType = (typeof CONTACT_TYPES)[number]
+export type ContentImageCategory = (typeof CONTENT_IMAGE_CATEGORIES)[number]
 export type BookingType = (typeof BOOKING_TYPES)[number]
 export type RateType = (typeof RATE_TYPES)[number]
 export type MealPlan = (typeof MEAL_PLANS)[number]
