@@ -93,6 +93,14 @@ const invalidErrors = (url: URL, _: ReturnType<ServeContext['translate']>) =>
 const stockEnabled = async (ctx: ServeContext, req: Parameters<Route>[1]) =>
   Boolean((await ctx.live(req)).functions['stock.configureProduct'])
 
+const TRACKING = ['none', 'lot', 'serial'] as const
+const validStockForm = (form: Record<string, string>): boolean => {
+  const tracking = form.tracking || 'none'
+  return (
+    (TRACKING as readonly string[]).includes(tracking) && (form.isStorable === '1' || tracking === 'none')
+  )
+}
+
 const configureStock = (
   ctx: ServeContext,
   url: URL,
@@ -248,6 +256,8 @@ export const routes: Record<string, RouteEntry> = {
       const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
         const form = await readForm(req)
+        if (hasStock && !validStockForm(form))
+          return seeOther(inLocale(url, '/admin/products/new?invalid=1&count=1'))
         const id = randomUUID()
         const result = await ctx.call(
           'product.saveTemplate',
