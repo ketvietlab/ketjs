@@ -105,6 +105,17 @@ export async function collaborationEvidenceApp(
       countedQuantity: '18',
       productUomId: 'unit',
     })
+    await call('stock.saveOrderpoint', {
+      id: 'orderpoint-collab',
+      productId: 'variant-collab',
+      warehouseId: 'wh',
+      locationId: 'wh:stock',
+      trigger: 'manual',
+      minQuantity: '40',
+      maxQuantity: '50',
+      replenishmentUomId: 'unit',
+      routeId: 'wh:receipt-route',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
