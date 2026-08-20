@@ -155,6 +155,12 @@ async function confirm(ctx: Ctx, id: unknown) {
 }
 
 export const functions: Record<string, FnSpec> = {
+  listInvoicePolicies: defineFn({
+    input: {},
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: (ctx) => ctx.db.select('product.Template', { saleOk: true }),
+  }),
   setInvoicePolicy: defineFn({
     input: { templateId: 'id', invoicePolicy: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
