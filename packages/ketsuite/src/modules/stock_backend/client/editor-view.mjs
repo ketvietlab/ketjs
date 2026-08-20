@@ -13,7 +13,23 @@ const LABELS = {
   },
 }
 
-const labelsOf = (props) => LABELS[String(props.lang ?? '').toLowerCase()] ?? LABELS.vi
+const LOT_LABELS = {
+  vi: {
+    saving: 'Đang lưu lô hoặc sê-ri…',
+    saved: 'Đã lưu lô hoặc sê-ri.',
+    failed: 'Không thể lưu lô hoặc sê-ri. Vui lòng kiểm tra lại.',
+  },
+  en: {
+    saving: 'Saving lot or serial…',
+    saved: 'Lot or serial saved.',
+    failed: 'The lot or serial could not be saved. Please review the form.',
+  },
+}
+
+const labelsOf = (props) => {
+  const source = props.lotId ? LOT_LABELS : LABELS
+  return source[String(props.lang ?? '').toLowerCase()] ?? source.vi
+}
 
 const errorText = async (response, fallback) => {
   try {
@@ -36,7 +52,7 @@ const replaceRecordParts = (markup) => {
   const currentHeader = document.querySelector('[data-ui="record-header"]')
   const currentBody = document.querySelector('[data-ui="record-body"]')
   if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-    throw new Error('The refreshed Transfer fragment is incomplete.')
+    throw new Error('The refreshed record fragment is incomplete.')
 
   currentHeader.replaceWith(document.importNode(nextHeader, true))
   currentBody.replaceWith(document.importNode(nextBody, true))
@@ -47,7 +63,8 @@ const editorHostFor = (props) => {
   if (typeof document === 'undefined') return null
   return Array.from(document.querySelectorAll('ket-island[data-island="stock.editor"]')).find((element) => {
     try {
-      return JSON.parse(element.getAttribute('data-props') ?? '{}').pickingId === props.pickingId
+      const hostProps = JSON.parse(element.getAttribute('data-props') ?? '{}')
+      return props.lotId ? hostProps.lotId === props.lotId : hostProps.pickingId === props.pickingId
     } catch {
       return false
     }
@@ -60,6 +77,7 @@ export function createStockEditorView(runtime, props) {
   const state = signal('idle')
   const message = signal('')
   const host = editorHostFor(props)
+  const scope = props.lotId ? 'stock-lot' : 'stock-transfer'
   if (host) host.hidden = true
 
   const showState = (nextState, nextMessage) => {
@@ -71,7 +89,7 @@ export function createStockEditorView(runtime, props) {
   if (typeof document !== 'undefined') {
     document.addEventListener('submit', async (event) => {
       const form = event.target
-      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== 'stock-transfer') return
+      if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
       event.preventDefault()
       if (state() === 'saving') return
 
@@ -90,7 +108,7 @@ export function createStockEditorView(runtime, props) {
           headers: {
             accept: 'text/html',
             'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            'x-ket-partial': 'stock-transfer',
+            'x-ket-partial': scope,
           },
           body,
         })

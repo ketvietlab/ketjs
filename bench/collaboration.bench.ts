@@ -9,7 +9,8 @@ const percentile = (values: number[], point: number): number => {
   return ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * point))] ?? 0
 }
 
-const e2e = await collaborationEvidenceApp()
+const databaseUrl = process.env.KET_BENCH_PG?.trim()
+const e2e = await collaborationEvidenceApp(databaseUrl ? { databaseUrl } : {})
 try {
   await e2e.client.login({ login: 'admin', password: 'correct horse' })
   const screens = [
@@ -62,6 +63,11 @@ try {
       label: 'Operation type list',
       path: '/admin/picking-types?lang=vi',
       markers: ['picking-type-create-form', 'record-workspace', 'Loại hoạt động đã cấu hình'],
+    },
+    {
+      label: 'Lot collaboration',
+      path: '/admin/lots/lot-collab?lang=vi',
+      markers: ['lot-detail-form', 'mail.chatter', 'activity.record', 'record-workspace'],
     },
     {
       label: 'My activities',

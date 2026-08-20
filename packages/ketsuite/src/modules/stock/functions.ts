@@ -1368,14 +1368,22 @@ functions.savePicking = defineFn({
 functions.saveLot = defineFn({
   input: { id: 'id', productId: 'id', name: 'text', ref: 'text?', note: 'text?', active: 'bool?' },
   output: { ok: 'bool', id: 'id?', errors: 'json?' },
-  effects: ['read:product.Product', 'read:stock.Lot', 'write:stock.Lot'],
+  effects: ['read:product.Product', 'read:stock.Lot', 'write:stock.Lot', 'read:stock.MoveLine'],
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
     if (!(await ctx.db.select('product.Product', { id: args.productId }))[0])
       return invalid('productId', 'biến thể không tồn tại')
     const existing = (await ctx.db.select('stock.Lot', { id: args.id }))[0]
-    const values = { ...args, active: args.active ?? true }
+    if (existing && existing.productId !== args.productId) {
+      const moveLines = await ctx.db.select('stock.MoveLine', { lotId: args.id })
+      if (moveLines.length)
+        return invalid(
+          'productId',
+          'không thể đổi sản phẩm khi lô hoặc sê-ri đã được dùng trong dịch chuyển kho',
+        )
+    }
+    const values = { ...args, active: args.active ?? existing?.active ?? true }
     const cs = ctx
       .change('stock.Lot', values, existing ?? null)
       .cast(['id', 'productId', 'name', 'ref', 'note', 'active'])

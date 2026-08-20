@@ -8,6 +8,7 @@ import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
+import { lotDetailScreen } from './lot-screen.tsx'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
@@ -635,6 +636,7 @@ export const routes: Record<string, RouteEntry> = {
           name: String(row.name),
           kind: 'lot',
           detail: `${String(row.productId)} · ${String(row.ref ?? '')}`,
+          href: inLocale(url, `/admin/lots/${String(row.id)}`),
         })),
         [
           surface({
@@ -653,6 +655,132 @@ export const routes: Record<string, RouteEntry> = {
           }),
         ],
       )
+    },
+
+  '/admin/lots/{id}':
+    (ctx): Route =>
+    async (url, req, params) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const here = inLocale(url, `/admin/lots/${params.id}`)
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
+      let current = lots.find((row) => String(row.id) === params.id)
+      if (!current) return text(_('stock_backend.lot.error.notFound'), { status: 404 })
+      if (req.method === 'POST') {
+        const partial = req.headers['x-ket-partial'] === 'stock-lot'
+        const form = await readForm(req)
+        const values = {
+          productId: form.productId ?? '',
+          name: form.name ?? '',
+          ref: form.ref || null,
+          note: form.note || null,
+        }
+        const result = await ctx.call(
+          'stock.saveLot',
+          {
+            id: params.id,
+            ...values,
+          },
+          url,
+          req,
+        )
+        if (!(result as { ok?: boolean }).ok) {
+          if (partial)
+            return json(
+              { ok: false, message: _('stock_backend.error.invalid'), errors: errorsOf(result) },
+              { status: 422 },
+            )
+          return seeOther(`${here}${here.includes('?') ? '&' : '?'}invalid=1`)
+        }
+        if (!partial) return seeOther(here)
+        current = { ...current, ...values }
+      }
+      const [products, rawLocations, quants] = (await Promise.all([
+        ctx.call('stock.listStorableProducts', {}, url, req),
+        ctx.call('stock.listLocations', {}, url, req),
+        ctx.call('stock.listQuants', { productId: String(current.productId) }, url, req),
+      ])) as [AnyRow[], AnyRow[], AnyRow[]]
+      const locations = localizeGeneratedRecords(_, rawLocations, 'location')
+      const listedProductOptions = products.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
+      )
+      const productOptions = listedProductOptions.some(
+        (product) => product.value === String(current.productId),
+      )
+        ? listedProductOptions
+        : [{ value: String(current.productId), label: String(current.productId) }, ...listedProductOptions]
+      const productLabel =
+        productOptions.find((product) => product.value === String(current.productId))?.label ??
+        String(current.productId)
+      const rawLocationNameById = new Map(
+        locations.map((location) => [String(location.id), String(location.name)]),
+      )
+      const locationById = new Map(locations.map((location) => [String(location.id), location]))
+      const locationNameById = new Map(
+        locations.map((location) => [
+          String(location.id),
+          completeLocationName(location, rawLocationNameById),
+        ]),
+      )
+      const inventoryRows = quants
+        .filter((quant) => String(quant.lotId ?? '') === params.id)
+        .map((quant) => {
+          const quantity = String(quant.quantity)
+          const reserved = String(quant.reservedQuantity)
+          return {
+            id: String(quant.id),
+            location: locationNameById.get(String(quant.locationId)) ?? String(quant.locationId),
+            quantity,
+            reserved,
+            available: String(Number(quantity) - Number(reserved)),
+            countsAsOnHand: ['internal', 'transit'].includes(
+              String(locationById.get(String(quant.locationId))?.usage),
+            ),
+          }
+        })
+      return page({
+        body: ctx.document({
+          lang,
+          title: String(current.name),
+          head: await ctx.styles(req),
+          body: lotDetailScreen(
+            _,
+            {
+              lot: {
+                id: String(current.id),
+                name: String(current.name),
+                productId: String(current.productId),
+                productLabel,
+                ref: String(current.ref ?? ''),
+                note: String(current.note ?? ''),
+                active: current.active !== false,
+              },
+              rows: inventoryRows,
+              products: productOptions,
+              action: here,
+              collaboration: await ctx.joint(url, req, 'stock_backend:lot.collaboration', {
+                resModel: 'stock.Lot',
+                resId: String(current.id),
+                lang,
+              }),
+              editor: await ctx.joint(url, req, 'stock_backend:lot.editor', {
+                lotId: String(current.id),
+                lang,
+              }),
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/stock-routes':
