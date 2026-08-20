@@ -74,6 +74,7 @@ const safeNext = (value: string | undefined): string => {
   if (
     !value?.startsWith('/') ||
     value.startsWith('//') ||
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: return paths must reject ASCII control characters.
     /[\\\u0000-\u001f\u007f]/.test(value) ||
     /%5c/i.test(value)
   )
