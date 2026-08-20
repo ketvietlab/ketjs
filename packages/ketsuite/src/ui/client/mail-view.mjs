@@ -219,7 +219,9 @@ export function createChatterView(runtime, props, seed = {}) {
           ${data.following ? labels.unfollow : labels.follow}
         </button>
       </header>
-      ${composerKind() ? html`<form data-ui="chatter-composer" on:submit=${post}>
+      ${
+        composerKind()
+          ? html`<form data-ui="chatter-composer" on:submit=${post}>
         <input type="hidden" name="kind" value=${composerKind()}>
         <textarea data-ui="chatter-body" name="body" placeholder=${labels.placeholder} required disabled=${busy()}></textarea>
         <div data-ui="chatter-compose-actions">
@@ -229,7 +231,9 @@ export function createChatterView(runtime, props, seed = {}) {
             <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
           </div>
         </div>
-      </form>` : ''}
+      </form>`
+          : ''
+      }
       ${error() ? html`<div data-ui="chatter-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
       <div data-ui="chatter-timeline" aria-live="polite">
         ${status() === 'loading' ? html`<p data-ui="chatter-loading">${labels.loading}</p>` : ''}
