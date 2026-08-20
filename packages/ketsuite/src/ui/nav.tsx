@@ -26,6 +26,7 @@ export const HOOKS = [
   'menu',
   'menu-item-wrap',
   'menu-item',
+  'menu-icon',
   'menu-label',
   'menu-dot',
   'menu-section',
@@ -80,6 +81,7 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
       <details data-ui="menu-section" open={node.active || depth === 0}>
         <summary data-ui="menu-section-title">
           <span data-ui="menu-section-chevron">{icon('chevron-right')}</span>
+          {node.icon && hasIcon(node.icon) ? <span data-ui="menu-icon">{icon(node.icon)}</span> : ''}
           <span data-ui="menu-section-text">{node.label}</span>
         </summary>
         <ul data-ui="menu-section-children">
@@ -94,7 +96,11 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
   ) : (
     <li data-ui="menu-item-wrap" data-depth={String(depth)}>
       <a data-ui="menu-item" data-active={String(node.active)} href={destination(node)}>
-        <span data-ui="menu-dot" aria-hidden="true" />
+        {node.icon && hasIcon(node.icon) ? (
+          <span data-ui="menu-icon">{icon(node.icon)}</span>
+        ) : (
+          <span data-ui="menu-dot" aria-hidden="true" />
+        )}
         <span data-ui="menu-label">{node.label}</span>
       </a>
     </li>

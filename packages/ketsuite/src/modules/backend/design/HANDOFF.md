@@ -290,9 +290,10 @@ không có thanh ứng dụng ngang trên desktop, systray nằm ở chân. Cùn
 bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên nào thì phải nói bên
 kia — mục tiêu là hai sản phẩm trông như một.
 
-Icon: 12 glyph Lucide (ISC) **chép vào** `icons.ts`, không cài package — giống hệt
-cách theme Odoo làm. `MenuDef.icon` là *tên* icon; tên nào không có thì rơi về
-monogram (chữ đầu), không mất dòng.
+Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
+theme Odoo làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
+design system sở hữu glyph. Tên app không có glyph thì rơi về monogram (chữ đầu),
+tên menu con không có glyph thì rơi về dot; cả hai đều không làm mất dòng.
 
 `[data-ui="icon"]` mặc định `1em`. Hộp nào cỡ cố định thì tự khai báo cho `<svg>`
 bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
@@ -307,7 +308,7 @@ bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
 | `[data-ui="app-entry"][data-active]`, `[data-ui="app-icon"]`, `[data-ui="app-monogram"]` | một app |
 | `[data-ui="menu-item-wrap"][data-depth]` | một mục, kèm độ sâu |
 | `[data-ui="menu-section-chevron"]`, `[data-ui="menu-section-text"]`, `[data-ui="menu-section-children"]` | nhóm; con có đường kẻ dọc bên trái |
-| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá |
+| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-icon"]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá; icon do module chọn, dot là fallback |
 
 ## Form và media
 

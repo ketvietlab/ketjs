@@ -309,7 +309,7 @@ export default defineModule({
   summary: 'Giao diện sổ cái, hoá đơn, thanh toán và báo cáo.',
   category: 'Tài chính',
   menus: {
-    accounting: { label: 'menu.app', icon: 'bank', sequence: 30 },
+    accounting: { label: 'menu.app', icon: 'banknote', sequence: 30 },
     'accounting.dashboard': {
       parent: 'accounting',
       label: 'menu.dashboard',

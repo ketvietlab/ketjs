@@ -1,7 +1,7 @@
 import type { MenuDef } from 'ketjs'
 
 export const menus: Record<string, MenuDef> = {
-  hospitality: { label: 'menu.app', icon: 'building-2', sequence: 10 },
+  hospitality: { label: 'menu.app', icon: 'hotel', sequence: 10 },
   'hospitality.operations': { parent: 'hospitality', label: 'menu.operations', sequence: 10 },
   'hospitality.frontDesk': {
     parent: 'hospitality.operations',

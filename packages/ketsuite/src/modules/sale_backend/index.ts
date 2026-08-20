@@ -407,7 +407,7 @@ export default defineModule({
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
   menus: {
-    sale: { label: 'menu.app', icon: 'cart', sequence: 20 },
+    sale: { label: 'menu.app', icon: 'shopping-bag', sequence: 20 },
     'sale.dashboard': {
       parent: 'sale',
       label: 'menu.dashboard',

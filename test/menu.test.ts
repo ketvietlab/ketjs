@@ -20,7 +20,7 @@ const sales = defineModule({
   },
   menus: {
     sales: { label: 'menu.app', icon: 'S', sequence: 20 },
-    'sales.orders': { parent: 'sales', label: 'menu.orders', sequence: 10 },
+    'sales.orders': { parent: 'sales', label: 'menu.orders', icon: 'shopping-bag', sequence: 10 },
     'sales.list': { parent: 'sales.orders', label: 'menu.list', path: '/sales', needs: 'sales.listOrders' },
     'sales.quotes': {
       parent: 'sales.orders',
@@ -61,6 +61,12 @@ test('menu: a module declares its entries and composition gathers them', () => {
     tree[0]!.children[0]!.children.map((n) => n.id),
     ['sales.quotes', 'sales.list'],
     'sequence orders inside a section too',
+  )
+  assert.equal(tree[0]!.icon, 'S', 'the root keeps the icon declared by its module')
+  assert.equal(
+    tree[0]!.children[0]!.icon,
+    'shopping-bag',
+    'a nested entry keeps the icon declared by its module too',
   )
 })
 

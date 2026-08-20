@@ -441,7 +441,7 @@ export default defineModule({
   summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Hệ thống',
   menus: {
-    purchase: { label: 'menu.app', icon: 'cart', sequence: 25 },
+    purchase: { label: 'menu.app', icon: 'shopping-cart', sequence: 25 },
     'purchase.dashboard': {
       parent: 'purchase',
       label: 'menu.dashboard',
