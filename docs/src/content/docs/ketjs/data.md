@@ -74,6 +74,40 @@ await ctx.db.update('sales.Order', { id }, patch)
 
 Prefer query values for complex reads and deletes because their complete reach is inspectable.
 
+## Group and aggregate
+
+Build a grouped query from the same immutable value and execute it with `ctx.db.group()`:
+
+```ts
+const summary = await ctx.db.group(
+  from(Orders)
+    .where(eq(Orders.active, true))
+    .groupBy({ col: Orders.confirmedAt, interval: 'month', timezone: 'Asia/Ho_Chi_Minh' })
+    .aggregate({ fn: 'sum', col: Orders.total, as: 'total' })
+    .orderGroupsBy({ by: 'key', dir: 'asc' }),
+)
+```
+
+Each result has `key`, `count`, and `aggregates`. Supported aggregates are `count`,
+`countDistinct`, `sum`, `avg`, `min`, and `max`. Group queries use the same declared-effect and row
+scope checks as ordinary reads. Date buckets accept `day`, ISO `week`, `month`, `quarter`, and `year`;
+SQLite and PostgreSQL produce the same stable local-calendar keys.
+
+## Declarative list search
+
+`defineListSearch()` declares explicit allowlists for searchable, filterable, groupable, and sortable
+fields. `parseListState()` and `encodeListState()` make the URL canonical state, while
+`compileListFilter()` turns the validated filter tree into parameterized expressions.
+
+Custom filters support nested `and`/`or` groups. Default limits are four levels, 25 rules, three group
+levels, and ten open group paths. Unknown URL presets, groups, and sorts are dropped with warnings;
+server compilation independently rejects invalid fields or operators with `E_LIST_FILTER`.
+
+Preset filters in the same declared group combine with `OR`; different preset groups, search text,
+and custom filter trees combine with `AND`. Case-insensitive contains searches escape SQL wildcard
+characters. Datetime calendar-day filters accept an IANA timezone and compile to UTC half-open ranges,
+including days shortened or lengthened by daylight-saving transitions.
+
 ## Build a changeset
 
 ```ts
