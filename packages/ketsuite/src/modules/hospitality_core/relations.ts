@@ -30,7 +30,26 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     rooms: { hasMany: 'hospitality_core.Room', by: 'roomTypeId' },
     amenities: { hasMany: 'hospitality_core.RoomTypeAmenity', by: 'roomTypeId' },
     beds: { hasMany: 'hospitality_core.Bed', by: 'roomTypeId' },
+    ratePlans: { hasMany: 'hospitality_core.RatePlan', by: 'roomTypeId' },
+    availability: { hasMany: 'hospitality_core.AvailabilityLedger', by: 'roomTypeId' },
+    restrictions: { hasMany: 'hospitality_core.Restriction', by: 'roomTypeId' },
     cancellationPolicy: { belongsTo: 'hospitality_core.CancellationPolicy', by: 'cancellationPolicyId' },
+  },
+  'hospitality_core.RatePlan': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.AvailabilityLedger': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.Restriction': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
+  },
+  'hospitality_core.InventoryChange': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    roomType: { belongsTo: 'hospitality_core.RoomType', by: 'roomTypeId' },
   },
   'hospitality_core.Room': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
