@@ -575,6 +575,67 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(checkedOutHtml, /Đã trả phòng/)
   assert.doesNotMatch(checkedOutHtml, /hospitality_core\./)
 
+  const taskPath = '/admin/hospitality/housekeeping/tasks/checkout%3Abooking-1%3Astay'
+  const taskVi = await e2e.client.get(`${taskPath}?lang=vi`)
+  const taskViHtml = await taskVi.text()
+  assert.equal(taskVi.status, 200, taskViHtml)
+  assert.match(taskViHtml, /Việc dọn phòng HK-S-BOOKING-1/)
+  assert.match(taskViHtml, /Bắt đầu thực hiện/)
+  assert.doesNotMatch(taskViHtml, /hospitality_core\./)
+
+  const startedTask = await e2e.client.post(
+    `${taskPath}?lang=vi`,
+    new URLSearchParams({ operation: 'start', lang: 'vi', assigneeId: 'housekeeper-01' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(startedTask.status, 303, await startedTask.clone().text())
+  assert.match(startedTask.headers.get('location') ?? '', /status=started/)
+  const taskEn = await e2e.client.get(`${taskPath}?lang=en`)
+  const taskEnHtml = await taskEn.text()
+  assert.equal(taskEn.status, 200, taskEnHtml)
+  assert.match(taskEnHtml, /Cleaning task HK-S-BOOKING-1/)
+  assert.match(taskEnHtml, /In progress/)
+  assert.match(taskEnHtml, /housekeeper-01/)
+  assert.doesNotMatch(taskEnHtml, /hospitality_core\./)
+
+  const completedTask = await e2e.client.post(
+    `${taskPath}?lang=en`,
+    new URLSearchParams({ operation: 'complete', lang: 'en' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(completedTask.status, 303, await completedTask.clone().text())
+  assert.match(completedTask.headers.get('location') ?? '', /status=completed/)
+  const completedTaskPage = await e2e.client.get(completedTask.headers.get('location')!)
+  const completedTaskHtml = await completedTaskPage.text()
+  assert.match(completedTaskHtml, /Task completed/)
+  assert.match(completedTaskHtml, /Completed at/)
+  assert.doesNotMatch(completedTaskHtml, /hospitality_core\./)
+
+  const createdTask = await e2e.client.post(
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel',
+    new URLSearchParams({
+      operation: 'create',
+      lang: 'vi',
+      id: 'manual-inspection',
+      code: 'HK-MANUAL-001',
+      propertyId: 'hotel',
+      state: 'all',
+      roomId: '102',
+      taskType: 'inspection',
+      priority: 'normal',
+      assigneeId: 'supervisor-01',
+      notes: 'Kiểm tra minibar sau khi vệ sinh.',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(createdTask.status, 303, await createdTask.clone().text())
+  assert.match(createdTask.headers.get('location') ?? '', /status=created/)
+  const createdTaskPage = await e2e.client.get(createdTask.headers.get('location')!)
+  const createdTaskHtml = await createdTaskPage.text()
+  assert.match(createdTaskHtml, /Đã tạo công việc buồng phòng/)
+  assert.match(createdTaskHtml, /HK-MANUAL-001/)
+  assert.doesNotMatch(createdTaskHtml, /hospitality_core\./)
+
   for (const [path, title] of [
     ['/admin/hospitality/housekeeping?lang=vi', 'Việc dọn phòng'],
     ['/admin/hospitality/housekeeping/rooms?lang=vi', 'Bảng trạng thái phòng'],
@@ -595,10 +656,17 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
       [
         {
           id: 'checkout:booking-1:stay',
-          state: 'todo',
+          state: 'done',
           priority: 'urgent',
           roomId: '102',
           taskType: 'checkout_clean',
+        },
+        {
+          id: 'manual-inspection',
+          state: 'todo',
+          priority: 'normal',
+          roomId: '102',
+          taskType: 'inspection',
         },
         {
           id: 'move:booking-1:stay:assignment:1:clean',
@@ -608,6 +676,16 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
           taskType: 'daily_clean',
         },
       ],
+    )
+    const cleanedRoom = await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['102'])
+    assert.equal(cleanedRoom[0]?.status, 'available')
+    const manualTask = await adapter.all(
+      'SELECT "assigneeId", notes FROM hospitality_core_cleaning_task WHERE id = ?',
+      ['manual-inspection'],
+    )
+    assert.deepEqual(
+      { ...manualTask[0] },
+      { assigneeId: 'supervisor-01', notes: 'Kiểm tra minibar sau khi vệ sinh.' },
     )
   })
 })
