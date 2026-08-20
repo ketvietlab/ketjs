@@ -149,6 +149,37 @@ export async function collaborationEvidenceApp(
     })
     await call('sale.confirmOrder', { id: 'sales-order-collab' })
     await call('sale.setInvoicePolicy', { templateId: 'tpl-collab', invoicePolicy: 'delivery' })
+    await call('account.saveAccount', {
+      id: 'account-receivable-collab',
+      code: '131',
+      name: 'Phải thu khách hàng',
+      accountType: 'asset_receivable',
+    })
+    await call('account.saveAccount', {
+      id: 'account-revenue-collab',
+      code: '5111',
+      name: 'Doanh thu bán hàng',
+      accountType: 'income',
+    })
+    await call('account.saveJournal', {
+      id: 'account-sales-collab',
+      name: 'Bán hàng',
+      code: 'SAL',
+      type: 'sale',
+    })
+    await call('account.createInvoice', {
+      id: 'invoice-collab',
+      journalId: 'account-sales-collab',
+      moveType: 'out_invoice',
+      partnerId: 'member-party',
+      invoiceDate: '2026-08-20T00:00:00.000Z',
+      ref: 'INV/COLLAB/2026',
+      description: 'Áo khoác vận hành',
+      quantity: '4',
+      priceUnit: '1250000',
+      lineAccountId: 'account-revenue-collab',
+      counterpartAccountId: 'account-receivable-collab',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
@@ -185,6 +216,7 @@ export async function collaborationEvidenceApp(
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'admin')
     await call('stock_lot_mail_backend.follow', { targetId: 'lot-collab' }, 'admin')
     await call('sale_mail_backend.follow', { targetId: 'quotation-collab' }, 'admin')
+    await call('account_mail_backend.follow', { targetId: 'invoice-collab' }, 'admin')
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'member')
     await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'member')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'member')
@@ -272,6 +304,19 @@ export async function collaborationEvidenceApp(
         assigneeUserId: 'admin',
         summary: 'Xác nhận thời gian giao hàng',
         note: 'Gọi khách hàng để chốt khung giờ nhận hàng.',
+        dueDate: '2026-08-21',
+      },
+      'admin',
+    )
+    await call(
+      'account_activity_backend.schedule',
+      {
+        id: 'activity-account-seed',
+        targetId: 'invoice-collab',
+        typeId: 'activity-todo',
+        assigneeUserId: 'admin',
+        summary: 'Kiểm tra hoá đơn trước khi ghi sổ',
+        note: 'Đối chiếu khách hàng, số tiền và tài khoản doanh thu.',
         dueDate: '2026-08-21',
       },
       'admin',
@@ -424,6 +469,16 @@ export async function collaborationEvidenceApp(
         targetId: 'quotation-collab',
         kind: 'note',
         body: 'Ghi chú nội bộ: kiểm tra hạn báo giá trước khi gửi.',
+      },
+      'admin',
+    )
+    await call(
+      'account_mail_backend.post',
+      {
+        id: 'account-message-1',
+        targetId: 'invoice-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: đối chiếu điều khoản thanh toán trước khi ghi sổ.',
       },
       'admin',
     )
