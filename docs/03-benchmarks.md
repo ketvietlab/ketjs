@@ -216,18 +216,18 @@ select PostgreSQL with `KET_BENCH_DRIVER=postgres`.
 
 The hospitality benchmark migrates separate physical databases and loads each one
 through the public `hospitality_core` functions: one property, one building, ten
-floors, twelve room types, 250 rooms and 100 reservations. It then runs check-in,
-service-charge and checkout cycles, alternates room-board and reservation queries,
-and makes two PostgreSQL connections race for one physical room. A second race
-checks that cancel and check-in cannot both win or leave reservation, stay, room
-and assignment states out of sync. It also checks that every database contains
-exactly its own company-scoped rows and that PostgreSQL kept room rates as
-`numeric`.
+floors, twelve room types, 250 rooms and 100 reservations. It then creates and
+idempotently posts 50 service intentions per database, runs check-in/charge/
+checkout cycles and alternates room-board and reservation queries. Two PostgreSQL
+connections race for the same physical room and the same service occurrence. A
+third race checks that cancel and check-in cannot both win or leave reservation,
+stay, room and assignment states out of sync. The run also checks company isolation,
+content-change durability and PostgreSQL `numeric`/`date` column types.
 
-| driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | operation cycles/s | list pairs/s | one room winner | cancel/check-in consistent | isolated counts |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| SQLite | 8 | 2,000 | 800 | 119.5 ms | 2,397 | 727 | 929 | 379 | yes (sequential) | yes (sequential) | complete |
-| PostgreSQL 17 | 4 | 1,000 | 400 | 954.2 ms | 356 | 170 | 150 | 197 | yes (concurrent) | yes (concurrent) | complete |
+| driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | service posts/s | operation cycles/s | list pairs/s | room/service races | isolated counts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| SQLite | 8 | 2,000 | 800 | 178.1 ms | 3,135 | 908 | 1,060 | 1,391 | 529 | one row (sequential) | complete |
+| PostgreSQL 17 | 4 | 1,000 | 400 | 906.1 ms | 729 | 227 | 195 | 237 | 261 | one row (concurrent) | complete |
 
 An operation cycle contains check-in, an idempotent folio charge and checkout for
 every second stay. A list pair contains the room board plus the reservation list;
@@ -245,7 +245,10 @@ include the much larger dependency manifest now pulled in by the backend module;
 the operation rates remain the hospitality-only paths. The rerun also includes
 the property-timezone, primary-guest, room-claim and cancel/check-in concurrency
 guards, and verifies that every checkout creates exactly one durable housekeeping
-task in every physical tenant database.
+task in every physical tenant database. The 2026-08-21 rerun adds provider-visible
+property fees, product-backed service intentions and immutable operational charges;
+retrying all 600 service-post attempts produced exactly 400 SQLite and 200
+PostgreSQL charge rows, while the two-connection PostgreSQL race produced one row.
 
 ## Not measured
 

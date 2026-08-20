@@ -9,7 +9,7 @@ import { performance } from 'node:perf_hooks'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import { postgresAdapter } from 'ketjs-postgres'
 import type { Adapter } from 'ketjs'
-import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
@@ -29,7 +29,7 @@ const keys = Array.from(
   { length: databaseCount },
   (_, index) => `hospitality_bench_${String(index).padStart(3, '0')}`,
 )
-const modules = [address, partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 registerFunctions(modules)
 
@@ -245,6 +245,51 @@ try {
   )
   const bookingMs = performance.now() - bookingStarted
 
+  const serviceIntentionsPerDatabase = Math.min(50, reservationsPerDatabase)
+  const serviceStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      await call(key, 'uom.saveUnit', { id: 'service-unit', name: 'Unit', relativeFactor: '1' })
+      await call(key, 'product.saveTemplate', {
+        id: 'service-template',
+        name: 'Benchmark breakfast',
+        type: 'service',
+        uomId: 'service-unit',
+        listPrice: '250000',
+        saleOk: true,
+      })
+      await call(key, 'product.saveVariant', {
+        id: 'service-product',
+        templateId: 'service-template',
+        defaultCode: 'SVC',
+        combinationKey: '',
+      })
+      for (let fee = 0; fee < 3; fee++)
+        await call(key, 'hospitality_core.savePropertyCharge', {
+          id: `property-fee:${fee}`,
+          propertyId: 'property',
+          chargeType: fee === 0 ? 'city_tax' : fee === 1 ? 'parking' : 'other',
+          name: `Benchmark fee ${fee}`,
+          amount: String(35_000 + fee * 25_000),
+          active: true,
+        })
+      for (let index = 0; index < serviceIntentionsPerDatabase; index++) {
+        const saved = await call(key, 'hospitality_core.saveExtraLine', {
+          id: `extra:${index}`,
+          reservationId: `reservation:${index}`,
+          productId: 'service-product',
+          recurrence: 'once',
+        })
+        if (!(saved.value as { ok: boolean }).ok) throw new Error(`${key}: service intention failed`)
+        const posted = await call(key, 'hospitality_core.materializeExtraLine', { id: `extra:${index}` })
+        const retry = await call(key, 'hospitality_core.materializeExtraLine', { id: `extra:${index}` })
+        if (!(posted.value as { ok: boolean }).ok || !(retry.value as { existing: boolean }).existing)
+          throw new Error(`${key}: service materialisation was not idempotent`)
+      }
+    }),
+  )
+  const serviceMs = performance.now() - serviceStarted
+
   const candidateRooms = Array.from({ length: roomsPerDatabase }, (_, room) => room).filter(
     (room) => room % 17 !== 0 && room % 5 !== 0,
   )
@@ -302,6 +347,35 @@ try {
     })
   const contender = driver === 'postgres' ? open(collisionKey) : null
   if (contender) await contender.open()
+  await call(collisionKey, 'hospitality_core.saveExtraLine', {
+    id: 'concurrent-extra',
+    reservationId: 'collision:a',
+    productId: 'service-product',
+    recurrence: 'once',
+  })
+  const postSameService = (adapter: Adapter) =>
+    callWith(adapter, collisionKey, 'hospitality_core.materializeExtraLine', { id: 'concurrent-extra' })
+  const serviceRaceResults =
+    contender === null
+      ? [
+          await postSameService(adapters.get(collisionKey)!),
+          await postSameService(adapters.get(collisionKey)!),
+        ]
+      : await Promise.all([postSameService(adapters.get(collisionKey)!), postSameService(contender)])
+  const concurrentServicePostSingleCharge =
+    serviceRaceResults.every((result) => (result.value as { ok: boolean }).ok) &&
+    Number(
+      (
+        await adapters
+          .get(collisionKey)!
+          .all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_charge WHERE "extraLineId" = ${driver === 'postgres' ? '$1' : '?'}`,
+            ['concurrent-extra'],
+          )
+      )[0]!.n,
+    ) === 1
+  if (!concurrentServicePostSingleCharge)
+    throw new Error('concurrent service materialisation did not produce one charge')
   await call(collisionKey, 'hospitality_core.setInventoryRange', {
     propertyId: 'property',
     roomTypeId: 'type:0',
@@ -454,6 +528,12 @@ try {
       throw new Error(
         `PostgreSQL content change createdAt is ${contentChangeColumns.createdAt}, expected timestamp with time zone`,
       )
+    const extraColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_extra_line!
+    if (extraColumns.unitPrice !== 'numeric')
+      throw new Error(`PostgreSQL service unitPrice is ${extraColumns.unitPrice}, expected numeric`)
+    const serviceChargeColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_charge!
+    if (serviceChargeColumns.serviceDate !== 'date')
+      throw new Error(`PostgreSQL serviceDate is ${serviceChargeColumns.serviceDate}, expected date`)
   }
 
   const totalRooms = databaseCount * roomsPerDatabase
@@ -491,10 +571,22 @@ try {
       return Number(rows[0]!.n)
     }),
   )
-  const minimumContentChanges = 1 + 12 + 13 * contentImagesPerTarget
+  const minimumContentChanges = 1 + 12 + 13 * contentImagesPerTarget + 3
   const durableContentChangesPresent = contentChangeCounts.every((count) => count >= minimumContentChanges)
   if (!durableContentChangesPresent)
     throw new Error('property, room-type or media changes were not recorded durably')
+  const serviceChargeCounts = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters
+        .get(key)!
+        .all('SELECT COUNT(*) AS n FROM hospitality_core_charge WHERE "extraLineId" IS NOT NULL')
+      return { key, count: Number(rows[0]!.n) }
+    }),
+  )
+  const idempotentServiceCountsMatch = serviceChargeCounts.every(
+    ({ key, count }) => count === serviceIntentionsPerDatabase + (key === collisionKey ? 1 : 0),
+  )
+  if (!idempotentServiceCountsMatch) throw new Error('service materialisation created duplicate charges')
   console.log(
     JSON.stringify(
       {
@@ -515,11 +607,18 @@ try {
         reservations: totalReservations,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
+        serviceIntentions: databaseCount * serviceIntentionsPerDatabase,
+        serviceMs: Number(serviceMs.toFixed(1)),
+        serviceMaterializationsPerSecond: Math.round(
+          (databaseCount * serviceIntentionsPerDatabase * 1_000) / serviceMs,
+        ),
+        idempotentServiceCountsMatch,
         checkInChargeCheckoutCycles: totalTransitions,
         transitionMs: Number(transitionMs.toFixed(1)),
         transitionsPerSecond: Math.round((totalTransitions * 1_000) / transitionMs),
         concurrentRoomClaimSingleWinner,
         concurrentInventoryClaimSingleWinner,
+        concurrentServicePostSingleCharge,
         concurrentCancelCheckInConsistent,
         housekeepingCheckoutTasksMatch,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),

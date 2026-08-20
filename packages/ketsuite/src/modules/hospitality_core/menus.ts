@@ -38,6 +38,13 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listFolios',
     sequence: 50,
   },
+  'hospitality.services': {
+    parent: 'hospitality.operations',
+    label: 'menu.services',
+    path: '/admin/hospitality/services',
+    needs: 'hospitality_core.listExtraLines',
+    sequence: 52,
+  },
   'hospitality.inventory': {
     parent: 'hospitality.operations',
     label: 'menu.inventory',

@@ -10,11 +10,11 @@ import {
   translator,
 } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
-import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
-const modules = [address, partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const ACME = { company: 'acme', branches: null }
 const GLOBEX = { company: 'globex', branches: null }
@@ -54,13 +54,18 @@ test('hospitality core: public namespace is clean and the whole vertical is one 
   assert.ok(manifest.models['hospitality_core.Amenity'])
   assert.ok(manifest.models['hospitality_core.ContentImage'])
   assert.ok(manifest.models['hospitality_core.ContentChange'])
+  assert.ok(manifest.models['hospitality_core.PropertyCharge'])
+  assert.ok(manifest.models['hospitality_core.ExtraLine'])
   assert.equal(
     Object.keys(manifest.modules).some((name) => name.startsWith('vidoo_')),
     false,
   )
   assert.equal(JSON.stringify(hospitalityCore).includes('vidoo_'), false)
   assert.equal(hospitalityCore.depends.includes('storage'), true)
+  assert.equal(hospitalityCore.depends.includes('product'), true)
+  assert.equal(hospitalityCore.depends.includes('uom'), true)
   assert.equal('invoiceId' in manifest.models['hospitality_core.Property']!.fields, false)
+  assert.equal('invoiceId' in manifest.models['hospitality_core.Charge']!.fields, false)
 })
 
 test('hospitality core: property defaults and uniqueness are company-scoped', async () => {
