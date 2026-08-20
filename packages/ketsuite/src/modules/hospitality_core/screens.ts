@@ -182,13 +182,27 @@ export type InventoryRow = {
 export type CleaningTaskRow = {
   id: string
   code: string
+  propertyId: string
+  roomId: string
+  stayId?: string | null
   taskType: string
   priority: string
   state: string
   requestedAt: string
   startedAt?: string | null
-  room?: { code?: string; name?: string } | null
+  doneAt?: string | null
+  notes?: string | null
+  room?: { code?: string; name?: string; status?: string } | null
+  property?: { code?: string; name?: string } | null
+  stay?: { code?: string } | null
   assigneeId?: string | null
+}
+
+export type CleaningTaskSummary = {
+  todo: number
+  inProgress: number
+  done: number
+  cancelled: number
 }
 
 export type ReservationRow = {
@@ -421,6 +435,13 @@ const workflowTone = (status: string): 'positive' | 'warning' | 'danger' | 'info
   if (status === 'cancelled') return 'danger'
   if (status === 'checked_out' || status === 'closed') return 'neutral'
   return 'info'
+}
+
+const cleaningTone = (state: string): 'positive' | 'warning' | 'danger' | 'info' | 'neutral' => {
+  if (state === 'todo') return 'warning'
+  if (state === 'in_progress') return 'info'
+  if (state === 'done') return 'positive'
+  return 'neutral'
 }
 
 const dateTime = (value: string, locale: string, timezone: string): string =>
@@ -672,13 +693,35 @@ const inventoryColumns = (_: Translator): Array<Column<InventoryRow>> => [
   },
 ]
 
-const cleaningTaskColumns = (_: Translator, locale: string): Array<Column<CleaningTaskRow>> => [
+const cleaningTaskColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+): Array<Column<CleaningTaskRow>> => [
   { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
   {
     key: 'room',
     label: _('hospitality_core.col.room'),
     cell: (row) => row.room?.name ?? row.room?.code ?? '—',
     priority: 'primary',
+  },
+  {
+    key: 'status',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(_(`hospitality_core.cleaningState.${row.state}`), cleaningTone(row.state), row.state),
+    kind: 'status',
+    priority: 'primary',
+  },
+  {
+    key: 'priority',
+    label: _('hospitality_core.col.priority'),
+    cell: (row) =>
+      badge(
+        _(`hospitality_core.cleaningPriority.${row.priority}`),
+        row.priority === 'urgent' ? 'danger' : 'neutral',
+      ),
+    kind: 'status',
   },
   {
     key: 'type',
@@ -693,26 +736,8 @@ const cleaningTaskColumns = (_: Translator, locale: string): Array<Column<Cleani
   {
     key: 'requestedAt',
     label: _('hospitality_core.col.requestedAt'),
-    cell: (row) => dateTime(row.requestedAt, locale, 'UTC'),
+    cell: (row) => dateTime(row.requestedAt, locale, timezone),
     kind: 'date',
-  },
-  {
-    key: 'priority',
-    label: _('hospitality_core.col.priority'),
-    cell: (row) =>
-      badge(
-        _(`hospitality_core.cleaningPriority.${row.priority}`),
-        row.priority === 'urgent' ? 'danger' : 'neutral',
-      ),
-    kind: 'status',
-  },
-  {
-    key: 'status',
-    label: _('hospitality_core.col.status'),
-    cell: (row) =>
-      badge(_(`hospitality_core.cleaningState.${row.state}`), workflowTone(row.state), row.state),
-    kind: 'status',
-    priority: 'primary',
   },
 ]
 
@@ -758,21 +783,377 @@ export const roomsScreen = (_: Translator, rows: RoomRow[], frame: Frame): Templ
 
 export const cleaningTasksScreen = (
   _: Translator,
-  rows: CleaningTaskRow[],
+  data: {
+    rows: CleaningTaskRow[]
+    properties: PropertyRow[]
+    propertyId?: string
+    state: string
+    rooms: RoomRow[]
+    summary: CleaningTaskSummary
+    id: string
+    code: string
+  },
   locale: string,
+  timezone: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
+  status?: string | null,
+): TemplateResult => {
+  const visibleRows = data.state === 'all' ? data.rows : data.rows.filter((row) => row.state === data.state)
+  const query = new URLSearchParams({ lang: locale })
+  if (data.propertyId) query.set('property', data.propertyId)
+  if (data.state !== 'all') query.set('state', data.state)
+  const action = `/admin/hospitality/housekeeping?${query.toString()}`
+  const feedback =
+    status === 'created'
+      ? notice({
+          title: _('hospitality_core.housekeeping.feedback.created'),
+          message: _('hospitality_core.housekeeping.feedback.createdHint'),
+          tone: 'positive',
+        })
+      : status === 'invalid'
+        ? notice({
+            title: _('hospitality_core.feedback.invalid'),
+            message: _('hospitality_core.housekeeping.feedback.invalidHint'),
+            tone: 'danger',
+          })
+        : null
+
+  return framed(
     _,
     _('hospitality_core.screen.cleaningTasks.title'),
     frame,
-    rows.length
-      ? dataTable(_, { columns: cleaningTaskColumns(_, locale), rows, id: (row) => row.id })
-      : emptyState(
-          _('hospitality_core.screen.cleaningTasks.empty'),
-          _('hospitality_core.screen.cleaningTasks.emptyHint'),
-        ),
+    stack([
+      feedback,
+      recordForm({
+        action: '/admin/hospitality/housekeeping',
+        method: 'get',
+        layout: 'inline',
+        submit: _('hospitality_core.action.select'),
+        submitVariant: 'secondary',
+        hidden: { lang: locale },
+        fields: [
+          {
+            name: 'property',
+            label: _('hospitality_core.menu.properties'),
+            type: 'select',
+            value: data.propertyId,
+            required: true,
+            options: choices(data.properties),
+          },
+          {
+            name: 'state',
+            label: _('hospitality_core.col.status'),
+            type: 'select',
+            value: data.state,
+            options: ['all', 'todo', 'in_progress', 'done', 'cancelled'].map((value) => ({
+              value,
+              label: _(`hospitality_core.cleaningState.${value}`),
+            })),
+          },
+        ],
+      }),
+      cardGrid({
+        items: ['todo', 'in_progress', 'done'].map((state) => ({
+          state,
+          count:
+            state === 'todo'
+              ? data.summary.todo
+              : state === 'in_progress'
+                ? data.summary.inProgress
+                : data.summary.done,
+        })),
+        id: (item) => item.state,
+        card: (item) =>
+          metric({
+            label: _(`hospitality_core.cleaningState.${item.state}`),
+            value: String(item.count),
+            tone: item.state,
+          }),
+      }),
+      section({
+        title: _('hospitality_core.housekeeping.section.create'),
+        description: _('hospitality_core.housekeeping.section.createHint'),
+        body: data.rooms.length
+          ? recordForm({
+              action,
+              method: 'post',
+              submit: _('hospitality_core.housekeeping.action.create'),
+              submitVariant: 'secondary',
+              hidden: {
+                operation: 'create',
+                lang: locale,
+                id: data.id,
+                code: data.code,
+                propertyId: data.propertyId ?? '',
+                state: data.state,
+              },
+              fields: [
+                {
+                  name: 'roomId',
+                  label: _('hospitality_core.col.room'),
+                  type: 'select',
+                  required: true,
+                  options: data.rooms.map((room) => ({
+                    value: room.id,
+                    label: `${room.code} · ${room.name} · ${_(`hospitality_core.roomStatus.${room.status}`)}`,
+                  })),
+                },
+                {
+                  name: 'taskType',
+                  label: _('hospitality_core.col.type'),
+                  type: 'select',
+                  value: 'daily_clean',
+                  required: true,
+                  options: ['checkout_clean', 'daily_clean', 'maintenance', 'inspection'].map((value) => ({
+                    value,
+                    label: _(`hospitality_core.cleaningType.${value}`),
+                  })),
+                },
+                {
+                  name: 'priority',
+                  label: _('hospitality_core.col.priority'),
+                  type: 'select',
+                  value: 'normal',
+                  required: true,
+                  options: ['normal', 'urgent'].map((value) => ({
+                    value,
+                    label: _(`hospitality_core.cleaningPriority.${value}`),
+                  })),
+                },
+                {
+                  name: 'assigneeId',
+                  label: _('hospitality_core.col.assignee'),
+                  help: _('hospitality_core.housekeeping.field.assigneeHint'),
+                },
+                {
+                  name: 'notes',
+                  label: _('hospitality_core.housekeeping.field.notes'),
+                  type: 'textarea',
+                  span: 'full',
+                },
+              ],
+            })
+          : emptyState(
+              _('hospitality_core.housekeeping.empty.rooms'),
+              _('hospitality_core.housekeeping.empty.roomsHint'),
+            ),
+      }),
+      section({
+        title: _('hospitality_core.housekeeping.section.queue'),
+        description: _('hospitality_core.housekeeping.section.queueHint'),
+        body: visibleRows.length
+          ? dataTable(_, {
+              columns: cleaningTaskColumns(_, locale, timezone),
+              rows: visibleRows,
+              id: (row) => row.id,
+              rowHref: (row) =>
+                `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+            })
+          : emptyState(
+              _('hospitality_core.screen.cleaningTasks.empty'),
+              _('hospitality_core.screen.cleaningTasks.emptyHint'),
+            ),
+      }),
+    ]),
   )
+}
+
+const cleaningTaskFeedback = (
+  _: Translator,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'started' || status === 'completed' || status === 'cancelled')
+    return notice({
+      title: _(`hospitality_core.housekeeping.feedback.${status}`),
+      message: _(`hospitality_core.housekeeping.feedback.${status}Hint`),
+      tone: status === 'cancelled' ? 'warning' : 'positive',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const cleaningTaskDetailScreen = (
+  _: Translator,
+  task: CleaningTaskRow,
+  locale: string,
+  timezone: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult => {
+  const action = `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(task.id)}?lang=${encodeURIComponent(locale)}`
+  const room = task.room?.name ?? task.room?.code ?? task.roomId
+  const actions: TemplateResult[] = []
+
+  if (task.state === 'todo')
+    actions.push(
+      section({
+        title: _('hospitality_core.housekeeping.action.start'),
+        description: _('hospitality_core.housekeeping.action.startHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.housekeeping.action.start'),
+          submitVariant: 'primary',
+          hidden: { operation: 'start', lang: locale },
+          fields: [
+            {
+              name: 'assigneeId',
+              label: _('hospitality_core.col.assignee'),
+              value: task.assigneeId,
+              help: _('hospitality_core.housekeeping.field.assigneeHint'),
+            },
+          ],
+        }),
+      }),
+    )
+
+  if (task.state === 'in_progress')
+    actions.push(
+      section({
+        title: _('hospitality_core.housekeeping.action.complete'),
+        description: _('hospitality_core.housekeeping.action.completeHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.housekeeping.action.complete'),
+          submitVariant: 'primary',
+          hidden: { operation: 'complete', lang: locale },
+          fields: [],
+        }),
+      }),
+    )
+
+  if (task.state === 'todo' || task.state === 'in_progress')
+    actions.push(
+      section({
+        title: _('hospitality_core.housekeeping.action.cancel'),
+        description: _('hospitality_core.housekeeping.action.cancelHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.housekeeping.action.cancel'),
+          submitVariant: 'destructive',
+          hidden: { operation: 'cancel', lang: locale },
+          fields: [],
+        }),
+      }),
+    )
+
+  return framed(
+    _,
+    _('hospitality_core.housekeeping.detail.title', { code: task.code }),
+    frame,
+    stack([
+      cleaningTaskFeedback(_, status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.housekeeping.detail.kicker'),
+        title: task.code,
+        subtitle: room,
+        imageFallback: icon('check-circle'),
+        badges: [
+          badge(_(`hospitality_core.cleaningState.${task.state}`), cleaningTone(task.state), task.state),
+          badge(
+            _(`hospitality_core.cleaningPriority.${task.priority}`),
+            task.priority === 'urgent' ? 'danger' : 'neutral',
+          ),
+        ],
+        summary: [
+          {
+            id: 'room',
+            label: _('hospitality_core.col.room'),
+            value: room,
+          },
+          {
+            id: 'type',
+            label: _('hospitality_core.col.type'),
+            value: _(`hospitality_core.cleaningType.${task.taskType}`),
+          },
+          {
+            id: 'assignee',
+            label: _('hospitality_core.col.assignee'),
+            value: task.assigneeId || '—',
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.housekeeping.action.back'),
+          href: `/admin/hospitality/housekeeping?property=${encodeURIComponent(task.propertyId)}&lang=${encodeURIComponent(locale)}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.housekeeping.section.information'),
+            description: _('hospitality_core.housekeeping.section.informationHint'),
+            body: definitionList({
+              title: task.code,
+              items: [
+                {
+                  key: 'property',
+                  term: _('hospitality_core.menu.properties'),
+                  value: task.property?.name ?? task.property?.code ?? task.propertyId,
+                },
+                {
+                  key: 'room',
+                  term: _('hospitality_core.col.room'),
+                  value: room,
+                },
+                {
+                  key: 'requested',
+                  term: _('hospitality_core.col.requestedAt'),
+                  value: dateTime(task.requestedAt, locale, timezone),
+                },
+                ...(task.startedAt
+                  ? [
+                      {
+                        key: 'started',
+                        term: _('hospitality_core.housekeeping.field.startedAt'),
+                        value: dateTime(task.startedAt, locale, timezone),
+                      },
+                    ]
+                  : []),
+                ...(task.doneAt
+                  ? [
+                      {
+                        key: 'done',
+                        term: _('hospitality_core.housekeeping.field.doneAt'),
+                        value: dateTime(task.doneAt, locale, timezone),
+                      },
+                    ]
+                  : []),
+                ...(task.stayId
+                  ? [
+                      {
+                        key: 'stay',
+                        term: _('hospitality_core.menu.stays'),
+                        value: task.stay?.code ?? task.stayId,
+                      },
+                    ]
+                  : []),
+                ...(task.notes
+                  ? [
+                      {
+                        key: 'notes',
+                        term: _('hospitality_core.housekeeping.field.notes'),
+                        value: task.notes,
+                      },
+                    ]
+                  : []),
+              ],
+            }),
+          }),
+          ...actions,
+        ]),
+      }),
+    ]),
+  )
+}
 
 export const housekeepingRoomsScreen = (_: Translator, rows: RoomRow[], frame: Frame): TemplateResult =>
   framed(

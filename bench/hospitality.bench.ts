@@ -548,6 +548,29 @@ try {
   )
   const transitionMs = performance.now() - transitionStarted
 
+  const housekeepingTaskCount = Math.ceil(transitionCount / 2)
+  const housekeepingStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let index = 0; index < transitionCount; index += 2) {
+        const id = `checkout:reservation:${index}:stay`
+        const started = await call(key, 'hospitality_core.startCleaningTask', {
+          id,
+          assigneeId: 'benchmark-housekeeper',
+          at: '2026-09-03T12:05:00.000Z',
+        })
+        if (!(started.value as { ok: boolean }).ok) throw new Error(`${key}: housekeeping start failed`)
+        const completed = await call(key, 'hospitality_core.completeCleaningTask', {
+          id,
+          at: '2026-09-03T12:35:00.000Z',
+        })
+        if (!(completed.value as { ok: boolean }).ok)
+          throw new Error(`${key}: housekeeping completion failed`)
+      }
+    }),
+  )
+  const housekeepingMs = performance.now() - housekeepingStarted
+
   const stayNoticeStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -965,6 +988,22 @@ try {
     }),
   ).then((matches) => matches.every(Boolean))
   if (!housekeepingCheckoutTasksMatch) throw new Error('checkout did not create one cleaning task per stay')
+  const housekeepingLifecycleMatch = await Promise.all(
+    keys.map(async (key) => {
+      const rows = await adapters.get(key)!.all(
+        `SELECT COUNT(*) AS n
+           FROM hospitality_core_cleaning_task task
+           JOIN hospitality_core_room room ON room.id = task."roomId"
+          WHERE task."taskType" = 'checkout_clean'
+            AND task.state = 'done'
+            AND task."assigneeId" = 'benchmark-housekeeper'
+            AND room.status = 'available'`,
+      )
+      return Number(rows[0]!.n) === housekeepingTaskCount
+    }),
+  ).then((matches) => matches.every(Boolean))
+  if (!housekeepingLifecycleMatch)
+    throw new Error('housekeeping task lifecycle did not restore every cleaned checkout room')
   const housekeepingMoveTasksMatch = await Promise.all(
     keys.map(async (key) => {
       const rows = await adapters
@@ -1075,6 +1114,12 @@ try {
         concurrentCancelCheckInConsistent,
         housekeepingCheckoutTasksMatch,
         housekeepingMoveTasksMatch,
+        housekeepingTasksCompleted: databaseCount * housekeepingTaskCount,
+        housekeepingMs: Number(housekeepingMs.toFixed(1)),
+        housekeepingTasksPerSecond: Math.round(
+          (databaseCount * housekeepingTaskCount * 1_000) / housekeepingMs,
+        ),
+        housekeepingLifecycleMatch,
         folioCorrectionsMatch,
         concurrentFolioCorrectionSingleAdjustment,
         inventoryChanges: inventoryChangeCounts.reduce((sum, count) => sum + count, 0),
