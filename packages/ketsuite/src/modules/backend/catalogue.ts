@@ -10,6 +10,7 @@ import {
   code,
   contentCard,
   countBadge,
+  datePicker,
   emptyState,
   errorState,
   icon,
@@ -520,6 +521,40 @@ export const CASES: Array<{
         ],
         'loose',
       ),
+  },
+  {
+    id: 'kit-date-picker',
+    label: 'Component — chọn khoảng ngày',
+    note: 'Native date control giữ locale, bàn phím và mobile picker của trình duyệt; form GET giữ bộ lọc trong URL.',
+    render: () =>
+      surface({
+        body: datePicker({
+          action: '#kit-date-picker',
+          label: 'Khoảng lưu trú',
+          submit: 'Xem lịch',
+          clearHref: '#kit-date-picker',
+          clearLabel: 'Xóa',
+          hidden: { property: 'hotel-hn' },
+          fields: [
+            {
+              name: 'from',
+              label: 'Từ ngày',
+              value: '2026-08-20',
+              min: '2026-01-01',
+              required: true,
+              help: 'Theo múi giờ của cơ sở.',
+            },
+            {
+              name: 'to',
+              label: 'Đến ngày',
+              value: '2026-08-18',
+              min: '2026-08-20',
+              required: true,
+              error: 'Ngày kết thúc phải sau ngày bắt đầu.',
+            },
+          ],
+        }),
+      }),
   },
   {
     id: 'kit-form',
