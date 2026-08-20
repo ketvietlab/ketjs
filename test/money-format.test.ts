@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { compose, translator } from 'ketjs'
 import { renderToString } from 'ketjs-view'
 import backend, { formatMoney } from 'ketsuite/backend'
-import { movesScreen } from '../packages/ketsuite/src/modules/account_backend/screens.ts'
+import { customerInvoicesScreen } from '../packages/ketsuite/src/modules/account_backend/customer-invoices-screen.tsx'
 import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.ts'
 import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.ts'
 import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.ts'
@@ -69,10 +69,10 @@ test('money format: every money-bearing backend module renders formatted list va
         currency: 'VND',
       },
     ]),
-    movesScreen(vi, {
-      title: 'Moves',
+    customerInvoicesScreen(vi, {
       frame: {},
       action: '/moves',
+      locale: '',
       fields: [],
       rows: [
         {
