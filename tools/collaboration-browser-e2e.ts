@@ -203,6 +203,7 @@ let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/assets/odoo-collaboration')
 const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
+const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -210,6 +211,7 @@ try {
   await mkdir(artifactDir, { recursive: true })
   await mkdir(lotEvidenceDir, { recursive: true })
   await mkdir(routeEvidenceDir, { recursive: true })
+  await mkdir(routeDetailEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -286,6 +288,11 @@ try {
       name: 'route-list',
       path: '/admin/stock-routes?lang=vi',
       ready: `document.querySelector('#stock-route-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'route-detail',
+      path: '/admin/stock-routes/wh:receipt-route?lang=vi',
+      ready: `document.querySelector('#stock-route-detail-form') && document.querySelector('#stock-route-rule-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1085,6 +1092,123 @@ try {
         false,
       )
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'route-detail') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            routeForm: Boolean(document.querySelector('#stock-route-detail-form[data-scope="stock-route"]')),
+            ruleForm: Boolean(document.querySelector('#stock-route-rule-form[data-scope="stock-route-rule"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            localizedRoute: document.body.textContent.includes('Nhận hàng trực tiếp'),
+            localizedRule: document.querySelector('[data-ui="table"]')?.textContent.includes('Cung ứng theo nhu cầu'),
+            rawSelectionCode: /one_step|make_to_stock/.test(document.querySelector('[data-ui="record-workspace"]')?.textContent ?? ''),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-detail-form [data-ui="form-field"], #stock-route-rule-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          routeForm: true,
+          ruleForm: true,
+          rowsAtLeastOne: true,
+          localizedRoute: true,
+          localizedRule: true,
+          rawSelectionCode: false,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#stock-route-detail-form')
+          form.noValidate = true
+          form.querySelector('[name="name"]').value = ''
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `location.search.includes('invalid=route')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            error: Boolean(document.querySelector('#stock-route-detail-form [data-ui="form-errors"][role="alert"]')),
+            unrelatedError: Boolean(document.querySelector('#stock-route-rule-form [data-ui="form-errors"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
+          })`,
+        ),
+        { error: true, unrelatedError: false, chatter: false },
+      )
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#stock-route-rule-form')`)
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Configured rules')`), true)
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      assert.equal(await evaluate(cdp, `scrollX`), 0)
+      if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            routeFormVisible: document.querySelector('#stock-route-detail-form')?.getBoundingClientRect().height > 0,
+            ruleFormVisible: document.querySelector('#stock-route-rule-form')?.getBoundingClientRect().height > 0,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-detail-form [data-ui="form-field"], #stock-route-rule-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28)
+          })`,
+        ),
+        {
+          horizontalOverflow: false,
+          routeFormVisible: true,
+          ruleFormVisible: true,
+          formRowsAtLeast28: true,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
