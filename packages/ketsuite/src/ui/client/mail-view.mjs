@@ -67,6 +67,7 @@ const apiFor = (resModel) => {
   if (resModel === 'stock.Picking') return 'stock_mail_backend'
   if (resModel === 'stock.Lot') return 'stock_lot_mail_backend'
   if (resModel === 'sale.Order') return 'sale_mail_backend'
+  if (resModel === 'account.Move') return 'account_mail_backend'
   return null
 }
 
