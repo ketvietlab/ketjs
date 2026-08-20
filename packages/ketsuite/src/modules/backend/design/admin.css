@@ -2124,6 +2124,9 @@
     min-inline-size: 0;
     gap: var(--admin-gap-lg);
   }
+  [data-ui="record-form"][data-layout="actions"] {
+    display: block;
+  }
   [data-ui="form-grid"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

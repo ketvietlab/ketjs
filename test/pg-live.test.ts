@@ -24,7 +24,18 @@ import {
   table,
 } from 'ketjs'
 import type { Adapter } from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory, product, stock, uom } from 'ketsuite'
+import {
+  account,
+  catalog,
+  checkout,
+  company,
+  defaultTheme as theme,
+  inventory,
+  partner,
+  product,
+  stock,
+  uom,
+} from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
@@ -493,6 +504,64 @@ test('live pg: concurrent stock reservations never over-reserve one quant', live
       lines.reduce((sum, line) => sum + Number(line.quantity), 0),
       8,
       'MoveLine remains the reservation authority',
+    )
+  })
+})
+
+test('live pg: concurrent accounting posts assign one gapless journal sequence', live, async () => {
+  await withPg(async (a) => {
+    const accountModules = [partner, company, uom, product, account]
+    const accountManifest = compose(accountModules, { headless: true })
+    const accountSchema = schemaFromManifest(accountManifest)
+    for (const tableName of Object.keys(accountSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, accountSchema), a)) await a.exec(sql)
+    registerFunctions(accountModules)
+    const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
+    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+    await callFn(
+      'account.saveAccount',
+      { id: 'bank', code: '1121', name: 'Bank', accountType: 'asset_cash' },
+      options,
+    )
+    await callFn(
+      'account.saveAccount',
+      { id: 'revenue', code: '5111', name: 'Revenue', accountType: 'income' },
+      options,
+    )
+    await callFn(
+      'account.saveJournal',
+      { id: 'general', name: 'Miscellaneous', code: 'MISC', type: 'general' },
+      options,
+    )
+    for (let index = 1; index <= 8; index += 1) {
+      const id = `entry-${index}`
+      await callFn(
+        'account.createMove',
+        { id, journalId: 'general', moveType: 'entry', date: '2026-08-20T00:00:00.000Z' },
+        options,
+      )
+      await callFn(
+        'account.addMoveLine',
+        { id: `${id}:debit`, moveId: id, name: 'Debit', accountId: 'bank', debit: '1' },
+        options,
+      )
+      await callFn(
+        'account.addMoveLine',
+        { id: `${id}:credit`, moveId: id, name: 'Credit', accountId: 'revenue', credit: '1' },
+        options,
+      )
+    }
+
+    const posted = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        callFn('account.postMove', { id: `entry-${index + 1}` }, options),
+      ),
+    )
+    assert.deepEqual(
+      posted.map((result) => String((result.value as { name: string }).name)).sort(),
+      Array.from({ length: 8 }, (_, index) => `MISC/2026/${String(index + 1).padStart(5, '0')}`),
     )
   })
 })

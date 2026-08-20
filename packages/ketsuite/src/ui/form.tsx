@@ -186,3 +186,31 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     </div>
   </form>
 )
+
+/** Several POST actions for one record, kept in one compact native form. */
+export const recordActions = (o: {
+  action: string
+  label?: string | null
+  actions: ReadonlyArray<{
+    value: string
+    label: string
+    variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive'
+    disabled?: boolean
+  }>
+}): TemplateResult => (
+  <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
+    {actionGroup({
+      label: o.label,
+      actions: o.actions.map((action) =>
+        button({
+          label: action.label,
+          type: 'submit',
+          name: 'action',
+          value: action.value,
+          variant: action.variant,
+          disabled: action.disabled,
+        }),
+      ),
+    })}
+  </form>
+)
