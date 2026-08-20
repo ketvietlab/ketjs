@@ -1868,3 +1868,18 @@ Property, Stay, StayGuest and GuestDocument rows only in memory while submission
 recorded; neither the package nor the full document number is copied into the notice
 row, queue payload or default logs. Foreign-guest temporary-residence integration
 and accounting/e-invoice behavior remain later private slices.
+
+## D61 — Property settings preserve canonical location and publish one content change
+
+The Property workspace edits the accommodation identity, operating timezone,
+check-in/out clock, long-stay behavior, guest policy and public copy. Timezones must
+be valid IANA names and a default cancellation policy must resolve inside the same
+company scope. A successful create or update writes one `ContentChange` in the same
+transaction so private channel connections independently rebuild current content.
+
+Canonical address fields are intentionally read-only in this first workspace slice.
+Saving operational settings copies their existing structured country/division and
+coordinate values back through the public function; it never replaces them with a
+free-text approximation. A dedicated address-picker slice may edit those references
+later. Property charges remain provider content, and invoices or accounting entries
+remain outside this boundary.

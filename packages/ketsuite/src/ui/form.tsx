@@ -29,6 +29,7 @@ export type FormField = {
     | 'password'
     | 'number'
     | 'decimal'
+    | 'time'
     | 'date'
     | 'datetime-local'
     | 'select'
