@@ -206,6 +206,7 @@ const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
 const replenishmentEvidenceDir = resolve('docs/assets/inventory-replenishment')
 const forecastEvidenceDir = resolve('docs/assets/inventory-forecast')
+const quotationEvidenceDir = resolve('docs/assets/sales-quotation-list')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -216,6 +217,7 @@ try {
   await mkdir(routeDetailEvidenceDir, { recursive: true })
   await mkdir(replenishmentEvidenceDir, { recursive: true })
   await mkdir(forecastEvidenceDir, { recursive: true })
+  await mkdir(quotationEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -307,6 +309,11 @@ try {
       name: 'forecast',
       path: '/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi',
       ready: `document.querySelector('#forecast-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length === 1`,
+    },
+    {
+      name: 'quotation-list',
+      path: '/admin/sales/quotations?lang=vi',
+      ready: `document.querySelector('#quotation-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1460,6 +1467,116 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(forecastEvidenceDir, 'forecast-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'quotation-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            form: Boolean(document.querySelector('#quotation-create-form[data-scope="sale-quotation-create"]')),
+            customerBlank: document.querySelector('#quotation-create-form [name="partnerId"]')?.value === '',
+            warehouseBlank: document.querySelector('#quotation-create-form [name="warehouseId"]')?.value === '',
+            customerLabel: document.querySelector('#quotation-create-form [name="partnerId"]')?.textContent.includes('Trần Điều Phối'),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#quotation-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          customerBlank: true,
+          warehouseBlank: true,
+          customerLabel: true,
+          rowsAtLeastOne: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#quotation-create-form')
+          form.noValidate = true
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `location.search.includes('invalid=1')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            error: Boolean(document.querySelector('#quotation-create-form [data-ui="form-errors"][role="alert"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
+          })`,
+        ),
+        { error: true, chatter: false },
+      )
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Current quotations')`), true)
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#quotation-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
+          })`,
+        ),
+        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,

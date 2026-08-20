@@ -7,6 +7,7 @@ import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
+import { quotationsScreen } from './quotations-screen.tsx'
 import { dashboard, labelOf, orderDetail, ordersScreen, policyScreen } from './screens.ts'
 
 type AnyRow = Record<string, unknown>
@@ -90,7 +91,7 @@ const orderFields = (_: Translator, d: Awaited<ReturnType<typeof common>>): Form
     name: 'partnerId',
     label: _('sale_backend.field.customer'),
     type: 'select',
-    options: choices(d.partners),
+    options: choices(d.partners, true),
     required: true,
   },
   { name: 'clientOrderRef', label: _('sale_backend.field.clientOrderRef') },
@@ -98,7 +99,7 @@ const orderFields = (_: Translator, d: Awaited<ReturnType<typeof common>>): Form
     name: 'warehouseId',
     label: _('sale_backend.field.warehouse'),
     type: 'select',
-    options: choices(d.warehouses),
+    options: choices(d.warehouses, true),
     required: true,
   },
   {
@@ -280,6 +281,19 @@ const vi = {
   'dashboard.toInvoice': 'Chờ lập hoá đơn',
   'dashboard.records': 'Bản ghi',
   'quotations.title': 'Báo giá',
+  'quotation.kicker': 'Báo giá khách hàng',
+  'quotation.title': 'Báo giá',
+  'quotation.subtitle': 'Soạn, gửi và theo dõi báo giá trước khi xác nhận thành đơn bán hàng.',
+  'quotation.summary.total': 'Tổng báo giá',
+  'quotation.summary.draft': 'Bản nháp',
+  'quotation.summary.sent': 'Đã gửi',
+  'quotation.create.title': 'Tạo báo giá',
+  'quotation.create.hint': 'Chọn khách hàng, kho giao hàng và các điều kiện thương mại.',
+  'quotation.list.title': 'Báo giá hiện có',
+  'quotation.list.hint': 'Mở một báo giá để thêm sản phẩm, gửi hoặc xác nhận đơn hàng.',
+  'quotation.empty': 'Chưa có báo giá',
+  'quotation.emptyHint': 'Tạo báo giá đầu tiên để bắt đầu quy trình bán hàng.',
+  'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'orders.title': 'Đơn bán hàng',
   'detail.title': 'Chi tiết đơn bán',
   'policies.title': 'Chính sách lập hoá đơn',
@@ -356,6 +370,19 @@ const en = {
   'dashboard.toInvoice': 'To Invoice',
   'dashboard.records': 'Records',
   'quotations.title': 'Quotations',
+  'quotation.kicker': 'Customer quotations',
+  'quotation.title': 'Quotations',
+  'quotation.subtitle': 'Draft, send and track quotations before confirming a sales order.',
+  'quotation.summary.total': 'Total quotations',
+  'quotation.summary.draft': 'Draft',
+  'quotation.summary.sent': 'Sent',
+  'quotation.create.title': 'Create quotation',
+  'quotation.create.hint': 'Choose the customer, delivery warehouse and commercial terms.',
+  'quotation.list.title': 'Current quotations',
+  'quotation.list.hint': 'Open a quotation to add products, send it or confirm the sales order.',
+  'quotation.empty': 'No quotations yet',
+  'quotation.emptyHint': 'Create the first quotation to start the sales flow.',
+  'error.invalid': 'The form is invalid. Check the required fields and try again.',
   'orders.title': 'Sales Orders',
   'detail.title': 'Sales Order Detail',
   'policies.title': 'Invoicing Policies',
@@ -467,6 +494,10 @@ export default defineModule({
     '/admin/sales/quotations':
       (ctx): Route =>
       async (url, req) => {
+        const detailSuffix = url.searchParams.get('lang')
+          ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+          : ''
+        const quotationPath = `/admin/sales/quotations${detailSuffix}`
         if (req.method === 'POST') {
           const form = await readForm(req),
             result = await ctx.call(
@@ -484,7 +515,7 @@ export default defineModule({
               url,
               req,
             )
-          return redirect(result, '/admin/sales/quotations')
+          return redirect(result, quotationPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [rows, d] = await Promise.all([
@@ -494,13 +525,15 @@ export default defineModule({
           state = url.searchParams.get('state'),
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
         return document(ctx, url, req, 'sale_backend.quotations.title', (_, shell) =>
-          ordersScreen(_, {
-            title: _('sale_backend.quotations.title'),
+          quotationsScreen(_, {
             frame: shell,
             fields: orderFields(_, d),
             rows: rows
               .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
               .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+            action: quotationPath,
+            detailSuffix,
+            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
           }),
         )
       },
