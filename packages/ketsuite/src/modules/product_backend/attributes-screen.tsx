@@ -8,8 +8,10 @@ import {
   emptyState,
   framed,
   icon,
+  inline,
   recordForm as RecordForm,
   section as Section,
+  stack,
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
@@ -36,17 +38,16 @@ const ValueBadges = ({
 }: {
   _: Translator
   values: Array<Record<string, unknown>>
-}): TemplateResult => (
-  <div data-ui="inline">
-    {values.length
+}): TemplateResult =>
+  inline([
+    values.length
       ? each(
           values,
           (value) => value.id,
           (value) => badge(String(value.name)),
         )
-      : badge(_('product_backend.attributes.noValues'))}
-  </div>
-)
+      : badge(_('product_backend.attributes.noValues')),
+  ])
 
 const AttributeCard = ({
   _,
@@ -58,9 +59,9 @@ const AttributeCard = ({
   locale: string
 }): TemplateResult => {
   const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
-  const body: JSXChild = (
-    <div data-ui="stack" data-gap="compact">
-      <ValueBadges _={_} values={values} />
+  const body: JSXChild = stack(
+    [
+      <ValueBadges _={_} values={values} />,
       <RecordForm
         scope="product-attribute-value"
         action={localized(`/admin/product-attributes/${String(row.id)}/values`, locale)}
@@ -81,8 +82,9 @@ const AttributeCard = ({
             span: 'full',
           },
         ]}
-      />
-    </div>
+      />,
+    ],
+    'compact',
   )
   return (
     <ContentCard
@@ -151,17 +153,20 @@ export const attributesScreen = (
     _,
     _('product_backend.attributes.title'),
     frame,
-    <div data-ui="stack" data-gap="loose">
-      <Section
-        title={_('product_backend.attributes.createTitle')}
-        description={_('product_backend.attributes.createHint')}
-        body={<Surface padding="compact" body={createForm} />}
-      />
-      <Section
-        title={_('product_backend.attributes.configuredTitle')}
-        description={_('product_backend.attributes.configuredHint')}
-        body={configured}
-      />
-    </div>,
+    stack(
+      [
+        <Section
+          title={_('product_backend.attributes.createTitle')}
+          description={_('product_backend.attributes.createHint')}
+          body={<Surface padding="compact" body={createForm} />}
+        />,
+        <Section
+          title={_('product_backend.attributes.configuredTitle')}
+          description={_('product_backend.attributes.configuredHint')}
+          body={configured}
+        />,
+      ],
+      'loose',
+    ),
   )
 }
