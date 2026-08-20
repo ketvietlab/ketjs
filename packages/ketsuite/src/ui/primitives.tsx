@@ -21,9 +21,14 @@ export const HOOKS = [
   'app-action',
 ] as const
 
-/** Small values on one line, allowed to wrap without a caller writing a container. */
+/**
+ * Small values on one line, allowed to wrap without a caller writing a container.
+ *
+ * This is deliberately a `div`, not a `span`: callers may supply native forms or
+ * other flow content, and the browser must never repair an invalid phrasing tree.
+ */
 export const inline = (items: readonly JSXChild[]): TemplateResult => (
-  <span data-ui="inline">
+  <div data-ui="inline">
     {each(
       items,
       (_, i) => i,
@@ -31,7 +36,7 @@ export const inline = (items: readonly JSXChild[]): TemplateResult => (
         <>{item}</>
       ),
     )}
-  </span>
+  </div>
 )
 
 /**

@@ -1,4 +1,4 @@
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import {
   framed,
@@ -180,6 +180,7 @@ export const productDetailScreen = (
     stockEnabled?: boolean
     errors?: string[]
   },
+  collaboration: JSXChild,
   frame: Frame = {},
   locale = '',
 ): TemplateResult =>
@@ -202,6 +203,7 @@ export const productDetailScreen = (
           body: recordForm({
             action: localized(`/admin/products/${row.id}`, locale),
             submit: _('product_backend.action.save'),
+            submitVariant: 'primary',
             errors: management.errors,
             fields: [
               { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
@@ -283,6 +285,7 @@ export const productDetailScreen = (
         actions: recordForm({
           action: localized(`/admin/products/${row.id}/variants/generate`, locale),
           submit: _('product_backend.variants.generate'),
+          submitVariant: 'secondary',
           fields: [],
         }),
         body:
@@ -324,6 +327,7 @@ export const productDetailScreen = (
         body: recordForm({
           action: localized(`/admin/products/${row.id}/attribute-lines`, locale),
           submit: _('product_backend.action.add'),
+          submitVariant: 'secondary',
           fields: [
             {
               name: 'attributeId',
@@ -341,6 +345,7 @@ export const productDetailScreen = (
           ],
         }),
       }),
+      collaboration,
     ]),
   )
 
@@ -358,6 +363,7 @@ export const newProductScreen = (
       body: recordForm({
         action: localized('/admin/products/new', locale),
         submit: _('product_backend.action.create'),
+        submitVariant: 'primary',
         cancelHref: localized('/admin/products', locale),
         cancelLabel: _('product_backend.action.cancel'),
         errors: options.errors,
@@ -437,6 +443,7 @@ export const variantScreen = (
         body: recordForm({
           action: localized(`/admin/products/${templateId}/variants/${String(row.id)}`, locale),
           submit: _('product_backend.action.save'),
+          submitVariant: 'primary',
           errors,
           fields: [
             {
@@ -492,6 +499,7 @@ export const attributesScreen = (
         body: recordForm({
           action: localized('/admin/product-attributes', locale),
           submit: _('product_backend.action.create'),
+          submitVariant: 'primary',
           errors,
           fields: [
             { name: 'name', label: _('product_backend.field.name'), required: true },
@@ -528,6 +536,7 @@ export const attributesScreen = (
           body: recordForm({
             action: localized(`/admin/product-attributes/${String(row.id)}/values`, locale),
             submit: _('product_backend.action.add'),
+            submitVariant: 'secondary',
             fields: [
               { name: 'name', label: _('product_backend.attributes.valueName'), required: true },
               { name: 'sequence', label: _('product_backend.col.sequence'), type: 'number', value: 10 },

@@ -22,6 +22,9 @@ const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => 
   extras: {
     'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
     'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+    'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', {
+      lang: ctx.localeOf(url, req),
+    }),
   },
 })
 

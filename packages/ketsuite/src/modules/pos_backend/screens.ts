@@ -89,6 +89,7 @@ export const configsScreen = (
         body: recordForm({
           action: '/admin/pos/configurations',
           submit: _('pos_backend.action.saveConfig'),
+          submitVariant: 'primary',
           fields,
         }),
       }),
@@ -135,6 +136,7 @@ export const methodsScreen = (
         body: recordForm({
           action: '/admin/pos/payment-methods',
           submit: _('pos_backend.action.saveMethod'),
+          submitVariant: 'secondary',
           hidden: { action: 'save' },
           fields,
         }),
@@ -143,6 +145,7 @@ export const methodsScreen = (
         body: recordForm({
           action: '/admin/pos/payment-methods',
           submit: _('pos_backend.action.linkMethod'),
+          submitVariant: 'secondary',
           hidden: { action: 'link' },
           fields: linkFields,
         }),
@@ -189,6 +192,7 @@ export const sessionsScreen = (
         body: recordForm({
           action: '/admin/pos/sessions',
           submit: _('pos_backend.action.createSession'),
+          submitVariant: 'primary',
           fields,
         }),
       }),
@@ -286,6 +290,7 @@ export const sessionDetail = (
                 body: recordForm({
                   action: actionPath,
                   submit: _('pos_backend.action.closeSession'),
+                  submitVariant: 'primary',
                   hidden: { action: 'close' },
                   fields: closeFields,
                 }),
@@ -351,6 +356,7 @@ export const registerScreen = (
         body: recordForm({
           action: actionPath,
           submit: _('pos_backend.action.newOrder'),
+          submitVariant: 'primary',
           fields: createFields,
         }),
       }),
@@ -434,6 +440,7 @@ export const orderDetail = (
                 body: recordForm({
                   action: actionPath,
                   submit: _('pos_backend.action.addProduct'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'line' },
                   fields: lineFields,
                 }),
@@ -471,6 +478,7 @@ export const orderDetail = (
                   body: recordForm({
                     action: actionPath,
                     submit: _('pos_backend.action.addPayment'),
+                    submitVariant: 'secondary',
                     hidden: { action: 'payment' },
                     fields: paymentFields,
                   }),

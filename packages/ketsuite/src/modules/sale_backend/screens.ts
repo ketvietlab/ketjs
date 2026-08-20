@@ -86,6 +86,7 @@ export const ordersScreen = (
               body: recordForm({
                 action: '/admin/sales/quotations',
                 submit: _('sale_backend.action.create'),
+                submitVariant: 'primary',
                 fields: o.fields,
               }),
             }),
@@ -148,6 +149,7 @@ export const policyScreen = (
         body: recordForm({
           action: '/admin/sales/invoicing-policies',
           submit: _('sale_backend.action.savePolicy'),
+          submitVariant: 'primary',
           fields,
         }),
       }),
@@ -273,6 +275,7 @@ export const orderDetail = (
                 body: recordForm({
                   action: o.actionPath,
                   submit: _('sale_backend.action.addLine'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'add-line' },
                   fields: o.lineFields,
                 }),
@@ -288,6 +291,7 @@ export const orderDetail = (
                 body: recordForm({
                   action: o.actionPath,
                   submit: _('sale_backend.action.createInvoice'),
+                  submitVariant: 'primary',
                   hidden: { action: 'invoice' },
                   fields: o.invoiceFields,
                 }),

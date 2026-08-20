@@ -39,6 +39,8 @@ export type RuntimeConfig = {
    * balancer sends you elsewhere.
    */
   secret: string | null
+  /** Dedicated HMAC key for anonymous provider callbacks; never reuse a session cookie key. */
+  webhookSecret: string | null
   /** LISTEN/NOTIFY is only an accelerator; polling remains the guarantee. */
   queueNotify: boolean
   storageKind: 'local' | 's3'
@@ -89,6 +91,7 @@ export function readConfig(
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultCompany: env.KET_COMPANY ?? defaults.defaultCompany ?? 'default',
     secret: env.KET_SECRET ?? defaults.secret ?? null,
+    webhookSecret: env.KET_WEBHOOK_SECRET ?? defaults.webhookSecret ?? null,
     queueNotify:
       env.KET_QUEUE_NOTIFY === undefined ? (defaults.queueNotify ?? true) : env.KET_QUEUE_NOTIFY !== '0',
     storageKind,

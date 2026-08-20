@@ -1,0 +1,70 @@
+import { defineModule } from 'ketjs'
+import { routes } from './routes.ts'
+
+export default defineModule({
+  name: 'mail_transport_backend',
+  version: '0.1.0',
+  depends: ['mail_transport', 'backend'],
+  install: 'auto',
+  app: true,
+  title: 'Hộp thư đi',
+  summary: 'Theo dõi delivery, lỗi gửi và retry vận hành.',
+  category: 'Năng suất',
+  routes,
+  menus: {
+    outbox: {
+      label: 'menu.app',
+      icon: 'send',
+      path: '/admin/outbox',
+      sequence: 16,
+      needs: 'mail_transport.listOutbox',
+    },
+  },
+  messages: {
+    vi: {
+      'app.title': 'Hộp thư đi',
+      'app.summary': 'Theo dõi delivery, lỗi gửi và retry vận hành.',
+      'app.category': 'Năng suất',
+      'menu.app': 'Hộp thư đi',
+      title: 'Hộp thư đi',
+      empty: 'Chưa có email nào trong outbox.',
+      emptyHint: 'Delivery snapshot sẽ xuất hiện ở đây ngay khi được ghi cùng giao dịch nghiệp vụ.',
+      direct: 'Nội dung trực tiếp',
+      attempts: 'lần thử',
+      failure: 'Lỗi gần nhất',
+      target: 'Bản ghi',
+      retry: 'Gửi lại',
+      cancel: 'Hủy gửi',
+      'state.queued': 'Đang chờ',
+      'state.sending': 'Đang gửi',
+      'state.retryable': 'Chờ thử lại',
+      'state.sent': 'Đã gửi',
+      'state.failed': 'Gửi lỗi',
+      'state.cancelled': 'Đã hủy',
+    },
+    en: {
+      'app.title': 'Outbox',
+      'app.summary': 'Inspect delivery, failures and operator retries.',
+      'app.category': 'Productivity',
+      'menu.app': 'Outbox',
+      title: 'Outbox',
+      empty: 'No email is in the outbox.',
+      emptyHint: 'A delivery snapshot appears here as soon as its business transaction commits.',
+      direct: 'Direct content',
+      attempts: 'attempts',
+      failure: 'Last failure',
+      target: 'Record',
+      retry: 'Retry',
+      cancel: 'Cancel',
+      'state.queued': 'Queued',
+      'state.sending': 'Sending',
+      'state.retryable': 'Retry pending',
+      'state.sent': 'Sent',
+      'state.failed': 'Failed',
+      'state.cancelled': 'Cancelled',
+    },
+  },
+})
+
+export { routes } from './routes.ts'
+export { outboxScreen } from './screens.ts'

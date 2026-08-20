@@ -89,12 +89,13 @@ const app = defineApp({
 
 const runCli = async (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
   const cli = fileURLToPath(new URL('../packages/ketjs/src/cli.js', import.meta.url))
-  const child = spawn(process.execPath, [cli, ...args], {
+  const env = { ...process.env }
+  // A plain CLI subprocess must not inherit Node's test-runner protocol. Node 24
+  // otherwise forwards the experimental SQLite warning into the captured protocol.
+  delete env.NODE_TEST_CONTEXT
+  const child = spawn(process.execPath, ['--no-warnings', cli, ...args], {
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
-    // Runtime diagnostics are not part of the CLI JSON protocol. Node 24 still
-    // marks node:sqlite experimental and some test runners merge that diagnostic
-    // into captured output, so keep the machine-readable channel deterministic.
-    env: { ...process.env, NODE_NO_WARNINGS: '1' },
   })
   let stdout = ''
   let stderr = ''
@@ -249,6 +250,7 @@ test('testing CLI: ket call smoke-tests a running server with files and structur
       '--compact',
     ])
     assert.equal(added.code, 0, added.stderr)
+    assert.doesNotMatch(added.stdout, /^\(node:/, JSON.stringify(added))
     assert.equal((JSON.parse(added.stdout) as { value: { id: string } }).value.id, 'cli')
 
     const listed = await runCli([
