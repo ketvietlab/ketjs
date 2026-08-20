@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { page, text } from 'ketjs'
+import { json, page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
 import type { JSXChild } from 'ketjs-view'
-import { formCluster, metric, recordForm, section, stack, surface } from '../../ui/index.ts'
-import type { ActionVariant, FormField } from '../../ui/index.ts'
-import { readForm, seeOther } from '../backend/forms.ts'
+import { metric, recordForm, section, stack, surface } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
+import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
+import { transferDetailScreen } from './transfer-screen.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
@@ -95,6 +96,18 @@ const resultRedirect = (result: unknown, success: string) =>
   (result as { ok?: boolean }).ok
     ? seeOther(success)
     : seeOther(`${success}${success.includes('?') ? '&' : '?'}invalid=1`)
+const isStockPartial = (req: Req): boolean => req.headers['x-ket-partial'] === 'stock-transfer'
+const dateTimeLabel = (value: unknown, lang: string): string => {
+  const raw = String(value ?? '')
+  if (!raw) return ''
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime())
+    ? raw
+    : new Intl.DateTimeFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+}
 const inLocale = (url: URL, path: string): string => {
   const target = new URL(path, 'http://ket.local')
   const lang = url.searchParams.get('lang')
@@ -283,10 +296,14 @@ export const routes: Record<string, RouteEntry> = {
     (ctx): Route =>
     async (url, req, params) => {
       const here = `${url.pathname}${url.search}`
-      const current = (await ctx.call('stock.getPicking', { id: params.id }, url, req)) as AnyRow | null
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      let current = (await ctx.call('stock.getPicking', { id: params.id }, url, req)) as AnyRow | null
       if (!current) return text('Transfer not found', { status: 404 })
-      const moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
+      let moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
+      let savedPartial = false
       if (req.method === 'POST') {
+        const partial = isStockPartial(req)
         const form = await readForm(req)
         let result: unknown
         if (form.action === 'add-move')
@@ -339,26 +356,22 @@ export const routes: Record<string, RouteEntry> = {
         else if (form.action === 'cancel')
           result = await ctx.call('stock.cancelPicking', { id: params.id }, url, req)
         else return text('Unknown transfer action', { status: 400 })
-        return resultRedirect(result, here)
+        if (!(result as { ok?: boolean }).ok) {
+          if (partial)
+            return json(
+              { ok: false, message: _('stock_backend.error.invalid'), errors: errorsOf(result) },
+              { status: 422 },
+            )
+          return resultRedirect(result, here)
+        }
+        if (!partial) return seeOther(here)
+        savedPartial = true
+        current = (await ctx.call('stock.getPicking', { id: params.id }, url, req)) as AnyRow | null
+        if (!current) return text('Transfer not found', { status: 404 })
+        moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
+      if (req.method !== 'GET' && !savedPartial) return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
-      const actionForm = (
-        action: string,
-        label: string,
-        variant: ActionVariant,
-        hidden: Record<string, string> = {},
-      ) =>
-        recordForm({
-          action: here,
-          submit: label,
-          submitVariant: variant,
-          layout: 'inline',
-          hidden: { action, ...hidden },
-          fields: [],
-        })
       const operationOptions = moves.flatMap((move) => {
         const lines = Array.isArray(move.lines) ? (move.lines as AnyRow[]) : []
         return lines.length
@@ -371,7 +384,6 @@ export const routes: Record<string, RouteEntry> = {
       const pickingType = data.pickingTypes.find((row) => row.id === current.pickingTypeId)
       const backorderPolicy = String(pickingType?.createBackorder ?? 'ask')
       const state = String(current.state)
-      const editable = !['done', 'cancel'].includes(state)
       const moveRows = moves.flatMap((move) => [
         {
           id: String(move.id),
@@ -388,111 +400,42 @@ export const routes: Record<string, RouteEntry> = {
           detail: `${String(line.quantity)} ${String(line.productUomId)}`,
         })),
       ])
-      return render(ctx, url, req, 'stock_backend.transferDetail', moveRows, [
-        stack([
-          metric({ label: _('stock_backend.field.reference'), value: String(current.name) }),
-          metric({
-            label: _('stock_backend.col.state'),
-            value: selectionLabel(_, 'state', current.state),
-          }),
-        ]),
-        ...(editable
-          ? [
-              surface({
-                body: recordForm({
-                  action: here,
-                  submit: _('stock_backend.action.addMove'),
-                  submitVariant: 'secondary',
-                  hidden: { action: 'add-move' },
-                  errors: invalid(url, _),
-                  fields: [
-                    { name: 'name', label: _('stock_backend.col.name') },
-                    { name: 'productId', label: _('stock_backend.field.productId'), required: true },
-                    {
-                      name: 'productUomId',
-                      label: _('stock_backend.field.uom'),
-                      type: 'select',
-                      options: options(data.units),
-                      required: true,
-                    },
-                    {
-                      name: 'productUomQty',
-                      label: _('stock_backend.field.demand'),
-                      type: 'decimal',
-                      required: true,
-                    },
-                  ],
-                }),
-              }),
-            ]
-          : []),
-        ...(editable && operationOptions.length
-          ? [
-              surface({
-                body: recordForm({
-                  action: here,
-                  submit: _('stock_backend.action.recordDone'),
-                  submitVariant: 'secondary',
-                  hidden: { action: 'pick' },
-                  errors: invalid(url, _),
-                  fields: [
-                    {
-                      name: 'operationId',
-                      label: _('stock_backend.field.operationLine'),
-                      type: 'select',
-                      options: operationOptions,
-                      required: true,
-                    },
-                    {
-                      name: 'quantity',
-                      label: _('stock_backend.field.doneQuantity'),
-                      type: 'decimal',
-                      required: true,
-                    },
-                    {
-                      name: 'lotId',
-                      label: _('stock_backend.field.lot'),
-                      type: 'select',
-                      options: [{ value: '', label: '—' }, ...options(data.lots)],
-                    },
-                  ],
-                }),
-              }),
-            ]
-          : []),
-        ...(editable
-          ? [
-              formCluster({
-                forms: [
-                  ...(state === 'draft'
-                    ? [actionForm('confirm', _('stock_backend.action.confirm'), 'primary')]
-                    : [actionForm('assign', _('stock_backend.action.assign'), 'primary')]),
-                  ...(state === 'draft'
-                    ? []
-                    : backorderPolicy === 'ask'
-                      ? [
-                          actionForm(
-                            'validate',
-                            _('stock_backend.action.validateCreateBackorder'),
-                            'primary',
-                            { backorder: 'create' },
-                          ),
-                          actionForm('validate', _('stock_backend.action.validateNoBackorder'), 'secondary', {
-                            backorder: 'cancel',
-                          }),
-                        ]
-                      : [actionForm('validate', _('stock_backend.action.validate'), 'primary')]),
-                  actionForm('cancel', _('stock_backend.action.cancel'), 'destructive'),
-                ],
-              }),
-            ]
-          : []),
-        await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
-          resModel: 'stock.Picking',
-          resId: String(current.id),
+      return page({
+        body: ctx.document({
           lang,
+          title: _('stock_backend.transferDetail'),
+          head: await ctx.styles(req),
+          body: transferDetailScreen(
+            _,
+            {
+              transfer: {
+                id: String(current.id),
+                name: String(current.name),
+                state,
+                scheduledDate: dateTimeLabel(current.scheduledDate, lang),
+                pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
+              },
+              rows: moveRows,
+              units: options(data.units),
+              lots: options(data.lots),
+              operationOptions,
+              backorderPolicy,
+              action: here,
+              collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+                resModel: 'stock.Picking',
+                resId: String(current.id),
+                lang,
+              }),
+              editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
+                pickingId: String(current.id),
+                lang,
+              }),
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
         }),
-      ])
+      })
     },
 
   '/admin/warehouses':
