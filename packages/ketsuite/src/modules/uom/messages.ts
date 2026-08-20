@@ -3,7 +3,7 @@ import type { Message } from 'ketjs'
 export const messages: Record<string, Record<string, Message>> = {
   vi: {
     'app.title': 'Đơn vị tính',
-    'app.summary': 'Nhóm đơn vị và quy đổi giữa chúng.',
+    'app.summary': 'Cây đơn vị tương đối và quy đổi theo Odoo 19.',
     'app.category': 'Bán hàng',
     'type.reference': 'Đơn vị gốc',
     'type.bigger': 'Lớn hơn gốc',
@@ -11,7 +11,7 @@ export const messages: Record<string, Record<string, Message>> = {
   },
   en: {
     'app.title': 'Units of measure',
-    'app.summary': 'Unit categories and the conversions between them.',
+    'app.summary': 'Odoo 19 relative unit trees and conversions.',
     'app.category': 'Sales',
     'type.reference': 'Reference unit',
     'type.bigger': 'Bigger than reference',

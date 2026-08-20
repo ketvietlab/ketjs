@@ -2,7 +2,7 @@
 // remain module data.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 
 export const HOOKS = [
   'kanban',
@@ -22,9 +22,9 @@ export const HOOKS = [
 export const kanbanCard = (o: {
   key: string
   title: string
-  meta?: unknown
+  meta?: JSXChild
   note?: string | null
-  actions?: unknown
+  actions?: JSXChild
 }): TemplateResult => (
   <article data-ui="kanban-card" data-key={o.key}>
     <h3 data-ui="kanban-title">{o.title}</h3>
@@ -47,7 +47,7 @@ export const recordList = <T,>(o: {
   title: (row: T) => string
   href: (row: T) => string
   summary?: (row: T) => string | null
-  value?: (row: T) => unknown
+  value?: (row: T) => JSXChild
 }): TemplateResult => (
   <ol data-ui="record-list">
     {each(o.rows, o.id, (row) => (

@@ -30,18 +30,69 @@ export class IslandError extends Error {
 }
 
 export type IslandProps = Record<string, unknown>
-export type IslandView = (props: IslandProps) => TemplateResult
-export type IslandRegistry = Record<string, IslandView>
+/** One mounted island instance. Signals and other local state live in this closure. */
+export type IslandView = () => TemplateResult
+/** Create one isolated instance from serializable server props. */
+export type IslandFactory = (props: IslandProps) => IslandView
+export type IslandDefinition = {
+  view: IslandFactory
+  /** The only surrounding scope keys that may cross into the island. */
+  props?: Record<string, string>
+  /** Browser module, relative to the declaring module's assets directory. */
+  client?: string
+  /** Named browser export; defaults to `default`. */
+  export?: string
+}
+export type IslandRegistry = Record<string, IslandFactory>
+
+const jsonProps = (name: string, props: IslandProps): { raw: string; revived: IslandProps } => {
+  const seen = new WeakSet<object>()
+  const visit = (value: unknown): void => {
+    if (value == null || typeof value === 'string' || typeof value === 'boolean') return
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new TypeError('non-finite number')
+      return
+    }
+    if (typeof value !== 'object') throw new TypeError(typeof value)
+    if (value instanceof Date) return
+    if (seen.has(value)) throw new TypeError('cyclic value')
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+    } else {
+      const prototype = Object.getPrototypeOf(value)
+      if (prototype !== null && prototype !== Object.prototype) throw new TypeError('non-plain object')
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item)
+    }
+    seen.delete(value)
+  }
+
+  try {
+    visit(props)
+    const raw = JSON.stringify(props)
+    const revived = JSON.parse(raw) as unknown
+    if (typeof revived !== 'object' || revived === null || Array.isArray(revived))
+      throw new TypeError('not an object')
+    return { raw, revived: revived as IslandProps }
+  } catch {
+    throw new IslandError({
+      code: 'E_ISLAND_PROPS',
+      message: `island "${name}" received props that are not JSON-serializable`,
+      hint: 'island props cross the server/browser boundary; pass plain JSON data only',
+    })
+  }
+}
 
 /**
  * Render an island to markup, carrying its props alongside so the client can
  * revive it with exactly the same input the server used. A different input would
  * mean a different tree, and hydration would rightly refuse it.
  */
-export function renderIsland(name: string, view: IslandView, props: IslandProps): string {
+export function renderIsland(name: string, factory: IslandFactory, props: IslandProps): string {
+  const { raw, revived } = jsonProps(name, props)
   return (
-    `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(JSON.stringify(props))}">` +
-    renderToString(view(props)) +
+    `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(raw)}">` +
+    renderToString(factory(revived)()) +
     `</${ISLAND_TAG}>`
   )
 }
@@ -64,13 +115,19 @@ export type HydratedIsland = { name: string; element: IslandElement; dispose(): 
  * island quietly rendered a second copy of itself beside the server's. An API that
  * makes the wrong choice expressible will eventually have it chosen.
  */
-export function hydrateIslands(host: Host, root: IslandElement, registry: IslandRegistry): HydratedIsland[] {
+export function hydrateIslands(
+  host: Host,
+  root: IslandElement,
+  registry: IslandRegistry,
+  options: { strict?: boolean } = {},
+): HydratedIsland[] {
   const out: HydratedIsland[] = []
   for (const element of root.querySelectorAll(ISLAND_TAG)) {
     const name = element.getAttribute('data-island')
     if (!name) continue
-    const view = registry[name]
-    if (!view) {
+    const factory = registry[name]
+    if (!factory) {
+      if (options.strict === false) continue
       throw new IslandError({
         code: 'E_UNKNOWN_ISLAND',
         message: `the page places island "${name}", which no installed module provides`,
@@ -81,12 +138,14 @@ export function hydrateIslands(host: Host, root: IslandElement, registry: Island
     const raw = element.getAttribute('data-props')
     if (raw) {
       try {
-        props = JSON.parse(raw) as IslandProps
+        const parsed = JSON.parse(raw) as unknown
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new TypeError()
+        props = parsed as IslandProps
       } catch {
         throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
       }
     }
-    const mounted = mountHydrated(host, element, () => view(props))
+    const mounted = mountHydrated(host, element, factory(props))
     out.push({ name, element, dispose: mounted.dispose })
   }
   return out

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title description">
+  <title id="title">Mặt trước hộp sản phẩm mẫu</title>
+  <desc id="description">Minh họa hình học màu chàm trên nền trung tính ấm.</desc>
+  <rect width="640" height="640" fill="#f7f5f5"/>
+  <rect x="116" y="92" width="408" height="456" rx="24" fill="#ffffff" stroke="#dddcde" stroke-width="4"/>
+  <path d="M204 236 320 170l116 66v142l-116 66-116-66Z" fill="#eef0fb" stroke="#5167c4" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m204 236 116 68 116-68M320 304v140" fill="none" stroke="#5167c4" stroke-width="8" stroke-linejoin="round"/>
+  <rect x="204" y="484" width="232" height="16" rx="8" fill="#dddcde"/>
+</svg>

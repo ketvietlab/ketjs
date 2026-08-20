@@ -63,6 +63,15 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
 
   const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
   const matches = (text: string): boolean => !needle || text.toLocaleLowerCase('vi').includes(needle)
+  const activePath = o.active
+    ? entries
+        .map(([, def]) => def.path)
+        .filter(
+          (path): path is string =>
+            !!path && (o.active === path || o.active!.startsWith(`${path.replace(/\/$/, '')}/`)),
+        )
+        .sort((a, b) => b.length - a.length)[0]
+    : undefined
 
   const build = (parent: string | undefined, depth: number): MenuNode[] => {
     if (depth > 8) return [] // a cycle would otherwise recurse forever
@@ -75,7 +84,7 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       // A search keeps a branch that matches anywhere along it, so a leaf never
       // arrives without the words that explain where it lives.
       if (needle && !children.length && !matches(label(def))) continue
-      const active = (def.path !== undefined && def.path === o.active) || children.some((c) => c.active)
+      const active = (def.path !== undefined && def.path === activePath) || children.some((c) => c.active)
       out.push({ id, label: label(def), path: def.path ?? null, icon: def.icon ?? null, active, children })
     }
     return out

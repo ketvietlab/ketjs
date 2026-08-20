@@ -5,9 +5,10 @@ Honest list of what is not settled or not built.
 ## Not built
 - **Client-side bundling.** Deliberately optional; unbundled ESM is the dev path.
   No production bundler exists yet.
-- **Product attachment integration.** The storage engine, Attachment model and
-  generic upload/download routes exist. Product images, document previews and
-  field-specific widgets stay with the product modules that own those records.
+- **Image processing.** Product media is connected to generic attachments, but
+  resize, transforms, focal points, CDN publication and document previews remain
+  separate features. The product bridge deliberately stores none of those as fake
+  URL or blob columns.
 
 ## Not built
 - **Streams under a database-per-tenant layout.** Whose database a stream belongs to

@@ -1,6 +1,6 @@
 # Backend UI — bàn giao cho đội design
 
-## Trạng thái triển khai — 2026-08-19
+## Trạng thái triển khai — 2026-08-20
 
 Visual baseline đã hoàn tất trong `design/tokens.css` và `design/admin.css` theo hướng
 **enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
@@ -139,7 +139,8 @@ lập bằng CSS.
 
 ## Bàn giao cho framework
 
-Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại thuộc markup/behavior:
+Baseline thị giác đã phủ shell, data view và component kit hiện tại. Các việc còn lại
+thuộc behavior hoặc workflow chưa có contract:
 
 - nối nút Cài/Gỡ vào server function;
 - thêm island cho List View và những chỗ cần tương tác thật;
@@ -147,7 +148,6 @@ Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại 
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
 - thêm toggle `data-theme="light|dark"`; system preference hiện là fallback;
-- form tạo/sửa trang;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
@@ -158,9 +158,9 @@ preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
 ở thời điểm bàn giao, không thay thế token, CSS hoặc `data-ui` contract làm đặc tả.
 
 
-## Màn hình đăng nhập và thanh danh tính (mới)
+## Màn hình đăng nhập và thanh danh tính
 
-Hai bề mặt vừa thêm, chưa có CSS. Markup đã xong, phần nhìn là của đội design.
+Hai bề mặt dùng cùng token, focus contract và density với phần backend còn lại.
 
 **Màn đăng nhập** — `/login`, do module `user` dựng:
 
@@ -197,9 +197,8 @@ Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
     viewer-many      thanh trên, nhiều công ty — có tên công ty đang chọn
     viewer-long      tên người và tên công ty đều dài, kiểm tra thanh trên không vỡ
 
-Hiện **chưa có quy tắc CSS nào** cho các selector này: trang đăng nhập nhúng
-`tokens.css` và `admin.css` như mọi màn hình khác, nhưng hai file đó chưa nói gì
-về `[data-ui="login"]`. Đó là phần việc tiếp theo của đội design.
+Các selector này đã có baseline trong `admin.css` và nằm trong `@layer ket.app`, nên
+`ket.user` vẫn override được mà không cần tăng specificity.
 
 Một chỗ chưa có điều khiển: tài khoản thuộc nhiều công ty thì `viewer-company` chỉ
 **hiện** công ty đang chọn, chưa **đổi** được. Khi vẽ tới đó, cần một control ở chính
@@ -309,3 +308,19 @@ bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
 | `[data-ui="menu-item-wrap"][data-depth]` | một mục, kèm độ sâu |
 | `[data-ui="menu-section-chevron"]`, `[data-ui="menu-section-text"]`, `[data-ui="menu-section-children"]` | nhóm; con có đường kẻ dọc bên trái |
 | `[data-ui="menu-item"][data-active]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá |
+
+## Form và media
+
+`recordForm` là form native, không cần island. Required có indicator nhìn thấy được;
+helper và lỗi tại field được nối với control qua `aria-describedby`; lỗi tổng hợp có
+`role="alert"`. Checkbox giữ vùng label click được, còn control invalid/disabled/focus
+dùng đúng semantic token.
+
+`mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
+sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
+chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide với hit area `40px`, tooltip
+và accessible label; mobile tăng lên `44px` theo quality gate.
+
+Status surface (`neutral`, `info`, `positive`, `warning`, `danger`) giữ surface sáng và
+màu chữ cố định ở cả light/dark như KétViệt Design System. Chỉ canvas, surface, border,
+text, active navigation và focus role được remap khi đổi theme.

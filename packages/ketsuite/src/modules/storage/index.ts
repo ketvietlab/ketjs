@@ -16,4 +16,16 @@ export default defineModule({
   functions,
   jobs,
   routes,
+  messages: {
+    vi: {
+      'app.title': 'Tệp tin',
+      'app.summary': 'Tệp đính kèm trên đĩa hoặc dịch vụ tương thích S3.',
+      'app.category': 'Hệ thống',
+    },
+    en: {
+      'app.title': 'Files',
+      'app.summary': 'Attachments on local disk or an S3-compatible service.',
+      'app.category': 'System',
+    },
+  },
 })

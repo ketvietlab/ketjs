@@ -1,41 +1,35 @@
 import type { ModelDef } from 'ketjs'
 
-/**
- * Units of measure, following Odoo's model deliberately.
- *
- * A category groups units that can convert between one another — weight, volume,
- * count. Exactly one unit in each category is the *reference*, and every other unit
- * records how it relates to it. Conversion across categories is not a rounding
- * problem, it is a mistake, and it is refused.
- *
- * `factor` is how many of THIS unit make one reference unit. Gram against a
- * kilogram reference is 1000; tonne is 0.001. The reference itself is 1.
- *
- * `rounding` is the precision this unit is meaningful to: 1 for whole pieces, 0.01
- * for kilograms weighed to the gram. Every conversion result is rounded to the
- * target's precision, because a quantity carried at full float precision is a
- * quantity that will eventually compare unequal to itself.
- */
+/** Odoo 19 models UoMs as relative trees, not categories. */
 export const models: Record<string, ModelDef> = {
-  Category: {
+  Precision: {
     scope: 'shared',
-    fields: { id: 'id', name: 'text' },
+    fields: { id: 'id', digits: 'int' },
   },
-
   Unit: {
     scope: 'shared',
     fields: {
       id: 'id',
       name: 'text',
-      categoryId: 'ref:uom.Category',
-      // 'reference' | 'bigger' | 'smaller' — validated on write, see functions.ts
-      type: 'text',
-      // decimal, not float: a factor of 0.001 written to a double comes back as
-      // 0.001000000000000000020816681711721685, and every conversion through it
-      // carries that error into a stock figure.
-      factor: 'decimal',
+      sequence: 'int',
+      relativeFactor: 'decimal',
+      relativeUomId: 'ref:uom.Unit?',
+      // Named `absoluteFactor`, not `factor`, because it means the reciprocal of
+      // what the old `factor` column held: how many root units make one of this
+      // unit, where `factor` was how many of this unit make one reference. Reusing
+      // the name would have left planMigration with a decimal column called
+      // `factor` before and after, no op to emit, no destructive flag to demand —
+      // and every stored row silently meaning its own inverse. The rename forces
+      // DROP_COLUMN plus ADD_COLUMN, so the upgrade cannot happen by accident.
+      absoluteFactor: 'decimal',
       rounding: 'decimal',
+      parentPath: 'text',
+      locked: 'bool',
       active: 'bool',
+    },
+    indexes: {
+      parent: { fields: ['relativeUomId'] },
+      parent_path: { fields: ['parentPath'] },
     },
   },
 }

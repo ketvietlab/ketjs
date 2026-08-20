@@ -44,6 +44,8 @@ const JS_OF: Record<string, string> = {
   json: 'object',
 }
 
+const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
+
 export function validateInput(fnKey: string, manifest: Manifest, args: Record<string, unknown>): void {
   const sig = manifest.functions[fnKey]?.input ?? {}
   const errors: string[] = []
@@ -57,6 +59,11 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
     if (!t.ok) continue
     const want = JS_OF[t.base]
     if (want && typeof v !== want) errors.push(`input "${name}" expects ${t.base} (${want}), got ${typeof v}`)
+    if (
+      t.base === 'decimal' &&
+      !((typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && DECIMAL.test(v.trim())))
+    )
+      errors.push(`input "${name}" expects a finite number or an exact decimal string`)
     if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
       errors.push(`input "${name}" expects an integer`)
   }

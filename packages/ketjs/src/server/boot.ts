@@ -24,7 +24,7 @@ import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
 import type { MenuNode } from '../kernel/menu.ts'
-import type { Markup } from 'ketjs-view'
+import type { IslandRegistry, Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
@@ -266,6 +266,16 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
 
   // Built per tenant, because which templates exist depends on what is installed.
+  const islandRegistry = (live: Manifest): IslandRegistry => {
+    const disabled = new Set(live.disabledModules ?? [])
+    const registry: IslandRegistry = {}
+    for (const module of modules) {
+      if (disabled.has(module.name)) continue
+      for (const [name, definition] of Object.entries(module.islands)) registry[name] = definition.view
+    }
+    return registry
+  }
+
   const themeFactory =
     spec.headless || !spec.theme
       ? {}
@@ -276,7 +286,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
 
   // Fills are KTL, so they translate the way templates do.
   const jointFactory = (live: Manifest, locale: string) =>
-    createJoints(live, { translate: translate(locale) })
+    createJoints(live, { translate: translate(locale), islands: islandRegistry(live) })
 
   const tenants: Tenants = serve.tenants
     ? createTenants({
@@ -616,6 +626,14 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     resolveAllow: allowFor,
     resolveActor: actorOf,
     queueNotify: config.queueNotify,
+    islandClients: (url: URL, req: IncomingMessage) =>
+      tenants.ofRequest(url, req, async (tenant) =>
+        Object.fromEntries(
+          Object.entries(tenant.live.islands)
+            .filter(([, island]) => island.client !== undefined)
+            .map(([name, island]) => [name, island.client as { src: string; export: string }]),
+        ),
+      ),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme
       ? {}

@@ -2,7 +2,7 @@
 // only the content and the business meaning placed inside them.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 
 export const HOOKS = [
   'stack',
@@ -29,7 +29,7 @@ export const HOOKS = [
 ] as const
 
 export const stack = (
-  items: readonly unknown[],
+  items: readonly JSXChild[],
   gap: 'compact' | 'default' | 'loose' = 'default',
 ): TemplateResult => (
   <div data-ui="stack" data-gap={gap}>
@@ -45,10 +45,10 @@ export const stack = (
 
 export const section = (o: {
   title: string
-  body: unknown
+  body: JSXChild
   description?: string | null
   eyebrow?: string | null
-  actions?: unknown
+  actions?: JSXChild
 }): TemplateResult => (
   <section data-ui="section">
     <header data-ui="section-head">
@@ -64,7 +64,7 @@ export const section = (o: {
 )
 
 export const surface = (o: {
-  body: unknown
+  body: JSXChild
   tone?: 'default' | 'subtle'
   padding?: 'compact' | 'default' | 'none'
 }): TemplateResult => (
@@ -83,9 +83,9 @@ export const cardGrid = <T,>(o: {
 export const contentCard = (o: {
   title: string
   summary?: string | null
-  body?: unknown
-  meta?: unknown
-  actions?: unknown
+  body?: JSXChild
+  meta?: JSXChild
+  actions?: JSXChild
   href?: string | null
   selected?: boolean
 }): TemplateResult => (

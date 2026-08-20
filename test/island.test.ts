@@ -2,18 +2,26 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseFragment, document } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
-import { compose, createTheme, defineModule, defineTheme } from 'ketjs'
+import { compose, createKetServer, createTheme, defineModule, defineTheme, sqliteAdapter } from 'ketjs'
 import type { KetError } from 'ketjs'
-import { ISLAND_TAG, domHost, html, hydrateIslands, signal } from 'ketjs-view'
-import type { IslandProps } from 'ketjs-view'
+import { ISLAND_TAG, domHost, html, hydrateIslands, renderIsland, signal } from 'ketjs-view'
+import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { website, websiteSearch } from 'ketsuite'
 
 // A module provides behaviour...
-const clicks = signal(0)
+let cartInstances = 0
 const cart = defineModule({
   name: 'cart',
   islands: {
-    'cart.widget': (props: IslandProps) =>
-      html`<button on:click=${() => clicks.set((c) => c + 1)}>Giỏ (${(props.qty as number) + clicks()})</button>`,
+    'cart.widget': {
+      props: { qty: 'int' },
+      view: (props: IslandProps) => {
+        cartInstances++
+        const clicks = signal(0)
+        return () =>
+          html`<button on:click=${() => clicks.set((c) => c + 1)}>Giỏ (${(props.qty as number) + clicks()})</button>`
+      },
+    },
   },
 })
 
@@ -28,7 +36,7 @@ const shop = defineTheme({
 
 test('island: a theme places behaviour it cannot write', () => {
   const manifest = compose([cart, shop])
-  assert.deepEqual(manifest.islands, { 'cart.widget': { by: 'cart' } })
+  assert.deepEqual(manifest.islands, { 'cart.widget': { by: 'cart', props: { qty: 'int' } } })
 
   const rt = createTheme(manifest, [cart, shop])
   const out = rt.renderRegion('page', { title: 'Cửa hàng', qty: 2 })
@@ -36,12 +44,26 @@ test('island: a theme places behaviour it cannot write', () => {
   assert.match(out, new RegExp(`<${ISLAND_TAG} data-island="cart.widget"`))
   assert.match(out, /Giỏ \(<!--k\[-->2<!--k-->\)/, 'the island was rendered on the server too')
   assert.ok(!out.includes('on:'), 'and its handler stayed behind')
+  const serializedProps = /data-props="([^"]*)"/.exec(out)?.[1] ?? ''
+  assert.ok(!serializedProps.includes('Cửa hàng'), 'only declared island props cross into data-props')
+  assert.throws(
+    () => rt.renderRegion('page', { title: 'Cửa hàng', qty: '2' }),
+    /island "cart.widget" prop "qty" expects int/,
+  )
+  assert.throws(
+    () => rt.renderRegion('page', { title: 'Cửa hàng' }),
+    /island "cart.widget" prop "qty" expects int/,
+    'required island props fail on the server instead of hydrating with a different tree',
+  )
 })
 
 test('island: a theme declaring one is refused outright', () => {
   const e = (() => {
     try {
-      defineTheme({ name: 't', islands: { x: () => html`<b>x</b>` } })
+      defineTheme({
+        name: 't',
+        islands: { x: { view: () => () => html`<b>x</b>` } },
+      })
     } catch (err) {
       return err as KetError
     }
@@ -59,8 +81,33 @@ test('island: placing one nobody provides fails at build time', () => {
 })
 
 test('island: two modules cannot claim the same island', () => {
-  const other = defineModule({ name: 'other', islands: { 'cart.widget': () => html`<b>x</b>` } })
+  const otherIsland: IslandDefinition = { view: () => () => html`<b>x</b>` }
+  const other = defineModule({ name: 'other', islands: { 'cart.widget': otherIsland } })
   assert.throws(() => compose([cart, other]), /already provided by "cart"/)
+})
+
+test('island: prop contracts and browser module paths are validated while composing', () => {
+  assert.throws(
+    () =>
+      compose([
+        defineModule({
+          name: 'bad_props',
+          islands: { bad: { props: { value: 'mystery' }, view: () => () => html`<b>x</b>` } },
+        }),
+      ]),
+    /prop "value" has unknown type "mystery"/,
+  )
+  assert.throws(
+    () =>
+      compose([
+        defineModule({
+          name: 'bad_client',
+          assets: new URL('.', import.meta.url),
+          islands: { bad: { client: '../escape.mjs', view: () => () => html`<b>x</b>` } },
+        }),
+      ]),
+    /client path must stay inside/,
+  )
 })
 
 test('island: only the island hydrates; the rest of the page stays inert', () => {
@@ -72,6 +119,7 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
   const button = container.querySelectorAll('button')[0] as TNode
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (2)')
 
+  cartInstances = 0
   const live = hydrateIslands(domHost(document), container as never, rt.islands)
   assert.equal(live.length, 1)
   assert.equal(live[0]!.name, 'cart.widget')
@@ -80,10 +128,60 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
 
   button.fire('click')
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (3)', 'the island is alive')
+  assert.equal(
+    cartInstances,
+    1,
+    'reactive renders reuse one factory closure instead of resetting local state',
+  )
 
   live[0]!.dispose()
   button.fire('click')
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (3)', 'and stops when disposed')
+})
+
+test('island: the server publishes a tenant-specific browser bootstrap and view runtime', async () => {
+  const shell = defineTheme({
+    name: 'island_shell',
+    depends: ['website_search'],
+    templates: {
+      layout: `<html><body>{% island "website.search" %}</body></html>`,
+      'website.page': '<main></main>',
+    },
+  })
+  const modules = [website, websiteSearch, shell]
+  const manifest = compose(modules)
+  const theme = createTheme(manifest, modules)
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const server = await createKetServer({
+    manifest,
+    adapter,
+    theme,
+    assets: { prefix: '/_ket/asset/website_search/', dir: manifest.assets['website_search']! },
+    pageScope: () => ({ label: 'Tìm' }),
+  })
+  const port = await server.listen(0)
+  const base = `http://127.0.0.1:${port}`
+  try {
+    const page = await fetch(base).then((response) => response.text())
+    assert.match(page, /<ket-island/)
+    assert.match(page, /<script type="module" src="\/_ket\/islands\.js"><\/script><\/body>/)
+
+    const bootstrap = await fetch(`${base}/_ket/islands.js`)
+    assert.match(bootstrap.headers.get('content-type') ?? '', /^text\/javascript/)
+    assert.match(await bootstrap.text(), /\/_ket\/asset\/website_search\/search\.mjs/)
+
+    const runtime = await fetch(`${base}/_ket/view/index.js`)
+    assert.equal(runtime.status, 200)
+    assert.match(runtime.headers.get('content-type') ?? '', /^text\/javascript/)
+
+    const client = await fetch(`${base}/_ket/asset/website_search/search.mjs`)
+    assert.equal(client.status, 200)
+    assert.match(client.headers.get('content-type') ?? '', /^text\/javascript/)
+  } finally {
+    await server.close()
+    await adapter.close()
+  }
 })
 
 test('island: hydrating one nobody registered says which', () => {
@@ -91,5 +189,20 @@ test('island: hydrating one nobody registered says which', () => {
   assert.throws(
     () => hydrateIslands(domHost(document), container as never, {}),
     /island "ghost", which no installed module provides/,
+  )
+  assert.deepEqual(
+    hydrateIslands(domHost(document), container as never, {}, { strict: false }),
+    [],
+    'the production bootstrap may leave an explicitly server-only island inert',
+  )
+})
+
+test('island: props must be plain JSON all the way down', () => {
+  assert.throws(
+    () =>
+      renderIsland('unsafe', () => () => html`<i>x</i>`, {
+        nested: { callback: () => 'not data' },
+      }),
+    /not JSON-serializable/,
   )
 })

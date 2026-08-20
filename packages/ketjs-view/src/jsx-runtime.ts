@@ -5,10 +5,10 @@
 // static element shapes are cached, while props and children remain renderer holes.
 
 import { html } from './render.ts'
-import type { TemplateResult } from './render.ts'
+import type { Renderable, TemplateResult } from './render.ts'
 
-/** Renderer holes deliberately accept application-defined branded values too. */
-export type JSXChild = unknown
+/** JSX additionally normalises nested arrays into fragments before rendering. */
+export type JSXChild = Renderable | readonly JSXChild[]
 export type JSXComponent<Props = Record<string, unknown>> = (props: Props) => TemplateResult
 
 export type IntrinsicProps = {
@@ -38,7 +38,7 @@ export namespace JSX {
   export type Element = TemplateResult
   export type ElementType = string | JSXComponent<never>
   export interface ElementChildrenAttribute {
-    children: unknown
+    children: JSXChild
   }
   export interface IntrinsicElements {
     [tag: string]: IntrinsicProps
@@ -121,7 +121,7 @@ const attributeName = (name: string): string => {
   return name
 }
 
-type RuntimeProps = Record<string, unknown> & { children?: unknown }
+type RuntimeProps = Record<string, unknown> & { children?: JSXChild }
 
 export function jsx(
   type: string | JSXComponent<RuntimeProps>,
@@ -169,7 +169,7 @@ export function jsx(
 
 export const jsxs = jsx
 
-export function Fragment(props: { children?: unknown }): TemplateResult {
+export function Fragment(props: { children?: JSXChild }): TemplateResult {
   if (props.children === undefined || props.children === null || props.children === false) return fragment([])
   return fragment(props.children)
 }
