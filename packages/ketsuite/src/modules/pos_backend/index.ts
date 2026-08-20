@@ -335,7 +335,7 @@ export default defineModule({
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Hệ thống',
   menus: {
-    pos: { label: 'menu.app', icon: 'cart', sequence: 18 },
+    pos: { label: 'menu.app', icon: 'store', sequence: 18 },
     'pos.dashboard': {
       parent: 'pos',
       label: 'menu.dashboard',
