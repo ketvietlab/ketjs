@@ -250,6 +250,24 @@ property fees, product-backed service intentions and immutable operational charg
 retrying all 600 service-post attempts produced exactly 400 SQLite and 200
 PostgreSQL charge rows, while the two-connection PostgreSQL race produced one row.
 
+The 2026-08-21 stay-notice extension prepares one masked notice for every checked-in
+guest, builds and hashes the live submission package, records operator evidence and
+confirms half the rows. It asserts that every physical database contains only its
+own company rows, every notice has only the final four document digits, and every
+submitted package has a SHA-256 hash. PostgreSQL additionally checks `dueAt` is
+`TIMESTAMPTZ` and runs two real connections against the same notice without creating
+a duplicate.
+
+| driver | physical databases | notices | elapsed | notices/s | masked evidence and isolation |
+|---|---:|---:|---:|---:|---|
+| SQLite | 2 | 24 | 22.1 ms | 1,085 | complete |
+| PostgreSQL 17 | 2 | 24 | 172.3 ms | 139 | complete |
+
+This targeted run used 48 rooms, 12 reservations and 12 operational transitions in
+each database so both engines exercised the same workflow. It is a regression baseline,
+not a capacity estimate; the PostgreSQL figure includes real transactions and
+cross-connection contention on the local development cluster.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so

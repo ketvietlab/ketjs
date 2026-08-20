@@ -6,6 +6,7 @@ import {
   code,
   dataTable,
   datePicker,
+  definitionList,
   emptyState,
   formCluster,
   formatMoney,
@@ -106,6 +107,28 @@ export type NightAuditRow = {
   startedAt?: string | null
   completedAt?: string | null
   error?: string | null
+}
+
+export type StayNoticeRow = {
+  id: string
+  propertyId: string
+  stayId: string
+  stayGuestId: string
+  state: string
+  reason?: string | null
+  dueAt: string
+  guestName: string
+  documentType?: string | null
+  documentLast4?: string | null
+  issueCodes: string[]
+  attempt: number
+  preparedAt?: string | null
+  submissionChannel?: string | null
+  submittedAt?: string | null
+  submittedBy?: string | null
+  receiptRef?: string | null
+  confirmedAt?: string | null
+  confirmedBy?: string | null
 }
 
 export type AmenityRow = { id: string; code: string; name: string; scope: string }
@@ -1118,6 +1141,317 @@ export const nightAuditScreen = (
           : emptyState(
               _('hospitality_core.nightAudit.empty.runs'),
               _('hospitality_core.nightAudit.empty.runsHint'),
+            ),
+      }),
+    ]),
+  )
+}
+
+const stayNoticeFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
+  if (state === 'refreshed' || state === 'submitted' || state === 'confirmed')
+    return notice({
+      title: _(`hospitality_core.stayNotice.feedback.${state}`),
+      message: _(`hospitality_core.stayNotice.feedback.${state}Hint`),
+      tone: 'positive',
+    })
+  if (state === 'invalid')
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: _('hospitality_core.stayNotice.feedback.invalidHint'),
+      tone: 'danger',
+    })
+  return null
+}
+
+const stayNoticeStateTone = (state: string): 'danger' | 'warning' | 'info' | 'positive' =>
+  state === 'attention'
+    ? 'danger'
+    : state === 'ready'
+      ? 'warning'
+      : state === 'submitted'
+        ? 'info'
+        : 'positive'
+
+const stayNoticeDocument = (_: Translator, row: StayNoticeRow): string => {
+  if (!row.documentType || !row.documentLast4) return _('hospitality_core.stayNotice.value.missing')
+  return `${_(`hospitality_core.document.${row.documentType}`)} · •••• ${row.documentLast4}`
+}
+
+const stayNoticeIssues = (_: Translator, row: StayNoticeRow): string =>
+  row.issueCodes.length
+    ? row.issueCodes.map((item) => _(`hospitality_core.stayNotice.issue.${item}`)).join(', ')
+    : _('hospitality_core.stayNotice.value.complete')
+
+const stayNoticeColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayNoticeRow>> => [
+  {
+    key: 'guest',
+    label: _('hospitality_core.stayNotice.col.guest'),
+    cell: (row) => row.guestName,
+    priority: 'primary',
+    kind: 'person',
+  },
+  {
+    key: 'document',
+    label: _('hospitality_core.stayNotice.col.document'),
+    cell: (row) => stayNoticeDocument(_, row),
+    priority: 'secondary',
+    kind: 'identifier',
+  },
+  {
+    key: 'due',
+    label: _('hospitality_core.stayNotice.col.due'),
+    cell: (row) =>
+      new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone }).format(
+        new Date(row.dueAt),
+      ),
+    priority: 'secondary',
+    kind: 'date',
+  },
+  {
+    key: 'state',
+    label: _('hospitality_core.col.status'),
+    cell: (row) => badge(_(`hospitality_core.stayNotice.state.${row.state}`), stayNoticeStateTone(row.state)),
+    kind: 'status',
+  },
+  {
+    key: 'issues',
+    label: _('hospitality_core.stayNotice.col.readiness'),
+    cell: (row) => stayNoticeIssues(_, row),
+    priority: 'tertiary',
+    optional: true,
+  },
+]
+
+const stayNoticeHref = (locale: string, propertyId: string, state: string, noticeId: string): string => {
+  const query = new URLSearchParams({ lang: locale, property: propertyId, notice: noticeId })
+  if (state !== 'all') query.set('state', state)
+  return `/admin/hospitality/stay-notices?${query.toString()}`
+}
+
+const stayNoticeAction = (
+  _: Translator,
+  selected: StayNoticeRow,
+  locale: string,
+  propertyId: string,
+  state: string,
+): TemplateResult | null => {
+  const hidden = {
+    lang: locale,
+    id: selected.id,
+    stayId: selected.stayId,
+    property: propertyId,
+    state,
+  }
+  if (selected.state === 'attention')
+    return recordForm({
+      action: '/admin/hospitality/stay-notices',
+      method: 'post',
+      submit: _('hospitality_core.stayNotice.action.refresh'),
+      submitVariant: 'secondary',
+      hidden: { ...hidden, operation: 'refresh' },
+      fields: [],
+    })
+  if (selected.state === 'ready')
+    return recordForm({
+      action: '/admin/hospitality/stay-notices',
+      method: 'post',
+      submit: _('hospitality_core.stayNotice.action.recordSubmission'),
+      submitVariant: 'primary',
+      hidden: { ...hidden, operation: 'record-submission' },
+      fields: [
+        {
+          name: 'reason',
+          label: _('hospitality_core.stayNotice.field.reason'),
+          type: 'select',
+          value: selected.reason,
+          required: true,
+          options: [
+            { value: '', label: _('hospitality_core.stayNotice.reason.select') },
+            ...['tourism', 'business', 'family', 'other'].map((value) => ({
+              value,
+              label: _(`hospitality_core.stayNotice.reason.${value}`),
+            })),
+          ],
+        },
+        {
+          name: 'channel',
+          label: _('hospitality_core.stayNotice.field.channel'),
+          type: 'select',
+          required: true,
+          options: ['online', 'vneid', 'email', 'phone', 'software'].map((value) => ({
+            value,
+            label: _(`hospitality_core.stayNotice.channel.${value}`),
+          })),
+        },
+        {
+          name: 'evidenceRef',
+          label: _('hospitality_core.stayNotice.field.evidenceRef'),
+          help: _('hospitality_core.stayNotice.field.evidenceRefHint'),
+          required: true,
+        },
+      ],
+    })
+  if (selected.state === 'submitted')
+    return recordForm({
+      action: '/admin/hospitality/stay-notices',
+      method: 'post',
+      submit: _('hospitality_core.stayNotice.action.confirm'),
+      submitVariant: 'primary',
+      hidden: { ...hidden, operation: 'confirm' },
+      fields: [
+        {
+          name: 'receiptRef',
+          label: _('hospitality_core.stayNotice.field.receiptRef'),
+          value: selected.receiptRef,
+          required: true,
+        },
+      ],
+    })
+  return null
+}
+
+export const stayNoticesScreen = (
+  _: Translator,
+  data: {
+    properties: Choice[]
+    propertyId?: string
+    state: string
+    rows: StayNoticeRow[]
+    selected?: StayNoticeRow
+  },
+  locale: string,
+  timezone: string,
+  frame: Frame,
+  feedbackState?: string | null,
+): TemplateResult => {
+  if (!data.propertyId)
+    return framed(
+      _,
+      _('hospitality_core.screen.stayNotices.title'),
+      frame,
+      emptyState(
+        _('hospitality_core.stayNotice.empty.property'),
+        _('hospitality_core.stayNotice.empty.propertyHint'),
+      ),
+    )
+  const counts = Object.fromEntries(
+    ['attention', 'ready', 'submitted', 'confirmed'].map((state) => [
+      state,
+      data.rows.filter((row) => row.state === state).length,
+    ]),
+  )
+  const visibleRows = data.state === 'all' ? data.rows : data.rows.filter((row) => row.state === data.state)
+  const action = data.selected
+    ? stayNoticeAction(_, data.selected, locale, data.propertyId, data.state)
+    : null
+  return framed(
+    _,
+    _('hospitality_core.screen.stayNotices.title'),
+    frame,
+    stack([
+      stayNoticeFeedback(_, feedbackState),
+      notice({
+        tone: 'info',
+        title: _('hospitality_core.stayNotice.privacy.title'),
+        message: _('hospitality_core.stayNotice.privacy.hint'),
+      }),
+      recordForm({
+        action: '/admin/hospitality/stay-notices',
+        method: 'get',
+        layout: 'inline',
+        submit: _('hospitality_core.action.select'),
+        submitVariant: 'secondary',
+        hidden: { lang: locale },
+        fields: [
+          {
+            name: 'property',
+            label: _('hospitality_core.menu.properties'),
+            type: 'select',
+            value: data.propertyId,
+            options: choices(data.properties),
+            required: true,
+          },
+          {
+            name: 'state',
+            label: _('hospitality_core.col.status'),
+            type: 'select',
+            value: data.state,
+            options: ['all', 'attention', 'ready', 'submitted', 'confirmed'].map((value) => ({
+              value,
+              label: _(`hospitality_core.stayNotice.state.${value}`),
+            })),
+          },
+        ],
+      }),
+      cardGrid({
+        items: ['attention', 'ready', 'submitted', 'confirmed'].map((state) => ({
+          state,
+          count: Number(counts[state] ?? 0),
+        })),
+        id: (item) => item.state,
+        card: (item) =>
+          metric({
+            label: _(`hospitality_core.stayNotice.state.${item.state}`),
+            value: String(item.count),
+            tone: item.state,
+          }),
+      }),
+      ...(data.selected
+        ? [
+            section({
+              title: _('hospitality_core.stayNotice.section.selected'),
+              description: _('hospitality_core.stayNotice.section.selectedHint'),
+              body: stack([
+                definitionList({
+                  title: data.selected.guestName,
+                  items: [
+                    {
+                      key: 'state',
+                      term: _('hospitality_core.col.status'),
+                      value: _(`hospitality_core.stayNotice.state.${data.selected.state}`),
+                    },
+                    {
+                      key: 'document',
+                      term: _('hospitality_core.stayNotice.col.document'),
+                      value: stayNoticeDocument(_, data.selected),
+                    },
+                    {
+                      key: 'reason',
+                      term: _('hospitality_core.stayNotice.field.reason'),
+                      value: data.selected.reason
+                        ? _(`hospitality_core.stayNotice.reason.${data.selected.reason}`)
+                        : _('hospitality_core.stayNotice.value.missing'),
+                    },
+                    {
+                      key: 'readiness',
+                      term: _('hospitality_core.stayNotice.col.readiness'),
+                      value: stayNoticeIssues(_, data.selected),
+                    },
+                    {
+                      key: 'evidence',
+                      term: _('hospitality_core.stayNotice.field.evidenceRef'),
+                      value: data.selected.receiptRef || _('hospitality_core.stayNotice.value.missing'),
+                    },
+                  ],
+                }),
+                action,
+              ]),
+            }),
+          ]
+        : []),
+      section({
+        title: _('hospitality_core.stayNotice.section.queue'),
+        description: _('hospitality_core.stayNotice.section.queueHint'),
+        body: visibleRows.length
+          ? dataTable(_, {
+              columns: stayNoticeColumns(_, locale, timezone),
+              rows: visibleRows,
+              id: (row) => row.id,
+              rowHref: (row) => stayNoticeHref(locale, data.propertyId!, data.state, row.id),
+            })
+          : emptyState(
+              _('hospitality_core.stayNotice.empty.rows'),
+              _('hospitality_core.stayNotice.empty.rowsHint'),
             ),
       }),
     ]),

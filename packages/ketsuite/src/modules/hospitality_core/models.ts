@@ -531,6 +531,44 @@ export const models: Record<string, ModelDef> = {
   },
 
   /**
+   * Operational evidence for Vietnam's stay-notification procedure. The row
+   * keeps masked identity metadata and a package hash, never a submitted PII payload.
+   */
+  StayNotice: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      stayId: 'ref:hospitality_core.Stay',
+      stayGuestId: 'ref:hospitality_core.StayGuest',
+      partnerId: 'ref:partner.Partner?',
+      documentId: 'ref:hospitality_core.GuestDocument?',
+      state: 'text',
+      reason: 'text?',
+      dueAt: 'datetime',
+      guestName: 'text',
+      documentType: 'text?',
+      documentLast4: 'text?',
+      issueCodes: 'json',
+      attempt: 'int',
+      preparedAt: 'datetime?',
+      submissionChannel: 'text?',
+      packageHash: 'text?',
+      submittedAt: 'datetime?',
+      submittedBy: 'text?',
+      receiptRef: 'text?',
+      confirmedAt: 'datetime?',
+      confirmedBy: 'text?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      stay_guest: { fields: ['companyId', 'stayId', 'stayGuestId'], unique: true },
+      property_state_due: { fields: ['companyId', 'propertyId', 'state', 'dueAt', 'id'] },
+    },
+  },
+
+  /**
    * A priced service intention attached to one reservation or one stay. Charge
    * rows snapshot every materialised occurrence, so invoice integration can be
    * added later without changing the operational source of truth.

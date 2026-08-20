@@ -1822,3 +1822,37 @@ dates are normalized at the adapter boundary because SQLite returns date text wh
 PostgreSQL may return Date objects. Charges and folio totals remain operational
 records; invoices, tax documents and accounting moves consume them in a later
 integration rather than being created by night audit.
+
+## D60 — Vietnam stay notices are an evidence workflow, not a simulated connector
+
+The first Vietnam compliance slice follows the current Ministry of Public Security
+[Circular 116/2026/TT-BCA](https://vanban.bocongan.gov.vn/co-so-du-lieu-van-ban/thong-tu-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-cu-tru-1784261073?tab=attributes)
+and its [stay-notice procedure](https://dichvucong.bocongan.gov.vn/public/link-to/chi-tiet-thu-tuc?ma-thu-tuc=26346).
+For a normal arrival, the property must notify by 23:00 on the arrival date; an
+arrival from 23:00 onward is due by 08:00 the following date. Deadlines are computed
+in the Property timezone. The durable preparation job runs after check-in and again
+when a checked-in stay gains a guest or updated document, with enqueue committed in
+the same transaction as the triggering business write.
+
+Readiness covers the current statutory content: guest name and birth date, identity
+or passport number, an explicitly chosen reason, stay period and property address.
+A single notice is refused when the stay exceeds the current 30-day limit. Supported
+evidence channels mirror Circular 116: registered telephone, email or website,
+National Public Service Portal, VNeID, or stay-notice software.
+
+The public procedure exposes human-facing online channels but no stable machine API
+contract that this module can safely claim to implement. KetSuite therefore never
+marks a record submitted merely because a worker ran. A signed-in operator records
+the actual official channel and a required verifiable evidence reference; a later
+confirmation retains its actor and timestamp. Adding a real connector requires a
+separate reviewed contract and encrypted deployment credentials. No portal account
+or password is stored by `hospitality_core`.
+
+`StayNotice` is an operational checklist, not a copy of the declaration. It stores
+the guest name already needed by hotel operations, document type, only the final
+four document digits, readiness issues, actors, timestamps, evidence reference and
+a SHA-256 comparison hash. The full statutory package is reconstructed from live
+Property, Stay, StayGuest and GuestDocument rows only in memory while submission is
+recorded; neither the package nor the full document number is copied into the notice
+row, queue payload or default logs. Foreign-guest temporary-residence integration
+and accounting/e-invoice behavior remain later private slices.

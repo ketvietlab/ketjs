@@ -88,6 +88,14 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listRooms',
     sequence: 20,
   },
+  'hospitality.compliance': { parent: 'hospitality', label: 'menu.compliance', sequence: 80 },
+  'hospitality.stayNotices': {
+    parent: 'hospitality.compliance',
+    label: 'menu.stayNotices',
+    path: '/admin/hospitality/stay-notices',
+    needs: 'hospitality_core.listStayNotices',
+    sequence: 10,
+  },
   'hospitality.configuration': { parent: 'hospitality', label: 'menu.configuration', sequence: 90 },
   'hospitality.roomTypes': {
     parent: 'hospitality.configuration',
