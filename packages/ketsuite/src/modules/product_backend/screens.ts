@@ -432,7 +432,9 @@ export const productDetailScreen = (
       ...(partial ? { fragmentTitle: row.name } : {}),
     },
   })
-  return partial ? workspace : framed(_, _('product_backend.detail.kicker'), frame, workspace)
+  return partial
+    ? workspace
+    : framed(_, frame.navigation ? row.name : _('product_backend.detail.kicker'), frame, workspace)
 }
 
 export const variantScreen = (

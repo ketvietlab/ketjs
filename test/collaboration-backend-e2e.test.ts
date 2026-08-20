@@ -99,7 +99,7 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.equal(navigation.status, 200)
   assert.equal(navigation.headers.get('content-type'), 'text/vnd.ket.fragments+html; charset=utf-8')
   const navigationHtml = await navigation.text()
-  assert.match(navigationHtml, /^<ket-fragments /)
+  assert.match(navigationHtml, /^<ket-fragments data-title="Collaborative product">/)
   assert.match(navigationHtml, /data-ket-slot="backend\.sidebar-main"/)
   assert.match(navigationHtml, /data-ket-slot="backend\.topbar"/)
   assert.match(navigationHtml, /data-ket-slot="backend\.content"/)
