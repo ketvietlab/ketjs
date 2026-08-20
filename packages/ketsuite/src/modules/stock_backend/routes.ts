@@ -376,7 +376,20 @@ export const routes: Record<string, RouteEntry> = {
         moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
       }
       if (req.method !== 'GET' && !savedPartial) return text('GET or POST', { status: 405 })
-      const data = await common(ctx, url, req)
+      const [data, templates] = await Promise.all([
+        common(ctx, url, req),
+        ctx.call('stock.listStorableProducts', {}, url, req) as Promise<AnyRow[]>,
+      ])
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
+      )
       const operationOptions = moves.flatMap((move) => {
         const lines = Array.isArray(move.lines) ? (move.lines as AnyRow[]) : []
         return lines.length
@@ -421,6 +434,7 @@ export const routes: Record<string, RouteEntry> = {
                 pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
               },
               rows: moveRows,
+              products,
               units: options(data.units),
               lots: options(data.lots),
               operationOptions,
