@@ -94,6 +94,8 @@ export {
   kanbanCard,
   kanbanGrid,
   recordList,
+  recordWorkspace,
+  recordToggle,
   breadcrumbs,
   tabs,
   mediaPanel,
@@ -141,4 +143,5 @@ export type {
   ScheduleEvent,
   ScheduleRow,
   ScheduleTone,
+  RecordSummaryItem,
 } from '../../ui/index.ts'

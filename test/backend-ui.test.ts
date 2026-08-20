@@ -42,6 +42,8 @@ import {
   recordList,
   recordActions,
   recordForm,
+  recordToggle,
+  recordWorkspace,
   scheduleBoard,
   section,
   settingsScreen,
@@ -140,6 +142,29 @@ const componentContract = [
     tag({ label: 'Filter', removeHref: '/clear' }),
     countBadge(3, '3 items'),
   ]),
+  recordWorkspace({
+    kicker: 'Product',
+    title: 'Linen shirt',
+    subtitle: 'LINEN-01 · Unit',
+    image: null,
+    imageFallback: icon('package'),
+    badges: [
+      badge('Goods', 'neutral'),
+      recordToggle({ name: 'saleOk', label: 'Can be sold', checked: true, form: 'product-form' }),
+    ],
+    summary: [
+      { id: 'variants', label: 'Variants', value: 6, href: '?tab=variants' },
+      { id: 'tracking', label: 'Tracking', value: 'Lots' },
+    ],
+    navigation: tabs({
+      label: 'Product sections',
+      items: [{ id: 'general', label: 'General', href: '?tab=general', active: true }],
+    }),
+    controller: notice({ title: 'Saved', message: 'Product updated', tone: 'positive' }),
+    body: surface({ body: 'Product form', padding: 'compact' }),
+    aside: surface({ body: 'Collaboration', padding: 'compact' }),
+    asideLabel: 'Collaboration',
+  }),
   stack([
     notice({
       title: 'Heads up',
@@ -195,6 +220,16 @@ const componentContract = [
     fields: [
       { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
       { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+      {
+        name: 'type',
+        label: 'Product type',
+        type: 'radio',
+        value: 'goods',
+        options: [
+          { value: 'goods', label: 'Goods' },
+          { value: 'service', label: 'Service' },
+        ],
+      },
     ],
   }),
   formCluster({
@@ -440,6 +475,17 @@ test('design density: desktop controls share the 28px operational height', () =>
   assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
   assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+})
+
+test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
+  assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
+  assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
+  assert.match(
+    css,
+    /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,
+  )
 })
 
 test('form: required, help and error states are visible and semantically connected', () => {

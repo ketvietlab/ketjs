@@ -9,6 +9,8 @@ const LABELS = {
     attachment: 'Tệp đính kèm',
     schedule: 'Lên lịch',
     scheduling: 'Đang lưu…',
+    newActivity: 'Hoạt động',
+    close: 'Đóng',
     loading: 'Đang tải hoạt động…',
     empty: 'Chưa có hoạt động nào.',
     assignee: 'Phụ trách',
@@ -35,6 +37,8 @@ const LABELS = {
     attachment: 'Attachment',
     schedule: 'Schedule',
     scheduling: 'Saving…',
+    newActivity: 'Activity',
+    close: 'Close',
     loading: 'Loading activities…',
     empty: 'No activities yet.',
     assignee: 'Assigned to',
@@ -100,6 +104,8 @@ export function createRecordActivityView(runtime, props, seed = {}) {
   const labels = labelsOf(props)
   const status = signal(seed.status ?? 'loading')
   const busy = signal(false)
+  const scheduleOpen = signal(seed.scheduleOpen ?? false)
+  const itemAction = signal(seed.itemAction ?? null)
   const error = signal(seed.error ?? '')
   const types = signal(seed.types ?? [])
   const activities = signal(seed.activities ?? [])
@@ -152,6 +158,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       const date = form.querySelector('[name="dueDate"]')
       if (date) date.value = localDate()
       await load({ quiet: true })
+      scheduleOpen.set(false)
     } catch (cause) {
       error.set(errorText(cause))
       status.set('error')
@@ -173,6 +180,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
         completedDate: localDate(),
       })
       await load({ quiet: true })
+      itemAction.set(null)
     } catch (cause) {
       error.set(errorText(cause))
       status.set('error')
@@ -193,6 +201,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
         dueDate: String(values.get('dueDate') ?? ''),
       })
       await load({ quiet: true })
+      itemAction.set(null)
     } catch (cause) {
       error.set(errorText(cause))
       status.set('error')
@@ -207,6 +216,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     try {
       await callApi('activity.cancel', { id })
       await load({ quiet: true })
+      itemAction.set(null)
     } catch (cause) {
       error.set(errorText(cause))
       status.set('error')
@@ -230,8 +240,11 @@ export function createRecordActivityView(runtime, props, seed = {}) {
     })
 
   return () => html`<section data-ui="activity-record" data-state=${status()} aria-label=${labels.title}>
-    <header data-ui="activity-head"><h2 data-ui="activity-title">${labels.title}</h2></header>
-    <form data-ui="activity-schedule" on:submit=${schedule}>
+    <header data-ui="activity-head">
+      <h2 data-ui="activity-title">${labels.title}</h2>
+      <button data-ui="activity-schedule-trigger" data-active=${scheduleOpen()} data-control="action" data-variant="secondary" data-size="compact" type="button" aria-pressed=${scheduleOpen()} on:click=${() => scheduleOpen.set(!scheduleOpen())} disabled=${busy()}>${labels.newActivity}</button>
+    </header>
+    ${scheduleOpen() ? html`<form data-ui="activity-schedule" on:submit=${schedule}>
       <label data-ui="activity-field">${labels.type}<select data-ui="activity-type" name="typeId" required disabled=${busy()}>${each(
         types(),
         (type) => type.id,
@@ -242,9 +255,12 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       <label data-ui="activity-field">${labels.due}<input data-ui="activity-date" type="date" name="dueDate" value=${localDate()} required disabled=${busy()}></label>
       <div data-ui="activity-schedule-actions">
         <label data-ui="activity-attachment">${labels.attachment}<input type="file" name="attachment" disabled=${busy()}></label>
-        <button data-ui="activity-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy() || types().length === 0}>${busy() ? labels.scheduling : labels.schedule}</button>
+        <div>
+          <button data-ui="activity-schedule-close" data-control="action" data-variant="tertiary" data-size="compact" type="button" on:click=${() => scheduleOpen.set(false)} disabled=${busy()}>${labels.close}</button>
+          <button data-ui="activity-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy() || types().length === 0}>${busy() ? labels.scheduling : labels.schedule}</button>
+        </div>
       </div>
-    </form>
+    </form>` : ''}
     ${error() ? html`<div data-ui="activity-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}
     <div data-ui="activity-list" aria-live="polite">
       ${status() === 'loading' ? html`<p data-ui="activity-loading">${labels.loading}</p>` : ''}
@@ -271,16 +287,18 @@ export function createRecordActivityView(runtime, props, seed = {}) {
           ${
             activity.active
               ? html`<div data-ui="activity-actions">
-                <form data-ui="activity-complete" data-id=${activity.id} on:submit=${complete}>
+                <button data-ui="activity-action-trigger" data-action="complete" data-active=${itemAction() === `complete:${activity.id}`} data-control="action" data-variant="primary" data-size="compact" type="button" on:click=${() => itemAction.set(itemAction() === `complete:${activity.id}` ? null : `complete:${activity.id}`)} disabled=${busy()}>${labels.complete}</button>
+                <button data-ui="activity-action-trigger" data-action="reschedule" data-active=${itemAction() === `reschedule:${activity.id}`} data-control="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => itemAction.set(itemAction() === `reschedule:${activity.id}` ? null : `reschedule:${activity.id}`)} disabled=${busy()}>${labels.reschedule}</button>
+                <button data-ui="activity-cancel" data-control="action" data-variant="destructive" data-size="compact" type="button" on:click=${() => cancel(activity.id)} disabled=${busy()}>${labels.cancel}</button>
+              </div>
+              ${itemAction() === `complete:${activity.id}` ? html`<form data-ui="activity-complete" data-id=${activity.id} on:submit=${complete}>
                   <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.feedback}</span><input data-ui="activity-feedback" name="feedback" disabled=${busy()}></label>
                   <button data-ui="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.completing : labels.complete}</button>
-                </form>
-                <form data-ui="activity-reschedule" data-id=${activity.id} on:submit=${reschedule}>
+                </form>` : ''}
+              ${itemAction() === `reschedule:${activity.id}` ? html`<form data-ui="activity-reschedule" data-id=${activity.id} on:submit=${reschedule}>
                   <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.newDue}</span><input type="date" name="dueDate" value=${activity.dueDate} required disabled=${busy()}></label>
                   <button data-ui="action" data-variant="secondary" data-size="compact" type="submit" disabled=${busy()}>${labels.reschedule}</button>
-                </form>
-                <button data-ui="activity-cancel" data-control="action" data-variant="destructive" data-size="compact" type="button" on:click=${() => cancel(activity.id)} disabled=${busy()}>${labels.cancel}</button>
-              </div>`
+                </form>` : ''}`
               : ''
           }
         </article>`,
