@@ -4,12 +4,17 @@ import type { RelationDef } from 'ketjs'
 export const relations: Record<string, Record<string, RelationDef>> = {
   'partner.Partner': {
     addresses: { hasMany: 'partner.Address', by: 'partnerId' },
+    addressDefaults: { hasMany: 'partner.AddressDefault', by: 'partnerId' },
     roles: { hasMany: 'partner.Role', by: 'partnerId' },
     children: { hasMany: 'partner.Partner', by: 'parentId' },
     parent: { belongsTo: 'partner.Partner', by: 'parentId' },
   },
   'partner.Address': {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+  },
+  'partner.AddressDefault': {
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    address: { belongsTo: 'partner.Address', by: 'addressId' },
   },
   'partner.Role': {
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },

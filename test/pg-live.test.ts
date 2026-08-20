@@ -452,6 +452,56 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
   }
 })
 
+test('live pg: concurrent partner defaults, roles and terms stay unique', live, async () => {
+  await withPg(async (a) => {
+    const partnerModules = [partner]
+    const partnerManifest = compose(partnerModules, { headless: true })
+    const partnerSchema = schemaFromManifest(partnerManifest)
+    for (const tableName of Object.keys(partnerSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, partnerSchema), a)) await a.exec(sql)
+    registerFunctions(partnerModules)
+    const options = { adapter: a, manifest: partnerManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'ACME' }, options)
+
+    await Promise.all(
+      ['invoice-a', 'invoice-b'].map((id) =>
+        callFn(
+          'partner.saveAddress',
+          {
+            id,
+            partnerId: 'p1',
+            use: 'invoice',
+            street: id,
+            city: 'Hà Nội',
+            country: 'VN',
+            isDefault: true,
+          },
+          options,
+        ),
+      ),
+    )
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        callFn('partner.grantRole', { id: `role-${index}`, partnerId: 'p1', role: 'customer' }, options),
+      ),
+    )
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        callFn(
+          'partner.saveTerms',
+          { id: `terms-${index}`, partnerId: 'p1', creditLimit: String(index) },
+          options,
+        ),
+      ),
+    )
+
+    assert.equal((await a.all('SELECT id FROM partner_address_default')).length, 1)
+    assert.equal((await a.all('SELECT id FROM partner_role')).length, 1)
+    assert.equal((await a.all('SELECT id FROM partner_company_terms')).length, 1)
+  })
+})
+
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {
     const stockModules = [uom, product, stock]
