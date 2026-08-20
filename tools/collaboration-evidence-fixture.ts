@@ -132,6 +132,22 @@ export async function collaborationEvidenceApp(
       productUomId: 'unit',
       priceUnit: '1250000',
     })
+    await call('sale.createOrder', {
+      id: 'sales-order-collab',
+      partnerId: 'member-party',
+      warehouseId: 'wh',
+      clientOrderRef: 'KH/2026/CONFIRMED',
+      notes: 'Đơn bán mẫu dùng để kiểm chứng danh sách đơn đã xác nhận.',
+    })
+    await call('sale.addLine', {
+      id: 'sales-order-collab:line',
+      orderId: 'sales-order-collab',
+      productId: 'variant-collab',
+      productUomQty: '4',
+      productUomId: 'unit',
+      priceUnit: '1250000',
+    })
+    await call('sale.confirmOrder', { id: 'sales-order-collab' })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',

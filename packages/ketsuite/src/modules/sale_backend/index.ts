@@ -10,7 +10,8 @@ import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
-import { dashboard, labelOf, ordersScreen, policyScreen } from './screens.ts'
+import { salesOrdersScreen } from './sales-orders-screen.tsx'
+import { dashboard, labelOf, policyScreen } from './screens.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -351,9 +352,21 @@ const vi = {
   'quotation.emptyHint': 'Tạo báo giá đầu tiên để bắt đầu quy trình bán hàng.',
   'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'orders.title': 'Đơn bán hàng',
+  'orderList.kicker': 'Vận hành bán hàng',
+  'orderList.title': 'Đơn bán hàng',
+  'orderList.subtitle': 'Theo dõi đơn đã xác nhận, trạng thái lập hoá đơn và tổng giá trị.',
+  'orderList.summary.total': 'Tổng đơn bán',
+  'orderList.summary.toInvoice': 'Chờ lập hoá đơn',
+  'orderList.summary.invoiced': 'Đã lập đủ',
+  'orderList.summary.locked': 'Đã khoá',
+  'orderList.records.title': 'Đơn bán đã xác nhận',
+  'orderList.records.hint': 'Mở một đơn để đồng bộ giao hàng, khoá đơn hoặc tạo hoá đơn.',
+  'orderList.empty': 'Chưa có đơn bán hàng',
+  'orderList.emptyHint': 'Xác nhận một báo giá để tạo đơn bán hàng đầu tiên.',
   'detail.title': 'Chi tiết đơn bán',
   'order.kicker': 'Đơn bán hàng',
   'order.locked': 'Đã khoá',
+  'order.unlocked': 'Đang mở',
   'order.actions.label': 'Hành động trên báo giá hoặc đơn bán',
   'order.information.title': 'Thông tin đơn hàng',
   'order.information.hint': 'Khách hàng, thời hạn và điều kiện thương mại của đơn.',
@@ -391,6 +404,7 @@ const vi = {
   'field.pricelist': 'Bảng giá',
   'field.paymentTerm': 'Điều khoản thanh toán',
   'field.invoiceStatus': 'Trạng thái lập hoá đơn',
+  'field.locked': 'Khoá đơn',
   'field.amountUntaxed': 'Chưa thuế',
   'field.amountTax': 'Thuế',
   'field.amountTotal': 'Tổng tiền',
@@ -453,9 +467,21 @@ const en = {
   'quotation.emptyHint': 'Create the first quotation to start the sales flow.',
   'error.invalid': 'The form is invalid. Check the required fields and try again.',
   'orders.title': 'Sales Orders',
+  'orderList.kicker': 'Sales operations',
+  'orderList.title': 'Sales Orders',
+  'orderList.subtitle': 'Track confirmed orders, invoicing status and total value.',
+  'orderList.summary.total': 'Total sales orders',
+  'orderList.summary.toInvoice': 'To invoice',
+  'orderList.summary.invoiced': 'Fully invoiced',
+  'orderList.summary.locked': 'Locked',
+  'orderList.records.title': 'Confirmed sales orders',
+  'orderList.records.hint': 'Open an order to sync deliveries, lock it or create an invoice.',
+  'orderList.empty': 'No sales orders yet',
+  'orderList.emptyHint': 'Confirm a quotation to create the first sales order.',
   'detail.title': 'Sales Order Detail',
   'order.kicker': 'Sales order',
   'order.locked': 'Locked',
+  'order.unlocked': 'Open',
   'order.actions.label': 'Quotation or sales order actions',
   'order.information.title': 'Order information',
   'order.information.hint': 'Customer, deadline and commercial terms for this order.',
@@ -493,6 +519,7 @@ const en = {
   'field.pricelist': 'Pricelist',
   'field.paymentTerm': 'Payment Terms',
   'field.invoiceStatus': 'Invoice Status',
+  'field.locked': 'Locked',
   'field.amountUntaxed': 'Untaxed Amount',
   'field.amountTax': 'Taxes',
   'field.amountTotal': 'Total',
@@ -632,16 +659,17 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
+        const detailSuffix = localeSuffix(url)
         const [rows, d] = await Promise.all([
             ctx.call('sale.listOrders', { state: 'sale' }, url, req) as Promise<AnyRow[]>,
             common(ctx, url, req),
           ]),
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
         return document(ctx, url, req, 'sale_backend.orders.title', (_, shell) =>
-          ordersScreen(_, {
-            title: _('sale_backend.orders.title'),
+          salesOrdersScreen(_, {
             frame: shell,
             rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+            detailSuffix,
           }),
         )
       },
