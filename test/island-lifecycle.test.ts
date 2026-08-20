@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { each, html, signal } from 'ketjs-view'
 import { createProductEditorView } from '../packages/ketsuite/src/modules/product_backend/client/editor-view.mjs'
+import { createSaleEditorView } from '../packages/ketsuite/src/modules/sale_backend/client/editor-view.mjs'
 import { createStockEditorView } from '../packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs'
 import { createRecordActivityView } from '../packages/ketsuite/src/ui/client/activity-view.mjs'
 import { createChatterView } from '../packages/ketsuite/src/ui/client/mail-view.mjs'
@@ -28,9 +29,11 @@ test('editor islands remove their document submit listener when disposed', () =>
       lang: 'vi',
     })
     const stock = createStockEditorView(runtime, { pickingId: 'picking-1', lang: 'vi' })
-    assert.equal(added.length, 2)
+    const sale = createSaleEditorView(runtime, { orderId: 'order-1', lang: 'vi' })
+    assert.equal(added.length, 3)
     product.dispose()
     stock.dispose()
+    sale.dispose()
     assert.deepEqual(removed, added)
   } finally {
     if (previous) Object.defineProperty(globalThis, 'document', previous)
