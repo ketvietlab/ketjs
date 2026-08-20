@@ -19,6 +19,7 @@ export const HOOKS = [
   'person-name',
   'avatar',
   'app-action',
+  'qr-code',
 ] as const
 
 /**
@@ -132,3 +133,32 @@ export const actionButton = (o: { label: string; action: string; disabled?: bool
     {o.label}
   </button>
 )
+
+/** A server-rendered QR matrix with a four-module quiet zone. */
+export const qrCode = (
+  matrix: readonly (readonly boolean[])[],
+  label: string,
+  pixels = 264,
+): TemplateResult => {
+  const size = matrix.length + 8
+  const cells = matrix.flatMap((row, y) => row.map((dark, x) => ({ x, y, dark }))).filter((cell) => cell.dark)
+  return (
+    <svg
+      data-ui="qr-code"
+      viewBox={`0 0 ${size} ${size}`}
+      width={pixels}
+      height={pixels}
+      role="img"
+      aria-label={label}
+    >
+      <rect width={size} height={size} fill="white" />
+      {each(
+        cells,
+        (cell) => `${cell.x}:${cell.y}`,
+        (cell) => (
+          <rect x={cell.x + 4} y={cell.y + 4} width="1" height="1" fill="black" />
+        ),
+      )}
+    </svg>
+  )
+}
