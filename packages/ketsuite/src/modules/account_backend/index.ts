@@ -25,6 +25,7 @@ import {
   reportScreen,
 } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
+import { journalsScreen } from './journals-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
@@ -509,17 +510,18 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/journals',
+            `/admin/journals${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         return document(ctx, url, req, 'account_backend.journals.title', (_, tr, shell) =>
-          entityScreen(tr, {
-            title: tr('account_backend.journals.title'),
+          journalsScreen(tr, {
             frame: shell,
-            action: '/admin/journals',
-            submit: tr('account_backend.action.create'),
+            action: `/admin/journals${localeSuffix(url)}`,
             rows: data.journals,
+            accounts: data.accounts,
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
             fields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               { name: 'code', label: tr('account_backend.field.code'), required: true },
@@ -534,25 +536,6 @@ export default defineModule({
                 label: tr('account_backend.field.defaultAccountId'),
                 type: 'select',
                 options: choices(data.accounts, true),
-              },
-            ],
-            columns: [
-              {
-                key: 'code',
-                label: tr('account_backend.field.code'),
-                cell: (row) => code(String(row.code)),
-                priority: 'primary',
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'type',
-                label: tr('account_backend.field.type'),
-                cell: (row) => labelOf(tr, 'journalType', row.type),
-              },
-              {
-                key: 'sequence',
-                label: tr('account_backend.field.sequence'),
-                cell: (row) => String(row.sequenceNumber),
               },
             ],
           }),
@@ -1226,6 +1209,18 @@ const vi: Record<string, string> = {
   'account.empty': 'Chưa có tài khoản',
   'account.emptyHint': 'Tạo tài khoản đầu tiên để cấu hình sổ cái.',
   'journals.title': 'Sổ nhật ký',
+  'journal.kicker': 'Cấu hình ghi sổ',
+  'journal.subtitle': 'Tổ chức chứng từ theo loại sổ nhật ký chuẩn Odoo 19.',
+  'journal.summary.total': 'Tổng sổ',
+  'journal.summary.sale': 'Bán hàng',
+  'journal.summary.purchase': 'Mua hàng',
+  'journal.summary.liquidity': 'Ngân hàng và tiền mặt',
+  'journal.create.title': 'Tạo sổ nhật ký',
+  'journal.create.hint': 'Mã là duy nhất; sổ ngân hàng và tiền mặt cần tài khoản thanh khoản mặc định.',
+  'journal.list.title': 'Sổ nhật ký hiện có',
+  'journal.list.hint': 'Kiểm tra mã, loại và tài khoản mặc định dùng khi ghi sổ.',
+  'journal.empty': 'Chưa có sổ nhật ký',
+  'journal.emptyHint': 'Tạo sổ đầu tiên để bắt đầu phân loại chứng từ.',
   'taxes.title': 'Thuế',
   'terms.title': 'Điều khoản thanh toán',
   'entries.title': 'Bút toán',
@@ -1388,6 +1383,18 @@ const en: Record<string, string> = {
   'account.empty': 'No accounts yet',
   'account.emptyHint': 'Create the first account to configure the general ledger.',
   'journals.title': 'Journals',
+  'journal.kicker': 'Posting configuration',
+  'journal.subtitle': 'Organize documents with Odoo 19 journal types.',
+  'journal.summary.total': 'Total journals',
+  'journal.summary.sale': 'Sales',
+  'journal.summary.purchase': 'Purchases',
+  'journal.summary.liquidity': 'Bank & cash',
+  'journal.create.title': 'Create a journal',
+  'journal.create.hint': 'The code is unique; bank and cash journals need a default liquidity account.',
+  'journal.list.title': 'Current journals',
+  'journal.list.hint': 'Review the code, type, and default account used for posting.',
+  'journal.empty': 'No journals yet',
+  'journal.emptyHint': 'Create the first journal to start classifying documents.',
   'taxes.title': 'Taxes',
   'terms.title': 'Payment terms',
   'entries.title': 'Journal entries',

@@ -215,6 +215,7 @@ const vendorBillsEvidenceDir = resolve('docs/assets/accounting-vendor-bills')
 const journalEntriesEvidenceDir = resolve('docs/assets/accounting-journal-entries')
 const paymentsEvidenceDir = resolve('docs/assets/accounting-payments')
 const accountsEvidenceDir = resolve('docs/assets/accounting-chart-of-accounts')
+const journalsEvidenceDir = resolve('docs/assets/accounting-journals')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -234,6 +235,7 @@ try {
   await mkdir(journalEntriesEvidenceDir, { recursive: true })
   await mkdir(paymentsEvidenceDir, { recursive: true })
   await mkdir(accountsEvidenceDir, { recursive: true })
+  await mkdir(journalsEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -370,6 +372,11 @@ try {
       name: 'accounting-chart-of-accounts',
       path: '/admin/accounts?lang=vi',
       ready: `document.querySelector('#account-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-journals',
+      path: '/admin/journals?lang=vi',
+      ready: `document.querySelector('#journal-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -2272,6 +2279,72 @@ try {
         await evaluate(cdp, `scrollTo(0, 0)`)
         if (!noArtifacts)
           await capture(cdp, join(accountsEvidenceDir, `chart-of-accounts-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-journals') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#journal-create-form')),
+        journal: document.querySelector('[data-ui="table"]')?.textContent.includes('BNK'),
+        accountLabel: document.querySelector('[data-ui="table"]')?.textContent.includes('1121'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#journal-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          journal: true,
+          accountLabel: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(journalsEvidenceDir, 'journals-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/journals?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#journal-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Current journals') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(journalsEvidenceDir, 'journals-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/journals?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#journal-create-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts) await capture(cdp, join(journalsEvidenceDir, `journals-${lang}-mobile.png`))
       }
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
