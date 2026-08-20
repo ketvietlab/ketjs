@@ -119,13 +119,31 @@ export async function collaborationEvidenceApp(
       productUomId: 'unit',
       productUomQty: '12',
     })
+    await call('stock.createLot', {
+      id: 'lot-collab',
+      productId: 'variant-collab',
+      name: 'LOT/2026/0084',
+      ref: 'NCC-LOT-84',
+      note: 'Lô kiểm chứng truy xuất và cộng tác.',
+    })
+    await call('stock.adjustInventory', {
+      id: 'inventory-lot-seed',
+      productId: 'variant-collab',
+      locationId: 'wh:stock',
+      inventoryLocationId: 'inventory-adjustment',
+      countedQuantity: '12',
+      lotId: 'lot-collab',
+      productUomId: 'unit',
+    })
 
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'admin')
     await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'admin')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'admin')
+    await call('stock_lot_mail_backend.follow', { targetId: 'lot-collab' }, 'admin')
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'member')
     await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'member')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'member')
+    await call('stock_lot_mail_backend.follow', { targetId: 'lot-collab' }, 'member')
 
     await call('activity.saveType', {
       id: 'activity-todo',
@@ -183,6 +201,19 @@ export async function collaborationEvidenceApp(
         summary: 'Gọi đơn vị vận chuyển',
         note: 'Xác nhận giờ lấy hàng tại cổng số 2.',
         dueDate: '2026-08-21',
+      },
+      'admin',
+    )
+    await call(
+      'stock_lot_activity_backend.schedule',
+      {
+        id: 'activity-stock-lot-seed',
+        targetId: 'lot-collab',
+        typeId: 'activity-todo',
+        assigneeUserId: 'admin',
+        summary: 'Kiểm tra chứng từ lô hàng',
+        note: 'Đối chiếu số lô với phiếu nhập kho.',
+        dueDate: '2026-08-20',
       },
       'admin',
     )
@@ -294,6 +325,26 @@ export async function collaborationEvidenceApp(
         targetId: 'pick-collab',
         kind: 'note',
         body: 'Ghi chú nội bộ: ưu tiên lấy hàng ở kệ A-03.',
+      },
+      'admin',
+    )
+    await call(
+      'stock_lot_mail_backend.post',
+      {
+        id: 'stock-lot-message-1',
+        targetId: 'lot-collab',
+        kind: 'comment',
+        body: 'Đã đối chiếu số lô với chứng từ nhập hàng.',
+      },
+      'member',
+    )
+    await call(
+      'stock_lot_mail_backend.post',
+      {
+        id: 'stock-lot-message-2',
+        targetId: 'lot-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: giữ mẫu kiểm tra tại kệ A-01.',
       },
       'admin',
     )
