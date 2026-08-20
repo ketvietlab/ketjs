@@ -202,12 +202,14 @@ const e2e = await collaborationEvidenceApp()
 let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/assets/odoo-collaboration')
 const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
+const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
 try {
   await mkdir(artifactDir, { recursive: true })
   await mkdir(lotEvidenceDir, { recursive: true })
+  await mkdir(routeEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -279,6 +281,11 @@ try {
       name: 'operation-type-list',
       path: '/admin/picking-types?lang=vi',
       ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'route-list',
+      path: '/admin/stock-routes?lang=vi',
+      ready: `document.querySelector('#stock-route-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -986,6 +993,105 @@ try {
         await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
         false,
       )
+    }
+    if (screen.name === 'route-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock-routes/"]')),
+            ruleCount: [...document.querySelectorAll('[data-ui="table"] [data-ui="row"]')].some((row) => /[1-9]/.test(row.lastElementChild?.textContent ?? '')),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          detailLink: true,
+          ruleCount: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#stock-route-create-form')
+          form.querySelector('[name="name"]').value = 'Tuyến Browser hai bước'
+          form.querySelector('[name="sequence"]').value = '15'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `location.pathname.startsWith('/admin/stock-routes/')`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]')?.textContent.includes('Tuyến Browser hai bước')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.body.textContent.includes('Configured inventory routes')`),
+        true,
+      )
+      if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
+          })`,
+        ),
+        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
+      )
+      if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
     }
     if (screen.name === 'lot-list') {
       assert.deepEqual(
