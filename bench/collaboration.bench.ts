@@ -129,6 +129,11 @@ try {
       markers: ['record-workspace', 'mail.chatter', 'activity.record'],
     },
     {
+      label: 'Accounting customer invoices',
+      path: '/admin/customer-invoices?lang=vi',
+      markers: ['record-workspace', 'customer-invoice-create-form', 'invoice-collab'],
+    },
+    {
       label: 'Accounting vendor bills',
       path: '/admin/vendor-bills?lang=vi',
       markers: ['record-workspace', 'vendor-bill-create-form', 'vendor-bill-collab'],

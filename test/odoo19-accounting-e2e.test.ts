@@ -169,6 +169,11 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
       assert.match(html, /id="vendor-bill-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
+    if (path === '/admin/customer-invoices') {
+      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /id="customer-invoice-create-form"/)
+      assert.doesNotMatch(html, /data-island="mail\.chatter"/)
+    }
     if (path === '/admin/journal-entries') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="journal-entry-create-form"/)
