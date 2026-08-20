@@ -16,8 +16,9 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { accountingDashboard, movesScreen, optionsOf } from './screens.ts'
+import { accountingDashboard, optionsOf } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
+import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
@@ -757,19 +758,22 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
-        if (req.method === 'POST') return createInvoice(ctx, url, req, '/admin/customer-invoices')
+        if (req.method === 'POST')
+          return createInvoice(ctx, url, req, `/admin/customer-invoices${localeSuffix(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
         const rows = all.filter((move) =>
           ['out_invoice', 'out_refund', 'out_receipt'].includes(String(move.moveType)),
         )
         return document(ctx, url, req, 'account_backend.customerInvoices.title', (_, tr, shell) =>
-          movesScreen(tr, {
-            title: tr('account_backend.customerInvoices.title'),
+          customerInvoicesScreen(tr, {
             frame: shell,
-            action: '/admin/customer-invoices',
+            action: `/admin/customer-invoices${localeSuffix(url)}`,
             fields: invoiceFields(tr, data, ['out_invoice', 'out_refund', 'out_receipt']),
             rows,
+            locale: localeSuffix(url),
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
         )
       },
@@ -1108,6 +1112,18 @@ const vi: Record<string, string> = {
   'entry.empty': 'Chưa có bút toán',
   'entry.emptyHint': 'Tạo bút toán đầu tiên để bắt đầu ghi nhận vào sổ cái.',
   'customerInvoices.title': 'Hoá đơn khách hàng',
+  'customerInvoice.kicker': 'Công nợ khách hàng',
+  'customerInvoice.subtitle': 'Lập, kiểm tra và theo dõi thanh toán hoá đơn bán hàng.',
+  'customerInvoice.summary.total': 'Tổng hoá đơn',
+  'customerInvoice.summary.draft': 'Bản nháp',
+  'customerInvoice.summary.posted': 'Đã ghi sổ',
+  'customerInvoice.summary.unpaid': 'Chưa thanh toán',
+  'customerInvoice.create.title': 'Tạo hoá đơn khách hàng',
+  'customerInvoice.create.hint': 'Nhập khách hàng, dòng doanh thu, thuế và tài khoản phải thu.',
+  'customerInvoice.list.title': 'Hoá đơn khách hàng hiện có',
+  'customerInvoice.list.hint': 'Mở chứng từ để kiểm tra dòng, ghi sổ, theo dõi thanh toán và trao đổi.',
+  'customerInvoice.empty': 'Chưa có hoá đơn khách hàng',
+  'customerInvoice.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải thu.',
   'vendorBills.title': 'Hoá đơn nhà cung cấp',
   'vendorBill.kicker': 'Công nợ nhà cung cấp',
   'vendorBill.subtitle': 'Ghi nhận, kiểm tra và theo dõi thanh toán hoá đơn mua hàng.',
@@ -1342,6 +1358,18 @@ const en: Record<string, string> = {
   'entry.empty': 'No journal entries yet',
   'entry.emptyHint': 'Create the first entry to start recording in the general ledger.',
   'customerInvoices.title': 'Customer invoices',
+  'customerInvoice.kicker': 'Customer receivables',
+  'customerInvoice.subtitle': 'Create, review, and track payment of sales invoices.',
+  'customerInvoice.summary.total': 'Total invoices',
+  'customerInvoice.summary.draft': 'Draft',
+  'customerInvoice.summary.posted': 'Posted',
+  'customerInvoice.summary.unpaid': 'Unpaid',
+  'customerInvoice.create.title': 'Create a customer invoice',
+  'customerInvoice.create.hint': 'Enter the customer, revenue line, tax, and receivable account.',
+  'customerInvoice.list.title': 'Current customer invoices',
+  'customerInvoice.list.hint': 'Open a document to review lines, post it, track payment, and collaborate.',
+  'customerInvoice.empty': 'No customer invoices yet',
+  'customerInvoice.emptyHint': 'Create the first invoice to start tracking accounts receivable.',
   'vendorBills.title': 'Vendor bills',
   'vendorBill.kicker': 'Vendor payable',
   'vendorBill.subtitle': 'Record, review, and track payment of purchase invoices.',
