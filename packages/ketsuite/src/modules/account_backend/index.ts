@@ -3,7 +3,7 @@ import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage, code, formatMoney } from '../../ui/index.ts'
+import { backendPage, formatMoney } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -24,6 +24,7 @@ import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { paymentTermsScreen } from './payment-terms-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
+import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -917,11 +918,11 @@ export default defineModule({
         ])) as [AnyRow[], AnyRow[]]
         return document(ctx, url, req, 'account_backend.trialBalance.title', (_, tr, shell) => {
           const currency = currencyOf(companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.trialBalance.title'),
+          return trialBalanceScreen(tr, {
             frame: shell,
-            action: '/admin/trial-balance',
+            action: `/admin/trial-balance${localeSuffix(url)}`,
             rows,
+            currency,
             fields: [
               {
                 name: 'dateFrom',
@@ -930,36 +931,6 @@ export default defineModule({
                 value: dateFrom,
               },
               { name: 'dateTo', label: tr('account_backend.field.dateTo'), type: 'date', value: dateTo },
-            ],
-            columns: [
-              {
-                key: 'code',
-                label: tr('account_backend.field.code'),
-                cell: (row) => code(String(row.code)),
-                priority: 'primary',
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'balance',
-                label: tr('account_backend.field.balance'),
-                cell: (row) => formatMoney(tr, row.balance, currency),
-                align: 'end',
-                kind: 'currency',
-              },
             ],
           })
         })
@@ -1225,6 +1196,17 @@ const vi: Record<string, string> = {
   'payment.empty': 'Chưa có thanh toán',
   'payment.emptyHint': 'Ghi nhận khoản thu hoặc chi đầu tiên để bắt đầu theo dõi dòng tiền.',
   'trialBalance.title': 'Bảng cân đối thử',
+  'trial.kicker': 'Báo cáo sổ cái',
+  'trial.subtitle': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản trong kỳ.',
+  'trial.summary.debit': 'Tổng Nợ',
+  'trial.summary.credit': 'Tổng Có',
+  'trial.summary.balance': 'Chênh lệch',
+  'trial.filter.title': 'Kỳ báo cáo',
+  'trial.filter.hint': 'Để trống ngày để tính trên toàn bộ bút toán đã ghi sổ.',
+  'trial.result.title': 'Số dư theo tài khoản',
+  'trial.result.hint': 'Tổng Nợ và Có phải cân bằng trên toàn bộ hệ thống tài khoản.',
+  'trial.empty': 'Không có số liệu trong kỳ',
+  'trial.emptyHint': 'Thay đổi khoảng ngày hoặc ghi sổ các bút toán trước khi tính lại.',
   'generalLedger.title': 'Sổ cái',
   'partnerStatement.title': 'Sổ đối tác',
   'lines.title': 'Dòng bút toán',
@@ -1424,6 +1406,17 @@ const en: Record<string, string> = {
   'payment.empty': 'No payments yet',
   'payment.emptyHint': 'Register the first receipt or disbursement to start tracking cash flow.',
   'trialBalance.title': 'Trial balance',
+  'trial.kicker': 'General ledger report',
+  'trial.subtitle': 'Reconcile total debits and credits by account for the period.',
+  'trial.summary.debit': 'Total debit',
+  'trial.summary.credit': 'Total credit',
+  'trial.summary.balance': 'Difference',
+  'trial.filter.title': 'Reporting period',
+  'trial.filter.hint': 'Leave dates blank to calculate across all posted entries.',
+  'trial.result.title': 'Balances by account',
+  'trial.result.hint': 'Total debit and credit must balance across the chart of accounts.',
+  'trial.empty': 'No figures for this period',
+  'trial.emptyHint': 'Change the dates or post journal entries before recalculating.',
   'generalLedger.title': 'General ledger',
   'partnerStatement.title': 'Partner ledger',
   'lines.title': 'Journal items',
