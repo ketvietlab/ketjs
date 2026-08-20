@@ -875,9 +875,28 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     headers: { accept: 'text/html' },
   })
   const forecastHtml = await forecastPage.text()
+  assert.match(forecastHtml, /data-ui="record-workspace"/)
+  assert.match(forecastHtml, /id="forecast-filter-form"/)
+  assert.match(forecastHtml, /data-scope="stock-forecast"/)
   assert.match(forecastHtml, /<select[^>]*name="productId"/)
   assert.match(forecastHtml, /<option value="p1"/)
   assert.match(forecastHtml, /name="lang" value="vi"/)
+  assert.match(forecastHtml, /Chưa chọn sản phẩm/)
+  assert.doesNotMatch(forecastHtml, /data-island="mail\.chatter"/)
+
+  const scopedForecastPage = await e2e.client.get(
+    '/admin/forecast?productId=p1&warehouseId=wh&locationId=wh:stock&lang=vi',
+    { headers: { accept: 'text/html' } },
+  )
+  const scopedForecastHtml = await scopedForecastPage.text()
+  assert.match(scopedForecastHtml, /Áo thun · AO/)
+  assert.match(scopedForecastHtml, /Vị trí:/)
+  assert.match(scopedForecastHtml, /Tồn thực tế/)
+  assert.match(scopedForecastHtml, /Đã giữ chỗ/)
+  assert.match(scopedForecastHtml, /Có thể sử dụng/)
+  assert.match(scopedForecastHtml, /Tồn thực tế \+ sắp nhận − sắp xuất = tồn dự báo/)
+  assert.match(scopedForecastHtml, /data-ui="table"/)
+  assert.doesNotMatch(scopedForecastHtml, /data-island="mail\.chatter"/)
 
   for (const path of ['/admin/inventory', '/admin/transfers/pick1', '/admin/forecast']) {
     const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })

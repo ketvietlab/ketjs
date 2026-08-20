@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { json, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { Translator } from 'ketjs'
-import type { JSXChild } from 'ketjs-view'
-import { backendPage, metric, recordForm, stack, surface } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
+import { forecastScreen } from './forecast-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
 import { lotDetailScreen } from './lot-screen.tsx'
 import { lotsScreen } from './lots-screen.tsx'
@@ -14,8 +14,6 @@ import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { replenishmentScreen } from './replenishment-screen.tsx'
 import { stockRouteDetailScreen } from './stock-route-screen.tsx'
 import { stockRoutesScreen } from './stock-routes-screen.tsx'
-import { stockScreen } from './screens.ts'
-import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
 import { transfersScreen } from './transfers-screen.tsx'
 import { warehousesScreen } from './warehouses-screen.tsx'
@@ -38,24 +36,6 @@ const frame = async (ctx: ServeContext, url: URL, req: Req) => ({
           }),
   },
 })
-
-const render = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  titleKey: string,
-  rows: StockRow[],
-  additions: readonly JSXChild[] = [],
-  showEmpty = true,
-) => {
-  const lang = ctx.localeOf(url, req)
-  const _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(titleKey),
-    body: stockScreen(_, _(titleKey), rows, await frame(ctx, url, req), additions, showEmpty),
-  })
-}
 
 const options = (rows: AnyRow[]) => rows.map((row) => ({ value: String(row.id), label: String(row.name) }))
 const selectionLabel = (_: Translator, group: string, value: unknown): string => {
@@ -1120,66 +1100,67 @@ export const routes: Record<string, RouteEntry> = {
               : String(template.name),
           })),
       )
+      const productById = new Map(products.map((product) => [product.value, product.label]))
+      const productUomById = new Map(
+        templates.flatMap((template) =>
+          (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : []).map(
+            (variant) => [String(variant.id), String(template.uomId ?? '')] as const,
+          ),
+        ),
+      )
+      const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
+      const locationById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const unitById = new Map(data.units.map((row) => [String(row.id), String(row.name)]))
       const forecast = productId
         ? ((await ctx.call(
             'stock.forecast',
-            { productId, ...(locationId ? { locationId } : {}), ...(warehouseId ? { warehouseId } : {}) },
+            { productId, ...(locationId ? { locationId } : warehouseId ? { warehouseId } : {}) },
             url,
             req,
           )) as AnyRow)
         : null
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.forecast',
-        [],
-        [
-          surface({
-            body: recordForm({
-              action: inLocale(url, '/admin/forecast'),
-              method: 'get',
-              submit: _('stock_backend.action.calculate'),
-              submitVariant: 'secondary',
-              hidden: { lang },
-              fields: [
-                {
-                  name: 'productId',
-                  label: _('stock_backend.field.productId'),
-                  type: 'select',
-                  value: productId,
-                  options: [{ value: '', label: '—' }, ...products],
-                  required: true,
-                },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  value: warehouseId,
-                  options: [{ value: '', label: '—' }, ...options(data.warehouses)],
-                },
-                {
-                  name: 'locationId',
-                  label: _('stock_backend.field.location'),
-                  type: 'select',
-                  value: locationId,
-                  options: [{ value: '', label: '—' }, ...options(data.locations)],
-                },
-              ],
-            }),
-          }),
-          ...(forecast
-            ? [
-                stack([
-                  metric({ label: _('stock_backend.forecast.onHand'), value: String(forecast.onHand) }),
-                  metric({ label: _('stock_backend.forecast.incoming'), value: String(forecast.incoming) }),
-                  metric({ label: _('stock_backend.forecast.outgoing'), value: String(forecast.outgoing) }),
-                  metric({ label: _('stock_backend.forecast.value'), value: String(forecast.forecast) }),
-                ]),
-              ]
-            : []),
-        ],
-        false,
-      )
+      const scopeLabel = locationId
+        ? _('stock_backend.forecast.scope.location', {
+            name: locationById.get(locationId) ?? locationId,
+          })
+        : warehouseId
+          ? _('stock_backend.forecast.scope.warehouse', {
+              name: warehouseById.get(warehouseId) ?? warehouseId,
+            })
+          : _('stock_backend.forecast.scope.all')
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.forecast'),
+        body: forecastScreen(
+          _,
+          {
+            products,
+            warehouses: options(data.warehouses),
+            locations: options(data.locations),
+            productId,
+            warehouseId,
+            locationId,
+            productLabel: productById.get(productId),
+            scopeLabel,
+            ...(forecast
+              ? {
+                  row: {
+                    id: productId,
+                    onHand: String(forecast.onHand),
+                    reserved: String(forecast.reserved),
+                    available: String(forecast.available),
+                    incoming: String(forecast.incoming),
+                    outgoing: String(forecast.outgoing),
+                    forecasted: String(forecast.forecasted),
+                    uom: unitById.get(productUomById.get(productId) ?? '') ?? '—',
+                  },
+                }
+              : {}),
+            action: inLocale(url, '/admin/forecast'),
+            lang,
+          },
+          await frame(ctx, url, req),
+        ),
+      })
     },
 }
