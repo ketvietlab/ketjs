@@ -1,5 +1,5 @@
 import type { Translator } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import {
   badge,
   cardGrid,
@@ -180,7 +180,14 @@ export const policyScreen = (
 
 export const orderDetail = (
   _: Translator,
-  o: { frame: Frame; order: AnyRow; actionPath: string; lineFields: FormField[]; invoiceFields: FormField[] },
+  o: {
+    frame: Frame
+    order: AnyRow
+    actionPath: string
+    lineFields: FormField[]
+    invoiceFields: FormField[]
+    integration?: JSXChild
+  },
 ): TemplateResult => {
   const lines = (o.order.lines as AnyRow[] | undefined) ?? [],
     moves = (o.order.moves as AnyRow[] | undefined) ?? [],
@@ -231,6 +238,7 @@ export const orderDetail = (
         card: (item) =>
           contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
       }),
+      ...(o.integration === undefined ? [] : [o.integration]),
       ...(actions.length ? [surface({ body: recordActions({ action: o.actionPath, actions }) })] : []),
       section({
         title: _('sale_backend.lines.title'),
