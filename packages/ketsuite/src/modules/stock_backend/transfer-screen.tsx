@@ -9,6 +9,7 @@ import {
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
   section as Section,
+  stack,
   surface as Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormOption, Frame } from '../../ui/index.ts'
@@ -159,17 +160,17 @@ export const transferDetailScreen = (
         },
       ]}
       controller={options.editor}
-      body={
-        <div data-ui="stack" data-gap="loose">
-          {actions.length ? (
+      body={stack(
+        [
+          actions.length ? (
             <FormCluster forms={actions} label={_('stock_backend.transfer.actions.label')} />
-          ) : null}
+          ) : null,
           <Section
             title={_('stock_backend.transfer.operations.title')}
             description={_('stock_backend.transfer.operations.hint')}
             body={operations}
-          />
-          {editable ? (
+          />,
+          editable ? (
             <Section
               title={_('stock_backend.transfer.addMove.title')}
               description={_('stock_backend.transfer.addMove.hint')}
@@ -210,8 +211,8 @@ export const transferDetailScreen = (
                 />
               }
             />
-          ) : null}
-          {editable && options.operationOptions.length ? (
+          ) : null,
+          editable && options.operationOptions.length ? (
             <Section
               title={_('stock_backend.transfer.recordDone.title')}
               description={_('stock_backend.transfer.recordDone.hint')}
@@ -252,9 +253,10 @@ export const transferDetailScreen = (
                 />
               }
             />
-          ) : null}
-        </div>
-      }
+          ) : null,
+        ],
+        'loose',
+      )}
       aside={options.collaboration}
       asideLabel={_('stock_backend.transfer.collaboration.label')}
     />,
