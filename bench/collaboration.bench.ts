@@ -88,6 +88,11 @@ try {
       markers: ['stock-route-create-form', 'record-workspace', 'Tuyến cung ứng đã cấu hình'],
     },
     {
+      label: 'Route detail',
+      path: '/admin/stock-routes/wh:receipt-route?lang=vi',
+      markers: ['stock-route-detail-form', 'stock-route-rule-form', 'record-workspace'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
