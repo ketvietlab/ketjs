@@ -207,6 +207,7 @@ const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
 const replenishmentEvidenceDir = resolve('docs/assets/inventory-replenishment')
 const forecastEvidenceDir = resolve('docs/assets/inventory-forecast')
 const quotationEvidenceDir = resolve('docs/assets/sales-quotation-list')
+const saleOrderEvidenceDir = resolve('docs/assets/sales-order-detail')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -218,6 +219,7 @@ try {
   await mkdir(replenishmentEvidenceDir, { recursive: true })
   await mkdir(forecastEvidenceDir, { recursive: true })
   await mkdir(quotationEvidenceDir, { recursive: true })
+  await mkdir(saleOrderEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -314,6 +316,11 @@ try {
       name: 'quotation-list',
       path: '/admin/sales/quotations?lang=vi',
       ready: `document.querySelector('#quotation-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'sale-order-detail',
+      path: '/admin/sales/quotations/quotation-collab?lang=vi',
+      ready: `document.querySelector('#sale-order-line-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1577,6 +1584,162 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'sale-order-detail') {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1920,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
+      await waitFor(cdp, screen.ready, 15_000)
+      await waitFor(cdp, `document.querySelector('ket-island[data-island="sale.editor"]')?.hidden === true`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const workspace = document.querySelector('[data-ui="record-workspace"]')
+            const aside = document.querySelector('[data-ui="record-aside"]')
+            const gap = parseFloat(getComputedStyle(workspace).columnGap)
+            const available = workspace.getBoundingClientRect().width - gap
+            const width = aside.getBoundingClientRect().width
+            return {
+              workspace: Boolean(workspace),
+              chatter: Boolean(document.querySelector('[data-ui="chatter"][data-state="ready"]')),
+              activity: Boolean(document.querySelector('[data-ui="activity-record"][data-state="ready"]')),
+              lineRows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length,
+              productSelector: document.querySelector('#sale-order-line-form [name="productId"]')?.tagName === 'SELECT',
+              formRowsAtLeast28: Array.from(document.querySelectorAll('#sale-order-line-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+              editorIdle: document.querySelector('ket-island[data-island="sale.editor"]')?.hidden === true,
+              asideAtLeast32Rem: width >= 512,
+              asideOneThird: Math.abs(width / available - 1 / 3) <= 0.01,
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+            }
+          })()`,
+        ),
+        {
+          workspace: true,
+          chatter: true,
+          activity: true,
+          lineRows: 1,
+          productSelector: true,
+          formRowsAtLeast28: true,
+          editorIdle: true,
+          asideAtLeast32Rem: true,
+          asideOneThird: true,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#sale-order-line-form')
+          form.noValidate = true
+          form.querySelector('[name="productId"]').value = ''
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="danger"]')`,
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          globalThis.__saleSaveNodes = {
+            chatter: document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: document.querySelector('[data-ui="sidebar-foot"]')
+          }
+          const form = document.querySelector('#sale-order-line-form')
+          form.querySelector('[name="productId"]').value = 'variant-collab'
+          form.querySelector('[name="productUomId"]').value = 'unit'
+          form.querySelector('[name="productUomQty"]').value = '2'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 2`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__saleSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__saleSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__saleSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            location: location.pathname + location.search,
+            overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          chatter: true,
+          activity: true,
+          sidebar: true,
+          location: '/admin/sales/quotations/quotation-collab?lang=vi',
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(saleOrderEvidenceDir, 'sales-order-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations/quotation-collab?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#sale-order-line-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Order information')`), true)
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(saleOrderEvidenceDir, 'sales-order-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations/quotation-collab?lang=vi`)
+      await waitFor(cdp, screen.ready, 15_000)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#sale-order-line-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatterBelowSheet: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().top >= document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().bottom
+          })`,
+        ),
+        { horizontalOverflow: false, formRowsAtLeast28: true, chatterBelowSheet: true },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(saleOrderEvidenceDir, 'sales-order-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations/quotation-collab?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#sale-order-line-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(saleOrderEvidenceDir, 'sales-order-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
