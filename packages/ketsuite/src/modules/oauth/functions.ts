@@ -18,14 +18,15 @@ const codeOf = (value: unknown): string =>
   String(value ?? '')
     .trim()
     .toLowerCase()
+const hasUnsafePathCharacter = (value: string): boolean =>
+  value.includes('\\') ||
+  [...value].some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
 const safeReturnTo = (value: unknown): string => {
   const path = String(value ?? '')
-  if (
-    !path.startsWith('/') ||
-    path.startsWith('//') ||
-    /[\\\u0000-\u001f\u007f]/.test(path) ||
-    /%5c/i.test(path)
-  )
+  if (!path.startsWith('/') || path.startsWith('//') || hasUnsafePathCharacter(path) || /%5c/i.test(path))
     return '/admin'
   const parsed = new URL(path, 'http://ket.local')
   return parsed.origin === 'http://ket.local' ? `${parsed.pathname}${parsed.search}${parsed.hash}` : '/admin'
@@ -662,8 +663,7 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:oauth.Provider', 'write:oauth.Transaction'],
     handler: async (ctx: Ctx, a) => {
       const provider = await providerById(ctx, a.providerId)
-      if (!provider || provider.active !== true)
-        return invalid([issue('providerId', 'oauth.error.providerUnavailable')])
+      if (provider?.active !== true) return invalid([issue('providerId', 'oauth.error.providerUnavailable')])
       const mode = String(a.mode ?? 'login')
       if (!['login', 'link'].includes(mode)) return invalid([issue('mode', 'oauth.error.modeInvalid')])
       if (mode === 'link' && (provider.allowLinking !== true || !ctx.actor || ctx.actor !== a.linkUserId))
@@ -788,8 +788,7 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       const provider = await providerById(ctx, a.providerId)
       if (
-        !provider ||
-        provider.active !== true ||
+        provider?.active !== true ||
         provider.issuer !== a.issuer ||
         timestamp(provider.updatedAt) !== timestamp(a.providerUpdatedAt)
       )

@@ -67,11 +67,17 @@ const decodedCookie = (value: string | undefined): string => {
   }
 }
 const wantsHtml = (req: Req): boolean => String(req.headers.accept ?? '').includes('text/html')
+const hasUnsafePathCharacter = (value: string): boolean =>
+  value.includes('\\') ||
+  [...value].some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 0x1f || code === 0x7f
+  })
 const safeReturnTo = (value: string | null): string => {
   if (
     !value?.startsWith('/') ||
     value.startsWith('//') ||
-    /[\\\u0000-\u001f\u007f]/.test(value) ||
+    hasUnsafePathCharacter(value) ||
     /%5c/i.test(value)
   )
     return '/admin'
