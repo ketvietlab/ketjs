@@ -28,6 +28,7 @@ export const authTokenScreen = (
           body: recordForm({
             action: `/auth/${options.kind}`,
             submit: _('user.token.submit'),
+            submitVariant: 'primary',
             errors: options.errors,
             hidden: { token: options.token },
             fields: [

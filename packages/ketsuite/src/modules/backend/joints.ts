@@ -26,7 +26,7 @@ export const joints: Record<string, JointDef> = {
   'topbar.end': { multiple: true },
   // The foot of the sidebar: a module with a queue of anything can put its count
   // there, beside who you are signed in as.
-  'sidebar.foot': { multiple: true },
+  'sidebar.foot': { props: { lang: 'text?' }, multiple: true },
   /** Under the last group on the apps screen. */
   'apps.footer': { multiple: true },
 }

@@ -1607,7 +1607,7 @@ KetSuite UI kit and write no private markup. Media remains `storage.Attachment`
 metadata plus the storage backend; hospitality does not invent another binary
 table or object-key convention.
 
-## D51 — Reservation intent, physical stay and operational folio are separate records
+## D52 — Reservation intent, physical stay and operational folio are separate records
 
 A reservation is the commercial promise, a stay is the physical visit, and a
 folio is the operational account for room and service charges. They are created in
@@ -1628,3 +1628,97 @@ so overlapping unassigned bookings remain legible instead of painting over each
 other. The browser acceptance path runs every hospitality route with seeded data
 in Vietnamese and English, plus the calendar at a narrow viewport; this is part of
 the feature definition, not a release-only visual pass.
+## D53 — Collaboration keeps one polymorphic boundary and external I/O behind jobs
+
+**A date is not a datetime with the clock hidden.** Activity deadlines and all-day
+event boundaries use the `date` scalar and canonical `YYYY-MM-DD` values. SQLite
+stores it as text and PostgreSQL as `DATE`; changesets, function/job inputs, layout
+contracts, generated declarations and agent JSON schemas all retain that meaning.
+Impossible and normalized dates such as `2026-02-30` are refused at every input
+boundary rather than left for a database or timezone conversion to reinterpret.
+
+**Record access stays with the record owner.** `mail.Thread` is the sole
+`resModel/resId` boundary. Mail has no public generic function that accepts an
+arbitrary model and id. Product, Stock and later business modules publish typed
+joints; a bridge depending on both sides verifies the target row under its normal
+company scope, then calls Mail operations while declaring both effect sets. The
+small bridge cost is intentional: a reusable generic Chatter endpoint would be a
+cross-domain record-rule bypass in a permission system whose unit is the function.
+
+**The first message document is plain text.** Chatter and inbound bodies are stored
+as text and escaped by the rendering layer. Odoo HTML is not copied into a trusted
+backend surface before a sanitizer or restricted document format exists. Internal
+notes exclude external followers; an external mention is rejected unless the UI
+passes a confirmation that represents an explicit user decision.
+
+**A delivery request is business data; `ket_job` is not.** Message, recipient
+Notification and the later rendered Delivery snapshot commit with the enqueue.
+The queue row owns attempts, leases and scheduling and may be pruned. A worker gets
+an `OutboundTransport` from the deployment through `serve.openTransport`; the job
+must declare `transport:send` before the provider sees anything. Provider secrets
+therefore remain deployment secrets rather than plaintext company rows or module
+globals.
+
+Every send carries a stable idempotency key. The in-memory provider double proves
+retry and provider-side deduplication, while the contract records whether a receipt
+was deduplicated. This yields exactly-once external acceptance only for providers
+that honor the key. Raw SMTP can reuse a stable RFC Message-ID but cannot close the
+crash-after-acceptance window, so no UI or runbook may claim that it can.
+
+## D54 — Inbound email enters through signed, concrete routes
+
+**Anonymous does not mean unauthenticated.** Provider callbacks use a dedicated
+`KET_WEBHOOK_SECRET`, not the session cookie key. The HMAC covers timestamp, path
+and exact body bytes; a five-minute window rejects replay and binding the path stops
+a valid reply callback from being replayed against an alias bridge. Only the route
+may call the closed receive function without a session. The generic function HTTP
+surface stays unavailable to strangers.
+
+**Dedupe precedes business work.** A company-scoped `(provider, providerEventId)`
+identity owns the receive attempt. The message, attachment metadata and event state
+commit together. Repeating a callback returns the existing outcome, while provider
+References resolve only through a recorded outbound provider message id. A supplied
+but invalid reply token is terminal and never falls back to a guessed Reference.
+
+**HTML is input, never a document.** A conservative converter removes active blocks
+and tags and stores only plain text in Chatter. Inbound files pass the same upload
+limit, content-addressed company key and `storage.Attachment` contract as browser
+uploads. A blob written before a failed database transaction is an unreferenced
+object and is collected by the storage sweep.
+
+**Aliases are bridges, not model names.** Core Mail records alias configuration but
+does not dynamically open a table or call a string-named model. The first concrete
+`stock.receipt` bridge depends on Stock and Mail, validates a configured picking
+type, creates one draft receipt, then posts to its ordinary Chatter thread. Unknown
+or uninstalled bridges remain bounded diagnostics. A maintenance job prunes failed
+diagnostics and expired token digests; processed provider identities remain compact
+dedupe tombstones.
+
+## D55 — Odoo collaboration cutover advances one explicit checkpoint
+
+**Identity is a four-part fact, not an inherited integer.** The import map keys the
+source database, Odoo model, source record id and explicit Ket target model. One
+Odoo Calendar row may therefore map both to its typed `calendar.Event` and to the
+`mail.Thread` authorized by the Calendar bridge without pretending those targets
+are interchangeable. Generated target ids contain a database namespace and remain
+stable across retries.
+
+**A batch and its checkpoint are one transaction.** Snapshot/delta rows, maps,
+issues, pending outbound jobs and the completed run commit before `lastCursor`
+moves. Delta callers must present the exact previous cursor. A repeated run payload
+returns its stored report; a different payload under the same run id is refused.
+Unresolved partners, users and business targets stay visible as issues rather than
+causing generic records to appear outside a domain owner.
+
+**Migration is allowed to lose syntax, never meaning silently.** Chatter-like Odoo
+HTML becomes plain text. Recurrence rules outside the supported Calendar contract
+are errors. Legacy QWeb templates are disabled for review, sent mail is not queued
+again, and secret-like alias defaults are stripped with warnings. Attachment bytes
+are streamed and checksummed before their transactional metadata is imported; the
+importer accepts only the same content-addressed company key used by Storage.
+
+**Rollback does not reverse history.** Until cutover, Odoo is the writable source;
+at freeze it remains an intact read-only fallback. The rollback manifest is a read
+of imported targets, not a delete script. Once KetSuite has accepted writes, an
+automated reverse merge would guess at business conflicts, so both sides must be
+frozen and reconciled explicitly.

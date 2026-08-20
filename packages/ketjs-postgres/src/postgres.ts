@@ -16,6 +16,7 @@ const SQL: Record<FieldBase, string> = {
   decimal: 'NUMERIC',
   bool: 'BOOLEAN',
   json: 'JSONB',
+  date: 'DATE',
   datetime: 'TIMESTAMPTZ',
   ref: 'TEXT',
 }

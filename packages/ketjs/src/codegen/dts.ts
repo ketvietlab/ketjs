@@ -23,6 +23,7 @@ const tsInput = (spec: string): string => {
     float: 'number',
     bool: 'boolean',
     json: 'unknown',
+    date: 'string',
     datetime: 'string',
   }
   const t = base.startsWith('ref:') ? 'string' : (map[base] ?? 'unknown')

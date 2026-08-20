@@ -1,5 +1,5 @@
 import { KetError } from '../kernel/errors.ts'
-import { parseType } from '../kernel/types.ts'
+import { isDateText, parseType } from '../kernel/types.ts'
 import type { Manifest } from '../types.ts'
 
 const scalarMatches = (base: string, value: unknown): boolean => {
@@ -7,6 +7,7 @@ const scalarMatches = (base: string, value: unknown): boolean => {
   if (base === 'int') return typeof value === 'number' && Number.isInteger(value)
   if (base === 'float' || base === 'decimal') return typeof value === 'number' && Number.isFinite(value)
   if (base === 'bool') return typeof value === 'boolean'
+  if (base === 'date') return isDateText(value)
   if (base === 'datetime')
     return (
       (typeof value === 'string' && !Number.isNaN(Date.parse(value))) ||

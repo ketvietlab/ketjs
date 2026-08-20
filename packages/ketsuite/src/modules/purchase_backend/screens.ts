@@ -99,6 +99,7 @@ export const ordersScreen = (
               body: recordForm({
                 action: '/admin/purchase/rfqs',
                 submit: _('purchase_backend.action.createRfq'),
+                submitVariant: 'primary',
                 fields: o.createFields,
               }),
             }),
@@ -160,6 +161,7 @@ export const supplierInfoScreen = (
         body: recordForm({
           action: '/admin/purchase/vendor-pricelists',
           submit: _('purchase_backend.action.addVendorPrice'),
+          submitVariant: 'secondary',
           fields: o.fields,
         }),
       }),
@@ -169,6 +171,7 @@ export const supplierInfoScreen = (
           body: recordForm({
             action: '/admin/purchase/vendor-pricelists',
             submit: _('purchase_backend.action.saveMethod'),
+            submitVariant: 'primary',
             hidden: { action: 'method' },
             fields: o.methodFields,
           }),
@@ -332,6 +335,7 @@ export const orderDetail = (
                 body: recordForm({
                   action: path,
                   submit: _('purchase_backend.action.addLine'),
+                  submitVariant: 'secondary',
                   hidden: { action: 'add-line' },
                   fields: o.lineFields,
                 }),
@@ -347,6 +351,7 @@ export const orderDetail = (
                 body: recordForm({
                   action: path,
                   submit: _('purchase_backend.action.createBill'),
+                  submitVariant: 'primary',
                   hidden: { action: 'bill' },
                   fields: o.billFields,
                 }),

@@ -37,6 +37,7 @@ import { bootRuntime } from './runtime.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
+import type { OpenTransport } from './transport/index.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
 import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
@@ -152,6 +153,8 @@ export type ServeSpec = {
   openStore?: OpenStore
   /** Override the built-in local/S3 storage selected by RuntimeConfig. */
   openStorage?: OpenStorage
+  /** Inject a deployment-owned outbound provider for durable worker jobs. */
+  openTransport?: OpenTransport
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.

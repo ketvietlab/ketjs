@@ -1,6 +1,7 @@
 import { each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
+import type { ActionSize, ActionVariant } from './actions.tsx'
 
 export const HOOKS = [
   'record-form',
@@ -13,6 +14,7 @@ export const HOOKS = [
   'form-error',
   'form-errors',
   'form-actions',
+  'form-cluster',
 ] as const
 
 export type FormOption = { value: string; label: string }
@@ -110,10 +112,14 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
 }
 
 /** A native, server-rendered form. Domain modules provide data, never markup. */
-type RecordFormOptions = {
+export type RecordFormOptions = {
   action: string
   fields: readonly FormField[]
   submit: string
+  /** Every submit declares its business hierarchy; there is no accidental primary. */
+  submitVariant: ActionVariant
+  submitSize?: ActionSize
+  layout?: 'default' | 'inline'
   method?: 'get' | 'post'
   errors?: readonly string[]
   hidden?: Record<string, string>
@@ -123,7 +129,14 @@ type RecordFormOptions = {
 )
 
 export const recordForm = (o: RecordFormOptions): TemplateResult => (
-  <form data-ui="record-form" method={o.method ?? 'post'} action={o.action}>
+  <form
+    data-ui="record-form"
+    data-layout={o.layout ?? 'default'}
+    data-has-fields={String(o.fields.length > 0)}
+    data-submit-variant={o.submitVariant}
+    method={o.method ?? 'post'}
+    action={o.action}
+  >
     {Object.entries(o.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} />
     ))}
@@ -143,7 +156,8 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
         o.fields,
         (field) => field.name,
         (field) => {
-          const id = `field-${o.action}-${field.name}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+          const scope = [o.action, o.hidden?.id, o.hidden?.action, field.name].filter(Boolean).join('-')
+          const id = `field-${scope}`.replace(/[^a-zA-Z0-9_-]/g, '-')
           const helpId = field.help ? `${id}-help` : null
           const errorId = field.error ? `${id}-error` : null
           const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
@@ -186,7 +200,12 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     <div data-ui="form-actions">
       {actionGroup({
         actions: [
-          button({ label: o.submit, type: 'submit', variant: 'primary' }),
+          button({
+            label: o.submit,
+            type: 'submit',
+            variant: o.submitVariant,
+            size: o.submitSize,
+          }),
           ...(o.cancelHref
             ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
             : []),
@@ -194,6 +213,20 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
       })}
     </div>
   </form>
+)
+
+/** Valid block-level grouping for related forms; never place a form in `inline`. */
+export const formCluster = (o: {
+  forms: readonly TemplateResult[]
+  label?: string | null
+}): TemplateResult => (
+  <div data-ui="form-cluster" role="group" aria-label={o.label ?? null}>
+    {each(
+      o.forms,
+      (_, index) => index,
+      (form) => form,
+    )}
+  </div>
 )
 
 /** Several POST actions for one record, kept in one compact native form. */
@@ -206,20 +239,28 @@ export const recordActions = (o: {
     variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive'
     disabled?: boolean
   }>
-}): TemplateResult => (
-  <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
-    {actionGroup({
-      label: o.label,
-      actions: o.actions.map((action) =>
-        button({
-          label: action.label,
-          type: 'submit',
-          name: 'action',
-          value: action.value,
-          variant: action.variant,
-          disabled: action.disabled,
-        }),
-      ),
-    })}
-  </form>
-)
+}): TemplateResult => {
+  const primaryCount = o.actions.filter((action) => action.variant === 'primary').length
+  if (primaryCount > 1)
+    throw new Error(
+      `recordActions(${o.action}) declares ${primaryCount} primary actions; keep one decision per group`,
+    )
+
+  return (
+    <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
+      {actionGroup({
+        label: o.label,
+        actions: o.actions.map((action) =>
+          button({
+            label: action.label,
+            type: 'submit',
+            name: 'action',
+            value: action.value,
+            variant: action.variant,
+            disabled: action.disabled,
+          }),
+        ),
+      })}
+    </form>
+  )
+}

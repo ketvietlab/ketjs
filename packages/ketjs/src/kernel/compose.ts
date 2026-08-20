@@ -589,7 +589,13 @@ export function compose(
         // Enqueue targets are validated after every job has been collected, so a
         // producer may refer to a job contributed later in dependency order.
         if (effect.startsWith('enqueue')) continue
-        if (effect === 'storage:read' || effect === 'storage:write' || effect === 'storage:remove') continue
+        if (
+          effect === 'storage:read' ||
+          effect === 'storage:write' ||
+          effect === 'storage:remove' ||
+          effect === 'transport:send'
+        )
+          continue
         const match = /^(read|write):(.+)$/.exec(effect)
         const model = match ? manifest.models[match[2] as string] : null
         if (!match || !model) {

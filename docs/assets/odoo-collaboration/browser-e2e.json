@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-08-20T06:20:52.183Z",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "assertions": [
+    "authenticated product and transfer islands reached ready state",
+    "message and internal-note composer crossed real browser HTTP",
+    "Chatter exposed linked sent and terminal-failure email delivery states",
+    "record activity island scheduled and completed an activity through real browser HTTP",
+    "My Activities rendered the actor due list and sidebar counter",
+    "My Activities kept inputs, date pickers and semantic actions on one contained baseline",
+    "KétViệt sidebar systray order, divider, account menu and settings link stayed functional",
+    "Agenda, week and month calendar views hydrated with bounded occurrence expansion",
+    "calendar date-time pickers kept equal dimensions and stayed inside their form grid",
+    "calendar event creation crossed real browser HTTP and remained visible after reload",
+    "transactional outbox rendered both provider-accepted and terminal-failure delivery states",
+    "inbound log rendered processed, failed and ignored signed-provider outcomes",
+    "plain-text message markup did not execute or create an img element",
+    "notification inbox rendered an unread message"
+  ],
+  "screens": [
+    {
+      "screen": "product-chatter",
+      "readyMs": 277.2582910000001,
+      "navigationMs": 107.29999995231628
+    },
+    {
+      "screen": "transfer-chatter",
+      "readyMs": 3753.027624999999,
+      "navigationMs": 92.70000004768372
+    },
+    {
+      "screen": "notification-inbox",
+      "readyMs": 95.65100000000166,
+      "navigationMs": 73.20000004768372
+    },
+    {
+      "screen": "my-activities",
+      "readyMs": 97.38275000000067,
+      "navigationMs": 76
+    },
+    {
+      "screen": "calendar-agenda",
+      "readyMs": 191.44879199999923,
+      "navigationMs": 73.40000009536743
+    },
+    {
+      "screen": "calendar-week",
+      "readyMs": 187.43495899999834,
+      "navigationMs": 75.29999995231628
+    },
+    {
+      "screen": "calendar-month",
+      "readyMs": 198.34479199999987,
+      "navigationMs": 81.20000004768372
+    },
+    {
+      "screen": "transactional-outbox",
+      "readyMs": 105.65520899999683,
+      "navigationMs": 77.5
+    },
+    {
+      "screen": "inbound-email-log",
+      "readyMs": 115.06287499999962,
+      "navigationMs": 82.69999980926514
+    }
+  ]
+}

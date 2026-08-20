@@ -35,16 +35,23 @@ export const HOOKS = [
   'menu-section-text',
   'menu-section-children',
   'sidebar-foot',
+  'sidebar-tools',
+  'sidebar-settings',
   'indicators',
   'indicator',
   'indicator-icon',
   'indicator-count',
+  'viewer-company-indicator',
   'viewer',
+  'viewer-trigger',
+  'viewer-presence',
+  'viewer-menu',
   'viewer-who',
   'viewer-name',
   'viewer-company',
   'signout',
   'signout-button',
+  'signout-label',
 ] as const
 
 export type Viewer = {
@@ -189,53 +196,74 @@ export const sidebar = (
       </nav>
 
       <div data-ui="sidebar-foot">
-        {(indicators.length > 0 || !!footItems) && (
-          <div data-ui="indicators">
-            {each(
-              indicators,
-              (indicator) => indicator.id,
-              (indicator) => (
-                <a
-                  data-ui="indicator"
-                  data-kind={indicator.id}
-                  href={indicator.path}
-                  title={indicator.label}
-                  aria-label={indicator.label}
-                >
-                  <span data-ui="indicator-icon">{icon(indicator.icon)}</span>
-                  {indicator.count > 0 && <span data-ui="indicator-count">{String(indicator.count)}</span>}
-                </a>
-              ),
-            )}
-            {footItems ?? ''}
-          </div>
-        )}
-
-        {!!viewer && (
-          <div data-ui="viewer">
-            <span data-ui="avatar" aria-hidden="true">
-              {initials(viewer.name)}
-            </span>
-            <span data-ui="viewer-who">
-              <span data-ui="viewer-name">
-                {viewer.profilePath ? <a href={viewer.profilePath}>{viewer.name}</a> : viewer.name}
-              </span>
-              {viewer.companies.length > 1 && (
-                <span data-ui="viewer-company">{viewer.companyName ?? viewer.company}</span>
+        <div data-ui="sidebar-tools">
+          {(indicators.length > 0 || !!footItems) && (
+            <div data-ui="indicators">
+              {each(
+                indicators,
+                (indicator) => indicator.id,
+                (indicator) => (
+                  <a
+                    data-ui="indicator"
+                    data-kind={indicator.id}
+                    href={indicator.path}
+                    title={indicator.label}
+                    aria-label={indicator.label}
+                  >
+                    <span data-ui="indicator-icon">{icon(indicator.icon)}</span>
+                    {indicator.count > 0 && <span data-ui="indicator-count">{String(indicator.count)}</span>}
+                  </a>
+                ),
               )}
+              {footItems ?? ''}
+            </div>
+          )}
+
+          {!!viewer?.company && (
+            <span
+              data-ui="viewer-company-indicator"
+              role="img"
+              title={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+              aria-label={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+            >
+              {icon('building-2')}
             </span>
-            <form data-ui="signout" method="post" action="/logout">
-              <button
-                data-ui="signout-button"
-                type="submit"
-                title={_('backend.signOut')}
-                aria-label={_('backend.signOut')}
-              >
-                {icon('log-out')}
-              </button>
-            </form>
-          </div>
-        )}
+          )}
+
+          {!!viewer && (
+            <details data-ui="viewer">
+              <summary data-ui="viewer-trigger" title={viewer.name} aria-label={viewer.name}>
+                <span data-ui="avatar" aria-hidden="true">
+                  {initials(viewer.name)}
+                </span>
+                <span data-ui="viewer-presence" aria-hidden="true" />
+              </summary>
+              <div data-ui="viewer-menu">
+                <span data-ui="viewer-who">
+                  <span data-ui="viewer-name">
+                    {viewer.profilePath ? <a href={viewer.profilePath}>{viewer.name}</a> : viewer.name}
+                  </span>
+                  {(viewer.companies.length > 1 || !!viewer.branchName) && (
+                    <span data-ui="viewer-company">
+                      {viewer.companyName ?? viewer.company}
+                      {viewer.branchName ? ` · ${viewer.branchName}` : ''}
+                    </span>
+                  )}
+                </span>
+                <form data-ui="signout" method="post" action="/logout">
+                  <button data-ui="signout-button" type="submit">
+                    {icon('log-out')}
+                    <span data-ui="signout-label">{_('backend.signOut')}</span>
+                  </button>
+                </form>
+              </div>
+            </details>
+          )}
+        </div>
+
+        <a data-ui="sidebar-settings" href="/admin/settings">
+          {_('backend.nav.settings')}
+        </a>
       </div>
     </aside>
   )

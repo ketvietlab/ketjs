@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { KetError } from '../kernel/errors.ts'
-import { parseType } from '../kernel/types.ts'
+import { isDateText, parseType } from '../kernel/types.ts'
 import type { Adapter, JobEnqueueOptions, JobEnqueueResult, Manifest, Row, Scope } from '../types.ts'
 
 export const JOB_CHANNEL = 'ket_job_ready'
@@ -216,6 +216,7 @@ const JS_OF: Record<string, string> = {
   float: 'number',
   decimal: 'number',
   bool: 'boolean',
+  date: 'string',
   datetime: 'string',
   json: 'object',
 }
@@ -236,6 +237,8 @@ export function validateJobInput(job: string, manifest: Manifest, args: Record<s
     if (want && typeof value !== want) errors.push(`input "${name}" expects ${want}, got ${typeof value}`)
     if (type.base === 'int' && typeof value === 'number' && !Number.isInteger(value))
       errors.push(`input "${name}" expects an integer`)
+    if (type.base === 'date' && !isDateText(value))
+      errors.push(`input "${name}" expects a calendar date (YYYY-MM-DD)`)
   }
   for (const name of Object.keys(args)) if (!(name in signature)) errors.push(`unknown input "${name}"`)
   if (errors.length)

@@ -11,6 +11,12 @@ export default defineModule({
   summary: 'Warehouse, tồn kho, dịch chuyển và routes.',
   category: 'Hệ thống',
   routes,
+  joints: {
+    'picking.collaboration': {
+      props: { resModel: 'text', resId: 'id', lang: 'text' },
+      multiple: true,
+    },
+  },
   menus: {
     stock: { label: 'menu.app', icon: 'warehouse', sequence: 30 },
     'stock.operations': { parent: 'stock', label: 'menu.operations', sequence: 10 },

@@ -6,7 +6,7 @@ import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
 import { KetError } from '../kernel/errors.ts'
 import { project } from './project.ts'
-import { parseType } from '../kernel/types.ts'
+import { isDateText, parseType } from '../kernel/types.ts'
 import { queueFor } from './queue.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
@@ -40,6 +40,7 @@ const JS_OF: Record<string, string> = {
   int: 'number',
   float: 'number',
   bool: 'boolean',
+  date: 'string',
   datetime: 'string',
   json: 'object',
 }
@@ -66,6 +67,8 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
       errors.push(`input "${name}" expects a finite number or an exact decimal string`)
     if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
       errors.push(`input "${name}" expects an integer`)
+    if (t.base === 'date' && !isDateText(v))
+      errors.push(`input "${name}" expects a calendar date (YYYY-MM-DD)`)
   }
   for (const k of Object.keys(args ?? {})) {
     if (!(k in sig)) errors.push(`unknown input "${k}" (accepted: ${Object.keys(sig).join(', ') || 'none'})`)

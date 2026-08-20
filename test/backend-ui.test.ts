@@ -8,6 +8,8 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
+  activityContractCases,
+  calendarContractCases,
   appsScreen,
   badge,
   breadcrumbs,
@@ -20,6 +22,7 @@ import {
   dataTable,
   emptyState,
   errorState,
+  formCluster,
   HOOKS,
   hasIcon,
   icon,
@@ -29,6 +32,7 @@ import {
   kanbanGrid,
   linkButton,
   loadingState,
+  mailContractCases,
   metric,
   mediaPanel,
   notice,
@@ -173,10 +177,40 @@ const componentContract = [
   recordForm({
     action: '/records',
     submit: 'Save',
+    submitVariant: 'primary',
     errors: ['Invalid value'],
     fields: [
       { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
       { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+    ],
+  }),
+  formCluster({
+    label: 'Activity actions',
+    forms: [
+      recordForm({
+        action: '/activities/1',
+        submit: 'Complete',
+        submitVariant: 'primary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'complete' },
+        fields: [{ name: 'feedback', label: 'Feedback' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Reschedule',
+        submitVariant: 'secondary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'reschedule' },
+        fields: [{ name: 'dueDate', label: 'New due date', type: 'date' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Cancel',
+        submitVariant: 'destructive',
+        layout: 'inline',
+        hidden: { id: '1', action: 'cancel' },
+        fields: [],
+      }),
     ],
   }),
   recordActions({
@@ -288,6 +322,9 @@ const everything = [
   settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
   errorState('E_X', 'msg', 'hint'),
   ...componentContract,
+  ...mailContractCases(),
+  ...activityContractCases(),
+  ...calendarContractCases(),
 ]
   .map((r) => renderToString(r))
   .join('')
@@ -304,7 +341,14 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
 })
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
@@ -319,8 +363,38 @@ test('sidebar: every KetSuite app declares a glyph carried by the design system'
   assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
 })
 
+test('sidebar footer: legacy systray order keeps settings and sign-out functional', () => {
+  const html = renderToString(
+    appsScreen(_, [app({ state: 'installed' })], {
+      menu: MENU,
+      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      indicators: [
+        { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
+        { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
+  assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
+  assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
+  assert.match(html, /<a data-ui="sidebar-settings" href="\/admin\/settings">/)
+  assert.ok(
+    html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
+    'Settings belongs below the systray divider',
+  )
+})
+
 test('design tokens: every admin role used by components is declared', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
   const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
@@ -352,6 +426,7 @@ test('form: required, help and error states are visible and semantically connect
     recordForm({
       action: '/records',
       submit: 'Save',
+      submitVariant: 'primary',
       fields: [
         {
           name: 'name',
@@ -372,6 +447,68 @@ test('form: required, help and error states are visible and semantically connect
   assert.match(html, /data-ui="form-help" id="field--records-name-help"/)
   assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
   assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
+})
+
+test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {
+  const html = renderToString(
+    formCluster({
+      forms: [
+        recordForm({
+          action: '/activities',
+          submit: 'Complete',
+          submitVariant: 'primary',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'complete' },
+          fields: [{ name: 'feedback', label: 'Feedback' }],
+        }),
+        recordForm({
+          action: '/activities',
+          submit: 'Cancel',
+          submitVariant: 'destructive',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'cancel' },
+          fields: [],
+        }),
+      ],
+    }),
+  )
+  assert.match(html, /^<div data-ui="form-cluster"/)
+  assert.match(html, /data-layout="inline" data-has-fields="true" data-submit-variant="primary"/)
+  assert.match(html, /data-layout="inline" data-has-fields="false" data-submit-variant="destructive"/)
+  assert.doesNotMatch(html, /^<span/, 'a form cluster must never use a phrasing root')
+  assert.match(html, /id="field--activities-one-complete-feedback"/)
+})
+
+test('actions: one decision cluster cannot declare two primary actions', () => {
+  assert.throws(
+    () =>
+      recordActions({
+        action: '/records/1',
+        actions: [
+          { value: 'confirm', label: 'Confirm', variant: 'primary' },
+          { value: 'approve', label: 'Approve', variant: 'primary' },
+        ],
+      }),
+    /declares 2 primary actions/,
+  )
+})
+
+test('islands: every business button declares the shared action role and hierarchy', () => {
+  for (const path of [
+    'packages/ketsuite/src/ui/client/mail-view.mjs',
+    'packages/ketsuite/src/ui/client/activity-view.mjs',
+    'packages/ketsuite/src/ui/client/calendar-view.mjs',
+  ]) {
+    const source = readFileSync(path, 'utf8')
+    for (const [index, match] of [...source.matchAll(/<button\b[\s\S]*?>/g)].entries()) {
+      assert.match(
+        match[0],
+        /(?:data-ui="action"|data-control="action")/,
+        `${path} button ${index + 1} bypasses the shared action control`,
+      )
+      assert.match(match[0], /data-variant="(?:primary|secondary|tertiary|destructive)"/)
+    }
+  }
 })
 
 test('media: primary state has a label and image actions keep accessible icon controls', () => {

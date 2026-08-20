@@ -21,6 +21,7 @@ const SQL: Record<FieldBase, string> = {
   decimal: 'TEXT',
   bool: 'INTEGER',
   json: 'TEXT',
+  date: 'TEXT',
   datetime: 'TEXT',
   ref: 'TEXT',
 }

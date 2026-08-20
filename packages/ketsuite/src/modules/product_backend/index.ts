@@ -31,6 +31,10 @@ export default defineModule({
   joints: {
     'template.media': { props: { templateId: 'id' } },
     'variant.media': { props: { productId: 'id' } },
+    'template.collaboration': {
+      props: { resModel: 'text', resId: 'id', lang: 'text' },
+      multiple: true,
+    },
   },
   messages: {
     vi: {

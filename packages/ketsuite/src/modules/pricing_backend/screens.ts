@@ -59,6 +59,7 @@ export const pricelistsScreen = (
         body: recordForm({
           action: localized('/admin/pricelists', locale),
           submit: _('pricing_backend.action.create'),
+          submitVariant: 'primary',
           fields: [
             { name: 'name', label: _('pricing_backend.col.name'), required: true },
             { name: 'sequence', label: _('pricing_backend.col.sequence'), type: 'number', value: 16 },
@@ -90,6 +91,7 @@ export const pricelistDetailScreen = (
           body: recordForm({
             action: localized(`/admin/pricelists/${String(row.id)}`, locale),
             submit: _('pricing_backend.action.save'),
+            submitVariant: 'primary',
             hidden: { action: 'save-pricelist' },
             fields: [
               { name: 'name', label: _('pricing_backend.col.name'), value: String(row.name), required: true },
@@ -157,6 +159,7 @@ export const pricelistDetailScreen = (
           body: recordForm({
             action: localized(`/admin/pricelists/${String(row.id)}`, locale),
             submit: _('pricing_backend.action.add'),
+            submitVariant: 'secondary',
             hidden: { action: 'add-item' },
             fields: [
               {
