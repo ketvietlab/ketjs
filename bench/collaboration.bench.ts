@@ -129,6 +129,11 @@ try {
       markers: ['record-workspace', 'mail.chatter', 'activity.record'],
     },
     {
+      label: 'Accounting overview',
+      path: '/admin/accounting?lang=vi',
+      markers: ['record-workspace', 'Nghiệp vụ hằng ngày', 'Báo cáo tài chính'],
+    },
+    {
       label: 'Accounting customer invoices',
       path: '/admin/customer-invoices?lang=vi',
       markers: ['record-workspace', 'customer-invoice-create-form', 'invoice-collab'],
