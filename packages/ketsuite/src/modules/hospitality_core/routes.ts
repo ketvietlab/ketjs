@@ -15,8 +15,10 @@ import {
   frontDeskScreen,
   housekeepingRoomDetailScreen,
   housekeepingRoomsScreen,
+  newPropertyScreen,
   policiesScreen,
   propertiesScreen,
+  propertyDetailScreen,
   ratePlansScreen,
   reservationDetailScreen,
   reservationsScreen,
@@ -37,6 +39,8 @@ import type {
   CleaningTaskRow,
   FolioRow,
   PolicyRow,
+  PropertyDetail,
+  PropertyFormValues,
   PropertyRow,
   RatePlanRow,
   InventoryRow,
@@ -434,6 +438,93 @@ const contentImages = async (
     url,
     req,
   )) as ContentImageRow[]
+}
+
+const defaultPropertyValues = (id: string): PropertyFormValues => ({
+  id,
+  code: '',
+  name: '',
+  publicName: null,
+  accommodationType: 'hotel',
+  timezone: 'Asia/Ho_Chi_Minh',
+  defaultCheckIn: '14:00',
+  defaultCheckOut: '12:00',
+  enforceTimes: true,
+  longStayBillOnCheckIn: true,
+  starRating: 0,
+  description: null,
+  houseRules: null,
+  childrenStayFree: false,
+  minimumGuestAge: null,
+  defaultCancellationPolicyId: null,
+})
+
+const propertyFormValues = (
+  id: string,
+  form: Record<string, string>,
+  current: PropertyDetail | null = null,
+): PropertyFormValues => ({
+  id,
+  code: form.code?.trim() ?? current?.code ?? '',
+  name: form.name?.trim() ?? current?.name ?? '',
+  publicName: form.publicName?.trim() || null,
+  accommodationType: form.accommodationType?.trim() ?? current?.accommodationType ?? 'hotel',
+  timezone: form.timezone?.trim() ?? current?.timezone ?? 'Asia/Ho_Chi_Minh',
+  defaultCheckIn: form.defaultCheckIn?.trim() ?? current?.defaultCheckIn ?? '14:00',
+  defaultCheckOut: form.defaultCheckOut?.trim() ?? current?.defaultCheckOut ?? '12:00',
+  enforceTimes: form.enforceTimes === '1',
+  longStayBillOnCheckIn: form.longStayBillOnCheckIn === '1',
+  starRating: integer(form.starRating, current?.starRating ?? 0),
+  description: form.description?.trim() || null,
+  houseRules: form.houseRules?.trim() || null,
+  childrenStayFree: form.childrenStayFree === '1',
+  minimumGuestAge: form.minimumGuestAge ? integer(form.minimumGuestAge) : null,
+  defaultCancellationPolicyId: form.defaultCancellationPolicyId?.trim() || null,
+})
+
+const propertySaveInput = (values: PropertyFormValues, current: PropertyDetail | null = null) => ({
+  ...values,
+  street1: current?.street1 ?? null,
+  street2: current?.street2 ?? null,
+  locality: current?.locality ?? null,
+  postalCode: current?.postalCode ?? null,
+  countryCode: current?.countryCode ?? null,
+  divisionId: current?.divisionId ?? null,
+  divisionText: current?.divisionText ?? null,
+  latitude: current?.latitude ?? null,
+  longitude: current?.longitude ?? null,
+})
+
+const renderPropertyDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+  attempted?: PropertyFormValues,
+) => {
+  const [property, policies] = (await Promise.all([
+    ctx.call('hospitality_core.getProperty', { id }, url, req),
+    ctx.call('hospitality_core.listCancellationPolicies', {}, url, req),
+  ])) as [PropertyDetail | null, PolicyRow[]]
+  if (!property) return text('Not found', { status: 404 })
+  const lang = ctx.localeOf(url, req)
+  return document(
+    ctx,
+    url,
+    req,
+    property.name,
+    propertyDetailScreen(
+      ctx.translate(lang),
+      property,
+      policies,
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+      attempted,
+    ),
+  )
 }
 
 export const routes: Record<string, RouteEntry> = {
@@ -884,6 +975,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/properties':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
@@ -900,9 +992,85 @@ export const routes: Record<string, RouteEntry> = {
             available: properties.reduce((sum, property) => sum + property.availableRooms, 0),
             attention: properties.reduce((sum, property) => sum + property.attentionRooms, 0),
           },
+          lang,
           await frame(ctx, url, req),
         ),
       )
+    },
+
+  '/admin/hospitality/properties/new':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const policies = (await ctx.call(
+        'hospitality_core.listCancellationPolicies',
+        {},
+        url,
+        req,
+      )) as PolicyRow[]
+      if (req.method === 'GET') {
+        const values = defaultPropertyValues(randomUUID())
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.property.create.title'),
+          newPropertyScreen(_, values, policies, lang, await frame(ctx, url, req)),
+        )
+      }
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const values = propertyFormValues(randomUUID(), form)
+      const result = (await ctx.call(
+        'hospitality_core.saveProperty',
+        propertySaveInput(values),
+        url,
+        req,
+      )) as OperationResult
+      if (!result.ok)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.property.create.title'),
+          newPropertyScreen(
+            _,
+            values,
+            policies,
+            lang,
+            await frame(ctx, url, req),
+            operationErrors(ctx, url, req, result),
+          ),
+        )
+      const query = new URLSearchParams({ status: 'created', lang })
+      return seeOther(`/admin/hospitality/properties/${encodeURIComponent(values.id)}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/properties/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderPropertyDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const current = (await ctx.call(
+        'hospitality_core.getProperty',
+        { id: params.id },
+        url,
+        req,
+      )) as PropertyDetail | null
+      if (!current) return text('Not found', { status: 404 })
+      const form = await readForm(req)
+      const values = propertyFormValues(params.id, form, current)
+      const result = (await ctx.call(
+        'hospitality_core.saveProperty',
+        propertySaveInput(values, current),
+        url,
+        req,
+      )) as OperationResult
+      if (!result.ok)
+        return renderPropertyDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
+      const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/rooms':
