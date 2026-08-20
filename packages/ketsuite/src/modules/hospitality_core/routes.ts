@@ -23,6 +23,7 @@ import {
   tapeChartScreen,
   contentScreen,
   servicesScreen,
+  nightAuditScreen,
 } from './screens.ts'
 import type {
   AmenityRow,
@@ -42,6 +43,8 @@ import type {
   PropertyChargeRow,
   ServiceChargeRow,
   ServiceProductRow,
+  NightAuditPreview,
+  NightAuditRow,
 } from './screens.ts'
 import { addCalendarDays, calendarRange, dateKeyIn } from './calendar.ts'
 
@@ -93,7 +96,7 @@ const selectedProperty = async (
 
 const redirected = (
   url: URL,
-  state: 'saved' | 'invalid',
+  state: 'saved' | 'queued' | 'invalid',
   values: Record<string, string | undefined> = {},
 ) => {
   const params = new URLSearchParams(url.searchParams)
@@ -640,6 +643,57 @@ export const routes: Record<string, RouteEntry> = {
           },
           lang,
           timezone,
+          await frame(ctx, url, req),
+          url.searchParams.get('status'),
+        ),
+      )
+    },
+
+  '/admin/hospitality/night-audit':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'request-night-audit') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.requestNightAudit',
+          { propertyId: form.propertyId ?? '', auditDate: form.auditDate ?? '' },
+          url,
+          req,
+        )) as { ok?: boolean }
+        return redirected(url, result.ok ? 'queued' : 'invalid', {
+          property: form.propertyId,
+          auditDate: form.auditDate,
+        })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
+      const timezone = await propertyTimezone(ctx, propertyId, url, req)
+      const today = dateKeyIn(new Date(), timezone)
+      const requestedDate = url.searchParams.get('auditDate')?.trim()
+      const auditDate =
+        /^\d{4}-\d{2}-\d{2}$/u.test(requestedDate ?? '') && requestedDate! <= today ? requestedDate! : today
+      const [preview, runs] = propertyId
+        ? ((await Promise.all([
+            ctx.call('hospitality_core.previewNightAudit', { propertyId, auditDate }, url, req),
+            ctx.call('hospitality_core.listNightAudits', { propertyId, limit: 30 }, url, req),
+          ])) as [NightAuditPreview, NightAuditRow[]])
+        : [undefined, []]
+      return document(
+        ctx,
+        url,
+        req,
+        _('hospitality_core.screen.nightAudit.title'),
+        nightAuditScreen(
+          _,
+          { properties, propertyId, auditDate, today, preview, runs },
+          lang,
           await frame(ctx, url, req),
           url.searchParams.get('status'),
         ),

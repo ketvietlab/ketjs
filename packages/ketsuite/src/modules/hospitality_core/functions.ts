@@ -162,6 +162,7 @@ const writable = (name: string): string[] =>
       'defaultCheckIn',
       'defaultCheckOut',
       'enforceTimes',
+      'longStayBillOnCheckIn',
       'starRating',
       'street1',
       'street2',
@@ -349,6 +350,7 @@ export const functions: Record<string, FnSpec> = {
       defaultCheckIn: 'text?',
       defaultCheckOut: 'text?',
       enforceTimes: 'bool?',
+      longStayBillOnCheckIn: 'bool?',
       starRating: 'int?',
       street: 'text?',
       street1: 'text?',
@@ -435,6 +437,7 @@ export const functions: Record<string, FnSpec> = {
       return ctx.tx(async (tx) => {
         const result = await save(tx, 'hospitality_core.Property', args, writable('Property'), {
           enforceTimes: true,
+          longStayBillOnCheckIn: true,
           childrenStayFree: false,
           active: true,
         })

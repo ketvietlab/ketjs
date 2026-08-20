@@ -216,6 +216,18 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     { ok: true, state: 'checked_in', roomId: '101' },
   )
 
+  const auditQueued = await e2e.client.post(
+    '/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20',
+    new URLSearchParams({
+      operation: 'request-night-audit',
+      propertyId: 'hotel',
+      auditDate: '2026-08-20',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(auditQueued.status, 303, await auditQueued.clone().text())
+  assert.match(auditQueued.headers.get('location') ?? '', /status=queued/)
+
   const screens = [
     ['/admin/hospitality/front-desk?lang=vi&date=2026-08-20', 'Bàn lễ tân'],
     ['/admin/hospitality/tape-chart?lang=vi&from=2026-08-20', 'Lịch phòng'],
@@ -231,6 +243,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ],
     ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
     ['/admin/hospitality/services?lang=vi&property=hotel', 'Dịch vụ &amp; phụ phí'],
+    ['/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20', 'Chốt ngày vận hành'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
       'Tồn kho &amp; hạn chế bán',
@@ -259,6 +272,13 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const englishServicesHtml = await englishServices.text()
   assert.match(englishServicesHtml, /Services &amp; fees/)
   assert.doesNotMatch(englishServicesHtml, /hospitality_core\./)
+  const englishAudit = await e2e.client.get(
+    '/admin/hospitality/night-audit?lang=en&property=hotel&auditDate=2026-08-20',
+  )
+  assert.equal(englishAudit.status, 200)
+  const englishAuditHtml = await englishAudit.text()
+  assert.match(englishAuditHtml, /Night audit/)
+  assert.doesNotMatch(englishAuditHtml, /hospitality_core\./)
 
   await e2e.fixture.withTenant('', async ({ adapter }) => {
     const stays = await adapter.all('SELECT state, "currentRoomId" FROM hospitality_core_stay WHERE id = ?', [
