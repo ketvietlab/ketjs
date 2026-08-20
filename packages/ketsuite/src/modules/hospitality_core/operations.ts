@@ -801,6 +801,7 @@ export const operations: Record<string, FnSpec> = {
       'write:hospitality_core.Room',
       'write:hospitality_core.Stay',
       'write:hospitality_core.RoomAssignment',
+      'write:hospitality_core.CleaningTask',
     ],
     idempotent: true,
     agent: true,
@@ -847,6 +848,18 @@ export const operations: Record<string, FnSpec> = {
             { state: 'closed', endAt: at.toISOString() },
           )
           await tx.db.update('hospitality_core.Room', { id: stay.currentRoomId }, { status: 'dirty' })
+          await tx.db.insert('hospitality_core.CleaningTask', {
+            id: `move:${String(current.id)}:clean`,
+            code: `HK-${String(stay.code)}-MOVE`,
+            propertyId: stay.propertyId,
+            roomId: stay.currentRoomId,
+            stayId: stay.id,
+            taskType: 'daily_clean',
+            priority: 'normal',
+            state: 'todo',
+            requestedAt: at.toISOString(),
+            notes: args.reason,
+          })
           await tx.db.insert('hospitality_core.RoomAssignment', {
             id: args.assignmentId,
             stayId: stay.id,

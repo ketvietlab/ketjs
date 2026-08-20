@@ -35,6 +35,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     companyId: 'default',
   })
   await seed('partner.savePartner', { id: 'guest', kind: 'person', name: 'Nguyễn An' })
+  await seed('partner.savePartner', { id: 'companion', kind: 'person', name: 'Trần Bình' })
   await seed('uom.saveUnit', { id: 'service-unit', name: 'Lần', relativeFactor: '1' })
   await seed('product.saveTemplate', {
     id: 'breakfast-template',
@@ -73,6 +74,23 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     roomTypeId: 'deluxe',
     code: '101',
     name: 'Phòng 101',
+  })
+  await seed('hospitality_core.saveRoom', {
+    id: '102',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    code: '102',
+    name: 'Phòng 102',
+  })
+  await seed('hospitality_core.saveRoom', {
+    id: 'archived-room',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    code: '199',
+    name: 'Phòng đã lưu trữ',
+  })
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    await adapter.run('UPDATE hospitality_core_room SET active = ? WHERE id = ?', [false, 'archived-room'])
   })
 
   await e2e.client.login({ login: 'admin', password: 'hospitality-e2e' })
@@ -332,6 +350,44 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(checkedInHtml, /Đã nhận phòng/)
   assert.match(checkedInHtml, /Trả phòng/)
   assert.doesNotMatch(checkedInHtml, /hospitality_core\./)
+
+  const stayDetailEn = await e2e.client.get('/admin/hospitality/stays/booking-1%3Astay?lang=en')
+  assert.equal(stayDetailEn.status, 200)
+  const stayDetailEnHtml = await stayDetailEn.text()
+  assert.match(stayDetailEnHtml, /Room assignment history/)
+  assert.match(stayDetailEnHtml, /Add staying guest/)
+  assert.doesNotMatch(stayDetailEnHtml, /Phòng đã lưu trữ/)
+  assert.doesNotMatch(stayDetailEnHtml, /hospitality_core\./)
+  const guestAdded = await e2e.client.post(
+    '/admin/hospitality/stays/booking-1%3Astay?lang=vi',
+    new URLSearchParams({
+      operation: 'add-guest',
+      lang: 'vi',
+      displayName: 'Trần Bình',
+      partnerId: 'companion',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(guestAdded.status, 303, await guestAdded.clone().text())
+  assert.match(guestAdded.headers.get('location') ?? '', /status=guest-added/)
+  const roomMoved = await e2e.client.post(
+    '/admin/hospitality/stays/booking-1%3Astay?lang=vi',
+    new URLSearchParams({
+      operation: 'move-room',
+      lang: 'vi',
+      roomId: '102',
+      reason: 'Khách cần phòng yên tĩnh hơn',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(roomMoved.status, 303, await roomMoved.clone().text())
+  assert.match(roomMoved.headers.get('location') ?? '', /status=room-moved/)
+  const movedPage = await e2e.client.get(roomMoved.headers.get('location')!)
+  const movedHtml = await movedPage.text()
+  assert.match(movedHtml, /Đã chuyển phòng/)
+  assert.match(movedHtml, /Trần Bình/)
+  assert.match(movedHtml, /Phòng 102/)
+  assert.doesNotMatch(movedHtml, /hospitality_core\./)
   assert.equal(await e2e.drainJobs(), 1)
 
   const stayNotice = await e2e.client.get(
@@ -450,7 +506,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     const stays = await adapter.all('SELECT state, "currentRoomId" FROM hospitality_core_stay WHERE id = ?', [
       'booking-1:stay',
     ])
-    assert.deepEqual({ ...stays[0] }, { state: 'checked_in', currentRoomId: '101' })
+    assert.deepEqual({ ...stays[0] }, { state: 'checked_in', currentRoomId: '102' })
     const notices = await adapter.all(
       'SELECT state, "packageHash", "submittedBy", "confirmedBy", "receiptRef" FROM hospitality_core_stay_notice WHERE id = ?',
       ['booking-1:stay:notice:booking-1:guest'],
@@ -487,9 +543,26 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
 
   await e2e.fixture.withTenant('', async ({ adapter }) => {
     const tasks = await adapter.all(
-      'SELECT state, priority, "roomId" FROM hospitality_core_cleaning_task WHERE id = ?',
-      ['checkout:booking-1:stay'],
+      'SELECT id, state, priority, "roomId", "taskType" FROM hospitality_core_cleaning_task ORDER BY id',
     )
-    assert.deepEqual({ ...tasks[0] }, { state: 'todo', priority: 'urgent', roomId: '101' })
+    assert.deepEqual(
+      tasks.map((task) => ({ ...task })),
+      [
+        {
+          id: 'checkout:booking-1:stay',
+          state: 'todo',
+          priority: 'urgent',
+          roomId: '102',
+          taskType: 'checkout_clean',
+        },
+        {
+          id: 'move:booking-1:stay:assignment:1:clean',
+          state: 'todo',
+          priority: 'normal',
+          roomId: '101',
+          taskType: 'daily_clean',
+        },
+      ],
+    )
   })
 })
