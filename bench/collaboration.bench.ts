@@ -164,6 +164,11 @@ try {
       markers: ['record-workspace', 'payment-term-create-form', 'payment-term-line-form', '30 ngày'],
     },
     {
+      label: 'Accounting trial balance',
+      path: '/admin/trial-balance?lang=vi',
+      markers: ['record-workspace', 'trial-balance-filter-form', 'Tổng Nợ'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
