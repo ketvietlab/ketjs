@@ -1576,3 +1576,31 @@ the explicit development loader.
 workspace and calling `composeWorkspace`. Composition, migrations, HTTP and workers
 continue to know only `KetModule[]`. Module location therefore cannot become a
 second registration mechanism or leak into business runtime code.
+
+## D51 — Hospitality is two business modules, and language is not business data
+
+The fourteen `vidoo_hospitality*` Odoo addons are a packaging history, not fourteen
+bounded contexts. KetSuite consolidates property, content, rooms, reservations,
+inventory restrictions, housekeeping, services and Vietnamese lodging operations
+under `hospitality_core`; provider-neutral channel work and provider adapters live
+under `hospitality_ota`. The public names carry no `vidoo_` prefix. Accounting and
+legal e-invoicing remain outside both modules until their own contracts exist.
+
+Operational codes are stable data. `available`, `out_of_order`, `hotel`,
+`non_refundable` and their peers are stored and exchanged; labels are resolved by
+the module catalogue. Every visible key and validation code ships in Vietnamese
+and English from its first PR. Business names and authored descriptions remain the
+user's data and are not copied into message catalogues.
+
+A property is company-scoped and is itself the operational accommodation boundary.
+Buildings, floors, room types and rooms repeat `propertyId` deliberately so every
+write can prove the full structure belongs to one property before committing. The
+database indexes enforce company and property uniqueness; APIs return translated
+message keys for validation failures rather than embedding one locale in business
+logic.
+
+Hospitality screens are owned by the same module as their functions because the
+agreed deployment has only two hospitality modules. They still compose the shared
+KetSuite UI kit and write no private markup. Media remains `storage.Attachment`
+metadata plus the storage backend; hospitality does not invent another binary
+table or object-key convention.

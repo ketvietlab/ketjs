@@ -40,6 +40,7 @@ export const ketsuite = defineApp({
     suite.saleBackend,
     suite.posBackend,
     backend,
+    suite.hospitalityCore,
   ],
   theme: suite.paperTheme,
   datastore: 'main',
@@ -63,6 +64,7 @@ export const ketsuite = defineApp({
       'pos',
       'user',
       'storage',
+      'hospitality_core',
     ],
     /**
      * Identity comes from a signed cookie now, not from X-Ket-Company. The store

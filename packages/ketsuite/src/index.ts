@@ -49,6 +49,23 @@ export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './mo
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as storage } from './modules/storage/index.ts'
+export { default as hospitalityCore } from './modules/hospitality_core/index.ts'
+export {
+  ACCOMMODATION_TYPES,
+  AMENITY_SCOPES,
+  BED_TYPES,
+  CANCELLATION_POLICY_TYPES,
+  CONTACT_TYPES,
+  ROOM_STATUSES,
+} from './modules/hospitality_core/types.ts'
+export type {
+  AccommodationType,
+  AmenityScope,
+  BedType,
+  CancellationPolicyType,
+  ContactType,
+  RoomStatus,
+} from './modules/hospitality_core/types.ts'
 export { default as user } from './modules/user/index.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
 export { permittedFor } from './modules/user/roles.ts'
