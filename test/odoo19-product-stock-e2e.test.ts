@@ -622,6 +622,39 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     true,
   )
 
+  const routesPage = await e2e.client.get('/admin/stock-routes?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const routesHtml = await routesPage.text()
+  assert.equal(routesPage.status, 200)
+  assert.match(routesHtml, /data-ui="record-workspace"/)
+  assert.match(routesHtml, /id="stock-route-create-form"/)
+  assert.match(routesHtml, /data-scope="stock-route-create"/)
+  assert.match(routesHtml, /Tuyến cung ứng đã cấu hình/)
+  assert.match(routesHtml, /Kho chính: Nhận hàng trực tiếp/)
+  assert.doesNotMatch(routesHtml, /one_step|ship_only/)
+  assert.match(routesHtml, />Quy tắc</)
+  assert.doesNotMatch(routesHtml, /data-island="mail\.chatter"/)
+
+  const createdRoutePage = await e2e.client.form<string>('/admin/stock-routes?lang=vi', {
+    name: 'Tuyến HTTP hai bước',
+    sequence: '15',
+  })
+  assert.match(createdRoutePage, /Quy tắc tuyến cung ứng/)
+  assert.equal(
+    (await call<Row[]>('stock.listRoutes', {})).value.some(
+      (row) => row.name === 'Tuyến HTTP hai bước' && row.sequence === 15,
+    ),
+    true,
+  )
+  assert.match(await (await e2e.client.get('/admin/stock-routes?lang=vi')).text(), /Tuyến HTTP hai bước/)
+
+  const invalidRoutePage = await e2e.client.form<string>('/admin/stock-routes?lang=vi', {
+    name: '',
+    sequence: '10',
+  })
+  assert.match(invalidRoutePage, /Dữ liệu chưa hợp lệ/)
+
   await call('stock.createLot', {
     id: 'lot-list-http',
     productId: 'p1',
