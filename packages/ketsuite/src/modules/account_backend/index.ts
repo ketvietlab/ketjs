@@ -19,6 +19,7 @@ import {
 import { accountingDashboard, movesScreen, optionsOf, reportScreen } from './screens.ts'
 import { accountsScreen } from './accounts-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
+import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
@@ -955,11 +956,11 @@ export default defineModule({
         )) as AnyRow[]
         return document(ctx, url, req, 'account_backend.generalLedger.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.generalLedger.title'),
+          return generalLedgerScreen(tr, {
             frame: shell,
-            action: '/admin/general-ledger',
+            action: `/admin/general-ledger${localeSuffix(url)}`,
             rows,
+            currency,
             fields: [
               {
                 name: 'accountId',
@@ -975,34 +976,6 @@ export default defineModule({
                 value: dateFrom,
               },
               { name: 'dateTo', label: tr('account_backend.field.dateTo'), type: 'date', value: dateTo },
-            ],
-            columns: [
-              {
-                key: 'date',
-                label: tr('account_backend.field.date'),
-                cell: (row) => String((row.move as AnyRow)?.date ?? '').slice(0, 10),
-                priority: 'primary',
-              },
-              {
-                key: 'entry',
-                label: tr('account_backend.field.entry'),
-                cell: (row) => String((row.move as AnyRow)?.name ?? ''),
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
             ],
           })
         })
@@ -1208,6 +1181,17 @@ const vi: Record<string, string> = {
   'trial.empty': 'Không có số liệu trong kỳ',
   'trial.emptyHint': 'Thay đổi khoảng ngày hoặc ghi sổ các bút toán trước khi tính lại.',
   'generalLedger.title': 'Sổ cái',
+  'ledger.kicker': 'Chi tiết sổ cái',
+  'ledger.subtitle': 'Theo dõi phát sinh Nợ và Có của từng tài khoản theo kỳ.',
+  'ledger.summary.lines': 'Dòng bút toán',
+  'ledger.summary.debit': 'Tổng Nợ',
+  'ledger.summary.credit': 'Tổng Có',
+  'ledger.filter.title': 'Bộ lọc sổ cái',
+  'ledger.filter.hint': 'Chọn một tài khoản hoặc để trống để xem toàn bộ dòng đã ghi sổ.',
+  'ledger.result.title': 'Chi tiết phát sinh',
+  'ledger.result.hint': 'Mỗi dòng liên kết phát sinh với bút toán và ngày ghi sổ.',
+  'ledger.empty': 'Không có phát sinh phù hợp',
+  'ledger.emptyHint': 'Thay đổi tài khoản hoặc khoảng ngày để xem dữ liệu khác.',
   'partnerStatement.title': 'Sổ đối tác',
   'lines.title': 'Dòng bút toán',
   'lines.add': 'Thêm dòng bút toán',
@@ -1418,6 +1402,17 @@ const en: Record<string, string> = {
   'trial.empty': 'No figures for this period',
   'trial.emptyHint': 'Change the dates or post journal entries before recalculating.',
   'generalLedger.title': 'General ledger',
+  'ledger.kicker': 'Ledger detail',
+  'ledger.subtitle': 'Track debit and credit movements by account and period.',
+  'ledger.summary.lines': 'Journal items',
+  'ledger.summary.debit': 'Total debit',
+  'ledger.summary.credit': 'Total credit',
+  'ledger.filter.title': 'Ledger filters',
+  'ledger.filter.hint': 'Choose an account or leave it blank to show all posted journal items.',
+  'ledger.result.title': 'Account movements',
+  'ledger.result.hint': 'Each item relates the movement to its journal entry and posting date.',
+  'ledger.empty': 'No matching movements',
+  'ledger.emptyHint': 'Change the account or date range to view other data.',
   'partnerStatement.title': 'Partner ledger',
   'lines.title': 'Journal items',
   'lines.add': 'Add journal item',
