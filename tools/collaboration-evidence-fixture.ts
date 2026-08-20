@@ -211,6 +211,35 @@ export async function collaborationEvidenceApp(
       lineAccountId: 'account-expense-collab',
       counterpartAccountId: 'account-payable-collab',
     })
+    await call('account.saveJournal', {
+      id: 'account-general-collab',
+      name: 'Nghiệp vụ chung',
+      code: 'MISC',
+      type: 'general',
+    })
+    await call('account.createMove', {
+      id: 'journal-entry-collab',
+      journalId: 'account-general-collab',
+      moveType: 'entry',
+      date: '2026-08-20T00:00:00.000Z',
+      ref: 'MISC/COLLAB/2026',
+    })
+    await call('account.addMoveLine', {
+      id: 'journal-entry-collab-debit',
+      moveId: 'journal-entry-collab',
+      name: 'Chi phí vận hành',
+      accountId: 'account-expense-collab',
+      debit: '1800000',
+      credit: '0',
+    })
+    await call('account.addMoveLine', {
+      id: 'journal-entry-collab-credit',
+      moveId: 'journal-entry-collab',
+      name: 'Phải trả nhà cung cấp',
+      accountId: 'account-payable-collab',
+      debit: '0',
+      credit: '1800000',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',

@@ -25,6 +25,7 @@ import {
   reportScreen,
 } from './screens.ts'
 import { moveDetailScreen } from './move-detail-screen.tsx'
+import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -824,7 +825,7 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/journal-entries',
+            `/admin/journal-entries${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -836,12 +837,14 @@ export default defineModule({
           req,
         )) as AnyRow[]
         return document(ctx, url, req, 'account_backend.entries.title', (_, tr, shell) =>
-          movesScreen(tr, {
-            title: tr('account_backend.entries.title'),
+          journalEntriesScreen(tr, {
             frame: shell,
-            action: '/admin/journal-entries',
+            action: `/admin/journal-entries${localeSuffix(url)}`,
             fields: moveFields(tr, data, ['entry']),
             rows,
+            locale: localeSuffix(url),
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
         )
       },
@@ -1255,6 +1258,17 @@ const vi: Record<string, string> = {
   'taxes.title': 'Thuế',
   'terms.title': 'Điều khoản thanh toán',
   'entries.title': 'Bút toán',
+  'entry.kicker': 'Sổ cái',
+  'entry.subtitle': 'Ghi nhận và kiểm soát các bút toán kế toán thủ công.',
+  'entry.summary.total': 'Tổng bút toán',
+  'entry.summary.draft': 'Bản nháp',
+  'entry.summary.posted': 'Đã ghi sổ',
+  'entry.create.title': 'Tạo bút toán',
+  'entry.create.hint': 'Chọn sổ nhật ký, ngày và tham chiếu trước khi thêm các dòng Nợ/Có.',
+  'entry.list.title': 'Bút toán hiện có',
+  'entry.list.hint': 'Mở bút toán để thêm dòng, kiểm tra cân đối và ghi sổ.',
+  'entry.empty': 'Chưa có bút toán',
+  'entry.emptyHint': 'Tạo bút toán đầu tiên để bắt đầu ghi nhận vào sổ cái.',
   'customerInvoices.title': 'Hoá đơn khách hàng',
   'vendorBills.title': 'Hoá đơn nhà cung cấp',
   'vendorBill.kicker': 'Công nợ nhà cung cấp',
@@ -1381,6 +1395,17 @@ const en: Record<string, string> = {
   'taxes.title': 'Taxes',
   'terms.title': 'Payment terms',
   'entries.title': 'Journal entries',
+  'entry.kicker': 'General ledger',
+  'entry.subtitle': 'Record and control manual accounting journal entries.',
+  'entry.summary.total': 'Total entries',
+  'entry.summary.draft': 'Draft',
+  'entry.summary.posted': 'Posted',
+  'entry.create.title': 'Create a journal entry',
+  'entry.create.hint': 'Choose the journal, date, and reference before adding debit and credit lines.',
+  'entry.list.title': 'Current journal entries',
+  'entry.list.hint': 'Open an entry to add lines, review balance, and post it.',
+  'entry.empty': 'No journal entries yet',
+  'entry.emptyHint': 'Create the first entry to start recording in the general ledger.',
   'customerInvoices.title': 'Customer invoices',
   'vendorBills.title': 'Vendor bills',
   'vendorBill.kicker': 'Vendor payable',
