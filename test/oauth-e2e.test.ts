@@ -163,11 +163,19 @@ test('oauth HTTP E2E: login page, cross-origin provider, PKCE callback and live 
   const hostileBody = await hostileLogin.text()
   assert.doesNotMatch(hostileBody, /attacker\.example/)
   assert.match(hostileBody, /next=%2Fadmin/)
+  const controlCharacterLogin = await browser.get('/login?next=%2Fwhoami%0ASet-Cookie&lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await controlCharacterLogin.text(), /next=%2Fadmin/)
 
   const hostileStart = await browser.get('/auth/oauth/fake/start?next=%2F%5Cattacker.example', {
     headers: { accept: 'text/html' },
   })
   assert.equal(hostileStart.status, 303)
+  const controlCharacterStart = await browser.get('/auth/oauth/fake/start?next=%2Fwhoami%0ASet-Cookie', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(controlCharacterStart.status, 303)
   assert.equal(
     (await e2e.adapter!.all('SELECT "returnTo" FROM oauth_transaction', [])).every(
       (row) => row.returnTo === '/admin',
@@ -209,7 +217,7 @@ test('oauth HTTP E2E: login page, cross-origin provider, PKCE callback and live 
   const rows = await e2e.adapter!.all('SELECT * FROM oauth_external_identity', [])
   assert.equal(rows.length, 1)
   assert.equal(rows[0]!.subject, 'fake-subject-42')
-  assert.equal((await e2e.adapter!.all('SELECT * FROM oauth_transaction', [])).length, 1)
+  assert.equal((await e2e.adapter!.all('SELECT * FROM oauth_transaction', [])).length, 2)
 
   const replay = await browser.get(callback, {
     headers: { accept: 'text/html' },
