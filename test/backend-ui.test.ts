@@ -20,6 +20,7 @@ import {
   contentCard,
   countBadge,
   dataTable,
+  datePicker,
   emptyState,
   errorState,
   formCluster,
@@ -174,6 +175,18 @@ const componentContract = [
     card: () => contentCard({ title: 'Grid card' }),
   }),
   metric({ label: 'Orders', value: '42', detail: 'Today' }),
+  datePicker({
+    action: '/calendar',
+    label: 'Stay dates',
+    submit: 'Apply',
+    clearHref: '/calendar',
+    clearLabel: 'Clear',
+    hidden: { property: 'hotel-1' },
+    fields: [
+      { name: 'from', label: 'From', value: '2026-08-20', required: true, help: 'Property timezone' },
+      { name: 'to', label: 'To', value: '2026-08-18', error: 'Must be after from' },
+    ],
+  }),
   recordForm({
     action: '/records',
     submit: 'Save',
@@ -509,6 +522,42 @@ test('islands: every business button declares the shared action role and hierarc
       assert.match(match[0], /data-variant="(?:primary|secondary|tertiary|destructive)"/)
     }
   }
+})
+
+test('date picker: range remains a native, accessible and URL-driven form', () => {
+  const html = renderToString(
+    datePicker({
+      action: '/calendar',
+      label: 'Stay dates',
+      submit: 'Apply',
+      clearHref: '/calendar',
+      clearLabel: 'Clear',
+      hidden: { property: 'hotel-1' },
+      fields: [
+        { name: 'from', label: 'From', value: '2026-08-20', min: '2026-01-01', required: true },
+        { name: 'to', label: 'To', value: '2026-08-18', error: 'Must be after from' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="date-picker" method="get" action="\/calendar" data-range="true"/)
+  assert.match(html, /type="hidden" name="property" value="hotel-1"/)
+  assert.match(html, /type="date" name="from" value="2026-08-20" min="2026-01-01"/)
+  assert.match(html, /aria-invalid="true" aria-describedby="date-picker--calendar-to-error"/)
+  assert.match(html, /data-ui="date-picker-error" id="date-picker--calendar-to-error"/)
+  assert.match(html, /href="\/calendar"/)
+
+  const single = renderToString(
+    datePicker({
+      action: '/day',
+      label: 'Business date',
+      submit: 'Open',
+      method: 'post',
+      fields: [{ name: 'date', label: 'Date', disabled: true }],
+    }),
+  )
+  assert.match(single, /method="post" action="\/day" data-range="false"/)
+  assert.match(single, /type="date" name="date" value="" disabled/)
+  assert.doesNotMatch(single, /href=/)
 })
 
 test('media: primary state has a label and image actions keep accessible icon controls', () => {
