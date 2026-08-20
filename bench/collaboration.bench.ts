@@ -65,6 +65,11 @@ try {
       markers: ['picking-type-create-form', 'record-workspace', 'Loại hoạt động đã cấu hình'],
     },
     {
+      label: 'Lot list',
+      path: '/admin/lots?lang=vi',
+      markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
+    },
+    {
       label: 'Lot collaboration',
       path: '/admin/lots/lot-collab?lang=vi',
       markers: ['lot-detail-form', 'mail.chatter', 'activity.record', 'record-workspace'],

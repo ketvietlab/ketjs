@@ -201,11 +201,13 @@ const capture = async (cdp: Cdp, path: string): Promise<void> => {
 const e2e = await collaborationEvidenceApp()
 let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/assets/odoo-collaboration')
+const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
 try {
   await mkdir(artifactDir, { recursive: true })
+  await mkdir(lotEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -277,6 +279,11 @@ try {
       name: 'operation-type-list',
       path: '/admin/picking-types?lang=vi',
       ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'lot-list',
+      path: '/admin/lots?lang=vi',
+      ready: `document.querySelector('#lot-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-detail-chatter',
@@ -980,6 +987,115 @@ try {
         false,
       )
     }
+    if (screen.name === 'lot-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            productSelector: document.querySelector('#lot-create-form [name="productId"]')?.tagName === 'SELECT',
+            productLabel: document.querySelector('#lot-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
+            onHand: document.querySelector('[data-ui="table"]')?.textContent.includes('12'),
+            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/lots/lot-collab"]')),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          productSelector: true,
+          productLabel: true,
+          onHand: true,
+          detailLink: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#lot-create-form')
+          form.querySelector('[name="productId"]').value = 'variant-collab'
+          form.querySelector('[name="name"]').value = 'LOT/BROWSER/0085'
+          form.querySelector('[name="ref"]').value = 'BROWSER-REF-85'
+          form.querySelector('[name="note"]').value = 'Được tạo qua trình duyệt headless.'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]')?.textContent.includes('LOT/BROWSER/0085')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.body.textContent.includes('Configured lots and serial numbers')`),
+        true,
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            productSelectorVisible: document.querySelector('#lot-create-form [name="productId"]')?.getBoundingClientRect().height >= 28,
+            listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
+          })`,
+        ),
+        {
+          horizontalOverflow: false,
+          formRowsAtLeast28: true,
+          productSelectorVisible: true,
+          listVisible: true,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
     if (screen.name === 'lot-detail-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -1195,7 +1311,7 @@ try {
       )
       await waitFor(cdp, `document.body.textContent.includes('Sự kiện từ Browser E2E')`)
     }
-    if (!noArtifacts) await capture(cdp, join(artifactDir, `${screen.name}.png`))
+    if (!noArtifacts && !onlyScreen) await capture(cdp, join(artifactDir, `${screen.name}.png`))
     if (screen.name === 'lot-detail-chatter')
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
@@ -1205,7 +1321,7 @@ try {
       })
   }
 
-  if (!noArtifacts)
+  if (!noArtifacts && !onlyScreen)
     await writeFile(
       join(artifactDir, 'browser-e2e.json'),
       `${JSON.stringify(
@@ -1220,6 +1336,7 @@ try {
             'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
             'Warehouse configuration rendered Odoo 19 shipment-step radios, created a warehouse and rendered no Chatter',
             'Location configuration rendered complete names, created a child location and rendered no Chatter',
+            'Lot list rendered human product labels and internal-location on-hand quantities, created a lot and rendered no collection-level Chatter',
             'Lot detail kept its collaboration column near one third of the large viewport and at least 32rem wide',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
