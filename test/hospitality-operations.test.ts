@@ -285,6 +285,55 @@ test('hospitality operations: charges are idempotent and guest lists do not expo
       (await adapter.all('SELECT "amountTotal" FROM hospitality_core_folio'))[0]!.amountTotal,
       '225',
     )
+    const tampered = await call(
+      'hospitality_core.voidCharge',
+      { id: 'spa-1', folioId: 'another:folio', reason: 'tampered route scope' },
+      adapter,
+    )
+    assert.equal((tampered.value as Row).ok, false)
+    assert.equal(((tampered.value as Row).errors as Row[])[0]!.code, 'folio_mismatch')
+    assert.equal(
+      (await adapter.all('SELECT state FROM hospitality_core_charge WHERE id = ?', ['spa-1']))[0]!.state,
+      'active',
+    )
+    const voided = await call(
+      'hospitality_core.voidCharge',
+      {
+        id: 'spa-1',
+        folioId: 'r1:folio',
+        reason: 'posted twice',
+        voidedAt: '2026-08-25T10:00:00.000Z',
+      },
+      adapter,
+    )
+    const voidRetry = await call(
+      'hospitality_core.voidCharge',
+      { id: 'spa-1', folioId: 'r1:folio', reason: 'retry must not change evidence' },
+      adapter,
+    )
+    assert.deepEqual(
+      {
+        ok: (voided.value as Row).ok,
+        amount: (voided.value as Row).amount,
+        amountTotal: (voided.value as Row).amountTotal,
+        existing: (voided.value as Row).existing,
+      },
+      { ok: true, amount: 25, amountTotal: '200', existing: false },
+    )
+    assert.equal((voidRetry.value as Row).existing, true)
+    const storedCharge = (
+      await adapter.all('SELECT state, "voidedAt", "voidReason" FROM hospitality_core_charge WHERE id = ?', [
+        'spa-1',
+      ])
+    )[0]!
+    assert.deepEqual(
+      { ...storedCharge },
+      { state: 'void', voidedAt: '2026-08-25T10:00:00.000Z', voidReason: 'posted twice' },
+    )
+    assert.equal(
+      (await adapter.all('SELECT "amountTotal" FROM hospitality_core_folio'))[0]!.amountTotal,
+      '200',
+    )
 
     await call(
       'hospitality_core.addStayGuest',
