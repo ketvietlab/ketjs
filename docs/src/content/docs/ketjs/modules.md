@@ -190,6 +190,7 @@ inventory/
 ├── relations.ts
 ├── functions.ts
 ├── jobs.ts
+├── reports.ts
 ├── menus.ts
 ├── messages.ts
 ├── views.ts

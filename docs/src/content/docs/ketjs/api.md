@@ -12,6 +12,7 @@ details.
 | Entrypoint | Runtime |
 | --- | --- |
 | `ketjs` | Framework composition, server, data, jobs, sessions, integrations, and selected view helpers. |
+| `ketjs/pdf` | Report-safe KTL compilation, constrained markup, HTML preview, fonts, and PDF rendering. |
 | `ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
 | `ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
 | `ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
