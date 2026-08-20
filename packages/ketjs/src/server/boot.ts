@@ -46,7 +46,17 @@ import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 
 export type { Html, RouteResult } from './respond.ts'
-export { page, fragment, text, bytes, streamed, raw, withHeaders } from './respond.ts'
+export {
+  page,
+  fragment,
+  navigablePage,
+  isNavigationRequest,
+  text,
+  bytes,
+  streamed,
+  raw,
+  withHeaders,
+} from './respond.ts'
 export { json } from './respond.ts'
 import type { Html, RouteResult } from './respond.ts'
 export type Route = (
