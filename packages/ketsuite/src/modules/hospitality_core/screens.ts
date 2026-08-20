@@ -49,6 +49,7 @@ export type RoomRow = {
   roomTypeId: string
   capacity: number
   status: string
+  active: boolean
   roomType?: { name?: string } | null
 }
 
@@ -252,17 +253,46 @@ export type StayRow = {
   id: string
   code: string
   folioId: string
+  propertyId: string
+  reservationId?: string | null
   partnerId: string
   roomTypeId: string
   currentRoomId?: string | null
+  bookingType: string
   checkIn: string
   checkOut: string
   adults: number
   children: number
+  billingMode: string
+  rate: string | number
+  nextBillDate?: string | null
   state: string
+  checkedInAt?: string | null
+  checkedOutAt?: string | null
   partner?: { name?: string } | null
   roomType?: { name?: string } | null
   currentRoom?: { name?: string; code?: string } | null
+  reservation?: { id?: string; code?: string } | null
+  assignments?: StayAssignmentRow[]
+  guests?: StayGuestRow[]
+}
+
+export type StayAssignmentRow = {
+  id: string
+  roomId: string
+  roomTypeId: string
+  startAt: string
+  endAt?: string | null
+  state: string
+  reason?: string | null
+  roomName?: string
+}
+
+export type StayGuestRow = {
+  id: string
+  partnerId?: string | null
+  displayName: string
+  primary: boolean
 }
 
 export type FolioRow = {
@@ -2216,7 +2246,18 @@ const reservationColumns = (
 ]
 
 const stayColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayRow>> => [
-  { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
+  {
+    key: 'code',
+    label: _('hospitality_core.col.code'),
+    cell: (row) =>
+      linkButton({
+        label: row.code,
+        href: `/admin/hospitality/stays/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+        variant: 'tertiary',
+        size: 'compact',
+      }),
+    kind: 'identifier',
+  },
   {
     key: 'guest',
     label: _('hospitality_core.col.guest'),
@@ -2799,6 +2840,305 @@ export const reservationDetailScreen = (
             }),
           }),
           ...actions,
+        ]),
+      }),
+    ]),
+  )
+}
+
+const stayAssignmentColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+): Array<Column<StayAssignmentRow>> => [
+  {
+    key: 'room',
+    label: _('hospitality_core.stay.field.room'),
+    cell: (row) => row.roomName ?? code(row.roomId),
+    priority: 'primary',
+  },
+  {
+    key: 'start',
+    label: _('hospitality_core.stay.assignment.start'),
+    cell: (row) => dateTime(row.startAt, locale, timezone),
+    kind: 'date',
+  },
+  {
+    key: 'end',
+    label: _('hospitality_core.stay.assignment.end'),
+    cell: (row) => (row.endAt ? dateTime(row.endAt, locale, timezone) : '—'),
+    kind: 'date',
+  },
+  {
+    key: 'reason',
+    label: _('hospitality_core.stay.field.moveReason'),
+    cell: (row) => row.reason || '—',
+  },
+  {
+    key: 'state',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(_(`hospitality_core.assignmentState.${row.state}`), workflowTone(row.state), row.state),
+    kind: 'status',
+  },
+]
+
+const stayGuestColumns = (_: Translator): Array<Column<StayGuestRow>> => [
+  {
+    key: 'guest',
+    label: _('hospitality_core.col.guest'),
+    cell: (row) => person(row.displayName),
+    kind: 'person',
+    priority: 'primary',
+  },
+  {
+    key: 'role',
+    label: _('hospitality_core.stay.guest.role'),
+    cell: (row) =>
+      badge(
+        row.primary ? _('hospitality_core.stay.guest.primary') : _('hospitality_core.stay.guest.companion'),
+        row.primary ? 'positive' : 'neutral',
+      ),
+    kind: 'status',
+  },
+]
+
+const stayDetailFeedback = (
+  _: Translator,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'guest-added')
+    return notice({
+      title: _('hospitality_core.stay.feedback.guestAdded'),
+      message: _('hospitality_core.stay.feedback.guestAddedHint'),
+      tone: 'positive',
+    })
+  if (status === 'room-moved')
+    return notice({
+      title: _('hospitality_core.stay.feedback.roomMoved'),
+      message: _('hospitality_core.stay.feedback.roomMovedHint'),
+      tone: 'positive',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+export const stayDetailScreen = (
+  _: Translator,
+  stay: StayRow,
+  rooms: RoomRow[],
+  partners: Choice[],
+  locale: string,
+  timezone: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult => {
+  const guest = guestName(stay)
+  const action = `/admin/hospitality/stays/${encodeURIComponent(stay.id)}?lang=${encodeURIComponent(locale)}`
+  const roomNames = new Map(rooms.map((room) => [room.id, `${room.code} · ${room.name}`]))
+  const assignments = (stay.assignments ?? []).map((assignment) => ({
+    ...assignment,
+    roomName: roomNames.get(assignment.roomId) ?? assignment.roomId,
+  }))
+  const guests = stay.guests ?? []
+  const availableRooms = rooms.filter(
+    (room) => room.active && room.status === 'available' && room.id !== stay.currentRoomId,
+  )
+
+  return framed(
+    _,
+    _('hospitality_core.stay.detail.title', { code: stay.code }),
+    frame,
+    stack([
+      stayDetailFeedback(_, status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.stay.detail.kicker'),
+        title: stay.code,
+        subtitle: guest,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(_(`hospitality_core.stayState.${stay.state}`), workflowTone(stay.state), stay.state),
+          badge(_(`hospitality_core.bookingType.${stay.bookingType}`), 'neutral'),
+        ],
+        summary: [
+          {
+            id: 'room',
+            label: _('hospitality_core.stay.field.room'),
+            value:
+              stay.currentRoom?.name ??
+              stay.currentRoom?.code ??
+              _('hospitality_core.reservation.value.unassigned'),
+          },
+          {
+            id: 'guests',
+            label: _('hospitality_core.col.guests'),
+            value: guests.length,
+          },
+          {
+            id: 'rate',
+            label: _('hospitality_core.reservation.field.rate'),
+            value: formatMoney(_, stay.rate),
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.stay.action.back'),
+          href: `/admin/hospitality/stays?property=${encodeURIComponent(stay.propertyId)}&lang=${encodeURIComponent(locale)}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.stay.section.information'),
+            description: _('hospitality_core.stay.section.informationHint'),
+            body: definitionList({
+              title: stay.code,
+              items: [
+                {
+                  key: 'guest',
+                  term: _('hospitality_core.reservation.field.guest'),
+                  value: guest,
+                },
+                {
+                  key: 'room-type',
+                  term: _('hospitality_core.col.roomType'),
+                  value: stay.roomType?.name ?? stay.roomTypeId,
+                },
+                {
+                  key: 'check-in',
+                  term: _('hospitality_core.col.checkIn'),
+                  value: dateTime(stay.checkIn, locale, timezone),
+                },
+                {
+                  key: 'check-out',
+                  term: _('hospitality_core.col.checkOut'),
+                  value: dateTime(stay.checkOut, locale, timezone),
+                },
+                {
+                  key: 'billing',
+                  term: _('hospitality_core.reservation.field.billingMode'),
+                  value: _(`hospitality_core.billing.${stay.billingMode}`),
+                },
+                ...(stay.nextBillDate
+                  ? [
+                      {
+                        key: 'next-bill',
+                        term: _('hospitality_core.stay.field.nextBillDate'),
+                        value: stay.nextBillDate,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'folio',
+                  term: _('hospitality_core.reservation.field.folio'),
+                  value: stay.folioId,
+                },
+                ...(stay.reservationId
+                  ? [
+                      {
+                        key: 'reservation',
+                        term: _('hospitality_core.stay.field.reservation'),
+                        value: stay.reservation?.code ?? stay.reservationId,
+                      },
+                    ]
+                  : []),
+              ],
+            }),
+          }),
+          section({
+            title: _('hospitality_core.stay.section.assignments'),
+            description: _('hospitality_core.stay.section.assignmentsHint'),
+            body: stack([
+              assignments.length
+                ? dataTable(_, {
+                    columns: stayAssignmentColumns(_, locale, timezone),
+                    rows: assignments,
+                    id: (assignment) => assignment.id,
+                  })
+                : emptyState(
+                    _('hospitality_core.stay.empty.assignments'),
+                    _('hospitality_core.stay.empty.assignmentsHint'),
+                  ),
+              stay.state === 'checked_in'
+                ? availableRooms.length
+                  ? recordForm({
+                      action,
+                      method: 'post',
+                      submit: _('hospitality_core.stay.action.moveRoom'),
+                      submitVariant: 'secondary',
+                      hidden: { operation: 'move-room', lang: locale },
+                      fields: [
+                        {
+                          name: 'roomId',
+                          label: _('hospitality_core.stay.field.newRoom'),
+                          type: 'select',
+                          required: true,
+                          options: availableRooms.map((room) => ({
+                            value: room.id,
+                            label: `${room.code} · ${room.name} · ${room.roomType?.name ?? room.roomTypeId}`,
+                          })),
+                        },
+                        {
+                          name: 'reason',
+                          label: _('hospitality_core.stay.field.moveReason'),
+                          type: 'textarea',
+                          required: true,
+                          help: _('hospitality_core.stay.field.moveReasonHint'),
+                        },
+                      ],
+                    })
+                  : notice({
+                      title: _('hospitality_core.stay.empty.availableRooms'),
+                      message: _('hospitality_core.stay.empty.availableRoomsHint'),
+                      tone: 'warning',
+                    })
+                : null,
+            ]),
+          }),
+          section({
+            title: _('hospitality_core.stay.section.guests'),
+            description: _('hospitality_core.stay.section.guestsHint'),
+            body: stack([
+              guests.length
+                ? dataTable(_, { columns: stayGuestColumns(_), rows: guests, id: (row) => row.id })
+                : emptyState(
+                    _('hospitality_core.stay.empty.guests'),
+                    _('hospitality_core.stay.empty.guestsHint'),
+                  ),
+              stay.state === 'draft' || stay.state === 'checked_in'
+                ? recordForm({
+                    action,
+                    method: 'post',
+                    submit: _('hospitality_core.stay.action.addGuest'),
+                    submitVariant: 'secondary',
+                    hidden: { operation: 'add-guest', lang: locale },
+                    fields: [
+                      {
+                        name: 'displayName',
+                        label: _('hospitality_core.stay.field.guestName'),
+                        required: true,
+                      },
+                      {
+                        name: 'partnerId',
+                        label: _('hospitality_core.stay.field.linkedPartner'),
+                        type: 'select',
+                        options: [
+                          { value: '', label: _('hospitality_core.stay.value.noLinkedPartner') },
+                          ...choices(partners),
+                        ],
+                        help: _('hospitality_core.stay.field.linkedPartnerHint'),
+                      },
+                    ],
+                  })
+                : null,
+            ]),
+          }),
         ]),
       }),
     ]),
