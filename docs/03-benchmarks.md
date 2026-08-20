@@ -212,6 +212,27 @@ writes, tenant-pool leasing, SigV4 and actual S3 HTTP. They are development-mach
 figures, not object-store capacity claims. Reproduce with `npm run bench:storage`;
 select PostgreSQL with `KET_BENCH_DRIVER=postgres`.
 
+## Hospitality master data across databases
+
+The hospitality benchmark migrates separate physical databases and loads each one
+through the public `hospitality_core` functions: one property, one building, ten
+floors, twelve room types and 250 rooms. The read pass alternates complete and
+availability-filtered room boards with explicit relation preloads. It also checks
+that every database contains exactly its own company-scoped rows and that
+PostgreSQL kept room rates as `numeric`.
+
+| driver | databases | rooms | migrate | writes/s | list queries/s | isolated counts |
+|---|---:|---:|---:|---:|---:|---|
+| SQLite | 8 | 2,000 | 61.5 ms | 2,604 | 1,254 | complete |
+| PostgreSQL 17 | 4 | 1,000 | 544.9 ms | 482 | 510 | complete |
+
+These are local development figures and the write rate includes application-level
+reference, uniqueness and same-property validation. Reproduce with
+`npm run bench:hospitality`; select PostgreSQL with
+`KET_BENCH_DRIVER=postgres`. The first PostgreSQL run caught a placeholder dialect
+bug in the benchmark's final isolation assertion, which is why both drivers remain
+part of the acceptance path.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
