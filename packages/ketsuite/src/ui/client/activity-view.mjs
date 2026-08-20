@@ -64,6 +64,7 @@ const apiFor = (resModel) => {
   if (resModel === 'product.Product') return 'product_variant_activity_backend'
   if (resModel === 'stock.Picking') return 'stock_activity_backend'
   if (resModel === 'stock.Lot') return 'stock_lot_activity_backend'
+  if (resModel === 'sale.Order') return 'sale_activity_backend'
   return null
 }
 const localDate = () => {
