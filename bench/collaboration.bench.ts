@@ -29,6 +29,11 @@ try {
       markers: ['product-attribute-create', 'product-attribute-value'],
     },
     {
+      label: 'Product create',
+      path: '/admin/products/new?lang=vi',
+      markers: ['product-create-form', 'product-create'],
+    },
+    {
       label: 'Transfer collaboration',
       path: '/admin/transfers/pick-collab?lang=vi',
       markers: ['mail.chatter', 'activity.record'],
