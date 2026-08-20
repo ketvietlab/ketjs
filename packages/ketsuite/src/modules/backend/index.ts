@@ -55,6 +55,7 @@ export { routes, viewerOf } from './routes.ts'
  * naturally on a backend screen.
  */
 export {
+  backendPage,
   shell,
   formatMoney,
   framed,

@@ -1,6 +1,7 @@
-import { page, text } from 'ketjs'
+import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
+import { backendPage } from '../../ui/index.ts'
 import { seeOther } from '../backend/forms.ts'
 import { catalogsScreen, countryScreen } from './screens.ts'
 import type { CatalogRow, DivisionRow } from './screens.ts'
@@ -16,6 +17,7 @@ const inLocale = (url: URL, path: string): string => {
   return `${target.pathname}${target.search}`
 }
 const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
+  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
   menuFilter: url.searchParams.get('menu')?.trim() || null,
@@ -30,15 +32,7 @@ const document = async (
   req: Req,
   title: string,
   body: Parameters<ServeContext['document']>[0]['body'],
-) =>
-  page({
-    body: ctx.document({
-      lang: ctx.localeOf(url, req),
-      title,
-      head: await ctx.styles(req),
-      body,
-    }),
-  })
+) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
 
 const catalogRows = async (ctx: ServeContext, url: URL, req: Req): Promise<CatalogRow[]> => {
   const [available, statuses] = await Promise.all([

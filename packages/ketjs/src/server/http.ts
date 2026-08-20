@@ -175,7 +175,7 @@ const applyFragments = async (markup) => {
     if (document.querySelectorAll(slotSelector(name)).length !== 1)
       throw new Error('current document does not have exactly one slot named "' + name + '"')
   }
-  await loadPlaced(envelope)
+  await Promise.all(templates.map((template) => loadPlaced(template.content)))
   const changed = []
   for (const template of templates) {
     const name = template.getAttribute('data-ket-slot')
@@ -353,7 +353,9 @@ export async function createKetServer(o: ServeOpts) {
   const mounts: AssetMount[] = [
     {
       prefix: '/_ket/view/',
-      dir: fileURLToPath(new URL('.', import.meta.resolve('ketjs-view'))),
+      // `tsx` resolves the workspace package to src/index.ts while production
+      // resolves its export to dist/index.js. Both entries share this dist root.
+      dir: fileURLToPath(new URL('../dist/', import.meta.resolve('ketjs-view'))),
     },
     ...configuredMounts,
   ]

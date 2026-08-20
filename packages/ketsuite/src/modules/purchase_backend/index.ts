@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { defineModule, page, text } from 'ketjs'
+import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
@@ -12,6 +13,7 @@ type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Frame> => ({
+  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
   viewer: await viewerOf(ctx, url, req),
   menu: await ctx.menu(url, req),
   extras: {
@@ -28,13 +30,10 @@ const document = async (
 ) => {
   const lang = ctx.localeOf(url, req),
     _ = ctx.translate(lang)
-  return page({
-    body: ctx.document({
-      lang,
-      title: _(title),
-      head: await ctx.styles(req),
-      body: await body(_, await frame(ctx, url, req)),
-    }),
+  return backendPage(ctx, req, {
+    lang,
+    title: _(title),
+    body: await body(_, await frame(ctx, url, req)),
   })
 }
 const redirect = (result: unknown, ok: string) =>

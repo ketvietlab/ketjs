@@ -93,6 +93,18 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.doesNotMatch(html, /data-ui="chatter-composer"/)
   assert.match(html, /data-island="mail\.inbox-indicator"/)
 
+  const navigation = await e2e.client.get('/admin/products/tpl-collab?lang=en', {
+    headers: { accept: 'text/html', 'x-ket-navigation': 'fragment-v1' },
+  })
+  assert.equal(navigation.status, 200)
+  assert.equal(navigation.headers.get('content-type'), 'text/vnd.ket.fragments+html; charset=utf-8')
+  const navigationHtml = await navigation.text()
+  assert.match(navigationHtml, /^<ket-fragments /)
+  assert.match(navigationHtml, /data-ket-slot="backend\.sidebar-main"/)
+  assert.match(navigationHtml, /data-ket-slot="backend\.topbar"/)
+  assert.match(navigationHtml, /data-ket-slot="backend\.content"/)
+  assert.doesNotMatch(navigationHtml, /<!doctype|data-ui="sidebar-foot"|mail\.inbox-indicator/)
+
   const bootstrap = await e2e.client.get('/_ket/islands.js')
   assert.match(await bootstrap.text(), /\/_ket\/asset\/mail_backend\/mail\.mjs/)
 
