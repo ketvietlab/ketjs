@@ -38,6 +38,14 @@ const document = async (
 }
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+const callIfInstalled = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  preferred: string,
+  fallback: string,
+  input: Record<string, unknown>,
+) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
@@ -135,13 +143,17 @@ const detail =
       else if (form.action === 'send')
         result = await ctx.call('sale.sendQuotation', { id: params.id }, url, req)
       else if (form.action === 'confirm')
-        result = await ctx.call('sale.confirmOrder', { id: params.id }, url, req)
+        result = await callIfInstalled(ctx, url, req, 'loyalty_sale.confirmOrder', 'sale.confirmOrder', {
+          id: params.id,
+        })
       else if (form.action === 'sync')
         result = await ctx.call('sale.syncDeliveries', { id: params.id }, url, req)
       else if (form.action === 'lock' || form.action === 'unlock')
         result = await ctx.call('sale.lockOrder', { id: params.id, locked: form.action === 'lock' }, url, req)
       else if (form.action === 'cancel')
-        result = await ctx.call('sale.cancelOrder', { id: params.id }, url, req)
+        result = await callIfInstalled(ctx, url, req, 'loyalty_sale.cancelOrder', 'sale.cancelOrder', {
+          id: params.id,
+        })
       else if (form.action === 'invoice')
         result = await ctx.call(
           'sale.createInvoice',
@@ -235,6 +247,12 @@ const detail =
       },
       { name: 'invoiceDate', label: _('sale_backend.field.invoiceDate'), type: 'date' },
     ]
+    const integration = await ctx.joint(url, req, 'sale_backend:order.loyalty', {
+      orderId: params.id,
+      locale: url.searchParams.get('lang')
+        ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+        : '',
+    })
     return document(ctx, url, req, 'sale_backend.detail.title', (_, shell) =>
       orderDetail(_, {
         frame: shell,
@@ -242,6 +260,7 @@ const detail =
         actionPath: path,
         lineFields,
         invoiceFields,
+        integration,
       }),
     )
   }
@@ -403,6 +422,7 @@ export default defineModule({
   depends: ['sale', 'backend'],
   install: 'auto',
   app: true,
+  joints: { 'order.loyalty': { props: { orderId: 'id', locale: 'text?' } } },
   title: 'Bán hàng trong quản trị',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',

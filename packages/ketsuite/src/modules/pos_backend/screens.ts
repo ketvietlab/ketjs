@@ -1,5 +1,5 @@
 import type { Translator } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import {
   badge,
   cardGrid,
@@ -371,6 +371,7 @@ export const orderDetail = (
   lineFields: FormField[],
   paymentFields: FormField[],
   actionPath: string,
+  integration?: JSXChild,
 ): TemplateResult => {
   const lines = (order.lines as AnyRow[] | undefined) ?? [],
     payments = (order.payments as AnyRow[] | undefined) ?? [],
@@ -406,6 +407,7 @@ export const orderDetail = (
         card: (item) =>
           contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
       }),
+      ...(integration === undefined ? [] : [integration]),
       ...(actions.length ? [surface({ body: recordActions({ action: actionPath, actions }) })] : []),
       section({
         title: _('pos_backend.lines.title'),

@@ -46,6 +46,14 @@ const document = async (
 }
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+const callIfInstalled = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  preferred: string,
+  fallback: string,
+  input: Record<string, unknown>,
+) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -331,6 +339,7 @@ export default defineModule({
   depends: ['pos', 'backend'],
   install: 'auto',
   app: true,
+  joints: { 'order.loyalty': { props: { orderId: 'id', locale: 'text?' } } },
   title: 'Điểm bán hàng trong quản trị',
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Hệ thống',
@@ -712,19 +721,22 @@ export default defineModule({
               req,
             )
           else if (form.action === 'validate')
-            result = await ctx.call('pos.validateOrder', { id: params.id }, url, req)
+            result = await callIfInstalled(ctx, url, req, 'loyalty_pos.validateOrder', 'pos.validateOrder', {
+              id: params.id,
+            })
           else if (form.action === 'cancel')
-            result = await ctx.call('pos.cancelOrder', { id: params.id }, url, req)
+            result = await callIfInstalled(ctx, url, req, 'loyalty_pos.cancelOrder', 'pos.cancelOrder', {
+              id: params.id,
+            })
           else if (form.action === 'refund') {
             const sessions = (await ctx.call('pos.listSessions', { state: 'opened' }, url, req)) as AnyRow[],
               session = sessions[0]
             result = session
-              ? await ctx.call(
-                  'pos.refundOrder',
-                  { id: randomUUID(), originalOrderId: params.id, sessionId: session.id },
-                  url,
-                  req,
-                )
+              ? await callIfInstalled(ctx, url, req, 'loyalty_pos.refundOrder', 'pos.refundOrder', {
+                  id: randomUUID(),
+                  originalOrderId: params.id,
+                  sessionId: session.id,
+                })
               : { ok: false }
           } else return text('unknown action', { status: 400 })
           return redirect(result, path)
@@ -757,6 +769,12 @@ export default defineModule({
           ...row,
           methodName: methodNames.get(String(row.paymentMethodId)),
         }))
+        const integration = await ctx.joint(url, req, 'pos_backend:order.loyalty', {
+          orderId: params.id,
+          locale: url.searchParams.get('lang')
+            ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+            : '',
+        })
         return document(ctx, url, req, 'pos_backend.orders.title', (_, shell) =>
           orderDetail(
             _,
@@ -801,6 +819,7 @@ export default defineModule({
               { name: 'amount', label: _('pos_backend.field.amount'), type: 'decimal', required: true },
             ],
             path,
+            integration,
           ),
         )
       },
