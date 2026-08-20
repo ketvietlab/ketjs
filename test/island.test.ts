@@ -50,6 +50,11 @@ test('island: a theme places behaviour it cannot write', () => {
     () => rt.renderRegion('page', { title: 'Cửa hàng', qty: '2' }),
     /island "cart.widget" prop "qty" expects int/,
   )
+  assert.throws(
+    () => rt.renderRegion('page', { title: 'Cửa hàng' }),
+    /island "cart.widget" prop "qty" expects int/,
+    'required island props fail on the server instead of hydrating with a different tree',
+  )
 })
 
 test('island: a theme declaring one is refused outright', () => {
