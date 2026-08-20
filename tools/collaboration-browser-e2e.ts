@@ -264,6 +264,11 @@ try {
       ready: `document.querySelector('#transfer-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
+      name: 'warehouse-list',
+      path: '/admin/warehouses?lang=vi',
+      ready: `document.querySelector('#warehouse-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -812,6 +817,51 @@ try {
         `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('TP/INT/BROWSER') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
       )
     }
+    if (screen.name === 'warehouse-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            receiptRadios: document.querySelectorAll('#warehouse-create-form [name="receptionSteps"]').length,
+            deliveryRadios: document.querySelectorAll('#warehouse-create-form [name="deliverySteps"]').length,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#warehouse-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          receiptRadios: 3,
+          deliveryRadios: 3,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#warehouse-create-form')
+          form.querySelector('[name="name"]').value = 'Kho Browser'
+          form.querySelector('[name="code"]').value = 'BRW'
+          form.querySelector('[name="receptionSteps"][value="three_steps"]').checked = true
+          form.querySelector('[name="deliverySteps"][value="pick_pack_ship"]').checked = true
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Browser') && document.querySelector('[data-ui="table"]')?.textContent.includes('BRW')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+    }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -938,6 +988,7 @@ try {
             'Transfer actions replaced only the record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Inventory adjustment selected a product, applied a count through real browser HTTP and rendered no Chatter',
             'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
+            'Warehouse configuration rendered Odoo 19 shipment-step radios, created a warehouse and rendered no Chatter',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',
