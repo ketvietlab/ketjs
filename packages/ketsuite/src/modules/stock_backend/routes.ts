@@ -9,6 +9,7 @@ import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
 import { lotDetailScreen } from './lot-screen.tsx'
+import { lotsScreen } from './lots-screen.tsx'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
@@ -625,36 +626,63 @@ export const routes: Record<string, RouteEntry> = {
         return resultRedirect(result, inLocale(url, '/admin/lots'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.lots',
-        lots.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: 'lot',
-          detail: `${String(row.productId)} · ${String(row.ref ?? '')}`,
-          href: inLocale(url, `/admin/lots/${String(row.id)}`),
-        })),
-        [
-          surface({
-            body: recordForm({
-              action: inLocale(url, '/admin/lots'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
-              errors: invalid(url, _),
-              fields: [
-                { name: 'productId', label: _('stock_backend.field.productId'), required: true },
-                { name: 'name', label: _('stock_backend.field.lotSerial'), required: true },
-                { name: 'ref', label: _('stock_backend.field.reference') },
-                { name: 'note', label: _('stock_backend.field.note'), type: 'textarea', span: 'full' },
-              ],
-            }),
-          }),
-        ],
+      const [lots, products, locations, quants] = (await Promise.all([
+        ctx.call('stock.listLots', {}, url, req),
+        ctx.call('stock.listStorableProducts', {}, url, req),
+        ctx.call('stock.listLocations', {}, url, req),
+        ctx.call('stock.listQuants', {}, url, req),
+      ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
+      const productOptions = products.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
       )
+      const productById = new Map(productOptions.map((product) => [product.value, product.label]))
+      const stockLocationIds = new Set(
+        locations
+          .filter((location) => ['internal', 'transit'].includes(String(location.usage)))
+          .map((location) => String(location.id)),
+      )
+      const onHandByLot = new Map<string, number>()
+      for (const quant of quants) {
+        const lotId = String(quant.lotId ?? '')
+        if (!lotId || !stockLocationIds.has(String(quant.locationId))) continue
+        onHandByLot.set(lotId, (onHandByLot.get(lotId) ?? 0) + Number(quant.quantity ?? 0))
+      }
+      const number = new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
+        maximumFractionDigits: 6,
+      })
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.lots'),
+          head: await ctx.styles(req),
+          body: lotsScreen(
+            _,
+            {
+              rows: lots.map((row) => ({
+                id: String(row.id),
+                name: String(row.name),
+                product: productById.get(String(row.productId)) ?? String(row.productId),
+                reference: String(row.ref ?? ''),
+                onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
+                onHandValue: onHandByLot.get(String(row.id)) ?? 0,
+                active: row.active !== false,
+                href: inLocale(url, `/admin/lots/${String(row.id)}`),
+              })),
+              products: productOptions,
+              action: inLocale(url, '/admin/lots'),
+              errors: invalid(url, _),
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/lots/{id}':
