@@ -38,6 +38,35 @@ export { default as loyalty } from './modules/loyalty/index.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
 export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
+export { default as crm } from './modules/crm/index.ts'
+export { default as crmSale } from './modules/crm_sale/index.ts'
+export { default as crmBackend } from './modules/crm_backend/index.ts'
+export { default as crmWebsite } from './modules/crm_website/index.ts'
+/** Stable extension boundary for private modules that compose Sale commands in one transaction. */
+export { functions as saleFunctionSpecs } from './modules/sale/functions.ts'
+export {
+  CASE_KINDS,
+  TERMINAL_STATES,
+  CASE_PRIORITIES,
+  MESSAGE_VISIBILITIES,
+  ASSIGNMENT_MODES,
+} from './modules/crm/types.ts'
+export {
+  actorRequired as crmActorRequired,
+  activeStage as crmActiveStage,
+  addCaseMessage as crmAddCaseMessage,
+  addTimeline as crmAddTimeline,
+  caseDetail as crmCaseDetail,
+  commandKey as crmCommandKey,
+  ensureCrmDefaults,
+  firstStage as crmFirstStage,
+  invalid as crmInvalid,
+  issue as crmIssue,
+  n as crmNumber,
+  now as crmNow,
+  saveCase as crmSaveCase,
+  serializeCaseList as crmSerializeCaseList,
+} from './modules/crm/index.ts'
 export {
   APPLICATION_STATES,
   DISCOUNT_APPLICABILITY,
