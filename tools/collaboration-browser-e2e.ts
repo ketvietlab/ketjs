@@ -209,6 +209,7 @@ const forecastEvidenceDir = resolve('docs/assets/inventory-forecast')
 const quotationEvidenceDir = resolve('docs/assets/sales-quotation-list')
 const saleOrderEvidenceDir = resolve('docs/assets/sales-order-detail')
 const salesOrderListEvidenceDir = resolve('docs/assets/sales-order-list')
+const invoicingPolicyEvidenceDir = resolve('docs/assets/sales-invoicing-policy')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -222,6 +223,7 @@ try {
   await mkdir(quotationEvidenceDir, { recursive: true })
   await mkdir(saleOrderEvidenceDir, { recursive: true })
   await mkdir(salesOrderListEvidenceDir, { recursive: true })
+  await mkdir(invoicingPolicyEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -328,6 +330,11 @@ try {
       name: 'sales-order-list',
       path: '/admin/sales/orders?lang=vi',
       ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'sales-invoicing-policy',
+      path: '/admin/sales/invoicing-policies?lang=vi',
+      ready: `document.querySelector('#invoicing-policy-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1838,6 +1845,104 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(salesOrderListEvidenceDir, 'sales-orders-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'sales-invoicing-policy') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            productSelect: document.querySelector('#invoicing-policy-form [name="templateId"]')?.tagName === 'SELECT',
+            radios: document.querySelectorAll('#invoicing-policy-form [name="invoicePolicy"][type="radio"]').length,
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#invoicing-policy-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          productSelect: true,
+          radios: 2,
+          rowsAtLeastOne: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          overflow: false,
+        },
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.querySelector('[data-ui="table"]')?.textContent.includes('Theo số lượng giao')`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(invoicingPolicyEvidenceDir, 'invoicing-policy-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/invoicing-policies?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]') && document.documentElement.lang === 'en'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            localized: document.body.textContent.includes('Policies by product') && document.querySelector('[data-ui="table"]')?.textContent.includes('Delivered quantities'),
+            action: document.querySelector('#invoicing-policy-form')?.getAttribute('action'),
+            productSelectVisible: document.querySelector('#invoicing-policy-form [name="templateId"]')?.getBoundingClientRect().width > 100,
+            overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          localized: true,
+          action: '/admin/sales/invoicing-policies?lang=en',
+          productSelectVisible: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(invoicingPolicyEvidenceDir, 'invoicing-policy-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/invoicing-policies?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#invoicing-policy-form [name="templateId"]')?.getBoundingClientRect().height >= 28 && document.documentElement.lang === 'vi'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(invoicingPolicyEvidenceDir, 'invoicing-policy-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/sales/invoicing-policies?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#invoicing-policy-form [name="templateId"]')?.getBoundingClientRect().height >= 28 && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(invoicingPolicyEvidenceDir, 'invoicing-policy-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,

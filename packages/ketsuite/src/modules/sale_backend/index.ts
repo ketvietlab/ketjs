@@ -8,10 +8,11 @@ import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
+import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { dashboard, labelOf, policyScreen } from './screens.ts'
+import { dashboard, labelOf } from './screens.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -372,6 +373,18 @@ const vi = {
   'order.information.hint': 'Khách hàng, thời hạn và điều kiện thương mại của đơn.',
   'order.collaboration.label': 'Trao đổi và hoạt động của đơn bán',
   'policies.title': 'Chính sách lập hoá đơn',
+  'policy.kicker': 'Cấu hình bán hàng',
+  'policy.subtitle': 'Chọn thời điểm số lượng sản phẩm đủ điều kiện để lập hoá đơn.',
+  'policy.summary.total': 'Sản phẩm có thể bán',
+  'policy.summary.order': 'Theo số lượng đặt',
+  'policy.summary.delivery': 'Theo số lượng giao',
+  'policy.edit.title': 'Cập nhật chính sách',
+  'policy.edit.hint': 'Theo Odoo 19, chính sách được lưu trên từng mẫu sản phẩm.',
+  'policy.products.title': 'Chính sách theo sản phẩm',
+  'policy.products.hint':
+    'Số lượng đặt cho phép lập hoá đơn ngay; số lượng giao chỉ cho phép sau khi giao hàng.',
+  'policy.empty': 'Chưa có sản phẩm có thể bán',
+  'policy.emptyHint': 'Bật Có thể bán trên một sản phẩm để cấu hình chính sách lập hoá đơn.',
   'lines.title': 'Dòng sản phẩm',
   'lines.hint': 'Số lượng, giao hàng, lập hoá đơn và thành tiền theo từng sản phẩm.',
   'lines.add': 'Thêm sản phẩm',
@@ -487,6 +500,18 @@ const en = {
   'order.information.hint': 'Customer, deadline and commercial terms for this order.',
   'order.collaboration.label': 'Sales order conversation and activities',
   'policies.title': 'Invoicing Policies',
+  'policy.kicker': 'Sales configuration',
+  'policy.subtitle': 'Choose when product quantities become eligible for invoicing.',
+  'policy.summary.total': 'Sellable products',
+  'policy.summary.order': 'Ordered quantities',
+  'policy.summary.delivery': 'Delivered quantities',
+  'policy.edit.title': 'Update a policy',
+  'policy.edit.hint': 'As in Odoo 19, the policy is stored on each product template.',
+  'policy.products.title': 'Policies by product',
+  'policy.products.hint':
+    'Ordered quantities invoice immediately; delivered quantities invoice only after delivery.',
+  'policy.empty': 'No sellable products yet',
+  'policy.emptyHint': 'Enable Can be sold on a product before configuring its invoicing policy.',
   'lines.title': 'Order Lines',
   'lines.hint': 'Ordered, delivered and invoiced quantities with each product subtotal.',
   'lines.add': 'Add a product',
@@ -680,6 +705,7 @@ export default defineModule({
       async (url, req) => {
         if (req.method === 'POST') {
           const form = await readForm(req)
+          const target = `/admin/sales/invoicing-policies${localeSuffix(url)}`
           return redirect(
             await ctx.call(
               'sale.setInvoicePolicy',
@@ -687,33 +713,35 @@ export default defineModule({
               url,
               req,
             ),
-            '/admin/sales/invoicing-policies',
+            target,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const d = await common(ctx, url, req),
+        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[],
           _ = ctx.translate(ctx.localeOf(url, req))
         return document(ctx, url, req, 'sale_backend.policies.title', (_, shell) =>
-          policyScreen(
-            _,
-            shell,
-            [
+          invoicingPoliciesScreen(_, {
+            frame: shell,
+            action: `/admin/sales/invoicing-policies${localeSuffix(url)}`,
+            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+            fields: [
               {
                 name: 'templateId',
                 label: _('sale_backend.field.product'),
                 type: 'select',
-                options: choices(d.templates),
+                options: choices(rows),
                 required: true,
               },
               {
                 name: 'invoicePolicy',
                 label: _('sale_backend.field.invoicePolicy'),
-                type: 'select',
+                type: 'radio',
                 options: INVOICE_POLICIES.map((v) => ({ value: v, label: labelOf(_, 'invoicePolicy', v) })),
+                required: true,
               },
             ],
-            d.templates,
-          ),
+            rows,
+          }),
         )
       },
   },
