@@ -114,6 +114,12 @@ const seed = async () => {
     countedQuantity: '12',
     productUomId: 'unit',
   })
+  await call('stock.createPicking', {
+    id: 'transfer-review',
+    name: 'WH/OUT/REVIEW',
+    pickingTypeId: 'wh:outgoing',
+    scheduledDate: '2026-08-21T08:30:00.000Z',
+  })
   await adapter.close()
 }
 
