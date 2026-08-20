@@ -479,6 +479,12 @@ try {
     sourceKey: 'visual:spa:1',
     occurredAt: '2026-08-19T16:00:00.000Z',
   })
+  await call('hospitality_core.voidCharge', {
+    id: 'charge-spa',
+    folioId: 'res-house:folio',
+    reason: 'Khách đổi ý trước khi sử dụng dịch vụ',
+    voidedAt: '2026-08-19T16:15:00.000Z',
+  })
   await call('hospitality_core.createCleaningTask', {
     id: 'cleaning-103',
     code: 'HK-000103',
