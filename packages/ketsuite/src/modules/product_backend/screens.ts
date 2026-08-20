@@ -25,6 +25,7 @@ const mediaLabels = (_: Translator) => ({
   loading: _('product_backend.media.loading'),
   loadError: _('product_backend.media.error'),
   retryHint: _('product_backend.media.retry'),
+  primary: _('product_backend.media.primaryLabel'),
   makePrimary: _('product_backend.media.primary'),
   moveUp: _('product_backend.media.up'),
   moveDown: _('product_backend.media.down'),

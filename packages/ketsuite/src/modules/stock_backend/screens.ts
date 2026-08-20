@@ -1,5 +1,5 @@
 import type { Translator } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import { badge, code, dataTable, emptyState, framed, linkButton, stack } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 
@@ -53,7 +53,7 @@ export const stockScreen = (
   title: string,
   rows: StockRow[],
   frame: Frame,
-  additions: readonly unknown[] = [],
+  additions: readonly JSXChild[] = [],
   showEmpty = true,
 ): TemplateResult =>
   framed(

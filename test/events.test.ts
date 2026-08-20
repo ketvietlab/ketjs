@@ -12,6 +12,7 @@ import {
   mountHydrated,
   renderToString,
   signal,
+  trustedMarkup,
 } from 'ketjs-view'
 import type { HostNode } from 'ketjs-view'
 
@@ -125,6 +126,42 @@ test('mount: reading a signal in the view subscribes the view to it', () => {
   m.dispose()
   count.set(99)
   assert.equal(host.text(container), 'đếm: 1', 'after dispose the view stops following')
+})
+
+test('mount: dispose detaches listeners from the DOM it leaves behind', () => {
+  const host = countingHost()
+  const container = host.root()
+  let clicks = 0
+  const mounted = mount(host, container, () => html`<button on:click=${() => clicks++}>x</button>`)
+  const button = container.children![0]!
+
+  mounted.dispose()
+  host.fire(button, 'click')
+  assert.equal(clicks, 0)
+})
+
+test('view: trusted markup is materialised and replaced on the client', () => {
+  const container = parseFragment('')
+  const root = createRoot(domHost(document), container as unknown as HostNode)
+  const view = (markup: string) => html`<section>${trustedMarkup(markup)}</section>`
+
+  root.render(view('<b>một</b><i>hai</i>'))
+  assert.equal(container.querySelectorAll('section')[0]!.innerHTML, '<b>một</b><i>hai</i>')
+  root.render(view('<em>ba</em>'))
+  assert.equal(container.querySelectorAll('section')[0]!.innerHTML, '<em>ba</em>')
+})
+
+test('view: hydration adopts trusted markup and can update it', () => {
+  const view = (markup: string) => html`<section>${trustedMarkup(markup)}</section>`
+  const container = parseFragment(renderToString(view('<b>server</b>')))
+  const section = container.querySelectorAll('section')[0]!
+  const serverNode = container.querySelectorAll('b')[0]!
+  const root = hydrateRoot(domHost(document), container as unknown as HostNode, view('<b>server</b>'))
+
+  assert.equal(container.querySelectorAll('b')[0], serverNode)
+  root.render(view('<i>client</i>'))
+  assert.equal(container.querySelectorAll('section')[0], section)
+  assert.equal(section.innerHTML.replace(/<!--k\[?-->/g, ''), '<i>client</i>')
 })
 
 test('mount: a click drives a signal drives the DOM, end to end', () => {

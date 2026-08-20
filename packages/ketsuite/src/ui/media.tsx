@@ -1,6 +1,7 @@
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
-import { button } from './actions.tsx'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { button, iconButton } from './actions.tsx'
+import { badge } from './primitives.tsx'
 import { errorState, loadingState } from './state.tsx'
 
 export const HOOKS = [
@@ -36,6 +37,7 @@ export type MediaLabels = {
   loading: string
   loadError: string
   retryHint: string
+  primary: string
   makePrimary: string
   moveUp: string
   moveDown: string
@@ -52,7 +54,7 @@ export type MediaPanelProps = {
   status: 'unavailable' | 'loading' | 'ready' | 'error'
   images?: readonly MediaItem[]
   error?: string | null
-  extension?: unknown
+  extension?: JSXChild
   uploadAction?: string | null
   labels?: Partial<MediaLabels>
 }
@@ -63,6 +65,7 @@ const defaultLabels: MediaLabels = {
   loading: 'Loading images',
   loadError: 'Images could not be loaded',
   retryHint: 'Try again when the image service is available.',
+  primary: 'Primary image',
   makePrimary: 'Set as primary',
   moveUp: 'Move up',
   moveDown: 'Move down',
@@ -94,28 +97,38 @@ export const mediaPanel = (props: MediaPanelProps): TemplateResult => {
             images,
             (image) => image.id,
             (image) => (
-              <article data-ui="media-item">
+              <article data-ui="media-item" data-primary={String(image.primary === true)}>
                 <img src={image.src} alt={image.alt} />
-                {image.actions && (
+                {(image.primary || image.actions) && (
                   <div data-ui="media-item-actions">
-                    {image.actions.primary && !image.primary && (
+                    {image.primary && badge(labels.primary, 'info', 'primary')}
+                    {image.actions?.primary && !image.primary && (
                       <form method="post" action={image.actions.primary}>
-                        {button({ label: labels.makePrimary, type: 'submit' })}
+                        {iconButton({
+                          label: labels.makePrimary,
+                          icon: 'check',
+                          type: 'submit',
+                        })}
                       </form>
                     )}
-                    {image.actions.moveUp && (
+                    {image.actions?.moveUp && (
                       <form method="post" action={image.actions.moveUp}>
-                        {button({ label: labels.moveUp, type: 'submit' })}
+                        {iconButton({ label: labels.moveUp, icon: 'arrow-up', type: 'submit' })}
                       </form>
                     )}
-                    {image.actions.moveDown && (
+                    {image.actions?.moveDown && (
                       <form method="post" action={image.actions.moveDown}>
-                        {button({ label: labels.moveDown, type: 'submit' })}
+                        {iconButton({ label: labels.moveDown, icon: 'arrow-down', type: 'submit' })}
                       </form>
                     )}
-                    {image.actions.remove && (
+                    {image.actions?.remove && (
                       <form method="post" action={image.actions.remove}>
-                        {button({ label: labels.remove, type: 'submit', variant: 'destructive' })}
+                        {iconButton({
+                          label: labels.remove,
+                          icon: 'x',
+                          type: 'submit',
+                          variant: 'destructive',
+                        })}
                       </form>
                     )}
                   </div>

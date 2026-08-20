@@ -297,7 +297,7 @@ export type ModuleSpec = AppMeta & {
    */
   routes?: Record<string, RouteEntry>
   /** Interactive views a theme may place but never write. */
-  islands?: Record<string, import('ketjs-view').IslandView>
+  islands?: Record<string, import('ketjs-view').IslandDefinition>
   sections?: Record<string, SectionDef>
   relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
@@ -325,7 +325,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly assets: string | URL | null
   readonly styles: readonly string[]
   readonly routes: Record<string, RouteEntry>
-  readonly islands: Record<string, import('ketjs-view').IslandView>
+  readonly islands: Record<string, import('ketjs-view').IslandDefinition>
   readonly sections: Record<string, SectionDef>
   readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
@@ -349,7 +349,10 @@ export type Manifest = {
   jobs: Record<string, JobMeta>
   views: Record<string, ViewDef & { by: string }>
   regions: { required: string[]; provided: Record<string, string[]> }
-  islands: Record<string, { by: string }>
+  islands: Record<
+    string,
+    { by: string; props: Record<string, string>; client?: { src: string; export: string } }
+  >
   sections: Record<string, SectionDef & { by: string }>
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages

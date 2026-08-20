@@ -4,7 +4,7 @@
 // are the states most often written twice and styled once.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 
 /** The data-ui names this file emits. See ui/hooks.ts. */
 export const HOOKS = [
@@ -35,8 +35,8 @@ export const notice = (o: {
   tone?: NoticeTone
   title: string
   message: string
-  icon?: unknown
-  actions?: unknown
+  icon?: JSXChild
+  actions?: JSXChild
 }): TemplateResult => (
   <aside data-ui="notice" data-tone={o.tone ?? 'info'} role={o.tone === 'danger' ? 'alert' : 'status'}>
     {o.icon !== undefined && (
@@ -55,7 +55,7 @@ export const notice = (o: {
 export const emptyState = (
   message: string,
   hint: string,
-  o: { icon?: unknown; actions?: unknown } = {},
+  o: { icon?: JSXChild; actions?: JSXChild } = {},
 ): TemplateResult => (
   <div data-ui="empty" role="status">
     {o.icon !== undefined && (

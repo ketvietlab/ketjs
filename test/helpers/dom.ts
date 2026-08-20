@@ -126,6 +126,7 @@ export const document = {
   createElement: (tag: string) => makeNode(ELEMENT, tag.toUpperCase()),
   createTextNode: (data: string) => makeNode(TEXT, '#text', data),
   createComment: (data: string) => makeNode(COMMENT, '#comment', data),
+  parseHTML: (html: string) => parseFragment(html),
 }
 
 const VOID = new Set([

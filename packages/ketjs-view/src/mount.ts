@@ -22,7 +22,13 @@ function drive(root: Root, view: () => TemplateResult): Mounted {
   const stop = effect(() => {
     root.render(view())
   })
-  return { dispose: stop, refresh: () => root.render(view()) }
+  return {
+    dispose: () => {
+      stop()
+      root.dispose()
+    },
+    refresh: () => root.render(view()),
+  }
 }
 
 /** Render into a container and keep it in sync with whatever signals the view reads. */
