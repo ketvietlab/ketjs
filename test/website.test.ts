@@ -173,17 +173,17 @@ test('theme: placing a section nobody provides fails loudly', () => {
   )
 })
 
-test('theme: the search box is placed by the theme and written by a module', () => {
+test('theme: the search box lives in stable chrome outside the navigable page region', () => {
   const rt = createTheme(manifest, mods)
-  const withSearch = rt.renderRegion('menu.primary', {
-    showSearch: true,
-    menu: [{ href: '/', label: 'Trang chủ' }],
+  const layout = rt.renderRegion('layout', {
+    page: { id: 'home', path: '/', title: 'Trang chủ' },
+    sections: homeLayout,
   })
-  assert.match(withSearch, /<ket-island data-island="website.search"/)
-  assert.ok(!withSearch.includes('on:'), 'the handler never reaches the HTML')
-
-  const without = rt.renderRegion('menu.primary', { showSearch: false, menu: [] })
-  assert.ok(!without.includes('ket-island'))
+  const searchAt = layout.indexOf('<ket-island data-island="website.search"')
+  const pageAt = layout.indexOf('<main class="page" data-ket-slot="website.page">')
+  assert.ok(searchAt >= 0 && searchAt < pageAt)
+  assert.ok(!rt.renderRegion('website.page', { page: {}, sections: homeLayout }).includes('ket-island'))
+  assert.ok(!layout.includes('on:'), 'the handler never reaches the HTML')
 })
 
 test('menu: items are validated and ordered', async () => {

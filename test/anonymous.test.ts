@@ -81,9 +81,12 @@ test('routes: the backend is closed to a stranger, and says so rather than rende
 test('routes: the storefront stays open, which is the point of the distinction', async () => {
   const b = await boot()
   try {
+    await b.apps!.install('website_search')
     const full = await fetch(`http://127.0.0.1:${b.port}/`)
     assert.equal(full.status, 200)
-    assert.match(await full.text(), /data-ket-slot="website\.page"/)
+    const fullHtml = await full.text()
+    assert.match(fullHtml, /data-ket-slot="website\.page"/)
+    assert.match(fullHtml, /data-island="website\.search"/)
 
     const navigation = await fetch(`http://127.0.0.1:${b.port}/`, {
       headers: { 'x-ket-navigation': 'fragment-v1' },
@@ -93,7 +96,7 @@ test('routes: the storefront stays open, which is the point of the distinction',
     const fragment = await navigation.text()
     assert.match(fragment, /^<ket-fragments /)
     assert.match(fragment, /<template data-ket-slot="website\.page">/)
-    assert.doesNotMatch(fragment, /<!doctype|<html|<body|data-ket-section="menu"/)
+    assert.doesNotMatch(fragment, /<!doctype|<html|<body|data-ket-section="menu"|website\.search/)
   } finally {
     await b.close()
   }
