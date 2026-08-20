@@ -134,6 +134,63 @@ try {
       name: `Phòng ${room.id}`,
       status: room.status,
     })
+  await call('hospitality_core.saveRatePlan', {
+    id: 'deluxe-flex',
+    propertyId: property,
+    roomTypeId: roomType,
+    code: 'FLEX-BB',
+    name: 'Linh hoạt kèm bữa sáng',
+    rateType: 'nightly',
+    amount: '1650000',
+    mealPlan: 'BB',
+    isDefault: true,
+    active: true,
+  })
+  await call('hospitality_core.saveRatePlan', {
+    id: 'deluxe-weekly',
+    propertyId: property,
+    roomTypeId: roomType,
+    code: 'WEEKLY',
+    name: 'Ưu đãi tuần',
+    rateType: 'weekly',
+    amount: '9200000',
+    minStay: 1,
+    active: true,
+  })
+  await call('hospitality_core.saveRatePlan', {
+    id: 'suite-flex',
+    propertyId: property,
+    roomTypeId: 'suite',
+    code: 'SUITE-RO',
+    name: 'Suite linh hoạt',
+    rateType: 'nightly',
+    amount: '2650000',
+    mealPlan: 'RO',
+    isDefault: true,
+    active: true,
+  })
+  await call('hospitality_core.setInventoryRange', {
+    propertyId: property,
+    roomTypeId: roomType,
+    from: '2026-08-18',
+    to: '2026-09-02',
+    total: 3,
+  })
+  await call('hospitality_core.setRestrictionRange', {
+    propertyId: property,
+    roomTypeId: roomType,
+    from: '2026-08-25',
+    to: '2026-08-26',
+    minLos: 2,
+    closedToArrival: true,
+  })
+  await call('hospitality_core.setRestrictionRange', {
+    propertyId: property,
+    roomTypeId: roomType,
+    from: '2026-08-30',
+    to: '2026-08-30',
+    stopSell: true,
+  })
   await call('hospitality_core.saveAmenityCategory', {
     id: 'comfort',
     name: 'Tiện nghi phòng',
