@@ -16,10 +16,13 @@ import {
   purchaseBackend,
   sale,
   saleBackend,
+  pos,
+  posBackend,
   stock,
   stockBackend,
   storage,
   uom,
+  user,
 } from 'ketsuite'
 import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/screens.ts'
 import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.ts'
@@ -28,6 +31,7 @@ import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/scre
 const modules = [
   partner,
   company,
+  user,
   storage,
   uom,
   product,
@@ -37,6 +41,7 @@ const modules = [
   account,
   purchase,
   sale,
+  pos,
   backend,
   productBackend,
   pricingBackend,
@@ -44,6 +49,7 @@ const modules = [
   accountBackend,
   purchaseBackend,
   saleBackend,
+  posBackend,
 ]
 const manifest = compose(modules, { headless: true })
 
@@ -61,6 +67,7 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
     account,
     purchase,
     sale,
+    pos,
     storage,
     productBackend,
     pricingBackend,
@@ -68,6 +75,7 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
     accountBackend,
     purchaseBackend,
     saleBackend,
+    posBackend,
   ].map((module) => ({
     name: module.name,
     title: module.title ?? module.name,
