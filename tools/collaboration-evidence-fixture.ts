@@ -210,6 +210,20 @@ export async function collaborationEvidenceApp(
       includeBaseAmount: false,
       sequence: 10,
     })
+    await call('account.savePaymentTerm', {
+      id: 'payment-term-collab',
+      name: '30 ngày',
+      note: 'Thanh toán toàn bộ sau 30 ngày.',
+    })
+    await call('account.savePaymentTermLine', {
+      id: 'payment-term-line-collab',
+      paymentId: 'payment-term-collab',
+      value: 'percent',
+      valueAmount: '100',
+      delayType: 'days_after',
+      nbDays: 30,
+      sequence: 10,
+    })
     await call('account.createInvoice', {
       id: 'vendor-bill-collab',
       journalId: 'account-purchase-collab',
