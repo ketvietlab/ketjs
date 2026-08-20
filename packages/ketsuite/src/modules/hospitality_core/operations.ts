@@ -19,6 +19,7 @@ import {
   restrictionIssues,
 } from './inventory.ts'
 import { postCharge } from './services.ts'
+import { initializeRecurringRent } from './night-audit.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
 type Schedule = {
@@ -174,6 +175,7 @@ const stayOutput = {
   children: 'int',
   billingMode: 'text',
   rate: 'decimal',
+  nextBillDate: 'date?',
   state: 'text',
   checkedInAt: 'datetime?',
   checkedOutAt: 'datetime?',
@@ -585,6 +587,9 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.Stay',
       'read:hospitality_core.Property',
       'read:hospitality_core.Room',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'write:hospitality_core.Charge',
       'write:hospitality_core.Room',
       'write:hospitality_core.Stay',
       'write:hospitality_core.Reservation',
@@ -596,8 +601,14 @@ export const operations: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
       if (!stay) return failure(issue('stayId', 'stay_missing'))
-      if (stay.state === 'checked_in')
+      if (stay.state === 'checked_in') {
+        const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
+        if (property) {
+          const rent = await initializeRecurringRent(ctx, stay, property)
+          if (rent.ok !== true) return rent
+        }
         return success(stay.id, { roomId: stay.currentRoomId, state: stay.state })
+      }
       if (stay.state !== 'draft') return failure(issue('state', 'stay_cannot_check_in'))
       const at = date(args.at) ?? new Date()
       const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
@@ -624,7 +635,7 @@ export const operations: Record<string, FnSpec> = {
         return failure(issue('roomId', 'room_not_available'))
 
       const assignmentId = args.assignmentId ?? `${String(stay.id)}:assignment:1`
-      return transition(() =>
+      const transitioned = await transition(() =>
         ctx.tx(async (tx) => {
           if (stay.reservationId) {
             const reservationClaim = await tx.db.compareAndSet(
@@ -665,6 +676,13 @@ export const operations: Record<string, FnSpec> = {
           return success(stay.id, { roomId: room!.id, state: 'checked_in' })
         }),
       )
+      if (transitioned.ok !== true) return transitioned
+      const checkedIn = await record(ctx, 'hospitality_core.Stay', stay.id)
+      if (checkedIn && property) {
+        const rent = await initializeRecurringRent(ctx, checkedIn, property)
+        if (rent.ok !== true) return rent
+      }
+      return transitioned
     },
   }),
 

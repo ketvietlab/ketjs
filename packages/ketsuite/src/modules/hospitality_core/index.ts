@@ -3,6 +3,7 @@ import { functions } from './functions.ts'
 import { housekeeping } from './housekeeping.ts'
 import { content } from './content.ts'
 import { inventory } from './inventory.ts'
+import { nightAuditFunctions, nightAuditJobs } from './night-audit.ts'
 import { operations } from './operations.ts'
 import { services } from './services.ts'
 import { menus } from './menus.ts'
@@ -21,7 +22,16 @@ export default defineModule({
   category: 'Khách sạn',
   models,
   relations,
-  functions: { ...functions, ...inventory, ...operations, ...housekeeping, ...content, ...services },
+  functions: {
+    ...functions,
+    ...inventory,
+    ...operations,
+    ...housekeeping,
+    ...content,
+    ...services,
+    ...nightAuditFunctions,
+  },
+  jobs: nightAuditJobs,
   routes,
   menus,
   messages,
@@ -53,6 +63,7 @@ export {
   CLEANING_TASK_PRIORITIES,
   CLEANING_TASK_STATES,
   CLEANING_TASK_TYPES,
+  NIGHT_AUDIT_STATES,
 } from './types.ts'
 export type {
   AccommodationType,
@@ -80,4 +91,5 @@ export type {
   CleaningTaskPriority,
   CleaningTaskState,
   CleaningTaskType,
+  NightAuditState,
 } from './types.ts'

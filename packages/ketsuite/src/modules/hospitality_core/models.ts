@@ -20,6 +20,7 @@ export const models: Record<string, ModelDef> = {
       defaultCheckIn: 'text',
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
+      longStayBillOnCheckIn: 'bool?',
       starRating: 'int',
       street1: 'text?',
       street2: 'text?',
@@ -452,6 +453,7 @@ export const models: Record<string, ModelDef> = {
       children: 'int',
       billingMode: 'text',
       rate: 'decimal',
+      nextBillDate: 'date?',
       state: 'text',
       checkedInAt: 'datetime?',
       checkedOutAt: 'datetime?',
@@ -460,6 +462,34 @@ export const models: Record<string, ModelDef> = {
       code_company: { fields: ['companyId', 'code'], unique: true },
       reservation: { fields: ['companyId', 'reservationId'], unique: true },
       property_state: { fields: ['companyId', 'propertyId', 'state', 'checkIn'] },
+    },
+  },
+
+  /**
+   * One durable operational close per property and local calendar date. A run
+   * may be retried, but recurring charges remain idempotent through Charge.sourceKey.
+   */
+  NightAuditRun: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      auditDate: 'date',
+      state: 'text',
+      inHouseCount: 'int',
+      servicePosted: 'int',
+      rentPosted: 'int',
+      existingCount: 'int',
+      totalAmount: 'decimal',
+      attempt: 'int',
+      requestedAt: 'datetime',
+      startedAt: 'datetime?',
+      completedAt: 'datetime?',
+      error: 'text?',
+    },
+    indexes: {
+      property_date: { fields: ['companyId', 'propertyId', 'auditDate'], unique: true },
+      property_state: { fields: ['companyId', 'propertyId', 'state', 'auditDate'] },
     },
   },
 
@@ -538,6 +568,7 @@ export const models: Record<string, ModelDef> = {
       folioId: 'ref:hospitality_core.Folio',
       stayId: 'ref:hospitality_core.Stay?',
       extraLineId: 'ref:hospitality_core.ExtraLine?',
+      nightAuditRunId: 'ref:hospitality_core.NightAuditRun?',
       productId: 'ref:product.Product?',
       uomId: 'ref:uom.Unit?',
       description: 'text',
@@ -554,6 +585,7 @@ export const models: Record<string, ModelDef> = {
       folio_date: { fields: ['companyId', 'folioId', 'occurredAt'] },
       source: { fields: ['companyId', 'sourceKey'], unique: true },
       extra_line: { fields: ['companyId', 'extraLineId', 'occurredAt'] },
+      night_audit: { fields: ['companyId', 'nightAuditRunId', 'occurredAt'] },
     },
   },
 
