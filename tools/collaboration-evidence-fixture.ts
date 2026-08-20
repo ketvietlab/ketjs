@@ -198,6 +198,18 @@ export async function collaborationEvidenceApp(
       code: 'PUR',
       type: 'purchase',
     })
+    await call('account.saveTax', {
+      id: 'tax-sale-collab',
+      name: 'VAT 10%',
+      description: 'Thuế GTGT bán ra 10%',
+      typeTaxUse: 'sale',
+      taxScope: 'consu',
+      amountType: 'percent',
+      amount: '10',
+      priceInclude: false,
+      includeBaseAmount: false,
+      sequence: 10,
+    })
     await call('account.createInvoice', {
       id: 'vendor-bill-collab',
       journalId: 'account-purchase-collab',
