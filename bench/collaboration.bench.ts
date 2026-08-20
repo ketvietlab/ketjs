@@ -129,6 +129,11 @@ try {
       markers: ['record-workspace', 'mail.chatter', 'activity.record'],
     },
     {
+      label: 'Accounting vendor bills',
+      path: '/admin/vendor-bills?lang=vi',
+      markers: ['record-workspace', 'vendor-bill-create-form', 'vendor-bill-collab'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
@@ -192,7 +197,7 @@ try {
         const response = await e2e.client.get(screen.path, { headers: variant.headers })
         const body = await response.text()
         variant.samples.push({ elapsed: performance.now() - started, bytes: Buffer.byteLength(body) })
-        assert.equal(response.status, 200)
+        assert.equal(response.status, 200, `${screen.label} ${variant.label}: ${body}`)
         if (variant.label === 'fragment') {
           assert.match(response.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
           assert.match(body, /^<ket-fragments /)
