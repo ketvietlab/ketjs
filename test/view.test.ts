@@ -71,6 +71,23 @@ test('signals: cleanup runs before the next effect and once more on disposal', (
   assert.deepEqual(log, ['run:0', 'clean:0', 'run:1', 'clean:1'])
 })
 
+test('signals: a failed eager effect leaves no live subscription behind', () => {
+  const source = signal(0)
+  let runs = 0
+  assert.throws(
+    () =>
+      effect(() => {
+        runs++
+        void source()
+        throw new Error('setup failed')
+      }),
+    /setup failed/,
+  )
+
+  source.set(1)
+  assert.equal(runs, 1)
+})
+
 test('signals: a computed subscription can be disposed', () => {
   const source = signal(1)
   let runs = 0
