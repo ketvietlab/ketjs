@@ -1,0 +1,139 @@
+import type { JSXChild, TemplateResult } from 'ketjs-view'
+import type { Translator } from 'ketjs'
+import {
+  framed,
+  icon,
+  recordForm as RecordForm,
+  recordToggle as RecordToggle,
+  recordWorkspace as RecordWorkspace,
+} from '../../ui/index.ts'
+import type { FormOption, Frame } from '../../ui/index.ts'
+
+type ProductCreateOptions = {
+  uoms: FormOption[]
+  categories: FormOption[]
+  stockEnabled?: boolean
+  errors?: string[]
+}
+
+const localized = (path: string, locale: string): string => {
+  if (!locale) return path
+  const target = new URL(path, 'http://ket.local')
+  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
+}
+
+const selectionLabel = (_: Translator, group: string, value: unknown): string => {
+  const raw = String(value)
+  const key = `product_backend.${group}.${raw}`
+  return _.resolves(key) ? _(key) : raw
+}
+
+export const newProductScreen = (
+  _: Translator,
+  options: ProductCreateOptions,
+  frame: Frame,
+  locale = '',
+): TemplateResult => {
+  const formId = 'product-create-form'
+  const badges: JSXChild[] = [
+    <RecordToggle name="saleOk" label={_('product_backend.field.saleOk')} checked={true} form={formId} />,
+    <RecordToggle
+      name="purchaseOk"
+      label={_('product_backend.field.purchaseOk')}
+      checked={true}
+      form={formId}
+    />,
+    ...(options.stockEnabled
+      ? [
+          <RecordToggle
+            name="isStorable"
+            label={_('product_backend.field.isStorable')}
+            checked={true}
+            form={formId}
+          />,
+        ]
+      : []),
+  ]
+
+  const form: JSXChild = (
+    <RecordForm
+      id={formId}
+      scope="product-create"
+      action={localized('/admin/products/new', locale)}
+      submit={_('product_backend.action.create')}
+      submitVariant="primary"
+      cancelHref={localized('/admin/products', locale)}
+      cancelLabel={_('product_backend.action.cancel')}
+      errors={options.errors}
+      fields={[
+        {
+          name: 'type',
+          label: _('product_backend.field.productKind'),
+          type: 'radio',
+          value: 'goods',
+          required: true,
+          span: 'full',
+          options: ['goods', 'service'].map((value) => ({
+            value,
+            label: selectionLabel(_, 'type', value),
+          })),
+        },
+        { name: 'name', label: _('product_backend.field.name'), required: true },
+        {
+          name: 'uomId',
+          label: _('product_backend.field.uom'),
+          type: 'select',
+          options: options.uoms,
+        },
+        {
+          name: 'categoryId',
+          label: _('product_backend.field.category'),
+          type: 'select',
+          options: [{ value: '', label: '—' }, ...options.categories],
+        },
+        {
+          name: 'listPrice',
+          label: _('product_backend.field.listPrice'),
+          type: 'decimal',
+          value: 0,
+        },
+        ...(options.stockEnabled
+          ? [
+              {
+                name: 'tracking',
+                label: _('product_backend.field.tracking'),
+                type: 'select' as const,
+                value: 'none',
+                options: ['none', 'lot', 'serial'].map((value) => ({
+                  value,
+                  label: selectionLabel(_, 'tracking', value),
+                })),
+              },
+            ]
+          : []),
+        {
+          name: 'description',
+          label: _('product_backend.field.description'),
+          type: 'textarea',
+          span: 'full',
+        },
+      ]}
+    />
+  )
+
+  return framed(
+    _,
+    _('product_backend.create.title'),
+    frame,
+    <RecordWorkspace
+      kicker={_('product_backend.create.kicker')}
+      title={_('product_backend.create.title')}
+      subtitle={_('product_backend.create.subtitle')}
+      imageFallback={icon('package')}
+      badges={badges}
+      body={form}
+    />,
+  )
+}

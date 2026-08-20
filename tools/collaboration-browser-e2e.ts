@@ -244,6 +244,11 @@ try {
       ready: `document.querySelector('#product-attribute-create') && document.querySelectorAll('[data-ui="content-card"]').length >= 3`,
     },
     {
+      name: 'product-create',
+      path: '/admin/products/new?lang=vi',
+      ready: `document.querySelector('#product-create-form') && document.querySelectorAll('[data-ui="record-toggle-input"]').length >= 3`,
+    },
+    {
       name: 'transfer-chatter',
       path: '/admin/transfers/pick-collab?lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
@@ -675,6 +680,43 @@ try {
         `[...document.querySelectorAll('[data-ui="card-title"]')].some((title) => title.textContent.includes('Hoàn thiện'))`,
       )
       assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-ui="content-card"]').length`), 4)
+    }
+    if (screen.name === 'product-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            typeRadios: document.querySelectorAll('#product-create-form [name="type"][type="radio"]').length,
+            headerToggles: document.querySelectorAll('[data-ui="record-badges"] [data-ui="record-toggle-input"][form="product-create-form"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('#product-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          typeRadios: 2,
+          headerToggles: 3,
+          gridRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#product-create-form')
+          form.querySelector('[name="name"]').value = 'Sản phẩm Browser E2E'
+          form.querySelector('[name="uomId"]').value = 'unit'
+          form.querySelector('[name="listPrice"]').value = '320000'
+          form.querySelector('[name="description"]').value = 'Được tạo bằng trình duyệt headless.'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('Sản phẩm Browser E2E') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
+      )
     }
     if (screen.name === 'transfer-chatter') {
       await evaluate(cdp, `document.querySelector('[data-ui="chatter-kind"][data-kind="note"]').click()`)

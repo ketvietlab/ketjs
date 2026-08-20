@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { json, page, text, withHeaders } from 'ketjs'
 import type { RouteEntry, Route, ServeContext } from 'ketjs'
 import {
-  newProductScreen,
   PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
@@ -11,6 +10,7 @@ import {
   VIEWS,
 } from './screens.ts'
 import { attributesScreen } from './attributes-screen.tsx'
+import { newProductScreen } from './create-screen.tsx'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'

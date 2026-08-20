@@ -154,6 +154,41 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
     '90',
   )
 
+  const productCreatePage = await e2e.client.get('/admin/products/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(productCreatePage.status, 200)
+  const productCreateHtml = await productCreatePage.text()
+  assert.match(productCreateHtml, /data-ui="record-workspace"/)
+  assert.match(productCreateHtml, /id="product-create-form"/)
+  assert.match(productCreateHtml, /data-scope="product-create"/)
+  assert.equal((productCreateHtml.match(/name="type"/g) ?? []).length, 2)
+  assert.doesNotMatch(productCreateHtml, /<select[^>]*name="type"/)
+  assert.match(productCreateHtml, /name="saleOk"[^>]*form="product-create-form"/)
+  assert.match(productCreateHtml, /name="purchaseOk"[^>]*form="product-create-form"/)
+  assert.match(productCreateHtml, /name="isStorable"[^>]*form="product-create-form"/)
+  assert.doesNotMatch(productCreateHtml, /data-island="mail\.chatter"/)
+
+  const createdProductPage = await e2e.client.post(
+    '/admin/products/new?lang=vi',
+    new URLSearchParams({
+      name: 'Sản phẩm từ form',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '250000',
+      saleOk: '1',
+      purchaseOk: '1',
+      isStorable: '1',
+      tracking: 'none',
+      description: 'Được tạo qua HTTP E2E.',
+    }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(createdProductPage.status, 200)
+  const createdProductHtml = await createdProductPage.text()
+  assert.match(createdProductHtml, /Sản phẩm từ form/)
+  assert.match(createdProductHtml, /data-island="mail\.chatter"/)
+
   const productPage = await e2e.client.get('/admin/products/tpl?lang=vi', {
     headers: { accept: 'text/html' },
   })
