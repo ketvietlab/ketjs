@@ -89,7 +89,13 @@ const app = defineApp({
 
 const runCli = async (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
   const cli = fileURLToPath(new URL('../packages/ketjs/src/cli.js', import.meta.url))
-  const child = spawn(process.execPath, [cli, ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, [cli, ...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // Runtime diagnostics are not part of the CLI JSON protocol. Node 24 still
+    // marks node:sqlite experimental and some test runners merge that diagnostic
+    // into captured output, so keep the machine-readable channel deterministic.
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  })
   let stdout = ''
   let stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => {

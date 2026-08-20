@@ -114,6 +114,13 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         `"${fkey}" is no longer idempotent`,
         'agent retries may double-apply it',
       )
+    if (bfn.exposure === 'http' && afn.exposure === 'internal')
+      push(
+        'breaking',
+        'FUNCTION_HTTP_REMOVED',
+        `server function "${fkey}" is no longer exposed over generic HTTP`,
+        'move callers behind the trusted route that owns this internal function',
+      )
     if (!bfn.crossCompany && afn.crossCompany) {
       push(
         'risky',

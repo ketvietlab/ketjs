@@ -207,8 +207,28 @@ export function createContext(o: {
         })
       }
     }
-    const out: Row = { ...row, companyId: requireCompany(model) }
-    if (kind === 'company+branch' && scope.branches?.length === 1) out.branchId = scope.branches[0]
+    const company = requireCompany(model)
+    const out: Row = { ...row, companyId: company }
+    if (kind === 'company+branch') {
+      const branch = scope.branch ?? null
+      if (!branch) {
+        throw new KetError({
+          code: 'E_NO_BRANCH_IN_SCOPE',
+          module: operation.by,
+          message: `"${fnKey}" writes ${model}, but the request names no branch to write to`,
+          hint: 'set scope.branch to one readable branch; scope.branches is only the read set',
+        })
+      }
+      if (scope.branches && !scope.branches.includes(branch)) {
+        throw new KetError({
+          code: 'E_WRITE_BRANCH_NOT_READABLE',
+          module: operation.by,
+          message: `"${fnKey}" would write to branch "${branch}", which is not in its readable branch set`,
+          hint: 'the write branch must be one of scope.branches',
+        })
+      }
+      out.branchId = branch
+    }
     return out
   }
   // Placeholders are dialect-specific. The query builder already knew this; these

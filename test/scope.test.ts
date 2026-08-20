@@ -62,8 +62,8 @@ const ledger = defineModule({
 })
 
 const manifest = compose([ledger], { headless: true })
-const A = { company: 'acme', branches: null }
-const B = { company: 'globex', branches: null }
+const A = { company: 'acme', branch: 'hanoi', branches: null }
+const B = { company: 'globex', branch: 'new-york', branches: null }
 
 async function boot(): Promise<Adapter> {
   const db = sqliteAdapter()
@@ -89,7 +89,7 @@ test('scope: a model that does not declare one is a build error', () => {
 test('scope: the columns are added by the composer, not by the module', () => {
   const inv = manifest.models['ledger.Invoice']!
   assert.equal(inv.fields.companyId!.by, '(scope)')
-  assert.equal(inv.fields.branchId!.optional, true, 'a row may belong to the company but no branch')
+  assert.equal(inv.fields.branchId!.optional, false, 'a branch-scoped row always belongs to one branch')
   assert.equal(
     'companyId' in manifest.models['ledger.Currency']!.fields,
     false,
@@ -195,12 +195,12 @@ test('scope: branch narrows within a company, and is not a permission', async ()
   await callFn(
     'ledger.add',
     { id: 'h1', total: 1 },
-    { adapter: db, manifest, scope: { company: 'acme', branches: ['hanoi'] } },
+    { adapter: db, manifest, scope: { company: 'acme', branch: 'hanoi', branches: ['hanoi'] } },
   )
   await callFn(
     'ledger.add',
     { id: 's1', total: 2 },
-    { adapter: db, manifest, scope: { company: 'acme', branches: ['saigon'] } },
+    { adapter: db, manifest, scope: { company: 'acme', branch: 'saigon', branches: ['saigon'] } },
   )
 
   const hanoi = (
@@ -226,6 +226,43 @@ test('scope: branch narrows within a company, and is not a permission', async ()
 
   const everyBranch = (await callFn('ledger.list', {}, { adapter: db, manifest, scope: A })).value as Row[]
   assert.equal(everyBranch.length, 2, 'no branch list means every branch of the company, not none')
+  await db.close()
+})
+
+test('scope: a branch-scoped write needs a declared write branch', async () => {
+  const db = await boot()
+  await assert.rejects(
+    () =>
+      callFn(
+        'ledger.add',
+        { id: 'x', total: 1 },
+        {
+          adapter: db,
+          manifest,
+          scope: { company: 'acme', branches: ['hanoi', 'saigon'] },
+        },
+      ),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_NO_BRANCH_IN_SCOPE')
+      return true
+    },
+  )
+  await assert.rejects(
+    () =>
+      callFn(
+        'ledger.add',
+        { id: 'x', total: 1 },
+        {
+          adapter: db,
+          manifest,
+          scope: { company: 'acme', branch: 'danang', branches: ['hanoi'] },
+        },
+      ),
+    (e: unknown) => {
+      assert.equal((e as { code: string }).code, 'E_WRITE_BRANCH_NOT_READABLE')
+      return true
+    },
+  )
   await db.close()
 })
 
