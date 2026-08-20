@@ -60,6 +60,9 @@ export const viewerOf = async (
     contextPath: live.routes['/admin/context']
       ? `/admin/context${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
       : null,
+    profilePath: live.routes['/admin/profile']
+      ? `/admin/profile${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
+      : null,
   }
 }
 

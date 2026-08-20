@@ -137,7 +137,7 @@ test('backend: signed in, the sidebar says who and offers the way out', async ()
   const foot = html
     .slice(html.indexOf('data-ui="sidebar-foot"'), html.indexOf('</aside>'))
     .replace(/<!--[^>]*-->/g, '')
-  assert.match(foot, /data-ui="viewer-name">Nguyễn Quản Trị/)
+  assert.match(foot, /data-ui="viewer-name"><a href="\/admin\/profile">Nguyễn Quản Trị<\/a>/)
   assert.match(foot, /data-ui="signout"[^>]*action="\/logout"/)
   await b.close()
 })

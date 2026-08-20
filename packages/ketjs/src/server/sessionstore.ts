@@ -43,8 +43,12 @@ export type SessionStore = {
   /** Replace identity scope only if nobody changed this session since it was read. */
   updateContext(id: string, expectedRevision: number, context: SessionContext): Promise<SessionRecord | null>
   destroy(id: string): Promise<void>
+  /** List live sessions for profile/admin screens. */
+  listUser(userId: string): Promise<SessionRecord[]>
   /** Every session of one user — logging out everywhere, or revoking an account. */
   destroyUser(userId: string): Promise<number>
+  /** Rotate credentials while keeping the session that performed the change. */
+  destroyUserExcept(userId: string, keepId: string): Promise<number>
   /** Remove what has expired. Returns rows removed. */
   sweep(now: number): Promise<number>
 }
@@ -92,10 +96,31 @@ export function memorySessionStore(o: { now?: () => number } = {}): SessionStore
     async destroy(id) {
       rows.delete(id)
     },
+    async listUser(userId) {
+      const out: SessionRecord[] = []
+      for (const [id, r] of rows) {
+        if (!alive(r, now())) {
+          rows.delete(id)
+          continue
+        }
+        if (r.userId === userId)
+          out.push({ ...r, companies: [...r.companies], branches: r.branches ? [...r.branches] : null })
+      }
+      return out.sort((a, b) => b.createdAt - a.createdAt)
+    },
     async destroyUser(userId) {
       let n = 0
       for (const [id, r] of rows)
         if (r.userId === userId) {
+          rows.delete(id)
+          n++
+        }
+      return n
+    },
+    async destroyUserExcept(userId, keepId) {
+      let n = 0
+      for (const [id, r] of rows)
+        if (r.userId === userId && id !== keepId) {
           rows.delete(id)
           n++
         }
@@ -240,10 +265,30 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
       await adapter.run(`DELETE FROM ket_session WHERE id = ${p(1)}`, [id])
     },
 
+    async listUser(userId) {
+      await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)} AND expires_at <= ${p(2)}`, [
+        userId,
+        now(),
+      ])
+      const rows = await adapter.all(
+        `SELECT * FROM ket_session WHERE user_id = ${p(1)} ORDER BY created_at DESC`,
+        [userId],
+      )
+      return rows.map((row) => decode(row as Record<string, unknown>))
+    },
+
     async destroyUser(userId) {
       const res = (await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)}`, [userId])) as {
         changes?: number
       }
+      return res.changes ?? 0
+    },
+
+    async destroyUserExcept(userId, keepId) {
+      const res = (await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)} AND id <> ${p(2)}`, [
+        userId,
+        keepId,
+      ])) as { changes?: number }
       return res.changes ?? 0
     },
 

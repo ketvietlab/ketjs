@@ -71,6 +71,20 @@ for (const [name, make] of stores) {
     await close()
   })
 
+  test(`session (${name}): credential rotation lists sessions and keeps only the current one`, async () => {
+    const { store, close } = await make()
+    const s = await createSessions({ store, secret: 'k' })
+    const current = await s.start({ userId: 'u1', companies: ['c1'] })
+    const stale = await s.start({ userId: 'u1', companies: ['c1'] })
+    await s.start({ userId: 'u2', companies: ['c1'] })
+    assert.equal((await store.listUser('u1')).length, 2)
+    assert.equal(await s.endUserExcept('u1', current.record.id), 1)
+    assert.notEqual(await store.read(current.record.id), null)
+    assert.equal(await store.read(stale.record.id), null)
+    assert.equal((await store.listUser('u2')).length, 1)
+    await close()
+  })
+
   test(`session (${name}): sweeping removes what has expired and nothing else`, async () => {
     let clock = 1_000_000
     const { store, close } = await make(() => clock)
