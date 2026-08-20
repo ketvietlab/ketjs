@@ -8,7 +8,8 @@ Baseline:
 - source: Odoo 19 Community semantics and data model
 - original target baseline: KetSuite at `origin/develop` commit
   `10eb9dda7f679e4b19cdacd5cca0e1574f926d77`
-- final integration baseline: the current `origin/develop` at PR publication
+- final integration baseline: KetSuite at `origin/develop` commit
+  `c82758c3f2a1400491899e016cc09c363e2a3350`
 - worktree: `/Users/kieuduy/dev/ketjs-odoo-collaboration-plan`
 - branch: `codex/odoo-collaboration-port-plan`
 
@@ -542,6 +543,11 @@ parsing can hide mistakes behind volume.
 
 Completed on 2026-08-20:
 
+Final integration verification on the baseline above reports 631 tests: 630
+passed, zero failed and one live MinIO check skipped because the opt-in service
+was not running. All 11 compile-time type assertions hold. The authenticated
+Chrome run satisfies 11 interaction/security assertions across all nine screens.
+
 - PR 0: strict `date` scalar, effect-gated outbound transport and durable retry/idempotency proof;
 - PR 1: company-scoped Mail/Chatter domain, follower/subtype fan-out, internal-note disclosure policy,
   actor-owned inbox and authenticated HTTP E2E;
@@ -578,22 +584,22 @@ Warm authenticated HTTP render benchmark, 30 samples per screen on the developme
 
 | screen | mean | p50 | p95 | HTML |
 | --- | ---: | ---: | ---: | ---: |
-| Product collaboration | 7.07 ms | 5.89 ms | 14.95 ms | 26,948 B |
-| Transfer collaboration | 4.07 ms | 3.93 ms | 5.54 ms | 25,797 B |
-| My Activities | 2.58 ms | 2.57 ms | 3.24 ms | 17,979 B |
-| Calendar Agenda | 2.16 ms | 1.93 ms | 3.65 ms | 11,135 B |
-| Calendar Week | 2.08 ms | 1.85 ms | 3.28 ms | 12,827 B |
-| Calendar Month | 2.41 ms | 2.25 ms | 4.52 ms | 21,450 B |
-| Notification inbox | 2.19 ms | 2.03 ms | 3.59 ms | 12,661 B |
-| Transactional outbox | 2.49 ms | 2.19 ms | 4.82 ms | 11,518 B |
-| Inbound email log | 2.48 ms | 2.28 ms | 3.89 ms | 12,312 B |
+| Product collaboration | 5.59 ms | 5.17 ms | 9.24 ms | 28,615 B |
+| Transfer collaboration | 4.40 ms | 4.01 ms | 5.79 ms | 27,464 B |
+| My Activities | 2.63 ms | 2.50 ms | 3.63 ms | 19,646 B |
+| Calendar Agenda | 2.04 ms | 1.95 ms | 3.15 ms | 12,802 B |
+| Calendar Week | 2.00 ms | 1.98 ms | 2.90 ms | 14,494 B |
+| Calendar Month | 2.37 ms | 2.29 ms | 3.08 ms | 23,117 B |
+| Notification inbox | 2.97 ms | 2.61 ms | 5.05 ms | 14,328 B |
+| Transactional outbox | 2.29 ms | 2.14 ms | 3.18 ms | 13,185 B |
+| Inbound email log | 2.33 ms | 2.26 ms | 3.24 ms | 13,979 B |
 
 The reproducible Chrome headless run records navigation and island-ready timings in
 `docs/assets/odoo-collaboration/browser-e2e.json`. It logs in through the real session route, posts a
 message and an internal note from the rendered composers, schedules and completes an Activity, verifies
 an HTML-looking payload stays text, checks Chatter delivery states, and checks the due list, inbox and
 transactional Outbox and inbound diagnostics. The latest interactive timings are recorded per screen,
-including 197.6 ms for Agenda, 180.3 ms for Week, 232.2 ms for Month, 185.8 ms for Outbox and 230.2 ms
+including 199.3 ms for Agenda, 201.8 ms for Week, 227.0 ms for Month, 137.7 ms for Outbox and 99.7 ms
 for the inbound email log. These are wall-clock browser readiness measurements, not server render time;
 the matching navigation values are retained in the JSON evidence. Reproduce both evidence sets with:
 

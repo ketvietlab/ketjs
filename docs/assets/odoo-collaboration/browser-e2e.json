@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-20T03:57:20.917Z",
+  "generatedAt": "2026-08-20T04:04:41.490Z",
   "viewport": {
     "width": 1440,
     "height": 1100
@@ -20,48 +20,48 @@
   "screens": [
     {
       "screen": "product-chatter",
-      "readyMs": 306.59962499999983,
-      "navigationMs": 159.39999985694885
+      "readyMs": 321.59179099999983,
+      "navigationMs": 153.20000004768372
     },
     {
       "screen": "transfer-chatter",
-      "readyMs": 203.30625000000055,
-      "navigationMs": 86.5
+      "readyMs": 202.39016600000014,
+      "navigationMs": 81.5
     },
     {
       "screen": "notification-inbox",
-      "readyMs": 95.17729099999997,
-      "navigationMs": 76
+      "readyMs": 88.16700000000037,
+      "navigationMs": 76.20000004768372
     },
     {
       "screen": "my-activities",
-      "readyMs": 123.53116599999976,
-      "navigationMs": 94.69999980926514
+      "readyMs": 97.3715830000001,
+      "navigationMs": 79.79999995231628
     },
     {
       "screen": "calendar-agenda",
-      "readyMs": 197.6038749999998,
-      "navigationMs": 80.89999985694885
+      "readyMs": 199.31695800000034,
+      "navigationMs": 80.10000014305115
     },
     {
       "screen": "calendar-week",
-      "readyMs": 180.34091699999954,
-      "navigationMs": 74.70000004768372
+      "readyMs": 201.77029200000015,
+      "navigationMs": 90
     },
     {
       "screen": "calendar-month",
-      "readyMs": 232.24987499999952,
-      "navigationMs": 101.30000019073486
+      "readyMs": 226.9762499999997,
+      "navigationMs": 106.29999995231628
     },
     {
       "screen": "transactional-outbox",
-      "readyMs": 185.7613339999998,
-      "navigationMs": 89
+      "readyMs": 137.73491699999977,
+      "navigationMs": 104.20000004768372
     },
     {
       "screen": "inbound-email-log",
-      "readyMs": 230.22249999999985,
-      "navigationMs": 112.30000019073486
+      "readyMs": 99.67674999999963,
+      "navigationMs": 79.5
     }
   ]
 }
