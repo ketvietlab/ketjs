@@ -36,7 +36,7 @@ try {
     {
       label: 'Transfer collaboration',
       path: '/admin/transfers/pick-collab?lang=vi',
-      markers: ['mail.chatter', 'activity.record'],
+      markers: ['mail.chatter', 'activity.record', 'record-workspace', 'stock.editor'],
     },
     {
       label: 'My activities',

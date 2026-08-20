@@ -719,6 +719,56 @@ try {
       )
     }
     if (screen.name === 'transfer-chatter') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            aside: Boolean(document.querySelector('[data-ui="record-aside"]')),
+            editorIdle: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === true,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('form[data-scope="stock-transfer"] [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          aside: true,
+          editorIdle: true,
+          formRowsAtLeast28: true,
+          collaborationNarrower: true,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          globalThis.__transferActionNodes = {
+            chatter: document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: document.querySelector('[data-ui="sidebar-foot"]')
+          }
+          document.querySelector('form[data-scope="stock-transfer"] input[name="action"][value="confirm"]').form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]') && document.querySelector('[data-ui="record-header"]')?.textContent.includes('Đã xác nhận')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            chatter: globalThis.__transferActionNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
+            activity: globalThis.__transferActionNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
+            sidebar: globalThis.__transferActionNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
+            editorVisible: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === false,
+            formReady: Array.from(document.querySelectorAll('form[data-scope="stock-transfer"]')).every((form) => form.getAttribute('aria-busy') !== 'true')
+          })`,
+        ),
+        { chatter: true, activity: true, sidebar: true, editorVisible: true, formReady: true },
+      )
       await evaluate(cdp, `document.querySelector('[data-ui="chatter-kind"][data-kind="note"]').click()`)
       await waitFor(cdp, `document.querySelector('[data-ui="chatter-composer"]')`)
       await evaluate(
@@ -791,6 +841,7 @@ try {
           assertions: [
             'authenticated product and transfer islands reached ready state',
             'Product save replaced only its record header/body and preserved Chatter, Activity and sidebar DOM identity',
+            'Transfer actions replaced only the record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',

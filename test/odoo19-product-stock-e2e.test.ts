@@ -398,6 +398,10 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     headers: { accept: 'text/html' },
   })
   const uiHtml = await uiPage.text()
+  assert.match(uiHtml, /data-ui="record-workspace"/)
+  assert.match(uiHtml, /data-ui="record-aside"/)
+  assert.match(uiHtml, /data-island="stock\.editor"/)
+  assert.match(uiHtml, /data-scope="stock-transfer"/)
   assert.match(uiHtml, /name="operationId"/)
   assert.match(uiHtml, /name="backorder" value="create"/)
   await e2e.client.form<string>('/admin/transfers/ui-pick?lang=vi', {

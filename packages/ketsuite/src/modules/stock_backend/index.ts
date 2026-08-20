@@ -1,4 +1,5 @@
 import { defineModule } from 'ketjs'
+import { islands } from './islands.ts'
 import { routes } from './routes.ts'
 
 export default defineModule({
@@ -7,6 +8,8 @@ export default defineModule({
   depends: ['stock', 'backend'],
   install: 'auto',
   app: true,
+  assets: new URL('./client/', import.meta.url),
+  islands,
   title: 'Kho trong quản trị',
   summary: 'Warehouse, tồn kho, dịch chuyển và routes.',
   category: 'Hệ thống',
@@ -16,6 +19,7 @@ export default defineModule({
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,
     },
+    'picking.editor': { props: { pickingId: 'id', lang: 'text?' } },
   },
   menus: {
     stock: { label: 'menu.app', icon: 'warehouse', sequence: 30 },
@@ -103,6 +107,18 @@ export default defineModule({
       replenishment: 'Bổ sung hàng',
       forecast: 'Dự báo tồn kho',
       transferDetail: 'Chi tiết dịch chuyển',
+      'transfer.kicker': 'Dịch chuyển kho',
+      'transfer.collaboration.label': 'Trao đổi và hoạt động của dịch chuyển',
+      'transfer.actions.label': 'Hành động dịch chuyển',
+      'transfer.summary.lines': 'Dòng thao tác',
+      'transfer.operations.title': 'Dòng dịch chuyển',
+      'transfer.operations.hint': 'Theo dõi nhu cầu, số lượng đã xử lý và trạng thái từng dòng.',
+      'transfer.operations.empty': 'Chưa có dòng dịch chuyển',
+      'transfer.operations.emptyHint': 'Thêm sản phẩm vào dịch chuyển để bắt đầu xử lý.',
+      'transfer.addMove.title': 'Thêm sản phẩm',
+      'transfer.addMove.hint': 'Khai báo sản phẩm, đơn vị và số lượng cần dịch chuyển.',
+      'transfer.recordDone.title': 'Ghi nhận xử lý',
+      'transfer.recordDone.hint': 'Nhập số lượng thực tế và lô hoặc sê-ri khi cần.',
       routeDetail: 'Quy tắc tuyến cung ứng',
       'col.name': 'Tên',
       'col.kind': 'Loại',
@@ -259,6 +275,18 @@ export default defineModule({
       replenishment: 'Replenishment',
       forecast: 'Stock forecast',
       transferDetail: 'Transfer details',
+      'transfer.kicker': 'Inventory transfer',
+      'transfer.collaboration.label': 'Transfer conversation and activities',
+      'transfer.actions.label': 'Transfer actions',
+      'transfer.summary.lines': 'Operation lines',
+      'transfer.operations.title': 'Stock moves',
+      'transfer.operations.hint': 'Review demand, completed quantities, and each line state.',
+      'transfer.operations.empty': 'No stock moves yet',
+      'transfer.operations.emptyHint': 'Add a product to begin processing this transfer.',
+      'transfer.addMove.title': 'Add product',
+      'transfer.addMove.hint': 'Set the product, unit, and quantity to move.',
+      'transfer.recordDone.title': 'Record processing',
+      'transfer.recordDone.hint': 'Enter the completed quantity and a lot or serial when required.',
       routeDetail: 'Route rules',
       'col.name': 'Name',
       'col.kind': 'Kind',
@@ -389,5 +417,8 @@ export default defineModule({
       'record.pickingType.pack': 'Pack',
       'record.pickingType.adjustment': 'Inventory Adjustments',
     },
+  },
+  fills: {
+    'stock_backend:picking.editor': `{% island "stock.editor" %}`,
   },
 })

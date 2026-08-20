@@ -247,6 +247,14 @@ test('Product Variant form keeps its own Chatter, activities and partial-save wo
 
 test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer screen joint', async (t) => {
   const { e2e, call, member } = await boot(t)
+  await call('stock.addMove', {
+    id: 'move-collab',
+    name: 'Collaborative product',
+    pickingId: 'pick-collab',
+    productId: 'variant-collab',
+    productUomId: 'unit',
+    productUomQty: '2',
+  })
   const transferPage = await e2e.client.get('/admin/transfers/pick-collab?lang=vi', {
     headers: { accept: 'text/html' },
   })
@@ -255,6 +263,21 @@ test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer 
   assert.match(html, /data-island="mail\.chatter"/)
   assert.match(html, /&quot;resModel&quot;:&quot;stock\.Picking&quot;/)
   assert.match(html, /WH\/OUT\/COLLAB/)
+  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="record-aside"/)
+  assert.match(html, /data-island="stock\.editor"/)
+  assert.match(html, /data-scope="stock-transfer"/)
+
+  const partial = await e2e.client.post(
+    '/admin/transfers/pick-collab?lang=vi',
+    new URLSearchParams({ action: 'confirm' }),
+    { headers: { accept: 'text/html', 'x-ket-partial': 'stock-transfer' } },
+  )
+  assert.equal(partial.status, 200)
+  const partialHtml = await partial.text()
+  assert.match(partialHtml, /data-ui="record-header"/)
+  assert.match(partialHtml, /data-ui="record-body"/)
+  assert.match(partialHtml, /Đã xác nhận/)
 
   await member.call('stock_mail_backend.follow', { targetId: 'pick-collab' })
   await call('stock_mail_backend.post', {

@@ -48,6 +48,9 @@ const columns = (_: Translator): Array<Column<StockRow>> => [
   { key: 'id', label: _('backend.table.id'), cell: (row) => code(row.id, 'identifier'), optional: true },
 ]
 
+export const stockRowsTable = (_: Translator, rows: StockRow[]): TemplateResult =>
+  dataTable(_, { columns: columns(_), rows, id: (row) => row.id })
+
 export const stockScreen = (
   _: Translator,
   title: string,
@@ -63,7 +66,7 @@ export const stockScreen = (
     stack([
       ...additions,
       rows.length
-        ? dataTable(_, { columns: columns(_), rows, id: (row) => row.id })
+        ? stockRowsTable(_, rows)
         : showEmpty
           ? emptyState(_('stock_backend.empty'), _('stock_backend.emptyHint'))
           : '',
