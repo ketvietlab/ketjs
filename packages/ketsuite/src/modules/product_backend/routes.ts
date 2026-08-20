@@ -378,6 +378,14 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         const partial = isProductPartial(req)
         const form = await readForm(req)
+        if (hasStock && !validStockForm(form)) {
+          if (partial)
+            return json(
+              { ok: false, message: _('product_backend.error.invalid'), errors: ['tracking'] },
+              { status: 422 },
+            )
+          return seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1&count=1`))
+        }
         const result = await ctx.call(
           'product.saveTemplate',
           {
