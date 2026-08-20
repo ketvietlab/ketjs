@@ -159,6 +159,7 @@ test('theme: the full page carries what seo filled into the head joint', () => {
     meta: { metaDescription: 'Mô tả trang', noindex: true, canonical: null, ogImage: null },
     sections: homeLayout,
   })
+  assert.match(html, /<main class="page" data-ket-slot="website\.page">/)
   assert.match(html, /<meta name="description" content="Mô tả trang">/)
   assert.match(html, /<meta name="robots" content="noindex">/)
   assert.ok(!html.includes('canonical'), 'an absent value contributes nothing')

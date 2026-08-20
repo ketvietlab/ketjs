@@ -140,6 +140,8 @@ export type ServeContext = {
  */
 export type PagesSpec = {
   resolve: string
+  /** Theme region whose host carries the same data-ket-slot name. */
+  region?: string
   /** Message key for the title of a path that has no page. */
   notFound?: string
   siteTitle?: string
@@ -620,6 +622,14 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
     })
   }
+  if (pages?.region && spec.theme && !spec.theme.templates[pages.region]) {
+    throw new KetError({
+      code: 'E_PAGE_REGION_MISSING',
+      module: spec.name,
+      message: `app "${spec.name}" navigates through region "${pages.region}", which its theme does not render`,
+      hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
+    })
+  }
 
   const appRoutes = serve.routes?.(ctx) ?? {}
   for (const path of Object.keys(appRoutes)) {
@@ -692,6 +702,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
      */
     ...(pages
       ? {
+          ...(pages.region ? { pageRegion: pages.region } : {}),
           pageScope: async (url: URL, req: IncomingMessage) => {
             const site = { title: pages.siteTitle ?? spec.name }
             // The theme's layout writes <html lang>, so the locale has to reach it.
