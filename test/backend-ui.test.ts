@@ -293,6 +293,7 @@ const componentContract = [
       kanbanCard({
         key: row.id,
         title: 'Card',
+        href: `/k/${row.id}`,
         meta: badge('Draft'),
         note: 'Note',
         actions: linkButton({ label: 'Open', href: '/k' }),
@@ -310,6 +311,7 @@ const componentContract = [
     caption: 'Sortable records',
     rows: [{ id: 'r', name: 'Record' }],
     id: (row) => row.id,
+    rowHref: (row) => `/r/${row.id}`,
     columns: [
       {
         key: 'name',

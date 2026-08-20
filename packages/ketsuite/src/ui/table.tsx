@@ -27,6 +27,7 @@ export type DataTable<R> = {
   columns: ReadonlyArray<Column<R>>
   rows: readonly R[]
   id: (row: R) => string
+  rowHref?: (row: R) => string
   caption?: string | null
   shown?: readonly string[]
   colsHref?: (keys: readonly string[]) => string
@@ -37,6 +38,7 @@ export const HOOKS = [
   'table',
   'col',
   'row',
+  'row-link',
   'cell',
   'col-actions',
   'cell-actions',
@@ -144,7 +146,13 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
                     data-kind={column.kind ?? 'text'}
                     data-priority={column.priority ?? 'secondary'}
                   >
-                    {column.cell(row)}
+                    {table.rowHref && column === columns[0] ? (
+                      <a data-ui="row-link" href={table.rowHref(row)}>
+                        {column.cell(row)}
+                      </a>
+                    ) : (
+                      column.cell(row)
+                    )}
                   </td>
                 ),
               )}
