@@ -151,8 +151,12 @@ const loadFactory = async (name) => {
   loading.set(name, pending)
   try { return await pending } finally { loading.delete(name) }
 }
-const loadPlaced = async (root) => {
+const loadPlaced = async (root, requireKnown = false) => {
   const names = new Set(Array.from(root.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')).filter(Boolean))
+  if (requireKnown) {
+    const unknown = Array.from(names).find((name) => !definitions[name])
+    if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
+  }
   await Promise.all(Array.from(names, loadFactory))
 }
 
@@ -179,7 +183,7 @@ const applyFragments = async (markup) => {
     if (document.querySelectorAll(slotSelector(name)).length !== 1)
       throw new Error('current document does not have exactly one slot named "' + name + '"')
   }
-  await Promise.all(templates.map((template) => loadPlaced(template.content)))
+  await Promise.all(templates.map((template) => loadPlaced(template.content, true)))
   const changed = []
   for (const template of templates) {
     const name = template.getAttribute('data-ket-slot')
