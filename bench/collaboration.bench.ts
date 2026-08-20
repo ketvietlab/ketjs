@@ -28,6 +28,7 @@ const report = (label: string, summary: Summary, suffix = ''): void =>
   )
 
 const databaseUrl = process.env.KET_BENCH_PG?.trim()
+const onlyScreen = process.env.KET_BENCH_SCREEN?.trim()
 const e2e = await collaborationEvidenceApp(databaseUrl ? { databaseUrl } : {})
 try {
   await e2e.client.login({ login: 'admin', password: 'correct horse' })
@@ -93,6 +94,11 @@ try {
       markers: ['stock-route-detail-form', 'stock-route-rule-form', 'record-workspace'],
     },
     {
+      label: 'Replenishment',
+      path: '/admin/replenishment?lang=vi',
+      markers: ['replenishment-create-form', 'record-workspace', 'Đề xuất bổ sung'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
@@ -129,7 +135,8 @@ try {
       path: '/admin/inbound-email?lang=vi',
       markers: ['Nhật ký email đến', 'Đã xử lý', 'Không định tuyến được', 'Đã bỏ qua'],
     },
-  ]
+  ].filter((screen) => !onlyScreen || screen.label === onlyScreen)
+  assert.ok(screens.length > 0, `unknown collaboration benchmark screen: ${String(onlyScreen)}`)
   console.log('collaboration screen HTTP benchmark (30 interleaved warm renders per response mode)')
   for (const screen of screens) {
     await e2e.client.get(screen.path)

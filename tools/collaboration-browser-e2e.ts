@@ -204,6 +204,7 @@ const artifactDir = resolve('docs/assets/odoo-collaboration')
 const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
+const replenishmentEvidenceDir = resolve('docs/assets/inventory-replenishment')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -212,6 +213,7 @@ try {
   await mkdir(lotEvidenceDir, { recursive: true })
   await mkdir(routeEvidenceDir, { recursive: true })
   await mkdir(routeDetailEvidenceDir, { recursive: true })
+  await mkdir(replenishmentEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -293,6 +295,11 @@ try {
       name: 'route-detail',
       path: '/admin/stock-routes/wh:receipt-route?lang=vi',
       ready: `document.querySelector('#stock-route-detail-form') && document.querySelector('#stock-route-rule-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'replenishment',
+      path: '/admin/replenishment?lang=vi',
+      ready: `document.querySelector('#replenishment-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1209,6 +1216,125 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-en-mobile.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'replenishment') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            productSelector: document.querySelector('#replenishment-create-form [name="productId"]')?.tagName === 'SELECT',
+            storableProduct: document.querySelector('#replenishment-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            forecast: document.querySelector('[data-ui="table"]')?.textContent.includes('Dự báo'),
+            proposal: Boolean(document.querySelector('[data-ui="table"] [data-ui="badge"][data-tone="warning"]')),
+            runAction: Boolean(document.querySelector('[data-ui="table"] form[action*="/admin/replenishment/"]')),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          productSelector: true,
+          storableProduct: true,
+          rowsAtLeastOne: true,
+          forecast: true,
+          proposal: true,
+          runAction: true,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#replenishment-create-form')
+          form.noValidate = true
+          form.querySelector('[name="productId"]').value = 'variant-collab'
+          form.querySelector('[name="warehouseId"]').value = 'wh'
+          form.querySelector('[name="locationId"]').value = 'wh:output'
+          form.querySelector('[name="trigger"]').value = 'auto'
+          form.querySelector('[name="minQuantity"]').value = '10'
+          form.querySelector('[name="maxQuantity"]').value = '5'
+          form.querySelector('[name="replenishmentUomId"]').value = 'unit'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(cdp, `location.search.includes('invalid=1')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            error: Boolean(document.querySelector('#replenishment-create-form [data-ui="form-errors"][role="alert"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
+          })`,
+        ),
+        { error: true, chatter: false },
+      )
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Reordering rules')`), true)
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-en-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
+          })`,
+        ),
+        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-mobile.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-en-mobile.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
