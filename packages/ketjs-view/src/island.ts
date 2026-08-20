@@ -44,6 +44,8 @@ export type IslandDefinition = {
   view: IslandFactory
   /** The only surrounding scope keys that may cross into the island. */
   props?: Record<string, string>
+  /** Props that identify one persistent instance. Empty means one global instance. */
+  key?: readonly string[]
   /** Browser module, relative to the declaring module's assets directory. */
   client?: string
   /** Named browser export; defaults to `default`. */
@@ -56,29 +58,37 @@ const controllerOf = (created: IslandView | IslandController): IslandController 
 
 const jsonProps = (name: string, props: IslandProps): { raw: string; revived: IslandProps } => {
   const seen = new WeakSet<object>()
-  const visit = (value: unknown): void => {
-    if (value == null || typeof value === 'string' || typeof value === 'boolean') return
+  const visit = (value: unknown): unknown => {
+    if (value == null || typeof value === 'string' || typeof value === 'boolean') return value
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) throw new TypeError('non-finite number')
-      return
+      return value
     }
     if (typeof value !== 'object') throw new TypeError(typeof value)
-    if (value instanceof Date) return
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) throw new TypeError('invalid date')
+      return value.toJSON()
+    }
     if (seen.has(value)) throw new TypeError('cyclic value')
     seen.add(value)
+    let out: unknown
     if (Array.isArray(value)) {
-      for (const item of value) visit(item)
+      out = value.map(visit)
     } else {
       const prototype = Object.getPrototypeOf(value)
       if (prototype !== null && prototype !== Object.prototype) throw new TypeError('non-plain object')
-      for (const item of Object.values(value as Record<string, unknown>)) visit(item)
+      const object = Object.create(null) as Record<string, unknown>
+      for (const key of Object.keys(value as Record<string, unknown>).sort())
+        object[key] = visit((value as Record<string, unknown>)[key])
+      out = object
     }
     seen.delete(value)
+    return out
   }
 
   try {
-    visit(props)
-    const raw = JSON.stringify(props)
+    const canonical = visit(props)
+    const raw = JSON.stringify(canonical)
     const revived = JSON.parse(raw) as unknown
     if (typeof revived !== 'object' || revived === null || Array.isArray(revived))
       throw new TypeError('not an object')
@@ -92,17 +102,36 @@ const jsonProps = (name: string, props: IslandProps): { raw: string; revived: Is
   }
 }
 
+const islandKey = (name: string, props: IslandProps, fields?: readonly string[]): string => {
+  if (fields === undefined) return jsonProps(name, props).raw
+  const values = fields.map((field) => {
+    if (!(field in props))
+      throw new IslandError({
+        code: 'E_ISLAND_KEY',
+        message: `island "${name}" key prop "${field}" is missing`,
+      })
+    return props[field]
+  })
+  return JSON.stringify(values)
+}
+
 /**
  * Render an island to markup, carrying its props alongside so the client can
  * revive it with exactly the same input the server used. A different input would
  * mean a different tree, and hydration would rightly refuse it.
  */
-export function renderIsland(name: string, factory: IslandFactory, props: IslandProps): string {
+export function renderIsland(
+  name: string,
+  factory: IslandFactory,
+  props: IslandProps,
+  options: { key?: readonly string[] } = {},
+): string {
   const { raw, revived } = jsonProps(name, props)
+  const key = islandKey(name, revived, options.key)
   const controller = controllerOf(factory(revived))
   try {
     return (
-      `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-props="${escapeHtml(raw)}">` +
+      `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-key="${escapeHtml(key)}" data-props="${escapeHtml(raw)}">` +
       renderToString(controller.view()) +
       `</${ISLAND_TAG}>`
     )
@@ -111,12 +140,180 @@ export function renderIsland(name: string, factory: IslandFactory, props: Island
   }
 }
 
-type IslandElement = HostNode & {
+export type IslandElement = HostNode & {
   getAttribute(name: string): string | null
+  setAttribute?(name: string, value: string): void
   querySelectorAll(sel: string): Iterable<IslandElement>
+  childNodes?: Iterable<IslandElement>
+  parentNode?: IslandElement | null
 }
 
-export type HydratedIsland = { name: string; element: IslandElement; dispose(): void }
+export type HydratedIsland = {
+  name: string
+  key: string
+  props: Readonly<IslandProps>
+  element: IslandElement
+  dispose(): void
+}
+
+export type IslandManager = {
+  hydrate(root: IslandElement): HydratedIsland[]
+  reconcile(slot: IslandElement, nextContent: IslandElement): HydratedIsland[]
+  dispose(root: IslandElement): void
+}
+
+type ManagedIsland = {
+  live: HydratedIsland
+  controller: IslandController
+  rawProps: string
+}
+
+const elementsOf = (root: IslandElement): IslandElement[] => {
+  const out: IslandElement[] = []
+  const nodeName =
+    (root as unknown as { nodeName?: string; tagName?: string }).nodeName ??
+    (root as unknown as { tagName?: string }).tagName
+  if (nodeName?.toLowerCase() === ISLAND_TAG) out.push(root)
+  out.push(...root.querySelectorAll(ISLAND_TAG))
+  return out
+}
+
+const childrenOf = (root: IslandElement): IslandElement[] => [
+  ...(root.childNodes ?? (root.children as Iterable<IslandElement> | undefined) ?? []),
+]
+
+const parsedProps = (name: string, element: IslandElement): { props: IslandProps; raw: string } => {
+  const raw = element.getAttribute('data-props')
+  try {
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {}
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new TypeError()
+    const normalized = jsonProps(name, parsed as IslandProps)
+    return { props: normalized.revived, raw: normalized.raw }
+  } catch {
+    throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
+  }
+}
+
+const identityOf = (element: IslandElement): { name: string; key: string; id: string } | null => {
+  const name = element.getAttribute('data-island')
+  if (!name) return null
+  const parsed = parsedProps(name, element)
+  const key = element.getAttribute('data-key') ?? parsed.raw
+  element.setAttribute?.('data-key', key)
+  return { name, key, id: JSON.stringify([name, key]) }
+}
+
+const uniqueByIdentity = (elements: IslandElement[]): Map<string, IslandElement> => {
+  const unique = new Map<string, IslandElement>()
+  const duplicates = new Set<string>()
+  for (const element of elements) {
+    const identity = identityOf(element)
+    if (!identity) continue
+    if (unique.has(identity.id)) {
+      duplicates.add(identity.id)
+      unique.delete(identity.id)
+    } else if (!duplicates.has(identity.id)) unique.set(identity.id, element)
+  }
+  return unique
+}
+
+export function createIslandManager(
+  host: Host,
+  registry: IslandRegistry,
+  options: { strict?: boolean } = {},
+): IslandManager {
+  const instances = new WeakMap<IslandElement, ManagedIsland>()
+
+  const disposeElement = (element: IslandElement): void => {
+    const managed = instances.get(element)
+    if (!managed) return
+    instances.delete(element)
+    managed.live.dispose()
+  }
+
+  const hydrate = (root: IslandElement): HydratedIsland[] => {
+    const out: HydratedIsland[] = []
+    for (const element of elementsOf(root)) {
+      const existing = instances.get(element)
+      if (existing) {
+        out.push(existing.live)
+        continue
+      }
+      const identity = identityOf(element)
+      if (!identity) continue
+      const factory = registry[identity.name]
+      if (!factory) {
+        if (options.strict === false) continue
+        throw new IslandError({
+          code: 'E_UNKNOWN_ISLAND',
+          message: `the page places island "${identity.name}", which no installed module provides`,
+          hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
+        })
+      }
+      const parsed = parsedProps(identity.name, element)
+      const controller = controllerOf(factory(parsed.props))
+      const mounted = mountHydrated(host, element, controller.view)
+      let disposed = false
+      const live: HydratedIsland = {
+        name: identity.name,
+        key: identity.key,
+        props: parsed.props,
+        element,
+        dispose: () => {
+          if (disposed) return
+          disposed = true
+          mounted.dispose()
+          controller.dispose?.()
+        },
+      }
+      instances.set(element, { live, controller, rawProps: parsed.raw })
+      out.push(live)
+    }
+    return out
+  }
+
+  const reconcile = (slot: IslandElement, nextContent: IslandElement): HydratedIsland[] => {
+    const current = elementsOf(slot)
+    const next = elementsOf(nextContent)
+    const currentById = uniqueByIdentity(current)
+    const nextById = uniqueByIdentity(next)
+    const preserved = new Set<IslandElement>()
+
+    for (const [id, nextElement] of nextById) {
+      const currentElement = currentById.get(id)
+      const managed = currentElement ? instances.get(currentElement) : undefined
+      if (!currentElement || !managed) continue
+      const identity = identityOf(nextElement) as { name: string; key: string; id: string }
+      const parsed = parsedProps(identity.name, nextElement)
+      if (managed.rawProps !== parsed.raw) {
+        if (!managed.controller.update) continue
+        managed.controller.update(parsed.props)
+        managed.rawProps = parsed.raw
+        managed.live.props = parsed.props
+        currentElement.setAttribute?.('data-props', parsed.raw)
+        currentElement.setAttribute?.('data-key', identity.key)
+      }
+      const parent = nextElement.parentNode ?? (nextElement.parent as IslandElement | null)
+      if (!parent) continue
+      host.insert(parent, currentElement, nextElement)
+      host.remove(nextElement)
+      preserved.add(currentElement)
+    }
+
+    for (const element of current) if (!preserved.has(element)) disposeElement(element)
+    for (const child of childrenOf(slot)) host.remove(child)
+    for (const child of childrenOf(nextContent)) host.insert(slot, child, null)
+    return hydrate(slot)
+  }
+
+  return {
+    hydrate,
+    reconcile,
+    dispose: (root) => {
+      for (const element of elementsOf(root)) disposeElement(element)
+    },
+  }
+}
 
 /**
  * Find every island in a server-rendered page and bring it to life. Only the
@@ -135,43 +332,5 @@ export function hydrateIslands(
   registry: IslandRegistry,
   options: { strict?: boolean } = {},
 ): HydratedIsland[] {
-  const out: HydratedIsland[] = []
-  for (const element of root.querySelectorAll(ISLAND_TAG)) {
-    const name = element.getAttribute('data-island')
-    if (!name) continue
-    const factory = registry[name]
-    if (!factory) {
-      if (options.strict === false) continue
-      throw new IslandError({
-        code: 'E_UNKNOWN_ISLAND',
-        message: `the page places island "${name}", which no installed module provides`,
-        hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
-      })
-    }
-    let props: IslandProps = {}
-    const raw = element.getAttribute('data-props')
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new TypeError()
-        props = parsed as IslandProps
-      } catch {
-        throw new IslandError({ code: 'E_ISLAND_PROPS', message: `island "${name}" has unreadable props` })
-      }
-    }
-    const controller = controllerOf(factory(props))
-    const mounted = mountHydrated(host, element, controller.view)
-    let disposed = false
-    out.push({
-      name,
-      element,
-      dispose: () => {
-        if (disposed) return
-        disposed = true
-        mounted.dispose()
-        controller.dispose?.()
-      },
-    })
-  }
-  return out
+  return createIslandManager(host, registry, options).hydrate(root)
 }
