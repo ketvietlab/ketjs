@@ -36,8 +36,10 @@ import {
   pricing,
   purchase,
   sale,
+  pos,
   stock,
   uom,
+  user,
 } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
@@ -643,6 +645,65 @@ test('live pg: concurrent quotations assign one gapless sales sequence', live, a
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `S${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test('live pg: concurrent POS orders assign one session-unique gapless sequence', live, async () => {
+  await withPg(async (a) => {
+    const posModules = [partner, company, user, uom, product, pricing, stock, account, pos]
+    const posManifest = compose(posModules, { headless: true }),
+      posSchema = schemaFromManifest(posManifest)
+    for (const tableName of Object.keys(posSchema.tables))
+      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, posSchema), a)) await a.exec(sql)
+    registerFunctions(posModules)
+    const options = { adapter: a, manifest: posManifest, scope: SCOPE }
+    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
+    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+    await callFn(
+      'user.createUser',
+      { id: 'cashier', login: 'cashier', password: 'correct horse', name: 'Cashier', defaultCompanyId: 'c1' },
+      options,
+    )
+    await callFn('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, options)
+    await callFn(
+      'account.saveAccount',
+      { id: 'revenue', code: '5111', name: 'Revenue', accountType: 'income' },
+      options,
+    )
+    await callFn(
+      'account.saveAccount',
+      { id: 'receivable', code: '131', name: 'Receivable', accountType: 'asset_receivable' },
+      options,
+    )
+    await callFn('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' }, options)
+    await callFn(
+      'pos.saveConfig',
+      {
+        id: 'shop',
+        name: 'Shop',
+        warehouseId: 'wh',
+        salesJournalId: 'sales',
+        revenueAccountId: 'revenue',
+        receivableAccountId: 'receivable',
+      },
+      options,
+    )
+    await callFn('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' }, options)
+    await callFn('pos.openSession', { id: 'session' }, options)
+    const created = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        callFn(
+          'pos.createOrder',
+          { id: `pos-${index + 1}`, uuid: `offline-${index + 1}`, sessionId: 'session' },
+          options,
+        ),
+      ),
+    )
+    assert.deepEqual(
+      created.map((result) => String((result.value as { name: string }).name)).sort(),
+      Array.from({ length: 8 }, (_, index) => `Order ${String(index + 1).padStart(5, '0')}`),
     )
   })
 })
