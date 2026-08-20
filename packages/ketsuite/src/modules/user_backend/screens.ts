@@ -215,6 +215,7 @@ export const userFormScreen = (
           body: recordForm({
             action: localized(create ? '/admin/users/new' : `/admin/users/${id}`, locale),
             submit: _('user_backend.action.save'),
+            submitVariant: 'primary',
             cancelHref: localized('/admin/users', locale),
             cancelLabel: _('user_backend.action.cancel'),
             errors: options.errors,
@@ -232,6 +233,7 @@ export const userFormScreen = (
                   body: recordForm({
                     action: localized(`/admin/users/${id}/companies`, locale),
                     submit: _('user_backend.action.saveCompanies'),
+                    submitVariant: 'secondary',
                     fields: options.companies.map((company) => ({
                       name: `company.${company.value}`,
                       label: company.label,
@@ -244,6 +246,7 @@ export const userFormScreen = (
                   body: recordForm({
                     action: localized(`/admin/users/${id}/branches`, locale),
                     submit: _('user_backend.action.saveBranches'),
+                    submitVariant: 'secondary',
                     fields: options.branches.map((branch) => ({
                       name: `branch.${branch.value}`,
                       label: branch.label,
@@ -257,6 +260,7 @@ export const userFormScreen = (
                   body: recordForm({
                     action: localized(`/admin/users/${id}/roles`, locale),
                     submit: _('user_backend.action.saveRoles'),
+                    submitVariant: 'secondary',
                     fields: options.roles.map((role) => ({
                       name: `role.${role.value}`,
                       label: role.label,
@@ -409,6 +413,7 @@ export const roleScreen = (
           body: recordForm({
             action: localized(create ? '/admin/roles/new' : `/admin/roles/${row.id}`, locale),
             submit: _('user_backend.action.save'),
+            submitVariant: 'primary',
             cancelHref: localized('/admin/roles', locale),
             cancelLabel: _('user_backend.action.cancel'),
             errors,
@@ -434,6 +439,7 @@ export const roleScreen = (
                 body: recordForm({
                   action: localized(`/admin/roles/${row.id}/permissions`, locale),
                   submit: _('user_backend.action.savePermissions'),
+                  submitVariant: 'secondary',
                   hidden: { module: moduleName },
                   fields: items.map((permission) => ({
                     name: `permission.${permission.key}`,
@@ -472,6 +478,7 @@ export const presetsScreen = (
           body: recordForm({
             action: localized('/admin/permission-presets', locale),
             submit: _('user_backend.action.applyPreset'),
+            submitVariant: 'primary',
             fields: [
               {
                 name: 'module',
@@ -526,6 +533,7 @@ export const profileScreen = (
           body: recordForm({
             action: localized('/admin/profile/password', locale),
             submit: _('user_backend.profile.changePassword'),
+            submitVariant: 'primary',
             errors,
             fields: [
               {
