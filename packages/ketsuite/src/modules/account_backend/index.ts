@@ -16,7 +16,8 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { accountingDashboard, optionsOf } from './screens.ts'
+import { optionsOf } from './screens.ts'
+import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
 import { accountsScreen } from './accounts-screen.tsx'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
@@ -431,17 +432,17 @@ export default defineModule({
           ctx.call('account.listMoves', {}, url, req),
         ])) as [AnyRow[], AnyRow[], AnyRow[]]
         return document(ctx, url, req, 'account_backend.dashboard.title', (_, tr, shell) =>
-          accountingDashboard(
-            tr,
-            {
+          accountingOverviewScreen(tr, {
+            counts: {
               accounts: accounts.length,
               journals: journals.length,
               draft: moves.filter((move) => move.state === 'draft').length,
               posted: moves.filter((move) => move.state === 'posted').length,
               unpaid: moves.filter((move) => move.paymentState === 'not_paid').length,
             },
-            shell,
-          ),
+            frame: shell,
+            locale: localeSuffix(url),
+          }),
         )
       },
     '/admin/accounts':
@@ -1041,11 +1042,28 @@ const vi: Record<string, string> = {
   'menu.taxes': 'Thuế',
   'menu.paymentTerms': 'Điều khoản thanh toán',
   'dashboard.title': 'Tổng quan kế toán',
+  'dashboard.kicker': 'Không gian tài chính',
+  'dashboard.subtitle': 'Theo dõi chứng từ, công nợ, báo cáo và cấu hình kế toán tại một nơi.',
   'dashboard.draft': 'Bút toán nháp',
   'dashboard.posted': 'Bút toán đã ghi sổ',
   'dashboard.unpaid': 'Chứng từ chưa thanh toán',
   'dashboard.records': 'Bản ghi',
   'dashboard.reports': 'Báo cáo tài chính',
+  'dashboard.reportsHint': 'Mở các báo cáo sổ cái và công nợ đã ghi sổ.',
+  'dashboard.operations': 'Nghiệp vụ hằng ngày',
+  'dashboard.operationsHint': 'Tạo và theo dõi hoá đơn, bút toán và thanh toán.',
+  'dashboard.configurationHint': 'Quản lý nền tảng dùng khi ghi sổ chứng từ.',
+  'dashboard.customerInvoicesHint': 'Hoá đơn bán hàng và phần công nợ chưa thanh toán.',
+  'dashboard.vendorBillsHint': 'Chứng từ mua hàng và nghĩa vụ phải trả nhà cung cấp.',
+  'dashboard.entriesHint': 'Bút toán nháp và đã ghi sổ trong sổ nhật ký.',
+  'dashboard.paymentsHint': 'Khoản thu, chi và đối soát công nợ.',
+  'dashboard.trialBalanceHint': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản.',
+  'dashboard.generalLedgerHint': 'Xem chi tiết phát sinh trên từng tài khoản.',
+  'dashboard.partnerLedgerHint': 'Theo dõi công nợ phải thu, phải trả theo đối tác.',
+  'dashboard.accountsHint': 'Mã tài khoản và hành vi báo cáo theo Odoo 19.',
+  'dashboard.journalsHint': 'Phân loại và đánh số chứng từ kế toán.',
+  'dashboard.taxesHint': 'Cấu hình phạm vi và cách tính thuế.',
+  'dashboard.paymentTermsHint': 'Lịch thanh toán dùng cho hoá đơn và công nợ.',
   'accounts.title': 'Hệ thống tài khoản',
   'account.kicker': 'Cấu hình sổ cái',
   'account.subtitle': 'Quản lý hệ thống mã và loại tài khoản theo chuẩn Odoo 19.',
@@ -1287,11 +1305,28 @@ const en: Record<string, string> = {
   'menu.taxes': 'Taxes',
   'menu.paymentTerms': 'Payment terms',
   'dashboard.title': 'Accounting overview',
+  'dashboard.kicker': 'Finance workspace',
+  'dashboard.subtitle': 'Track documents, balances, reports, and accounting configuration in one place.',
   'dashboard.draft': 'Draft entries',
   'dashboard.posted': 'Posted entries',
   'dashboard.unpaid': 'Unpaid documents',
   'dashboard.records': 'Records',
   'dashboard.reports': 'Financial reports',
+  'dashboard.reportsHint': 'Open posted ledger and receivable or payable reports.',
+  'dashboard.operations': 'Daily operations',
+  'dashboard.operationsHint': 'Create and track invoices, journal entries, and payments.',
+  'dashboard.configurationHint': 'Manage the foundations used when posting documents.',
+  'dashboard.customerInvoicesHint': 'Sales invoices and outstanding customer balances.',
+  'dashboard.vendorBillsHint': 'Purchase documents and supplier obligations.',
+  'dashboard.entriesHint': 'Draft and posted entries across accounting journals.',
+  'dashboard.paymentsHint': 'Inbound, outbound, and reconciled payments.',
+  'dashboard.trialBalanceHint': 'Compare total debit and credit movements by account.',
+  'dashboard.generalLedgerHint': 'Inspect posted movements on an individual account.',
+  'dashboard.partnerLedgerHint': 'Track receivable and payable balances by partner.',
+  'dashboard.accountsHint': 'Account codes and Odoo 19 reporting behavior.',
+  'dashboard.journalsHint': 'Classify and sequence accounting documents.',
+  'dashboard.taxesHint': 'Configure tax scope and calculation methods.',
+  'dashboard.paymentTermsHint': 'Payment schedules used by invoices and balances.',
   'accounts.title': 'Chart of accounts',
   'account.kicker': 'Ledger configuration',
   'account.subtitle': 'Manage account codes and Odoo 19 account types.',
