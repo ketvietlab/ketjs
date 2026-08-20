@@ -310,6 +310,24 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.match(attributesHtml, /Thuộc tính đã cấu hình/)
   assert.doesNotMatch(attributesHtml, /data-island="mail\.chatter"/)
 
+  const invalidAttribute = await e2e.client.post(
+    '/admin/product-attributes?lang=vi',
+    new URLSearchParams({ name: '   ', sequence: '20' }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.match(await invalidAttribute.text(), /Dữ liệu chưa hợp lệ/)
+  assert.equal((await call<Row[]>('product.listAttributes')).value.length, 1)
+
+  const invalidAttributeValue = await e2e.client.post(
+    '/admin/product-attributes/color/values?lang=vi',
+    new URLSearchParams({ name: '   ', sequence: '20' }),
+    { headers: { accept: 'text/html' } },
+  )
+  assert.match(await invalidAttributeValue.text(), /Dữ liệu chưa hợp lệ/)
+  const attributesAfterInvalidValue = (await call<Array<Row & { values: Row[] }>>('product.listAttributes'))
+    .value
+  assert.equal(attributesAfterInvalidValue.find((row) => row.id === 'color')?.values.length, 2)
+
   const createdAttribute = await e2e.client.post(
     '/admin/product-attributes?lang=vi',
     new URLSearchParams({
