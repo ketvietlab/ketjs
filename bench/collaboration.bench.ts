@@ -159,6 +159,11 @@ try {
       markers: ['record-workspace', 'tax-create-form', 'VAT 10%'],
     },
     {
+      label: 'Accounting payment terms',
+      path: '/admin/payment-terms?lang=vi',
+      markers: ['record-workspace', 'payment-term-create-form', 'payment-term-line-form', '30 ngày'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
