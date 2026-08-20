@@ -53,6 +53,27 @@ try {
     companyId: 'default',
   })
   await call('address.installCatalog', { countryCode: 'VN' })
+  await call('uom.saveUnit', { id: 'service-unit', name: 'Lần', relativeFactor: '1' })
+  for (const service of [
+    { id: 'breakfast', code: 'BF', name: 'Bữa sáng buffet', price: '220000' },
+    { id: 'minibar', code: 'MB', name: 'Minibar', price: '180000' },
+    { id: 'laundry', code: 'LD', name: 'Giặt ủi', price: '90000' },
+  ]) {
+    await call('product.saveTemplate', {
+      id: `${service.id}-template`,
+      name: service.name,
+      type: 'service',
+      uomId: 'service-unit',
+      listPrice: service.price,
+      saleOk: true,
+    })
+    await call('product.saveVariant', {
+      id: service.id,
+      templateId: `${service.id}-template`,
+      defaultCode: service.code,
+      combinationKey: '',
+    })
+  }
   for (const guest of [
     { id: 'guest-an', name: 'Nguyễn Minh An' },
     { id: 'guest-binh', name: 'Trần Gia Bình' },
@@ -83,6 +104,16 @@ try {
     divisionId: 'VN:2025-07-01:70101063',
     defaultCancellationPolicyId: 'flexible',
   })
+  for (const fee of [
+    { id: 'city-tax', chargeType: 'city_tax', name: 'Thuế lưu trú thành phố', amount: '35000' },
+    { id: 'parking-fee', chargeType: 'parking', name: 'Phí đỗ xe qua đêm', amount: '120000' },
+    { id: 'resort-fee', chargeType: 'resort_fee', name: 'Phí tiện ích', amount: '180000' },
+  ])
+    await call('hospitality_core.savePropertyCharge', {
+      ...fee,
+      propertyId: property,
+      active: true,
+    })
   await call('hospitality_core.saveBuilding', {
     id: 'tower-a',
     propertyId: property,
@@ -315,6 +346,36 @@ try {
     roomId: '102',
     assignmentId: 'assignment-depart',
     at: '2026-08-18T14:10:00.000Z',
+  })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-minibar',
+    reservationId: 'res-arrive',
+    productId: 'minibar',
+    description: 'Minibar chào phòng',
+    recurrence: 'once',
+  })
+  await call('hospitality_core.materializeExtraLine', { id: 'extra-minibar' })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-breakfast',
+    stayId: 'res-house:stay',
+    productId: 'breakfast',
+    description: 'Bữa sáng người lớn',
+    recurrence: 'per_night',
+    quantity: '2',
+  })
+  for (const serviceDate of ['2026-08-19', '2026-08-20'])
+    await call('hospitality_core.materializeExtraLine', { id: 'extra-breakfast', serviceDate })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-laundry',
+    stayId: 'res-house:stay',
+    productId: 'laundry',
+    description: 'Giặt ủi theo túi',
+    recurrence: 'per_unit',
+  })
+  await call('hospitality_core.materializeExtraLine', {
+    id: 'extra-laundry',
+    quantity: '3',
+    requestKey: 'laundry-bag-001',
   })
   await call('hospitality_core.addCharge', {
     id: 'charge-spa',

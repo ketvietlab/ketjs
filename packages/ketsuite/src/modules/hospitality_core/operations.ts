@@ -4,7 +4,6 @@ import {
   BILLING_MODES,
   BOOKING_PROVIDERS,
   BOOKING_TYPES,
-  CHARGE_TYPES,
   DOCUMENT_TYPES,
   GENDERS,
   OCR_STATES,
@@ -19,6 +18,7 @@ import {
   reserveInventory,
   restrictionIssues,
 } from './inventory.ts'
+import { postCharge } from './services.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
 type Schedule = {
@@ -897,63 +897,7 @@ export const operations: Record<string, FnSpec> = {
     ],
     idempotent: true,
     agent: true,
-    handler: async (ctx: Ctx, args) => {
-      const existing = await record(ctx, 'hospitality_core.Charge', args.id)
-      if (existing) return success(existing.id, { amount: existing.amount, existing: true })
-      const folio = await record(ctx, 'hospitality_core.Folio', args.folioId)
-      const stay = args.stayId ? await record(ctx, 'hospitality_core.Stay', args.stayId) : null
-      const type = String(args.type ?? 'service')
-      const quantity = Number(args.quantity ?? 1)
-      const unitPrice = Number(args.unitPrice)
-      const rawAmount = quantity * unitPrice
-      const amount = String(type === 'discount' ? -Math.abs(rawAmount) : rawAmount)
-      const errors: Issue[] = []
-      if (!folio) errors.push(issue('folioId', 'folio_missing'))
-      else if (folio.state !== 'open') errors.push(issue('folioId', 'folio_not_open'))
-      if (args.stayId && !stay) errors.push(issue('stayId', 'stay_missing'))
-      else if (stay && stay.folioId !== args.folioId) errors.push(issue('stayId', 'folio_mismatch'))
-      if (!text(args.description)) errors.push(issue('description', 'required'))
-      if (!oneOf(CHARGE_TYPES, type)) errors.push(issue('type', 'charge_type'))
-      if (!Number.isFinite(quantity) || quantity < 0) errors.push(issue('quantity', 'non_negative'))
-      if (!Number.isFinite(unitPrice) || unitPrice < 0) errors.push(issue('unitPrice', 'non_negative'))
-      if (args.sourceKey) {
-        const C = ctx.table('hospitality_core.Charge')
-        const duplicate = await ctx.db.one(from(C).where(eq(C.sourceKey, args.sourceKey)))
-        if (duplicate) return success(duplicate.id, { amount: duplicate.amount, existing: true })
-      }
-      if (errors.length || !folio) return failure(...errors)
-      const occurredAt = date(args.occurredAt)?.toISOString() ?? new Date().toISOString()
-      return transition(() =>
-        ctx.tx(async (tx) => {
-          await tx.db.insert('hospitality_core.Charge', {
-            id: args.id,
-            folioId: args.folioId,
-            stayId: args.stayId,
-            description: text(args.description),
-            type,
-            quantity: String(quantity),
-            unitPrice: String(unitPrice),
-            amount,
-            occurredAt,
-            sourceKey: args.sourceKey,
-            state: 'active',
-          })
-          let current = folio
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const next = String(Number(current.amountTotal) + Number(amount))
-            const changed = await tx.db.compareAndSet(
-              'hospitality_core.Folio',
-              { id: folio.id },
-              { state: 'open', version: current.version },
-              { amountTotal: next, version: Number(current.version) + 1 },
-            )
-            if ('matched' in changed && changed.matched) return success(args.id, { amount, existing: false })
-            current = (await record(tx, 'hospitality_core.Folio', folio.id))!
-          }
-          throw new TransitionConflict(issue('folioId', 'transition_conflict'))
-        }),
-      )
-    },
+    handler: postCharge,
   }),
 
   listFolios: defineFn({
