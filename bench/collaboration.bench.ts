@@ -124,6 +124,11 @@ try {
       markers: ['record-workspace', 'invoicing-policy-form', 'Chính sách theo sản phẩm'],
     },
     {
+      label: 'Accounting customer invoice',
+      path: '/admin/customer-invoices/invoice-collab?lang=vi',
+      markers: ['record-workspace', 'mail.chatter', 'activity.record'],
+    },
+    {
       label: 'Lot list',
       path: '/admin/lots?lang=vi',
       markers: ['lot-create-form', 'record-workspace', 'Lô và số sê-ri đã cấu hình'],
