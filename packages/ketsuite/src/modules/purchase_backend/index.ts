@@ -67,6 +67,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     ),
   )
   return {
+    companies,
     partners: partners.filter((row) => !own.has(row.id)),
     templates: purchasable,
     variants,
@@ -653,6 +654,7 @@ export default defineModule({
         return document(ctx, url, req, 'purchase_backend.pricelists.title', (_, shell) =>
           supplierInfoScreen(_, {
             frame: shell,
+            currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
             fields,
             methodFields,
             rows: rows.map((row) => ({
