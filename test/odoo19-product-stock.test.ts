@@ -512,6 +512,22 @@ test('routes 19: mts_else_mto chooses stock or procurement and links upstream mo
   }
 })
 
+test('routes 19: listRules applies the Odoo active-test default', async () => {
+  const adapter = await boot()
+  try {
+    await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, adapter)
+    const listed = (await call('stock.listRules', {}, adapter)).value as Row[]
+    assert.equal(listed.length, 2)
+    assert.equal(
+      listed.every((rule) => rule.active === true),
+      true,
+    )
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM stock_rule WHERE active = 0'))[0]!.n, 8)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('routes 19: completing a move triggers assigned push rules exactly once', async () => {
   const adapter = await boot()
   try {
