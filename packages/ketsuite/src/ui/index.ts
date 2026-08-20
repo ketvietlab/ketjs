@@ -14,6 +14,7 @@
 // deliberate trade, noted in design/HANDOFF.md.
 
 export { icon, hasIcon } from './icons.ts'
+export { formatMoney } from './format.ts'
 export { button, linkButton, iconButton, actionGroup } from './actions.tsx'
 export type { ActionVariant, ActionSize, ButtonSpec, LinkButtonSpec } from './actions.tsx'
 export {

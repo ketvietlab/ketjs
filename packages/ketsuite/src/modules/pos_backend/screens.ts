@@ -6,6 +6,7 @@ import {
   contentCard,
   dataTable,
   emptyState,
+  formatMoney,
   framed,
   linkButton,
   metric,
@@ -30,8 +31,10 @@ export const dashboard = (
   sessions: AnyRow[],
   orders: AnyRow[],
   frame: Frame,
-): TemplateResult =>
-  framed(
+): TemplateResult => {
+  const paidOrders = orders.filter((row) => ['paid', 'done'].includes(String(row.state)))
+  const sales = paidOrders.reduce((sum, row) => sum + Number(row.amountTotal), 0)
+  return framed(
     _,
     _('pos_backend.dashboard.title'),
     frame,
@@ -52,15 +55,13 @@ export const dashboard = (
         {
           id: 'paid',
           title: _('pos_backend.dashboard.paidOrders'),
-          value: orders.filter((r) => ['paid', 'done'].includes(String(r.state))).length,
+          value: paidOrders.length,
           href: '/admin/pos/orders',
         },
         {
           id: 'sales',
           title: _('pos_backend.dashboard.sales'),
-          value: orders
-            .filter((r) => ['paid', 'done'].includes(String(r.state)))
-            .reduce((sum, r) => sum + Number(r.amountTotal), 0),
+          value: formatMoney(_, sales, paidOrders[0]?.currency),
           href: '/admin/pos/orders',
         },
       ],
@@ -73,6 +74,7 @@ export const dashboard = (
         }),
     }),
   )
+}
 
 export const configsScreen = (
   _: Translator,
@@ -112,7 +114,9 @@ export const configsScreen = (
               {
                 key: 'difference',
                 label: _('pos_backend.field.maximumDifference'),
-                cell: (r) => String(r.maximumDifference),
+                cell: (r) => formatMoney(_, r.maximumDifference, r.currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
           })
@@ -239,6 +243,7 @@ export const sessionDetail = (
   session: AnyRow,
   closeFields: FormField[],
   actionPath: string,
+  currency?: unknown,
 ): TemplateResult => {
   const state = String(session.state),
     orders = (session.orders as AnyRow[] | undefined) ?? [],
@@ -263,7 +268,7 @@ export const sessionDetail = (
           {
             id: 'cash',
             title: _('pos_backend.field.expectedCash'),
-            value: String(session.cashRegisterBalanceEnd),
+            value: formatMoney(_, session.cashRegisterBalanceEnd, orders[0]?.currency ?? currency),
           },
         ],
         id: (item) => item.id,
@@ -331,7 +336,9 @@ const orderTable = (_: Translator, rows: AnyRow[]) =>
       {
         key: 'total',
         label: _('pos_backend.field.total'),
-        cell: (r) => `${String(r.amountTotal)} ${String(r.currency)}`,
+        cell: (r) => formatMoney(_, r.amountTotal, r.currency),
+        align: 'end',
+        kind: 'currency',
       },
     ],
   })
@@ -398,9 +405,13 @@ export const orderDetail = (
           {
             id: 'total',
             title: _('pos_backend.field.total'),
-            value: `${String(order.amountTotal)} ${String(order.currency)}`,
+            value: formatMoney(_, order.amountTotal, order.currency),
           },
-          { id: 'paid', title: _('pos_backend.field.paid'), value: String(order.amountPaid) },
+          {
+            id: 'paid',
+            title: _('pos_backend.field.paid'),
+            value: formatMoney(_, order.amountPaid, order.currency),
+          },
         ],
         id: (item) => item.id,
         card: (item) =>
@@ -421,12 +432,20 @@ export const orderDetail = (
                   priority: 'primary',
                 },
                 { key: 'qty', label: _('pos_backend.field.qty'), cell: (r) => String(r.qty) },
-                { key: 'price', label: _('pos_backend.field.priceUnit'), cell: (r) => String(r.priceUnit) },
+                {
+                  key: 'price',
+                  label: _('pos_backend.field.priceUnit'),
+                  cell: (r) => formatMoney(_, r.priceUnit, order.currency),
+                  align: 'end',
+                  kind: 'currency',
+                },
                 { key: 'discount', label: _('pos_backend.field.discount'), cell: (r) => String(r.discount) },
                 {
                   key: 'subtotal',
                   label: _('pos_backend.field.subtotal'),
-                  cell: (r) => String(r.priceSubtotalIncl),
+                  cell: (r) => formatMoney(_, r.priceSubtotalIncl, order.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
               ],
             })
@@ -468,7 +487,9 @@ export const orderDetail = (
                           {
                             key: 'amount',
                             label: _('pos_backend.field.amount'),
-                            cell: (r) => String(r.amount),
+                            cell: (r) => formatMoney(_, r.amount, order.currency),
+                            align: 'end',
+                            kind: 'currency',
                           },
                         ],
                       }),

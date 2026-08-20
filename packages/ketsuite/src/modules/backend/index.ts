@@ -56,6 +56,7 @@ export { routes, viewerOf } from './routes.ts'
  */
 export {
   shell,
+  formatMoney,
   framed,
   listChrome,
   topbarSearch,

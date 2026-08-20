@@ -67,6 +67,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     taxes,
     journals,
     accounts,
+    companies,
   ] = await Promise.all([
     ctx.call('pos.listConfigs', {}, url, req) as Promise<AnyRow[]>,
     ctx.call('pos.listPaymentMethods', {}, url, req) as Promise<AnyRow[]>,
@@ -79,6 +80,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     ctx.call('account.listTaxes', { typeTaxUse: 'sale' }, url, req) as Promise<AnyRow[]>,
     ctx.call('account.listJournals', {}, url, req) as Promise<AnyRow[]>,
     ctx.call('account.listAccounts', {}, url, req) as Promise<AnyRow[]>,
+    ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
   ])
   const variants: AnyRow[] = templates
     .filter((template) => template.saleOk)
@@ -101,6 +103,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     taxes,
     journals,
     accounts,
+    companies,
   }
 }
 const configFields = (_: Translator, d: Awaited<ReturnType<typeof common>>): FormField[] => [
@@ -411,12 +414,19 @@ export default defineModule({
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const d = await common(ctx, url, req),
-          names = new Map(d.warehouses.map((row) => [String(row.id), row.name]))
+          names = new Map(d.warehouses.map((row) => [String(row.id), row.name])),
+          currencies = new Map(d.pricelists.map((row) => [String(row.id), row.currency]))
         return document(ctx, url, req, 'pos_backend.configs.title', (_, shell) =>
           configsScreen(
             _,
             shell,
-            d.configs.map((row) => ({ ...row, warehouseName: names.get(String(row.warehouseId)) })),
+            d.configs.map((row) => ({
+              ...row,
+              warehouseName: names.get(String(row.warehouseId)),
+              currency:
+                currencies.get(String(row.pricelistId)) ??
+                d.companies.find((company) => company.id === shell.viewer?.company)?.currency,
+            })),
             configFields(_, d),
           ),
         )
@@ -573,9 +583,10 @@ export default defineModule({
           return redirect(result, path)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const [session, partners] = await Promise.all([
+        const [session, partners, companies] = await Promise.all([
           ctx.call('pos.getSession', { id: params.id }, url, req) as Promise<AnyRow | null>,
           ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
+          ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
         ])
         if (!session) return text('not found', { status: 404 })
         const names = new Map(partners.map((row) => [String(row.id), row.name]))
@@ -603,6 +614,7 @@ export default defineModule({
               },
             ],
             path,
+            companies.find((company) => company.id === shell.viewer?.company)?.currency,
           ),
         )
       },

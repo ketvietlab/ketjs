@@ -6,6 +6,7 @@ import {
   contentCard,
   dataTable,
   emptyState,
+  formatMoney,
   framed,
   linkButton,
   metric,
@@ -140,7 +141,9 @@ export const ordersScreen = (
               {
                 key: 'total',
                 label: _('purchase_backend.field.amountTotal'),
-                cell: (row) => `${String(row.amountTotal)} ${String(row.currency)}`,
+                cell: (row) => formatMoney(_, row.amountTotal, row.currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
           })
@@ -150,7 +153,7 @@ export const ordersScreen = (
 
 export const supplierInfoScreen = (
   _: Translator,
-  o: { frame: Frame; rows: AnyRow[]; fields: FormField[]; methodFields: FormField[] },
+  o: { frame: Frame; rows: AnyRow[]; fields: FormField[]; methodFields: FormField[]; currency?: unknown },
 ): TemplateResult =>
   framed(
     _,
@@ -197,7 +200,9 @@ export const supplierInfoScreen = (
               {
                 key: 'price',
                 label: _('purchase_backend.field.priceUnit'),
-                cell: (row) => String(row.price),
+                cell: (row) => formatMoney(_, row.price, o.currency),
+                align: 'end',
+                kind: 'currency',
               },
               {
                 key: 'discount',
@@ -277,7 +282,7 @@ export const orderDetail = (
           {
             id: 'total',
             label: _('purchase_backend.field.amountTotal'),
-            value: `${String(o.order.amountTotal)} ${String(o.order.currency)}`,
+            value: formatMoney(_, o.order.amountTotal, o.order.currency),
           },
         ],
         id: (item) => item.id,
@@ -316,12 +321,16 @@ export const orderDetail = (
                 {
                   key: 'price',
                   label: _('purchase_backend.field.priceUnit'),
-                  cell: (row) => String(row.priceUnit),
+                  cell: (row) => formatMoney(_, row.priceUnit, o.order.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
                 {
                   key: 'subtotal',
                   label: _('purchase_backend.field.subtotal'),
-                  cell: (row) => String(row.priceSubtotal),
+                  cell: (row) => formatMoney(_, row.priceSubtotal, o.order.currency),
+                  align: 'end',
+                  kind: 'currency',
                 },
               ],
             })
@@ -420,7 +429,9 @@ export const orderDetail = (
                   {
                     key: 'total',
                     label: _('purchase_backend.field.amountTotal'),
-                    cell: (row) => String(row.amountTotal),
+                    cell: (row) => formatMoney(_, row.amountTotal, row.currency ?? o.order.currency),
+                    align: 'end',
+                    kind: 'currency',
                   },
                 ],
               }),

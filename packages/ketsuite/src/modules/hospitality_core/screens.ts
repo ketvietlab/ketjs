@@ -6,6 +6,7 @@ import {
   code,
   dataTable,
   emptyState,
+  formatMoney,
   framed,
   metric,
   person,
@@ -158,9 +159,6 @@ const dateTime = (value: string, locale: string, timezone: string): string =>
     hour12: false,
   }).format(new Date(value))
 
-const amount = (value: string | number, locale: string): string =>
-  new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Number(value))
-
 const guestName = (row: { partnerId: string; partner?: { name?: string } | null }): string =>
   row.partner?.name ?? row.partnerId
 
@@ -238,7 +236,7 @@ const roomTypeColumns = (_: Translator): Array<Column<RoomTypeRow>> => [
   {
     key: 'baseRate',
     label: _('hospitality_core.col.baseRate'),
-    cell: (row) => String(row.baseRate),
+    cell: (row) => formatMoney(_, row.baseRate),
     align: 'end',
     kind: 'currency',
   },
@@ -483,7 +481,7 @@ const reservationColumns = (
   {
     key: 'amount',
     label: _('hospitality_core.col.amount'),
-    cell: (row) => amount(row.amountTotal, locale),
+    cell: (row) => formatMoney(_, row.amountTotal),
     align: 'end',
     kind: 'currency',
   },
@@ -564,7 +562,7 @@ const folioColumns = (_: Translator, locale: string, timezone: string): Array<Co
   {
     key: 'amount',
     label: _('hospitality_core.col.amount'),
-    cell: (row) => amount(row.amountTotal, locale),
+    cell: (row) => formatMoney(_, row.amountTotal),
     align: 'end',
     kind: 'currency',
   },

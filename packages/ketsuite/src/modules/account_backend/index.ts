@@ -3,7 +3,7 @@ import { defineModule, page, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { badge, code } from '../../ui/index.ts'
+import { badge, code, formatMoney } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -72,6 +72,9 @@ const choices = (rows: AnyRow[], empty = false) => [
   })),
 ]
 
+const currencyOf = (companies: AnyRow[], shell: Frame): unknown =>
+  companies.find((company) => company.id === shell.viewer?.company)?.currency
+
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [accounts, journals, taxes, terms, partners, companies, templates, units] = (await Promise.all([
     ctx.call('account.listAccounts', {}, url, req),
@@ -86,6 +89,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   const companyPartners = new Set(companies.map((company) => company.partnerId))
   return {
     accounts,
+    companies,
     journals,
     taxes,
     terms,
@@ -575,8 +579,9 @@ export default defineModule({
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        return document(ctx, url, req, 'account_backend.taxes.title', (_, tr, shell) =>
-          entityScreen(tr, {
+        return document(ctx, url, req, 'account_backend.taxes.title', (_, tr, shell) => {
+          const currency = currencyOf(data.companies, shell)
+          return entityScreen(tr, {
             title: tr('account_backend.taxes.title'),
             frame: shell,
             action: '/admin/taxes',
@@ -635,15 +640,26 @@ export default defineModule({
                 label: tr('account_backend.field.amountType'),
                 cell: (row) => labelOf(tr, 'taxAmountType', row.amountType),
               },
-              { key: 'amount', label: tr('account_backend.field.amount'), cell: (row) => String(row.amount) },
+              {
+                key: 'amount',
+                label: tr('account_backend.field.amount'),
+                cell: (row) =>
+                  row.amountType === 'fixed'
+                    ? formatMoney(tr, row.amount, currency)
+                    : row.amountType === 'group'
+                      ? '—'
+                      : `${String(row.amount)}%`,
+                align: 'end',
+                kind: 'number',
+              },
               {
                 key: 'included',
                 label: tr('account_backend.field.priceInclude'),
                 cell: (row) => (row.priceInclude ? tr('account_backend.yes') : tr('account_backend.no')),
               },
             ],
-          }),
-        )
+          })
+        })
       },
     '/admin/payment-terms':
       (ctx): Route =>
@@ -943,7 +959,7 @@ export default defineModule({
                   { value: '', label: '—' },
                   ...openItems.map((line) => ({
                     value: String(line.id),
-                    label: `${String((line.move as AnyRow)?.name ?? line.moveId)} · ${String(line.accountId)} · ${String(line.amountResidual)}`,
+                    label: `${String((line.move as AnyRow)?.name ?? line.moveId)} · ${String(line.accountId)} · ${formatMoney(tr, line.amountResidual, (line.move as AnyRow)?.currency)}`,
                   })),
                 ],
               },
@@ -963,7 +979,9 @@ export default defineModule({
               {
                 key: 'amount',
                 label: tr('account_backend.field.amount'),
-                cell: (row) => `${String(row.amount)} ${String(row.currency)}`,
+                cell: (row) => formatMoney(tr, row.amount, row.currency),
+                align: 'end',
+                kind: 'currency',
               },
               {
                 key: 'state',
@@ -980,14 +998,18 @@ export default defineModule({
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? ''
-        const rows = (await ctx.call(
-          'account.trialBalance',
-          { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) },
-          url,
-          req,
-        )) as AnyRow[]
-        return document(ctx, url, req, 'account_backend.trialBalance.title', (_, tr, shell) =>
-          reportScreen(tr, {
+        const [rows, companies] = (await Promise.all([
+          ctx.call(
+            'account.trialBalance',
+            { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) },
+            url,
+            req,
+          ),
+          ctx.call('company.listCompanies', {}, url, req),
+        ])) as [AnyRow[], AnyRow[]]
+        return document(ctx, url, req, 'account_backend.trialBalance.title', (_, tr, shell) => {
+          const currency = currencyOf(companies, shell)
+          return reportScreen(tr, {
             title: tr('account_backend.trialBalance.title'),
             frame: shell,
             action: '/admin/trial-balance',
@@ -1009,16 +1031,30 @@ export default defineModule({
                 priority: 'primary',
               },
               { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              { key: 'debit', label: tr('account_backend.field.debit'), cell: (row) => String(row.debit) },
-              { key: 'credit', label: tr('account_backend.field.credit'), cell: (row) => String(row.credit) },
+              {
+                key: 'debit',
+                label: tr('account_backend.field.debit'),
+                cell: (row) => formatMoney(tr, row.debit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
+              {
+                key: 'credit',
+                label: tr('account_backend.field.credit'),
+                cell: (row) => formatMoney(tr, row.credit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
               {
                 key: 'balance',
                 label: tr('account_backend.field.balance'),
-                cell: (row) => String(row.balance),
+                cell: (row) => formatMoney(tr, row.balance, currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
-          }),
-        )
+          })
+        })
       },
     '/admin/general-ledger':
       (ctx): Route =>
@@ -1038,8 +1074,9 @@ export default defineModule({
           url,
           req,
         )) as AnyRow[]
-        return document(ctx, url, req, 'account_backend.generalLedger.title', (_, tr, shell) =>
-          reportScreen(tr, {
+        return document(ctx, url, req, 'account_backend.generalLedger.title', (_, tr, shell) => {
+          const currency = currencyOf(data.companies, shell)
+          return reportScreen(tr, {
             title: tr('account_backend.generalLedger.title'),
             frame: shell,
             action: '/admin/general-ledger',
@@ -1073,11 +1110,23 @@ export default defineModule({
                 cell: (row) => String((row.move as AnyRow)?.name ?? ''),
               },
               { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              { key: 'debit', label: tr('account_backend.field.debit'), cell: (row) => String(row.debit) },
-              { key: 'credit', label: tr('account_backend.field.credit'), cell: (row) => String(row.credit) },
+              {
+                key: 'debit',
+                label: tr('account_backend.field.debit'),
+                cell: (row) => formatMoney(tr, row.debit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
+              {
+                key: 'credit',
+                label: tr('account_backend.field.credit'),
+                cell: (row) => formatMoney(tr, row.credit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
             ],
-          }),
-        )
+          })
+        })
       },
     '/admin/partner-statement':
       (ctx): Route =>
@@ -1088,8 +1137,9 @@ export default defineModule({
         const rows = partnerId
           ? ((await ctx.call('account.partnerStatement', { partnerId }, url, req)) as AnyRow[])
           : []
-        return document(ctx, url, req, 'account_backend.partnerStatement.title', (_, tr, shell) =>
-          reportScreen(tr, {
+        return document(ctx, url, req, 'account_backend.partnerStatement.title', (_, tr, shell) => {
+          const currency = currencyOf(data.companies, shell)
+          return reportScreen(tr, {
             title: tr('account_backend.partnerStatement.title'),
             frame: shell,
             action: '/admin/partner-statement',
@@ -1116,16 +1166,30 @@ export default defineModule({
                 cell: (row) => String((row.move as AnyRow)?.name ?? ''),
               },
               { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              { key: 'debit', label: tr('account_backend.field.debit'), cell: (row) => String(row.debit) },
-              { key: 'credit', label: tr('account_backend.field.credit'), cell: (row) => String(row.credit) },
+              {
+                key: 'debit',
+                label: tr('account_backend.field.debit'),
+                cell: (row) => formatMoney(tr, row.debit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
+              {
+                key: 'credit',
+                label: tr('account_backend.field.credit'),
+                cell: (row) => formatMoney(tr, row.credit, currency),
+                align: 'end',
+                kind: 'currency',
+              },
               {
                 key: 'residual',
                 label: tr('account_backend.field.residual'),
-                cell: (row) => String(row.amountResidual),
+                cell: (row) => formatMoney(tr, row.amountResidual, currency),
+                align: 'end',
+                kind: 'currency',
               },
             ],
-          }),
-        )
+          })
+        })
       },
   },
   messages: MESSAGES,
