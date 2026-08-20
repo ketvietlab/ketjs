@@ -11,6 +11,7 @@ import { locationsScreen } from './locations-screen.tsx'
 import { lotDetailScreen } from './lot-screen.tsx'
 import { lotsScreen } from './lots-screen.tsx'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
+import { stockRouteDetailScreen } from './stock-route-screen.tsx'
 import { stockRoutesScreen } from './stock-routes-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
@@ -77,6 +78,15 @@ const localizedGeneratedRouteName = (_: Translator, row: AnyRow): string => {
     (group === 'receptionSteps' && ['one_step', 'two_steps', 'three_steps'].includes(suffix)) ||
     (group === 'deliverySteps' && ['ship_only', 'pick_ship', 'pick_pack_ship'].includes(suffix))
   return generated ? `${raw.slice(0, separator)}: ${selectionLabel(_, group, suffix)}` : raw
+}
+
+const localizedGeneratedRuleName = (_: Translator, row: AnyRow): string => {
+  const parts = String(row.id).split(':')
+  const flow = parts.at(-2)
+  const suffix = parts.at(-1) ?? ''
+  const group = flow === 'receipt' ? 'record.receiptRule' : flow === 'delivery' ? 'record.deliveryRule' : ''
+  const key = group ? `stock_backend.${group}.${suffix}` : ''
+  return key && _.resolves(key) ? _(key) : String(row.name)
 }
 
 const completeLocationName = (row: AnyRow, nameById: Map<string, string>) =>
@@ -878,6 +888,24 @@ export const routes: Record<string, RouteEntry> = {
       if (!route) return text('Route not found', { status: 404 })
       if (req.method === 'POST') {
         const form = await readForm(req)
+        if (form.intent === 'route') {
+          const displayName = localizedGeneratedRouteName(ctx.translate(ctx.localeOf(url, req)), route)
+          const submittedName = form.name ?? ''
+          const result = await ctx.call(
+            'stock.saveRoute',
+            {
+              id: params.id,
+              name: submittedName === displayName ? String(route.name) : submittedName,
+              sequence: Number(form.sequence || 10),
+            },
+            url,
+            req,
+          )
+          const target = inLocale(url, `/admin/stock-routes/${params.id}`)
+          return (result as { ok?: boolean }).ok
+            ? seeOther(target)
+            : seeOther(`${target}${target.includes('?') ? '&' : '?'}invalid=route`)
+        }
         const result = await ctx.call(
           'stock.saveRule',
           {
@@ -894,7 +922,10 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, `/admin/stock-routes/${params.id}`))
+        const target = inLocale(url, `/admin/stock-routes/${params.id}`)
+        return (result as { ok?: boolean }).ok
+          ? seeOther(target)
+          : seeOther(`${target}${target.includes('?') ? '&' : '?'}invalid=rule`)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -903,68 +934,44 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listRules', { routeId: params.id }, url, req),
         common(ctx, url, req),
       ])) as [AnyRow[], Awaited<ReturnType<typeof common>>]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.routeDetail',
-        rules.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: String(row.action),
-          detail: `${String(row.locationSrcId ?? '—')} → ${String(row.locationDestId)} · ${selectionLabel(_, 'procureMethod', row.procureMethod)}`,
-        })),
-        [
-          surface({
-            body: recordForm({
-              action: inLocale(url, `/admin/stock-routes/${params.id}`),
-              submit: _('stock_backend.action.addRule'),
-              submitVariant: 'secondary',
-              errors: invalid(url, _),
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name'), required: true },
-                {
-                  name: 'action',
-                  label: _('stock_backend.field.ruleAction'),
-                  type: 'select',
-                  options: selectionOptions(_, 'ruleAction', ['pull', 'push', 'pull_push']),
-                },
-                { name: 'sequence', label: _('stock_backend.field.sequence'), type: 'number', value: 20 },
-                {
-                  name: 'locationSrcId',
-                  label: _('stock_backend.field.sourceLocation'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options(data.locations)],
-                },
-                {
-                  name: 'locationDestId',
-                  label: _('stock_backend.field.destinationLocation'),
-                  type: 'select',
-                  options: options(data.locations),
-                  required: true,
-                },
-                {
-                  name: 'pickingTypeId',
-                  label: _('stock_backend.field.operationType'),
-                  type: 'select',
-                  options: options(data.pickingTypes),
-                  required: true,
-                },
-                {
-                  name: 'procureMethod',
-                  label: _('stock_backend.field.procureMethod'),
-                  type: 'select',
-                  options: selectionOptions(_, 'procureMethod', [
-                    'make_to_stock',
-                    'make_to_order',
-                    'mts_else_mto',
-                  ]),
-                },
-              ],
-            }),
-          }),
-        ],
-      )
+      const locationById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const pickingTypeById = new Map(data.pickingTypes.map((row) => [String(row.id), String(row.name)]))
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.routeDetail'),
+        body: stockRouteDetailScreen(
+          _,
+          {
+            route: {
+              id: String(route.id),
+              name: localizedGeneratedRouteName(_, route),
+              sequence: Number(route.sequence),
+              active: route.active !== false,
+            },
+            rows: rules.map((row) => ({
+              id: String(row.id),
+              name: localizedGeneratedRuleName(_, row),
+              action: String(row.action),
+              actionLabel: selectionLabel(_, 'ruleAction', row.action),
+              sequence: Number(row.sequence),
+              source: row.locationSrcId
+                ? (locationById.get(String(row.locationSrcId)) ?? String(row.locationSrcId))
+                : '—',
+              destination: locationById.get(String(row.locationDestId)) ?? String(row.locationDestId),
+              operationType: pickingTypeById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
+              procureMethod: selectionLabel(_, 'procureMethod', row.procureMethod),
+            })),
+            locations: options(data.locations),
+            pickingTypes: options(data.pickingTypes),
+            action: inLocale(url, `/admin/stock-routes/${params.id}`),
+            routeErrors:
+              url.searchParams.get('invalid') === 'route' ? [_('stock_backend.error.invalid')] : undefined,
+            ruleErrors:
+              url.searchParams.get('invalid') === 'rule' ? [_('stock_backend.error.invalid')] : undefined,
+          },
+          await frame(ctx, url, req),
+        ),
+      })
     },
 
   '/admin/replenishment':
