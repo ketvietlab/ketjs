@@ -56,7 +56,7 @@ export const roleFunctions: Record<string, FnSpec> = {
           const action = key.split('.').at(-1) ?? key
           const task = /^(list|get|count|report|forecast|permitted)/.test(action)
             ? 'read'
-            : /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply)/.test(action)
+            : /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage)/.test(action)
               ? 'manage'
               : 'operate'
           return { key, module: key.split('.')[0] ?? '', task }
@@ -96,7 +96,11 @@ export const roleFunctions: Record<string, FnSpec> = {
           if (fn.exposure === 'internal') return level === 'manager' && key === 'user.issueAuthToken'
           if (level === 'manager') return true
           const action = key.split('.').at(-1) ?? key
-          return !/^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply)/.test(action)
+          // OAuth's public/self-service calls are anonymous-by-contract and already
+          // available to a signed-in user. Provider and foreign identity rows are
+          // administration data, so the ordinary User preset grants none of them.
+          if (moduleName === 'oauth') return false
+          return !/^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage)/.test(action)
         })
         .map(([key]) => key)
       let granted = 0
