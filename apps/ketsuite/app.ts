@@ -72,6 +72,8 @@ export const ketsuite = defineApp({
     suite.accountBackend,
     suite.purchaseBackend,
     suite.saleBackend,
+    suite.saleMailBackend,
+    suite.saleActivityBackend,
     suite.posBackend,
     suite.loyaltyBackend,
     backend,

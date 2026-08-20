@@ -19,6 +19,7 @@ const tone = (state: string): Tone =>
 const targetHref = (row: Row): string | null => {
   if (row.resModel === 'product.Template') return `/admin/products/${String(row.resId)}`
   if (row.resModel === 'stock.Picking') return `/admin/transfers/${String(row.resId)}`
+  if (row.resModel === 'sale.Order') return `/admin/sales/quotations/${String(row.resId)}`
   return null
 }
 

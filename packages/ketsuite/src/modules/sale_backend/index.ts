@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { defineModule, text } from 'ketjs'
+import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
-import { readForm, seeOther } from '../backend/forms.ts'
+import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
+import { islands } from './islands.ts'
+import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
-import { dashboard, labelOf, orderDetail, ordersScreen, policyScreen } from './screens.ts'
+import { dashboard, labelOf, ordersScreen, policyScreen } from './screens.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -47,6 +49,12 @@ const callIfInstalled = async (
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
+const localeSuffix = (url: URL) => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
+const orderPath = (order: AnyRow, url: URL) =>
+  `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeSuffix(url)}`
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((r) => ({
@@ -120,7 +128,8 @@ const orderFields = (_: Translator, d: Awaited<ReturnType<typeof common>>): Form
 const detail =
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
-    const path = `${url.pathname}${url.search}`
+    const partial = req.headers['x-ket-partial'] === 'sale-order'
+    let savedPartial = false
     if (req.method === 'POST') {
       const form = await readForm(req)
       let result: unknown
@@ -170,18 +179,36 @@ const detail =
           req,
         )
       else return text('unknown action', { status: 400 })
-      if ((result as AnyRow).ok && (result as AnyRow).state === 'sale')
-        return seeOther(`/admin/sales/orders/${params.id}${url.search}`)
-      return redirect(result, path)
+      if (!(result as AnyRow).ok) {
+        if (partial)
+          return json(
+            {
+              ok: false,
+              message: ctx.translate(ctx.localeOf(url, req))('sale_backend.error.invalid'),
+              errors: errorsOf(result),
+            },
+            { status: 422 },
+          )
+        return redirect(result, `${url.pathname}${url.search}`)
+      }
+      if (!partial) {
+        const current = (await ctx.call('sale.getOrder', { id: params.id }, url, req)) as AnyRow | null
+        return current ? seeOther(orderPath(current, url)) : text('not found', { status: 404 })
+      }
+      savedPartial = true
     }
-    if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-    const _ = ctx.translate(ctx.localeOf(url, req)),
+    if (req.method !== 'GET' && !savedPartial) return text('GET or POST', { status: 405 })
+    const lang = ctx.localeOf(url, req),
+      _ = ctx.translate(lang),
       [order, d] = await Promise.all([
         ctx.call('sale.getOrder', { id: params.id }, url, req) as Promise<AnyRow | null>,
         common(ctx, url, req),
       ])
     if (!order) return text('not found', { status: 404 })
     const customer = d.partners.find((r) => r.id === order.partnerId),
+      warehouse = d.warehouses.find((r) => r.id === order.warehouseId),
+      pricelist = d.pricelists.find((r) => r.id === order.pricelistId),
+      paymentTerm = d.terms.find((r) => r.id === order.paymentTermId),
       variants = d.variants.map((r) => ({
         value: String(r.id),
         label: `${String(r.templateName)}${r.defaultCode ? ` · ${String(r.defaultCode)}` : ''}`,
@@ -249,20 +276,49 @@ const detail =
     ]
     const integration = await ctx.joint(url, req, 'sale_backend:order.loyalty', {
       orderId: params.id,
-      locale: url.searchParams.get('lang')
-        ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
-        : '',
+      locale: localeSuffix(url),
     })
-    return document(ctx, url, req, 'sale_backend.detail.title', (_, shell) =>
-      orderDetail(_, {
-        frame: shell,
-        order: { ...order, partnerName: customer?.name },
-        actionPath: path,
+    const canonical = orderPath(order, url)
+    const body = orderDetailScreen(
+      _,
+      {
+        order: {
+          ...order,
+          partnerName: customer?.name,
+          warehouseName: warehouse?.name,
+          pricelistName: pricelist?.name,
+          paymentTermName: paymentTerm?.name,
+        },
+        action: canonical,
         lineFields,
         invoiceFields,
         integration,
-      }),
+        locale: localeSuffix(url),
+        collaboration: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'sale_backend:order.collaboration', {
+              resModel: 'sale.Order',
+              resId: String(order.id),
+              lang,
+            }),
+        editor: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'sale_backend:order.editor', {
+              identity: `order:${String(order.id)}`,
+              orderId: String(order.id),
+              lang,
+            }),
+        errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+      },
+      savedPartial ? {} : await frame(ctx, url, req),
+      savedPartial,
     )
+    if (savedPartial)
+      return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), {
+        vary: 'X-Ket-Partial',
+        'x-ket-location': canonical,
+      })
+    return backendPage(ctx, req, { lang, title: String(order.name), body })
   }
 const vi = {
   'app.title': 'Bán hàng trong quản trị',
@@ -296,10 +352,21 @@ const vi = {
   'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'orders.title': 'Đơn bán hàng',
   'detail.title': 'Chi tiết đơn bán',
+  'order.kicker': 'Đơn bán hàng',
+  'order.locked': 'Đã khoá',
+  'order.actions.label': 'Hành động trên báo giá hoặc đơn bán',
+  'order.information.title': 'Thông tin đơn hàng',
+  'order.information.hint': 'Khách hàng, thời hạn và điều kiện thương mại của đơn.',
+  'order.collaboration.label': 'Trao đổi và hoạt động của đơn bán',
   'policies.title': 'Chính sách lập hoá đơn',
   'lines.title': 'Dòng sản phẩm',
+  'lines.hint': 'Số lượng, giao hàng, lập hoá đơn và thành tiền theo từng sản phẩm.',
   'lines.add': 'Thêm sản phẩm',
+  'lines.addHint': 'Chọn biến thể, đơn vị tính, số lượng và điều kiện giá bán.',
+  'lines.empty': 'Chưa có dòng sản phẩm',
+  'lines.emptyHint': 'Thêm sản phẩm đầu tiên trước khi xác nhận báo giá.',
   'invoice.title': 'Tạo hoá đơn khách hàng',
+  'invoice.hint': 'Tạo hoá đơn cho số lượng hiện đang đủ điều kiện lập hoá đơn.',
   'deliveries.title': 'Phiếu giao hàng',
   'invoices.title': 'Hoá đơn khách hàng',
   empty: 'Chưa có dữ liệu.',
@@ -324,6 +391,8 @@ const vi = {
   'field.pricelist': 'Bảng giá',
   'field.paymentTerm': 'Điều khoản thanh toán',
   'field.invoiceStatus': 'Trạng thái lập hoá đơn',
+  'field.amountUntaxed': 'Chưa thuế',
+  'field.amountTax': 'Thuế',
   'field.amountTotal': 'Tổng tiền',
   'field.notes': 'Điều khoản và ghi chú',
   'field.product': 'Sản phẩm',
@@ -385,10 +454,21 @@ const en = {
   'error.invalid': 'The form is invalid. Check the required fields and try again.',
   'orders.title': 'Sales Orders',
   'detail.title': 'Sales Order Detail',
+  'order.kicker': 'Sales order',
+  'order.locked': 'Locked',
+  'order.actions.label': 'Quotation or sales order actions',
+  'order.information.title': 'Order information',
+  'order.information.hint': 'Customer, deadline and commercial terms for this order.',
+  'order.collaboration.label': 'Sales order conversation and activities',
   'policies.title': 'Invoicing Policies',
   'lines.title': 'Order Lines',
+  'lines.hint': 'Ordered, delivered and invoiced quantities with each product subtotal.',
   'lines.add': 'Add a product',
+  'lines.addHint': 'Choose a variant, unit, quantity and selling terms.',
+  'lines.empty': 'No order lines yet',
+  'lines.emptyHint': 'Add the first product before confirming the quotation.',
   'invoice.title': 'Create Customer Invoice',
+  'invoice.hint': 'Create an invoice for the quantities currently eligible for invoicing.',
   'deliveries.title': 'Deliveries',
   'invoices.title': 'Customer Invoices',
   empty: 'No data yet.',
@@ -413,6 +493,8 @@ const en = {
   'field.pricelist': 'Pricelist',
   'field.paymentTerm': 'Payment Terms',
   'field.invoiceStatus': 'Invoice Status',
+  'field.amountUntaxed': 'Untaxed Amount',
+  'field.amountTax': 'Taxes',
   'field.amountTotal': 'Total',
   'field.notes': 'Terms and Conditions',
   'field.product': 'Product',
@@ -448,7 +530,16 @@ export default defineModule({
   depends: ['sale', 'backend'],
   install: 'auto',
   app: true,
-  joints: { 'order.loyalty': { props: { orderId: 'id', locale: 'text?' } } },
+  assets: new URL('./client/', import.meta.url),
+  islands,
+  joints: {
+    'order.loyalty': { props: { orderId: 'id', locale: 'text?' } },
+    'order.collaboration': {
+      props: { resModel: 'text', resId: 'id', lang: 'text' },
+      multiple: true,
+    },
+    'order.editor': { props: { identity: 'text', orderId: 'id', lang: 'text?' } },
+  },
   title: 'Bán hàng trong quản trị',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
@@ -599,4 +690,7 @@ export default defineModule({
       },
   },
   messages: { vi, en },
+  fills: {
+    'sale_backend:order.editor': `{% island "sale.editor" %}`,
+  },
 })

@@ -124,6 +124,14 @@ export async function collaborationEvidenceApp(
       validityDate: '2026-08-31',
       notes: 'Báo giá mẫu dùng để kiểm chứng giao diện bán hàng.',
     })
+    await call('sale.addLine', {
+      id: 'quotation-collab:line',
+      orderId: 'quotation-collab',
+      productId: 'variant-collab',
+      productUomQty: '3',
+      productUomId: 'unit',
+      priceUnit: '1250000',
+    })
     await call('stock.createPicking', {
       id: 'pick-collab',
       name: 'TP/OUT/2026/0084',
@@ -159,10 +167,12 @@ export async function collaborationEvidenceApp(
     await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'admin')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'admin')
     await call('stock_lot_mail_backend.follow', { targetId: 'lot-collab' }, 'admin')
+    await call('sale_mail_backend.follow', { targetId: 'quotation-collab' }, 'admin')
     await call('product_mail_backend.follow', { targetId: 'tpl-collab' }, 'member')
     await call('product_variant_mail_backend.follow', { targetId: 'variant-collab' }, 'member')
     await call('stock_mail_backend.follow', { targetId: 'pick-collab' }, 'member')
     await call('stock_lot_mail_backend.follow', { targetId: 'lot-collab' }, 'member')
+    await call('sale_mail_backend.follow', { targetId: 'quotation-collab' }, 'member')
 
     await call('activity.saveType', {
       id: 'activity-todo',
@@ -233,6 +243,19 @@ export async function collaborationEvidenceApp(
         summary: 'Kiểm tra chứng từ lô hàng',
         note: 'Đối chiếu số lô với phiếu nhập kho.',
         dueDate: '2026-08-20',
+      },
+      'admin',
+    )
+    await call(
+      'sale_activity_backend.schedule',
+      {
+        id: 'activity-sale-seed',
+        targetId: 'quotation-collab',
+        typeId: 'activity-call',
+        assigneeUserId: 'admin',
+        summary: 'Xác nhận thời gian giao hàng',
+        note: 'Gọi khách hàng để chốt khung giờ nhận hàng.',
+        dueDate: '2026-08-21',
       },
       'admin',
     )
@@ -364,6 +387,26 @@ export async function collaborationEvidenceApp(
         targetId: 'lot-collab',
         kind: 'note',
         body: 'Ghi chú nội bộ: giữ mẫu kiểm tra tại kệ A-01.',
+      },
+      'admin',
+    )
+    await call(
+      'sale_mail_backend.post',
+      {
+        id: 'sale-message-1',
+        targetId: 'quotation-collab',
+        kind: 'comment',
+        body: 'Khách hàng đã xác nhận số lượng và địa điểm giao hàng.',
+      },
+      'member',
+    )
+    await call(
+      'sale_mail_backend.post',
+      {
+        id: 'sale-message-2',
+        targetId: 'quotation-collab',
+        kind: 'note',
+        body: 'Ghi chú nội bộ: kiểm tra hạn báo giá trước khi gửi.',
       },
       'admin',
     )
