@@ -11,6 +11,7 @@ export type { Markup } from './ssr.ts'
 export { renderIsland, hydrateIslands, ISLAND_TAG } from './island.ts'
 export type {
   IslandView,
+  IslandController,
   IslandFactory,
   IslandDefinition,
   IslandRegistry,
