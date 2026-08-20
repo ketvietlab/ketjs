@@ -120,6 +120,14 @@ const seed = async () => {
     pickingTypeId: 'wh:outgoing',
     scheduledDate: '2026-08-21T08:30:00.000Z',
   })
+  await call('stock.addMove', {
+    id: 'move-review',
+    name: 'Áo khoác xuất kho',
+    pickingId: 'transfer-review',
+    productId: 'stock-variant',
+    productUomId: 'unit',
+    productUomQty: '3',
+  })
   await adapter.close()
 }
 
