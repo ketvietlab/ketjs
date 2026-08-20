@@ -19,6 +19,7 @@
     "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
     "bench:queue": "npm run build --silent && node .build/bench/queue.bench.js",
     "bench:storage": "npm run build --silent && node .build/bench/storage.bench.js",
+    "bench:hospitality": "npm run build --silent && node .build/bench/hospitality.bench.js",
     "type-proof": "npm run build --silent && node .build/tools/type-proof.js",
     "audit:zero-dep": "npm run build --silent && node .build/tools/zero-dep-audit.js",
     "audit:ui": "npm run build --silent && node .build/tools/ui-audit.js",
