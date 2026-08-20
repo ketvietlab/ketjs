@@ -362,6 +362,28 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     true,
   )
 
+  const locationsPage = await e2e.client.get('/admin/locations?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const locationsHtml = await locationsPage.text()
+  assert.match(locationsHtml, /data-ui="record-workspace"/)
+  assert.match(locationsHtml, /id="location-create-form"/)
+  assert.match(locationsHtml, /data-scope="location-create"/)
+  assert.match(locationsHtml, /Kho chính \/ Tồn kho/)
+  assert.match(locationsHtml, /Loại vị trí/)
+  assert.match(locationsHtml, /Vị trí nội bộ/)
+  assert.doesNotMatch(locationsHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/locations?lang=vi', {
+    name: 'Kệ HTTP',
+    parentId: 'wh:stock',
+    usage: 'internal',
+    warehouseId: 'wh',
+  })
+  assert.equal(
+    (await call<Row[]>('stock.listLocations', {})).value.some((row) => row.name === 'Kệ HTTP'),
+    true,
+  )
+
   const adjustment = (
     await call<Row>('stock.adjustInventory', {
       id: 'adjust:1',
