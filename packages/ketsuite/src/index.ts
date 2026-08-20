@@ -30,6 +30,8 @@ export { default as account } from './modules/account/index.ts'
 export { default as accountBackend } from './modules/account_backend/index.ts'
 export { default as purchase } from './modules/purchase/index.ts'
 export { default as purchaseBackend } from './modules/purchase_backend/index.ts'
+export { default as sale } from './modules/sale/index.ts'
+export { default as saleBackend } from './modules/sale_backend/index.ts'
 export {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
@@ -40,6 +42,7 @@ export {
   TAX_AMOUNT_TYPES,
 } from './modules/account/functions.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
+export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as company } from './modules/company/index.ts'
 export { default as storage } from './modules/storage/index.ts'
