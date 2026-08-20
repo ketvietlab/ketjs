@@ -126,6 +126,7 @@ export {
   mountHydrated,
   renderIsland,
   hydrateIslands,
+  createIslandManager,
   ISLAND_TAG,
 } from 'ketjs-view'
 export { createTheme } from './theme/render.ts'
