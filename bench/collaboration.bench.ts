@@ -54,6 +54,11 @@ try {
       markers: ['warehouse-create-form', 'record-workspace', 'Kho đã cấu hình'],
     },
     {
+      label: 'Location list',
+      path: '/admin/locations?lang=vi',
+      markers: ['location-create-form', 'record-workspace', 'Cây vị trí'],
+    },
+    {
       label: 'My activities',
       path: '/admin/activities?lang=vi&today=2026-08-20',
       markers: ['Hoạt động của tôi'],

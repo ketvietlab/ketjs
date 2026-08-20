@@ -7,6 +7,7 @@ import { metric, recordForm, stack, surface } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
+import { locationsScreen } from './locations-screen.tsx'
 import { stockScreen } from './screens.ts'
 import type { StockRow } from './screens.ts'
 import { transferDetailScreen } from './transfer-screen.tsx'
@@ -502,57 +503,40 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.locations',
-        data.locations.map((row) => ({
-          id: String(row.id),
-          name: String(row.name),
-          kind: String(row.usage),
-          detail: String(row.parentPath),
-        })),
-        [
-          surface({
-            body: recordForm({
+      const nameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
+      const completeName = (row: AnyRow) =>
+        String(row.parentPath)
+          .split('/')
+          .filter(Boolean)
+          .map((id) => nameById.get(id) ?? id)
+          .join(' / ')
+      return page({
+        body: ctx.document({
+          lang,
+          title: _('stock_backend.locations'),
+          head: await ctx.styles(req),
+          body: locationsScreen(
+            _,
+            {
+              rows: data.locations.map((row) => ({
+                id: String(row.id),
+                completeName: completeName(row),
+                usage: String(row.usage),
+                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+              })),
+              warehouses: options(data.warehouses),
+              parents: data.locations.map((row) => ({
+                value: String(row.id),
+                label: completeName(row),
+              })),
               action: inLocale(url, '/admin/locations'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
               errors: invalid(url, _),
-              fields: [
-                { name: 'name', label: _('stock_backend.col.name'), required: true },
-                {
-                  name: 'usage',
-                  label: _('stock_backend.field.usage'),
-                  type: 'select',
-                  options: selectionOptions(_, 'usage', [
-                    'internal',
-                    'view',
-                    'supplier',
-                    'customer',
-                    'inventory',
-                    'production',
-                    'transit',
-                  ]),
-                },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options(data.warehouses)],
-                },
-                {
-                  name: 'parentId',
-                  label: _('stock_backend.field.parentLocation'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options(data.locations)],
-                },
-              ],
-            }),
-          }),
-        ],
-      )
+            },
+            await frame(ctx, url, req),
+          ),
+        }),
+      })
     },
 
   '/admin/picking-types':

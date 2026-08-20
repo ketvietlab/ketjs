@@ -269,6 +269,11 @@ try {
       ready: `document.querySelector('#warehouse-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
+      name: 'location-list',
+      path: '/admin/locations?lang=vi',
+      ready: `document.querySelector('#location-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'notification-inbox',
       path: '/admin/inbox?lang=vi',
       ready: `document.querySelector('[data-ui="content-card"]')`,
@@ -862,6 +867,53 @@ try {
         false,
       )
     }
+    if (screen.name === 'location-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            completeName: document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho'),
+            parentOptions: document.querySelectorAll('#location-create-form [name="parentId"] option').length > 1,
+            usageOptions: document.querySelectorAll('#location-create-form [name="usage"] option').length,
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#location-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          rowsAtLeastOne: true,
+          completeName: true,
+          parentOptions: true,
+          usageOptions: 7,
+          formRowsAtLeast28: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#location-create-form')
+          form.querySelector('[name="name"]').value = 'Kệ A-01'
+          form.querySelector('[name="parentId"]').value = 'wh:stock'
+          form.querySelector('[name="usage"]').value = 'internal'
+          form.querySelector('[name="warehouseId"]').value = 'wh'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho / Kệ A-01')`,
+      )
+      assert.equal(
+        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
+        false,
+      )
+    }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(
         await evaluate(
@@ -989,6 +1041,7 @@ try {
             'Inventory adjustment selected a product, applied a count through real browser HTTP and rendered no Chatter',
             'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
             'Warehouse configuration rendered Odoo 19 shipment-step radios, created a warehouse and rendered no Chatter',
+            'Location configuration rendered complete names, created a child location and rendered no Chatter',
             'message and internal-note composer crossed real browser HTTP',
             'Chatter exposed linked sent and terminal-failure email delivery states',
             'record activity island scheduled and completed an activity through real browser HTTP',
