@@ -619,6 +619,54 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     true,
   )
 
+  await call('stock.createLot', {
+    id: 'lot-list-http',
+    productId: 'p1',
+    name: 'LOT/LIST/001',
+    ref: 'LIST-REF',
+  })
+  await call('stock.adjustInventory', {
+    id: 'lot-list-adjustment',
+    productId: 'p1',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory',
+    countedQuantity: '3',
+    lotId: 'lot-list-http',
+    productUomId: 'unit',
+  })
+  const lotsPage = await e2e.client.get('/admin/lots?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const lotsHtml = await lotsPage.text()
+  assert.equal(lotsPage.status, 200)
+  assert.match(lotsHtml, /data-ui="record-workspace"/)
+  assert.match(lotsHtml, /id="lot-create-form"/)
+  assert.match(lotsHtml, /data-scope="lot-create"/)
+  assert.match(lotsHtml, /<select[^>]*name="productId"/)
+  assert.match(lotsHtml, /Áo thun · AO/)
+  assert.match(lotsHtml, /LOT\/LIST\/001/)
+  assert.match(lotsHtml, /href="\/admin\/lots\/lot-list-http\?lang=vi"/)
+  assert.match(lotsHtml, />3</)
+  assert.doesNotMatch(lotsHtml, /Dịch vụ tư vấn|service-variant/)
+  assert.doesNotMatch(lotsHtml, /data-island="mail\.chatter"/)
+
+  await e2e.client.form<string>('/admin/lots?lang=vi', {
+    productId: 'p1',
+    name: 'LOT/LIST/FORM',
+    ref: 'FORM-REF',
+    note: 'Được tạo từ danh sách.',
+  })
+  assert.equal(
+    (await call<Row[]>('stock.listLots', {})).value.some((row) => row.name === 'LOT/LIST/FORM'),
+    true,
+  )
+
+  const invalidLotPage = await e2e.client.form<string>('/admin/lots?lang=vi', {
+    productId: 'missing-product',
+    name: 'LOT/INVALID',
+  })
+  assert.match(invalidLotPage, /Dữ liệu chưa hợp lệ/)
+
   const missingLotUpdate = await e2e.client.post(
     '/admin/lots/missing-lot?lang=vi',
     new URLSearchParams({ productId: 'p1', name: 'Không được tạo' }),
