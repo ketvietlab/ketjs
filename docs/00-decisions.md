@@ -1642,6 +1642,11 @@ manual daily cleaning, inspection and maintenance use the same state machine. St
 completing or cancelling a task uses compare-and-set and recalculates room state in the
 same transaction. A company-scoped detail read preloads only its property, room and stay,
 and archived rooms remain visible in history but cannot receive new work from the UI.
+The room-status board reads sellable inventory and physical-room state as separate concepts. Occupied
+and cleaning states remain lifecycle-owned; the housekeeping workflow also owns the transition back to
+sellable. A supervisor may take an active, unoccupied ready/dirty room out of service, or release a repaired
+room back to dirty. Out-of-service transitions require a reason, reject open housekeeping work, and compare
+against the status the operator viewed so concurrent changes cannot be silently overwritten.
 ## D53 — Collaboration keeps one polymorphic boundary and external I/O behind jobs
 
 **A date is not a datetime with the clock hidden.** Activity deadlines and all-day

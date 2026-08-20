@@ -533,6 +533,141 @@ test('hospitality housekeeping: checkout creates one urgent task and cleaning re
   }
 })
 
+test('hospitality housekeeping: room board is scoped, exact and rejects unsafe status changes', async () => {
+  const adapter = await boot()
+  try {
+    const missingReason = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'maintenance' },
+      adapter,
+    )
+    assert.equal((missingReason.value as Row).ok, false)
+    assert.equal(((missingReason.value as Row).errors as Row[])[0]!.code, 'room_status_note_required')
+
+    const bypassHousekeeping = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'available' },
+      adapter,
+    )
+    assert.equal(
+      ((bypassHousekeeping.value as Row).errors as Row[])[0]!.code,
+      'room_status_available_managed',
+    )
+
+    const serviced = await call(
+      'hospitality_core.setRoomStatus',
+      {
+        id: '101',
+        expectedStatus: 'available',
+        status: 'maintenance',
+        note: 'Khóa nước tầng 1.',
+      },
+      adapter,
+    )
+    assert.equal((serviced.value as Row).status, 'maintenance')
+    const serviceRetry = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'maintenance' },
+      adapter,
+    )
+    assert.equal((serviceRetry.value as Row).status, 'maintenance')
+    const stale = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'dirty' },
+      adapter,
+    )
+    assert.equal(((stale.value as Row).errors as Row[])[0]!.code, 'transition_conflict')
+
+    const summary = (await call('hospitality_core.roomStatusSummary', { propertyId: 'hotel' }, adapter))
+      .value as Row
+    assert.deepEqual(summary, {
+      available: 1,
+      occupied: 0,
+      dirty: 0,
+      cleaning: 0,
+      maintenance: 1,
+      outOfOrder: 0,
+    })
+    const detail = (await call('hospitality_core.getHousekeepingRoom', { id: '101' }, adapter)).value as Row
+    assert.equal((detail.property as Row).name, 'Ket Hotel')
+    assert.equal((detail.roomType as Row).name, 'Deluxe')
+    assert.equal(detail.note, 'Khóa nước tầng 1.')
+    const hidden = await callFn(
+      'hospitality_core.getHousekeepingRoom',
+      { id: '101' },
+      { adapter, manifest, scope: { company: 'globex', branches: null } },
+    )
+    assert.equal(hidden.value, null)
+
+    const wrongTaskType = await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'wrong-service-task', code: 'HK-WRONG', roomId: '101', taskType: 'inspection' },
+      adapter,
+    )
+    assert.equal(((wrongTaskType.value as Row).errors as Row[])[0]!.code, 'cleaning_room_status')
+    await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'maintenance-task', code: 'HK-MAINT', roomId: '101', taskType: 'maintenance' },
+      adapter,
+    )
+    const releaseBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'dirty' },
+      adapter,
+    )
+    assert.equal(((releaseBlocked.value as Row).errors as Row[])[0]!.code, 'room_task_open')
+    await call('hospitality_core.cancelCleaningTask', { id: 'maintenance-task' }, adapter)
+    await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'dirty' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'room-board-clean', code: 'HK-ROOM-BOARD', roomId: '101', taskType: 'inspection' },
+      adapter,
+    )
+    const taskBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'dirty', status: 'out_of_order', note: 'Khóa phòng.' },
+      adapter,
+    )
+    assert.equal(((taskBlocked.value as Row).errors as Row[])[0]!.code, 'room_task_open')
+
+    await call('hospitality_core.startCleaningTask', { id: 'room-board-clean' }, adapter)
+    const cleaningBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'cleaning', status: 'maintenance', note: 'Dừng việc.' },
+      adapter,
+    )
+    assert.equal(((cleaningBlocked.value as Row).errors as Row[])[0]!.code, 'room_cleaning')
+    await call('hospitality_core.completeCleaningTask', { id: 'room-board-clean' }, adapter)
+
+    await call('hospitality_core.createReservation', reservation('occupied-board'), adapter)
+    await call(
+      'hospitality_core.checkIn',
+      {
+        stayId: 'occupied-board:stay',
+        roomId: '102',
+        assignmentId: 'occupied-board:assignment',
+        at: '2026-09-01T14:05:00.000Z',
+      },
+      adapter,
+    )
+    const occupiedBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '102', expectedStatus: 'occupied', status: 'maintenance', note: 'Không an toàn.' },
+      adapter,
+    )
+    assert.equal(((occupiedBlocked.value as Row).errors as Row[])[0]!.code, 'room_occupied')
+    const occupied = (await call('hospitality_core.getHousekeepingRoom', { id: '102' }, adapter)).value as Row
+    assert.equal((occupied.currentStay as Row).code, 'S-OCCUPIED-BOARD')
+    assert.equal(((occupied.currentStay as Row).partner as Row).name, 'Nguyễn An')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality housekeeping: stayover cleaning never makes an occupied room available', async () => {
   const adapter = await boot()
   try {
