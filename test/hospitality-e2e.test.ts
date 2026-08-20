@@ -388,6 +388,46 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(movedHtml, /Trần Bình/)
   assert.match(movedHtml, /Phòng 102/)
   assert.doesNotMatch(movedHtml, /hospitality_core\./)
+
+  const folioDetailEn = await e2e.client.get('/admin/hospitality/folios/booking-1%3Afolio?lang=en')
+  assert.equal(folioDetailEn.status, 200)
+  const folioDetailEnHtml = await folioDetailEn.text()
+  assert.match(folioDetailEnHtml, /Operational record only/)
+  assert.match(folioDetailEnHtml, /Post charge/)
+  assert.doesNotMatch(folioDetailEnHtml, /hospitality_core\./)
+  const chargePosted = await e2e.client.post(
+    '/admin/hospitality/folios/booking-1%3Afolio?lang=vi',
+    new URLSearchParams({
+      operation: 'post-charge',
+      id: 'e2e-manual-charge',
+      lang: 'vi',
+      stayId: 'booking-1:stay',
+      description: 'Nước suối minibar',
+      type: 'minibar',
+      quantity: '2',
+      unitPrice: '10',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(chargePosted.status, 303, await chargePosted.clone().text())
+  assert.match(chargePosted.headers.get('location') ?? '', /status=charge-posted/)
+  const chargeVoided = await e2e.client.post(
+    '/admin/hospitality/folios/booking-1%3Afolio?lang=vi',
+    new URLSearchParams({
+      operation: 'void-charge',
+      lang: 'vi',
+      chargeId: 'e2e-manual-charge',
+      reason: 'Lễ tân ghi nhầm số lượng',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(chargeVoided.status, 303, await chargeVoided.clone().text())
+  assert.match(chargeVoided.headers.get('location') ?? '', /status=charge-voided/)
+  const correctedFolio = await e2e.client.get(chargeVoided.headers.get('location')!)
+  const correctedFolioHtml = await correctedFolio.text()
+  assert.match(correctedFolioHtml, /Đã hủy khoản phí/)
+  assert.match(correctedFolioHtml, /Nước suối minibar/)
+  assert.doesNotMatch(correctedFolioHtml, /hospitality_core\./)
   assert.equal(await e2e.drainJobs(), 1)
 
   const stayNotice = await e2e.client.get(
@@ -516,6 +556,11 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     assert.equal(notices[0]?.submittedBy, 'admin')
     assert.equal(notices[0]?.confirmedBy, 'admin')
     assert.equal(notices[0]?.receiptRef, 'DVC-E2E-0001')
+    const correction = await adapter.all(
+      'SELECT state, "voidReason" FROM hospitality_core_charge WHERE id = ?',
+      ['e2e-manual-charge'],
+    )
+    assert.deepEqual({ ...correction[0] }, { state: 'void', voidReason: 'Lễ tân ghi nhầm số lượng' })
   })
 
   const checkedOut = await e2e.client.post(

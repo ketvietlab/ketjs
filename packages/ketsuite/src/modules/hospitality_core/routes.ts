@@ -9,6 +9,7 @@ import { receiveAttachment } from '../storage/routes.ts'
 import {
   amenitiesScreen,
   cleaningTasksScreen,
+  folioDetailScreen,
   foliosScreen,
   frontDeskScreen,
   housekeepingRoomsScreen,
@@ -194,6 +195,36 @@ const renderStayDetail = async (
       lang,
       timezone,
       await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
+const renderFolioDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+) => {
+  const folio = (await ctx.call('hospitality_core.getFolio', { id }, url, req)) as FolioRow | null
+  if (!folio) return text('Not found', { status: 404 })
+  const timezone = await propertyTimezone(ctx, folio.propertyId, url, req)
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.folio.detail.title', { code: folio.code }),
+    folioDetailScreen(
+      _,
+      folio,
+      lang,
+      timezone,
+      await frame(ctx, url, req),
+      randomUUID(),
       url.searchParams.get('status'),
       errors,
     ),
@@ -701,6 +732,56 @@ export const routes: Record<string, RouteEntry> = {
         _('hospitality_core.screen.folios.title'),
         foliosScreen(_, rows, lang, timezone, await frame(ctx, url, req)),
       )
+    },
+
+  '/admin/hospitality/folios/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderFolioDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      let result: OperationResult
+      let status: 'charge-posted' | 'charge-voided'
+
+      if (form.operation === 'post-charge') {
+        const id = form.id?.trim() || randomUUID()
+        result = (await ctx.call(
+          'hospitality_core.addCharge',
+          {
+            id,
+            folioId: params.id,
+            stayId: form.stayId?.trim() || undefined,
+            description: form.description?.trim() || '',
+            type: form.type?.trim() || 'service',
+            quantity: form.quantity?.trim() || '1',
+            unitPrice: form.unitPrice?.trim() || '',
+            sourceKey: `manual-charge:${id}`,
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'charge-posted'
+      } else if (form.operation === 'void-charge') {
+        result = (await ctx.call(
+          'hospitality_core.voidCharge',
+          {
+            id: form.chargeId?.trim() || '',
+            folioId: params.id,
+            reason: form.reason?.trim() || '',
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'charge-voided'
+      } else return text('unknown action', { status: 400 })
+
+      if (!result.ok)
+        return renderFolioDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams()
+      query.set('status', status)
+      const lang = url.searchParams.get('lang')?.trim() || form.lang?.trim()
+      if (lang) query.set('lang', lang)
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/tape-chart':

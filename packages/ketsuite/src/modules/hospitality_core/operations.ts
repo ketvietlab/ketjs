@@ -304,6 +304,52 @@ const bookingEffects = [
   'write:hospitality_core.InventoryChange',
 ]
 
+const voidPostedCharge = async (ctx: Ctx, args: Record<string, unknown>) => {
+  const reason = text(args.reason)
+  if (!reason) return failure(issue('reason', 'required'))
+  const voidedAt = date(args.voidedAt)?.toISOString() ?? new Date().toISOString()
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await ctx.tx(async (tx) => {
+        const charge = await record(tx, 'hospitality_core.Charge', args.id)
+        if (!charge) return failure(issue('id', 'charge_missing'))
+        if (charge.folioId !== args.folioId) return failure(issue('folioId', 'folio_mismatch'))
+        if (charge.state === 'void') return success(charge.id, { amount: charge.amount, existing: true })
+        if (charge.state !== 'active') return failure(issue('id', 'charge_not_active'))
+
+        const folio = await record(tx, 'hospitality_core.Folio', charge.folioId)
+        if (!folio) return failure(issue('folioId', 'folio_missing'))
+        if (folio.state !== 'open') return failure(issue('folioId', 'folio_not_open'))
+
+        const nextTotal = String(Number(folio.amountTotal) - Number(charge.amount))
+        const changedFolio = await tx.db.compareAndSet(
+          'hospitality_core.Folio',
+          { id: folio.id },
+          { state: 'open', version: folio.version },
+          { amountTotal: nextTotal, version: Number(folio.version) + 1 },
+        )
+        if (!('dryRun' in changedFolio) && !changedFolio.matched)
+          throw new TransitionConflict(issue('folioId', 'transition_conflict'))
+
+        const changedCharge = await tx.db.compareAndSet(
+          'hospitality_core.Charge',
+          { id: charge.id },
+          { state: 'active' },
+          { state: 'void', voidedAt, voidReason: reason },
+        )
+        if (!('dryRun' in changedCharge) && !changedCharge.matched)
+          throw new TransitionConflict(issue('id', 'transition_conflict'))
+        return success(charge.id, { amount: charge.amount, amountTotal: nextTotal, existing: false })
+      })
+    } catch (error) {
+      if (!(error instanceof TransitionConflict)) throw error
+      if (attempt === 4) return failure(error.problem)
+    }
+  }
+  return failure(issue('id', 'transition_conflict'))
+}
+
 export const operations: Record<string, FnSpec> = {
   quoteReservation: defineFn({
     input: {
@@ -1053,6 +1099,27 @@ export const operations: Record<string, FnSpec> = {
     handler: postCharge,
   }),
 
+  voidCharge: defineFn({
+    input: { id: 'id', folioId: 'id', reason: 'text', voidedAt: 'datetime?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      amount: 'decimal?',
+      amountTotal: 'decimal?',
+      existing: 'bool?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'write:hospitality_core.Folio',
+      'write:hospitality_core.Charge',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: voidPostedCharge,
+  }),
+
   listFolios: defineFn({
     input: { propertyId: 'id?', state: 'text?' },
     output: {
@@ -1091,14 +1158,20 @@ export const operations: Record<string, FnSpec> = {
       version: 'int',
       openedAt: 'datetime',
       closedAt: 'datetime?',
+      partner: 'json?',
       charges: 'json?',
       stays: 'json?',
     },
-    effects: ['read:hospitality_core.Folio', 'read:hospitality_core.Charge', 'read:hospitality_core.Stay'],
+    effects: [
+      'read:hospitality_core.Folio',
+      'read:partner.Partner',
+      'read:hospitality_core.Charge',
+      'read:hospitality_core.Stay',
+    ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const F = ctx.table('hospitality_core.Folio')
-      return ctx.db.one(from(F).where(eq(F.id, args.id)).preload('charges', 'stays'))
+      return ctx.db.one(from(F).where(eq(F.id, args.id)).preload('partner', 'charges', 'stays'))
     },
   }),
 
