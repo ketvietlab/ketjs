@@ -160,9 +160,58 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.equal(productPage.status, 200)
   const productHtml = await productPage.text()
   assert.match(productHtml, /Áo thun/)
-  assert.match(productHtml, /data-ui="media" data-state="ready"/)
-  assert.match(productHtml, /action="\/admin\/products\/tpl\?lang=vi"/)
-  assert.ok((productHtml.match(/<img /g) ?? []).length >= 2)
+  assert.match(productHtml, /data-ui="record-workspace"/)
+  assert.match(productHtml, /data-ui="record-controller"/)
+  assert.match(productHtml, /data-island="product\.editor"/)
+  assert.match(productHtml, /id="product-detail-form"/)
+  assert.equal((productHtml.match(/name="saleOk"/g) ?? []).length, 1)
+  assert.equal((productHtml.match(/name="purchaseOk"/g) ?? []).length, 1)
+  assert.equal((productHtml.match(/name="isStorable"/g) ?? []).length, 1)
+  assert.equal((productHtml.match(/name="type"/g) ?? []).length, 2)
+  assert.doesNotMatch(productHtml, /<select[^>]*name="type"/)
+  assert.match(productHtml, /data-ui="form-option-input" type="radio" name="type" value="goods"/)
+  assert.match(productHtml, /Loại hàng hoá/)
+  assert.match(productHtml, /name="saleOk"[^>]*form="product-detail-form"/)
+  assert.match(
+    productHtml,
+    /data-ui="tab" data-active="true" href="\/admin\/products\/tpl\?tab=general&amp;lang=vi"/,
+  )
+  assert.match(productHtml, /action="\/admin\/products\/tpl\?tab=general&amp;lang=vi"/)
+  assert.doesNotMatch(productHtml, /data-ui="media" data-state="ready"/)
+
+  const partialSave = await e2e.client.post(
+    '/admin/products/tpl?tab=general&lang=vi',
+    new URLSearchParams({
+      name: 'Áo thun',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '100.00',
+      saleOk: '1',
+      purchaseOk: '1',
+      tracking: 'none',
+    }),
+    { headers: { accept: 'text/html', 'x-ket-partial': 'product-detail' } },
+  )
+  assert.equal(partialSave.status, 200)
+  assert.match(partialSave.headers.get('content-type') ?? '', /^text\/html/)
+  assert.match(await partialSave.text(), /data-ui="record-body"/)
+
+  const variantsPage = await e2e.client.get('/admin/products/tpl?tab=variants&lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(variantsPage.status, 200)
+  const variantsHtml = await variantsPage.text()
+  assert.match(variantsHtml, /name="saleOk"[^>]*disabled/)
+  assert.doesNotMatch(variantsHtml, /id="product-detail-form"/)
+
+  const mediaPage = await e2e.client.get('/admin/products/tpl?tab=media&lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(mediaPage.status, 200)
+  const mediaHtml = await mediaPage.text()
+  assert.match(mediaHtml, /data-ui="media" data-state="ready"/)
+  assert.match(mediaHtml, /action="\/admin\/products\/tpl\/media\?tab=media&amp;lang=vi"/)
+  assert.ok((mediaHtml.match(/<img /g) ?? []).length >= 3)
 
   const pricingPage = await e2e.client.get('/admin/pricelists/retail?lang=vi', {
     headers: { accept: 'text/html' },
