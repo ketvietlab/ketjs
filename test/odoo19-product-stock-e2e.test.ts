@@ -375,6 +375,12 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
 test('e2e stock 19: inventory, reservation, partial completion and backorder cross HTTP', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
+  await call('uom.saveUnit', {
+    id: 'dozen',
+    name: 'Dozen',
+    relativeUomId: 'unit',
+    relativeFactor: '12',
+  })
   await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' })
   await call('product.saveTemplate', {
     id: 'service-template',
@@ -702,6 +708,33 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
     sequence: '10',
   })
   assert.match(invalidRoutePage, /Dữ liệu chưa hợp lệ/)
+
+  const replenishmentPage = await e2e.client.get('/admin/replenishment?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const replenishmentHtml = await replenishmentPage.text()
+  assert.match(replenishmentHtml, /data-ui="record-workspace"/)
+  assert.match(replenishmentHtml, /id="replenishment-create-form"/)
+  assert.match(replenishmentHtml, /data-scope="stock-replenishment-create"/)
+  assert.match(replenishmentHtml, /<select[^>]*name="productId"/)
+  assert.match(replenishmentHtml, /Áo thun · AO/)
+  assert.doesNotMatch(replenishmentHtml, /Dịch vụ tư vấn/)
+  assert.doesNotMatch(replenishmentHtml, /data-island="mail\.chatter"/)
+  const replenishmentWithRule = await e2e.client.form<string>('/admin/replenishment?lang=vi', {
+    productId: 'p1',
+    warehouseId: 'wh',
+    locationId: 'wh:stock',
+    trigger: 'manual',
+    minQuantity: '7',
+    maxQuantity: '12',
+    replenishmentUomId: 'dozen',
+    routeId: 'wh:receipt-route',
+  })
+  assert.match(replenishmentWithRule, /Đề xuất bổ sung/)
+  assert.match(replenishmentWithRule, /Áo thun · AO/)
+  assert.match(replenishmentWithRule, /data-ui="badge" data-tone="warning"[\s\S]{0,80}1/)
+  assert.match(replenishmentWithRule, /Dozen/)
+  assert.match(replenishmentWithRule, /Thủ công/)
 
   await call('stock.createLot', {
     id: 'lot-list-http',

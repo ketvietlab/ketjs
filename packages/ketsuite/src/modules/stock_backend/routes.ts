@@ -11,6 +11,7 @@ import { locationsScreen } from './locations-screen.tsx'
 import { lotDetailScreen } from './lot-screen.tsx'
 import { lotsScreen } from './lots-screen.tsx'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
+import { replenishmentScreen } from './replenishment-screen.tsx'
 import { stockRouteDetailScreen } from './stock-route-screen.tsx'
 import { stockRoutesScreen } from './stock-routes-screen.tsx'
 import { stockScreen } from './screens.ts'
@@ -62,9 +63,6 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const key = `stock_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
 }
-const selectionOptions = (_: Translator, group: string, values: readonly string[]) =>
-  values.map((value) => ({ value, label: selectionLabel(_, group, value) }))
-
 const localizedGeneratedRouteName = (_: Translator, row: AnyRow): string => {
   const raw = String(row.name)
   const separator = raw.lastIndexOf(': ')
@@ -1000,88 +998,90 @@ export const routes: Record<string, RouteEntry> = {
         return resultRedirect(result, inLocale(url, '/admin/replenishment'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [points, data] = (await Promise.all([
+      const [points, data, templates] = (await Promise.all([
         ctx.call('stock.listOrderpoints', {}, url, req),
         common(ctx, url, req),
-      ])) as [AnyRow[], Awaited<ReturnType<typeof common>>]
-      return render(
-        ctx,
-        url,
-        req,
-        'stock_backend.replenishment',
-        points.map((row) => ({
-          id: String(row.id),
-          name: String(row.productId),
-          kind: String(row.trigger),
-          detail: `${String(row.minQuantity)} / ${String(row.maxQuantity)} · ${String(row.locationId)}`,
-        })),
-        [
-          surface({
-            body: recordForm({
-              action: inLocale(url, '/admin/replenishment'),
-              submit: _('stock_backend.action.create'),
-              submitVariant: 'primary',
-              errors: invalid(url, _),
-              fields: [
-                { name: 'productId', label: _('stock_backend.field.productId'), required: true },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  options: options(data.warehouses),
-                  required: true,
-                },
-                {
-                  name: 'locationId',
-                  label: _('stock_backend.field.location'),
-                  type: 'select',
-                  options: options(data.locations),
-                  required: true,
-                },
-                {
-                  name: 'trigger',
-                  label: _('stock_backend.field.trigger'),
-                  type: 'select',
-                  options: selectionOptions(_, 'trigger', ['auto', 'manual']),
-                },
-                {
-                  name: 'minQuantity',
-                  label: _('stock_backend.field.minQuantity'),
-                  type: 'decimal',
-                  value: 0,
-                },
-                {
-                  name: 'maxQuantity',
-                  label: _('stock_backend.field.maxQuantity'),
-                  type: 'decimal',
-                  value: 0,
-                },
-                {
-                  name: 'replenishmentUomId',
-                  label: _('stock_backend.field.replenishmentUom'),
-                  type: 'select',
-                  options: options(data.units),
-                },
-                {
-                  name: 'routeId',
-                  label: _('stock_backend.field.route'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options(data.routes)],
-                },
-              ],
-            }),
-          }),
-          ...points.map((row) =>
-            recordForm({
-              action: inLocale(url, `/admin/replenishment/${String(row.id)}/run`),
-              submit: `${_('stock_backend.action.run')}: ${String(row.productId)}`,
-              submitVariant: 'secondary',
-              layout: 'inline',
-              fields: [],
-            }),
-          ),
-        ],
+        ctx.call('stock.listStorableProducts', {}, url, req),
+      ])) as [AnyRow[], Awaited<ReturnType<typeof common>>, AnyRow[]]
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
       )
+      const forecasts = (await Promise.all(
+        points.map((point) =>
+          ctx.call('stock.forecast', { productId: point.productId, locationId: point.locationId }, url, req),
+        ),
+      )) as AnyRow[]
+      const productUomById = new Map(
+        templates.flatMap((template) =>
+          (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : []).map(
+            (variant) => [String(variant.id), String(template.uomId ?? '')] as const,
+          ),
+        ),
+      )
+      const productById = new Map(products.map((product) => [product.value, product.label]))
+      const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
+      const locationById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
+      const unitById = new Map(data.units.map((row) => [String(row.id), String(row.name)]))
+      const unitRecordById = new Map(data.units.map((row) => [String(row.id), row]))
+      return backendPage(ctx, req, {
+        lang,
+        title: _('stock_backend.replenishment'),
+        body: replenishmentScreen(
+          _,
+          {
+            rows: points.map((row, index) => {
+              const forecasted = String(forecasts[index]?.forecasted ?? '0')
+              const baseUom = unitRecordById.get(productUomById.get(String(row.productId)) ?? '')
+              const replenishmentUom = unitRecordById.get(
+                String(row.replenishmentUomId ?? productUomById.get(String(row.productId)) ?? ''),
+              )
+              const baseQuantity = Math.max(0, Number(row.maxQuantity) - Number(forecasted))
+              const rawQuantity =
+                baseUom && replenishmentUom
+                  ? (baseQuantity * Number(baseUom.absoluteFactor)) / Number(replenishmentUom.absoluteFactor)
+                  : baseQuantity
+              const rounding = Math.max(Number(replenishmentUom?.rounding ?? 1), 1e-12)
+              const quantity =
+                Number(forecasted) < Number(row.minQuantity)
+                  ? Math.ceil(rawQuantity / rounding - 1e-12) * rounding
+                  : 0
+              return {
+                id: String(row.id),
+                product: productById.get(String(row.productId)) ?? String(row.productId),
+                warehouse: warehouseById.get(String(row.warehouseId)) ?? String(row.warehouseId),
+                location: locationById.get(String(row.locationId)) ?? String(row.locationId),
+                trigger: String(row.trigger),
+                triggerLabel: selectionLabel(_, 'trigger', row.trigger),
+                minQuantity: String(row.minQuantity),
+                maxQuantity: String(row.maxQuantity),
+                forecasted,
+                toOrder: String(quantity),
+                replenishmentUom:
+                  unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
+                runAction: inLocale(url, `/admin/replenishment/${String(row.id)}/run`),
+              }
+            }),
+            products,
+            warehouses: options(data.warehouses),
+            locations: options(data.locations),
+            units: options(data.units),
+            routes: data.routes.map((row) => ({
+              value: String(row.id),
+              label: localizedGeneratedRouteName(_, row),
+            })),
+            action: inLocale(url, '/admin/replenishment'),
+            errors: invalid(url, _),
+          },
+          await frame(ctx, url, req),
+        ),
+      })
     },
 
   '/admin/replenishment/{id}/run':
