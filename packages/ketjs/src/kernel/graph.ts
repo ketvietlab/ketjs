@@ -2,7 +2,18 @@ import { KetError } from './errors.ts'
 import type { KetModule } from '../types.ts'
 
 export function topoSort(modules: KetModule[]): KetModule[] {
-  const byName = new Map(modules.map((m) => [m.name, m]))
+  const byName = new Map<string, KetModule>()
+  for (const module of modules) {
+    if (byName.has(module.name)) {
+      throw new KetError({
+        code: 'E_MODULE_NAME_CLASH',
+        module: module.name,
+        message: `more than one module is named "${module.name}"`,
+        hint: 'module names are deployment-wide identities; remove or rename one implementation',
+      })
+    }
+    byName.set(module.name, module)
+  }
   for (const m of modules) {
     for (const d of m.depends) {
       if (!byName.has(d)) {

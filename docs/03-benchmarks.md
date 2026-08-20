@@ -148,6 +148,27 @@ These are regression baselines, not capacity claims. Price resolution deliberate
 includes precedence/date/quantity checks; reservation deliberately includes the
 transaction and compare-and-set work that makes the result safe.
 
+## Module discovery startup
+
+Measured on 2026-08-20 with Node 26.7.0 on Apple Silicon. One module root contains
+250 valid descriptors; the app selects the end of a 40-module dependency chain.
+The other 210 executable entries throw immediately if imported, proving that a
+catalogue scan does not execute modules outside the selected closure.
+
+| catalogue | selected closure | cold resolve | warm median | warm p95 |
+|---:|---:|---:|---:|---:|
+| 250 modules | 40 modules | 33.38 ms | 14.89 ms | 20.84 ms |
+
+The first implementation probed each directory sequentially and measured a 62.42
+ms warm median on the same machine. The benchmark led to bounded concurrent probes
+(64 directories at a time), reducing that median by 4.2× without unbounded file
+descriptor pressure. Settled results are still consumed in sorted order, so faster
+I/O cannot change which invalid module is reported first.
+
+Read this as startup/catalogue cost, not request throughput. Warm resolution still
+reads and validates every descriptor while Node reuses executable modules it has
+already imported. Reproduce it with `npm run bench:modules`.
+
 ## Queue across tenant databases
 
 The queue benchmark uses the public worker and tenant-pool APIs, warms migrations
