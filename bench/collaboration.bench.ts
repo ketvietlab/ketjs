@@ -49,6 +49,11 @@ try {
       markers: ['transfer-create-form', 'record-workspace', 'Phiếu chuyển kho'],
     },
     {
+      label: 'Warehouse list',
+      path: '/admin/warehouses?lang=vi',
+      markers: ['warehouse-create-form', 'record-workspace', 'Kho đã cấu hình'],
+    },
+    {
       label: 'My activities',
       path: '/admin/activities?lang=vi&today=2026-08-20',
       markers: ['Hoạt động của tôi'],
