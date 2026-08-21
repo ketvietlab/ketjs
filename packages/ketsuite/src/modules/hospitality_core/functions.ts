@@ -196,6 +196,7 @@ const writable = (name: string): string[] =>
   ({
     Property: [
       'id',
+      'branchId',
       'code',
       'name',
       'publicName',
@@ -254,6 +255,8 @@ export const functions: Record<string, FnSpec> = {
     input: { includeArchived: 'bool?' },
     output: {
       id: 'id',
+      companyId: 'id',
+      branchId: 'id?',
       code: 'text',
       name: 'text',
       publicName: 'text?',
@@ -313,6 +316,8 @@ export const functions: Record<string, FnSpec> = {
     input: { id: 'id' },
     output: {
       id: 'id',
+      companyId: 'id',
+      branchId: 'id?',
       code: 'text',
       name: 'text',
       publicName: 'text?',
@@ -382,6 +387,7 @@ export const functions: Record<string, FnSpec> = {
   saveProperty: defineFn({
     input: {
       id: 'id',
+      branchId: 'id?',
       code: 'text',
       name: 'text',
       publicName: 'text?',
@@ -419,6 +425,7 @@ export const functions: Record<string, FnSpec> = {
       'write:hospitality_core.Property',
       'write:hospitality_core.ContentChange',
       'read:hospitality_core.CancellationPolicy',
+      'read:company.Branch',
       'read:address.Country',
       'read:address.CurrentCatalog',
       'read:address.Division',
@@ -426,6 +433,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
+      const current = await record(ctx, 'hospitality_core.Property', raw.id)
       const args = normalized(raw, {
         code: cleanCode(raw.code),
         name: cleanText(raw.name),
@@ -460,6 +468,12 @@ export const functions: Record<string, FnSpec> = {
         !(await record(ctx, 'hospitality_core.CancellationPolicy', args.defaultCancellationPolicyId))
       )
         errors.push(issue('defaultCancellationPolicyId', 'policy_missing'))
+      if (args.branchId && args.branchId !== current?.branchId) {
+        const branch = await record(ctx, 'company.Branch', args.branchId)
+        if (!branch || branch.companyId !== ctx.scope.company)
+          errors.push(issue('branchId', 'branch_company_mismatch'))
+        else if (branch.active !== true) errors.push(issue('branchId', 'branch_archived'))
+      }
       if (args.countryCode && !/^[A-Z]{2}$/.test(args.countryCode))
         errors.push(issue('countryId', 'address.error.countryCode'))
       if (args.countryCode) {
@@ -529,6 +543,7 @@ export const functions: Record<string, FnSpec> = {
     input: { propertyId: 'id', includeArchived: 'bool?' },
     output: {
       id: 'id',
+      companyId: 'id',
       propertyId: 'id',
       code: 'text',
       name: 'text',
@@ -551,6 +566,7 @@ export const functions: Record<string, FnSpec> = {
     input: { id: 'id' },
     output: {
       id: 'id',
+      companyId: 'id',
       propertyId: 'id',
       code: 'text',
       name: 'text',

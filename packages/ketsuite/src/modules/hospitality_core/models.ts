@@ -12,6 +12,7 @@ export const models: Record<string, ModelDef> = {
     scope: 'company',
     fields: {
       id: 'id',
+      branchId: 'ref:company.Branch?',
       code: 'text',
       name: 'text',
       publicName: 'text?',

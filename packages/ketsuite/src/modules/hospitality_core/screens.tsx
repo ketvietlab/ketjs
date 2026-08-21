@@ -44,6 +44,8 @@ const providerName = (_: Translator, provider: string): string =>
 
 export type PropertyRow = {
   id: string
+  companyId?: string
+  branchId?: string | null
   code: string
   name: string
   accommodationType: string
@@ -61,6 +63,8 @@ export type PropertyRow = {
 
 export type PropertyDetail = {
   id: string
+  companyId: string
+  branchId?: string | null
   code: string
   name: string
   publicName?: string | null
@@ -99,6 +103,7 @@ export type PropertyDetail = {
 export type PropertyFormValues = Pick<
   PropertyDetail,
   | 'id'
+  | 'branchId'
   | 'code'
   | 'name'
   | 'publicName'
@@ -115,6 +120,13 @@ export type PropertyFormValues = Pick<
   | 'minimumGuestAge'
   | 'defaultCancellationPolicyId'
 >
+
+export type BranchChoice = {
+  id: string
+  code: string
+  name: string
+  active: boolean
+}
 
 export type BuildingRow = {
   id: string
@@ -1053,6 +1065,7 @@ const propertyFormFields = (
   _: Translator,
   values: PropertyFormValues,
   policies: readonly PolicyRow[],
+  branches: readonly BranchChoice[],
 ): FormField[] => {
   const timezones = [...new Set([values.timezone, ...PROPERTY_TIMEZONES])]
   return [
@@ -1063,6 +1076,20 @@ const propertyFormFields = (
       label: _('hospitality_core.property.field.publicName'),
       value: values.publicName,
       help: _('hospitality_core.property.field.publicNameHint'),
+    },
+    {
+      name: 'branchId',
+      label: _('hospitality_core.property.field.branch'),
+      type: 'select',
+      value: values.branchId,
+      help: _('hospitality_core.property.field.branchHint'),
+      options: [
+        { value: '', label: _('hospitality_core.property.value.noBranch') },
+        ...branches.map((branch) => ({
+          value: branch.id,
+          label: `${branch.code} · ${branch.name}`,
+        })),
+      ],
     },
     {
       name: 'accommodationType',
@@ -1166,6 +1193,7 @@ const propertyForm = (
   _: Translator,
   values: PropertyFormValues,
   policies: readonly PolicyRow[],
+  branches: readonly BranchChoice[],
   locale: string,
   action: string,
   submit: string,
@@ -1173,7 +1201,7 @@ const propertyForm = (
 ): TemplateResult => (
   <RecordForm
     action={action}
-    fields={propertyFormFields(_, values, policies)}
+    fields={propertyFormFields(_, values, policies, branches)}
     hidden={{ id: values.id, lang: locale }}
     submit={submit}
     submitVariant="primary"
@@ -1249,6 +1277,7 @@ export const newPropertyScreen = (
   _: Translator,
   values: PropertyFormValues,
   policies: readonly PolicyRow[],
+  branches: readonly BranchChoice[],
   locale: string,
   frame: Frame,
   errors: readonly string[] = [],
@@ -1266,6 +1295,7 @@ export const newPropertyScreen = (
           _,
           values,
           policies,
+          branches,
           locale,
           `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
           _('hospitality_core.property.action.create'),
@@ -1280,6 +1310,7 @@ export const propertyDetailScreen = (
   _: Translator,
   property: PropertyDetail,
   policies: readonly PolicyRow[],
+  branches: readonly BranchChoice[],
   locale: string,
   frame: Frame,
   status?: string | null,
@@ -1378,6 +1409,7 @@ export const propertyDetailScreen = (
                 _,
                 values,
                 policies,
+                branches,
                 locale,
                 `/admin/hospitality/properties/${encodeURIComponent(property.id)}?${query}`,
                 _('hospitality_core.property.action.save'),

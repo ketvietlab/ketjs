@@ -26,7 +26,7 @@ const ledger = defineModule({
   name: 'ledger',
   models: {
     Invoice: { scope: 'company+branch', fields: { id: 'id', total: 'int' } },
-    Setting: { scope: 'company', fields: { id: 'id', value: 'text' } },
+    Setting: { scope: 'company', fields: { id: 'id', value: 'text', branchId: 'text?' } },
     Currency: { scope: 'shared', fields: { id: 'id', code: 'text' } },
   },
   functions: {
@@ -52,6 +52,11 @@ const ledger = defineModule({
       effects: ['write:ledger.Invoice'],
       handler: async (ctx: Ctx, a) =>
         ctx.db.insert('ledger.Invoice', { id: a.id, total: 1, companyId: a.companyId } as Row),
+    }),
+    saveSetting: defineFn({
+      input: { id: 'id', value: 'text', branchId: 'text?' },
+      effects: ['write:ledger.Setting'],
+      handler: async (ctx: Ctx, a) => ctx.db.insert('ledger.Setting', a as Row),
     }),
     currencies: defineFn({
       input: {},
@@ -144,6 +149,22 @@ test('scope: a write is stamped from the request, and cannot be aimed elsewhere'
   )
   assert.equal((await db.all('SELECT * FROM ledger_invoice', [])).length, 0)
   await db.close()
+})
+
+test('scope: a company-scoped model may use branchId as an ordinary optional relation', async () => {
+  const db = await boot()
+  try {
+    await callFn(
+      'ledger.saveSetting',
+      { id: 'branch-preference', value: 'enabled', branchId: 'saigon' },
+      { adapter: db, manifest, scope: A },
+    )
+    const [row] = await db.all('SELECT * FROM ledger_setting')
+    assert.equal(row?.companyId, 'acme')
+    assert.equal(row?.branchId, 'saigon')
+  } finally {
+    await db.close()
+  }
 })
 
 test('scope: a request with no company cannot touch company data at all', async () => {

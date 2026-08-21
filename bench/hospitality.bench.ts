@@ -1654,6 +1654,31 @@ try {
   if (!noShowsMatch)
     throw new Error(`no-show lifecycle lost state or charges: ${JSON.stringify(noShowResults)}`)
 
+  const catalogStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let pass = 0; pass < readPasses; pass++) {
+        const properties = (
+          await call(key, 'hospitality_core.listPropertyCatalog', {
+            propertyIds: ['property'],
+            limit: 20,
+          })
+        ).value as Array<Record<string, unknown>>
+        const roomTypes = (
+          await call(key, 'hospitality_core.listRoomTypeCatalog', {
+            propertyId: 'property',
+            limit: 20,
+          })
+        ).value as Array<Record<string, unknown>>
+        if (properties.length !== 1 || properties[0]?.companyId !== key || 'rooms' in properties[0]!)
+          throw new Error(`${key}: property catalog projection is not safe or company-owned`)
+        if (roomTypes.length !== 12 || roomTypes.some((row) => row.companyId !== key || 'rooms' in row))
+          throw new Error(`${key}: room catalog projection is not safe or company-owned`)
+      }
+    }),
+  )
+  const catalogMs = performance.now() - catalogStarted
+
   const readStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1878,6 +1903,9 @@ try {
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),
+        catalogQueries: totalReads * 2,
+        catalogMs: Number(catalogMs.toFixed(1)),
+        catalogQueriesPerSecond: Math.round((totalReads * 2 * 1_000) / catalogMs),
         ratePlans: databaseCount * 12,
         inventoryDaysConfigured: databaseCount * 12 * 3,
         restrictionDaysConfigured: databaseCount * 7,
