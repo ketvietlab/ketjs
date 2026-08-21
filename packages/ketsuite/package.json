@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketsuite",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
@@ -43,8 +43,8 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "0.1.1",
-    "@ketvietlab/ketjs-view": "0.1.1"
+    "@ketvietlab/ketjs": "0.1.2",
+    "@ketvietlab/ketjs-view": "0.1.2"
   },
   "publishConfig": {
     "access": "public",
