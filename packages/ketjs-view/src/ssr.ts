@@ -10,7 +10,7 @@
 
 import { templateFor } from './template.ts'
 import type { TplEl, TplNode } from './template.ts'
-import { isResult, isEach } from './render.ts'
+import { EVENT_PREFIX, isResult, isEach } from './render.ts'
 import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
 
@@ -115,8 +115,10 @@ function writeResult(result: TemplateResult, out: string[]): void {
     out.push(`<${el.tag}`)
     for (const a of el.attrs) {
       // on:* is behaviour, not markup. It is attached during hydration and must
-      // never appear in the HTML, where it would be a dead string at best.
-      if (a.name.startsWith('on:')) continue
+      // never appear in the HTML, where it would be a dead string at best. The
+      // prefix is the renderer's constant, not a second copy of it: the two walks
+      // have to agree on what counts as an event or SSR emits what hydration binds.
+      if (a.name.startsWith(EVENT_PREFIX)) continue
       const v = a.hole != null ? result.values[a.hole] : a.value
       if (v == null || v === false) continue
       out.push(` ${a.name}="${escapeHtml(v)}"`)

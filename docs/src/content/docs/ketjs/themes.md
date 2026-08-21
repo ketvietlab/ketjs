@@ -46,7 +46,9 @@ templates/
 └── menu.primary.ktl        → menu.primary
 ```
 
-Errors name the template and line. An empty or missing directory fails early.
+Errors name the template and line. An empty or missing directory fails early. Two modules providing
+one template name is `E_TEMPLATE_DUPLICATE` rather than a silent last-one-wins; a theme providing a
+name a module already uses is the override a theme exists for and remains allowed.
 
 Inline `templates` objects remain supported, but files provide clearer ownership, editor tooling, and
 location-aware diagnostics.
@@ -169,6 +171,11 @@ The theme provides a template named after each section type, such as `website.he
 from a disabled module is skipped but remains in page data for later reinstall. A section unknown to
 the entire deployment leaves an HTML diagnostic comment.
 
+`validateLayout()` checks a layout against this schema on the way in, and the renderer projects each
+placement to the declared settings on the way out: a stored layout that predates a schema change
+reaches the template carrying declared keys only, with missing values as `null`. A section template
+also receives `page`, which is context rather than one of its settings.
+
 ## Islands
 
 Place module-owned behavior by name:
@@ -202,21 +209,45 @@ views: {
 }
 ```
 
-Use `makeDrop()` or `makeDrops()` to build immutable null-prototype objects containing only those
-fields. `sealScope()` recursively refuses functions. KTL also rejects `constructor`, `prototype`, and
-`__proto__` paths and throws if a readable property resolves to a function.
+A declared view is enforced, not merely named. When a joint or island prop declares a view key, the
+value is projected before it crosses: the extension receives an immutable null-prototype object
+carrying the declared fields and nothing else, with absent fields as `null`. Passing a whole row is
+therefore safe — the extra columns do not travel.
+
+```ts
+joints: {
+  'product.detail.footer': { props: { product: 'product.productCard' } },
+}
+```
+
+The reader matters. A fill sees the fields declared by the view's owner, plus the fields its own
+module declared in a view over the same model. A module that adds a field with `extend` and then
+publishes a view over it has declared that field theme-visible and may read it back through the
+owner's joint; a field no installed module declared anywhere never crosses.
+
+`makeDrop()` and `makeDrops()` build the same projection by hand, for scopes an application composes
+itself. `sealScope()` refuses functions anywhere inside a scope value, at any depth, and names the
+path it found one at. KTL also rejects `constructor`, `prototype`, and `__proto__` paths and throws
+if a readable property resolves to a function.
 
 ## Tokens and CSS layers
 
-`tokensToCss()` converts declared tokens to `--ket-*` custom properties and emits the cascade order:
+Declared `tokens` become CSS without a theme doing anything: the framework serves them at
+`/_ket/tokens.css` and links that stylesheet into every document a theme renders. The tokens served
+are those of the modules that actually render the page — installed modules plus the selected theme —
+so a deployment shipping several themes gets the palette of the one the site chose rather than the
+one that composed last.
+
+`tokensToCss()` performs the conversion to `--ket-*` custom properties and emits the cascade order:
 
 ```text
 ket.reset → ket.theme → ket.app → ket.user
 ```
 
-Application styles load after theme styles in dependency order. `scopedCss(section, css)` scopes a
-block to a section boundary. Keep semantic tokens stable and map component CSS to tokens instead of
-hard-coding a second palette.
+Tokens land in `ket.theme`; application styles load after them in dependency order.
+`scopedCss(section, css)` scopes a block to a section boundary. Keep semantic tokens stable and map
+component CSS to tokens instead of hard-coding a second palette. `ThemeRuntime.tokensCss` carries the
+same stylesheet for a caller rendering outside the HTTP server.
 
 ## Theme verification
 

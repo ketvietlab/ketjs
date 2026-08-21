@@ -1939,3 +1939,45 @@ acceptance fixtures use synthetic values and must never contain real guest PII.
 Manual entry is the complete first front-desk path. Storage-backed front/back images
 and OCR state remain supported by the domain model, but automated scanning is a later
 adapter slice and is not required to receive or operate a stay.
+
+## D66 — A declared boundary that nothing enforces is not a boundary
+
+**The view layer's contracts were all named and only some were kept.** `views` said
+which fields a theme may read and no render path ever projected one: `makeDrop()` had
+exactly one caller in the whole repository, a test. A joint declaring
+`product: 'catalog.product'` checked that the value was an object and passed the row
+through with every column on it. `tokens` had the same shape of problem one layer up —
+every theme declared them, the manifest composed them, `tokensToCss()` turned them into
+`--ket-*` inside a declared cascade layer, and nothing ever put the result on a page, so
+themes hard-coded a second palette in their own stylesheet. A rule nothing checks decays;
+a rule nothing *runs* was never true to begin with.
+
+**Chosen:** the framework enforces at the one choke point it owns. A view-typed prop is
+projected before it crosses into a joint or an island. A section placement is projected to
+the settings its section declared, so a layout stored before a schema change still hands a
+theme declared keys only. `sealScope()` refuses a function at any depth rather than at the
+top level, which is what its documentation had always claimed. And the tokens a theme
+declares are served at `/_ket/tokens.css` and linked into the document it renders — by the
+framework, because the framework is what publishes the cascade order they live in.
+
+**The projection is per reader, not per joint.** The first cut projected to the view named
+in the contract and broke the example the framework leads with: `inventory` adds
+`leadTimeDays` to `catalog.Product` with `extend`, declares its own view over it, and reads
+it back through a joint `catalog` published. Refusing that would mean the extension pillar
+and the view boundary could not both be true. So a module reads the fields the view's owner
+declared plus the fields it declared itself over the same model. A field nobody declared
+anywhere still cannot cross.
+
+**Cost:** a fill that was reading an undeclared field now reads empty, and finds out at
+render rather than at build — the projection cannot tell an undeclared field from a typo.
+Tokens now reach pages that never had them, so a theme carrying a hard-coded palette may
+show two sources of truth until it moves its colours into `tokens`.
+
+**Reversible:** yes, but pointlessly. Loosening restores a leak nobody asked for.
+
+**One behaviour, one implementation.** Rendering a joint existed twice — once for the
+storefront, once for first-party screens — and the copies had drifted: the same missing
+joint reported two different error codes depending on which half of the product you stood
+in, and one of them took a tenant's whole theme down when an island's module was switched
+off while the other degraded to nothing. Both now go through `theme/joint-runtime.ts`. The
+storefront kept the degradation, because that is the behaviour a restricted manifest is for.
