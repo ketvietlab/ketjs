@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto'
 import { defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
-import {
-  CUSTOMER_DUMMY_HASH,
-  hashCustomerPassword,
-  verifyCustomerPassword,
-} from './customer-password.ts'
+import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
 
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_ABSOLUTE_SECONDS = 30 * 24 * 60 * 60
@@ -23,7 +19,10 @@ const accountView = (account: Row) => ({
   securityVersion: account.securityVersion,
 })
 
-export const normalizeCustomerEmail = (value: unknown): string => String(value ?? '').trim().toLowerCase()
+export const normalizeCustomerEmail = (value: unknown): string =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
 
 const validPassword = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.length < 10 || value.length > 128) return false
@@ -102,9 +101,7 @@ const claimRateSlot = async (
 
 const accountByEmail = async (ctx: Ctx, realmId: unknown, email: string): Promise<Row | null> => {
   const Account = ctx.table('website.CustomerAccount')
-  return ctx.db.one(
-    from(Account).where(eq(Account.realmId, realmId), eq(Account.emailNormalized, email)),
-  )
+  return ctx.db.one(from(Account).where(eq(Account.realmId, realmId), eq(Account.emailNormalized, email)))
 }
 
 const sessionOutput = {
@@ -167,8 +164,7 @@ export const customerFunctions: Record<string, FnSpec> = {
         return invalid('displayName', 'website.customer.error.invalidName')
       if (!EMAIL.test(email) || email.length > 320)
         return invalid('email', 'website.customer.error.invalidEmail')
-      if (!validPassword(args.password))
-        return invalid('password', 'website.customer.error.invalidPassword')
+      if (!validPassword(args.password)) return invalid('password', 'website.customer.error.invalidPassword')
       const now = new Date()
       const rateKey = String(args.rateKey ?? 'anonymous').slice(0, 256)
       if (
@@ -287,11 +283,7 @@ export const customerFunctions: Record<string, FnSpec> = {
     exposure: 'internal',
     input: { id: 'id', accountId: 'id', tokenDigest: 'text', networkFingerprint: 'text?' },
     output: sessionOutput,
-    effects: [
-      'read:website.CustomerAccount',
-      'read:website.CustomerRealm',
-      'write:website.CustomerSession',
-    ],
+    effects: ['read:website.CustomerAccount', 'read:website.CustomerRealm', 'write:website.CustomerSession'],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
       if (account?.status !== 'active') return null
@@ -406,7 +398,10 @@ export const customerFunctions: Record<string, FnSpec> = {
         await ctx.db.update(
           'website.CustomerSession',
           { id: session.id },
-          { revokedAt: new Date().toISOString(), revokeReason: String(args.reason ?? 'logout').slice(0, 100) },
+          {
+            revokedAt: new Date().toISOString(),
+            revokeReason: String(args.reason ?? 'logout').slice(0, 100),
+          },
         )
       return { ok: true }
     },
@@ -448,11 +443,7 @@ export const customerFunctions: Record<string, FnSpec> = {
     exposure: 'internal',
     input: { accountId: 'id', displayName: 'text' },
     output: { ok: 'bool', account: 'json?', errors: 'json?' },
-    effects: [
-      'read:website.CustomerAccount',
-      'write:website.CustomerAccount',
-      'write:partner.Partner',
-    ],
+    effects: ['read:website.CustomerAccount', 'write:website.CustomerAccount', 'write:partner.Partner'],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
       if (account?.status !== 'active') return invalid('account', 'website.customer.error.sessionExpired')

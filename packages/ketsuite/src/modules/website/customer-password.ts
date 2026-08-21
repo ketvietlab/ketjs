@@ -21,14 +21,9 @@ const scrypt = (
 export const hashCustomerPassword = async (password: string): Promise<string> => {
   const salt = randomBytes(LIMITS.saltLength)
   const key = await scrypt(password, salt, PARAMS.N, PARAMS.r, PARAMS.p, PARAMS.keyLength)
-  return [
-    'scrypt',
-    PARAMS.N,
-    PARAMS.r,
-    PARAMS.p,
-    salt.toString('base64url'),
-    key.toString('base64url'),
-  ].join('$')
+  return ['scrypt', PARAMS.N, PARAMS.r, PARAMS.p, salt.toString('base64url'), key.toString('base64url')].join(
+    '$',
+  )
 }
 
 export const verifyCustomerPassword = async (password: string, encoded: string): Promise<boolean> => {

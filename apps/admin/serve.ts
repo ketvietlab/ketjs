@@ -23,8 +23,16 @@ import {
 } from 'ketjs'
 import { html, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
-import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
-import backend, { appsScreen, pagesScreen, settingsScreen, cataloguePage } from 'ketsuite/backend'
+import { address, paperTheme, partner, website, websiteMenu, websiteSearch, websiteSeo } from 'ketsuite'
+import backend, {
+  appsScreen,
+  attachmentPanel,
+  cataloguePage,
+  modalSheet,
+  pagesScreen,
+  settingsScreen,
+  surface,
+} from 'ketsuite/backend'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -38,7 +46,7 @@ const DESIGN = join(HERE, '../../packages/ketsuite/src/modules/backend/design')
  */
 const DEMO_SCOPE = { company: 'design', branches: null }
 
-const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme, backend]
+const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme, backend]
 const manifest = compose(mods)
 
 const db = sqliteAdapter()
@@ -103,6 +111,8 @@ const app = await createKetServer({
           body: html`
       <ul>
         <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
+        <li><a href="/catalogue/attachments">Attachment primitive</a></li>
+        <li><a href="/catalogue/modal">Modal primitive</a></li>
         <li><a href="/admin/apps">Apps (real data)</a></li>
         <li><a href="/admin/pages">Pages (real data)</a></li>
         <li><a href="/admin/settings">Settings (real data)</a></li>
@@ -119,6 +129,47 @@ const app = await createKetServer({
       }),
 
     '/catalogue': route((t) => cataloguePage(t)),
+
+    '/catalogue/attachments': route(() =>
+      surface({
+        padding: 'default',
+        body: attachmentPanel({
+          items: [
+            {
+              id: 'contract',
+              name: 'enterprise-contract-with-a-deliberately-long-file-name-for-responsive-review.pdf',
+              href: '/design/fixtures/product-front.svg',
+              size: 248_320,
+              mimetype: 'application/pdf',
+            },
+            {
+              id: 'brief',
+              name: 'sales-brief.txt',
+              href: '/design/fixtures/product-back.svg',
+              size: 4_096,
+              mimetype: 'text/plain',
+            },
+          ],
+          uploadAction: '/fixture/attachments',
+          emptyTitle: 'No attachments',
+          emptyHint: 'Upload the first file to continue.',
+          chooseLabel: 'Choose file',
+          uploadLabel: 'Upload',
+        }),
+      }),
+    ),
+
+    '/catalogue/modal': route(() =>
+      modalSheet({
+        title: 'Follow-up workspace with a long responsive title',
+        closeHref: '/',
+        closeLabel: 'Close',
+        body: surface({
+          padding: 'default',
+          body: 'This route isolates the URL-addressable modal for desktop and mobile review.',
+        }),
+      }),
+    ),
 
     '/admin/apps': route(async (t) => appsScreen(t, await apps.list())),
 
