@@ -1,0 +1,71 @@
+name: publish npm packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v0.1.0
+        required: true
+        type: string
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: release tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: >-
+          node --input-type=module --eval
+          "import fs from 'node:fs';
+          const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+          if (process.env.RELEASE_TAG !== 'v' + version)
+          throw new Error('release tag ' + process.env.RELEASE_TAG + ' does not match v' + version)"
+
+      - name: verify packages and clean-room scaffold
+        run: npm run release:check
+
+      # Internal dependencies use exact versions, so publish from the bottom of
+      # the graph upward. The npm environment may require a human reviewer.
+      - name: publish ketjs-view
+        run: npm publish --workspace ketjs-view --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: publish ketjs
+        run: npm publish --workspace ketjs --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: publish ketjs-postgres
+        run: npm publish --workspace ketjs-postgres --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: publish ketsuite
+        run: npm publish --workspace ketsuite --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,11 +1,32 @@
 {
   "name": "ketsuite",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/ketsuite"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "keywords": [
+    "erp",
+    "business",
+    "modules",
+    "ketjs",
+    "typescript"
+  ],
   "engines": {
     "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../.."
   },
   "exports": {
     ".": {
@@ -22,8 +43,13 @@
     }
   },
   "dependencies": {
-    "ketjs": "0.0.0",
-    "ketjs-view": "0.0.0"
+    "ketjs": "0.1.0",
+    "ketjs-view": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
     "dist"
