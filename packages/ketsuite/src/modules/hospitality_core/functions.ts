@@ -935,7 +935,10 @@ export const functions: Record<string, FnSpec> = {
       )
         errors.push(issue('code', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.Room', args, writable('Room'), {
+      const configuration = { ...args }
+      delete configuration.status
+      delete configuration.note
+      return save(ctx, 'hospitality_core.Room', configuration, writable('Room'), {
         status: 'available',
         note: null,
         active: true,
