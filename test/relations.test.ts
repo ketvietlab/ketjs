@@ -8,6 +8,7 @@ import {
   from,
   migrateOne,
   registerFunctions,
+  schemaFromManifest,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { Adapter, Ctx, KetError, Row } from '@ketvietlab/ketjs'
@@ -93,6 +94,48 @@ test('relations: declared, and composed with the module that declared them', () 
     declaredBy: 'product',
   })
   assert.equal(manifest.relations['product.Product']!.template!.kind, 'belongsTo')
+})
+
+test('relations: schema adds an index for each has-many preload key', () => {
+  const indexes = Object.values(schemaFromManifest(manifest).tables.product_product!.indexes)
+  assert.ok(indexes.some((index) => index.fields.join(',') === 'templateId' && index.by === '(framework)'))
+})
+
+test('models: physical table collisions are rejected during composition', () => {
+  const first = defineModule({
+    name: 'foo',
+    models: { BarBaz: { scope: 'shared', fields: { id: 'id' } } },
+  })
+  const second = defineModule({
+    name: 'foo_bar',
+    models: { Baz: { scope: 'shared', fields: { id: 'id' } } },
+  })
+  assert.throws(() => compose([first, second], { headless: true }), /E_TABLE_NAME_COLLISION/)
+})
+
+test('relations: large has-many preloads are split into bounded queries', async () => {
+  const db = await boot()
+  try {
+    for (let index = 0; index < 501; index++) {
+      await db.run('INSERT INTO product_template (id, name) VALUES (?, ?)', [
+        `bulk-${index}`,
+        `Bulk ${index}`,
+      ])
+    }
+    let childQueries = 0
+    const recording: Adapter = {
+      ...db,
+      async all(sql, params) {
+        if (sql.includes('FROM "product_product"') && sql.includes(' IN (')) childQueries++
+        return db.all(sql, params)
+      },
+    }
+    const result = await callFn('product.templates', { withVariants: true }, { adapter: recording, manifest })
+    assert.equal((result.value as Row[]).length, 503)
+    assert.equal(childQueries, 2)
+  } finally {
+    await db.close()
+  }
 })
 
 test('relations: a key that does not exist is a build error, not an empty result', () => {

@@ -72,6 +72,9 @@ await ctx.db.insert('sales.Order', row)
 await ctx.db.update('sales.Order', { id }, patch)
 ```
 
+Update filters and patch keys are validated against the manifest. Updates require a non-empty filter,
+and scope columns cannot be moved through a patch.
+
 Prefer query values for complex reads and deletes because their complete reach is inspectable.
 
 ## Group and aggregate

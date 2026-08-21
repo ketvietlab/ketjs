@@ -64,23 +64,10 @@ function taxAmounts(tax: Row | null, gross: number, quantity: number) {
   return { untaxed, tax: taxAmount, total: money(untaxed + taxAmount) }
 }
 async function recompute(ctx: Ctx, orderId: unknown) {
-  let untaxed = 0,
-    tax = 0
-  for (const line of await ctx.db.select('pos.OrderLine', { orderId })) {
-    const held = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-    const amounts = taxAmounts(
-      held,
-      money(n(line.qty) * n(line.priceUnit) * (1 - n(line.discount) / 100)),
-      n(line.qty),
-    )
-    untaxed = money(untaxed + amounts.untaxed)
-    tax = money(tax + amounts.tax)
-    await ctx.db.update(
-      'pos.OrderLine',
-      { id: line.id },
-      { priceSubtotal: decimal(amounts.untaxed), priceSubtotalIncl: decimal(amounts.total) },
-    )
-  }
+  const lines = await ctx.db.select('pos.OrderLine', { orderId })
+  const untaxed = money(lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0))
+  const total = money(lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0))
+  const tax = money(total - untaxed)
   const payments = await ctx.db.select('pos.Payment', { orderId }),
     paid = money(payments.reduce((sum, payment) => sum + n(payment.amount), 0))
   await ctx.db.update(
@@ -89,9 +76,9 @@ async function recompute(ctx: Ctx, orderId: unknown) {
     {
       amountUntaxed: decimal(untaxed),
       amountTax: decimal(tax),
-      amountTotal: decimal(untaxed + tax),
+      amountTotal: decimal(total),
       amountPaid: decimal(paid),
-      amountReturn: decimal(paid - untaxed - tax),
+      amountReturn: decimal(paid - total),
     },
   )
 }
@@ -675,8 +662,9 @@ export const functions: Record<string, FnSpec> = {
       const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] : null
       if (args.taxId && (!tax || !['sale', 'none'].includes(String(tax.typeTaxUse))))
         return invalid('taxId', 'tax use does not match POS sales')
+      let amounts: ReturnType<typeof taxAmounts>
       try {
-        taxAmounts(tax, n(args.qty) * n(priceUnit) * (1 - n(discount) / 100), n(args.qty))
+        amounts = taxAmounts(tax, n(args.qty) * n(priceUnit) * (1 - n(discount) / 100), n(args.qty))
       } catch (error) {
         return invalid('taxId', (error as Error).message)
       }
@@ -691,8 +679,8 @@ export const functions: Record<string, FnSpec> = {
           priceUnit: String(priceUnit),
           discount: String(discount),
           taxId: args.taxId ?? null,
-          priceSubtotal: '0',
-          priceSubtotalIncl: '0',
+          priceSubtotal: decimal(amounts.untaxed),
+          priceSubtotalIncl: decimal(amounts.total),
           refundedOrderlineId: null,
           sequence: 10,
         })
@@ -710,9 +698,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Payment',
       'write:pos.Payment',
       'read:pos.OrderLine',
-      'write:pos.OrderLine',
       'write:pos.Order',
-      'read:account.Tax',
     ],
     idempotent: true,
     agent: true,
@@ -769,7 +755,6 @@ export const functions: Record<string, FnSpec> = {
       'write:account.MoveLine',
       'read:account.Journal',
       'read:account.Account',
-      'read:account.Tax',
       ...stockEffects,
       ...accountEffects,
     ],
@@ -893,7 +878,6 @@ export const functions: Record<string, FnSpec> = {
       'write:pos.OrderLine',
       'read:pos.Payment',
       'write:pos.Order',
-      'read:account.Tax',
       'read:pos.Sequence',
       'write:pos.Sequence',
       'read:pos.Session',
@@ -950,8 +934,8 @@ export const functions: Record<string, FnSpec> = {
           priceUnit: line.priceUnit,
           discount: line.discount,
           taxId: line.taxId,
-          priceSubtotal: '0',
-          priceSubtotalIncl: '0',
+          priceSubtotal: decimal(-n(line.priceSubtotal)),
+          priceSubtotalIncl: decimal(-n(line.priceSubtotalIncl)),
           refundedOrderlineId: line.id,
           sequence,
         })

@@ -11,6 +11,7 @@ import { parseType } from './types.ts'
 import type { KetModule, Manifest, ComposedModel } from '../types.ts'
 import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
+import { tableNameFor } from '../data/migrate.ts'
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
@@ -216,9 +217,22 @@ export function compose(
   }
 
   // --- models -------------------------------------------------------------
+  const physicalTables = new Map<string, string>()
   for (const m of order) {
     for (const [modelName, def] of Object.entries(m.models)) {
       const key = qualify(m.name, modelName)
+      const physicalTable = tableNameFor(key)
+      const existingPhysicalModel = physicalTables.get(physicalTable)
+      if (existingPhysicalModel && existingPhysicalModel !== key) {
+        diag.add({
+          code: 'E_TABLE_NAME_COLLISION',
+          module: m.name,
+          message: `models "${existingPhysicalModel}" and "${key}" both map to table "${physicalTable}"`,
+          hint: 'rename one model or module so every composed model has a unique physical table',
+        })
+      } else {
+        physicalTables.set(physicalTable, key)
+      }
       if (manifest.models[key]) {
         diag.add({
           code: 'E_MODEL_DUPLICATE',

@@ -37,7 +37,7 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
   const evictOne = async (): Promise<boolean> => {
     let oldest: [string, Entry] | null = null
     for (const [k, e] of entries) {
-      if (e.leases > 0) continue
+      if (e.leases > 0 || e.opening) continue
       if (!oldest || e.lastUsed < oldest[1].lastUsed) oldest = [k, e]
     }
     if (!oldest) return false
@@ -58,13 +58,24 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
       const adapter = o.create(key)
       e = { adapter, leases: 0, lastUsed: now(), opening: null }
       entries.set(key, e)
-      e.opening = adapter.open()
-    }
-    if (e.opening) {
-      await e.opening
-      e.opening = null
+      const entry = e
+      entry.opening = adapter.open().catch(async (error) => {
+        if (entries.get(key) === entry) entries.delete(key)
+        await adapter.close().catch(() => {})
+        throw error
+      })
     }
     e.leases++
+    const opening = e.opening
+    if (opening) {
+      try {
+        await opening
+      } catch (error) {
+        e.leases = Math.max(0, e.leases - 1)
+        throw error
+      }
+      if (e.opening === opening) e.opening = null
+    }
     e.lastUsed = now()
     return e.adapter
   }
@@ -91,7 +102,7 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
       const cutoff = now() - idleMs
       let n = 0
       for (const [k, e] of [...entries]) {
-        if (e.leases > 0 || e.lastUsed > cutoff) continue
+        if (e.leases > 0 || e.opening || e.lastUsed > cutoff) continue
         entries.delete(k)
         await e.adapter.close()
         n++

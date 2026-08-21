@@ -22,7 +22,8 @@ for (const sql of renderSql(operations, adapter)) {
 ```
 
 Field provenance is retained in the schema. A destructive operation can therefore identify the module
-that contributed the affected field.
+that contributed the affected field. The derived schema includes framework-owned indexes for row scope
+and declared `hasMany` relation keys; these appear as ordinary non-destructive migration operations.
 
 ## Non-destructive by default
 
