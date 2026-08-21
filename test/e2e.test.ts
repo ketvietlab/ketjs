@@ -80,10 +80,15 @@ test('e2e: a bad call returns a structured error an agent can act on', async () 
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ wrong: 1 }),
   })
-  assert.equal(res.status, 400)
-  const body = (await res.json()) as { code: string; hint: string }
+  assert.equal(res.status, 422)
+  const body = (await res.json()) as {
+    code: string
+    hint: string
+    fieldErrors: Record<string, Array<{ code: string }>>
+  }
   assert.equal(body.code, 'E_INVALID_INPUT')
   assert.match(body.hint, /signature/)
+  assert.equal(body.fieldErrors.wrong![0]!.code, 'unknown')
   await app.close()
   await adapter.close()
 })

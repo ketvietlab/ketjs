@@ -14,6 +14,7 @@ import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
+import { FormValidationError } from './form.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import { KetError as KetErr } from '../kernel/errors.ts'
@@ -563,6 +564,7 @@ export async function createKetServer(o: ServeOpts) {
         if (!res.writableEnded) res.destroy(e as Error)
         return
       }
+      if (e instanceof FormValidationError) return json(res, 422, e.toJSON())
       if (e instanceof KetError) return json(res, e.code === 'E_PAYLOAD_TOO_LARGE' ? 413 : 400, e.toJSON())
       return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
     }
