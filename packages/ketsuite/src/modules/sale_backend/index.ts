@@ -631,7 +631,12 @@ export default defineModule({
       async (url, req) =>
         req.method === 'GET'
           ? document(ctx, url, req, 'sale_backend.dashboard.title', async (_, shell) =>
-              dashboard(_, (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[], shell),
+              dashboard(
+                _,
+                (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
+                shell,
+                localeSuffix(url),
+              ),
             )
           : text('GET', { status: 405 }),
     '/admin/sales/quotations':
