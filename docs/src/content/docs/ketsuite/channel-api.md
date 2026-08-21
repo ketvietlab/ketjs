@@ -3,9 +3,10 @@ title: Channel API architecture
 description: Stable, profile-specific contracts for websites, mobile clients, POS terminals, and integrations.
 ---
 
-The Channel API is the supported boundary for clients outside the KetSuite backend. It is a facade over
-domain functions, not a second business layer: modules keep ownership of validation and transactions while
-the facade owns authentication presentation, capability discovery, response envelopes, and API versioning.
+The Channel API is KetSuite's supported boundary for clients outside the backend. It uses KetJS
+[HTTP contract metadata](/ketjs/openapi/) but owns the product decisions: profiles, customer authentication,
+capability discovery, response envelopes, and API versioning. It is a facade over domain functions, not a second
+business layer; vertical modules retain validation and transaction ownership.
 
 ## Profiles and ownership
 
@@ -81,12 +82,13 @@ the wrong result. Invalid media types, oversized bodies, and invalid JSON are re
 
 ## OpenAPI and Starlight
 
-OpenAPI 3.1 is generated from the same composed route contracts used by the server. The checked-in artifact
-is regenerated before Starlight development and production builds:
+KetSuite's `openApiDocument()` maps the Customer profile, Bearer/cookie security schemes, capabilities, and
+idempotency metadata to OpenAPI 3.1. The checked-in artifact is regenerated from the composed server contract
+before Starlight development and production builds:
 
 ```sh
 npm run generate:api --prefix docs
 ```
 
-The [Customer API reference](/ketjs/channel-api-reference/) renders that artifact directly and offers the raw
+The [Customer API reference](/ketsuite/channel-api-reference/) renders that artifact directly and offers the raw
 document for SDK generation and external tooling.

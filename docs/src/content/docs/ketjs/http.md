@@ -37,6 +37,9 @@ prefix must come from the owner or from a dependent extension using the owner's 
 the route method, request schema, response schemas, capability, and idempotency behavior in the manifest so
 OpenAPI can be generated from the deployed composition rather than maintained as a separate document.
 
+See [HTTP contracts and OpenAPI](/ketjs/openapi/) for the framework contract fields, extension rules, and generator
+boundary.
+
 ## Anonymous routes
 
 Routes default to requiring a session. Public endpoints must opt in:
