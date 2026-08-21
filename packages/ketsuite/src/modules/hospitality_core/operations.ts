@@ -16,6 +16,7 @@ import {
   quoteAvailability,
   recordInventoryChange,
   releaseInventory,
+  replaceReservedInventory,
   reserveInventory,
   restrictionIssues,
 } from './inventory.ts'
@@ -553,6 +554,189 @@ export const operations: Record<string, FnSpec> = {
     },
   }),
 
+  amendReservation: defineFn({
+    input: {
+      id: 'id',
+      roomTypeId: 'id',
+      partnerId: 'id',
+      checkIn: 'datetime',
+      checkOut: 'datetime',
+      adults: 'int',
+      children: 'int',
+      rate: 'decimal',
+      at: 'datetime?',
+    },
+    output: { ok: 'bool', id: 'id?', amountTotal: 'decimal?', errors: 'json?' },
+    effects: [
+      ...reservationQuoteEffects,
+      'read:partner.Partner',
+      'read:hospitality_core.Reservation',
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.StayGuest',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'write:hospitality_core.Reservation',
+      'write:hospitality_core.Stay',
+      'write:hospitality_core.StayGuest',
+      'write:hospitality_core.Folio',
+      'write:hospitality_core.Charge',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const reservation = await record(ctx, 'hospitality_core.Reservation', args.id)
+      if (!reservation) return failure(issue('id', 'reservation_missing'))
+      if (reservation.provider !== 'direct')
+        return failure(issue('provider', 'reservation_external_readonly'))
+      if (reservation.state !== 'confirmed') return failure(issue('state', 'reservation_cannot_amend'))
+      const stay = reservation.stayId ? await record(ctx, 'hospitality_core.Stay', reservation.stayId) : null
+      if (stay?.state !== 'draft') return failure(issue('state', 'reservation_cannot_amend'))
+      const partner = await record(ctx, 'partner.Partner', args.partnerId)
+      const plan = await planReservation(ctx, {
+        ...args,
+        propertyId: reservation.propertyId,
+        bookingType: reservation.bookingType,
+        billingMode: reservation.billingMode,
+      })
+      const errors = plan.errors.filter((problem) => problem.code !== 'no_availability')
+      if (!partner) errors.push(issue('partnerId', 'partner_missing'))
+      if (errors.length || !plan.schedule) return failure(...errors)
+
+      const property = plan.property!
+      const previousDates =
+        reservation.bookingType === 'hourly'
+          ? []
+          : occupancyDates(reservation.checkIn, reservation.checkOut, String(property.timezone ?? 'UTC'))
+      const at = date(args.at)?.toISOString() ?? new Date().toISOString()
+      const schedule = plan.schedule
+      return transition(() =>
+        ctx.tx(async (tx) => {
+          const claimed = await tx.db.compareAndSet(
+            'hospitality_core.Reservation',
+            { id: reservation.id },
+            { state: 'confirmed', updatedAt: reservation.updatedAt },
+            { updatedAt: at },
+          )
+          if (!('matched' in claimed) || !claimed.matched)
+            throw new TransitionConflict(issue('state', 'transition_conflict'))
+
+          await replaceReservedInventory(
+            tx,
+            reservation.propertyId,
+            reservation.roomTypeId,
+            previousDates,
+            args.roomTypeId,
+            plan.inventoryDates,
+          )
+          const inventoryChanged =
+            reservation.roomTypeId !== args.roomTypeId ||
+            previousDates.join(',') !== plan.inventoryDates.join(',')
+          if (inventoryChanged && previousDates.length)
+            await recordInventoryChange(tx, {
+              propertyId: reservation.propertyId,
+              roomTypeId: reservation.roomTypeId,
+              kind: 'availability',
+              dateFrom: previousDates[0]!,
+              dateTo: previousDates.at(-1)!,
+              aggregateId: reservation.id,
+            })
+          if (inventoryChanged && plan.inventoryDates.length)
+            await recordInventoryChange(tx, {
+              propertyId: reservation.propertyId,
+              roomTypeId: args.roomTypeId,
+              kind: 'availability',
+              dateFrom: plan.inventoryDates[0]!,
+              dateTo: plan.inventoryDates.at(-1)!,
+              aggregateId: reservation.id,
+            })
+
+          const changedStay = await tx.db.compareAndSet(
+            'hospitality_core.Stay',
+            { id: stay.id },
+            { state: 'draft' },
+            {
+              partnerId: args.partnerId,
+              roomTypeId: args.roomTypeId,
+              checkIn: schedule.checkIn,
+              checkOut: schedule.checkOut,
+              adults: Number(args.adults),
+              children: Number(args.children),
+              rate: plan.rate,
+            },
+          )
+          if (!('matched' in changedStay) || !changedStay.matched)
+            throw new TransitionConflict(issue('state', 'transition_conflict'))
+
+          await tx.db.update(
+            'hospitality_core.Reservation',
+            { id: reservation.id },
+            {
+              partnerId: args.partnerId,
+              roomTypeId: args.roomTypeId,
+              checkIn: schedule.checkIn,
+              checkOut: schedule.checkOut,
+              adults: Number(args.adults),
+              children: Number(args.children),
+              rate: plan.rate,
+              quantity: schedule.quantity,
+              amountTotal: schedule.amountTotal,
+              updatedAt: at,
+            },
+          )
+          const Guest = tx.table('hospitality_core.StayGuest')
+          const primaryGuest = await tx.db.one(
+            from(Guest).where(eq(Guest.stayId, stay.id), eq(Guest.primary, true)),
+          )
+          if (primaryGuest)
+            await tx.db.update(
+              'hospitality_core.StayGuest',
+              { id: primaryGuest.id },
+              { partnerId: args.partnerId, displayName: partner!.name },
+            )
+
+          if (reservation.billingMode === 'upfront') {
+            const charge = await record(tx, 'hospitality_core.Charge', `${String(reservation.id)}:room`)
+            const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
+            if (charge?.state !== 'active')
+              throw new TransitionConflict(issue('folioId', 'room_charge_missing'))
+            if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
+            const nextFolioTotal = String(
+              Number(folio.amountTotal) - Number(charge.amount) + Number(schedule.amountTotal),
+            )
+            await tx.db.update(
+              'hospitality_core.Charge',
+              { id: charge.id },
+              {
+                description: `room:${String(args.roomTypeId)}`,
+                quantity: schedule.quantity,
+                unitPrice: plan.rate,
+                amount: schedule.amountTotal,
+              },
+            )
+            await tx.db.update(
+              'hospitality_core.Folio',
+              { id: folio.id },
+              {
+                partnerId: args.partnerId,
+                amountTotal: nextFolioTotal,
+                version: Number(folio.version) + 1,
+              },
+            )
+          } else {
+            await tx.db.update(
+              'hospitality_core.Folio',
+              { id: reservation.folioId },
+              { partnerId: args.partnerId },
+            )
+          }
+          return success(reservation.id, { amountTotal: schedule.amountTotal })
+        }),
+      )
+    },
+  }),
+
   listReservations: defineFn({
     input: { propertyId: 'id?', state: 'text?', from: 'datetime?', to: 'datetime?' },
     output: reservationOutput,
@@ -725,6 +909,7 @@ export const operations: Record<string, FnSpec> = {
     output: { ok: 'bool', id: 'id?', roomId: 'id?', state: 'text?', errors: 'json?' },
     effects: [
       'read:hospitality_core.Stay',
+      'read:hospitality_core.Reservation',
       'read:hospitality_core.Property',
       'read:hospitality_core.Room',
       'read:hospitality_core.Folio',
@@ -756,6 +941,10 @@ export const operations: Record<string, FnSpec> = {
         return success(stay.id, { roomId: stay.currentRoomId, state: stay.state })
       }
       if (stay.state !== 'draft') return failure(issue('state', 'stay_cannot_check_in'))
+      const reservation = stay.reservationId
+        ? await record(ctx, 'hospitality_core.Reservation', stay.reservationId)
+        : null
+      if (stay.reservationId && !reservation) return failure(issue('state', 'transition_conflict'))
       const at = date(args.at) ?? new Date()
       const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
       if (property?.enforceTimes && at < date(stay.checkIn)!) return failure(issue('at', 'early_check_in'))
@@ -787,7 +976,7 @@ export const operations: Record<string, FnSpec> = {
             const reservationClaim = await tx.db.compareAndSet(
               'hospitality_core.Reservation',
               { id: stay.reservationId },
-              { state: 'confirmed' },
+              { state: 'confirmed', updatedAt: reservation!.updatedAt },
               { state: 'checked_in', updatedAt: at.toISOString() },
             )
             if (!('matched' in reservationClaim) || !reservationClaim.matched)
