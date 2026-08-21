@@ -280,3 +280,100 @@ test('product: timestamp fields are added without inventing history for old migr
   assert.equal(row.createdAt, row.updatedAt)
   await db.close()
 })
+
+/**
+ * A session can read several companies while writing to exactly one. Every
+ * company-scoped lookup below therefore has to name the active company: reads
+ * span the readable set, writes are pinned, and a lookup that ignores the
+ * difference finds a row it can never write.
+ */
+const BOTH = { company: 'acme', companies: ['acme', 'globex'], branches: null }
+
+const seedVariant = async (db: Adapter): Promise<void> => {
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+  await call('product.saveTemplate', { id: 'tpl', name: 'Tpl', type: 'goods', uomId: 'ea' }, db)
+  await call('product.saveVariant', { id: 'var', templateId: 'tpl' }, db)
+}
+
+test('product: a cost is written to the active company, not to whichever one is readable', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  // globex prices the shared variant first.
+  await call('product.setCost', { productId: 'var', standardPrice: '99' }, db, OTHER)
+  // acme now prices it while globex is still in its readable set.
+  const mine = await call('product.setCost', { productId: 'var', standardPrice: '42' }, db, BOTH)
+  assert.equal((mine.value as { ok: boolean }).ok, true)
+
+  const acme = (await call('product.getVariant', { id: 'var' }, db, BOTH)).value as {
+    cost: Row | null
+  }
+  const globex = (await call('product.getVariant', { id: 'var' }, db, OTHER)).value as {
+    cost: Row | null
+  }
+  assert.equal(Number(acme.cost?.standardPrice), 42, 'the active company stores its own price')
+  assert.equal(Number(globex.cost?.standardPrice), 99, "and does not overwrite its sibling's")
+  await db.close()
+})
+
+test('product: two companies can hold the same unit for one shared variant', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  const first = await call('product.addProductUom', { productId: 'var', uomId: 'ea' }, db)
+  const second = await call('product.addProductUom', { productId: 'var', uomId: 'ea' }, db, OTHER)
+  assert.equal((first.value as { ok: boolean }).ok, true)
+  assert.equal((second.value as { ok: boolean }).ok, true)
+  assert.notEqual(
+    (first.value as { id: string }).id,
+    (second.value as { id: string }).id,
+    'a tenant-global id would have collided on the primary key',
+  )
+  for (const scope of [SCOPE, OTHER]) {
+    const seen = (await call('product.getVariant', { id: 'var' }, db, scope)).value as { uoms: Row[] }
+    assert.equal(seen.uoms.length, 1, 'each company sees only its own unit')
+  }
+  await db.close()
+})
+
+test('product: setting a variant unit replaces the previous one instead of adding to it', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+
+  await call('product.setProductUom', { productId: 'var', uomId: 'ea' }, db)
+  await call('product.setProductUom', { productId: 'var', uomId: 'box' }, db)
+  const after = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.equal(after.uoms.length, 1, 'switching the unit does not accumulate rows')
+  assert.equal(after.uoms[0]!.uomId, 'box')
+
+  // The form's empty option means "no unit", so a null clears it.
+  await call('product.setProductUom', { productId: 'var', uomId: null }, db)
+  const cleared = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.deepEqual(cleared.uoms, [])
+  await db.close()
+})
+
+test('product: a partial list state narrows nothing rather than throwing', async () => {
+  const db = await boot()
+  await call('product.saveTemplate', { id: 'p1', name: 'One', type: 'goods' }, db)
+  await call('product.saveTemplate', { id: 'p2', name: 'Two', type: 'service' }, db)
+  for (const state of [{}, { filters: null }, { sort: [] }, { groupBy: 'nonsense' }]) {
+    const rows = (await call('product.listTemplates', { state }, db)).value as Row[]
+    assert.equal(rows.length, 2, `state ${JSON.stringify(state)} should list everything`)
+    const count = (await call('product.countTemplates', { state }, db)).value as { count: number }
+    assert.equal(count.count, 2)
+  }
+  await db.close()
+})
+
+test('product: a search term is matched literally, wildcards included', async () => {
+  const db = await boot()
+  await call('product.saveTemplate', { id: 'a', name: 'Discount 50% off', type: 'goods' }, db)
+  await call('product.saveTemplate', { id: 'b', name: 'Discount 5000 off', type: 'goods' }, db)
+  const hits = (await call('product.listTemplates', { search: '50%' }, db)).value as Row[]
+  assert.deepEqual(
+    hits.map((row) => row.id),
+    ['a'],
+    'an unescaped % would have matched both',
+  )
+  await db.close()
+})

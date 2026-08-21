@@ -63,6 +63,21 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
   }
 }
 
+/**
+ * The two things every mutating route here has to establish before it reads a form.
+ *
+ * The admin authenticates with a session cookie, so a POST that arrives from
+ * another origin carries the signed-in user's credentials without their intent —
+ * which is why every write in this module refuses one, the same way user_backend,
+ * company_backend and oauth_backend do.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
 const productTabOf = (url: URL): ProductDetailTab => {
   const asked = url.searchParams.get('tab')
   return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
@@ -633,9 +648,10 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const form = req.method === 'POST' ? await readForm(req) : null
-      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      // Refused before the body is read, not after.
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = req.method === 'POST' ? await readForm(req) : null
       const rawReturn = form?.returnTo ?? url.searchParams.get('returnTo') ?? '/admin/product/templates'
       const source = new URL(rawReturn, 'http://ket.local')
       const returnTo =
@@ -680,6 +696,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         if (hasStock && !validStockForm(form))
           return seeOther(inLocale(url, '/admin/product/templates/new?invalid=1&count=1'))
@@ -690,8 +707,11 @@ export const routes: Record<string, RouteEntry> = {
             id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
@@ -732,6 +752,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const name = form.name?.trim()
         if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
@@ -762,7 +783,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/attributes/{id}/values':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const name = form.name?.trim()
       if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
@@ -790,6 +812,7 @@ export const routes: Record<string, RouteEntry> = {
       const activeTab = productTabOf(url)
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req)
         const form = await readForm(req)
         if (hasStock && !validStockForm(form)) {
@@ -806,8 +829,11 @@ export const routes: Record<string, RouteEntry> = {
             id: params.id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
@@ -956,7 +982,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/generate':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const result = await ctx.call('product.generateVariants', { templateId: params.id }, url, req)
       return (result as { ok?: boolean }).ok
         ? seeProduct(params.id, url)
@@ -965,7 +992,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/attribute-lines':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const attributeId = form.attributeId ?? ''
       const result = await ctx.call(
@@ -999,6 +1027,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!existing || existing.templateId !== params.id) return text('Variant not found', { status: 404 })
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req, 'product-variant')
         const form = await readForm(req)
         const saved = await ctx.call(
@@ -1040,10 +1069,18 @@ export const routes: Record<string, RouteEntry> = {
             inLocale(url, `/admin/product/templates/${params.id}/variants/${params.variantId}?invalid=1`),
           )
         }
-        if (form.uomId) {
+        {
+          // The form's unit is a single select, so the submission replaces what
+          // the variant has rather than adding to it — and an empty selection
+          // clears it. Adding would leave the previous unit in place, and the
+          // form would go on showing it.
           const productUom = await ctx.call(
-            'product.addProductUom',
-            { productId: params.variantId, uomId: form.uomId, barcode: form.uomBarcode || null },
+            'product.setProductUom',
+            {
+              productId: params.variantId,
+              uomId: form.uomId || null,
+              barcode: form.uomBarcode || null,
+            },
             url,
             req,
           )
@@ -1171,7 +1208,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/{variantId}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const variant = (await ctx.call('product.getVariant', { id: params.variantId }, url, req)) as AnyVariant
       if (!variant || variant.templateId !== params.id) return text('Variant not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1201,7 +1239,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
@@ -1210,7 +1249,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
@@ -1227,7 +1267,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const template = await ctx.call('product.getTemplate', { id: params.id }, url, req)
       if (!template) return text('Product not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1257,7 +1298,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
@@ -1266,7 +1308,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
@@ -1290,7 +1333,8 @@ const move = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await mediaFor(ctx, url, req, templateId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })
@@ -1312,7 +1356,8 @@ const moveVariant = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await variantMediaFor(ctx, url, req, productId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })

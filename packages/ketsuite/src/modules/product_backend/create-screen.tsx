@@ -71,7 +71,11 @@ export const newProductScreen = (
           name: 'uomId',
           label: _('product_backend.field.uom'),
           type: 'select',
-          options: options.uoms,
+          // The field is optional on the model, so it gets the same empty option
+          // the category beside it and the detail screen both offer. Without one
+          // the browser preselects the first unit and every product is born with
+          // a unit nobody chose.
+          options: [{ value: '', label: '—' }, ...options.uoms],
         },
         {
           name: 'categoryId',

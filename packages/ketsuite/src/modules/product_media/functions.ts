@@ -88,8 +88,17 @@ export const functions: Record<string, FnSpec> = {
         invalid('attachment target does not match the product media target')
 
       return ctx.tx(async (tx) => {
+        const before = (await tx.db.select('product_media.Media', { id: args.id }))[0]
+        if (before && (before.attachmentId !== args.attachmentId || before.targetKey !== selected.targetKey))
+          invalid('media id is already attached to another image or target')
         const existing = await rowsFor(tx, selected)
-        const makePrimary = args.primary === true || existing.length === 0
+        // The row being written is already in `existing` on a re-run, so both the
+        // primary decision and the sequence are taken from the *other* rows.
+        // Counting it would make a replay of the first attach see one image, drop
+        // makePrimary to false, and demote the only primary the gallery has.
+        const others = existing.filter((row) => String(row.id) !== String(args.id))
+        const makePrimary =
+          args.primary === true || (args.primary == null && before?.primary === true) || others.length === 0
         if (makePrimary) await resetPrimary(tx, existing, args.id)
         const row = {
           id: args.id,
@@ -99,12 +108,9 @@ export const functions: Record<string, FnSpec> = {
           targetKey: selected.targetKey,
           primarySlot: makePrimary ? selected.targetKey : null,
           alt: args.alt ?? null,
-          sequence: Number(args.sequence ?? existing.length * 10 + 10),
+          sequence: Number(args.sequence ?? before?.sequence ?? others.length * 10 + 10),
           primary: makePrimary,
         }
-        const before = (await tx.db.select('product_media.Media', { id: args.id }))[0]
-        if (before && (before.attachmentId !== args.attachmentId || before.targetKey !== selected.targetKey))
-          invalid('media id is already attached to another image or target')
         const inserted = await tx.db.insertIfAbsent('product_media.Media', row)
         if (!('dryRun' in inserted) && !inserted.inserted)
           await tx.db.update(
