@@ -374,6 +374,22 @@ The location run shares the same 2,000-room SQLite and 1,000-room PostgreSQL fix
 as the full Hospitality benchmark; all reservation, inventory, folio, housekeeping,
 night-audit, durable-feed and tenant-isolation assertions stayed green.
 
+The physical-room lifecycle extension then archives a room, verifies that ordinary
+queries exclude it while history queries retain it, refuses restore under an archived
+floor/building, and restores it after the parent chain. PostgreSQL races room archive
+against housekeeping-task creation through two real connections and proves exactly
+one wins.
+
+| driver | physical databases | room transitions | elapsed | transitions/s | archive/task race |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 16 | 33.5 ms | 477 | consistent |
+| PostgreSQL 17 | 4 | 8 | 73.3 ms | 109 | consistent |
+
+The full fixtures still contain 2,000 rooms on SQLite and 1,000 on PostgreSQL. All
+location, booking, inventory, folio, housekeeping, night-audit, content-feed and
+tenant-isolation assertions remained green; these timings are regression evidence,
+not an operator-latency or production-capacity SLA.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
