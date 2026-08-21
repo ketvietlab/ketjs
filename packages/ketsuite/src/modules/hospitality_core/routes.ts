@@ -107,6 +107,7 @@ const document = async (
 
 type OperationResult = {
   ok?: boolean
+  inventoryReleased?: number
   errors?: Array<{ messageKey?: string; params?: Record<string, unknown> }>
 }
 
@@ -1117,7 +1118,14 @@ export const routes: Record<string, RouteEntry> = {
       if (!reservation) return text('Not found', { status: 404 })
 
       let result: OperationResult
-      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended' | 'no-show' | 'departure-adjusted'
+      let status:
+        | 'checked-in'
+        | 'checked-out'
+        | 'checked-out-early'
+        | 'cancelled'
+        | 'amended'
+        | 'no-show'
+        | 'departure-adjusted'
       if (form.operation === 'amend') {
         const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
         const checkIn = instantFromLocal(form.checkIn, timezone)
@@ -1223,7 +1231,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as OperationResult
-        status = 'checked-out'
+        status = Number(result.inventoryReleased ?? 0) > 0 ? 'checked-out-early' : 'checked-out'
       } else if (form.operation === 'cancel') {
         result = (await ctx.call(
           'hospitality_core.cancelReservation',
