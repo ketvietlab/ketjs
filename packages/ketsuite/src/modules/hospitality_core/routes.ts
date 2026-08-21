@@ -1115,7 +1115,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!reservation) return text('Not found', { status: 404 })
 
       let result: OperationResult
-      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended'
+      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended' | 'no-show'
       if (form.operation === 'amend') {
         const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
         const checkIn = instantFromLocal(form.checkIn, timezone)
@@ -1195,6 +1195,14 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as OperationResult
         status = 'cancelled'
+      } else if (form.operation === 'no-show') {
+        result = (await ctx.call(
+          'hospitality_core.markNoShow',
+          { id: reservation.id, reason: form.reason?.trim() || '' },
+          url,
+          req,
+        )) as OperationResult
+        status = 'no-show'
       } else return text('unknown action', { status: 400 })
 
       if (!result.ok)
