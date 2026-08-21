@@ -480,6 +480,7 @@ test('hospitality core: room configuration preserves workflow-owned status and p
         code: '101',
         name: 'Room 101',
         capacity: 3,
+        status: 'available',
       },
       adapter,
     )
