@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -188,35 +188,43 @@ export const replenishmentScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.replenishment'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.replenishment.kicker')}
-      title={_('stock_backend.replenishment.title')}
-      subtitle={_('stock_backend.replenishment.subtitle')}
-      imageFallback={icon('warehouse')}
-      summary={[
-        { id: 'rules', label: _('stock_backend.replenishment.summary.rules'), value: options.rows.length },
-        { id: 'automatic', label: _('stock_backend.replenishment.summary.automatic'), value: automatic },
-        { id: 'to-order', label: _('stock_backend.replenishment.summary.toOrder'), value: toOrder },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.replenishment.create.title')}
-            description={_('stock_backend.replenishment.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.replenishment.rules.title')}
-            description={_('stock_backend.replenishment.rules.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.replenishment')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.replenishment.kicker')}
+          title={_('stock_backend.replenishment.title')}
+          subtitle={_('stock_backend.replenishment.subtitle')}
+          imageFallback={icon('warehouse')}
+          summary={[
+            {
+              id: 'rules',
+              label: _('stock_backend.replenishment.summary.rules'),
+              value: options.rows.length,
+            },
+            { id: 'automatic', label: _('stock_backend.replenishment.summary.automatic'), value: automatic },
+            { id: 'to-order', label: _('stock_backend.replenishment.summary.toOrder'), value: toOrder },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.replenishment.create.title')}
+                description={_('stock_backend.replenishment.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.replenishment.rules.title')}
+                description={_('stock_backend.replenishment.rules.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

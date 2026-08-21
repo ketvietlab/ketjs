@@ -47,4 +47,4 @@ export default defineModule({
   },
 })
 
-export { accountingTermsScreen } from './screens.ts'
+export { accountingTermsScreen } from './screens.tsx'

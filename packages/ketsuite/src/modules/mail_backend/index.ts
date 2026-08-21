@@ -54,4 +54,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { inboxScreen } from './screens.ts'
+export { inboxScreen } from './screens.tsx'

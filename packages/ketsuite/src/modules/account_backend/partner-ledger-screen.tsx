@@ -4,7 +4,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -84,62 +84,66 @@ export const partnerLedgerScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.partnerStatement.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.partnerLedger.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.partnerStatement.title')}
-      subtitle={_('account_backend.partnerLedger.subtitle')}
-      imageFallback={icon('credit-card')}
-      summary={[
-        {
-          id: 'debit',
-          label: _('account_backend.partnerLedger.summary.debit'),
-          value: formatMoney(_, total('debit'), options.currency),
-        },
-        {
-          id: 'credit',
-          label: _('account_backend.partnerLedger.summary.credit'),
-          value: formatMoney(_, total('credit'), options.currency),
-        },
-        {
-          id: 'residual',
-          label: _('account_backend.partnerLedger.summary.residual'),
-          value: formatMoney(_, total('amountResidual'), options.currency),
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.partnerLedger.filter.title')}
-            description={_('account_backend.partnerLedger.filter.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.partnerLedger.kicker')}
+          title={_('account_backend.partnerStatement.title')}
+          subtitle={_('account_backend.partnerLedger.subtitle')}
+          imageFallback={icon('credit-card')}
+          summary={[
+            {
+              id: 'debit',
+              label: _('account_backend.partnerLedger.summary.debit'),
+              value: formatMoney(_, total('debit'), options.currency),
+            },
+            {
+              id: 'credit',
+              label: _('account_backend.partnerLedger.summary.credit'),
+              value: formatMoney(_, total('credit'), options.currency),
+            },
+            {
+              id: 'residual',
+              label: _('account_backend.partnerLedger.summary.residual'),
+              value: formatMoney(_, total('amountResidual'), options.currency),
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.partnerLedger.filter.title')}
+                description={_('account_backend.partnerLedger.filter.hint')}
                 body={
-                  <RecordForm
-                    id="partner-ledger-filter-form"
-                    scope="account-partner-ledger"
-                    action={options.action}
-                    method="get"
-                    submit={_('account_backend.action.calculate')}
-                    submitVariant="secondary"
-                    fields={options.fields}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="partner-ledger-filter-form"
+                        scope="account-partner-ledger"
+                        action={options.action}
+                        method="get"
+                        submit={_('account_backend.action.calculate')}
+                        submitVariant="secondary"
+                        fields={options.fields}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.partnerLedger.result.title')}
-            description={_('account_backend.partnerLedger.result.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.partnerLedger.result.title')}
+                description={_('account_backend.partnerLedger.result.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

@@ -176,5 +176,5 @@ export default defineModule({
   },
 })
 
-export { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.ts'
+export { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
 export { partnerRelationControl } from './relation-control.ts'

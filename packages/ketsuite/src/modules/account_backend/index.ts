@@ -16,7 +16,7 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { optionsOf } from './screens.ts'
+import { optionsOf } from './screens.tsx'
 import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
 import { accountsScreen } from './accounts-screen.tsx'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'

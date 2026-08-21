@@ -1,6 +1,14 @@
 import type { Translator } from 'ketjs'
 import type { JSXChild, TemplateResult } from 'ketjs-view'
-import { badge, code, dataTable, emptyState, framed, linkButton, stack } from '../../ui/index.ts'
+import {
+  badge,
+  code,
+  dataTable,
+  emptyState,
+  framedPage as Framed,
+  linkButton,
+  stack,
+} from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 
 export type StockRow = {
@@ -58,17 +66,18 @@ export const stockScreen = (
   frame: Frame,
   additions: readonly JSXChild[] = [],
   showEmpty = true,
-): TemplateResult =>
-  framed(
-    _,
-    title,
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={title}
+    frame={frame}
+    body={stack([
       ...additions,
       rows.length
         ? stockRowsTable(_, rows)
         : showEmpty
           ? emptyState(_('stock_backend.empty'), _('stock_backend.emptyHint'))
           : '',
-    ]),
-  )
+    ])}
+  />
+)

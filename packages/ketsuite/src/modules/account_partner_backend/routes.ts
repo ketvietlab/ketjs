@@ -3,7 +3,7 @@ import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { accountingTermsScreen } from './screens.ts'
+import { accountingTermsScreen } from './screens.tsx'
 import { backendPage } from '../../ui/index.ts'
 
 type AnyRow = Record<string, unknown>

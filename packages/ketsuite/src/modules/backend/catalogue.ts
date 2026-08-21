@@ -1,6 +1,6 @@
 import { html, each } from 'ketjs-view'
 import type { TemplateResult } from 'ketjs-view'
-import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
+import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
 import {
   actionGroup,
   badge,
@@ -13,6 +13,7 @@ import {
   datePicker,
   emptyState,
   errorState,
+  framed,
   icon,
   iconButton,
   inline,
@@ -26,13 +27,14 @@ import {
   person,
   recordForm,
   recordList,
+  recordWorkspace,
   section,
   stack,
   surface,
   tabs,
   tag,
 } from '../../ui/index.ts'
-import type { AppRow, PageRow } from './screens.ts'
+import type { AppRow, PageRow } from './screens.tsx'
 import type { ListChrome, Viewer } from '../../ui/index.ts'
 import { loginScreen } from '../user/login.ts'
 import type { MenuNode, Translator } from 'ketjs'
@@ -338,6 +340,31 @@ export const CASES: Array<{
         [page(), page({ id: 'p2', path: '/gioi-thieu', title: 'Giới thiệu', published: false })],
         { menu: MENU, chrome: { ...CHROME, pager: null } },
         { shown: ['id'], colsHref: (keys) => `?cols=${keys.join(',')}` },
+      ),
+  },
+  {
+    id: 'record-workspace',
+    label: 'Workspace — không lồng layout',
+    note: 'Màn hình đã có identity riêng giữ đúng một sheet khi đi qua framed layout dùng chung.',
+    render: (_) =>
+      framed(
+        _,
+        'Chi tiết sản phẩm',
+        { menu: MENU },
+        recordWorkspace({
+          kicker: 'Danh mục sản phẩm',
+          title: 'Bàn làm việc tiêu chuẩn',
+          subtitle: 'SKU-2026-001 · Nội thất',
+          imageFallback: icon('package'),
+          summary: [
+            { id: 'price', label: 'Giá bán', value: '4.500.000 ₫' },
+            { id: 'variants', label: 'Biến thể', value: 3 },
+          ],
+          body: section({
+            title: 'Thông tin chung',
+            body: surface({ body: 'Nội dung nghiệp vụ giữ nguyên padding và hierarchy.' }),
+          }),
+        }),
       ),
   },
   {

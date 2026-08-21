@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -14,7 +14,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type Row = Record<string, unknown>
 
@@ -90,63 +90,67 @@ export const taxesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.taxes.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.tax.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.taxes.title')}
-      subtitle={_('account_backend.tax.subtitle')}
-      imageFallback={icon('banknote')}
-      summary={[
-        { id: 'total', label: _('account_backend.tax.summary.total'), value: options.rows.length },
-        {
-          id: 'sale',
-          label: _('account_backend.tax.summary.sale'),
-          value: options.rows.filter((row) => row.typeTaxUse === 'sale').length,
-        },
-        {
-          id: 'purchase',
-          label: _('account_backend.tax.summary.purchase'),
-          value: options.rows.filter((row) => row.typeTaxUse === 'purchase').length,
-        },
-        {
-          id: 'included',
-          label: _('account_backend.tax.summary.included'),
-          value: options.rows.filter((row) => row.priceInclude).length,
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.tax.create.title')}
-            description={_('account_backend.tax.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.tax.kicker')}
+          title={_('account_backend.taxes.title')}
+          subtitle={_('account_backend.tax.subtitle')}
+          imageFallback={icon('banknote')}
+          summary={[
+            { id: 'total', label: _('account_backend.tax.summary.total'), value: options.rows.length },
+            {
+              id: 'sale',
+              label: _('account_backend.tax.summary.sale'),
+              value: options.rows.filter((row) => row.typeTaxUse === 'sale').length,
+            },
+            {
+              id: 'purchase',
+              label: _('account_backend.tax.summary.purchase'),
+              value: options.rows.filter((row) => row.typeTaxUse === 'purchase').length,
+            },
+            {
+              id: 'included',
+              label: _('account_backend.tax.summary.included'),
+              value: options.rows.filter((row) => row.priceInclude).length,
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.tax.create.title')}
+                description={_('account_backend.tax.create.hint')}
                 body={
-                  <RecordForm
-                    id="tax-create-form"
-                    scope="account-tax"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="tax-create-form"
+                        scope="account-tax"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.tax.list.title')}
-            description={_('account_backend.tax.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.tax.list.title')}
+                description={_('account_backend.tax.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

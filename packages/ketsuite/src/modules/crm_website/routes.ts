@@ -3,7 +3,7 @@ import { page, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { websiteLeadScreen } from './screens.ts'
+import { websiteLeadScreen } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]

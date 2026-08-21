@@ -5,7 +5,7 @@ import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
-import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.ts'
+import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
 import { partnerRelationControl } from './relation-control.ts'
 
 type AnyRow = Record<string, unknown>

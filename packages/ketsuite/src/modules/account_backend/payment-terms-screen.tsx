@@ -3,7 +3,7 @@ import type { TemplateResult } from 'ketjs-view'
 import {
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -59,74 +59,78 @@ export const paymentTermsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.terms.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.term.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.terms.title')}
-      subtitle={_('account_backend.term.subtitle')}
-      imageFallback={icon('credit-card')}
-      summary={[
-        { id: 'total', label: _('account_backend.term.summary.total'), value: options.rows.length },
-        { id: 'configured', label: _('account_backend.term.summary.configured'), value: configured },
-        { id: 'lines', label: _('account_backend.term.summary.lines'), value: lineCount },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.term.create.title')}
-            description={_('account_backend.term.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.term.kicker')}
+          title={_('account_backend.terms.title')}
+          subtitle={_('account_backend.term.subtitle')}
+          imageFallback={icon('credit-card')}
+          summary={[
+            { id: 'total', label: _('account_backend.term.summary.total'), value: options.rows.length },
+            { id: 'configured', label: _('account_backend.term.summary.configured'), value: configured },
+            { id: 'lines', label: _('account_backend.term.summary.lines'), value: lineCount },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.term.create.title')}
+                description={_('account_backend.term.create.hint')}
                 body={
-                  <RecordForm
-                    id="payment-term-create-form"
-                    scope="account-payment-term"
-                    action={options.action}
-                    submit={_('account_backend.action.createTerm')}
-                    submitVariant="primary"
-                    fields={options.termFields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="payment-term-create-form"
+                        scope="account-payment-term"
+                        action={options.action}
+                        submit={_('account_backend.action.createTerm')}
+                        submitVariant="primary"
+                        fields={options.termFields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          ...(options.lineFields
-            ? [
-                <Section
-                  title={_('account_backend.term.line.create.title')}
-                  description={_('account_backend.term.line.create.hint')}
-                  body={
-                    <Surface
-                      padding="compact"
+              />,
+              ...(options.lineFields
+                ? [
+                    <Section
+                      title={_('account_backend.term.line.create.title')}
+                      description={_('account_backend.term.line.create.hint')}
                       body={
-                        <RecordForm
-                          id="payment-term-line-form"
-                          scope="account-payment-term-line"
-                          action={options.action}
-                          submit={_('account_backend.action.addTermLine')}
-                          submitVariant="secondary"
-                          hidden={{ action: 'line' }}
-                          fields={options.lineFields}
+                        <Surface
+                          padding="compact"
+                          body={
+                            <RecordForm
+                              id="payment-term-line-form"
+                              scope="account-payment-term-line"
+                              action={options.action}
+                              submit={_('account_backend.action.addTermLine')}
+                              submitVariant="secondary"
+                              hidden={{ action: 'line' }}
+                              fields={options.lineFields}
+                            />
+                          }
                         />
                       }
-                    />
-                  }
-                />,
-              ]
-            : []),
-          <Section
-            title={_('account_backend.term.list.title')}
-            description={_('account_backend.term.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+                    />,
+                  ]
+                : []),
+              <Section
+                title={_('account_backend.term.list.title')}
+                description={_('account_backend.term.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

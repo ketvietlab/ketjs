@@ -20,7 +20,7 @@ import {
   dataTable,
   definitionList,
   emptyState,
-  framed,
+  framedPage as Framed,
   shell,
 } from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
@@ -155,29 +155,33 @@ export const pagesScreen = (
   pages: PageRow[],
   frame: Frame = {},
   table: Partial<DataTable<PageRow>> = {},
-): TemplateResult =>
-  framed(
-    _,
-    _('backend.pages.title'),
-    frame,
-    pages.length === 0
-      ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
-      : dataTable(_, { columns: pageColumns(_), rows: pages, id: (p) => p.id, ...table }),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('backend.pages.title')}
+    frame={frame}
+    body={
+      pages.length === 0
+        ? emptyState(_('backend.pages.empty.message'), _('backend.pages.empty.hint'))
+        : dataTable(_, { columns: pageColumns(_), rows: pages, id: (p) => p.id, ...table })
+    }
+  />
+)
 
 export const settingsScreen = (
   _: Translator,
   tokens: Record<string, string>,
   frame: Frame = {},
-): TemplateResult =>
-  framed(
-    _,
-    _('backend.settings.title'),
-    frame,
-    definitionList({
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('backend.settings.title')}
+    frame={frame}
+    body={definitionList({
       title: _('backend.settings.tokens'),
       items: Object.entries(tokens).map(([k, v]) => ({ key: k, term: `--ket-${k}`, value: v })),
-    }),
-  )
+    })}
+  />
+)
 
 export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState }

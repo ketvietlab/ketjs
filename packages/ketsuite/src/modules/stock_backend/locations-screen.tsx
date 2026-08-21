@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -127,43 +127,47 @@ export const locationsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.locations'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.location.kicker')}
-      title={_('stock_backend.location.title')}
-      subtitle={_('stock_backend.location.subtitle')}
-      imageFallback={icon('warehouse')}
-      summary={[
-        {
-          id: 'internal',
-          label: _('stock_backend.location.summary.internal'),
-          value: internalCount,
-        },
-        { id: 'views', label: _('stock_backend.location.summary.views'), value: viewCount },
-        {
-          id: 'warehouses',
-          label: _('stock_backend.location.summary.warehouses'),
-          value: warehouseCount,
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.location.create.title')}
-            description={_('stock_backend.location.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.location.configured.title')}
-            description={_('stock_backend.location.configured.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.locations')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.location.kicker')}
+          title={_('stock_backend.location.title')}
+          subtitle={_('stock_backend.location.subtitle')}
+          imageFallback={icon('warehouse')}
+          summary={[
+            {
+              id: 'internal',
+              label: _('stock_backend.location.summary.internal'),
+              value: internalCount,
+            },
+            { id: 'views', label: _('stock_backend.location.summary.views'), value: viewCount },
+            {
+              id: 'warehouses',
+              label: _('stock_backend.location.summary.warehouses'),
+              value: warehouseCount,
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.location.create.title')}
+                description={_('stock_backend.location.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.location.configured.title')}
+                description={_('stock_backend.location.configured.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

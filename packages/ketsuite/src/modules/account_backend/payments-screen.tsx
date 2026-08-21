@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -14,7 +14,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type Row = Record<string, unknown>
 
@@ -81,51 +81,55 @@ export const paymentsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.payments.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.payment.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.payments.title')}
-      subtitle={_('account_backend.payment.subtitle')}
-      imageFallback={icon('credit-card')}
-      summary={[
-        { id: 'total', label: _('account_backend.payment.summary.total'), value: options.rows.length },
-        { id: 'inbound', label: _('account_backend.payment.summary.inbound'), value: inbound },
-        { id: 'outbound', label: _('account_backend.payment.summary.outbound'), value: outbound },
-        { id: 'open', label: _('account_backend.payment.summary.open'), value: options.openItems },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.payment.create.title')}
-            description={_('account_backend.payment.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.payment.kicker')}
+          title={_('account_backend.payments.title')}
+          subtitle={_('account_backend.payment.subtitle')}
+          imageFallback={icon('credit-card')}
+          summary={[
+            { id: 'total', label: _('account_backend.payment.summary.total'), value: options.rows.length },
+            { id: 'inbound', label: _('account_backend.payment.summary.inbound'), value: inbound },
+            { id: 'outbound', label: _('account_backend.payment.summary.outbound'), value: outbound },
+            { id: 'open', label: _('account_backend.payment.summary.open'), value: options.openItems },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.payment.create.title')}
+                description={_('account_backend.payment.create.hint')}
                 body={
-                  <RecordForm
-                    id="payment-register-form"
-                    scope="account-payment"
-                    action={options.action}
-                    submit={_('account_backend.action.registerPayment')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="payment-register-form"
+                        scope="account-payment"
+                        action={options.action}
+                        submit={_('account_backend.action.registerPayment')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.payment.list.title')}
-            description={_('account_backend.payment.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.payment.list.title')}
+                description={_('account_backend.payment.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

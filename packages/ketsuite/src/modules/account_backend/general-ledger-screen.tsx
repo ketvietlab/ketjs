@@ -4,7 +4,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -70,58 +70,62 @@ export const generalLedgerScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.generalLedger.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.ledger.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.generalLedger.title')}
-      subtitle={_('account_backend.ledger.subtitle')}
-      imageFallback={icon('notebook-tabs')}
-      summary={[
-        { id: 'lines', label: _('account_backend.ledger.summary.lines'), value: options.rows.length },
-        {
-          id: 'debit',
-          label: _('account_backend.ledger.summary.debit'),
-          value: formatMoney(_, total('debit'), options.currency),
-        },
-        {
-          id: 'credit',
-          label: _('account_backend.ledger.summary.credit'),
-          value: formatMoney(_, total('credit'), options.currency),
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.ledger.filter.title')}
-            description={_('account_backend.ledger.filter.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.ledger.kicker')}
+          title={_('account_backend.generalLedger.title')}
+          subtitle={_('account_backend.ledger.subtitle')}
+          imageFallback={icon('notebook-tabs')}
+          summary={[
+            { id: 'lines', label: _('account_backend.ledger.summary.lines'), value: options.rows.length },
+            {
+              id: 'debit',
+              label: _('account_backend.ledger.summary.debit'),
+              value: formatMoney(_, total('debit'), options.currency),
+            },
+            {
+              id: 'credit',
+              label: _('account_backend.ledger.summary.credit'),
+              value: formatMoney(_, total('credit'), options.currency),
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.ledger.filter.title')}
+                description={_('account_backend.ledger.filter.hint')}
                 body={
-                  <RecordForm
-                    id="general-ledger-filter-form"
-                    scope="account-general-ledger"
-                    action={options.action}
-                    method="get"
-                    submit={_('account_backend.action.calculate')}
-                    submitVariant="secondary"
-                    fields={options.fields}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="general-ledger-filter-form"
+                        scope="account-general-ledger"
+                        action={options.action}
+                        method="get"
+                        submit={_('account_backend.action.calculate')}
+                        submitVariant="secondary"
+                        fields={options.fields}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.ledger.result.title')}
-            description={_('account_backend.ledger.result.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.ledger.result.title')}
+                description={_('account_backend.ledger.result.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

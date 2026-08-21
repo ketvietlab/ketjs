@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -73,62 +73,66 @@ export const trialBalanceScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.trialBalance.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.trial.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.trialBalance.title')}
-      subtitle={_('account_backend.trial.subtitle')}
-      imageFallback={icon('notebook-tabs')}
-      summary={[
-        {
-          id: 'debit',
-          label: _('account_backend.trial.summary.debit'),
-          value: formatMoney(_, total('debit'), options.currency),
-        },
-        {
-          id: 'credit',
-          label: _('account_backend.trial.summary.credit'),
-          value: formatMoney(_, total('credit'), options.currency),
-        },
-        {
-          id: 'balance',
-          label: _('account_backend.trial.summary.balance'),
-          value: formatMoney(_, total('balance'), options.currency),
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.trial.filter.title')}
-            description={_('account_backend.trial.filter.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.trial.kicker')}
+          title={_('account_backend.trialBalance.title')}
+          subtitle={_('account_backend.trial.subtitle')}
+          imageFallback={icon('notebook-tabs')}
+          summary={[
+            {
+              id: 'debit',
+              label: _('account_backend.trial.summary.debit'),
+              value: formatMoney(_, total('debit'), options.currency),
+            },
+            {
+              id: 'credit',
+              label: _('account_backend.trial.summary.credit'),
+              value: formatMoney(_, total('credit'), options.currency),
+            },
+            {
+              id: 'balance',
+              label: _('account_backend.trial.summary.balance'),
+              value: formatMoney(_, total('balance'), options.currency),
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.trial.filter.title')}
+                description={_('account_backend.trial.filter.hint')}
                 body={
-                  <RecordForm
-                    id="trial-balance-filter-form"
-                    scope="account-trial-balance"
-                    action={options.action}
-                    method="get"
-                    submit={_('account_backend.action.calculate')}
-                    submitVariant="secondary"
-                    fields={options.fields}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="trial-balance-filter-form"
+                        scope="account-trial-balance"
+                        action={options.action}
+                        method="get"
+                        submit={_('account_backend.action.calculate')}
+                        submitVariant="secondary"
+                        fields={options.fields}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.trial.result.title')}
-            description={_('account_backend.trial.result.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.trial.result.title')}
+                description={_('account_backend.trial.result.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

@@ -57,4 +57,4 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export { inboundScreen } from './screens.ts'
+export { inboundScreen } from './screens.tsx'

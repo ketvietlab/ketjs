@@ -2579,6 +2579,30 @@
   [data-ui="record-workspace"][data-has-aside="false"] {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* `framed` gives legacy list/form screens the accounting workspace. Rich
+     screens already render their own RecordWorkspace; flatten only the generic
+     wrapper in that case so no duplicate card or heading appears. */
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+    > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+  ),
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"],
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"]
+    > [data-ui="record-body"] {
+    display: contents;
+  }
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"]
+    > [data-ui="record-header"] {
+    display: none;
+  }
   [data-ui="record-sheet"] {
     min-inline-size: 0;
     overflow: hidden;

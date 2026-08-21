@@ -3,7 +3,7 @@ import type { TemplateResult } from 'ketjs-view'
 import {
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -96,39 +96,47 @@ export const stockRoutesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.routes'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.stockRoute.list.kicker')}
-      title={_('stock_backend.stockRoute.list.title')}
-      subtitle={_('stock_backend.stockRoute.list.subtitle')}
-      imageFallback={icon('sliders-horizontal')}
-      summary={[
-        { id: 'total', label: _('stock_backend.stockRoute.list.summary.total'), value: options.rows.length },
-        {
-          id: 'configured',
-          label: _('stock_backend.stockRoute.list.summary.configured'),
-          value: configuredCount,
-        },
-        { id: 'rules', label: _('stock_backend.stockRoute.list.summary.rules'), value: ruleCount },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.stockRoute.create.title')}
-            description={_('stock_backend.stockRoute.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.stockRoute.list.records.title')}
-            description={_('stock_backend.stockRoute.list.records.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.routes')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.stockRoute.list.kicker')}
+          title={_('stock_backend.stockRoute.list.title')}
+          subtitle={_('stock_backend.stockRoute.list.subtitle')}
+          imageFallback={icon('sliders-horizontal')}
+          summary={[
+            {
+              id: 'total',
+              label: _('stock_backend.stockRoute.list.summary.total'),
+              value: options.rows.length,
+            },
+            {
+              id: 'configured',
+              label: _('stock_backend.stockRoute.list.summary.configured'),
+              value: configuredCount,
+            },
+            { id: 'rules', label: _('stock_backend.stockRoute.list.summary.rules'), value: ruleCount },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.stockRoute.create.title')}
+                description={_('stock_backend.stockRoute.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.stockRoute.list.records.title')}
+                description={_('stock_backend.stockRoute.list.records.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -133,35 +133,39 @@ export const transfersScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.transfers'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.transfer.list.kicker')}
-      title={_('stock_backend.transfer.list.title')}
-      subtitle={_('stock_backend.transfer.list.subtitle')}
-      imageFallback={icon('truck')}
-      summary={[
-        { id: 'open', label: _('stock_backend.transfer.list.summary.open'), value: openCount },
-        { id: 'ready', label: _('stock_backend.transfer.list.summary.ready'), value: readyCount },
-        { id: 'done', label: _('stock_backend.transfer.list.summary.done'), value: doneCount },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.transfer.create.title')}
-            description={_('stock_backend.transfer.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.transfer.list.records.title')}
-            description={_('stock_backend.transfer.list.records.hint')}
-            body={transferTable}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.transfers')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.transfer.list.kicker')}
+          title={_('stock_backend.transfer.list.title')}
+          subtitle={_('stock_backend.transfer.list.subtitle')}
+          imageFallback={icon('truck')}
+          summary={[
+            { id: 'open', label: _('stock_backend.transfer.list.summary.open'), value: openCount },
+            { id: 'ready', label: _('stock_backend.transfer.list.summary.ready'), value: readyCount },
+            { id: 'done', label: _('stock_backend.transfer.list.summary.done'), value: doneCount },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.transfer.create.title')}
+                description={_('stock_backend.transfer.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.transfer.list.records.title')}
+                description={_('stock_backend.transfer.list.records.hint')}
+                body={transferTable}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

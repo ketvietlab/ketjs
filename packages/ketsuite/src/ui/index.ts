@@ -56,7 +56,16 @@ export { sidebar, sidebarMain, sidebarFoot } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
-export { backendPage, shell, framed, appCard, card, cardGroups, definitionList } from './layout.tsx'
+export {
+  backendPage,
+  shell,
+  framed,
+  framedPage,
+  appCard,
+  card,
+  cardGroups,
+  definitionList,
+} from './layout.tsx'
 export type { CardMeta, Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'

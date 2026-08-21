@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -137,56 +137,64 @@ export const forecastScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.forecast'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.forecast.kicker')}
-      title={options.productLabel ?? _('stock_backend.forecast.title')}
-      subtitle={options.scopeLabel ?? _('stock_backend.forecast.subtitle')}
-      imageFallback={icon('warehouse')}
-      summary={
-        row
-          ? [
-              { id: 'on-hand', label: _('stock_backend.forecast.onHand'), value: row.onHand },
-              { id: 'incoming', label: _('stock_backend.forecast.incoming'), value: `+ ${row.incoming}` },
-              { id: 'outgoing', label: _('stock_backend.forecast.outgoing'), value: `− ${row.outgoing}` },
-              { id: 'forecasted', label: _('stock_backend.forecast.value'), value: `= ${row.forecasted}` },
-            ]
-          : [
-              {
-                id: 'products',
-                label: _('stock_backend.forecast.summary.products'),
-                value: options.products.length,
-              },
-              {
-                id: 'warehouses',
-                label: _('stock_backend.forecast.summary.warehouses'),
-                value: options.warehouses.length,
-              },
-              {
-                id: 'locations',
-                label: _('stock_backend.forecast.summary.locations'),
-                value: options.locations.length,
-              },
-            ]
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.forecast')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.forecast.kicker')}
+          title={options.productLabel ?? _('stock_backend.forecast.title')}
+          subtitle={options.scopeLabel ?? _('stock_backend.forecast.subtitle')}
+          imageFallback={icon('warehouse')}
+          summary={
+            row
+              ? [
+                  { id: 'on-hand', label: _('stock_backend.forecast.onHand'), value: row.onHand },
+                  { id: 'incoming', label: _('stock_backend.forecast.incoming'), value: `+ ${row.incoming}` },
+                  { id: 'outgoing', label: _('stock_backend.forecast.outgoing'), value: `− ${row.outgoing}` },
+                  {
+                    id: 'forecasted',
+                    label: _('stock_backend.forecast.value'),
+                    value: `= ${row.forecasted}`,
+                  },
+                ]
+              : [
+                  {
+                    id: 'products',
+                    label: _('stock_backend.forecast.summary.products'),
+                    value: options.products.length,
+                  },
+                  {
+                    id: 'warehouses',
+                    label: _('stock_backend.forecast.summary.warehouses'),
+                    value: options.warehouses.length,
+                  },
+                  {
+                    id: 'locations',
+                    label: _('stock_backend.forecast.summary.locations'),
+                    value: options.locations.length,
+                  },
+                ]
+          }
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.forecast.filter.title')}
+                description={_('stock_backend.forecast.filter.hint')}
+                body={<Surface padding="compact" body={filterForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.forecast.result.title')}
+                description={_('stock_backend.forecast.result.hint')}
+                body={result}
+              />,
+            ],
+            'loose',
+          )}
+        />
       }
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.forecast.filter.title')}
-            description={_('stock_backend.forecast.filter.hint')}
-            body={<Surface padding="compact" body={filterForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.forecast.result.title')}
-            description={_('stock_backend.forecast.result.hint')}
-            body={result}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+    />
   )
 }
