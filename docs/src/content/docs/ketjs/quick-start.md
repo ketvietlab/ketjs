@@ -21,7 +21,7 @@ deployment contracts may still change before 1.0.
 Run the `ket` binary from the `@ketvietlab/ketjs` package:
 
 ```bash
-npx -y @ketvietlab/ketjs new notes
+npx -y @ketvietlab/ketjs@latest new notes
 cd notes
 npm install
 npm run dev
@@ -32,8 +32,11 @@ names accept lowercase letters, digits, and underscores and must start with a le
 the app identifier from its directory name:
 
 ```bash
-npx -y @ketvietlab/ketjs new my_app --dir ./my-app
+npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 ```
+
+Keep `@latest` even though npm normally defaults to the latest tag. When invoked inside an existing
+KetJS project, `npx` can reuse that project's locally installed older CLI when no tag is present.
 
 The generated app listens on `http://127.0.0.1:3000`. Its first boot creates `.ket/app.db`, applies
 the composed schema, installs the bootstrap module, and serves the workspace's first servable app.
