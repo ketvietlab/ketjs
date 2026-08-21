@@ -1068,6 +1068,51 @@ try {
   )
   const transitionMs = performance.now() - transitionStarted
 
+  const departureIndexes = Array.from({ length: transitionCount }, (_, index) => index).filter(
+    (index) => index % 2 === 1,
+  )
+  const departureStarted = performance.now()
+  const departureResults = await Promise.all(
+    keys.map(async (key) => {
+      for (const index of departureIndexes) {
+        const result = await call(key, 'hospitality_core.adjustStayDeparture', {
+          stayId: `reservation:${index}:stay`,
+          checkOut: '2026-09-04T12:00:00.000Z',
+          at: '2026-09-02T10:00:00.000Z',
+        })
+        if (!(result.value as { ok: boolean }).ok) return { key, match: false, index, failure: result.value }
+      }
+      if (!departureIndexes.length) return { key, match: true }
+      const index = departureIndexes[0]!
+      const rows = await adapters.get(key)!.all(
+        `SELECT r."checkOut" AS reservation_checkout, s."checkOut" AS stay_checkout,
+                r."amountTotal" AS reservation_total, c.amount AS charge_total
+           FROM hospitality_core_reservation r
+           JOIN hospitality_core_stay s ON s.id = r."stayId"
+           JOIN hospitality_core_charge c ON c.id = ${driver === 'postgres' ? '$1' : '?'}
+          WHERE r.id = ${driver === 'postgres' ? '$2' : '?'}`,
+        [`reservation:${index}:room`, `reservation:${index}`],
+      )
+      const sample = rows[0]
+      return {
+        key,
+        match:
+          new Date(String(sample?.reservation_checkout)).toISOString() === '2026-09-04T12:00:00.000Z' &&
+          new Date(String(sample?.stay_checkout)).toISOString() === '2026-09-04T12:00:00.000Z' &&
+          Number(sample?.reservation_total) === Number(sample?.charge_total),
+        sample,
+      }
+    }),
+  )
+  const departureMs = performance.now() - departureStarted
+  const departuresMatch = departureResults.every((result) => result.match)
+  if (!departuresMatch)
+    throw new Error(
+      `departure adjustment lost stay, reservation, inventory or folio state: ${JSON.stringify(
+        departureResults.filter((result) => !result.match),
+      )}`,
+    )
+
   const housekeepingTaskCount = Math.ceil(transitionCount / 2)
   const housekeepingStarted = performance.now()
   await Promise.all(
@@ -1838,6 +1883,12 @@ try {
           ? Math.round((databaseCount * amendmentIndexes.length * 1_000) / amendmentMs)
           : 0,
         amendmentsMatch,
+        stayDepartureAdjustments: databaseCount * departureIndexes.length,
+        departureMs: Number(departureMs.toFixed(1)),
+        departureAdjustmentsPerSecond: departureIndexes.length
+          ? Math.round((databaseCount * departureIndexes.length * 1_000) / departureMs)
+          : 0,
+        departuresMatch,
         reservationNoShows: databaseCount * noShowIndexes.length,
         noShowMs: Number(noShowMs.toFixed(1)),
         noShowsPerSecond: noShowIndexes.length

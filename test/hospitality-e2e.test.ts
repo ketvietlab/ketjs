@@ -904,7 +904,30 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const checkedInHtml = await checkedInPage.text()
   assert.match(checkedInHtml, /Đã nhận phòng/)
   assert.match(checkedInHtml, /Trả phòng/)
+  assert.match(checkedInHtml, /Điều chỉnh ngày trả phòng/)
   assert.doesNotMatch(checkedInHtml, /hospitality_core\./)
+
+  const departureAdjusted = await e2e.client.post(
+    '/admin/hospitality/reservations/booking-1?lang=vi',
+    new URLSearchParams({
+      operation: 'adjust-departure',
+      lang: 'vi',
+      checkOut: '2026-08-24T12:00',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(departureAdjusted.status, 303, await departureAdjusted.clone().text())
+  assert.match(departureAdjusted.headers.get('location') ?? '', /status=departure-adjusted/)
+  const departurePage = await e2e.client.get(departureAdjusted.headers.get('location')!)
+  const departureHtml = await departurePage.text()
+  assert.match(departureHtml, /Đã cập nhật ngày trả phòng/)
+  assert.match(departureHtml, /value="2026-08-24T12:00"/)
+  assert.doesNotMatch(departureHtml, /hospitality_core\./)
+  const departurePageEn = await e2e.client.get('/admin/hospitality/reservations/booking-1?lang=en')
+  const departureHtmlEn = await departurePageEn.text()
+  assert.match(departureHtmlEn, /Adjust departure/)
+  assert.match(departureHtmlEn, /value="2026-08-24T12:00"/)
+  assert.doesNotMatch(departureHtmlEn, /hospitality_core\./)
 
   const stayDetailEn = await e2e.client.get('/admin/hospitality/stays/booking-1%3Astay?lang=en')
   assert.equal(stayDetailEn.status, 200)

@@ -1114,6 +1114,130 @@ export const operations: Record<string, FnSpec> = {
     },
   }),
 
+  adjustStayDeparture: defineFn({
+    input: { stayId: 'id', checkOut: 'datetime', at: 'datetime?' },
+    output: { ok: 'bool', id: 'id?', checkOut: 'datetime?', amountTotal: 'decimal?', errors: 'json?' },
+    effects: [
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.Reservation',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.Stay',
+      'write:hospitality_core.Reservation',
+      'write:hospitality_core.Folio',
+      'write:hospitality_core.Charge',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
+      if (!stay) return failure(issue('stayId', 'stay_missing'))
+      if (stay.state !== 'checked_in') return failure(issue('state', 'stay_cannot_adjust_departure'))
+      const reservation = stay.reservationId
+        ? await record(ctx, 'hospitality_core.Reservation', stay.reservationId)
+        : null
+      if (reservation?.state !== 'checked_in') return failure(issue('state', 'transition_conflict'))
+      const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
+      if (!property) return failure(issue('propertyId', 'property_missing'))
+      const calculated = scheduleOf(
+        stay.bookingType,
+        stay.checkIn,
+        args.checkOut,
+        stay.rate,
+        String(property.timezone ?? 'UTC'),
+      )
+      if (calculated.errors.length || !calculated.schedule) return failure(...calculated.errors)
+      const schedule = calculated.schedule
+      if (schedule.checkOut === new Date(String(stay.checkOut)).toISOString())
+        return success(stay.id, { checkOut: schedule.checkOut, amountTotal: schedule.amountTotal })
+      const at = date(args.at) ?? new Date()
+      if (date(schedule.checkOut)! <= at) return failure(issue('checkOut', 'departure_not_future'))
+      const previousDates =
+        stay.bookingType === 'hourly'
+          ? []
+          : occupancyDates(stay.checkIn, stay.checkOut, String(property.timezone ?? 'UTC'))
+      const nextDates =
+        stay.bookingType === 'hourly'
+          ? []
+          : occupancyDates(stay.checkIn, schedule.checkOut, String(property.timezone ?? 'UTC'))
+      const timestamp = at.toISOString()
+      return transition(() =>
+        ctx.tx(async (tx) => {
+          const reservationClaim = await tx.db.compareAndSet(
+            'hospitality_core.Reservation',
+            { id: reservation.id },
+            { state: 'checked_in', updatedAt: reservation.updatedAt },
+            {
+              checkOut: schedule.checkOut,
+              quantity: schedule.quantity,
+              amountTotal: schedule.amountTotal,
+              updatedAt: timestamp,
+            },
+          )
+          if (!('matched' in reservationClaim) || !reservationClaim.matched)
+            throw new TransitionConflict(issue('state', 'transition_conflict'))
+          const stayClaim = await tx.db.compareAndSet(
+            'hospitality_core.Stay',
+            { id: stay.id },
+            { state: 'checked_in', checkOut: stay.checkOut },
+            { checkOut: schedule.checkOut },
+          )
+          if (!('matched' in stayClaim) || !stayClaim.matched)
+            throw new TransitionConflict(issue('state', 'transition_conflict'))
+          await replaceReservedInventory(
+            tx,
+            stay.propertyId,
+            stay.roomTypeId,
+            previousDates,
+            stay.roomTypeId,
+            nextDates,
+          )
+          if (previousDates.join(',') !== nextDates.join(',')) {
+            const changedDates = [...previousDates, ...nextDates].sort()
+            if (changedDates.length)
+              await recordInventoryChange(tx, {
+                propertyId: stay.propertyId,
+                roomTypeId: stay.roomTypeId,
+                kind: 'availability',
+                dateFrom: changedDates[0]!,
+                dateTo: changedDates.at(-1)!,
+                aggregateId: reservation.id,
+              })
+          }
+          if (stay.billingMode === 'upfront') {
+            const charge = await record(tx, 'hospitality_core.Charge', `${String(reservation.id)}:room`)
+            const folio = await record(tx, 'hospitality_core.Folio', stay.folioId)
+            if (charge?.state !== 'active')
+              throw new TransitionConflict(issue('folioId', 'room_charge_missing'))
+            if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
+            const nextFolioTotal = String(
+              Number(folio.amountTotal) - Number(charge.amount) + Number(schedule.amountTotal),
+            )
+            await tx.db.update(
+              'hospitality_core.Charge',
+              { id: charge.id },
+              { quantity: schedule.quantity, amount: schedule.amountTotal },
+            )
+            const folioClaim = await tx.db.compareAndSet(
+              'hospitality_core.Folio',
+              { id: folio.id },
+              { state: 'open', version: folio.version },
+              { amountTotal: nextFolioTotal, version: Number(folio.version) + 1 },
+            )
+            if (!('matched' in folioClaim) || !folioClaim.matched)
+              throw new TransitionConflict(issue('folioId', 'transition_conflict'))
+          }
+          return success(stay.id, { checkOut: schedule.checkOut, amountTotal: schedule.amountTotal })
+        }),
+      )
+    },
+  }),
+
   moveRoom: defineFn({
     input: { stayId: 'id', roomId: 'id', assignmentId: 'id', reason: 'text?', at: 'datetime?' },
     output: { ok: 'bool', id: 'id?', roomId: 'id?', state: 'text?', errors: 'json?' },

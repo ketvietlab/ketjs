@@ -145,6 +145,7 @@ const renderReservationDetail = async (
   id: string,
   errors: readonly string[] = [],
   attempted?: Partial<ReservationAmendmentValues>,
+  attemptedDeparture?: string,
 ) => {
   const reservation = (await ctx.call(
     'hospitality_core.getReservation',
@@ -198,6 +199,7 @@ const renderReservationDetail = async (
       roomTypes,
       partners,
       amendment,
+      attemptedDeparture ?? localDateTime(new Date(reservation.checkOut), timezone),
       lang,
       timezone,
       await frame(ctx, url, req),
@@ -1115,7 +1117,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!reservation) return text('Not found', { status: 404 })
 
       let result: OperationResult
-      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended' | 'no-show'
+      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended' | 'no-show' | 'departure-adjusted'
       if (form.operation === 'amend') {
         const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
         const checkIn = instantFromLocal(form.checkIn, timezone)
@@ -1175,6 +1177,41 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as OperationResult
         status = 'checked-in'
+      } else if (form.operation === 'adjust-departure') {
+        if (!reservation.stayId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.stay_missing'),
+          ])
+        const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
+        const attemptedDeparture = form.checkOut?.trim() || ''
+        const checkOut = instantFromLocal(attemptedDeparture, timezone)
+        if (!checkOut)
+          return renderReservationDetail(
+            ctx,
+            url,
+            req,
+            params.id,
+            [ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.datetime')],
+            undefined,
+            attemptedDeparture,
+          )
+        result = (await ctx.call(
+          'hospitality_core.adjustStayDeparture',
+          { stayId: reservation.stayId, checkOut },
+          url,
+          req,
+        )) as OperationResult
+        if (!result.ok)
+          return renderReservationDetail(
+            ctx,
+            url,
+            req,
+            params.id,
+            operationErrors(ctx, url, req, result),
+            undefined,
+            attemptedDeparture,
+          )
+        status = 'departure-adjusted'
       } else if (form.operation === 'check-out') {
         if (!reservation.stayId)
           return renderReservationDetail(ctx, url, req, params.id, [
