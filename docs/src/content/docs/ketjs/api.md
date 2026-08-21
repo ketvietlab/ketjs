@@ -61,7 +61,7 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
 `ServeContext`, `BootedApp`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
-`RouteResult`.
+`RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 
 ### Sessions, streams, queues, and integration effects
 
@@ -103,6 +103,20 @@ adapters and operational tooling, not a requirement for ordinary modules.
 
 The `Adapter`, `Transaction`, `Scope`, `Dialect`, `Sql`, `Table`, `Expr`, `FieldError`, and `Validator`
 types are exported from the same entrypoint.
+
+### Reports and PDF
+
+| API | Purpose |
+| --- | --- |
+| `compileReportTemplate` | Compile KTL in report-safe mode and return a typed document tree. |
+| `parseReportMarkup`, `renderReportHtml` | Validate constrained report markup and produce a safe HTML preview. |
+| `renderPdf` | Render deterministic PDF bytes using explicit TrueType fonts. |
+| `interFontUrl` | Resolve the framework-vendored Inter Regular, SemiBold, or Bold asset. |
+| `parseTrueType`, `parseImage` | Parse supported embedded font and image assets. |
+
+These APIs are exported from `ketjs` so application packages stay on the framework's main public contract. The
+narrow `ketjs/pdf` entrypoint exposes the same report-specific surface for independent tooling. Related types
+include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `TrueTypeFont`, and `PdfImage`.
 
 ### Presentation, menus, and capabilities
 
@@ -199,14 +213,3 @@ implements KetJS's public `Adapter` contract; core does not import a PostgreSQL 
 - Review manifest and migration diffs when upgrading.
 - Treat identifiers persisted in databases, queues, storage, and cookies as compatibility contracts even
   when TypeScript signatures still compile.
-`ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
-
-## `ketjs/pdf`
-
-| Export | Purpose |
-| --- | --- |
-| `compileReportTemplate` | Compile KTL in report-safe mode and return a typed document tree. |
-| `parseReportMarkup` | Validate constrained report markup. |
-| `renderReportHtml` | Produce a safe HTML preview from the document tree. |
-| `renderPdf` | Render PDF bytes using an explicit TrueType font. |
-| `interFontUrl` | Resolve the framework-vendored Inter Regular, SemiBold, or Bold asset. |
