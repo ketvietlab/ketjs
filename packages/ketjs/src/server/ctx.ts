@@ -197,7 +197,8 @@ export function createContext(o: {
   const stamp = (model: string, row: Row): Row => {
     const kind = scopeOf(model)
     if (kind === 'shared') return row
-    for (const key of ['companyId', 'branchId']) {
+    const protectedScopeFields = kind === 'company+branch' ? ['companyId', 'branchId'] : ['companyId']
+    for (const key of protectedScopeFields) {
       if (key in row) {
         throw new KetError({
           code: 'E_SCOPE_FIELD_WRITTEN',
