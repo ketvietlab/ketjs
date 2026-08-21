@@ -113,6 +113,26 @@ const contentType = (type: string): string => {
 
 const islandScript = '<script type="module" src="/_ket/islands.js"></script>'
 const viewRuntimeUrl = '/_ket/view/index.js'
+const TOKENS_PATH = '/_ket/tokens.css'
+const tokensLink = `<link rel="stylesheet" href="${TOKENS_PATH}">`
+
+/**
+ * A theme's declared tokens, linked into the document it renders.
+ *
+ * `tokens` had been a declaration with no consumer: every theme wrote one, the
+ * manifest composed them, `tokensToCss` turned them into `--ket-*` custom
+ * properties inside the `ket.theme` layer — and nothing ever put the result on a
+ * page, so themes hard-coded a second palette in their own stylesheet instead. The
+ * framework owns the cascade order it publishes, which is why it links this rather
+ * than asking every theme to.
+ */
+const withThemeTokens = (body: string, css: string): string => {
+  if (!css || body.includes(TOKENS_PATH)) return body
+  const closingHead = body.indexOf('</head>')
+  return closingHead < 0
+    ? tokensLink + body
+    : body.slice(0, closingHead) + tokensLink + body.slice(closingHead)
+}
 
 const bootstrapDocument = (body: string): string => {
   if (
@@ -428,6 +448,14 @@ export async function createKetServer(o: ServeOpts) {
 
       if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
       if (url.pathname === '/_ket/agent') return json(res, 200, agentDescriptor(o.manifest))
+      if (url.pathname === TOKENS_PATH) {
+        const theme = await resolveTheme(url, req)
+        res.writeHead(theme ? 200 : 404, {
+          'content-type': contentType(theme ? 'text/css' : 'text/plain'),
+          'cache-control': 'no-cache',
+        })
+        return res.end(theme ? theme.tokensCss : 'not found')
+      }
       if (url.pathname === '/_ket/islands.js') {
         const theme = await resolveTheme(url, req)
         const clients = await resolveIslandClients(url, req, theme)
@@ -518,7 +546,9 @@ export async function createKetServer(o: ServeOpts) {
             }),
           )
         }
-        const fullHtml = bootstrapDocument(theme.renderRegion('layout', scope))
+        const fullHtml = bootstrapDocument(
+          withThemeTokens(theme.renderRegion('layout', scope), theme.tokensCss),
+        )
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
