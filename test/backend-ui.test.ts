@@ -37,6 +37,7 @@ import {
   kanbanGrid,
   linkButton,
   loadingState,
+  loginScreen,
   mailContractCases,
   metric,
   modalSheet,
@@ -427,6 +428,14 @@ const everything = [
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
   settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
   errorState('E_X', 'msg', 'hint'),
+  // The sign-in screen, in the one state that shows every hook it owns at once.
+  loginScreen(_, {
+    next: '/admin/settings',
+    failed: true,
+    providers: [{ code: 'google', name: 'Google', href: '/oauth/google' }],
+    locales: ['vi', 'en'],
+    locale: 'vi',
+  }),
   ...componentContract,
   ...mailContractCases(),
   ...activityContractCases(),

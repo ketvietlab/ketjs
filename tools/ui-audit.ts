@@ -33,7 +33,6 @@ const PATTERNS = [
  * grows. Empty it, do not extend it.
  */
 const PENDING: Record<string, string> = {
-  'packages/ketsuite/src/modules/user/login.ts': 'waiting on ui/form.ts',
   'packages/ketsuite/src/modules/website_search/islands.ts':
     'an island, so its markup is behaviour — needs kit primitives that take handlers',
   'packages/ketsuite/src/modules/backend/catalogue.ts':
