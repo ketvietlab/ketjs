@@ -16,6 +16,7 @@ import {
   housekeepingRoomDetailScreen,
   housekeepingRoomsScreen,
   newPropertyScreen,
+  newRoomScreen,
   newRoomTypeScreen,
   policiesScreen,
   propertiesScreen,
@@ -25,6 +26,7 @@ import {
   reservationsScreen,
   inventoryScreen,
   roomsScreen,
+  roomDetailScreen,
   roomTypeDetailScreen,
   roomTypesScreen,
   stayDetailScreen,
@@ -37,9 +39,11 @@ import {
 } from './screens.ts'
 import type {
   AmenityRow,
+  BuildingRow,
   CleaningTaskSummary,
   CleaningTaskRow,
   FolioRow,
+  FloorRow,
   PolicyRow,
   PropertyDetail,
   PropertyFormValues,
@@ -51,6 +55,8 @@ import type {
   ReservationQuote,
   ReservationIntakeValues,
   RoomRow,
+  RoomDetail,
+  RoomFormValues,
   RoomStatusSummary,
   RoomTypeDetail,
   RoomTypeFormValues,
@@ -624,6 +630,143 @@ const renderRoomTypeDetail = async (
   )
 }
 
+const roomFormValues = (
+  id: string,
+  form: Record<string, string>,
+  current: RoomDetail | null = null,
+): RoomFormValues => ({
+  id,
+  propertyId: form.propertyId?.trim() ?? current?.propertyId ?? '',
+  roomTypeId: form.roomTypeId?.trim() ?? current?.roomTypeId ?? '',
+  buildingId: form.buildingId?.trim() || null,
+  floorId: form.floorId?.trim() || null,
+  code: form.code?.trim() ?? current?.code ?? '',
+  name: form.name?.trim() ?? current?.name ?? '',
+  capacity: integer(form.capacity, current?.capacity ?? 1),
+})
+
+const defaultRoomValues = (id: string, propertyId: string, roomTypeId: string): RoomFormValues => ({
+  id,
+  propertyId,
+  roomTypeId,
+  buildingId: null,
+  floorId: null,
+  code: '',
+  name: '',
+  capacity: 2,
+})
+
+const roomOptions = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  propertyId: string | undefined,
+  includeArchived = false,
+): Promise<{
+  properties: PropertyRow[]
+  propertyId?: string
+  roomTypes: RoomTypeRow[]
+  buildings: BuildingRow[]
+  floors: FloorRow[]
+}> => {
+  const properties = (await ctx.call(
+    'hospitality_core.listProperties',
+    includeArchived ? { includeArchived: true } : {},
+    url,
+    req,
+  )) as PropertyRow[]
+  const selected = properties.some((row) => row.id === propertyId) ? propertyId : properties[0]?.id
+  if (!selected) return { properties, propertyId: undefined, roomTypes: [], buildings: [], floors: [] }
+  const [roomTypes, buildings, floors] = (await Promise.all([
+    ctx.call(
+      'hospitality_core.listRoomTypes',
+      { propertyId: selected, includeArchived: includeArchived || undefined },
+      url,
+      req,
+    ),
+    ctx.call(
+      'hospitality_core.listBuildings',
+      { propertyId: selected, includeArchived: includeArchived || undefined },
+      url,
+      req,
+    ),
+    ctx.call(
+      'hospitality_core.listFloors',
+      { propertyId: selected, includeArchived: includeArchived || undefined },
+      url,
+      req,
+    ),
+  ])) as [RoomTypeRow[], BuildingRow[], FloorRow[]]
+  return { properties, propertyId: selected, roomTypes, buildings, floors }
+}
+
+const renderRooms = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  errors: readonly string[] = [],
+) => {
+  const requestedProperty = url.searchParams.get('property')?.trim() || undefined
+  const options = await roomOptions(ctx, url, req, requestedProperty)
+  const rows = options.propertyId
+    ? ((await ctx.call(
+        'hospitality_core.listRooms',
+        { propertyId: options.propertyId },
+        url,
+        req,
+      )) as RoomRow[])
+    : []
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    _('hospitality_core.screen.rooms.title'),
+    roomsScreen(
+      _,
+      { rows, ...options },
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
+const renderRoomDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+  attempted?: RoomFormValues,
+) => {
+  const room = (await ctx.call('hospitality_core.getRoom', { id }, url, req)) as RoomDetail | null
+  if (!room) return text('Not found', { status: 404 })
+  const options = await roomOptions(ctx, url, req, room.propertyId, true)
+  const lang = ctx.localeOf(url, req)
+  return document(
+    ctx,
+    url,
+    req,
+    room.name,
+    roomDetailScreen(
+      ctx.translate(lang),
+      room,
+      attempted ?? room,
+      options.properties,
+      options.roomTypes,
+      options.buildings,
+      options.floors,
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
 export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/front-desk':
     (ctx: ServeContext): Route =>
@@ -1173,22 +1316,122 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/rooms':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method === 'GET') return renderRooms(ctx, url, req)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const operation = form.operation?.trim()
+      const propertyId = form.propertyId?.trim() || ''
+      let result: OperationResult
+      let status: string
+      if (operation === 'save-building') {
+        result = (await ctx.call(
+          'hospitality_core.saveBuilding',
+          {
+            id: randomUUID(),
+            propertyId,
+            code: form.code?.trim() || '',
+            name: form.name?.trim() || '',
+            sequence: integer(form.sequence, 10),
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'building-created'
+      } else if (operation === 'save-floor') {
+        result = (await ctx.call(
+          'hospitality_core.saveFloor',
+          {
+            id: randomUUID(),
+            propertyId,
+            buildingId: form.buildingId?.trim() || '',
+            code: form.code?.trim() || '',
+            name: form.name?.trim() || '',
+            sequence: integer(form.sequence, 10),
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'floor-created'
+      } else return text('unknown action', { status: 400 })
+      if (!result.ok) return renderRooms(ctx, url, req, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams({ property: propertyId, status, lang: ctx.localeOf(url, req) })
+      return seeOther(`/admin/hospitality/rooms?${query.toString()}`)
+    },
+
+  '/admin/hospitality/rooms/new':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const requestedProperty = url.searchParams.get('property')?.trim() || undefined
+      const initial = await roomOptions(ctx, url, req, requestedProperty)
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const selected = url.searchParams.get('property') || undefined
-      const rows = (await ctx.call(
-        'hospitality_core.listRooms',
-        { propertyId: selected },
+      if (!initial.propertyId || !initial.roomTypes.length)
+        return seeOther(`/admin/hospitality/rooms?lang=${encodeURIComponent(lang)}`)
+      if (req.method === 'GET') {
+        const values = defaultRoomValues(randomUUID(), initial.propertyId, initial.roomTypes[0]!.id)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.room.create.title'),
+          newRoomScreen(
+            _,
+            values,
+            initial.properties,
+            initial.roomTypes,
+            initial.buildings,
+            initial.floors,
+            lang,
+            await frame(ctx, url, req),
+          ),
+        )
+      }
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const values = roomFormValues(randomUUID(), form)
+      const options = await roomOptions(ctx, url, req, values.propertyId)
+      const result = (await ctx.call('hospitality_core.saveRoom', values, url, req)) as OperationResult
+      if (!result.ok)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.room.create.title'),
+          newRoomScreen(
+            _,
+            values,
+            options.properties,
+            options.roomTypes,
+            options.buildings,
+            options.floors,
+            lang,
+            await frame(ctx, url, req),
+            operationErrors(ctx, url, req, result),
+          ),
+        )
+      const query = new URLSearchParams({ status: 'created', lang })
+      return seeOther(`/admin/hospitality/rooms/${encodeURIComponent(values.id)}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/rooms/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderRoomDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const current = (await ctx.call(
+        'hospitality_core.getRoom',
+        { id: params.id },
         url,
         req,
-      )) as RoomRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.rooms.title'),
-        roomsScreen(_, rows, await frame(ctx, url, req)),
-      )
+      )) as RoomDetail | null
+      if (!current) return text('Not found', { status: 404 })
+      const form = await readForm(req)
+      const values = roomFormValues(params.id, form, current)
+      const result = (await ctx.call('hospitality_core.saveRoom', values, url, req)) as OperationResult
+      if (!result.ok)
+        return renderRoomDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
+      const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/room-types':

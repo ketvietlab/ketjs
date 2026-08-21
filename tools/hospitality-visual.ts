@@ -231,12 +231,12 @@ try {
     })
   }
   for (const room of [
-    { id: '101', type: roomType, status: 'available' },
-    { id: '102', type: roomType, status: 'available' },
-    { id: '103', type: roomType, status: 'cleaning' },
-    { id: '104', type: 'suite', status: 'available' },
-    { id: '105', type: 'suite', status: 'maintenance' },
-    { id: '106', type: roomType, status: 'available' },
+    { id: '101', type: roomType },
+    { id: '102', type: roomType },
+    { id: '103', type: roomType },
+    { id: '104', type: 'suite' },
+    { id: '105', type: 'suite' },
+    { id: '106', type: roomType },
   ])
     await call('hospitality_core.saveRoom', {
       id: room.id,
@@ -246,8 +246,13 @@ try {
       floorId: 'floor-1',
       code: room.id,
       name: `Phòng ${room.id}`,
-      status: room.status,
     })
+  await call('hospitality_core.setRoomStatus', {
+    id: '105',
+    expectedStatus: 'available',
+    status: 'maintenance',
+    note: 'Bảo trì điều hòa theo kế hoạch.',
+  })
   await call('hospitality_core.saveRatePlan', {
     id: 'deluxe-flex',
     propertyId: property,

@@ -451,6 +451,115 @@ test('hospitality core: building, floor, room type and room cannot cross propert
   }
 })
 
+test('hospitality core: room configuration preserves workflow-owned status and preloads location', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveBuilding',
+      { id: 'tower-a', propertyId: 'hotel', code: 'A', name: 'Tower A', sequence: 10 },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveFloor',
+      { id: 'floor-1', propertyId: 'hotel', buildingId: 'tower-a', code: '01', name: 'Floor 1' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'deluxe', propertyId: 'hotel', code: 'DLX', name: 'Deluxe', defaultCapacity: 2 },
+      adapter,
+    )
+    const created = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'Room 101',
+        capacity: 3,
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+
+    await call('hospitality_core.setRoomStatus', { id: '101', status: 'dirty' }, adapter)
+    const bypass = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'tower-a',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'Room 101',
+        capacity: 3,
+        status: 'maintenance',
+      },
+      adapter,
+    )
+    assert.equal((bypass.value as Row).ok, false)
+    assert.equal(((bypass.value as Row).errors as Row[])[0]?.code, 'room_status_configuration_managed')
+
+    const updated = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'tower-a',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'River Room 101',
+        capacity: 4,
+      },
+      adapter,
+    )
+    assert.equal((updated.value as Row).ok, true)
+
+    const detail = (await call('hospitality_core.getRoom', { id: '101' }, adapter)).value as Row
+    assert.equal(detail.status, 'dirty')
+    assert.equal(detail.name, 'River Room 101')
+    assert.equal(Number(detail.capacity), 4)
+    assert.equal((detail.property as Row).name, 'Ket Hotel Saigon')
+    assert.equal((detail.roomType as Row).name, 'Deluxe')
+    assert.equal((detail.building as Row).name, 'Tower A')
+    assert.equal((detail.floor as Row).name, 'Floor 1')
+
+    const buildings = (await call('hospitality_core.listBuildings', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const floors = (await call('hospitality_core.listFloors', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const buildingRow = buildings[0]
+    const floorRow = floors[0]
+    assert.ok(buildingRow)
+    assert.ok(floorRow)
+    assert.equal((buildingRow.floors as Row[]).length, 1)
+    assert.equal((buildingRow.rooms as Row[]).length, 1)
+    assert.equal((floorRow.rooms as Row[]).length, 1)
+    assert.equal((floorRow.building as Row).id, 'tower-a')
+
+    await adapter.run('UPDATE hospitality_core_building SET active = ? WHERE id = ?', [false, 'tower-a'])
+    await adapter.run('UPDATE hospitality_core_floor SET active = ? WHERE id = ?', [false, 'floor-1'])
+    const activeBuildings = (await call('hospitality_core.listBuildings', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const archivedBuildings = (
+      await call('hospitality_core.listBuildings', { propertyId: 'hotel', includeArchived: true }, adapter)
+    ).value as Row[]
+    const archivedFloors = (
+      await call('hospitality_core.listFloors', { propertyId: 'hotel', includeArchived: true }, adapter)
+    ).value as Row[]
+    assert.equal(activeBuildings.length, 0)
+    assert.equal(archivedBuildings[0]?.id, 'tower-a')
+    assert.equal(archivedFloors[0]?.id, 'floor-1')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality core: amenities preserve property and room scopes', async () => {
   const adapter = await boot()
   try {
