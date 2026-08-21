@@ -19,10 +19,10 @@ import {
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
-} from './screens.ts'
+} from './screens.tsx'
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
-import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.ts'
+import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
 import { timezoneOf, viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { Extras, SearchMenu, TableGroup } from '../../ui/index.ts'

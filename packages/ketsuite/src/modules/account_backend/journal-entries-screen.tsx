@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -14,7 +14,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type Row = Record<string, unknown>
 
@@ -74,50 +74,54 @@ export const journalEntriesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.entries.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.entry.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.entries.title')}
-      subtitle={_('account_backend.entry.subtitle')}
-      imageFallback={icon('notebook-tabs')}
-      summary={[
-        { id: 'total', label: _('account_backend.entry.summary.total'), value: options.rows.length },
-        { id: 'draft', label: _('account_backend.entry.summary.draft'), value: draft },
-        { id: 'posted', label: _('account_backend.entry.summary.posted'), value: posted },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.entry.create.title')}
-            description={_('account_backend.entry.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.entry.kicker')}
+          title={_('account_backend.entries.title')}
+          subtitle={_('account_backend.entry.subtitle')}
+          imageFallback={icon('notebook-tabs')}
+          summary={[
+            { id: 'total', label: _('account_backend.entry.summary.total'), value: options.rows.length },
+            { id: 'draft', label: _('account_backend.entry.summary.draft'), value: draft },
+            { id: 'posted', label: _('account_backend.entry.summary.posted'), value: posted },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.entry.create.title')}
+                description={_('account_backend.entry.create.hint')}
                 body={
-                  <RecordForm
-                    id="journal-entry-create-form"
-                    scope="account-journal-entry"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="journal-entry-create-form"
+                        scope="account-journal-entry"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.entry.list.title')}
-            description={_('account_backend.entry.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.entry.list.title')}
+                description={_('account_backend.entry.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

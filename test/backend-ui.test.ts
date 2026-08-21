@@ -26,6 +26,7 @@ import {
   emptyState,
   errorState,
   formCluster,
+  framed,
   HOOKS,
   hasIcon,
   icon,
@@ -505,6 +506,30 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
     ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
   )
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+})
+
+test('backend layout: framed list and form screens share the accounting workspace', () => {
+  const list = renderToString(pagesScreen(_, [page()], {}))
+  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
+  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
+
+  const rich = renderToString(
+    framed(
+      _,
+      'Record',
+      {},
+      recordWorkspace({
+        title: 'Record identity',
+        imageFallback: icon('package'),
+        body: surface({ body: 'Record body' }),
+      }),
+    ),
+  )
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
+  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
+
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /data-page-frame="true"\]:has/)
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {

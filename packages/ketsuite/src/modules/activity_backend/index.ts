@@ -78,4 +78,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { activitiesScreen } from './screens.ts'
+export { activitiesScreen } from './screens.tsx'

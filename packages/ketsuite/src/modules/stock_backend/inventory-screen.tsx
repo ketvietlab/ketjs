@@ -5,7 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   notice,
@@ -169,71 +169,75 @@ export const inventoryScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.inventory'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.inventory.kicker')}
-      title={_('stock_backend.inventory.workspace.title')}
-      subtitle={_('stock_backend.inventory.workspace.subtitle')}
-      imageFallback={icon('warehouse')}
-      summary={[
-        {
-          id: 'on-hand',
-          label: _('stock_backend.inventory.summary.onHand'),
-          value: String(totalOnHand),
-        },
-        {
-          id: 'balances',
-          label: _('stock_backend.inventory.summary.balances'),
-          value: options.rows.length,
-        },
-        {
-          id: 'locations',
-          label: _('stock_backend.inventory.summary.locations'),
-          value: locationCount,
-        },
-      ]}
-      body={stack(
-        [
-          options.applied
-            ? notice({
-                tone: 'positive',
-                title: _('stock_backend.inventory.applied.title'),
-                message: _('stock_backend.inventory.applied.message'),
-                icon: icon('check-circle'),
-              })
-            : null,
-          <Section
-            title={_('stock_backend.adjustment.title')}
-            description={_('stock_backend.adjustment.hint')}
-            body={
-              configured ? (
-                <Surface padding="compact" body={adjustmentForm(_, options)} />
-              ) : (
-                notice({
-                  tone: 'warning',
-                  title: _('stock_backend.inventory.configuration.title'),
-                  message: _('stock_backend.inventory.configuration.message'),
-                  icon: icon('alert-triangle'),
-                  actions: linkButton({
-                    label: _('stock_backend.inventory.configuration.action'),
-                    href: options.locationsHref,
-                    variant: 'secondary',
-                  }),
-                })
-              )
-            }
-          />,
-          <Section
-            title={_('stock_backend.inventory.balances.title')}
-            description={_('stock_backend.inventory.balances.hint')}
-            body={balances}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.inventory')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.inventory.kicker')}
+          title={_('stock_backend.inventory.workspace.title')}
+          subtitle={_('stock_backend.inventory.workspace.subtitle')}
+          imageFallback={icon('warehouse')}
+          summary={[
+            {
+              id: 'on-hand',
+              label: _('stock_backend.inventory.summary.onHand'),
+              value: String(totalOnHand),
+            },
+            {
+              id: 'balances',
+              label: _('stock_backend.inventory.summary.balances'),
+              value: options.rows.length,
+            },
+            {
+              id: 'locations',
+              label: _('stock_backend.inventory.summary.locations'),
+              value: locationCount,
+            },
+          ]}
+          body={stack(
+            [
+              options.applied
+                ? notice({
+                    tone: 'positive',
+                    title: _('stock_backend.inventory.applied.title'),
+                    message: _('stock_backend.inventory.applied.message'),
+                    icon: icon('check-circle'),
+                  })
+                : null,
+              <Section
+                title={_('stock_backend.adjustment.title')}
+                description={_('stock_backend.adjustment.hint')}
+                body={
+                  configured ? (
+                    <Surface padding="compact" body={adjustmentForm(_, options)} />
+                  ) : (
+                    notice({
+                      tone: 'warning',
+                      title: _('stock_backend.inventory.configuration.title'),
+                      message: _('stock_backend.inventory.configuration.message'),
+                      icon: icon('alert-triangle'),
+                      actions: linkButton({
+                        label: _('stock_backend.inventory.configuration.action'),
+                        href: options.locationsHref,
+                        variant: 'secondary',
+                      }),
+                    })
+                  )
+                }
+              />,
+              <Section
+                title={_('stock_backend.inventory.balances.title')}
+                description={_('stock_backend.inventory.balances.hint')}
+                body={balances}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }
