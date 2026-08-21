@@ -98,6 +98,15 @@ class LocationLifecycleGuard extends Error {
   }
 }
 
+class RoomLifecycleGuard extends Error {
+  readonly problem: Issue
+
+  constructor(problem: Issue) {
+    super(problem.code)
+    this.problem = problem
+  }
+}
+
 const lockActiveFlag = async (ctx: Ctx, model: string, row: Row): Promise<boolean> => {
   const active = row.active === true
   const locked = await ctx.db.compareAndSet(model, { id: row.id }, { active }, { active })
@@ -1145,6 +1154,94 @@ export const functions: Record<string, FnSpec> = {
       }),
   }),
 
+  archiveRoom: defineFn({
+    input: { id: 'id', active: 'bool' },
+    output: result,
+    effects: [
+      'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.CleaningTask',
+      'write:hospitality_core.Building',
+      'write:hospitality_core.Floor',
+      'write:hospitality_core.Room',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      try {
+        return await ctx.tx(async (tx) => {
+          const room = await record(tx, 'hospitality_core.Room', args.id)
+          if (!room) return failure(issue('id', 'room_missing'))
+          if (room.active === args.active) return success(args.id)
+
+          if (args.active) {
+            const property = await record(tx, 'hospitality_core.Property', room.propertyId)
+            if (!property) return failure(issue('propertyId', 'property_missing'))
+            if (property.active !== true) return failure(issue('propertyId', 'property_archived'))
+            const roomType = await record(tx, 'hospitality_core.RoomType', room.roomTypeId)
+            if (!roomType) return failure(issue('roomTypeId', 'room_type_missing'))
+            if (roomType.active !== true) return failure(issue('roomTypeId', 'room_type_archived'))
+
+            const building = room.buildingId
+              ? await record(tx, 'hospitality_core.Building', room.buildingId)
+              : null
+            if (room.buildingId && !building) return failure(issue('buildingId', 'building_missing'))
+            if (building && building.active !== true) return failure(issue('buildingId', 'location_archived'))
+            if (building && !(await lockActiveFlag(tx, 'hospitality_core.Building', building)))
+              return failure(issue('buildingId', 'transition_conflict'))
+
+            const floor = room.floorId ? await record(tx, 'hospitality_core.Floor', room.floorId) : null
+            if (room.floorId && !floor) return failure(issue('floorId', 'floor_missing'))
+            if (floor && floor.active !== true) return failure(issue('floorId', 'location_archived'))
+            if (floor && !(await lockActiveFlag(tx, 'hospitality_core.Floor', floor)))
+              return failure(issue('floorId', 'transition_conflict'))
+
+            const restored = await tx.db.compareAndSet(
+              'hospitality_core.Room',
+              { id: args.id },
+              { active: false, status: 'available' },
+              { active: true },
+            )
+            if (!('matched' in restored) || !restored.matched)
+              return failure(issue('id', 'transition_conflict'))
+            return success(args.id)
+          }
+
+          if (room.status !== 'available') return failure(issue('id', 'room_archive_status'))
+          const archived = await tx.db.compareAndSet(
+            'hospitality_core.Room',
+            { id: args.id },
+            { active: true, status: 'available' },
+            { active: false },
+          )
+          if (!('matched' in archived) || !archived.matched)
+            return failure(issue('id', 'transition_conflict'))
+
+          const S = tx.table('hospitality_core.Stay')
+          const activeStay = await tx.db.one(
+            from(S).where(eq(S.currentRoomId, args.id), eq(S.state, 'checked_in')).limit(1),
+          )
+          if (activeStay) throw new RoomLifecycleGuard(issue('id', 'room_has_active_stay'))
+          const T = tx.table('hospitality_core.CleaningTask')
+          const activeTask = await tx.db.one(
+            from(T)
+              .where(eq(T.roomId, args.id), inArray(T.state, ['todo', 'in_progress']))
+              .limit(1),
+          )
+          if (activeTask) throw new RoomLifecycleGuard(issue('id', 'room_has_open_task'))
+          return success(args.id)
+        })
+      } catch (error) {
+        if (error instanceof RoomLifecycleGuard) return failure(error.problem)
+        throw error
+      }
+    },
+  }),
+
   setRoomStatus: defineFn({
     input: { id: 'id', expectedStatus: 'text?', status: 'text', note: 'text?' },
     output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
@@ -1187,7 +1284,7 @@ export const functions: Record<string, FnSpec> = {
           const changed = await tx.db.compareAndSet(
             'hospitality_core.Room',
             { id: args.id },
-            { status: room.status },
+            { status: room.status, active: true },
             {
               status: args.status,
               ...(note !== undefined ? { note: note || null } : {}),
