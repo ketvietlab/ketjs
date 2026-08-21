@@ -237,6 +237,55 @@ export const releaseInventory = async (
     }))
 }
 
+/**
+ * Replace one reservation's room-night claim without exposing a release window.
+ * Deltas are applied in one stable order so two concurrent room-type swaps do
+ * not lock the same ledger rows in opposite order.
+ */
+export const replaceReservedInventory = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  previousRoomTypeId: unknown,
+  previousDates: readonly string[],
+  nextRoomTypeId: unknown,
+  nextDates: readonly string[],
+): Promise<void> => {
+  const deltas = new Map<string, { roomTypeId: unknown; date: string; delta: number }>()
+  const add = (roomTypeId: unknown, date: string, delta: number) => {
+    const key = `${String(roomTypeId)}\u0000${date}`
+    const current = deltas.get(key)
+    deltas.set(key, { roomTypeId, date, delta: (current?.delta ?? 0) + delta })
+  }
+  for (const date of previousDates) add(previousRoomTypeId, date, -1)
+  for (const date of nextDates) add(nextRoomTypeId, date, 1)
+
+  const changes = [...deltas.entries()]
+    .filter(([, value]) => value.delta !== 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, value]) => value)
+  const datesByRoomType = new Map<unknown, string[]>()
+  for (const change of changes) {
+    const dates = datesByRoomType.get(change.roomTypeId) ?? []
+    dates.push(change.date)
+    datesByRoomType.set(change.roomTypeId, dates)
+  }
+  for (const [roomTypeId, dates] of datesByRoomType)
+    await ensureLedgerRows(ctx, propertyId, roomTypeId, dates)
+  for (const change of changes)
+    await changeLedger(ctx, propertyId, change.roomTypeId, change.date, (current) => {
+      const total = Number(current.total)
+      const sold = Number(current.sold)
+      const blocked = Number(current.blocked)
+      if (change.delta > 0 && total - sold - blocked < change.delta)
+        return issue('roomTypeId', 'no_availability', {
+          date: change.date,
+          available: total - sold - blocked,
+          required: change.delta,
+        })
+      return { total, sold: Math.max(sold + change.delta, 0), blocked }
+    })
+}
+
 export const defaultRatePlan = async (
   ctx: Ctx,
   roomTypeId: unknown,

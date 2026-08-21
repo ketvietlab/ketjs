@@ -61,6 +61,7 @@ import type {
   ReservationDetail,
   ReservationQuote,
   ReservationIntakeValues,
+  ReservationAmendmentValues,
   RoomRow,
   RoomDetail,
   RoomFormValues,
@@ -143,6 +144,7 @@ const renderReservationDetail = async (
   req: Parameters<Route>[1],
   id: string,
   errors: readonly string[] = [],
+  attempted?: Partial<ReservationAmendmentValues>,
 ) => {
   const reservation = (await ctx.call(
     'hospitality_core.getReservation',
@@ -160,19 +162,30 @@ const renderReservationDetail = async (
     )) as StayRow | null
   }
   const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
-  const rooms =
+  const [allRooms, roomTypes, partners] = (await Promise.all([
     reservation.state === 'confirmed'
-      ? (
-          (await ctx.call(
-            'hospitality_core.listRooms',
-            { propertyId: reservation.propertyId, status: 'available' },
-            url,
-            req,
-          )) as RoomRow[]
-        ).filter((room) => room.roomTypeId === reservation.roomTypeId)
-      : []
+      ? ctx.call(
+          'hospitality_core.listRooms',
+          { propertyId: reservation.propertyId, status: 'available' },
+          url,
+          req,
+        )
+      : Promise.resolve([]),
+    ctx.call('hospitality_core.listRoomTypes', { propertyId: reservation.propertyId }, url, req),
+    ctx.call('partner.listPartners', { kind: 'person', limit: 500 }, url, req),
+  ])) as [RoomRow[], Array<{ id: string; code: string; name: string }>, Array<{ id: string; name: string }>]
+  const rooms = allRooms.filter((room) => room.roomTypeId === reservation.roomTypeId)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
+  const amendment: ReservationAmendmentValues = {
+    partnerId: attempted?.partnerId ?? reservation.partnerId,
+    roomTypeId: attempted?.roomTypeId ?? reservation.roomTypeId,
+    checkIn: attempted?.checkIn ?? localDateTime(new Date(reservation.checkIn), timezone),
+    checkOut: attempted?.checkOut ?? localDateTime(new Date(reservation.checkOut), timezone),
+    adults: attempted?.adults ?? reservation.adults,
+    children: attempted?.children ?? reservation.children,
+    rate: attempted?.rate ?? String(reservation.rate),
+  }
   return document(
     ctx,
     url,
@@ -182,6 +195,9 @@ const renderReservationDetail = async (
       _,
       reservation,
       rooms,
+      roomTypes,
+      partners,
+      amendment,
       lang,
       timezone,
       await frame(ctx, url, req),
@@ -1099,8 +1115,55 @@ export const routes: Record<string, RouteEntry> = {
       if (!reservation) return text('Not found', { status: 404 })
 
       let result: OperationResult
-      let status: 'checked-in' | 'checked-out' | 'cancelled'
-      if (form.operation === 'check-in') {
+      let status: 'checked-in' | 'checked-out' | 'cancelled' | 'amended'
+      if (form.operation === 'amend') {
+        const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
+        const checkIn = instantFromLocal(form.checkIn, timezone)
+        const checkOut = instantFromLocal(form.checkOut, timezone)
+        const attempted: ReservationAmendmentValues = {
+          partnerId: form.partnerId?.trim() || '',
+          roomTypeId: form.roomTypeId?.trim() || '',
+          checkIn: form.checkIn?.trim() || '',
+          checkOut: form.checkOut?.trim() || '',
+          adults: integer(form.adults, 1),
+          children: integer(form.children),
+          rate: form.rate?.trim() || '',
+        }
+        if (!checkIn || !checkOut)
+          return renderReservationDetail(
+            ctx,
+            url,
+            req,
+            params.id,
+            [ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.datetime')],
+            attempted,
+          )
+        result = (await ctx.call(
+          'hospitality_core.amendReservation',
+          {
+            id: reservation.id,
+            partnerId: attempted.partnerId,
+            roomTypeId: attempted.roomTypeId,
+            checkIn,
+            checkOut,
+            adults: attempted.adults,
+            children: attempted.children,
+            rate: attempted.rate,
+          },
+          url,
+          req,
+        )) as OperationResult
+        if (!result.ok)
+          return renderReservationDetail(
+            ctx,
+            url,
+            req,
+            params.id,
+            operationErrors(ctx, url, req, result),
+            attempted,
+          )
+        status = 'amended'
+      } else if (form.operation === 'check-in') {
         if (!reservation.stayId || !form.roomId)
           return renderReservationDetail(ctx, url, req, params.id, [
             ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.no_available_room'),
