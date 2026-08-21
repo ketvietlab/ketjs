@@ -2,9 +2,11 @@ import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { Translator } from 'ketjs'
 import {
   badge,
+  button,
   code,
   dataTable,
   emptyState,
+  formCluster,
   framed,
   inline,
   linkButton,
@@ -155,24 +157,35 @@ export const partnerDetailScreen = (
     row.name,
     frame,
     stack([
-      options.integration ?? '',
       section({
         title: _('partner_backend.state.title'),
         body: surface({
-          body: recordActions({
-            action: localized(`/admin/partners/${row.id}/archive`, locale),
-            actions: [
-              row.active
-                ? {
-                    value: 'archive',
-                    label: _('partner_backend.action.archive'),
-                    variant: 'destructive',
-                  }
-                : {
-                    value: 'restore',
-                    label: _('partner_backend.action.restore'),
-                    variant: 'secondary',
-                  },
+          body: formCluster({
+            label: _('partner_backend.state.title'),
+            forms: [
+              button({
+                label: _('partner_backend.action.save'),
+                type: 'submit',
+                form: 'partner-identity-form',
+                variant: 'primary',
+              }),
+              options.integration ?? '',
+              recordActions({
+                action: localized(`/admin/partners/${row.id}/archive`, locale),
+                actions: [
+                  row.active
+                    ? {
+                        value: 'archive',
+                        label: _('partner_backend.action.archive'),
+                        variant: 'destructive',
+                      }
+                    : {
+                        value: 'restore',
+                        label: _('partner_backend.action.restore'),
+                        variant: 'secondary',
+                      },
+                ],
+              }),
             ],
           }),
         }),
@@ -181,9 +194,11 @@ export const partnerDetailScreen = (
         title: _('partner_backend.detail.identity'),
         body: surface({
           body: recordForm({
+            id: 'partner-identity-form',
             action: localized(`/admin/partners/${row.id}`, locale),
             submit: _('partner_backend.action.save'),
             submitVariant: 'primary',
+            submitPlacement: 'external',
             errors: options.errors,
             fields: [
               { name: 'name', label: _('partner_backend.field.name'), value: row.name, required: true },
