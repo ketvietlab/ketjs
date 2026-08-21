@@ -1,0 +1,1 @@
+<section class="products" data-ket-section="products"><p class="drop">The edit</p><h2>{{ heading | default: 'Good things, clearly chosen.' }}</h2><div class="product-grid"><article>Everyday</article><article>New forms</article><article>Small pleasures</article><article>Last chance</article></div></section>
