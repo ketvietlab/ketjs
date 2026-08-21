@@ -12,7 +12,6 @@ import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
 import { cmsFunctions } from './cms.ts'
 import { customerFunctions } from './customer.ts'
-import { customerRoutes } from './customer-routes.ts'
 import { jobs } from './jobs.ts'
 
 export default defineModule({
@@ -147,7 +146,6 @@ export default defineModule({
   sections,
   views,
   functions: { ...functions, ...cmsFunctions, ...customerFunctions },
-  routes: customerRoutes,
   jobs,
   tokens,
 })

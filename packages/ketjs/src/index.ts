@@ -19,6 +19,10 @@ export type {
   TaxonomyDef,
   ComposedContentType,
   ComposedTaxonomy,
+  RouteEntry,
+  HttpRouteContract,
+  JsonSchema,
+  Manifest,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'

@@ -160,11 +160,13 @@ export const models: Record<string, ModelDef> = {
     timestamps: true,
     fields: {
       id: 'id',
+      key: 'text',
       name: 'text',
       active: 'bool',
       sessionIdleSeconds: 'int',
       sessionAbsoluteSeconds: 'int',
     },
+    indexes: { key: { fields: ['key'], unique: true } },
   },
   CustomerRealmSite: {
     scope: 'company',
@@ -231,6 +233,30 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       token: { fields: ['tokenDigest'], unique: true },
       account_expiry: { fields: ['accountId', 'absoluteExpiresAt'] },
+    },
+  },
+  /** Rotating bearer credentials for headless and native customer clients. */
+  CustomerTokenGrant: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      accountId: 'ref:website.CustomerAccount',
+      accessDigest: 'text',
+      refreshDigest: 'text',
+      securityVersion: 'int',
+      version: 'int',
+      createdAt: 'datetime',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      lastRotatedAt: 'datetime',
+      revokedAt: 'datetime?',
+      revokeReason: 'text?',
+    },
+    indexes: {
+      access: { fields: ['accessDigest'], unique: true },
+      refresh: { fields: ['refreshDigest'], unique: true },
+      account_expiry: { fields: ['accountId', 'refreshExpiresAt'] },
     },
   },
   CustomerAuthRateLimit: {

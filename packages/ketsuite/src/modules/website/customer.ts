@@ -5,6 +5,7 @@ import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } fro
 
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_ABSOLUTE_SECONDS = 30 * 24 * 60 * 60
+const ACCESS_SECONDS = 15 * 60
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -17,6 +18,15 @@ const accountView = (account: Row) => ({
   displayName: account.displayName,
   status: account.status,
   securityVersion: account.securityVersion,
+})
+
+const tokenGrantView = (grant: Row, account: Row) => ({
+  id: grant.id,
+  realmId: grant.realmId,
+  account: accountView(account),
+  accessExpiresAt: grant.accessExpiresAt,
+  refreshExpiresAt: grant.refreshExpiresAt,
+  version: grant.version,
 })
 
 export const normalizeCustomerEmail = (value: unknown): string =>
@@ -43,6 +53,7 @@ export const ensureCustomerRealm = async (ctx: Ctx, siteId: string, name: string
   const realmId = `site:${ctx.scope.company ?? 'default'}:${siteId}`
   await ctx.db.insertIfAbsent('website.CustomerRealm', {
     id: realmId,
+    key: realmId,
     name,
     active: true,
     sessionIdleSeconds: DEFAULT_IDLE_SECONDS,
@@ -117,6 +128,35 @@ const sessionOutput = {
 } as const
 
 export const customerFunctions: Record<string, FnSpec> = {
+  customerRealmByKey: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { key: 'text' },
+    output: { id: 'id', key: 'text', name: 'text' },
+    effects: ['read:website.CustomerRealm'],
+    handler: async (ctx, args) => {
+      const realm = (
+        await ctx.db.select('website.CustomerRealm', { key: String(args.key).trim(), active: true })
+      )[0]
+      return realm ? { id: realm.id, key: realm.key, name: realm.name } : null
+    },
+  }),
+  primaryCustomerSiteForRealm: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { realmId: 'id' },
+    output: { siteId: 'id', realmId: 'id' },
+    effects: ['read:website.CustomerRealmSite'],
+    handler: async (ctx, args) => {
+      const Link = ctx.table('website.CustomerRealmSite')
+      const primary = await ctx.db.one(
+        from(Link).where(eq(Link.realmId, args.realmId), eq(Link.primary, true), eq(Link.active, true)),
+      )
+      if (primary) return { siteId: primary.siteId, realmId: primary.realmId }
+      const active = await ctx.db.one(from(Link).where(eq(Link.realmId, args.realmId), eq(Link.active, true)))
+      return active ? { siteId: active.siteId, realmId: active.realmId } : null
+    },
+  }),
   customerRealmForSite: defineFn({
     anonymous: true,
     exposure: 'internal',
@@ -407,6 +447,133 @@ export const customerFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  issueCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { id: 'id', accountId: 'id', accessDigest: 'text', refreshDigest: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      version: 'int',
+    },
+    effects: ['read:website.CustomerAccount', 'write:website.CustomerTokenGrant'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
+      if (account?.status !== 'active') return null
+      const now = new Date()
+      const grant = {
+        id: args.id,
+        realmId: account.realmId,
+        accountId: account.id,
+        accessDigest: args.accessDigest,
+        refreshDigest: args.refreshDigest,
+        securityVersion: account.securityVersion,
+        version: 1,
+        createdAt: now.toISOString(),
+        accessExpiresAt: new Date(now.getTime() + ACCESS_SECONDS * 1000).toISOString(),
+        refreshExpiresAt: new Date(now.getTime() + DEFAULT_ABSOLUTE_SECONDS * 1000).toISOString(),
+        lastRotatedAt: now.toISOString(),
+      }
+      await ctx.db.insert('website.CustomerTokenGrant', grant)
+      return tokenGrantView(grant, account)
+    },
+  }),
+
+  resolveCustomerAccessToken: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { accessDigest: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      version: 'int',
+    },
+    effects: ['read:website.CustomerTokenGrant', 'read:website.CustomerAccount'],
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.accessDigest, args.accessDigest)))
+      if (!grant || grant.revokedAt || new Date(String(grant.accessExpiresAt)) <= new Date()) return null
+      const account = (await ctx.db.select('website.CustomerAccount', { id: grant.accountId }))[0]
+      if (account?.status !== 'active' || Number(account.securityVersion) !== Number(grant.securityVersion))
+        return null
+      return tokenGrantView(grant, account)
+    },
+  }),
+
+  rotateCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { refreshDigest: 'text', nextAccessDigest: 'text', nextRefreshDigest: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      version: 'int',
+    },
+    effects: [
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
+      'read:website.CustomerAccount',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.refreshDigest, args.refreshDigest)))
+      const now = new Date()
+      if (!grant || grant.revokedAt || new Date(String(grant.refreshExpiresAt)) <= now) return null
+      const account = (await ctx.db.select('website.CustomerAccount', { id: grant.accountId }))[0]
+      if (account?.status !== 'active' || Number(account.securityVersion) !== Number(grant.securityVersion))
+        return null
+      const patch = {
+        accessDigest: args.nextAccessDigest,
+        refreshDigest: args.nextRefreshDigest,
+        accessExpiresAt: new Date(now.getTime() + ACCESS_SECONDS * 1000).toISOString(),
+        lastRotatedAt: now.toISOString(),
+        version: Number(grant.version) + 1,
+      }
+      const changed = await ctx.db.compareAndSet(
+        'website.CustomerTokenGrant',
+        { id: grant.id },
+        { version: grant.version, refreshDigest: grant.refreshDigest },
+        patch,
+      )
+      if (!('dryRun' in changed) && !changed.matched) return null
+      return tokenGrantView({ ...grant, ...patch }, account)
+    },
+  }),
+
+  revokeCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { accessDigest: 'text', reason: 'text?' },
+    output: { ok: 'bool' },
+    effects: ['read:website.CustomerTokenGrant', 'write:website.CustomerTokenGrant'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.accessDigest, args.accessDigest)))
+      if (grant && !grant.revokedAt)
+        await ctx.db.update(
+          'website.CustomerTokenGrant',
+          { id: grant.id },
+          {
+            revokedAt: new Date().toISOString(),
+            revokeReason: String(args.reason ?? 'logout').slice(0, 100),
+          },
+        )
+      return { ok: true }
+    },
+  }),
+
   revokeAllCustomerSessions: defineFn({
     anonymous: true,
     exposure: 'internal',
@@ -417,6 +584,8 @@ export const customerFunctions: Record<string, FnSpec> = {
       'write:website.CustomerAccount',
       'read:website.CustomerSession',
       'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
     ],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
@@ -431,6 +600,14 @@ export const customerFunctions: Record<string, FnSpec> = {
             await tx.db.update(
               'website.CustomerSession',
               { id: session.id },
+              { revokedAt, revokeReason: String(args.reason ?? 'logout-all').slice(0, 100) },
+            )
+        const grants = await tx.db.select('website.CustomerTokenGrant', { accountId: account.id })
+        for (const grant of grants)
+          if (!grant.revokedAt)
+            await tx.db.update(
+              'website.CustomerTokenGrant',
+              { id: grant.id },
               { revokedAt, revokeReason: String(args.reason ?? 'logout-all').slice(0, 100) },
             )
       })
@@ -470,6 +647,8 @@ export const customerFunctions: Record<string, FnSpec> = {
       'write:website.CustomerCredential',
       'read:website.CustomerSession',
       'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
     ],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
@@ -500,6 +679,14 @@ export const customerFunctions: Record<string, FnSpec> = {
             await tx.db.update(
               'website.CustomerSession',
               { id: session.id },
+              { revokedAt: now, revokeReason: 'password-change' },
+            )
+        const grants = await tx.db.select('website.CustomerTokenGrant', { accountId: account.id })
+        for (const grant of grants)
+          if (!grant.revokedAt)
+            await tx.db.update(
+              'website.CustomerTokenGrant',
+              { id: grant.id },
               { revokedAt: now, revokeReason: 'password-change' },
             )
       })
