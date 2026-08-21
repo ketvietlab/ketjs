@@ -5,14 +5,14 @@ import {
   code,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -160,22 +160,24 @@ export const companyFormScreen = (
                 title={_('company_backend.state.title')}
                 body={
                   <Surface
-                    body={recordActions({
-                      action: localized(`/admin/companies/${row.id}/archive`, locale),
-                      actions: [
-                        row.active
-                          ? {
-                              value: 'archive',
-                              label: _('company_backend.action.archive'),
-                              variant: 'destructive' as const,
-                            }
-                          : {
-                              value: 'restore',
-                              label: _('company_backend.action.restore'),
-                              variant: 'secondary' as const,
-                            },
-                      ],
-                    })}
+                    body={
+                      <RecordActions
+                        action={localized(`/admin/companies/${row.id}/archive`, locale)}
+                        actions={[
+                          row.active
+                            ? {
+                                value: 'archive',
+                                label: _('company_backend.action.archive'),
+                                variant: 'destructive' as const,
+                              }
+                            : {
+                                value: 'restore',
+                                label: _('company_backend.action.restore'),
+                                variant: 'secondary' as const,
+                              },
+                        ]}
+                      />
+                    }
                   />
                 }
               />,
@@ -188,7 +190,7 @@ export const companyFormScreen = (
             existing
               ? linkButton({
                   label: _('company_backend.action.manageAddress'),
-                  href: localized(`/admin/partners/${row.partnerId}`, locale),
+                  href: localized(`/admin/partner/partners/${row.partnerId}`, locale),
                   variant: 'secondary',
                 })
               : undefined
@@ -235,7 +237,10 @@ export const companyFormScreen = (
                                 ? branch.name
                                 : linkButton({
                                     label: branch.name,
-                                    href: localized(`/admin/branches/${branch.id}`, locale),
+                                    href: localized(
+                                      `/admin/companies/${row.id}/branches/${branch.id}`,
+                                      locale,
+                                    ),
                                     variant: 'tertiary',
                                   }),
                           },
@@ -299,22 +304,27 @@ export const branchFormScreen = (
                 title={_('company_backend.state.title')}
                 body={
                   <Surface
-                    body={recordActions({
-                      action: localized(`/admin/branches/${row.id}/archive`, locale),
-                      actions: [
-                        row.active
-                          ? {
-                              value: 'archive',
-                              label: _('company_backend.action.archiveBranch'),
-                              variant: 'destructive' as const,
-                            }
-                          : {
-                              value: 'restore',
-                              label: _('company_backend.action.restoreBranch'),
-                              variant: 'secondary' as const,
-                            },
-                      ],
-                    })}
+                    body={
+                      <RecordActions
+                        action={localized(
+                          `/admin/companies/${company.id}/branches/${row.id}/archive`,
+                          locale,
+                        )}
+                        actions={[
+                          row.active
+                            ? {
+                                value: 'archive',
+                                label: _('company_backend.action.archiveBranch'),
+                                variant: 'destructive' as const,
+                              }
+                            : {
+                                value: 'restore',
+                                label: _('company_backend.action.restoreBranch'),
+                                variant: 'secondary' as const,
+                              },
+                        ]}
+                      />
+                    }
                   />
                 }
               />,
@@ -328,7 +338,9 @@ export const branchFormScreen = (
               body={
                 <RecordForm
                   action={localized(
-                    existing ? `/admin/branches/${row.id}` : `/admin/companies/${company.id}/branches/new`,
+                    existing
+                      ? `/admin/companies/${company.id}/branches/${row.id}`
+                      : `/admin/companies/${company.id}/branches/new`,
                     locale,
                   )}
                   fields={[

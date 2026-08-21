@@ -246,7 +246,8 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/branches/${id}`))
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/companies/${params.id}/branches/${id}`))
         return adminPage(ctx, url, req, {
           title: 'company_backend.branch.createTitle',
           body: (_, frame) =>
@@ -273,7 +274,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/branches/{id}':
+  '/admin/companies/{companyId}/branches/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method === 'GET') return renderBranch(ctx, url, req, params.id)
@@ -293,7 +294,8 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/branches/${params.id}`))
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/companies/${params.companyId}/branches/${params.id}`))
       return renderBranch(
         ctx,
         url,
@@ -303,7 +305,7 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
-  '/admin/branches/{id}/archive':
+  '/admin/companies/{companyId}/branches/{id}/archive':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -314,7 +316,8 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/branches/${params.id}`))
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/companies/${params.companyId}/branches/${params.id}`))
       return renderBranch(
         ctx,
         url,

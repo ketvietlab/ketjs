@@ -1,12 +1,6 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  framedPage as Framed,
-  icon,
-  recordForm as RecordForm,
-  recordToggle as RecordToggle,
-  recordWorkspace as RecordWorkspace,
-} from '../../ui/index.ts'
+import { Framed, icon, RecordForm, RecordToggle, RecordWorkspace } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
@@ -53,10 +47,10 @@ export const newProductScreen = (
     <RecordForm
       id={formId}
       scope="product-create"
-      action={localized('/admin/products/new', locale)}
+      action={localized('/admin/product/templates/new', locale)}
       submit={_('product_backend.action.create')}
       submitVariant="primary"
-      cancelHref={localized('/admin/products', locale)}
+      cancelHref={localized('/admin/product/templates', locale)}
       cancelLabel={_('product_backend.action.cancel')}
       errors={options.errors}
       fields={[

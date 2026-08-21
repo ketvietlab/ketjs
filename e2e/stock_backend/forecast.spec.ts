@@ -26,7 +26,7 @@ for (const viewport of [
   for (const locale of ['vi', 'en'] as const) {
     test(`renders forecast in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(`/admin/forecast?lang=${locale}`)
+      await page.goto(`/admin/stock/forecast?lang=${locale}`)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
       await expect(page.locator('select[name="productId"]')).toContainText('STOCK-JACKET')
@@ -53,7 +53,7 @@ for (const viewport of [
 }
 
 test('calculates forecast for a selected product and warehouse', async ({ page }) => {
-  await page.goto('/admin/forecast?lang=vi')
+  await page.goto('/admin/stock/forecast?lang=vi')
   await page.locator('select[name="productId"]').selectOption('stock-variant')
   await page.locator('select[name="warehouseId"]').selectOption('wh')
   await page.getByRole('button', { name: 'Tính dự báo' }).click()

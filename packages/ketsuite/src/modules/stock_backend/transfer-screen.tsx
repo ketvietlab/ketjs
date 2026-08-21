@@ -3,14 +3,14 @@ import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   emptyState,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   icon,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormOption, Frame } from '../../ui/index.ts'
 import { stockRowsTable } from './screens.tsx'

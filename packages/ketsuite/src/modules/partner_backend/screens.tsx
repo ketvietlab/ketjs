@@ -6,15 +6,15 @@ import {
   code,
   dataTable,
   emptyState,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   inline,
   linkButton,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { DataTable, FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -45,22 +45,25 @@ export const partnersScreen = (
       inline([
         linkButton({
           label: _('partner_backend.action.create'),
-          href: localized('/admin/partners/new', locale),
+          href: localized('/admin/partner/partners/new', locale),
           variant: 'primary',
         }),
         linkButton({
           label: _('partner_backend.filter.customers'),
-          href: localized('/admin/partners?role=customer', locale),
+          href: localized('/admin/partner/partners?role=customer', locale),
         }),
         linkButton({
           label: _('partner_backend.filter.suppliers'),
-          href: localized('/admin/partners?role=supplier', locale),
+          href: localized('/admin/partner/partners?role=supplier', locale),
         }),
         linkButton({
           label: includeArchived
             ? _('partner_backend.filter.activeOnly')
             : _('partner_backend.filter.includeArchived'),
-          href: localized(includeArchived ? '/admin/partners' : '/admin/partners?archived=1', locale),
+          href: localized(
+            includeArchived ? '/admin/partner/partners' : '/admin/partner/partners?archived=1',
+            locale,
+          ),
           variant: 'tertiary',
         }),
       ]),
@@ -77,7 +80,7 @@ export const partnersScreen = (
                 cell: (row) =>
                   linkButton({
                     label: row.name,
-                    href: localized(`/admin/partners/${row.id}`, locale),
+                    href: localized(`/admin/partner/partners/${row.id}`, locale),
                     variant: 'tertiary',
                   }),
               },
@@ -173,9 +176,9 @@ export const partnerDetailScreen = (
                       variant: 'primary',
                     }),
                     options.integration ?? '',
-                    recordActions({
-                      action: localized(`/admin/partners/${row.id}/archive`, locale),
-                      actions: [
+                    <RecordActions
+                      action={localized(`/admin/partner/partners/${row.id}/archive`, locale)}
+                      actions={[
                         row.active
                           ? {
                               value: 'archive',
@@ -187,8 +190,8 @@ export const partnerDetailScreen = (
                               label: _('partner_backend.action.restore'),
                               variant: 'secondary',
                             },
-                      ],
-                    }),
+                      ]}
+                    />,
                   ]}
                 />
               }
@@ -202,7 +205,7 @@ export const partnerDetailScreen = (
               body={
                 <RecordForm
                   id="partner-identity-form"
-                  action={localized(`/admin/partners/${row.id}`, locale)}
+                  action={localized(`/admin/partner/partners/${row.id}`, locale)}
                   submit={_('partner_backend.action.save')}
                   submitVariant="primary"
                   submitPlacement="external"
@@ -245,7 +248,7 @@ export const partnerDetailScreen = (
             <Surface
               body={
                 <RecordForm
-                  action={localized(`/admin/partners/${row.id}/roles`, locale)}
+                  action={localized(`/admin/partner/partners/${row.id}/roles`, locale)}
                   submit={_('partner_backend.action.saveRoles')}
                   submitVariant="secondary"
                   fields={['customer', 'supplier', 'employee'].map((role) => ({
@@ -275,7 +278,7 @@ export const partnerDetailScreen = (
             <Surface
               body={
                 <RecordForm
-                  action={localized(`/admin/partners/${row.id}/terms`, locale)}
+                  action={localized(`/admin/partner/partners/${row.id}/terms`, locale)}
                   submit={_('partner_backend.action.saveTerms')}
                   submitVariant="secondary"
                   fields={[
@@ -319,10 +322,10 @@ export const newPartnerScreen = (
       <Surface
         body={
           <RecordForm
-            action={localized('/admin/partners/new', locale)}
+            action={localized('/admin/partner/partners/new', locale)}
             submit={_('partner_backend.action.create')}
             submitVariant="primary"
-            cancelHref={localized('/admin/partners', locale)}
+            cancelHref={localized('/admin/partner/partners', locale)}
             cancelLabel={_('partner_backend.action.cancel')}
             errors={errors}
             fields={[

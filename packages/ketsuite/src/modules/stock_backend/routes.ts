@@ -129,7 +129,7 @@ const common = async (ctx: ServeContext, url: URL, req: Req) => {
 }
 
 export const routes: Record<string, RouteEntry> = {
-  '/admin/inventory':
+  '/admin/stock/inventory':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -151,8 +151,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(inLocale(url, '/admin/inventory?applied=1'))
-          : seeOther(inLocale(url, '/admin/inventory?invalid=1'))
+          ? seeOther(inLocale(url, '/admin/stock/inventory?applied=1'))
+          : seeOther(inLocale(url, '/admin/stock/inventory?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [quants, data, templates] = (await Promise.all([
@@ -206,8 +206,8 @@ export const routes: Record<string, RouteEntry> = {
               inventoryLocations: options(data.locations.filter((row) => row.usage === 'inventory')),
               units: options(data.units),
               lots: options(data.lots),
-              action: inLocale(url, '/admin/inventory'),
-              locationsHref: inLocale(url, '/admin/locations'),
+              action: inLocale(url, '/admin/stock/inventory'),
+              locationsHref: inLocale(url, '/admin/stock/locations'),
               applied: url.searchParams.has('applied'),
               errors: invalid(url, _),
             },
@@ -216,7 +216,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/transfers':
+  '/admin/stock/transfers':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -236,8 +236,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(inLocale(url, `/admin/transfers/${id}`))
-          : seeOther(inLocale(url, '/admin/transfers?invalid=1'))
+          ? seeOther(inLocale(url, `/admin/stock/transfers/${id}`))
+          : seeOther(inLocale(url, '/admin/stock/transfers?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [pickings, data] = (await Promise.all([
@@ -260,10 +260,10 @@ export const routes: Record<string, RouteEntry> = {
                 destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
                 scheduledDate: dateTimeLabel(row.scheduledDate, lang),
                 state: String(row.state),
-                href: inLocale(url, `/admin/transfers/${String(row.id)}`),
+                href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
               })),
               pickingTypes: options(data.pickingTypes),
-              action: inLocale(url, '/admin/transfers'),
+              action: inLocale(url, '/admin/stock/transfers'),
               errors: invalid(url, _),
             },
             frame,
@@ -271,7 +271,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/transfers/{id}':
+  '/admin/stock/transfers/{id}':
     (ctx): Route =>
     async (url, req, params) => {
       const here = `${url.pathname}${url.search}`
@@ -448,7 +448,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/warehouses':
+  '/admin/stock/warehouses':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -467,7 +467,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/warehouses'))
+        return resultRedirect(result, inLocale(url, '/admin/stock/warehouses'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
@@ -484,7 +484,7 @@ export const routes: Record<string, RouteEntry> = {
                 receptionSteps: String(row.receptionSteps),
                 deliverySteps: String(row.deliverySteps),
               })),
-              action: inLocale(url, '/admin/warehouses'),
+              action: inLocale(url, '/admin/stock/warehouses'),
               errors: invalid(url, _),
             },
             frame,
@@ -492,7 +492,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/locations':
+  '/admin/stock/locations':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -511,7 +511,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/locations'))
+        return resultRedirect(result, inLocale(url, '/admin/stock/locations'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -534,7 +534,7 @@ export const routes: Record<string, RouteEntry> = {
                 value: String(row.id),
                 label: completeLocationName(row, nameById),
               })),
-              action: inLocale(url, '/admin/locations'),
+              action: inLocale(url, '/admin/stock/locations'),
               errors: invalid(url, _),
             },
             frame,
@@ -542,7 +542,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/picking-types':
+  '/admin/stock/picking-types':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -563,7 +563,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/picking-types'))
+        return resultRedirect(result, inLocale(url, '/admin/stock/picking-types'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -592,7 +592,7 @@ export const routes: Record<string, RouteEntry> = {
                 value: String(row.id),
                 label: completeLocationNameById.get(String(row.id)) ?? String(row.name),
               })),
-              action: inLocale(url, '/admin/picking-types'),
+              action: inLocale(url, '/admin/stock/picking-types'),
               errors: invalid(url, _),
             },
             frame,
@@ -600,7 +600,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/lots':
+  '/admin/stock/lots':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -619,7 +619,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/lots'))
+        return resultRedirect(result, inLocale(url, '/admin/stock/lots'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [lots, products, locations, quants] = (await Promise.all([
@@ -667,10 +667,10 @@ export const routes: Record<string, RouteEntry> = {
                 onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
                 onHandValue: onHandByLot.get(String(row.id)) ?? 0,
                 active: row.active !== false,
-                href: inLocale(url, `/admin/lots/${String(row.id)}`),
+                href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
               })),
               products: productOptions,
-              action: inLocale(url, '/admin/lots'),
+              action: inLocale(url, '/admin/stock/lots'),
               errors: invalid(url, _),
             },
             frame,
@@ -678,12 +678,12 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/lots/{id}':
+  '/admin/stock/lots/{id}':
     (ctx): Route =>
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const here = inLocale(url, `/admin/lots/${params.id}`)
+      const here = inLocale(url, `/admin/stock/lots/${params.id}`)
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
       let current = lots.find((row) => String(row.id) === params.id)
@@ -803,7 +803,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/stock-routes':
+  '/admin/stock/routes':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -818,8 +818,8 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(inLocale(url, `/admin/stock-routes/${id}`))
-          : seeOther(inLocale(url, '/admin/stock-routes?invalid=1'))
+          ? seeOther(inLocale(url, `/admin/stock/routes/${id}`))
+          : seeOther(inLocale(url, '/admin/stock/routes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [rows, rules] = (await Promise.all([
@@ -842,9 +842,9 @@ export const routes: Record<string, RouteEntry> = {
                 name: localizedGeneratedRouteName(_, row),
                 sequence: Number(row.sequence),
                 ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
-                href: inLocale(url, `/admin/stock-routes/${String(row.id)}`),
+                href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
               })),
-              action: inLocale(url, '/admin/stock-routes'),
+              action: inLocale(url, '/admin/stock/routes'),
               errors: invalid(url, _),
             },
             frame,
@@ -852,7 +852,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/stock-routes/{id}':
+  '/admin/stock/routes/{id}':
     (ctx): Route =>
     async (url, req, params) => {
       const routes = (await ctx.call('stock.listRoutes', {}, url, req)) as AnyRow[]
@@ -873,7 +873,7 @@ export const routes: Record<string, RouteEntry> = {
             url,
             req,
           )
-          const target = inLocale(url, `/admin/stock-routes/${params.id}`)
+          const target = inLocale(url, `/admin/stock/routes/${params.id}`)
           return (result as { ok?: boolean }).ok
             ? seeOther(target)
             : seeOther(`${target}${target.includes('?') ? '&' : '?'}invalid=route`)
@@ -894,7 +894,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        const target = inLocale(url, `/admin/stock-routes/${params.id}`)
+        const target = inLocale(url, `/admin/stock/routes/${params.id}`)
         return (result as { ok?: boolean }).ok
           ? seeOther(target)
           : seeOther(`${target}${target.includes('?') ? '&' : '?'}invalid=rule`)
@@ -935,7 +935,7 @@ export const routes: Record<string, RouteEntry> = {
               })),
               locations: options(data.locations),
               pickingTypes: options(data.pickingTypes),
-              action: inLocale(url, `/admin/stock-routes/${params.id}`),
+              action: inLocale(url, `/admin/stock/routes/${params.id}`),
               routeErrors:
                 url.searchParams.get('invalid') === 'route' ? [_('stock_backend.error.invalid')] : undefined,
               ruleErrors:
@@ -946,7 +946,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/replenishment':
+  '/admin/stock/replenishment':
     (ctx): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -969,7 +969,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/replenishment'))
+        return resultRedirect(result, inLocale(url, '/admin/stock/replenishment'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [points, data, templates] = (await Promise.all([
@@ -1040,7 +1040,7 @@ export const routes: Record<string, RouteEntry> = {
                   toOrder: String(quantity),
                   replenishmentUom:
                     unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
-                  runAction: inLocale(url, `/admin/replenishment/${String(row.id)}/run`),
+                  runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
                 }
               }),
               products,
@@ -1051,7 +1051,7 @@ export const routes: Record<string, RouteEntry> = {
                 value: String(row.id),
                 label: localizedGeneratedRouteName(_, row),
               })),
-              action: inLocale(url, '/admin/replenishment'),
+              action: inLocale(url, '/admin/stock/replenishment'),
               errors: invalid(url, _),
             },
             frame,
@@ -1059,7 +1059,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/replenishment/{id}/run':
+  '/admin/stock/replenishment/{id}/run':
     (ctx): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -1069,10 +1069,10 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      return resultRedirect(result, inLocale(url, '/admin/replenishment'))
+      return resultRedirect(result, inLocale(url, '/admin/stock/replenishment'))
     },
 
-  '/admin/forecast':
+  '/admin/stock/forecast':
     (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -1151,7 +1151,7 @@ export const routes: Record<string, RouteEntry> = {
                     },
                   }
                 : {}),
-              action: inLocale(url, '/admin/forecast'),
+              action: inLocale(url, '/admin/stock/forecast'),
               lang,
             },
             frame,

@@ -1,13 +1,13 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  cardGrid,
-  contentCard,
-  framedPage as Framed,
+  CardGrid,
+  ContentCard,
+  Framed,
   icon,
-  metric,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  Metric,
+  RecordWorkspace,
+  Section,
   stack,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
@@ -28,24 +28,24 @@ type OverviewCard = {
   value?: number
 }
 
-const cards = (_: Translator, locale: string, items: OverviewCard[]): TemplateResult =>
-  cardGrid({
-    items,
-    id: (item) => item.id,
-    card: (item) =>
-      contentCard({
-        title: item.title,
-        summary: item.summary,
-        href: `${item.href}${locale}`,
-        body:
-          item.value === undefined
-            ? undefined
-            : metric({
-                label: _('account_backend.dashboard.records'),
-                value: String(item.value),
-              }),
-      }),
-  })
+const cards = (_: Translator, locale: string, items: OverviewCard[]): TemplateResult => (
+  <CardGrid
+    items={items}
+    id={(item) => item.id}
+    card={(item) => (
+      <ContentCard
+        title={item.title}
+        summary={item.summary}
+        href={`${item.href}${locale}`}
+        body={
+          item.value === undefined ? undefined : (
+            <Metric label={_('account_backend.dashboard.records')} value={String(item.value)} />
+          )
+        }
+      />
+    )}
+  />
+)
 
 export const accountingOverviewScreen = (
   _: Translator,
@@ -79,27 +79,27 @@ export const accountingOverviewScreen = (
                     id: 'customer-invoices',
                     title: _('account_backend.menu.customerInvoices'),
                     summary: _('account_backend.dashboard.customerInvoicesHint'),
-                    href: '/admin/customer-invoices',
+                    href: '/admin/accounting/customer-invoices',
                     value: counts.unpaid,
                   },
                   {
                     id: 'vendor-bills',
                     title: _('account_backend.menu.vendorBills'),
                     summary: _('account_backend.dashboard.vendorBillsHint'),
-                    href: '/admin/vendor-bills',
+                    href: '/admin/accounting/vendor-bills',
                   },
                   {
                     id: 'entries',
                     title: _('account_backend.menu.entries'),
                     summary: _('account_backend.dashboard.entriesHint'),
-                    href: '/admin/journal-entries',
+                    href: '/admin/accounting/entries',
                     value: counts.draft + counts.posted,
                   },
                   {
                     id: 'payments',
                     title: _('account_backend.menu.payments'),
                     summary: _('account_backend.dashboard.paymentsHint'),
-                    href: '/admin/payments',
+                    href: '/admin/accounting/payments',
                   },
                 ])}
               />,
@@ -111,19 +111,19 @@ export const accountingOverviewScreen = (
                     id: 'trial',
                     title: _('account_backend.menu.trialBalance'),
                     summary: _('account_backend.dashboard.trialBalanceHint'),
-                    href: '/admin/trial-balance',
+                    href: '/admin/accounting/trial-balance',
                   },
                   {
                     id: 'ledger',
                     title: _('account_backend.menu.generalLedger'),
                     summary: _('account_backend.dashboard.generalLedgerHint'),
-                    href: '/admin/general-ledger',
+                    href: '/admin/accounting/general-ledger',
                   },
                   {
                     id: 'partner',
                     title: _('account_backend.menu.partnerStatement'),
                     summary: _('account_backend.dashboard.partnerLedgerHint'),
-                    href: '/admin/partner-statement',
+                    href: '/admin/accounting/partner-statement',
                   },
                 ])}
               />,
@@ -135,27 +135,27 @@ export const accountingOverviewScreen = (
                     id: 'accounts',
                     title: _('account_backend.menu.accounts'),
                     summary: _('account_backend.dashboard.accountsHint'),
-                    href: '/admin/accounts',
+                    href: '/admin/accounting/accounts',
                     value: counts.accounts,
                   },
                   {
                     id: 'journals',
                     title: _('account_backend.menu.journals'),
                     summary: _('account_backend.dashboard.journalsHint'),
-                    href: '/admin/journals',
+                    href: '/admin/accounting/journals',
                     value: counts.journals,
                   },
                   {
                     id: 'taxes',
                     title: _('account_backend.menu.taxes'),
                     summary: _('account_backend.dashboard.taxesHint'),
-                    href: '/admin/taxes',
+                    href: '/admin/accounting/taxes',
                   },
                   {
                     id: 'terms',
                     title: _('account_backend.menu.paymentTerms'),
                     summary: _('account_backend.dashboard.paymentTermsHint'),
-                    href: '/admin/payment-terms',
+                    href: '/admin/accounting/terms',
                   },
                 ])}
               />,

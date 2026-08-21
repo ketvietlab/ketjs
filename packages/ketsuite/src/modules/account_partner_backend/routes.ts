@@ -35,15 +35,15 @@ const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, 
         terms as never,
         options,
         frame,
-        inLocale(url, `/admin/partners/${partnerId}/accounting`),
-        inLocale(url, `/admin/partners/${partnerId}`),
+        inLocale(url, `/admin/partner/partners/${partnerId}/accounting`),
+        inLocale(url, `/admin/partner/partners/${partnerId}`),
         errors,
       ),
   })
 }
 
 export const routes: Record<string, RouteEntry> = {
-  '/admin/partners/{id}/accounting':
+  '/admin/partner/partners/{id}/accounting':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method === 'GET') return render(ctx, url, req, params.id)
@@ -61,7 +61,8 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
       const errors = ((result as { errors?: Array<{ field?: string; code?: string }> }).errors ?? []).map(
         (error) =>
           `${error.field ? `${error.field}: ` : ''}${ctx.translate(ctx.localeOf(url, req))(error.code ?? 'account_partner.error.accountMissing')}`,

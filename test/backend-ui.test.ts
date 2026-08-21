@@ -27,7 +27,7 @@ import {
   emptyState,
   errorState,
   formCluster,
-  framed,
+  Framed,
   HOOKS,
   hasIcon,
   icon,
@@ -533,6 +533,56 @@ test('design tokens: no rule sits outside a cascade layer, where it outranks ket
   }
 })
 
+test('routes: the segment after /admin names the app, so a path says where it lives', () => {
+  // Two conventions used to run side by side: /admin/crm/cases said which app it
+  // belonged to, /admin/transfers and /admin/accounts did not — and website_backend
+  // used both, with pages and posts namespaced and forms, media, menus, sites and
+  // taxonomies flat. A reader could not tell what owned a screen from its URL, and
+  // /admin/pages and /admin/website/pages were two page lists in two apps.
+  const APPS = new Set([
+    // one per root menu entry
+    'accounting',
+    'activities',
+    'attendance',
+    'calendar',
+    'crm',
+    'hospitality',
+    'hr',
+    'inbound-email',
+    'inbox',
+    'loyalty',
+    'oauth',
+    'outbox',
+    'partner',
+    'pos',
+    'pricing',
+    'product',
+    'purchase',
+    'sales',
+    'stock',
+    'website',
+    // and the administration app's own screens, which sit directly under /admin
+    'apps',
+    'settings',
+    'profile',
+    'context',
+    'addresses',
+    'companies',
+    'users',
+    'roles',
+    'permission-presets',
+  ])
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const stray = Object.keys(manifest.routes)
+    .filter((path) => path === '/admin' || path.startsWith('/admin/'))
+    .filter((path) => {
+      const app = path.split('/')[2]
+      return app !== undefined && !APPS.has(app)
+    })
+    .sort()
+  assert.deepEqual(stray, [], 'a backend path must start with the app it belongs to')
+})
+
 test('sidebar: every menu entry says where it goes in the list', () => {
   // Without `sequence` an entry falls to 100 and ties with every other one, and the
   // tie-break is the label — so a Vietnamese menu came out in the order its English
@@ -630,16 +680,16 @@ test('backend layout: framed list and form screens share the accounting workspac
   assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
 
   const rich = renderToString(
-    framed(
-      _,
-      'Record',
-      {},
-      recordWorkspace({
+    Framed({
+      translator: _,
+      title: 'Record',
+      frame: {},
+      body: recordWorkspace({
         title: 'Record identity',
         imageFallback: icon('package'),
         body: surface({ body: 'Record body' }),
       }),
-    ),
+    }),
   )
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
   assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
@@ -703,6 +753,35 @@ test('design tokens: status surfaces stay fixed across light and dark themes', (
       `${name} is a self-contained status surface, not a theme role`,
     )
   }
+})
+
+test('ui kit: every PascalCase export takes the one props object JSX hands it', async () => {
+  // A positional helper exported under a JSX name is a trap: `<Stack items={…} />`
+  // would hand `stack(items, gap)` a props object where it wants a list, and the
+  // page renders empty rather than failing. So the entry rule for the PascalCase
+  // block is arity one.
+  const kit = (await import('@ketvietlab/ketsuite/ui')) as unknown as Record<string, unknown>
+  const wrong = Object.entries(kit)
+    .filter(([name]) => /^[A-Z][a-zA-Z]*$/.test(name))
+    .filter(([, value]) => typeof value === 'function')
+    .filter(([, value]) => (value as (...args: unknown[]) => unknown).length !== 1)
+    .map(([name]) => name)
+    .sort()
+  assert.deepEqual(wrong, [], 'a JSX component takes props, not a positional argument list')
+})
+
+test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
+  // As a plain grid item the sidebar stretched to the shell's row — the content's
+  // height — so on a long list the systray, the message and activity counts and the
+  // settings link sat hundreds of pixels below the fold. It is the window's height
+  // and it sticks; `sidebar-nav` takes the overflow inside it.
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /position:\s*sticky;/)
+  assert.match(rule, /inset-block-start:\s*0;/)
+  assert.match(rule, /block-size:\s*100dvh;/)
+  assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
+  assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
 test('design density: desktop controls share the 28px operational height', () => {

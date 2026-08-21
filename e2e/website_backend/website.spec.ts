@@ -62,59 +62,64 @@ test('keeps pages and posts separate while creating, revising and publishing', a
 })
 
 test('creates, edits and deletes taxonomy, media and menu records', async ({ page }) => {
-  await page.goto('/admin/taxonomies/new?site=hospitality-site&lang=vi')
+  await page.goto('/admin/website/taxonomies/new?site=hospitality-site&lang=vi')
   await page.locator('input[name="name"]').fill('Tin doanh nghiệp')
   await page.locator('input[name="slug"]').fill('tin-doanh-nghiep')
   await page.locator('select[name="taxonomy"]').selectOption('website.category')
   await page.getByRole('button', { name: 'Lưu' }).click()
-  await expect(page).toHaveURL(/\/admin\/taxonomies\/[^/?]+\?lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/taxonomies\/[^/?]+\?lang=vi/)
   await page.locator('input[name="name"]').fill('Tin công ty')
   await page.getByRole('button', { name: 'Lưu' }).click()
   await expect(page.locator('input[name="name"]')).toHaveValue('Tin công ty')
   await page.getByRole('button', { name: 'Xóa term' }).click()
-  await expect(page).toHaveURL(/\/admin\/taxonomies\?site=hospitality-site&lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/taxonomies\?site=hospitality-site&lang=vi/)
   await expect(page.getByText('Tin công ty')).toHaveCount(0)
 
-  await page.goto('/admin/media/new?site=hospitality-site&lang=vi')
+  await page.goto('/admin/website/media/new?site=hospitality-site&lang=vi')
   await page.locator('input[name="attachmentId"]').fill('attachment-e2e')
   await page.locator('input[name="alt"]').fill('Ảnh E2E')
   await page.locator('input[name="width"]').fill('1200')
   await page.locator('input[name="height"]').fill('800')
   await page.getByRole('button', { name: 'Lưu' }).click()
-  await expect(page).toHaveURL(/\/admin\/media\/[^/?]+\?lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/media\/[^/?]+\?lang=vi/)
   await page.locator('input[name="alt"]').fill('Ảnh E2E đã sửa')
   await page.getByRole('button', { name: 'Lưu' }).click()
   await expect(page.locator('input[name="alt"]')).toHaveValue('Ảnh E2E đã sửa')
   await page.getByRole('button', { name: 'Xóa metadata media' }).click()
-  await expect(page).toHaveURL(/\/admin\/media\?site=hospitality-site&lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/media\?site=hospitality-site&lang=vi/)
 
-  await page.goto('/admin/menus/new?site=hospitality-site&lang=vi')
+  await page.goto('/admin/website/menus/new?site=hospitality-site&lang=vi')
   await page.locator('input[name="label"]').fill('Khuyến mại')
   await page.locator('input[name="href"]').fill('/khuyen-mai')
   await page.locator('input[name="position"]').fill('30')
   await page.getByRole('button', { name: 'Lưu' }).click()
-  await expect(page).toHaveURL(/\/admin\/menus\/[^/?]+\?site=hospitality-site&lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/menus\/[^/?]+\?site=hospitality-site&lang=vi/)
   await page.locator('input[name="label"]').fill('Ưu đãi')
   await page.getByRole('button', { name: 'Lưu' }).click()
   await expect(page.locator('input[name="label"]')).toHaveValue('Ưu đãi')
   await page.getByRole('button', { name: 'Xóa mục menu' }).click()
-  await expect(page).toHaveURL(/\/admin\/menus\?site=hospitality-site&lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/menus\?site=hospitality-site&lang=vi/)
   await expect(page.getByText('Ưu đãi')).toHaveCount(0)
 })
 
 test('creates a schema-backed form and keeps the English backend translated', async ({ page }) => {
-  await page.goto('/admin/forms/new?site=hospitality-site&lang=vi')
+  await page.goto('/admin/website/forms/new?site=hospitality-site&lang=vi')
   await page.locator('input[name="name"]').fill('Đăng ký nhận tin')
   await page.locator('input[name="successMessage"]').fill('Đăng ký thành công')
   await page
     .locator('textarea[name="schema"]')
     .fill(JSON.stringify({ fields: [{ name: 'email', type: 'email', required: true }] }))
   await page.getByRole('button', { name: 'Lưu' }).click()
-  await expect(page).toHaveURL(/\/admin\/forms\?site=hospitality-site&lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/forms\?site=hospitality-site&lang=vi/)
   await expect(page.getByText('Đăng ký nhận tin')).toBeVisible()
 
+<<<<<<< HEAD
   await page.goto('/admin/sites?lang=en')
   await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
+=======
+  await page.goto('/admin/website/sites?lang=en')
+  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
+>>>>>>> 0d69311 (fix(backend): one URL convention, one JSX kit, one pinned sidebar)
   await expect(page.getByRole('link', { name: 'Create site' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText('website_backend.')
 })
@@ -259,16 +264,21 @@ test('customer Channel API supports isolated browser and bearer sessions', async
   expect((await properties.json()).data).toEqual([])
 
   // The customer cookie coexists with, but never replaces, the backend admin session.
+<<<<<<< HEAD
   await page.goto('/admin/sites?lang=en')
   await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
+=======
+  await page.goto('/admin/website/sites?lang=en')
+  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
+>>>>>>> 0d69311 (fix(backend): one URL convention, one JSX kit, one pinned sidebar)
 })
 
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const screens = [
-    ['sites', '/admin/sites?lang=vi'],
-    ['site-new', '/admin/sites/new?lang=vi'],
-    ['site-edit', '/admin/sites/hospitality-site?lang=vi'],
+    ['sites', '/admin/website/sites?lang=vi'],
+    ['site-new', '/admin/website/sites/new?lang=vi'],
+    ['site-edit', '/admin/website/sites/hospitality-site?lang=vi'],
     ['pages', '/admin/website/pages?site=hospitality-site&lang=vi'],
     ['page-new', '/admin/website/pages/new?site=hospitality-site&lang=vi'],
     ['page-edit', '/admin/website/pages/home-hospitality?lang=vi'],
@@ -276,18 +286,18 @@ test('captures every website backend screen and the KTL storefront', async ({ pa
     ['post-new', '/admin/website/posts/new?site=hospitality-site&lang=vi'],
     ['revisions', '/admin/website/pages/home-hospitality/revisions?lang=vi'],
     ['preview', '/admin/website/pages/home-hospitality/preview?lang=vi'],
-    ['taxonomies', '/admin/taxonomies?site=hospitality-site&lang=vi'],
-    ['taxonomy-new', '/admin/taxonomies/new?site=hospitality-site&lang=vi'],
-    ['taxonomy-edit', '/admin/taxonomies/journal?lang=vi'],
-    ['media', '/admin/media?site=hospitality-site&lang=vi'],
-    ['media-new', '/admin/media/new?site=hospitality-site&lang=vi'],
-    ['media-edit', '/admin/media/hero-media?lang=vi'],
-    ['menus', '/admin/menus?site=hospitality-site&lang=vi'],
-    ['menu-new', '/admin/menus/new?site=hospitality-site&lang=vi'],
-    ['menu-edit', '/admin/menus/menu-home?site=hospitality-site&lang=vi'],
-    ['forms', '/admin/forms?site=hospitality-site&lang=vi'],
-    ['form-new', '/admin/forms/new?site=hospitality-site&lang=vi'],
-    ['submissions', '/admin/forms/contact-form/submissions?lang=vi'],
+    ['taxonomies', '/admin/website/taxonomies?site=hospitality-site&lang=vi'],
+    ['taxonomy-new', '/admin/website/taxonomies/new?site=hospitality-site&lang=vi'],
+    ['taxonomy-edit', '/admin/website/taxonomies/journal?lang=vi'],
+    ['media', '/admin/website/media?site=hospitality-site&lang=vi'],
+    ['media-new', '/admin/website/media/new?site=hospitality-site&lang=vi'],
+    ['media-edit', '/admin/website/media/hero-media?lang=vi'],
+    ['menus', '/admin/website/menus?site=hospitality-site&lang=vi'],
+    ['menu-new', '/admin/website/menus/new?site=hospitality-site&lang=vi'],
+    ['menu-edit', '/admin/website/menus/menu-home?site=hospitality-site&lang=vi'],
+    ['forms', '/admin/website/forms?site=hospitality-site&lang=vi'],
+    ['form-new', '/admin/website/forms/new?site=hospitality-site&lang=vi'],
+    ['submissions', '/admin/website/forms/contact-form/submissions?lang=vi'],
   ] as const
 
   for (const [name, path] of screens) {

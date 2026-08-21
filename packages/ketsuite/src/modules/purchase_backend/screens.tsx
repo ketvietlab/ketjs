@@ -2,20 +2,20 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  cardGrid,
-  contentCard,
+  CardGrid,
+  ContentCard,
   dataTable,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  metric,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Metric,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { localized, selectionLabel } from '../backend/screen.ts'
@@ -48,8 +48,8 @@ export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale 
             variant: 'primary',
           }),
         ]),
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             {
               id: 'draft',
               title: _('purchase_backend.dashboard.toSend'),
@@ -80,15 +80,16 @@ export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale 
               value: orders.filter((row) => row.invoiceStatus === 'to invoice').length,
               href: localized('/admin/purchase/orders', locale),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({
-              title: item.title,
-              href: item.href,
-              body: metric({ label: _('purchase_backend.dashboard.records'), value: String(item.value) }),
-            }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard
+              title={item.title}
+              href={item.href}
+              body={<Metric label={_('purchase_backend.dashboard.records')} value={String(item.value)} />}
+            />
+          )}
+        />,
       ])}
     />
   )
@@ -286,8 +287,8 @@ export const orderDetail = (
       title={String(o.order.name)}
       frame={o.frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             {
               id: 'state',
               label: _('purchase_backend.field.state'),
@@ -313,12 +314,13 @@ export const orderDetail = (
               label: _('purchase_backend.field.amountTotal'),
               value: formatMoney(_, o.order.amountTotal, o.order.currency),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
-        }),
-        ...(actions.length ? [<Surface body={recordActions({ action: path, actions })} />] : []),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.label} body={<Metric label={item.label} value={item.value} />} />
+          )}
+        />,
+        ...(actions.length ? [<Surface body={<RecordActions action={path} actions={actions} />} />] : []),
         ...(o.printActions === undefined ? [] : [<Surface body={o.printActions} />]),
         <Section
           title={_('purchase_backend.lines.title')}
@@ -422,7 +424,7 @@ export const orderDetail = (
                       cell: (row) =>
                         linkButton({
                           label: String(row.origin ?? row.id),
-                          href: `/admin/transfers/${String(row.pickingId)}`,
+                          href: `/admin/stock/transfers/${String(row.pickingId)}`,
                           variant: 'tertiary',
                         }),
                       priority: 'primary',
@@ -456,7 +458,7 @@ export const orderDetail = (
                       cell: (row) =>
                         linkButton({
                           label: String(row.name),
-                          href: `/admin/vendor-bills/${String(row.id)}`,
+                          href: `/admin/accounting/vendor-bills/${String(row.id)}`,
                           variant: 'tertiary',
                         }),
                       priority: 'primary',

@@ -83,10 +83,21 @@
      systray at the foot. There is no application bar across the top — the row
      above the content is the control panel, and it belongs to the view. */
 
+  /* The sidebar is as tall as the window, not as tall as the page.
+     As a plain grid item it stretched to the shell's row, which is the content's
+     height — so on a list of forty rows the systray, the message and activity
+     counts and the settings link sat eight hundred pixels below the fold, and you
+     scrolled the whole page to reach them. Sticky at 100dvh keeps the document the
+     scroller, so the browser's own scrollbar and the navigation runtime's scroll
+     restoration go on working; `sidebar-nav` takes the overflow inside. */
   [data-ui="sidebar"] {
     z-index: 20;
     display: flex;
+    position: sticky;
+    inset-block-start: 0;
     min-inline-size: 0;
+    align-self: start;
+    block-size: 100dvh;
     flex-direction: column;
     overflow: hidden;
     padding: 0;

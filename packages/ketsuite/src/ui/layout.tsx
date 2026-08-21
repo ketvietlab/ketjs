@@ -142,32 +142,35 @@ export const backendPage = async (
  * A screen that already supplies a richer record workspace is flattened by CSS,
  * so its domain-specific identity, facts, tabs, and collaboration rail remain the
  * only visible workspace rather than being wrapped in a second card.
+ *
+ * One shape, not two: this was `framed(_, title, frame, body)` beside
+ * `framedPage({...})`, the second wrapping the first, and the audit banned only the
+ * first — so which one a screen used depended on whether its filename happened to
+ * contain the word "screen". It is exported as `Framed` for JSX.
  */
-export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
-  shell(
-    _,
-    title,
-    recordWorkspace({
-      pageFrame: true,
-      title,
-      imageFallback: icon('layout-grid'),
-      body,
-    }),
-    frame,
-  )
-
-/** JSX entry point for backend screens; `framed` remains for extension compatibility. */
 export const framedPage = (options: {
   translator: Translator
   title: string
   frame: Frame
   body: TemplateResult
-}): TemplateResult => framed(options.translator, options.title, options.frame, options.body)
+}): TemplateResult =>
+  shell(
+    options.translator,
+    options.title,
+    recordWorkspace({
+      pageFrame: true,
+      title: options.title,
+      imageFallback: icon('layout-grid'),
+      body: options.body,
+    }),
+    options.frame,
+  )
 
 export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
 
 export const appCard = (options: {
-  key: string
+  /** The module this card is for. Not `key`: JSX reserves that name. */
+  app: string
   state: string
   title: string
   summary: string
@@ -175,7 +178,7 @@ export const appCard = (options: {
   action: { label: string; action: string; disabled?: boolean }
   extra?: JSXChild
 }): TemplateResult => (
-  <article data-ui="app-card" data-state={options.state} data-app={options.key}>
+  <article data-ui="app-card" data-state={options.state} data-app={options.app}>
     <h3 data-ui="app-title">{options.title}</h3>
     <p data-ui="app-summary">{options.summary}</p>
     <dl data-ui="app-meta">
@@ -198,8 +201,6 @@ export const appCard = (options: {
     </div>
   </article>
 )
-
-export const card = appCard
 
 export const cardGroups = <T,>(options: {
   groups: Array<{ key: string; title: string; items: readonly T[] }>

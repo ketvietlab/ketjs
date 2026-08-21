@@ -5,7 +5,7 @@ export const menus: Record<string, MenuDef> = {
   'partner.directory': {
     parent: 'partner',
     label: 'menu.directory',
-    path: '/admin/partners',
+    path: '/admin/partner/partners',
     needs: 'partner.listPartners',
     sequence: 10,
   },

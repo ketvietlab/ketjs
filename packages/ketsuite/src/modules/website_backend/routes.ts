@@ -309,7 +309,7 @@ const menuEditRoute =
         req,
       )
       if ((result as { ok?: boolean }).ok)
-        return seeOther(inLocale(url, `/admin/menus/${id}?site=${encodeURIComponent(siteId)}`))
+        return seeOther(inLocale(url, `/admin/website/menus/${id}?site=${encodeURIComponent(siteId)}`))
       return adminPage(ctx, url, req, {
         title: existing?.label ?? _('website_backend.menus.newTitle'),
         translate: false,
@@ -334,7 +334,7 @@ const menuEditRoute =
 export const routes: Record<string, RouteEntry> = {
   ...entryRoutes(PAGES, 'website.page'),
   ...entryRoutes(POSTS, 'website.post'),
-  '/admin/sites':
+  '/admin/website/sites':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -345,7 +345,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/sites/new':
+  '/admin/website/sites/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -366,7 +366,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/sites/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/sites/${id}`))
         return adminPage(ctx, url, req, {
           title: 'website_backend.sites.newTitle',
           body: (_, frame) =>
@@ -386,7 +386,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/sites/{id}':
+  '/admin/website/sites/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -408,7 +408,8 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/sites/${params.id}`))
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/website/sites/${params.id}`))
         return adminPage(ctx, url, req, {
           title: site.title,
           translate: false,
@@ -427,14 +428,14 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/content':
+  '/admin/website/content':
     (_ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       return seeOther(`/admin/website/pages${url.search}`)
     },
 
-  '/admin/content/new':
+  '/admin/website/content/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -450,7 +451,8 @@ export const routes: Record<string, RouteEntry> = {
           return renderEntry(ctx, url, req, null, siteId, PAGES, { values: form, errors: jsonErrors })
         const id = randomUUID()
         const result = await saveEntry(ctx, url, req, id, form, 'website.page')
-        if ((result as { ok?: boolean } | null)?.ok) return seeOther(inLocale(url, `/admin/content/${id}`))
+        if ((result as { ok?: boolean } | null)?.ok)
+          return seeOther(inLocale(url, `/admin/website/content/${id}`))
         return renderEntry(ctx, url, req, null, siteId, PAGES, {
           values: form,
           errors: resultErrors(result, _),
@@ -460,7 +462,7 @@ export const routes: Record<string, RouteEntry> = {
       return renderEntry(ctx, url, req, null, siteId, PAGES)
     },
 
-  '/admin/content/{id}':
+  '/admin/website/content/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const detail = await entryOf(ctx, url, req, params.id)
@@ -493,7 +495,7 @@ export const routes: Record<string, RouteEntry> = {
         detail.entry.type === 'website.post' ? 'website.post' : 'website.page',
       )
       if ((result as { ok?: boolean } | null)?.ok)
-        return seeOther(inLocale(url, `/admin/content/${params.id}`))
+        return seeOther(inLocale(url, `/admin/website/content/${params.id}`))
       return renderEntry(
         ctx,
         url,
@@ -508,7 +510,7 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
-  '/admin/content/{id}/publish':
+  '/admin/website/content/{id}/publish':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -535,10 +537,10 @@ export const routes: Record<string, RouteEntry> = {
           },
         )
       }
-      return seeOther(inLocale(url, `/admin/content/${params.id}`))
+      return seeOther(inLocale(url, `/admin/website/content/${params.id}`))
     },
 
-  '/admin/content/{id}/revisions':
+  '/admin/website/content/{id}/revisions':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -558,7 +560,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/content/{id}/preview':
+  '/admin/website/content/{id}/preview':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -575,7 +577,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/taxonomies':
+  '/admin/website/taxonomies':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -591,7 +593,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/media':
+  '/admin/website/media':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -605,7 +607,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/menus':
+  '/admin/website/menus':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -621,7 +623,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/taxonomies/new':
+  '/admin/website/taxonomies/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -654,7 +656,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/taxonomies/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/taxonomies/${id}`))
         return adminPage(ctx, url, req, {
           title: 'website_backend.taxonomies.newTitle',
           body: (_, frame) =>
@@ -674,7 +676,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/taxonomies/{id}':
+  '/admin/website/taxonomies/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -711,7 +713,8 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/taxonomies/${row.id}`))
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/website/taxonomies/${row.id}`))
         return adminPage(ctx, url, req, {
           title: row.name,
           translate: false,
@@ -733,7 +736,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/taxonomies/{id}/delete':
+  '/admin/website/taxonomies/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -751,10 +754,10 @@ export const routes: Record<string, RouteEntry> = {
         (result as { changes?: number }).changes == null
       )
         return text(resultErrors(result, _).join('\n'), { status: 409 })
-      return seeOther(inLocale(url, `/admin/taxonomies?site=${encodeURIComponent(row.siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/taxonomies?site=${encodeURIComponent(row.siteId)}`))
     },
 
-  '/admin/media/new':
+  '/admin/website/media/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -770,7 +773,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/media/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/media/${id}`))
         return adminPage(ctx, url, req, {
           title: 'website_backend.media.newTitle',
           body: (_, frame) =>
@@ -787,7 +790,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/media/{id}':
+  '/admin/website/media/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -801,7 +804,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/media/${row.id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/media/${row.id}`))
         return adminPage(ctx, url, req, {
           title: row.attachmentId,
           translate: false,
@@ -820,7 +823,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/media/{id}/delete':
+  '/admin/website/media/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -829,12 +832,12 @@ export const routes: Record<string, RouteEntry> = {
       if (!row) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call('website.deleteMediaMetadata', { id: params.id }, url, req)
       if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('\n'), { status: 409 })
-      return seeOther(inLocale(url, `/admin/media?site=${encodeURIComponent(row.siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/media?site=${encodeURIComponent(row.siteId)}`))
     },
 
-  '/admin/menus/new': menuEditRoute(),
-  '/admin/menus/{id}': menuEditRoute(),
-  '/admin/menus/{id}/delete':
+  '/admin/website/menus/new': menuEditRoute(),
+  '/admin/website/menus/{id}': menuEditRoute(),
+  '/admin/website/menus/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -845,10 +848,10 @@ export const routes: Record<string, RouteEntry> = {
         const _ = ctx.translate(ctx.localeOf(url, req))
         return text(resultErrors(result, _).join('\n'), { status: 409 })
       }
-      return seeOther(inLocale(url, `/admin/menus?site=${encodeURIComponent(siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/menus?site=${encodeURIComponent(siteId)}`))
     },
 
-  '/admin/forms':
+  '/admin/website/forms':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -862,7 +865,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/forms/new':
+  '/admin/website/forms/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -898,7 +901,7 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if ((result as { ok?: boolean }).ok)
-          return seeOther(inLocale(url, `/admin/forms?site=${encodeURIComponent(siteId)}`))
+          return seeOther(inLocale(url, `/admin/website/forms?site=${encodeURIComponent(siteId)}`))
         return adminPage(ctx, url, req, {
           title: 'website_backend.forms.newTitle',
           body: (_, frame) =>
@@ -916,7 +919,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/forms/{id}/submissions':
+  '/admin/website/forms/{id}/submissions':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })

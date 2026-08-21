@@ -4,13 +4,13 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  Framed,
   icon,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 

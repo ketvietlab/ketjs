@@ -3,16 +3,16 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  cardGrid as CardGrid,
-  contentCard as ContentCard,
+  CardGrid,
+  ContentCard,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   inline,
-  recordForm as RecordForm,
-  section as Section,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -56,7 +56,7 @@ const AttributeCard = ({
       <ValueBadges _={_} values={values} />,
       <RecordForm
         scope="product-attribute-value"
-        action={localized(`/admin/product-attributes/${String(row.id)}/values`, locale)}
+        action={localized(`/admin/product/attributes/${String(row.id)}/values`, locale)}
         submit={_('product_backend.action.add')}
         submitVariant="secondary"
         fields={[
@@ -98,7 +98,7 @@ export const attributesScreen = (
     <RecordForm
       id="product-attribute-create"
       scope="product-attribute-create"
-      action={localized('/admin/product-attributes', locale)}
+      action={localized('/admin/product/attributes', locale)}
       submit={_('product_backend.action.create')}
       submitVariant="primary"
       errors={errors}

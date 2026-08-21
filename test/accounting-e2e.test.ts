@@ -114,18 +114,18 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
 
   const pages: Array<[string, RegExp]> = [
     ['/admin/accounting', /Tổng quan kế toán/],
-    ['/admin/accounts', /Hệ thống tài khoản/],
-    ['/admin/journals', /Sổ nhật ký/],
-    ['/admin/taxes', /Thuế/],
-    ['/admin/payment-terms', /name="paymentId"/],
-    ['/admin/journal-entries', /Bút toán/],
-    ['/admin/customer-invoices', /Hoá đơn khách hàng/],
-    ['/admin/vendor-bills', /Hoá đơn nhà cung cấp/],
-    ['/admin/customer-invoices/invoice-1', /SAL\/2026\/00001/],
-    ['/admin/payments', /Thanh toán/],
-    ['/admin/trial-balance', /Bảng cân đối thử/],
-    ['/admin/general-ledger', /Sổ cái/],
-    ['/admin/partner-statement?partnerId=customer', /Sổ đối tác/],
+    ['/admin/accounting/accounts', /Hệ thống tài khoản/],
+    ['/admin/accounting/journals', /Sổ nhật ký/],
+    ['/admin/accounting/taxes', /Thuế/],
+    ['/admin/accounting/terms', /name="paymentId"/],
+    ['/admin/accounting/entries', /Bút toán/],
+    ['/admin/accounting/customer-invoices', /Hoá đơn khách hàng/],
+    ['/admin/accounting/vendor-bills', /Hoá đơn nhà cung cấp/],
+    ['/admin/accounting/customer-invoices/invoice-1', /SAL\/2026\/00001/],
+    ['/admin/accounting/payments', /Thanh toán/],
+    ['/admin/accounting/trial-balance', /Bảng cân đối thử/],
+    ['/admin/accounting/general-ledger', /Sổ cái/],
+    ['/admin/accounting/partner-statement?partnerId=customer', /Sổ đối tác/],
   ]
   for (const [path, expected] of pages) {
     const response = await e2e.client.get(path, { headers: { accept: 'text/html' } })
@@ -133,7 +133,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     assert.equal(response.status, 200, `${path}: ${html}`)
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /account_backend\.[A-Za-z]/, path)
-    if (path === '/admin/customer-invoices/invoice-1') {
+    if (path === '/admin/accounting/customer-invoices/invoice-1') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /data-ui="record-aside"/)
       assert.match(html, /data-island="mail\.chatter"/)
@@ -145,66 +145,66 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.match(html, /Báo cáo tài chính/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/vendor-bills') {
+    if (path === '/admin/accounting/vendor-bills') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="vendor-bill-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/customer-invoices') {
+    if (path === '/admin/accounting/customer-invoices') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="customer-invoice-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/journal-entries') {
+    if (path === '/admin/accounting/entries') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="journal-entry-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/payments') {
+    if (path === '/admin/accounting/payments') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="payment-register-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/accounts') {
+    if (path === '/admin/accounting/accounts') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="account-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/journals') {
+    if (path === '/admin/accounting/journals') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="journal-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/taxes') {
+    if (path === '/admin/accounting/taxes') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="tax-create-form"/)
       assert.match(html, /Số tiền \/ tỷ lệ/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/payment-terms') {
+    if (path === '/admin/accounting/terms') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="payment-term-create-form"/)
       assert.match(html, /id="payment-term-line-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/trial-balance') {
+    if (path === '/admin/accounting/trial-balance') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="trial-balance-filter-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path === '/admin/general-ledger') {
+    if (path === '/admin/accounting/general-ledger') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="general-ledger-filter-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
-    if (path.startsWith('/admin/partner-statement')) {
+    if (path.startsWith('/admin/accounting/partner-statement')) {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="partner-ledger-filter-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
   }
 
-  const english = await e2e.client.get('/admin/accounts?lang=en', {
+  const english = await e2e.client.get('/admin/accounting/accounts?lang=en', {
     headers: { accept: 'text/html' },
   })
   assert.equal(english.status, 200)

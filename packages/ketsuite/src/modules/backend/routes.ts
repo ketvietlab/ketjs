@@ -8,10 +8,9 @@
 // The frame these sit in belongs to `screen.ts`, which every other module uses too.
 
 import type { ServeContext, Route } from '@ketvietlab/ketjs'
-import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
+import { appsScreen, settingsScreen } from './screens.tsx'
 import { adminPage } from './screen.ts'
 import type { Req } from './screen.ts'
-import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 /**
  * The apps screen wants two joints nothing else does: a footer under the last
@@ -45,45 +44,6 @@ const apps =
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
   '/admin': apps,
   '/admin/apps': apps,
-  '/admin/pages': (ctx) => async (url, req: Req) => {
-    // Paging and searching are in the URL, so page four is a link you can send
-    // someone and the back button needs no help from us.
-    const search = searchOf(url)
-    const page = pageOf(url)
-    const filter = { includeDrafts: true, search }
-    // The same call path as the API: this request's live manifest and company.
-    const rows = (await ctx.call(
-      'website.listPages',
-      { ...filter, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
-      url,
-      req,
-    )) as Array<{ id: string; path: string; title: string; published: number }>
-    const { count } = (await ctx.call('website.countPages', filter, url, req)) as { count: number }
-    return adminPage(ctx, url, req, {
-      title: 'KetSuite',
-      translate: false,
-      body: (_, frame) =>
-        pagesScreen(
-          _,
-          rows.map((row) => ({ ...row, published: !!row.published })),
-          {
-            ...frame,
-            chrome: {
-              search: {
-                name: 'q',
-                value: search ?? '',
-                placeholder: _('backend.chrome.searchPages'),
-                facets: search
-                  ? [{ label: `${_('backend.chrome.searchFacet')}: ${search}`, without: url.pathname }]
-                  : [],
-              },
-              pager: pager(url, page, rows.length, count),
-            },
-          },
-          { shown: colsOf(url), colsHref: colsHref(url) },
-        ),
-    })
-  },
   '/admin/settings': (ctx) => async (url, req: Req) =>
     adminPage(ctx, url, req, {
       title: 'KetSuite',

@@ -1,24 +1,24 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import {
-  framedPage as Framed,
-  emptyState,
   badge,
   code,
   dataTable,
-  inline,
+  emptyState,
+  Framed,
   icon,
-  kanbanCard,
-  kanbanGrid,
+  inline,
+  KanbanCard,
+  KanbanGrid,
   linkButton,
-  mediaPanel,
-  recordForm as RecordForm,
-  recordToggle,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  MediaPanel,
+  RecordForm,
+  RecordToggle,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
-  tabs,
+  Surface,
+  Tabs,
 } from '../../ui/index.ts'
 import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -110,22 +110,24 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   },
 ]
 
-const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): TemplateResult =>
-  kanbanGrid({
-    rows,
-    id: (r) => r.id,
-    card: (r) =>
-      kanbanCard({
-        key: r.id,
-        title: r.name,
-        href: localized(`/admin/products/${r.id}`, locale),
-        meta: inline([
+const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): TemplateResult => (
+  <KanbanGrid
+    rows={rows}
+    id={(r) => r.id}
+    card={(r) => (
+      <KanbanCard
+        key={r.id}
+        title={r.name}
+        href={localized(`/admin/product/templates/${r.id}`, locale)}
+        meta={inline([
           badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
           r.uomId ? code(r.uomId, 'unit') : '',
-        ]),
-        note: `${_('product_backend.col.variants')}: ${String(r.variants)}`,
-      }),
-  })
+        ])}
+        note={`${_('product_backend.col.variants')}: ${String(r.variants)}`}
+      />
+    )}
+  />
+)
 
 /**
  * The catalogue, in the frame the backend already owns.
@@ -156,7 +158,7 @@ export const productsScreen = (
               columns: templateColumns(_),
               rows,
               id: (r) => r.id,
-              rowHref: (r) => localized(`/admin/products/${r.id}`, locale),
+              rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
               ...table,
             })
     }
@@ -178,7 +180,7 @@ export const favoriteScreen = (
       <Surface
         body={
           <RecordForm
-            action={localized('/admin/products/favorites/new', locale)}
+            action={localized('/admin/product/templates/favorites/new', locale)}
             submit={_('product_backend.favorite.save')}
             submitVariant="primary"
             errors={errors}
@@ -236,20 +238,22 @@ export const productDetailScreen = (
       ? `${_('product_backend.field.defaultCode')}: ${management.variants[0].defaultCode}`
       : null
   const subtitle = [reference, category, unit].filter(Boolean).join(' · ')
-  const tabHref = (tab: ProductDetailTab) => localized(`/admin/products/${row.id}?tab=${tab}`, locale)
+  const tabHref = (tab: ProductDetailTab) =>
+    localized(`/admin/product/templates/${row.id}?tab=${tab}`, locale)
   const productFormId = 'product-detail-form'
-  const productToggle = (name: string, label: string, checked: boolean) =>
-    recordToggle({
-      name,
-      label,
-      checked,
-      form: activeTab === 'general' ? productFormId : null,
-      disabled: activeTab !== 'general',
-    })
+  const productToggle = (name: string, label: string, checked: boolean) => (
+    <RecordToggle
+      name={name}
+      label={label}
+      checked={checked}
+      form={activeTab === 'general' ? productFormId : null}
+      disabled={activeTab !== 'general'}
+    />
+  )
   const general = (
     <RecordForm
       id={productFormId}
-      action={localized(`/admin/products/${row.id}?tab=general`, locale)}
+      action={localized(`/admin/product/templates/${row.id}?tab=general`, locale)}
       submit={_('product_backend.action.save')}
       submitVariant="primary"
       scope="product-detail"
@@ -318,7 +322,7 @@ export const productDetailScreen = (
       title={_('product_backend.variants.title')}
       actions={
         <RecordForm
-          action={localized(`/admin/products/${row.id}/variants/generate?tab=variants`, locale)}
+          action={localized(`/admin/product/templates/${row.id}/variants/generate?tab=variants`, locale)}
           submit={_('product_backend.variants.generate')}
           submitVariant="secondary"
           fields={[]}
@@ -337,7 +341,7 @@ export const productDetailScreen = (
                   cell: (variant) =>
                     linkButton({
                       label: variant.defaultCode || variant.id,
-                      href: localized(`/admin/products/${row.id}/variants/${variant.id}`, locale),
+                      href: localized(`/admin/product/templates/${row.id}/variants/${variant.id}`, locale),
                       variant: 'tertiary',
                     }),
                 },
@@ -366,7 +370,7 @@ export const productDetailScreen = (
           padding="compact"
           body={
             <RecordForm
-              action={localized(`/admin/products/${row.id}/attribute-lines?tab=variants`, locale)}
+              action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
               submit={_('product_backend.action.add')}
               submitVariant="secondary"
               fields={[
@@ -395,7 +399,7 @@ export const productDetailScreen = (
     <Section
       title={_('product_backend.media.title')}
       description={_('product_backend.media.description')}
-      body={mediaPanel({ ...media, labels: mediaLabels(_) })}
+      body={<MediaPanel {...media} labels={mediaLabels(_)} />}
     />
   )
 
@@ -436,31 +440,33 @@ export const productDetailScreen = (
             ]
           : []),
       ]}
-      navigation={tabs({
-        label: _('product_backend.tabs.label'),
-        items: [
-          {
-            id: 'general',
-            label: _('product_backend.tabs.general'),
-            href: tabHref('general'),
-            active: activeTab === 'general',
-          },
-          {
-            id: 'variants',
-            label: _('product_backend.tabs.variants'),
-            href: tabHref('variants'),
-            active: activeTab === 'variants',
-            count: management.variants.length,
-          },
-          {
-            id: 'media',
-            label: _('product_backend.tabs.media'),
-            href: tabHref('media'),
-            active: activeTab === 'media',
-            count: images.length,
-          },
-        ],
-      })}
+      navigation={
+        <Tabs
+          label={_('product_backend.tabs.label')}
+          items={[
+            {
+              id: 'general',
+              label: _('product_backend.tabs.general'),
+              href: tabHref('general'),
+              active: activeTab === 'general',
+            },
+            {
+              id: 'variants',
+              label: _('product_backend.tabs.variants'),
+              href: tabHref('variants'),
+              active: activeTab === 'variants',
+              count: management.variants.length,
+            },
+            {
+              id: 'media',
+              label: _('product_backend.tabs.media'),
+              href: tabHref('media'),
+              active: activeTab === 'media',
+              count: images.length,
+            },
+          ]}
+        />
+      }
       controller={management.editor}
       body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general}
       aside={collaboration}
@@ -505,7 +511,7 @@ export const variantScreen = (
     ? (row.uoms[0] as Record<string, unknown> | undefined)
     : undefined
   const tabHref = (tab: VariantDetailTab) =>
-    localized(`/admin/products/${templateId}/variants/${String(row.id)}?tab=${tab}`, locale)
+    localized(`/admin/product/templates/${templateId}/variants/${String(row.id)}?tab=${tab}`, locale)
   const title = String(row.defaultCode || template.name || row.id)
   const subtitle = [
     `${_('product_backend.variant.template')}: ${template.name}`,
@@ -565,7 +571,7 @@ export const variantScreen = (
     <Section
       title={_('product_backend.media.title')}
       description={_('product_backend.media.description')}
-      body={mediaPanel({ ...media, labels: mediaLabels(_) })}
+      body={<MediaPanel {...media} labels={mediaLabels(_)} />}
     />
   )
 
@@ -589,24 +595,26 @@ export const variantScreen = (
           value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
         },
       ]}
-      navigation={tabs({
-        label: _('product_backend.variant.tabs.label'),
-        items: [
-          {
-            id: 'general',
-            label: _('product_backend.tabs.general'),
-            href: tabHref('general'),
-            active: activeTab === 'general',
-          },
-          {
-            id: 'media',
-            label: _('product_backend.tabs.media'),
-            href: tabHref('media'),
-            active: activeTab === 'media',
-            count: images.length,
-          },
-        ],
-      })}
+      navigation={
+        <Tabs
+          label={_('product_backend.variant.tabs.label')}
+          items={[
+            {
+              id: 'general',
+              label: _('product_backend.tabs.general'),
+              href: tabHref('general'),
+              active: activeTab === 'general',
+            },
+            {
+              id: 'media',
+              label: _('product_backend.tabs.media'),
+              href: tabHref('media'),
+              active: activeTab === 'media',
+              count: images.length,
+            },
+          ]}
+        />
+      }
       controller={editor}
       body={activeTab === 'media' ? mediaTab : general}
       aside={collaboration}

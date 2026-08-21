@@ -89,12 +89,24 @@ const NOT_THE_BACKEND: Record<string, string> = {
   'apps/admin/serve.ts': 'the design harness serves the catalogue, not a product screen',
 }
 
+/** Where the PascalCase name is not just the capitalised one. */
+const JSX_NAME: Record<string, string> = { framedPage: 'Framed' }
+
 type Finding = { file: string; line: number; what: string; text: string; fix?: string }
 
 /** An opening/closing tag in the literal portions of html`...`. */
 const TAG = /<\/?[a-z][a-z0-9-]*(?=[\s>/])/
 const DATA_UI = /data-ui\s*=/
-const SCREEN_COMPONENT_CALL = /\b(framed|recordWorkspace|recordForm|section|surface|formCluster)\s*\(/g
+/**
+ * A component the kit exports under a PascalCase name, called as a function.
+ *
+ * The rule is not about taste: the function form takes whatever arguments happen to
+ * be there, so a screen can grow a second positional argument that the JSX form
+ * cannot express and the next reader cannot see. Every name here has a PascalCase
+ * export in `ui/index.ts` — there is nothing left to alias.
+ */
+const SCREEN_COMPONENT_CALL =
+  /\b(framedPage|recordWorkspace|recordForm|recordActions|recordToggle|section|surface|contentCard|cardGrid|formCluster|notice|modalSheet|datePicker|scheduleBoard|kanbanGrid|kanbanCard|recordList|tabs|breadcrumbs|metric|mediaPanel|attachmentPanel|definitionList|appCard|cardGroups)\s*\(/g
 
 const skipQuoted = (source: string, start: number, quote: string): number => {
   for (let i = start + 1; i < source.length; i++) {
@@ -209,14 +221,18 @@ for (const pattern of PATTERNS) {
         const line = source.slice(0, match.index).split('\n').length
         findings.push({ file: path, line, what: 'raw JSX tag', text: lines[line - 1]?.trim() ?? match[0] })
       }
-      if (/\/[^/]*screen[^/]*\.tsx$/.test(path)) {
+      // Every module .tsx, not just the ones whose filename happens to contain
+      // "screen": that spelling checked `screens.tsx` and skipped
+      // `create-screen`'s neighbours, which is how two call styles lived side by
+      // side for so long.
+      {
         for (const match of source.matchAll(SCREEN_COMPONENT_CALL)) {
           const line = source.slice(0, match.index).split('\n').length
           findings.push({
             file: path,
             line,
             what: 'component function call',
-            text: `${match[1]}(...) — use <${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)} /> JSX`,
+            text: `${match[1]}(...) — the kit exports it as <${JSX_NAME[match[1] as string] ?? `${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)}`} />`,
           })
         }
       }

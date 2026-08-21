@@ -1,14 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  badge,
-  code,
-  dataTable,
-  emptyState,
-  framedPage as Framed,
-  linkButton,
-  stack,
-} from '../../ui/index.ts'
+import { badge, code, dataTable, emptyState, Framed, linkButton, stack } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 

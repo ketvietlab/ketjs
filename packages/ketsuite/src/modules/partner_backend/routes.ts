@@ -120,8 +120,8 @@ const addressFormsFor = async (
     }
     const body = await ctx.joint(url, req, 'partner_backend:address.form', {
       action: isNew
-        ? inLocale(url, `/admin/partners/${partnerId}/addresses`)
-        : inLocale(url, `/admin/partners/${partnerId}/addresses/${address.id}`),
+        ? inLocale(url, `/admin/partner/partners/${partnerId}/addresses`)
+        : inLocale(url, `/admin/partner/partners/${partnerId}/addresses/${address.id}`),
       address,
       countries,
       provinces: await list(countryCode),
@@ -205,7 +205,7 @@ const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
   )
 
 export const routes: Record<string, RouteEntry> = {
-  '/admin/partners':
+  '/admin/partner/partners':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -257,7 +257,7 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/partners/new':
+  '/admin/partner/partners/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -266,7 +266,7 @@ export const routes: Record<string, RouteEntry> = {
         const form = await readForm(req)
         const id = randomUUID()
         const result = await savePartner(ctx, url, req, id, form)
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partner/partners/${id}`))
         const parents = await partnerOptions(ctx, url, req)
         return adminPage(ctx, url, req, {
           title: 'partner_backend.create.title',
@@ -302,13 +302,14 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/partners/{id}':
+  '/admin/partner/partners/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method === 'GET') return renderDetail(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const result = await savePartner(ctx, url, req, params.id, await readForm(req))
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
       return renderDetail(
         ctx,
         url,
@@ -318,7 +319,7 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
-  '/admin/partners/{id}/roles':
+  '/admin/partner/partners/{id}/roles':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -328,19 +329,19 @@ export const routes: Record<string, RouteEntry> = {
           await ctx.call('partner.grantRole', { id: randomUUID(), partnerId: params.id, role }, url, req)
         else await ctx.call('partner.revokeRole', { partnerId: params.id, role }, url, req)
       }
-      return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 
-  '/admin/partners/{id}/archive':
+  '/admin/partner/partners/{id}/archive':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
       await ctx.call('partner.archivePartner', { id: params.id, active: form.action === 'restore' }, url, req)
-      return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 
-  '/admin/partners/{id}/addresses':
+  '/admin/partner/partners/{id}/addresses':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -363,7 +364,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
         : renderDetail(
             ctx,
             url,
@@ -373,7 +374,7 @@ export const routes: Record<string, RouteEntry> = {
           )
     },
 
-  '/admin/partners/{id}/addresses/{addressId}':
+  '/admin/partner/partners/{id}/addresses/{addressId}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -396,7 +397,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
         : renderDetail(
             ctx,
             url,
@@ -406,7 +407,7 @@ export const routes: Record<string, RouteEntry> = {
           )
     },
 
-  '/admin/partners/{id}/terms':
+  '/admin/partner/partners/{id}/terms':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -423,7 +424,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
         : renderDetail(
             ctx,
             url,

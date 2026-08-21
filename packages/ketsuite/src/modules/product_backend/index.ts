@@ -283,7 +283,7 @@ export default defineModule({
     'product_backend:variant.editor': `{% island "product.editor" %}`,
     'product_backend:media.upload': `{% island "product.media-upload" %}`,
     // KTL, addressing joints by name — the same language a storefront theme uses.
-    'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
+    'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/product/templates">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },
 })
 

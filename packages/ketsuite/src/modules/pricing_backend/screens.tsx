@@ -5,12 +5,12 @@ import {
   code,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   linkButton,
-  recordForm as RecordForm,
-  section as Section,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -35,7 +35,7 @@ export const pricelistsScreen = (
       cell: (row) =>
         linkButton({
           label: row.name,
-          href: localized(`/admin/pricelists/${row.id}`, locale),
+          href: localized(`/admin/pricing/pricelists/${row.id}`, locale),
           variant: 'tertiary',
         }),
       priority: 'primary',
@@ -58,7 +58,7 @@ export const pricelistsScreen = (
         <Surface
           body={
             <RecordForm
-              action={localized('/admin/pricelists', locale)}
+              action={localized('/admin/pricing/pricelists', locale)}
               submit={_('pricing_backend.action.create')}
               submitVariant="primary"
               fields={[
@@ -94,7 +94,7 @@ export const pricelistDetailScreen = (
           <Surface
             body={
               <RecordForm
-                action={localized(`/admin/pricelists/${String(row.id)}`, locale)}
+                action={localized(`/admin/pricing/pricelists/${String(row.id)}`, locale)}
                 submit={_('pricing_backend.action.save')}
                 submitVariant="primary"
                 hidden={{ action: 'save-pricelist' }}
@@ -172,7 +172,7 @@ export const pricelistDetailScreen = (
           <Surface
             body={
               <RecordForm
-                action={localized(`/admin/pricelists/${String(row.id)}`, locale)}
+                action={localized(`/admin/pricing/pricelists/${String(row.id)}`, locale)}
                 submit={_('pricing_backend.action.add')}
                 submitVariant="secondary"
                 hidden={{ action: 'add-item' }}

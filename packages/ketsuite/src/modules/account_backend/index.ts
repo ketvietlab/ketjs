@@ -341,7 +341,7 @@ export default defineModule({
     'accounting.customerInvoices': {
       parent: 'accounting.customers',
       label: 'menu.customerInvoices',
-      path: '/admin/customer-invoices',
+      path: '/admin/accounting/customer-invoices',
       needs: 'account.listMoves',
       sequence: 10,
     },
@@ -349,7 +349,7 @@ export default defineModule({
     'accounting.vendorBills': {
       parent: 'accounting.vendors',
       label: 'menu.vendorBills',
-      path: '/admin/vendor-bills',
+      path: '/admin/accounting/vendor-bills',
       needs: 'account.listMoves',
       sequence: 10,
     },
@@ -357,14 +357,14 @@ export default defineModule({
     'accounting.entries': {
       parent: 'accounting.operations',
       label: 'menu.entries',
-      path: '/admin/journal-entries',
+      path: '/admin/accounting/entries',
       needs: 'account.listMoves',
       sequence: 10,
     },
     'accounting.payments': {
       parent: 'accounting.operations',
       label: 'menu.payments',
-      path: '/admin/payments',
+      path: '/admin/accounting/payments',
       needs: 'account.listPayments',
       sequence: 20,
     },
@@ -372,21 +372,21 @@ export default defineModule({
     'accounting.trialBalance': {
       parent: 'accounting.reporting',
       label: 'menu.trialBalance',
-      path: '/admin/trial-balance',
+      path: '/admin/accounting/trial-balance',
       needs: 'account.trialBalance',
       sequence: 10,
     },
     'accounting.generalLedger': {
       parent: 'accounting.reporting',
       label: 'menu.generalLedger',
-      path: '/admin/general-ledger',
+      path: '/admin/accounting/general-ledger',
       needs: 'account.generalLedger',
       sequence: 20,
     },
     'accounting.partnerStatement': {
       parent: 'accounting.reporting',
       label: 'menu.partnerStatement',
-      path: '/admin/partner-statement',
+      path: '/admin/accounting/partner-statement',
       needs: 'account.partnerStatement',
       sequence: 30,
     },
@@ -394,28 +394,28 @@ export default defineModule({
     'accounting.accounts': {
       parent: 'accounting.configuration',
       label: 'menu.accounts',
-      path: '/admin/accounts',
+      path: '/admin/accounting/accounts',
       needs: 'account.listAccounts',
       sequence: 10,
     },
     'accounting.journals': {
       parent: 'accounting.configuration',
       label: 'menu.journals',
-      path: '/admin/journals',
+      path: '/admin/accounting/journals',
       needs: 'account.listJournals',
       sequence: 20,
     },
     'accounting.taxes': {
       parent: 'accounting.configuration',
       label: 'menu.taxes',
-      path: '/admin/taxes',
+      path: '/admin/accounting/taxes',
       needs: 'account.listTaxes',
       sequence: 30,
     },
     'accounting.terms': {
       parent: 'accounting.configuration',
       label: 'menu.paymentTerms',
-      path: '/admin/payment-terms',
+      path: '/admin/accounting/terms',
       needs: 'account.listPaymentTerms',
       sequence: 40,
     },
@@ -449,7 +449,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/accounts':
+    '/admin/accounting/accounts':
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
@@ -496,7 +496,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/journals':
+    '/admin/accounting/journals':
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
@@ -549,7 +549,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/taxes':
+    '/admin/accounting/taxes':
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
@@ -637,7 +637,7 @@ export default defineModule({
           },
         })
       },
-    '/admin/payment-terms':
+    '/admin/accounting/terms':
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
@@ -733,7 +733,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/journal-entries':
+    '/admin/accounting/entries':
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
@@ -778,7 +778,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/customer-invoices':
+    '/admin/accounting/customer-invoices':
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
@@ -803,7 +803,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/vendor-bills':
+    '/admin/accounting/vendor-bills':
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
@@ -828,10 +828,10 @@ export default defineModule({
             }),
         })
       },
-    '/admin/journal-entries/{id}': accountMoveRoute,
-    '/admin/customer-invoices/{id}': accountMoveRoute,
-    '/admin/vendor-bills/{id}': accountMoveRoute,
-    '/admin/payments':
+    '/admin/accounting/entries/{id}': accountMoveRoute,
+    '/admin/accounting/customer-invoices/{id}': accountMoveRoute,
+    '/admin/accounting/vendor-bills/{id}': accountMoveRoute,
+    '/admin/accounting/payments':
       (ctx): Route =>
       async (url, req) => {
         const [data, openItems] = await Promise.all([
@@ -937,7 +937,7 @@ export default defineModule({
             }),
         })
       },
-    '/admin/trial-balance':
+    '/admin/accounting/trial-balance':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -974,7 +974,7 @@ export default defineModule({
           },
         })
       },
-    '/admin/general-ledger':
+    '/admin/accounting/general-ledger':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -1021,7 +1021,7 @@ export default defineModule({
           },
         })
       },
-    '/admin/partner-statement':
+    '/admin/accounting/partner-statement':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })

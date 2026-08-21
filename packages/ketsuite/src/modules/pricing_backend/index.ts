@@ -19,13 +19,13 @@ export default defineModule({
     'pricing.lists': {
       parent: 'pricing',
       label: 'menu.lists',
-      path: '/admin/pricelists',
+      path: '/admin/pricing/pricelists',
       needs: 'pricing.listPricelists',
       sequence: 10,
     },
   },
   routes: {
-    '/admin/pricelists':
+    '/admin/pricing/pricelists':
       (ctx): Route =>
       async (url, req) => {
         const lang = ctx.localeOf(url, req)
@@ -39,8 +39,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther(inLocale(url, '/admin/pricelists'))
-            : seeOther(inLocale(url, '/admin/pricelists?invalid=1'))
+            ? seeOther(inLocale(url, '/admin/pricing/pricelists'))
+            : seeOther(inLocale(url, '/admin/pricing/pricelists?invalid=1'))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (
@@ -57,7 +57,7 @@ export default defineModule({
           body: (_, frame) => pricelistsScreen(_, rows, { ...frame }, localeQuery(url)),
         })
       },
-    '/admin/pricelists/{id}':
+    '/admin/pricing/pricelists/{id}':
       (ctx): Route =>
       async (url, req, params) => {
         const lang = ctx.localeOf(url, req)
@@ -82,8 +82,8 @@ export default defineModule({
               req,
             )
             return (result as { ok?: boolean }).ok
-              ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
-              : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
+              ? seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}`))
+              : seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}?invalid=1`))
           }
           const optional = (name: string) => (form[name] ? { [name]: form[name] } : {})
           const result = await ctx.call(
@@ -113,8 +113,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
-            : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
+            ? seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}`))
+            : seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}?invalid=1`))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const items = (await ctx.call(
