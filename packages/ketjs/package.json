@@ -1,11 +1,33 @@
 {
   "name": "ketjs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Ket — a zero-dependency, module-composable, theme-driven fullstack framework for Node.",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/ketjs"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "keywords": [
+    "framework",
+    "fullstack",
+    "ssr",
+    "islands",
+    "typescript",
+    "sqlite"
+  ],
   "engines": {
     "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../.."
   },
   "exports": {
     ".": {
@@ -22,10 +44,15 @@
     }
   },
   "bin": {
-    "ket": "./dist/cli.js"
+    "ket": "dist/cli.js"
   },
   "dependencies": {
-    "ketjs-view": "0.0.0"
+    "ketjs-view": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
     "dist"

@@ -8,6 +8,7 @@ node_modules/
 .ket-build-stage-*/
 packages/*/dist/
 coverage/
+.release/
 *.tsbuildinfo
 
 # Ket runtime state
