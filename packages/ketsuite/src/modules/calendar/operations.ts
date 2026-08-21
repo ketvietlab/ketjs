@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { asc, deleteFrom, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { asc, deleteFrom, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { ensureThread, followThread, postMessage } from '../mail/index.ts'
 import {
   datePartsIn,

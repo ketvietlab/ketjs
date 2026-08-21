@@ -1,6 +1,6 @@
 // Proves the "surgical" claim with numbers instead of adjectives: how many host
 // operations does it actually take to change one row out of a thousand?
-import { countingHost, createRoot, html, each } from 'ketjs-view'
+import { countingHost, createRoot, html, each } from '@ketvietlab/ketjs-view'
 
 type Item = { id: number; name: string; qty: number }
 

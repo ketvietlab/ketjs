@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { postMessage } from '../mail/index.ts'
 import { jsonValue } from '../mail_transport/index.ts'
 import { INBOUND_KINDS } from './types.ts'

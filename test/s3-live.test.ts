@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { s3Storage, signRequest, sha256 } from 'ketjs'
+import { s3Storage, signRequest, sha256 } from '@ketvietlab/ketjs'
 
 const endpoint = process.env.KET_TEST_S3_ENDPOINT ?? 'http://127.0.0.1:19000'
 const bucket = process.env.KET_TEST_S3_BUCKET ?? 'ketjs-storage-live'

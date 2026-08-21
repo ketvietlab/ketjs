@@ -1,4 +1,4 @@
-import type { Message } from 'ketjs'
+import type { Message } from '@ketvietlab/ketjs'
 
 export const messages: Record<string, Record<string, Message>> = {
   vi: {

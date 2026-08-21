@@ -1,8 +1,8 @@
 // One codebase, several deployable apps — the umbrella layout.
 // storefront and admin share the `main` datastore and the catalog module; only
 // storefront installs a theme, only admin installs checkout.
-import { defineApp, composeWorkspace } from 'ketjs'
-import { catalog, inventory, checkout, defaultTheme as theme } from 'ketsuite'
+import { defineApp, composeWorkspace } from '@ketvietlab/ketjs'
+import { catalog, inventory, checkout, defaultTheme as theme } from '@ketvietlab/ketsuite'
 
 export const storefront = defineApp({
   name: 'storefront',

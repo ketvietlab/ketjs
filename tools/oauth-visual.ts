@@ -2,8 +2,8 @@
 // The target must be an explicit, new SQLite file; this tool never replaces data.
 
 import { existsSync } from 'node:fs'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter } from 'ketjs'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Adapter } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const path = process.env.KET_VISUAL_SQLITE

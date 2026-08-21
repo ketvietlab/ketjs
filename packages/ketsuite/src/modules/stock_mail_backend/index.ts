@@ -1,5 +1,5 @@
-import { defineModule, eq, from, KetError } from 'ketjs'
-import type { Ctx } from 'ketjs'
+import { defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
 import { targetFunctions } from '../mail/index.ts'
 import { withDeliveryStatus } from '../mail_transport/index.ts'
 

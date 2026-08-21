@@ -1,6 +1,6 @@
 // Assembly only — each concern lives in its own file.
 
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { models } from './models.ts'
 import { relations } from './relations.ts'
 import { functions } from './functions.ts'

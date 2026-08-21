@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /**
  * Master data: one catalogue across every company in the tenant, by decision.

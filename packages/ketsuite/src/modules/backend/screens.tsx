@@ -1,7 +1,7 @@
 // The backend screens.
 //
 // Data assembly only. Not one tag, not one `data-ui` attribute — those live in
-// `ketsuite/ui`, and `tools/ui-audit.ts` keeps them there. What a screen decides is
+// `@ketvietlab/ketsuite/ui`, and `tools/ui-audit.ts` keeps them there. What a screen decides is
 // which rows, which columns, which labels; what it must not decide is what a card
 // or a table looks like, because that decision made forty times is forty answers.
 //
@@ -10,8 +10,8 @@
 // a screen that reached for a global would answer the wrong language the moment two
 // requests overlapped.
 
-import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   card,

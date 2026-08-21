@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { assertTimezone, defineFn, deleteFrom, eq, from, localDateTimeToUtc } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { assertTimezone, defineFn, deleteFrom, eq, from, localDateTimeToUtc } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { LEAVE_PORTIONS } from './types.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }

@@ -13,8 +13,8 @@
 // review. `bytes` and `streamed` carry octets rather than a string, and they refuse
 // markup content types so that the same claim holds for them.
 
-import { renderToString, html, when, each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { renderToString, html, when, each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { IncomingMessage } from 'node:http'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */

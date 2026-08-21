@@ -41,7 +41,7 @@ KET_STORAGE_DIR=.ket/storage
 Programmatic construction:
 
 ```ts
-import { localStorage } from 'ketjs'
+import { localStorage } from '@ketvietlab/ketjs'
 
 const storage = localStorage({ dir: '.ket/storage' })
 ```
@@ -94,7 +94,7 @@ Job storage is additionally wrapped by `storage:read`, `storage:write`, and `sto
 `multipart()` parses parts sequentially and streams each part body:
 
 ```ts
-import { multipart } from 'ketjs'
+import { multipart } from '@ketvietlab/ketjs'
 
 const contentType = String(request.headers['content-type'] ?? '')
 
@@ -167,7 +167,7 @@ deployment owns credentials, provider SDKs, retry semantics, and deliverability 
 Streams persist ordered batches for clients that disconnect and resume:
 
 ```ts
-import { createStreams, dbStreamStore } from 'ketjs'
+import { createStreams, dbStreamStore } from '@ketvietlab/ketjs'
 
 const streams = await createStreams(dbStreamStore(adapter))
 const writer = await streams.open('generation:42')

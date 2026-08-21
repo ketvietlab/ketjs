@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from, isNull, like } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from, isNull, like } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { availableCatalogs, loadCatalog } from './loader.ts'
 import { divisionPath, resolveAddress, snapshotAddress, validateAddress } from './format.ts'
 

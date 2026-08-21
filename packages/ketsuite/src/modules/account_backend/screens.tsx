@@ -1,4 +1,4 @@
-import type { Translator } from 'ketjs'
+import type { Translator } from '@ketvietlab/ketjs'
 
 export const labelOf = (_: Translator, group: string, value: unknown): string => {
   const raw = String(value ?? '')

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { Row } from 'ketjs'
+import type { Row } from '@ketvietlab/ketjs'
 import { addDays, stateOf } from '../packages/ketsuite/src/modules/activity/index.ts'
 
 const activity = (over: Partial<Row> = {}): Row => ({

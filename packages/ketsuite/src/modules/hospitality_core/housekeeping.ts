@@ -1,5 +1,5 @@
-import { asc, defineFn, desc, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, desc, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   CLEANING_TASK_PRIORITIES,
   CLEANING_TASK_STATES,

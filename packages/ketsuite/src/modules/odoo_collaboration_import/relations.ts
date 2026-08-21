@@ -1,4 +1,4 @@
-import type { RelationDef } from 'ketjs'
+import type { RelationDef } from '@ketvietlab/ketjs'
 
 export const relations: Record<string, Record<string, RelationDef>> = {
   'odoo_collaboration_import.Source': {

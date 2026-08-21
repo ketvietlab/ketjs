@@ -11,8 +11,8 @@ import {
   registerFunctions,
   sqliteAdapter,
   json,
-} from 'ketjs'
-import type { Adapter, Ctx, Manifest, Scope } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Ctx, Manifest, Scope } from '@ketvietlab/ketjs'
 
 /**
  * Reads span a set of companies, writes go to exactly one.

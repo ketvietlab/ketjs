@@ -9,8 +9,15 @@ import {
   text,
   validateListState,
   withHeaders,
-} from 'ketjs'
-import type { FilterOperator, FilterRule, ListState, RouteEntry, Route, ServeContext } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type {
+  FilterOperator,
+  FilterRule,
+  ListState,
+  RouteEntry,
+  Route,
+  ServeContext,
+} from '@ketvietlab/ketjs'
 import {
   favoriteScreen,
   PRODUCT_DETAIL_TABS,

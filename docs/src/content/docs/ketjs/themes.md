@@ -3,15 +3,15 @@ title: Themes and KTL
 description: Build installable KetJS themes with restricted KTL templates, tokens, regions, joints, sections, and islands.
 ---
 
-KetJS has two presentation languages. First-party behavior uses `ketjs-view`, where trusted application
+KetJS has two presentation languages. First-party behavior uses `@ketvietlab/ketjs-view`, where trusted application
 code may run. Installable themes use KTL, a restricted template language that reads data and invokes
 named rendering contracts but cannot call JavaScript.
 
 ## Define a theme
 
 ```ts
-import { defineTheme } from 'ketjs'
-import { loadTemplates } from 'ketjs/theme'
+import { defineTheme } from '@ketvietlab/ketjs'
+import { loadTemplates } from '@ketvietlab/ketjs/theme'
 
 export const paper = defineTheme({
   name: 'theme_paper',

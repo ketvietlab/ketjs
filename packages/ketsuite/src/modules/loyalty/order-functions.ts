@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { defineFn } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { decimal, evaluate, invalid, issue, n, normalizeCode, now, snapshotOf } from './engine.ts'
 import {
   finalizeReservation,

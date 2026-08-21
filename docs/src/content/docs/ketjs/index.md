@@ -23,7 +23,7 @@ KetJS is organized around five constraints:
    theme contract, and agent descriptor.
 3. **Declared effects.** A function or job can access only the models, queues, storage, and transports
    named in its effects.
-4. **Safe presentation.** First-party UI uses `ketjs-view`; third-party themes use restricted KTL and
+4. **Safe presentation.** First-party UI uses `@ketvietlab/ketjs-view`; third-party themes use restricted KTL and
    cannot execute JavaScript.
 5. **Operational durability.** Migrations, idempotency, queues, streams, storage, and multitenancy are
    framework contracts rather than application conventions.
@@ -32,13 +32,13 @@ KetJS is organized around five constraints:
 
 | Package | Use it for |
 | --- | --- |
-| `ketjs` | Modules, workspaces, data, functions, HTTP, jobs, storage, sessions, and composition. |
-| `ketjs/theme` | KTL compilation, theme runtime helpers, view models, and design tokens. |
-| `ketjs/testing` | Isolated headless end-to-end applications and an HTTP test client. |
-| `ketjs-view` | Browser-safe signals, HTML templates, SSR, hydration, JSX, and islands. |
-| `ketjs-postgres` | The optional PostgreSQL adapter. SQLite remains the built-in default. |
+| `@ketvietlab/ketjs` | Modules, workspaces, data, functions, HTTP, jobs, storage, sessions, and composition. |
+| `@ketvietlab/ketjs/theme` | KTL compilation, theme runtime helpers, view models, and design tokens. |
+| `@ketvietlab/ketjs/testing` | Isolated headless end-to-end applications and an HTTP test client. |
+| `@ketvietlab/ketjs-view` | Browser-safe signals, HTML templates, SSR, hydration, JSX, and islands. |
+| `@ketvietlab/ketjs-postgres` | The optional PostgreSQL adapter. SQLite remains the built-in default. |
 
-`ketjs` depends only on `ketjs-view`. The core package has no required database driver or service SDK.
+`@ketvietlab/ketjs` depends only on `@ketvietlab/ketjs-view`. The core package has no required database driver or service SDK.
 
 ## How an application is assembled
 
@@ -78,7 +78,7 @@ planned from the complete deployment manifest.
 - Node.js 24 or later.
 - ESM (`"type": "module"`).
 - TypeScript for authored applications; production executes emitted JavaScript only.
-- SQLite by default, or PostgreSQL through `ketjs-postgres` and the optional `postgres` driver.
+- SQLite by default, or PostgreSQL through `@ketvietlab/ketjs-postgres` and the optional `postgres` driver.
 
 KetJS does not execute TypeScript in production. The development scaffold uses `tsx` only as an
 in-memory compiler and watcher.

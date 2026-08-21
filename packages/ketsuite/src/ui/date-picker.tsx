@@ -1,5 +1,5 @@
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
 import { icon } from './icons.ts'
 

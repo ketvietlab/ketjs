@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /** Provider configuration is vendor-neutral. ZITADEL is one OIDC issuer, not a schema choice. */
 export const models: Record<string, ModelDef> = {

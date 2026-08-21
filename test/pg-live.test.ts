@@ -3,7 +3,7 @@
 // proven against a stand-in; this is the part only a live server can settle.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { postgresAdapter } from 'ketjs-postgres'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import {
   callFn,
   compose,
@@ -22,8 +22,8 @@ import {
   renderSql,
   schemaFromManifest,
   table,
-} from 'ketjs'
-import type { Adapter } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter } from '@ketvietlab/ketjs'
 import {
   account,
   catalog,
@@ -43,8 +43,8 @@ import {
   uom,
   user,
   VIETNAM_TAXES,
-} from 'ketsuite'
-import { address } from 'ketsuite'
+} from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }

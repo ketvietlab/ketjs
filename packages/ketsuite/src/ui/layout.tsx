@@ -1,9 +1,9 @@
 // The frame a screen sits in, and the shared arrangements inside it.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
-import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from 'ketjs'
-import type { MenuNode, Route, ServeContext, Translator } from 'ketjs'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
+import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'

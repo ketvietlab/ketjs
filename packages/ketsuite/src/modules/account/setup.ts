@@ -1,5 +1,5 @@
-import { eq, from } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import {
   TT99_ACCOUNTS,
   TT99_CATALOG_CHECKSUM,

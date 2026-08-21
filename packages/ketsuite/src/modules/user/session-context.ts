@@ -1,5 +1,5 @@
-import { callFn } from 'ketjs'
-import type { SessionContext, SessionResolveContext } from 'ketjs'
+import { callFn } from '@ketvietlab/ketjs'
+import type { SessionContext, SessionResolveContext } from '@ketvietlab/ketjs'
 
 /**
  * Rebuild the session's scope from live rows on every request.

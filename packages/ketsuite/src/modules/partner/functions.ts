@@ -1,5 +1,5 @@
-import { asc, defineFn, deleteFrom, eq, from, like } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, like } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
 import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
 

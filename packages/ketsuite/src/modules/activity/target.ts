@@ -1,5 +1,5 @@
-import { asc, defineFn, desc, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { ensureThread } from '../mail/index.ts'
 import type { TargetBridge } from '../mail/index.ts'
 import { actorId, addDays, scheduleActivity, stateOf, validatePlanStep } from './operations.ts'

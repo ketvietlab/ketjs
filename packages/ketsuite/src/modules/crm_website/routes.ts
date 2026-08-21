@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { page, text } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import { page, text } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { websiteLeadScreen } from './screens.tsx'
 

@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from, like, validateLayout } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from, like, validateLayout } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 /**
  * The one query both the page and its total are built from — a count that filters

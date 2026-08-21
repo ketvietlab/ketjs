@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from, inArray, isNull, KetError } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { asc, defineFn, eq, from, inArray, isNull, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { NOTIFICATION_STATES } from './types.ts'
 import { unreadNotifications } from './operations.ts'
 

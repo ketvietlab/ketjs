@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
 
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60

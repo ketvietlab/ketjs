@@ -1,4 +1,4 @@
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { adminFunctions } from './admin-functions.ts'
 import { jobs, maintenanceFunctions } from './jobs.ts'
 import { membershipFunctions } from './membership-functions.ts'

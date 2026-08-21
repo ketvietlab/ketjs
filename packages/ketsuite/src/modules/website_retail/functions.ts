@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canManageStructure } from '../website/access.ts'
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex')

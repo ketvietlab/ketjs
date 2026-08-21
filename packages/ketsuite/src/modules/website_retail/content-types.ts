@@ -1,4 +1,4 @@
-import type { ContentTypeDef } from 'ketjs'
+import type { ContentTypeDef } from '@ketvietlab/ketjs'
 
 export const contentTypes: Record<string, ContentTypeDef> = {
   product: {

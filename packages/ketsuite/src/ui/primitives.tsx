@@ -4,8 +4,8 @@
 // module composes these; it does not write the markup, which is what stops the
 // stylesheet's contract drifting one screen at a time.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 /** The data-ui names this file emits. See ui/hooks.ts. */
 export const HOOKS = [

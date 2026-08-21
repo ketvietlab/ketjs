@@ -10,8 +10,8 @@
 // These are the same glyphs the Odoo backend theme vendors, so the two products
 // look like one product.
 
-import { trustedMarkup } from 'ketjs-view'
-import type { Markup } from 'ketjs-view'
+import { trustedMarkup } from '@ketvietlab/ketjs-view'
+import type { Markup } from '@ketvietlab/ketjs-view'
 
 /** The inside of a 24×24 <svg>, stroked with currentColor. */
 const PATHS: Record<string, string> = {

@@ -1,8 +1,8 @@
 // Data views other than a table. Their shape is shared; rows and business labels
 // remain module data.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'kanban',

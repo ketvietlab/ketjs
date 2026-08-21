@@ -13,8 +13,8 @@ import {
   page,
   raw,
   text,
-} from 'ketjs'
-import { html } from 'ketjs-view'
+} from '@ketvietlab/ketjs'
+import { html } from '@ketvietlab/ketjs-view'
 
 const stringBody = (body: ReturnType<typeof page>['body']): string => {
   assert.equal(typeof body, 'string')

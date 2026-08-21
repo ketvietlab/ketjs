@@ -2,7 +2,7 @@
 // models, the extension points or the server functions knows where to go without
 // scrolling past the other two.
 
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { models } from './models.ts'
 import { joints } from './joints.ts'
 import { sections } from './sections.ts'

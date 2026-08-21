@@ -9,7 +9,7 @@
 // What a third party — or a design team — does own here is the stylesheet and the
 // tokens. See design/HANDOFF.md.
 
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 import { joints } from './joints.ts'
@@ -64,9 +64,9 @@ export { readForm, seeOther } from './forms.ts'
 /**
  * The kit, re-exported.
  *
- * It is not this module's — it lives in `ketsuite/ui` so a module can use a button
+ * It is not this module's — it lives in `@ketvietlab/ketsuite/ui` so a module can use a button
  * without depending on the admin. These are here so an existing caller keeps
- * working and so `import backend, { badge } from 'ketsuite/backend'` still reads
+ * working and so `import backend, { badge } from '@ketvietlab/ketsuite/backend'` still reads
  * naturally on a backend screen.
  */
 export {

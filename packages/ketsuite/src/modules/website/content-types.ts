@@ -1,4 +1,4 @@
-import type { ContentTypeDef, TaxonomyDef } from 'ketjs'
+import type { ContentTypeDef, TaxonomyDef } from '@ketvietlab/ketjs'
 
 export const contentTypes: Record<string, ContentTypeDef> = {
   page: {

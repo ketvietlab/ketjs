@@ -93,8 +93,8 @@ storage or choose external services.
 Install the optional driver in the application and make adapter ownership explicit:
 
 ```ts
-import { defineApp } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
+import { defineApp } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
 export const erp = defineApp({
   name: 'erp',
@@ -111,7 +111,7 @@ export const erp = defineApp({
 })
 ```
 
-Install both `ketjs-postgres` and its optional `postgres` peer dependency. The application owns the driver
+Install both `@ketvietlab/ketjs-postgres` and its optional `postgres` peer dependency. The application owns the driver
 dependency, opens the adapter in `openStore`, and returns it ready for use; KetJS core owns only the
 `Adapter` contract. Graceful shutdown closes the returned adapter.
 

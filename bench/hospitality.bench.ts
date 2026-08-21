@@ -6,12 +6,19 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, defineModule, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import type { Adapter, Ctx } from 'ketjs'
-import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
-import { address } from 'ketsuite'
-import backend from 'ketsuite/backend'
+import {
+  callFn,
+  compose,
+  defineModule,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import type { Adapter, Ctx } from '@ketvietlab/ketjs'
+import { company, hospitalityCore, partner, product, storage, uom } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
+import backend from '@ketvietlab/ketsuite/backend'
 import { executeNightAudit } from '../packages/ketsuite/src/modules/hospitality_core/night-audit.ts'
 import { prepareStayNotices } from '../packages/ketsuite/src/modules/hospitality_core/stay-notices.ts'
 

@@ -9,8 +9,8 @@ import {
   eq,
   parseListState,
   table,
-} from 'ketjs'
-import type { FilterNode, ListState } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { FilterNode, ListState } from '@ketvietlab/ketjs'
 
 const model = defineModule({
   name: 'searchable',

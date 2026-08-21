@@ -1,4 +1,4 @@
-import type { JobSpec } from 'ketjs'
+import type { JobSpec } from '@ketvietlab/ketjs'
 
 export const jobs: Record<string, JobSpec> = {
   publishScheduled: {

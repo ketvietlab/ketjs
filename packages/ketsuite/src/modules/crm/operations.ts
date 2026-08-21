@@ -11,8 +11,8 @@ import {
   isNull,
   like,
   or,
-} from 'ketjs'
-import type { Ctx, ListState, Row } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { addDays, cancelActivity, completeActivity, scheduleActivity } from '../activity/index.ts'
 import { ensureThread } from '../mail/index.ts'
 import { CASE_KINDS, CASE_PRIORITIES, MESSAGE_VISIBILITIES } from './types.ts'

@@ -14,8 +14,8 @@ import {
   schemaFromManifest,
   sqliteAdapter,
   validateLayout,
-} from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
+} from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
 const dated = defineModule({
   name: 'dated',

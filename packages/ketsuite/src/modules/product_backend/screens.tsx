@@ -1,5 +1,5 @@
-import type { JSXChild, TemplateResult } from 'ketjs-view'
-import type { MenuNode, Translator } from 'ketjs'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import {
   framedPage as Framed,
   emptyState,

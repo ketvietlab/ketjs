@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { asc, defineFn, desc, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canManageStructure } from '../website/access.ts'
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })

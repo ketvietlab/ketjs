@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { effectStorage, localStorage, namespacedStorage } from 'ketjs'
+import { effectStorage, localStorage, namespacedStorage } from '@ketvietlab/ketjs'
 
 const chunks = async function* (...values: Array<string | Uint8Array>): AsyncGenerator<Uint8Array> {
   for (const value of values) yield typeof value === 'string' ? Buffer.from(value) : value

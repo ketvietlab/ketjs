@@ -1,7 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compose, defineModule, reachOf, functionsOf, formatReach, formatInventory, from } from 'ketjs'
-import type { Ctx } from 'ketjs'
+import {
+  compose,
+  defineModule,
+  reachOf,
+  functionsOf,
+  formatReach,
+  formatInventory,
+  from,
+} from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
 
 /**
  * The question this answers: "the user needs orders but must not have products".

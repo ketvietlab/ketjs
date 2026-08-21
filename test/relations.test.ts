@@ -9,8 +9,8 @@ import {
   migrateOne,
   registerFunctions,
   sqliteAdapter,
-} from 'ketjs'
-import type { Adapter, Ctx, KetError, Row } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Ctx, KetError, Row } from '@ketvietlab/ketjs'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'acme', branches: null }

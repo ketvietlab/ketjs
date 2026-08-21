@@ -61,7 +61,7 @@ becomes a second manifest.
 The entry must default-export a normal module:
 
 ```ts
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'sale_discount',
@@ -82,8 +82,8 @@ the workspace. Discovery is not a sandbox. Themes still have to export
 New workspaces should default-export `defineWorkspace()`:
 
 ```ts
-import { defineApp, defineWorkspace } from 'ketjs'
-import { product, uom } from 'ketsuite'
+import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
+import { product, uom } from '@ketvietlab/ketsuite'
 
 export default defineWorkspace({
   modulePaths: [
@@ -254,7 +254,7 @@ useful, a remediation hint.
 Tools embedding Ket can call the same boundary used by the CLI:
 
 ```ts
-import { composeWorkspace, resolveWorkspace } from 'ketjs'
+import { composeWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(workspace, {
   baseUrl: new URL('./ket.workspace.js', import.meta.url),

@@ -1,5 +1,5 @@
-import { deleteFrom, defineFn, eq } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { invalid, issue, n } from '../loyalty/engine.ts'
 import { orderFunctions } from '../loyalty/order-functions.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'

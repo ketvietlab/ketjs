@@ -754,7 +754,7 @@ ketjs, so a framework that reached for it would be a cycle. An app that wants it
 hands `serve.openStore` in. The dependency audit is what keeps this true rather
 than a comment — it failed this change twice and was right both times, once for
 importing the driver and once for scaffold templates whose *string literals*
-contained `from 'ketjs'`. The templates are files now, which makes "this is data,
+contained `from '@ketvietlab/ketjs'`. The templates are files now, which makes "this is data,
 not code" a shape instead of an exception.
 
 **`install` replaced `autoInstall`, and gained the case that was missing.**
@@ -1057,16 +1057,16 @@ self-reference at build time. This is the argument for writing a vertical rather
 than more framework.
 
 ## D19 — Monorepo, so the fences become shapes
-**Chosen:** four packages — `ketjs-view`, `ketjs`, `ketjs-postgres`, `ketsuite` —
+**Chosen:** four packages — `@ketvietlab/ketjs-view`, `@ketvietlab/ketjs`, `@ketvietlab/ketjs-postgres`, `@ketvietlab/ketsuite` —
 in one repository under npm workspaces.
 
 **Each boundary earns its place:**
-- `ketjs-view` is browser-safe and depends on nothing, so a client that never
+- `@ketvietlab/ketjs-view` is browser-safe and depends on nothing, so a client that never
   touches the server half can install it alone.
-- `ketjs-postgres` exists *because of* D4a. The driver is no longer "allowed in one
+- `@ketvietlab/ketjs-postgres` exists *because of* D4a. The driver is no longer "allowed in one
   file" — it lives in the one package that declares it, and every other package is
   structurally unable to reach it.
-- `ketsuite` may only import `ketjs`'s public entry. If the suite needs something
+- `@ketvietlab/ketsuite` may only import `@ketvietlab/ketjs`'s public entry. If the suite needs something
   deeper, so does every third-party module, and it should be exported rather than
   smuggled. This is the rule that keeps the framework honest, and it is now checked
   rather than promised.
@@ -1076,7 +1076,7 @@ kernel, while the theme layer imported the view. A single line, and the only thi
 that would have made the two packages mutually dependent. The view layer now carries
 its own errors, which is better layering regardless of packaging.
 
-**Verified by trying to break it:** a suite file importing `ketjs/src/kernel/...` is
+**Verified by trying to break it:** a suite file importing `@ketvietlab/ketjs/src/kernel/...` is
 rejected; a core file importing `postgres` is rejected.
 
 ## D18 — A theme places behaviour; it never writes it
@@ -1237,7 +1237,7 @@ own, because that is the lego pillar, and Ecto never faces this. Deferred on pur
 until the query shape has run against real data.
 
 ## D10 — Name
-`Ket`, from *kết* — to join. npm `ketjs` is free; `ket` is held by a dead 2022
+`Ket`, from *kết* — to join. npm `@ketvietlab/ketjs` is free; `ket` is held by a dead 2022
 package. Flagged: `ket` is UK slang for ketamine and bra-ket notation in physics.
 
 ## D42 — Menus are declared in the module, and hidden by permission

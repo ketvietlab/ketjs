@@ -1,5 +1,5 @@
-import { page, sha256, text, withHeaders } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
+import { page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { credentialScreen, kioskScreen, myWorkScreen, periodScreen } from './screens.tsx'

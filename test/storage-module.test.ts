@@ -3,9 +3,9 @@ import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { bootApp, bootWorker, callFn, defineApp, localStorage, namespacedStorage } from 'ketjs'
-import { company, partner, storage as storageModule } from 'ketsuite'
-import { address } from 'ketsuite'
+import { bootApp, bootWorker, callFn, defineApp, localStorage, namespacedStorage } from '@ketvietlab/ketjs'
+import { company, partner, storage as storageModule } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 test('storage module: upload, safe download, deduplication and queued GC work end to end', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-storage-module-'))

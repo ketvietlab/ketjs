@@ -1,5 +1,5 @@
-import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import { linkButton } from './actions.tsx'
 import { recordForm } from './form.tsx'
 import { notice } from './state.tsx'

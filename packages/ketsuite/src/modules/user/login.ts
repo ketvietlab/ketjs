@@ -1,6 +1,6 @@
-import { each, html, when } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import { each, html, when } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 
 /**
  * The sign-in screen.

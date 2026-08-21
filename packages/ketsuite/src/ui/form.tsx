@@ -1,5 +1,5 @@
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
 import type { ActionSize, ActionVariant } from './actions.tsx'
 

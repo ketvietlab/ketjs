@@ -6,9 +6,9 @@
 // them — an app that named another module's files would go on serving them after
 // that module was switched off.
 
-import { defineApp } from 'ketjs'
-import * as suite from 'ketsuite'
-import backend from 'ketsuite/backend'
+import { defineApp } from '@ketvietlab/ketjs'
+import * as suite from '@ketvietlab/ketsuite'
+import backend from '@ketvietlab/ketsuite/backend'
 import { openStore } from './config.ts'
 
 export const ketsuite = defineApp({

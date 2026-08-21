@@ -9,7 +9,7 @@ inspected before execution; changesets cast and validate untrusted input before 
 ## Build a query
 
 ```ts
-import { asc, desc, eq, from, gte, like } from 'ketjs'
+import { asc, desc, eq, from, gte, like } from '@ketvietlab/ketjs'
 
 const Orders = ctx.table('sales.Order')
 
@@ -30,7 +30,7 @@ state.
 
 ## Expression helpers
 
-Import expression helpers from `ketjs`:
+Import expression helpers from `@ketvietlab/ketjs`:
 
 | Helper | SQL intent |
 | --- | --- |
@@ -56,7 +56,7 @@ const all = await ctx.db.all(from(Orders).preload('customer', 'lines'))
 Use a delete query when its condition benefits from the query builder:
 
 ```ts
-import { deleteFrom, eq } from 'ketjs'
+import { deleteFrom, eq } from '@ketvietlab/ketjs'
 
 await ctx.db.del(deleteFrom(Orders).where(eq(Orders.id, orderId)))
 ```

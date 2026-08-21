@@ -6,8 +6,8 @@
 // permissions unanswerable, because granting read on a table grants it everywhere
 // the table is used.
 
-import { asc, defineFn, deleteFrom, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 
 const error = (field: string, code: string, params?: Record<string, unknown>) => ({
   field,

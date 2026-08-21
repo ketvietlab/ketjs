@@ -1,5 +1,5 @@
-import { each, html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 import { createChatterView, createInboxIndicatorView } from '../../ui/client/mail-view.mjs'
 
 const runtime = { each, html, signal }

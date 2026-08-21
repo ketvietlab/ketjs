@@ -8,8 +8,8 @@ import {
   migrateOne,
   registerFunctions,
   sqliteAdapter,
-} from 'ketjs'
-import type { Adapter, Manifest } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Manifest } from '@ketvietlab/ketjs'
 import {
   address,
   paperTheme,
@@ -19,7 +19,7 @@ import {
   websiteForm,
   websiteMenu,
   websiteSeo,
-} from 'ketsuite'
+} from '@ketvietlab/ketsuite'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const SCOPE = { company: 'acme', branches: null }

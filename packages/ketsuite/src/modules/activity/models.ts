@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 export const models: Record<string, ModelDef> = {
   Type: {

@@ -13,8 +13,8 @@ import {
   sqliteAdapter,
   diffManifests,
   agentTools,
-} from 'ketjs'
-import type { Adapter, Ctx, KetError, Row } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Ctx, KetError, Row } from '@ketvietlab/ketjs'
 
 /**
  * Company isolation used to be a database boundary. Here it is a WHERE clause, so a

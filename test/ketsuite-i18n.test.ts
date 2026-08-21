@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { compose, formatMissing, missingMessages, renderToString, translator } from 'ketjs'
-import backend, { appsScreen } from 'ketsuite/backend'
+import { compose, formatMissing, missingMessages, renderToString, translator } from '@ketvietlab/ketjs'
+import backend, { appsScreen } from '@ketvietlab/ketsuite/backend'
 import {
   account,
   accountBackend,
@@ -28,7 +28,7 @@ import {
   storage,
   uom,
   user,
-} from 'ketsuite'
+} from '@ketvietlab/ketsuite'
 import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/attributes-screen.tsx'
 import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.tsx'
 import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.tsx'
