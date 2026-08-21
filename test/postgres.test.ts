@@ -4,6 +4,7 @@ import {
   callFn,
   compose,
   createIdempotency,
+  defineModule,
   eq,
   from,
   planMigration,
@@ -193,34 +194,68 @@ test('idempotency: a record survives a restart because it lives in the log', asy
   await adapter.close()
 })
 
+test('idempotency: legacy tables gain request digests without losing records', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await adapter.exec(`CREATE TABLE ket_idem (
+    key TEXT PRIMARY KEY, fn TEXT NOT NULL, state TEXT NOT NULL, result TEXT, created_at TEXT NOT NULL
+  )`)
+  await adapter.run(`INSERT INTO ket_idem (key, fn, state, result, created_at) VALUES (?, ?, 'done', ?, ?)`, [
+    'legacy',
+    'legacy.fn',
+    JSON.stringify({ ok: true }),
+    new Date().toISOString(),
+  ])
+  const idem = await createIdempotency(adapter)
+  assert.ok((await adapter.introspect()).ket_idem!.digest)
+  assert.deepEqual(await idem.read('legacy'), { state: 'done', result: { ok: true }, digest: null })
+  await adapter.close()
+})
+
 test('idempotency: a key claimed but not finished is reported, not silently re-run', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
     await adapter.exec(sql)
-  registerFunctions(mods)
-
-  // Stand in for another instance that claimed the key and has not finished.
-  const idem = await createIdempotency(adapter)
-  const claimed = await idem.claim('catalog.createProduct:k9', 'catalog.createProduct')
-  assert.equal(claimed, true)
-  assert.equal(
-    await idem.claim('catalog.createProduct:k9', 'catalog.createProduct'),
-    false,
-    'the primary key settles the race',
+  let entered!: () => void
+  let finish!: () => void
+  const started = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  const pending = defineModule({
+    name: 'pending',
+    functions: {
+      hold: {
+        input: { id: 'id' },
+        idempotent: true,
+        handler: async () => {
+          entered()
+          await gate
+          return { ok: true }
+        },
+      },
+    },
+  })
+  const pendingManifest = compose([...mods, pending])
+  registerFunctions([...mods, pending])
+  const first = callFn(
+    'pending.hold',
+    { id: 'p2' },
+    { adapter, manifest: pendingManifest, idempotencyKey: 'k9' },
   )
+  await started
 
   await assert.rejects(
-    () =>
-      callFn(
-        'catalog.createProduct',
-        { id: 'p2', title: 'B', priceCents: 1, slug: 'b' },
-        { adapter, manifest, idempotencyKey: 'k9' },
-      ),
+    () => callFn('pending.hold', { id: 'p2' }, { adapter, manifest: pendingManifest, idempotencyKey: 'k9' }),
     (e: unknown) => {
       assert.equal((e as { code: string }).code, 'E_IDEMPOTENCY_IN_FLIGHT')
       return true
     },
   )
+  finish()
+  await first
   await adapter.close()
 })

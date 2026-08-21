@@ -103,6 +103,37 @@ export function createContext(o: {
 
   const scopeOf = (model: string) => manifest.models[model]?.scope ?? 'shared'
 
+  const validateFields = (model: string, row: Row, operationName: 'filter' | 'update'): void => {
+    const def = manifest.models[model]
+    if (!def) {
+      throw new KetError({
+        code: 'E_UNKNOWN_MODEL',
+        module: operation.by,
+        message: `no model "${model}"`,
+      })
+    }
+    const unknown = Object.keys(row).filter((key) => !def.fields[key])
+    if (unknown.length) {
+      throw new KetError({
+        code: 'E_UNKNOWN_FIELD',
+        module: operation.by,
+        message: `${model} has no field(s): ${unknown.join(', ')}`,
+        hint: `fields: ${Object.keys(def.fields).join(', ')}`,
+      })
+    }
+    if (operationName !== 'update') return
+    const protectedFields = def.scope === 'company+branch' ? ['companyId', 'branchId'] : ['companyId']
+    const attempted = protectedFields.filter((key) => key in row)
+    if (def.scope !== 'shared' && attempted.length) {
+      throw new KetError({
+        code: 'E_SCOPE_FIELD_WRITTEN',
+        module: operation.by,
+        message: `"${fnKey}" attempted to update ${model}.${attempted.join(', ')}`,
+        hint: 'scope columns are immutable after insert — move data with an explicitly cross-company administrative workflow',
+      })
+    }
+  }
+
   // ── decimal columns ────────────────────────────────────────────────────────
   //
   // Both adapters store and return a decimal as a string, which is what keeps it
@@ -259,6 +290,20 @@ export function createContext(o: {
    */
   const fillPreloads = async (q: Query, rows: Row[]): Promise<Row[]> => {
     if (!q.preloads.length || !rows.length) return rows
+    const chunks = <T>(values: T[], size = 500): T[][] => {
+      const out: T[][] = []
+      for (let index = 0; index < values.length; index += size) out.push(values.slice(index, index + size))
+      return out
+    }
+    const loadChunks = async (model: string, field: string, values: unknown[]): Promise<Row[]> => {
+      const loaded: Row[] = []
+      for (const batch of chunks(values)) {
+        loaded.push(
+          ...(await db.all(from(table(manifest, model)).where(inArray({ model, name: field }, batch)))),
+        )
+      }
+      return loaded
+    }
 
     for (const { name } of q.preloads) {
       const rel = relationOf(q.model, name)
@@ -269,9 +314,7 @@ export function createContext(o: {
           for (const r of rows) r[name] = null
           continue
         }
-        const parents = await db.all(
-          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: 'id' }, ids)),
-        )
+        const parents = await loadChunks(rel.target, 'id', ids)
         const byId = new Map(parents.map((p) => [p.id, p]))
         for (const r of rows) r[name] = byId.get(r[rel.by]) ?? null
       } else {
@@ -280,9 +323,7 @@ export function createContext(o: {
           for (const r of rows) r[name] = []
           continue
         }
-        const children = await db.all(
-          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: rel.by }, ids)),
-        )
+        const children = await loadChunks(rel.target, rel.by, ids)
         const grouped = new Map<unknown, Row[]>()
         for (const child of children) {
           const key = child[rel.by]
@@ -434,6 +475,16 @@ export function createContext(o: {
     },
     async update(model, where, patch) {
       need('write', model)
+      validateFields(model, where, 'filter')
+      validateFields(model, patch, 'update')
+      if (!Object.keys(where).length) {
+        throw new KetError({
+          code: 'E_UPDATE_NEEDS_WHERE',
+          module: operation.by,
+          message: `updating ${model} requires a non-empty where clause`,
+        })
+      }
+      if (!Object.keys(patch).length) return { changes: 0 }
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const where3 = encodeRow(

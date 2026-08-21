@@ -78,6 +78,19 @@ test('engine: named unique indexes are part of the schema and migration SQL', ()
   assert.match(sql, /CREATE UNIQUE INDEX "ledger_balance__account_unique"/)
 })
 
+test('engine: scoped models receive a framework index when no authored index covers the scope', () => {
+  const scoped = defineModule({
+    name: 'scoped',
+    models: { Entry: { scope: 'company+branch', fields: { id: 'id', value: 'text' } } },
+  })
+  const indexes = Object.values(
+    schemaFromManifest(compose([scoped], { headless: true })).tables.scoped_entry!.indexes,
+  )
+  assert.ok(
+    indexes.some((index) => index.fields.join(',') === 'companyId,branchId' && index.by === '(framework)'),
+  )
+})
+
 test('engine: exact decimal strings are accepted and malformed decimals are rejected', async () => {
   const { adapter, manifest } = await boot()
   try {
