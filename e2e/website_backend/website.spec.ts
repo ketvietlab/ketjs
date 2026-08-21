@@ -20,6 +20,7 @@ test.beforeAll(async () => mkdir(artifacts, { recursive: true }))
 test.beforeEach(async ({ page }) => login(page))
 
 test('creates, revises and publishes content through the backend', async ({ page }) => {
+  await expect(page.getByRole('link', { name: 'Website', exact: true }).first()).toBeVisible()
   await page.goto('/admin/content/new?site=hospitality-site&lang=vi')
   await expect(page.getByRole('heading', { name: 'Nội dung mới', level: 1 })).toBeVisible()
   await page.locator('input[name="title"]').fill('Câu chuyện của Mây')
