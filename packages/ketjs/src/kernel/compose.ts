@@ -563,7 +563,7 @@ export function compose(
 
   // --- printable reports ---------------------------------------------------
   for (const m of order) {
-    for (const [name, def] of Object.entries(m.reports)) {
+    for (const [name, def] of Object.entries(m.reports ?? {})) {
       const id = qualify(m.name, name)
       if (!/^[a-z][a-zA-Z0-9_]*$/.test(name)) {
         diag.add({ code: 'E_REPORT_NAME', module: m.name, message: `invalid report name "${name}"` })

@@ -1,6 +1,5 @@
-import { defineFn, sha256 } from 'ketjs'
+import { compileReportTemplate, defineFn, sha256 } from 'ketjs'
 import type { FnSpec, Row } from 'ketjs'
-import { compileReportTemplate } from 'ketjs/pdf'
 
 const now = () => new Date().toISOString()
 const definition = (ctx: Parameters<FnSpec['handler']>[0], id: unknown) => {
