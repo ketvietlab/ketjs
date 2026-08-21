@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import { callFn, compose, createTheme, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import { paperTheme, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
+import { address, paperTheme, partner, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
 
 const siteCount = Number(process.env.KET_BENCH_SITES ?? 8)
 const entriesPerSite = Number(process.env.KET_BENCH_ENTRIES ?? 50)
@@ -12,7 +12,7 @@ if (!Number.isInteger(revisionPasses) || revisionPasses < 1)
   throw new Error('KET_BENCH_REVISIONS must be >= 1')
 if (!Number.isInteger(renderPasses) || renderPasses < 1) throw new Error('KET_BENCH_RENDERS must be >= 1')
 
-const modules = [website, websiteMenu, websiteSeo, websiteForm, paperTheme]
+const modules = [address, partner, website, websiteMenu, websiteSeo, websiteForm, paperTheme]
 const composeStarted = performance.now()
 const manifest = compose(modules)
 const composeMs = performance.now() - composeStarted
@@ -67,6 +67,40 @@ try {
   }
   const writeMs = performance.now() - writeStarted
 
+  const customerAuthStarted = performance.now()
+  const customerAccounts: Array<{ id: string }> = []
+  for (let site = 0; site < siteCount; site += 1) {
+    const registered = (await call('website.registerCustomer', {
+      realmId: `site:${scope.company}:site:${site}`,
+      displayName: `Benchmark customer ${site}`,
+      email: `customer-${site}@example.test`,
+      password: 'benchmark-customer-password',
+      rateKey: `benchmark-register-${site}`,
+    })) as { account: { id: string } }
+    customerAccounts.push(registered.account)
+    await call('website.authenticateCustomer', {
+      realmId: `site:${scope.company}:site:${site}`,
+      email: `customer-${site}@example.test`,
+      password: 'benchmark-customer-password',
+      rateKey: `benchmark-login-${site}`,
+    })
+  }
+  const customerAuthMs = performance.now() - customerAuthStarted
+
+  const customerSessionStarted = performance.now()
+  for (let site = 0; site < siteCount; site += 1) {
+    await call('website.startCustomerSession', {
+      id: `customer-session:${site}`,
+      accountId: customerAccounts[site]!.id,
+      tokenDigest: `benchmark-token-digest:${site}`,
+    })
+    await call('website.resolveCustomerSession', {
+      siteId: `site:${site}`,
+      tokenDigest: `benchmark-token-digest:${site}`,
+    })
+  }
+  const customerSessionMs = performance.now() - customerSessionStarted
+
   const revisionStarted = performance.now()
   for (let pass = 0; pass < revisionPasses; pass += 1)
     for (let site = 0; site < siteCount; site += 1)
@@ -108,6 +142,18 @@ try {
     `revision writes     : ${revisionMs.toFixed(2)} ms (${(revisionMs / (siteCount * revisionPasses)).toFixed(3)} ms/op)`,
   )
   console.log(`parallel site lists : ${readMs.toFixed(2)} ms (${rows} rows)`)
+  console.log(
+    `customer register+login: ${customerAuthMs.toFixed(2)} ms (${(
+      customerAuthMs /
+      (siteCount * 2)
+    ).toFixed(2)} ms/password op)`,
+  )
+  console.log(
+    `customer session pair : ${customerSessionMs.toFixed(2)} ms (${(
+      customerSessionMs /
+      (siteCount * 2)
+    ).toFixed(3)} ms/op)`,
+  )
   console.log(
     `KTL renders         : ${renderMs.toFixed(2)} ms (${(renderMs / renderPasses).toFixed(3)} ms/op)`,
   )

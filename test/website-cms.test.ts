@@ -10,7 +10,7 @@ import {
   sqliteAdapter,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
-import { paperTheme, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
+import { address, paperTheme, partner, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const SCOPE = { company: 'acme', branches: null }
@@ -24,7 +24,7 @@ const altTheme = defineTheme({
     'website.rich_text': '<div>{{ body }}</div>',
   },
 })
-const modules = [website, websiteMenu, websiteSeo, websiteForm, paperTheme, altTheme]
+const modules = [address, partner, website, websiteMenu, websiteSeo, websiteForm, paperTheme, altTheme]
 const manifest = compose(modules)
 
 const boot = async (): Promise<{ db: Adapter; manifest: Manifest }> => {
@@ -80,6 +80,60 @@ test('cms: domains resolve isolated sites with their locale and selected KTL the
     tokens: null,
   })
   assert.equal(await call(db, 'website.resolveSite', { host: 'unknown.example.test' }), null)
+  await db.close()
+})
+
+test('customer auth: site realm, account and session stay separate from backend users', async () => {
+  const { db } = await boot()
+  await call(db, 'website.saveSite', {
+    id: 'headless-site',
+    name: 'Headless',
+    title: 'Headless Store',
+    defaultLocale: 'en',
+    theme: 'theme_paper',
+  })
+  const realm = (await call(db, 'website.customerRealmForSite', { siteId: 'headless-site' })) as {
+    id: string
+  }
+  assert.equal(realm.id, 'site:acme:headless-site')
+
+  const registered = (await call(db, 'website.registerCustomer', {
+    realmId: realm.id,
+    displayName: 'Lan Anh',
+    email: ' Lan.Anh@Example.Test ',
+    password: 'correct-horse-battery-staple',
+    rateKey: 'unit-register',
+  })) as { ok: boolean; account: { id: string; partnerId: string; email: string } }
+  assert.equal(registered.ok, true)
+  assert.equal(registered.account.email, 'lan.anh@example.test')
+  assert.match(registered.account.partnerId, /:partner$/)
+
+  const rejected = (await call(db, 'website.authenticateCustomer', {
+    realmId: realm.id,
+    email: registered.account.email,
+    password: 'wrong-password',
+    rateKey: 'unit-login-wrong',
+  })) as { ok: boolean }
+  assert.equal(rejected.ok, false)
+  const authenticated = (await call(db, 'website.authenticateCustomer', {
+    realmId: realm.id,
+    email: registered.account.email,
+    password: 'correct-horse-battery-staple',
+    rateKey: 'unit-login-good',
+  })) as { ok: boolean; account: { id: string } }
+  assert.equal(authenticated.ok, true)
+
+  const session = (await call(db, 'website.startCustomerSession', {
+    id: 'customer-session',
+    accountId: authenticated.account.id,
+    tokenDigest: 'opaque-token-digest',
+  })) as { accountId: string }
+  assert.equal(session.accountId, registered.account.id)
+  const resolved = (await call(db, 'website.resolveCustomerSession', {
+    siteId: 'headless-site',
+    tokenDigest: 'opaque-token-digest',
+  })) as { accountId: string }
+  assert.equal(resolved.accountId, registered.account.id)
   await db.close()
 })
 

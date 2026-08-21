@@ -110,6 +110,83 @@ test('hardens the public form boundary and unknown hosts', async ({ page }) => {
   expect(unknownHost.status()).toBe(404)
 })
 
+test('customer authentication is a separate, headless-ready browser session', async ({ page }) => {
+  const origin = 'http://127.0.0.1:4173'
+  const email = 'customer.e2e@example.test'
+  const registered = await page.request.post('/api/website/v1/customer/auth/register', {
+    headers: { Origin: origin },
+    data: {
+      displayName: 'Lan Anh',
+      email,
+      password: 'customer-password-old',
+    },
+  })
+  expect(registered.status()).toBe(201)
+  const registration = (await registered.json()) as {
+    customer: { displayName: string; email: string }
+    csrfToken: string
+  }
+  expect(registration.customer).toEqual({
+    id: expect.any(String),
+    displayName: 'Lan Anh',
+    email,
+  })
+  expect(registration.csrfToken).toHaveLength(64)
+
+  const session = await page.request.get('/api/website/v1/customer/session')
+  expect(session.status()).toBe(200)
+  expect((await session.json()).authenticated).toBe(true)
+
+  const noCsrf = await page.request.patch('/api/website/v1/customer/profile', {
+    headers: { Origin: origin },
+    data: { displayName: 'Lan Anh Updated' },
+  })
+  expect(noCsrf.status()).toBe(403)
+  const profile = await page.request.patch('/api/website/v1/customer/profile', {
+    headers: { Origin: origin, 'X-CSRF-Token': registration.csrfToken },
+    data: { displayName: 'Lan Anh Updated' },
+  })
+  expect(profile.status()).toBe(200)
+  expect((await profile.json()).customer.displayName).toBe('Lan Anh Updated')
+
+  const crossOrigin = await page.request.post('/api/website/v1/customer/auth/logout', {
+    headers: { Origin: 'https://evil.example', 'X-CSRF-Token': registration.csrfToken },
+  })
+  expect(crossOrigin.status()).toBe(403)
+  const changed = await page.request.post('/api/website/v1/customer/password/change', {
+    headers: { Origin: origin, 'X-CSRF-Token': registration.csrfToken },
+    data: {
+      currentPassword: 'customer-password-old',
+      newPassword: 'customer-password-new',
+    },
+  })
+  expect(changed.status()).toBe(200)
+  const rotated = (await changed.json()) as { csrfToken: string }
+  expect(rotated.csrfToken).not.toBe(registration.csrfToken)
+
+  const loggedOut = await page.request.post('/api/website/v1/customer/auth/logout', {
+    headers: { Origin: origin, 'X-CSRF-Token': rotated.csrfToken },
+  })
+  expect(loggedOut.status()).toBe(204)
+  expect((await (await page.request.get('/api/website/v1/customer/session')).json()).authenticated).toBe(
+    false,
+  )
+  const oldPassword = await page.request.post('/api/website/v1/customer/auth/login', {
+    headers: { Origin: origin },
+    data: { email, password: 'customer-password-old' },
+  })
+  expect(oldPassword.status()).toBe(401)
+  const newPassword = await page.request.post('/api/website/v1/customer/auth/login', {
+    headers: { Origin: origin },
+    data: { email, password: 'customer-password-new' },
+  })
+  expect(newPassword.status()).toBe(200)
+
+  // The customer cookie coexists with, but never replaces, the backend admin session.
+  await page.goto('/admin/sites?lang=en')
+  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
+})
+
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const screens = [
