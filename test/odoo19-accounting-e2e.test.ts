@@ -37,59 +37,34 @@ async function bootAccounting(t: TestContext) {
 test('e2e accounting 19: invoice, payment reconciliation and reports cross real HTTP', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
-  for (const [id, code, name, accountType] of [
-    ['receivable', '131', 'Phải thu', 'asset_receivable'],
-    ['bank', '1121', 'Ngân hàng', 'asset_cash'],
-    ['revenue', '5111', 'Doanh thu', 'income'],
-    ['tax', '3331', 'Thuế GTGT', 'liability_current'],
-  ])
-    await call('account.saveAccount', { id, code, name, accountType })
-  await call('account.saveJournal', {
-    id: 'sales',
-    name: 'Bán hàng',
-    code: 'SAL',
-    type: 'sale',
-  })
-  await call('account.saveJournal', {
-    id: 'bank-journal',
-    name: 'Ngân hàng',
-    code: 'BNK',
-    type: 'bank',
-    defaultAccountId: 'bank',
-  })
-  await call('account.saveTax', {
-    id: 'vat10',
-    name: 'GTGT 10%',
-    typeTaxUse: 'sale',
-    amountType: 'percent',
-    amount: '10',
-  })
-  await call('account.savePaymentTerm', { id: 'net30', name: '30 ngày' })
-  await call('account.savePaymentTermLine', {
-    id: 'net30:line',
-    paymentId: 'net30',
-    value: 'percent',
-    valueAmount: '100',
-    delayType: 'days_after',
-    nbDays: 30,
-  })
+  const dashboard = await e2e.client.get('/admin/accounting', { headers: { accept: 'text/html' } })
+  assert.equal(dashboard.status, 200)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const taxes = (await call<Row[]>('account.listTaxes', { typeTaxUse: 'sale' })).value
+  const terms = (await call<Row[]>('account.listPaymentTerms')).value
+  assert.equal(accounts.length, 216)
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  const salesJournalId = String(journals.find((row) => row.type === 'sale')?.id)
+  const bankJournalId = String(journals.find((row) => row.type === 'bank')?.id)
+  const vat10Id = String(taxes.find((row) => Number(row.amount) === 10)?.id)
+  const net30Id = String(terms.find((row) => row.name === '30 ngày')?.id)
 
   const created = (
     await call<Row>('account.createInvoice', {
       id: 'invoice-1',
-      journalId: 'sales',
+      journalId: salesJournalId,
       moveType: 'out_invoice',
       partnerId: 'customer',
       invoiceDate: '2026-08-20T00:00:00.000Z',
-      paymentTermId: 'net30',
+      paymentTermId: net30Id,
       ref: 'INV/DEMO',
       description: 'Dịch vụ triển khai',
       quantity: '2',
       priceUnit: '100',
-      lineAccountId: 'revenue',
-      counterpartAccountId: 'receivable',
-      taxId: 'vat10',
-      taxAccountId: 'tax',
+      lineAccountId: accountId('511'),
+      counterpartAccountId: accountId('1311'),
+      taxId: vat10Id,
     })
   ).value
   assert.deepEqual(created, { ok: true, id: 'invoice-1', amountTotal: '220' })
@@ -97,7 +72,7 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
 
   const openItems = (await call<Row[]>('account.listOpenItems', { partnerId: 'customer' })).value
   assert.equal(openItems.length, 1)
-  assert.equal(openItems[0]!.accountId, 'receivable')
+  assert.equal(openItems[0]!.accountId, accountId('1311'))
   const receivableLineId = String(openItems[0]!.id)
 
   await call('account.registerPayment', {
@@ -106,8 +81,8 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
     paymentType: 'inbound',
     partnerType: 'customer',
     partnerId: 'customer',
-    journalId: 'bank-journal',
-    destinationAccountId: 'receivable',
+    journalId: bankJournalId,
+    destinationAccountId: accountId('1311'),
     amount: '100',
     reconcileLineId: receivableLineId,
   })
@@ -118,8 +93,8 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
     paymentType: 'inbound',
     partnerType: 'customer',
     partnerId: 'customer',
-    journalId: 'bank-journal',
-    destinationAccountId: 'receivable',
+    journalId: bankJournalId,
+    destinationAccountId: accountId('1311'),
     amount: '120',
     reconcileLineId: receivableLineId,
   })
@@ -135,7 +110,7 @@ test('e2e accounting 19: invoice, payment reconciliation and reports cross real 
     trial.reduce((sum, row) => sum + Number(row.credit), 0),
     440,
   )
-  assert.ok((await call<Row[]>('account.generalLedger', { accountId: 'receivable' })).value.length >= 3)
+  assert.ok((await call<Row[]>('account.generalLedger', { accountId: accountId('1311') })).value.length >= 3)
 
   const pages: Array<[string, RegExp]> = [
     ['/admin/accounting', /Tổng quan kế toán/],
