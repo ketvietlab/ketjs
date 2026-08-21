@@ -291,7 +291,7 @@ test('loyalty HTTP E2E: promotion code is applied through the public HTTP bounda
   assert.equal((applied.program as Row).programId, 'promo')
   const replay = await call<Row>(
     'loyalty.applyCode',
-    { order, code: 'KINGFRESH' },
+    { order, code: ' kingfresh ' },
     { idempotencyKey: 'promo-order:code' },
   )
   assert.equal(replay.ok, true)
