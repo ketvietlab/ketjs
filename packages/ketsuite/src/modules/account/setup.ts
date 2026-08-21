@@ -1,8 +1,8 @@
 import { eq, from } from 'ketjs'
 import type { Ctx, Row } from 'ketjs'
 import {
-  TT99_ACCOUNT_CHECKSUM,
   TT99_ACCOUNTS,
+  TT99_CATALOG_CHECKSUM,
   TT99_CODE,
   TT99_COUNTRY,
   TT99_LEGAL_BASIS,
@@ -53,7 +53,7 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
   if (!companyId) throw new Error('account.error.companyRequired')
   const S = ctx.table('account.Setup')
   const current = await ctx.db.one(from(S).where(eq(S.companyId, companyId)))
-  if (current) return current
+  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) return current
 
   const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
   if (!company) throw new Error('account.error.companyMissing')
@@ -64,7 +64,7 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
     const existingSetup = await tx.db.one(
       from(tx.table('account.Setup')).where(eq(tx.table('account.Setup').companyId, companyId)),
     )
-    if (existingSetup) return existingSetup
+    if (existingSetup?.sourceChecksum === TT99_CATALOG_CHECKSUM) return existingSetup
 
     const existingAccounts = await tx.db.select('account.Account')
     const byCode = new Map(existingAccounts.map((row) => [String(row.code), row]))
@@ -146,15 +146,26 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
       sequence: 10,
     })
 
-    const installedAt = new Date().toISOString()
-    await put(tx, 'account.Setup', {
-      id: setupId(companyId),
-      countryCode,
-      standard: TT99_CODE,
-      legalBasis: TT99_LEGAL_BASIS,
-      sourceChecksum: TT99_ACCOUNT_CHECKSUM,
-      installedAt,
-    })
+    if (existingSetup)
+      await tx.db.update(
+        'account.Setup',
+        { id: existingSetup.id },
+        {
+          countryCode,
+          standard: TT99_CODE,
+          legalBasis: TT99_LEGAL_BASIS,
+          sourceChecksum: TT99_CATALOG_CHECKSUM,
+        },
+      )
+    else
+      await put(tx, 'account.Setup', {
+        id: setupId(companyId),
+        countryCode,
+        standard: TT99_CODE,
+        legalBasis: TT99_LEGAL_BASIS,
+        sourceChecksum: TT99_CATALOG_CHECKSUM,
+        installedAt: new Date().toISOString(),
+      })
     return (await tx.db.select('account.Setup', { id: setupId(companyId) }))[0]!
   })
 }
@@ -163,13 +174,13 @@ export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
   const current = (await ctx.db.select('account.Setup'))[0]
-  if (current) return current
+  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) return current
 
   const active = installing.get(companyId)
   if (active) {
     await active
     const completed = (await ctx.db.select('account.Setup'))[0]
-    if (completed) return completed
+    if (completed?.sourceChecksum === TT99_CATALOG_CHECKSUM) return completed
   }
 
   const task = installCompanyAccounting(ctx).then(() => undefined)

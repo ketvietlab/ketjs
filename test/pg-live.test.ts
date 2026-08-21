@@ -42,6 +42,7 @@ import {
   TT99_ACCOUNTS,
   uom,
   user,
+  VIETNAM_TAXES,
 } from 'ketsuite'
 import { address } from 'ketsuite'
 
@@ -752,6 +753,14 @@ test('live pg: concurrent TT99 initialization converges on one complete company 
       assert.equal(
         Number((await a.all('SELECT COUNT(*) AS count FROM account_account'))[0]!.count),
         TT99_ACCOUNTS.length,
+      )
+      assert.equal(
+        Number((await a.all('SELECT COUNT(*) AS count FROM account_tax'))[0]!.count),
+        VIETNAM_TAXES.length,
+      )
+      assert.equal(
+        Number((await a.all(`SELECT COUNT(*) AS count FROM account_tax WHERE name = 'KKKNT'`))[0]!.count),
+        2,
       )
       assert.equal(
         Number(
