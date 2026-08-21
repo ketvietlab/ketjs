@@ -94,9 +94,15 @@ test('fill: required props cannot be missing or null', () => {
 })
 
 test('fill: nested callables and non-finite numbers cannot cross as data', () => {
+  // The path, not just "somewhere in this prop": one walker refuses a function at
+  // every door into a theme, and it says where it found one.
   assert.throws(
     () => render([owner, filler('a', `{{ app.callback }}`)], { app: { callback: () => 'secret' } }),
-    /contains a non-data value/,
+    /scope key "app\.callback" is a function/,
+  )
+  assert.throws(
+    () => render([owner, filler('a', `x`)], { app: { rows: [{ onClick: () => 1 }] } }),
+    /scope key "app\.rows\[0\]\.onClick" is a function/,
   )
   assert.throws(
     () => render([owner, filler('a', `{{ app.total }}`)], { app: { total: Number.POSITIVE_INFINITY } }),
