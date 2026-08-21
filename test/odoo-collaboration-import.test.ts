@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { defineApp, defineModule } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
-import { createTestApp } from 'ketjs/testing'
+import { defineApp, defineModule } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import {
   activity,
   address,
@@ -15,7 +15,7 @@ import {
   partner,
   storage,
   user,
-} from 'ketsuite'
+} from '@ketvietlab/ketsuite'
 import { stableTargetId } from '../packages/ketsuite/src/modules/odoo_collaboration_import/index.ts'
 import type {
   OdooImportBatch,

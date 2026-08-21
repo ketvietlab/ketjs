@@ -11,18 +11,18 @@ details.
 
 | Entrypoint | Runtime |
 | --- | --- |
-| `ketjs` | Framework composition, server, data, jobs, sessions, integrations, and selected view helpers. |
-| `ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
-| `ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
-| `ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
-| `ketjs-view/jsx-runtime` | Automatic JSX runtime. |
-| `ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
-| `ketjs-postgres` | Optional PostgreSQL adapter. |
+| `@ketvietlab/ketjs` | Framework composition, server, data, jobs, sessions, integrations, and selected view helpers. |
+| `@ketvietlab/ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
+| `@ketvietlab/ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
+| `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
+| `@ketvietlab/ketjs-view/jsx-runtime` | Automatic JSX runtime. |
+| `@ketvietlab/ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
+| `@ketvietlab/ketjs-postgres` | Optional PostgreSQL adapter. |
 
-All packages require Node.js 24 or later for their supported server/tooling use. `ketjs-view` has no runtime
+All packages require Node.js 24 or later for their supported server/tooling use. `@ketvietlab/ketjs-view` has no runtime
 dependencies and its browser-facing entrypoint avoids Node APIs.
 
-## `ketjs`
+## `@ketvietlab/ketjs`
 
 ### Composition and application model
 
@@ -112,13 +112,13 @@ types are exported from the same entrypoint.
 | `createTheme`, `compileKtl`, `loadTemplates`, `createJoints` | Compile and execute the theme boundary. |
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
-| `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `ketjs-view` rendering helpers. |
+| `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `@ketvietlab/ketjs-view` rendering helpers. |
 | `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Server-render, hydrate, and reconcile named islands. |
 | `reachOf`, `functionsOf`, `formatReach`, `formatInventory` | Inspect function and data/effect permission reach. |
 | `agentTools`, `agentDescriptor`, `compositionSchema` | Describe the composed application for tooling and agents. |
 | `generateDts` | Generate manifest-derived TypeScript declarations. |
 
-## `ketjs/theme`
+## `@ketvietlab/ketjs/theme`
 
 Use the narrow theme entrypoint in presentation packages:
 
@@ -133,12 +133,12 @@ import {
   scopedCss,
   sealScope,
   tokensToCss,
-} from 'ketjs/theme'
+} from '@ketvietlab/ketjs/theme'
 ```
 
 It also exports `LAYER_ORDER` and the `Compiled`, `Filter`, `Scope`, and `Joints` types.
 
-## `ketjs/testing`
+## `@ketvietlab/ketjs/testing`
 
 ```ts
 import {
@@ -146,14 +146,14 @@ import {
   TestClient,
   TestHttpError,
   createTestApp,
-} from 'ketjs/testing'
+} from '@ketvietlab/ketjs/testing'
 ```
 
 The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOptions`, `TestIdentity`,
 `TestCallOptions`, `TestFixtures`, `TestFixtureCallOptions`, and `TestFixtureTenant`. See
 [Testing](/ketjs/testing/) for the lifecycle and isolation contract.
 
-## `ketjs-view`
+## `@ketvietlab/ketjs-view`
 
 | API | Purpose |
 | --- | --- |
@@ -175,15 +175,15 @@ TypeScript projects using automatic JSX can configure:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "ketjs-view"
+    "jsxImportSource": "@ketvietlab/ketjs-view"
   }
 }
 ```
 
-## `ketjs-postgres`
+## `@ketvietlab/ketjs-postgres`
 
 ```ts
-import { postgresAdapter, type PostgresOptions } from 'ketjs-postgres'
+import { postgresAdapter, type PostgresOptions } from '@ketvietlab/ketjs-postgres'
 ```
 
 The app installs the optional `postgres` peer dependency and owns its connection configuration. The adapter

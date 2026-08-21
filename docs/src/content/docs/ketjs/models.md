@@ -10,7 +10,7 @@ generated declarations from the same model definitions.
 ## Declare a model
 
 ```ts
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
   name: 'sales',

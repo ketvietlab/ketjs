@@ -2,8 +2,8 @@
 // use breadcrumbs, but deeper ERP records still need a canonical component rather
 // than forty hand-written trails or tab bars.
 
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = ['breadcrumbs', 'breadcrumb', 'tabs', 'tab'] as const
 

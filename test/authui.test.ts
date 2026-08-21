@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, callFn } from 'ketjs'
+import { bootApp, callFn } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 /**
@@ -185,7 +185,7 @@ test('login: the page carries the stylesheets, like every other screen', async (
 })
 
 test('catalogue: the new states are there for the design team to draw', async () => {
-  const { CASES } = await import('ketsuite/backend')
+  const { CASES } = await import('@ketvietlab/ketsuite/backend')
   const ids = CASES.map((c) => c.id)
   for (const id of ['login', 'login-failed', 'login-next', 'viewer-one', 'viewer-many', 'viewer-long']) {
     assert.ok(ids.includes(id), `missing catalogue case: ${id}`)

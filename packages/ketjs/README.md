@@ -14,7 +14,7 @@ required application-server dependency.
 ## Create an application
 
 ```bash
-npx --package ketjs ket new notes
+npx --package @ketvietlab/ketjs ket new notes
 cd notes
 npm install
 npm run dev
@@ -26,11 +26,11 @@ at `http://127.0.0.1:3000`.
 ## Install in an existing project
 
 ```bash
-npm install ketjs
+npm install @ketvietlab/ketjs
 ```
 
 ```ts
-import { defineApp, defineModule, defineWorkspace } from 'ketjs'
+import { defineApp, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
 ```
 
 Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvietlab/ketjs)

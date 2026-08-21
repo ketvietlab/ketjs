@@ -8,8 +8,8 @@
 // So the split is: `user.authenticate` decides whether the password is right and
 // what the account may see, and this decides what to do about it.
 
-import { json, page, sha256, text, withHeaders } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
+import { json, page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { loginScreen } from './login.ts'
 import { authTokenScreen } from '../../ui/auth.tsx'
 

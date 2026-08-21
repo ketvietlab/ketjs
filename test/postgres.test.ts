@@ -12,10 +12,10 @@ import {
   schemaFromManifest,
   sqliteAdapter,
   table,
-} from 'ketjs'
-import type { Adapter } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import type { Adapter } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)

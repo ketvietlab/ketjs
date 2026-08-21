@@ -1,5 +1,5 @@
-import { defineFn, deleteFrom, eq } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import {
   invalid,
   issue,

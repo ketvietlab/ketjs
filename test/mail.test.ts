@@ -1,9 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, defineModule, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter, Ctx, Row } from 'ketjs'
-import { company, mail, partner, storage, user } from 'ketsuite'
-import { address } from 'ketsuite'
+import {
+  callFn,
+  compose,
+  defineModule,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
+import type { Adapter, Ctx, Row } from '@ketvietlab/ketjs'
+import { company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 import {
   ensureThread,
   followThread,

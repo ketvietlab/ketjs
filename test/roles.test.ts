@@ -9,8 +9,8 @@ import {
   migrateOne,
   registerFunctions,
   sqliteAdapter,
-} from 'ketjs'
-import type { Ctx } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 /**

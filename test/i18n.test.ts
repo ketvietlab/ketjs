@@ -9,10 +9,10 @@ import {
   missingMessages,
   formatMissing,
   PSEUDO_LOCALE,
-} from 'ketjs'
-import { renderToString } from 'ketjs-view'
-import { appsScreen } from 'ketsuite/backend'
-import backend from 'ketsuite/backend'
+} from '@ketvietlab/ketjs'
+import { renderToString } from '@ketvietlab/ketjs-view'
+import { appsScreen } from '@ketvietlab/ketsuite/backend'
+import backend from '@ketvietlab/ketsuite/backend'
 
 const shop = defineModule({
   name: 'shop',

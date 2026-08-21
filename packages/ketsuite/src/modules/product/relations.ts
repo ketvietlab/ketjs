@@ -1,4 +1,4 @@
-import type { RelationDef } from 'ketjs'
+import type { RelationDef } from '@ketvietlab/ketjs'
 
 /**
  * Every relation is declared in both directions where both are useful, and each is

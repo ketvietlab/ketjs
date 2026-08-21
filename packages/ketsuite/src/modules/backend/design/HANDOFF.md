@@ -120,7 +120,7 @@ không tự sửa, vì nó gắn với dữ liệu thật.
 
 List View không dùng TanStack Table, AG Grid hoặc CSS framework. Nền tảng là semantic
 HTML (`table`, `thead`, `tbody`, `th`) + CSS thuần; hành vi tương tác sau này là island
-nhỏ dùng signal/DOM API đã có trong `ketjs-view`.
+nhỏ dùng signal/DOM API đã có trong `@ketvietlab/ketjs-view`.
 
 Quy ước triển khai tiếp theo:
 

@@ -1,8 +1,8 @@
 // The sidebar: permitted apps, the open app's menu, operational indicators and viewer.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
-import type { MenuNode, Translator } from 'ketjs'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 

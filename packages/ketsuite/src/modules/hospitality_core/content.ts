@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, defineFn, deleteFrom, eq, from, gt, KetError, or } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { and, asc, defineFn, deleteFrom, eq, from, gt, KetError, or } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { CONTENT_IMAGE_CATEGORIES } from './types.ts'
 
 type ContentTarget = {

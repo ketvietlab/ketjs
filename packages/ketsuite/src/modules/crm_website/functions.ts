@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { FnSpec } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { FnSpec } from '@ketvietlab/ketjs'
 import { caseWriteEffects, commandKey, invalid, issue, now, saveCase } from '../crm/index.ts'
 
 export const functions: Record<string, FnSpec> = {

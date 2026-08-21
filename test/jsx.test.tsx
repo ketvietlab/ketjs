@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { countingHost, domHost, mount, renderToString, signal } from 'ketjs-view'
-import type { HostNode, TemplateResult } from 'ketjs-view'
-import { jsx } from 'ketjs-view/jsx-runtime'
+import { countingHost, domHost, mount, renderToString, signal } from '@ketvietlab/ketjs-view'
+import type { HostNode, TemplateResult } from '@ketvietlab/ketjs-view'
+import { jsx } from '@ketvietlab/ketjs-view/jsx-runtime'
 import { document, parseFragment } from './helpers/dom.ts'
 
 type CounterProps = { label: string; count: number; onIncrement?: () => void }
@@ -59,7 +59,7 @@ test('jsx: event handlers attach once and refresh their closure', () => {
 })
 
 test('jsx: server markup hydrates without replacing its element', async () => {
-  const { mountHydrated } = await import('ketjs-view')
+  const { mountHydrated } = await import('@ketvietlab/ketjs-view')
   const count = signal(3)
   const view = () => <Counter label="Count" count={count()} />
   const container = parseFragment(renderToString(view()))

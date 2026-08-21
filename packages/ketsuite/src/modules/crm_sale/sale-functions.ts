@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addTimeline, commandKey, invalid, issue, now } from '../crm/index.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'
 

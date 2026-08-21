@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { multipart } from 'ketjs'
+import { multipart } from '@ketvietlab/ketjs'
 
 const split = async function* (value: Buffer, sizes: number[]): AsyncGenerator<Uint8Array> {
   let at = 0
