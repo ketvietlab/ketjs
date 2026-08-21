@@ -24,11 +24,13 @@ export const taxesScreen = (
     frame: Frame
     fields: FormField[]
     rows: Row[]
+    accounts: Row[]
     action: string
     currency: unknown
     errors?: string[]
   },
 ): TemplateResult => {
+  const accountCodes = new Map(options.accounts.map((account) => [String(account.id), String(account.code)]))
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,
@@ -61,6 +63,11 @@ export const taxesScreen = (
                 : `${String(row.amount)}%`,
           align: 'end',
           kind: 'number',
+        },
+        {
+          key: 'account',
+          label: _('account_backend.field.accountId'),
+          cell: (row) => (row.accountId ? (accountCodes.get(String(row.accountId)) ?? '—') : '—'),
         },
         {
           key: 'included',

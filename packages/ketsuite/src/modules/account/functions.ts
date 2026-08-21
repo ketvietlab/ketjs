@@ -1,5 +1,6 @@
 import { asc, defineFn, eq, from } from 'ketjs'
 import type { Ctx, FnSpec, Row } from 'ketjs'
+import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
 
 export const ACCOUNT_TYPES = [
   'asset_receivable',
@@ -182,11 +183,33 @@ async function updatePaymentState(ctx: Ctx, moveId: unknown): Promise<void> {
 }
 
 export const functions: Record<string, FnSpec> = {
+  initializeCompany: defineFn({
+    input: {},
+    output: {
+      id: 'id',
+      countryCode: 'text',
+      standard: 'text',
+      legalBasis: 'text',
+      sourceChecksum: 'text',
+      installedAt: 'datetime',
+    },
+    effects: [...ACCOUNT_SETUP_EFFECTS],
+    idempotent: true,
+    agent: true,
+    handler: (ctx) => ensureCompanyAccounting(ctx),
+  }),
+  getSetup: defineFn({
+    input: {},
+    effects: ['read:account.Setup'],
+    agent: true,
+    handler: async (ctx) => (await ctx.db.select('account.Setup'))[0] ?? null,
+  }),
   listAccounts: defineFn({
     input: { includeArchived: 'bool?' },
-    effects: ['read:account.Account'],
+    effects: ['read:account.Account', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx, args) => {
+      await ensureCompanyAccounting(ctx)
       const A = ctx.table('account.Account')
       const q = from(A).orderBy(asc(A.code))
       return ctx.db.all(args.includeArchived ? q : q.where(eq(A.active, true)))
@@ -220,10 +243,12 @@ export const functions: Record<string, FnSpec> = {
   }),
   listJournals: defineFn({
     input: { type: 'text?' },
-    effects: ['read:account.Journal'],
+    effects: ['read:account.Journal', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
-    handler: (ctx, args) =>
-      ctx.db.select('account.Journal', args.type ? { type: args.type, active: true } : { active: true }),
+    handler: async (ctx, args) => {
+      await ensureCompanyAccounting(ctx)
+      return ctx.db.select('account.Journal', args.type ? { type: args.type, active: true } : { active: true })
+    },
   }),
   saveJournal: defineFn({
     input: { id: 'id', name: 'text', code: 'text', type: 'text', defaultAccountId: 'id?', active: 'bool?' },
@@ -256,13 +281,15 @@ export const functions: Record<string, FnSpec> = {
   }),
   listTaxes: defineFn({
     input: { typeTaxUse: 'text?' },
-    effects: ['read:account.Tax'],
+    effects: ['read:account.Tax', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
-    handler: (ctx, args) =>
-      ctx.db.select(
+    handler: async (ctx, args) => {
+      await ensureCompanyAccounting(ctx)
+      return ctx.db.select(
         'account.Tax',
         args.typeTaxUse ? { typeTaxUse: args.typeTaxUse, active: true } : { active: true },
-      ),
+      )
+    },
   }),
   saveTax: defineFn({
     input: {
@@ -275,11 +302,12 @@ export const functions: Record<string, FnSpec> = {
       amount: 'decimal',
       priceInclude: 'bool?',
       includeBaseAmount: 'bool?',
+      accountId: 'id?',
       sequence: 'int?',
       active: 'bool?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:account.Tax', 'write:account.Tax'],
+    effects: ['read:account.Tax', 'write:account.Tax', 'read:account.Account'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -289,6 +317,8 @@ export const functions: Record<string, FnSpec> = {
         return invalid('amountType', 'unsupported Odoo 19 tax computation')
       if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope)))
         return invalid('taxScope', 'tax scope must be service or consu')
+      if (args.accountId && !(await accountOf(ctx, args.accountId)))
+        return invalid('accountId', 'tax account does not exist')
       const existing = (await ctx.db.select('account.Tax', { id: args.id }))[0]
       const values = {
         ...args,
@@ -309,6 +339,7 @@ export const functions: Record<string, FnSpec> = {
           'amount',
           'priceInclude',
           'includeBaseAmount',
+          'accountId',
           'sequence',
           'active',
         ])
@@ -320,9 +351,10 @@ export const functions: Record<string, FnSpec> = {
   }),
   listPaymentTerms: defineFn({
     input: {},
-    effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine'],
+    effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx) => {
+      await ensureCompanyAccounting(ctx)
       const T = ctx.table('account.PaymentTerm')
       return ctx.db.all(from(T).where(eq(T.active, true)).orderBy(asc(T.name)).preload('lines'))
     },
@@ -595,7 +627,8 @@ export const functions: Record<string, FnSpec> = {
       } catch (error) {
         return invalid('taxId', (error as Error).message)
       }
-      if (amounts.tax && (!args.taxAccountId || !(await accountOf(ctx, args.taxAccountId))))
+      const taxAccountId = args.taxAccountId ?? tax?.accountId
+      if (amounts.tax && (!taxAccountId || !(await accountOf(ctx, taxAccountId))))
         return invalid('taxAccountId', 'a valid tax account is required when tax is non-zero')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
@@ -672,7 +705,7 @@ export const functions: Record<string, FnSpec> = {
         if (amounts.tax)
           await line(
             `${String(args.id)}:tax`,
-            args.taxAccountId,
+            taxAccountId,
             amounts.tax,
             mainDebit,
             String(tax?.name ?? 'Tax'),

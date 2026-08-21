@@ -28,6 +28,7 @@
     "bench:user-auth": "npm run build --silent && node .build/bench/identity-auth.bench.js",
     "bench:oauth": "npm run build --silent && node .build/bench/identity-oauth.bench.js",
     "bench:address": "npm run build --silent && node .build/bench/address.bench.js",
+    "bench:account-tt99": "npm run build --silent && node .build/bench/account-tt99.bench.js",
     "test:hospitality:e2e": "npm run build --silent && node --test .build/test/hospitality-e2e.test.js",
     "visual:hospitality:seed": "npm run build --silent && node .build/tools/hospitality-visual.js",
     "visual:partner:seed": "npm run build --silent && node .build/tools/partner-visual.js",
