@@ -1,0 +1,1 @@
+<section class="signup" data-ket-section="form">{% if heading %}<h2>{{ heading }}</h2>{% endif %}{% if description %}<p>{{ description }}</p>{% endif %}<a class="buy" href="#newsletter">Keep me posted →</a></section>

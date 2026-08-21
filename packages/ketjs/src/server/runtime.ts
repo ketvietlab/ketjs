@@ -27,7 +27,7 @@ export async function bootRuntime(
     ...(options.port === undefined ? {} : { port: options.port }),
   })
   if (options.port !== undefined) config.port = options.port
-  const modules = spec.theme ? [...spec.modules, spec.theme] : [...spec.modules]
+  const modules = [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]
   const manifest = compose(modules, {
     appRequires: spec.requires ?? [],
     headless: spec.headless ?? false,

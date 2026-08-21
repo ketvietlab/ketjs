@@ -31,6 +31,8 @@ export type AppSpec = {
   name: string
   modules: KetModule[]
   theme?: KetModule
+  /** Themes this deployment allows sites to select. `theme` remains the fallback. */
+  themes?: KetModule[]
   datastore?: string
   requires?: string[]
   /** An app that exposes functions but renders no pages: no theme, no region contract. */
@@ -49,9 +51,10 @@ export type AppSpec = {
  * the workspace boundary and nowhere deeper in the framework.
  */
 export type ModuleRef = KetModule | string
-export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme'> & {
+export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme' | 'themes'> & {
   modules: ModuleRef[]
   theme?: ModuleRef
+  themes?: ModuleRef[]
 }
 
 export type ModulePath = string | URL
@@ -72,7 +75,13 @@ export function defineApp(spec: AppSpec): AppSpec
 export function defineApp(spec: AppDeclaration): AppDeclaration
 export function defineApp(spec: AppDeclaration): AppDeclaration {
   if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
-  if (spec.headless && spec.theme) throw new Error(`app "${spec.name}" is headless but installs a theme`)
+  if (spec.headless && (spec.theme || spec.themes?.length))
+    throw new Error(`app "${spec.name}" is headless but installs a theme`)
+  const themeNames = [spec.theme, ...(spec.themes ?? [])]
+    .filter((theme): theme is ModuleRef => theme !== undefined)
+    .map((theme) => (typeof theme === 'string' ? theme : theme.name))
+  if (new Set(themeNames).size !== themeNames.length)
+    throw new Error(`app "${spec.name}" selects the same theme more than once`)
   if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
   const pageRegion = spec.serve?.pages?.region
   if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
@@ -101,7 +110,7 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
   const usedBy = new Map<string, string[]>()
 
   for (const app of apps) {
-    const mods = app.theme ? [...app.modules, app.theme] : [...app.modules]
+    const mods = [...app.modules, ...(app.theme ? [app.theme] : []), ...(app.themes ?? [])]
     try {
       manifests[app.name] = compose(mods, {
         appRequires: app.requires ?? [],

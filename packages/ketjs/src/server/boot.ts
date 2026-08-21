@@ -140,6 +140,8 @@ export type ServeContext = {
  */
 export type PagesSpec = {
   resolve: string
+  /** Optional function taking `{ host }` and returning site id, title, locale and theme. */
+  siteResolve?: string
   /** Theme region whose host carries the same data-ket-slot name. */
   region?: string
   /** Message key for the title of a path that has no page. */
@@ -301,12 +303,19 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     return registry
   }
 
+  const availableThemes = [spec.theme, ...(spec.themes ?? [])].filter(
+    (theme): theme is NonNullable<typeof theme> => theme !== undefined,
+  )
+  const fallbackTheme = spec.theme ?? availableThemes[0]
   const themeFactory =
-    spec.headless || !spec.theme
+    spec.headless || !fallbackTheme
       ? {}
       : {
           theme: (live: Manifest) =>
-            createTheme(live, modules, { translate: translate(config.defaultLocale) }),
+            createTheme(live, modules, {
+              translate: translate(config.defaultLocale),
+              theme: fallbackTheme.name,
+            }),
         }
 
   // Fills are KTL, so they translate the way templates do.
@@ -622,14 +631,48 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
     })
   }
-  if (pages?.region && spec.theme && !spec.theme.templates[pages.region]) {
+  if (pages?.siteResolve && !manifest.functions[pages.siteResolve]) {
     throw new KetError({
-      code: 'E_PAGE_REGION_MISSING',
+      code: 'E_SITE_RESOLVER_MISSING',
       module: spec.name,
-      message: `app "${spec.name}" navigates through region "${pages.region}", which its theme does not render`,
-      hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
+      message: `app "${spec.name}" resolves sites with "${pages.siteResolve}", which no installed module declares`,
     })
   }
+  for (const selected of availableThemes)
+    if (pages?.region && !selected.templates[pages.region]) {
+      throw new KetError({
+        code: 'E_PAGE_REGION_MISSING',
+        module: spec.name,
+        message: `app "${spec.name}" navigates through region "${pages.region}", which theme "${selected.name}" does not render`,
+        hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
+      })
+    }
+
+  type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
+  const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
+  const requestHost = (url: URL, req: IncomingMessage): string => {
+    const raw = String(req.headers.host ?? url.host).trim()
+    try {
+      return new URL(`http://${raw}`).hostname.replace(/^\[|\]$/g, '')
+    } catch {
+      return ''
+    }
+  }
+  const siteOf = (url: URL, req: IncomingMessage): Promise<ResolvedSite | null> => {
+    if (!pages?.siteResolve) return Promise.resolve(null)
+    let pending = siteRecords.get(req)
+    if (!pending) {
+      pending = ctx.call(
+        pages.siteResolve,
+        { host: requestHost(url, req) },
+        url,
+        req,
+      ) as Promise<ResolvedSite | null>
+      siteRecords.set(req, pending)
+    }
+    return pending
+  }
+  const dynamicThemes = new Map<string, ReturnType<typeof createTheme>>()
 
   const appRoutes = serve.routes?.(ctx) ?? {}
   for (const path of Object.keys(appRoutes)) {
@@ -688,10 +731,31 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
         ),
       ),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
-    ...(spec.headless || !spec.theme
+    ...(spec.headless || !fallbackTheme
       ? {}
       : {
-          theme: (url: URL, req: IncomingMessage) => tenants.ofRequest(url, req, async (t) => t.theme),
+          theme: (url: URL, req: IncomingMessage) =>
+            tenants.ofRequest(url, req, async (t) => {
+              const site = await siteOf(url, req)
+              // A multisite app must never serve its fallback site for an unknown
+              // Host header. Apart from leaking tenant content, that turns Host
+              // header poisoning into generated links and cached HTML.
+              if (pages?.siteResolve && !site) return null
+              const chosen = site?.theme ?? fallbackTheme.name
+              const allowed = availableThemes.find((theme) => theme.name === chosen)
+              if (!allowed || t.live.disabledModules?.includes(allowed.name)) return null
+              const locale = site?.locale ?? localeOf(url, req)
+              const key = `${t.key}::${t.live.order.join(',')}::${allowed.name}::${locale}`
+              let runtime = dynamicThemes.get(key)
+              if (!runtime) {
+                runtime = createTheme(t.live, modules, {
+                  translate: translate(locale),
+                  theme: allowed.name,
+                })
+                dynamicThemes.set(key, runtime)
+              }
+              return runtime
+            }),
         }),
     /**
      * The storefront: a path becomes a page, and a page becomes its sections.
@@ -704,12 +768,22 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       ? {
           ...(pages.region ? { pageRegion: pages.region } : {}),
           pageScope: async (url: URL, req: IncomingMessage) => {
-            const site = { title: pages.siteTitle ?? spec.name }
+            const resolvedSite = await siteOf(url, req)
+            const site = {
+              id: resolvedSite?.id,
+              title: resolvedSite?.title ?? pages.siteTitle ?? spec.name,
+              theme: resolvedSite?.theme ?? fallbackTheme?.name,
+            }
             // The theme's layout writes <html lang>, so the locale has to reach it.
             // It was hardcoded there, which made i18n untrue on the first tag of every
             // storefront page.
-            const locale = localeOf(url, req)
-            const row = (await ctx.call(pages.resolve, { path: url.pathname }, url, req)) as {
+            const locale = resolvedSite?.locale ?? localeOf(url, req)
+            const row = (await ctx.call(
+              pages.resolve,
+              { path: url.pathname, ...(resolvedSite?.id ? { siteId: resolvedSite.id } : {}) },
+              url,
+              req,
+            )) as {
               id: string
               title: string
               layout: unknown

@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ page.title }}</title><link rel="stylesheet" href="/_ket/asset/theme_retail/theme.css">{% joint "website:page.head" %}</head>
+<body class="retail-site"><header class="shop-head"><a href="/">{{ site.title }}</a><a href="/cart">Bag</a></header>{% joint "website:page.body.start" %}<main data-ket-slot="website.page">{% region "website.page" %}</main>{% joint "website:page.body.end" %}<footer class="shop-foot">Built for the everyday.</footer></body>
+</html>
