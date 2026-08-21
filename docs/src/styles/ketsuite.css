@@ -117,8 +117,10 @@ header.header {
 }
 
 .site-title img {
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+  inline-size: auto;
+  block-size: 2rem;
+  max-inline-size: 10.5rem;
+  object-fit: contain;
 }
 
 site-search button {
@@ -319,7 +321,7 @@ starlight-lang-select select {
 
 #starlight__sidebar summary {
   padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.2;
@@ -345,7 +347,7 @@ starlight-lang-select select {
 #starlight__sidebar a {
   padding: 0.3125rem 0.5rem;
   border-radius: var(--ks-radius-sm);
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   line-height: 1.35;
 }
 

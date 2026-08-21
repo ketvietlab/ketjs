@@ -1,3 +1,9 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/src/assets/ketsuite-logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="./docs/src/assets/ketsuite-logo-light.png">
+  <img alt="KetSuite — Extensible Open ERP" src="./docs/src/assets/ketsuite-logo-light.png" width="420">
+</picture>
+
 # Ket
 
 A monorepo: **KetJS** the framework, **KetSuite** the application built on it.

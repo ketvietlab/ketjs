@@ -24,8 +24,10 @@ export default defineConfig({
       description: 'Architecture, operations, and development documentation for the KetJS framework.',
       favicon: '/favicon.svg',
       logo: {
-        src: './src/assets/logo-placeholder.svg',
-        replacesTitle: false,
+        light: './src/assets/ketsuite-logo-light.png',
+        dark: './src/assets/ketsuite-logo-dark.png',
+        alt: 'KetSuite — Extensible Open ERP',
+        replacesTitle: true,
       },
       locales: {
         root: {
