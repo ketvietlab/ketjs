@@ -44,6 +44,7 @@ import type {
   BuildingDetail,
   BuildingFormValues,
   BuildingRow,
+  BranchChoice,
   CleaningTaskSummary,
   CleaningTaskRow,
   FolioRow,
@@ -481,6 +482,7 @@ const contentImages = async (
 
 const defaultPropertyValues = (id: string): PropertyFormValues => ({
   id,
+  branchId: null,
   code: '',
   name: '',
   publicName: null,
@@ -504,6 +506,7 @@ const propertyFormValues = (
   current: PropertyDetail | null = null,
 ): PropertyFormValues => ({
   id,
+  branchId: form.branchId?.trim() || current?.branchId || null,
   code: form.code?.trim() ?? current?.code ?? '',
   name: form.name?.trim() ?? current?.name ?? '',
   publicName: form.publicName?.trim() || null,
@@ -542,10 +545,14 @@ const renderPropertyDetail = async (
   errors: readonly string[] = [],
   attempted?: PropertyFormValues,
 ) => {
-  const [property, policies] = (await Promise.all([
+  const scope = await ctx.scopeOf(url, req)
+  const [property, policies, branches] = (await Promise.all([
     ctx.call('hospitality_core.getProperty', { id }, url, req),
     ctx.call('hospitality_core.listCancellationPolicies', {}, url, req),
-  ])) as [PropertyDetail | null, PolicyRow[]]
+    scope.company
+      ? ctx.call('company.listBranches', { companyId: scope.company }, url, req)
+      : Promise.resolve([]),
+  ])) as [PropertyDetail | null, PolicyRow[], BranchChoice[]]
   if (!property) return text('Not found', { status: 404 })
   const lang = ctx.localeOf(url, req)
   return document(
@@ -557,6 +564,7 @@ const renderPropertyDetail = async (
       ctx.translate(lang),
       property,
       policies,
+      branches,
       lang,
       await frame(ctx, url, req),
       url.searchParams.get('status'),
@@ -1495,6 +1503,10 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as PolicyRow[]
+      const scope = await ctx.scopeOf(url, req)
+      const branches = scope.company
+        ? ((await ctx.call('company.listBranches', { companyId: scope.company }, url, req)) as BranchChoice[])
+        : []
       if (req.method === 'GET') {
         const values = defaultPropertyValues(randomUUID())
         return document(
@@ -1502,7 +1514,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
           _('hospitality_core.property.create.title'),
-          newPropertyScreen(_, values, policies, lang, await frame(ctx, url, req)),
+          newPropertyScreen(_, values, policies, branches, lang, await frame(ctx, url, req)),
         )
       }
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
@@ -1524,6 +1536,7 @@ export const routes: Record<string, RouteEntry> = {
             _,
             values,
             policies,
+            branches,
             lang,
             await frame(ctx, url, req),
             operationErrors(ctx, url, req, result),
