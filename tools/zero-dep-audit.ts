@@ -33,9 +33,9 @@ type Rule = {
 
 const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
-  ketjs: { allow: ['ketjs-view'] },
-  'ketjs-postgres': { allow: ['ketjs'], optionalPeers: ['postgres'] },
-  ketsuite: { allow: ['ketjs', 'ketjs-view'], publicOnly: true },
+  ketjs: { allow: ['@ketvietlab/ketjs-view'] },
+  'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
+  ketsuite: { allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view'], publicOnly: true },
 }
 const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres'])
 
@@ -95,7 +95,8 @@ for (const [name, rule] of Object.entries(RULES)) {
         const spec = (m[1] ?? m[2] ?? m[3]) as string
         if (spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../')) continue
 
-        const target = spec.split('/')[0] as string
+        const parts = spec.split('/')
+        const target = spec.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] as string)
         const isSibling = rule.allow.includes(target)
         const isPeer = (rule.optionalPeers ?? []).includes(target)
         if (!isSibling && !isPeer) {

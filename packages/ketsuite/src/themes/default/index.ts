@@ -1,4 +1,4 @@
-import { defineTheme, loadTemplates } from 'ketjs'
+import { defineTheme, loadTemplates } from '@ketvietlab/ketjs'
 
 // A theme may only declare templates, fills, tokens and regions. Try adding
 // `models` or `functions` here and defineTheme() refuses it.

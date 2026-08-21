@@ -1,4 +1,4 @@
-import type { RelationDef } from 'ketjs'
+import type { RelationDef } from '@ketvietlab/ketjs'
 
 export const relations: Record<string, Record<string, RelationDef>> = {
   'account.Account': { lines: { hasMany: 'account.MoveLine', by: 'accountId' } },

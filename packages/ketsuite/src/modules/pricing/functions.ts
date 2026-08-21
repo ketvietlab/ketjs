@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { convertQty, roundTo, type Unit } from '../uom/convert.ts'
 
 export const APPLIED_ON = ['3_global', '2_product_category', '1_product', '0_product_variant'] as const

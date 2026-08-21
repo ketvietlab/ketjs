@@ -9,7 +9,7 @@ business data, and a separate worker process claims jobs with leases. Redis is n
 ## Declare a job
 
 ```ts
-import { defineJob, defineModule } from 'ketjs'
+import { defineJob, defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
   name: 'sales',

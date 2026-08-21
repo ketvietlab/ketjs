@@ -1,4 +1,4 @@
-import { defineTheme, loadTemplates } from 'ketjs'
+import { defineTheme, loadTemplates } from '@ketvietlab/ketjs'
 import { tokens } from './tokens.ts'
 
 export default defineTheme({

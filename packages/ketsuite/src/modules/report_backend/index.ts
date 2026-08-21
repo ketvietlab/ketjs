@@ -1,4 +1,4 @@
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { routes } from './routes.tsx'
 
 export default defineModule({

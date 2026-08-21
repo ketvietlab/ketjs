@@ -12,7 +12,7 @@ import {
   namespacedStorage,
   registerFunctions,
   sqliteAdapter,
-} from 'ketjs'
+} from '@ketvietlab/ketjs'
 import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))

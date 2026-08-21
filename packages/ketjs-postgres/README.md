@@ -7,14 +7,14 @@ The PostgreSQL datastore adapter for KetJS.
 Install the adapter and its optional peer driver:
 
 ```bash
-npm install ketjs-postgres postgres
+npm install @ketvietlab/ketjs-postgres postgres
 ```
 
 ```ts
-import { postgresAdapter } from 'ketjs-postgres'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 ```
 
-The core `ketjs` package remains independent of database drivers; this package is the explicit
+The core `@ketvietlab/ketjs` package remains independent of database drivers; this package is the explicit
 PostgreSQL boundary.
 
 Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvietlab/ketjs)

@@ -3,10 +3,17 @@
 // included in request latency samples.
 
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, planMigration, registerFunctions, renderSql, schemaFromManifest } from 'ketjs'
-import type { Row } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import { address, partner } from 'ketsuite'
+import {
+  callFn,
+  compose,
+  planMigration,
+  registerFunctions,
+  renderSql,
+  schemaFromManifest,
+} from '@ketvietlab/ketjs'
+import type { Row } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import { address, partner } from '@ketvietlab/ketsuite'
 
 const url = process.env.KET_BENCH_PG
 if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark database')

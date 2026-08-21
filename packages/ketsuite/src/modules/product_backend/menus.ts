@@ -5,7 +5,7 @@
 // function behind the screen, so an account that may not list templates is not
 // offered a screen that lists them.
 
-import type { MenuDef } from 'ketjs'
+import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
   product: { label: 'menu.app', icon: 'package', sequence: 20 },

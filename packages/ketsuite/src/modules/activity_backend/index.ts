@@ -1,4 +1,4 @@
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 import { islands } from './islands.ts'
 import { routes } from './routes.ts'
 

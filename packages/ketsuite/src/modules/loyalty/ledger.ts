@@ -1,4 +1,4 @@
-import type { Ctx, Row } from 'ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { decimal, n, now } from './engine.ts'
 
 export class LoyaltyConflict extends Error {}

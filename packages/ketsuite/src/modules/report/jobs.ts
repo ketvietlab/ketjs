@@ -1,5 +1,5 @@
-import { defineJob, deleteFrom, eq } from 'ketjs'
-import type { JobSpec } from 'ketjs'
+import { defineJob, deleteFrom, eq } from '@ketvietlab/ketjs'
+import type { JobSpec } from '@ketvietlab/ketjs'
 
 export const jobs: Record<string, JobSpec> = {
   purgeCache: defineJob({

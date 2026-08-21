@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compose, createJoints, defineModule, restrictManifest } from 'ketjs'
-import { html, renderToString } from 'ketjs-view'
+import { compose, createJoints, defineModule, restrictManifest } from '@ketvietlab/ketjs'
+import { html, renderToString } from '@ketvietlab/ketjs-view'
 
 /**
  * Extension points in first-party screens.
@@ -256,9 +256,9 @@ test('bridge: a module does not depend on the admin just to add a button to it',
   // The fill belongs in a bridge that installs itself once both sides are there,
   // which is what install:'auto' was built for and what Odoo does with sale_stock.
   const { address, company, partner, product, productBackend, productMedia, storage, uom } = await import(
-    'ketsuite'
+    '@ketvietlab/ketsuite'
   )
-  const backend = (await import('ketsuite/backend')).default
+  const backend = (await import('@ketvietlab/ketsuite/backend')).default
 
   const catalogueOnly = compose([uom, product])
   assert.ok(catalogueOnly.modules['product'], 'a catalogue composes with no admin at all')

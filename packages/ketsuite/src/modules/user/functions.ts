@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
 import { roleFunctions } from './roles.ts'
 

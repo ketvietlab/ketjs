@@ -15,7 +15,7 @@ flowchart LR
   manifest --> runtime["Central report runtime\ntemplate versions + cache"]
   admin["Report administration UI"] --> runtime
   runtime --> source["Permission-checked ctx.call"]
-  source --> engine["ketjs/pdf\nconstrained tree + embedded fonts"]
+  source --> engine["@ketvietlab/ketjs/pdf\nconstrained tree + embedded fonts"]
   engine --> preview["HTML preview"]
   engine --> artifact["Private PDF artifact"]
   artifact --> cache["Fingerprint cache"]
@@ -27,7 +27,7 @@ The ownership boundary is deliberate:
   paper settings, and translations.
 - The central report runtime owns operator customizations, immutable published versions, rollback, preview,
   artifact storage, and cache invalidation.
-- `ketjs/pdf` owns the portable rendering engine and has no knowledge of Sale, Purchase, Stock, Account, or
+- `@ketvietlab/ketjs/pdf` owns the portable rendering engine and has no knowledge of Sale, Purchase, Stock, Account, or
   any other application domain.
 - A backend module discovers available documents through `reportsOf()` and adds Print actions to its existing
   record screen.
@@ -37,7 +37,7 @@ declaration beside the domain source it describes. Create a separate module only
 independently installable cross-domain capability with its own ownership and dependency graph.
 
 ```ts
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'sale',
@@ -90,7 +90,7 @@ import {
   interFontUrl,
   renderPdf,
   renderReportHtml,
-} from 'ketjs/pdf'
+} from '@ketvietlab/ketjs/pdf'
 
 const document = compileReportTemplate(source, { translate }).render(viewModel)
 const preview = renderReportHtml(document)

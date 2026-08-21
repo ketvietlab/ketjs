@@ -1,5 +1,5 @@
-import type { JSXChild, TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   code,

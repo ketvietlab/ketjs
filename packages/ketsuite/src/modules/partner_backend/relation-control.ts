@@ -1,5 +1,5 @@
-import type { Route, ServeContext, Translator } from 'ketjs'
-import type { JSXChild } from 'ketjs-view'
+import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
+import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { relationControl, relationLabels } from '../backend/relation-select.ts'
 
 type Req = Parameters<Route>[1]

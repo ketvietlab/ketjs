@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { asc, defineFn, defineJob, desc, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, JobContext, JobSpec, Row } from 'ketjs'
+import { asc, defineFn, defineJob, desc, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, JobContext, JobSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { STAY_NOTICE_CHANNELS, STAY_NOTICE_REASONS } from './types.ts'
 

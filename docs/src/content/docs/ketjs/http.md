@@ -11,7 +11,7 @@ asset, island, and agent endpoints; modules and the app may add routes through d
 Declare reusable routes on the module that owns them:
 
 ```ts
-import { defineModule, json } from 'ketjs'
+import { defineModule, json } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
   name: 'sales',
@@ -52,7 +52,7 @@ declared `anonymous: true`.
 `serve.routes` is useful for application shell routes that do not belong to a reusable module:
 
 ```ts
-import { defineApp, json } from 'ketjs'
+import { defineApp, json } from '@ketvietlab/ketjs'
 
 const app = defineApp({
   name: 'orders_api',
@@ -115,11 +115,11 @@ types so binary APIs cannot accidentally become a markup escape hatch.
 
 ## Safe HTML
 
-Use `html` from `ketjs-view` and `page` or `fragment` from `ketjs`:
+Use `html` from `@ketvietlab/ketjs-view` and `page` or `fragment` from `@ketvietlab/ketjs`:
 
 ```ts
-import { page } from 'ketjs'
-import { html } from 'ketjs-view'
+import { page } from '@ketvietlab/ketjs'
+import { html } from '@ketvietlab/ketjs-view'
 
 routes: {
   '/orders/{id}': (ctx) => async (url, request, params) => {
@@ -143,7 +143,7 @@ pass request data to it.
 Use `navigablePage()` when one GET route can return either a complete document or replaceable slots:
 
 ```ts
-import { navigablePage } from 'ketjs'
+import { navigablePage } from '@ketvietlab/ketjs'
 
 return navigablePage(request, {
   title: 'Orders',

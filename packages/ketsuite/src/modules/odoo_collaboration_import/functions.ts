@@ -1,5 +1,5 @@
-import { asc, defineFn, desc, eq, from, KetError } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { asc, defineFn, desc, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { importOdooBatch, odooRollbackManifest, previewOdooBatch } from './operations.ts'
 
 const actor = (ctx: Ctx): string => {

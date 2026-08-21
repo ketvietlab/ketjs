@@ -1,5 +1,12 @@
-import { encodeListState } from 'ketjs'
-import type { FilterOperator, FilterRule, ListSearchSpec, ListState, Route, ServeContext } from 'ketjs'
+import { encodeListState } from '@ketvietlab/ketjs'
+import type {
+  FilterOperator,
+  FilterRule,
+  ListSearchSpec,
+  ListState,
+  Route,
+  ServeContext,
+} from '@ketvietlab/ketjs'
 import type { SearchMenu, TableGroup } from '../../ui/index.ts'
 
 type Translator = ReturnType<ServeContext['translate']>

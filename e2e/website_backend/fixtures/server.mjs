@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))

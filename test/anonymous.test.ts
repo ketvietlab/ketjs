@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, callFn, compose, defineApp, defineModule, json, text } from 'ketjs'
-import type { Ctx, RouteEntry, ServeContext, Route } from 'ketjs'
+import { bootApp, callFn, compose, defineApp, defineModule, json, text } from '@ketvietlab/ketjs'
+import type { Ctx, RouteEntry, ServeContext, Route } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 /**

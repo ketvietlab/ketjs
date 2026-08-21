@@ -66,8 +66,8 @@ A workspace may select compiled modules from several filesystem roots, like
 Odoo's `addons_path`, without importing every custom package by hand:
 
 ```ts
-import { defineApp, defineWorkspace } from 'ketjs'
-import { product } from 'ketsuite'
+import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
+import { product } from '@ketvietlab/ketsuite'
 
 export default defineWorkspace({
   modulePaths: [new URL('./custom-addons/', import.meta.url), '/opt/vendor-addons'],
@@ -105,7 +105,7 @@ The full packaging, resolution, deployment and error contract is documented in
 
 ## Headless end-to-end tests
 
-`ketjs/testing` boots the real app on an ephemeral port with an isolated SQLite
+`@ketvietlab/ketjs/testing` boots the real app on an ephemeral port with an isolated SQLite
 database and storage directory. `TestClient` crosses HTTP, retains login cookies,
 models company/tenant identity and can drain the app's durable worker without ever
 opening a browser. Fixture calls are named separately so test setup cannot be
@@ -187,7 +187,7 @@ found bugs in Ket, which is the point of running them.
 | A query is checked before it runs | `q.touches` vs declared effects — a query reading an undeclared model is blocked |
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
-| Zero required dependencies | `npm run audit:zero-dep` — enforces that only `ketjs-postgres` may import the one allowlisted driver |
+| Zero required dependencies | `npm run audit:zero-dep` — enforces that only `@ketvietlab/ketjs-postgres` may import the one allowlisted driver |
 | A committed job is not lost | PostgreSQL transaction/notify, concurrent unique enqueue, lease rescue and multi-database fairness are exercised live |
 | S3 compatibility is real | upload, HEAD, streamed GET, listing, presigned GET and delete run against MinIO in CI |
 
@@ -203,8 +203,8 @@ examples/          umbrella apps composed from the packages
 tools/  test/  bench/  docs/
 ```
 
-The split is not decoration. `ketjs` cannot import a database driver because no such
-dependency exists in its package; `ketsuite` cannot reach past the public entry
+The split is not decoration. `@ketvietlab/ketjs` cannot import a database driver because no such
+dependency exists in its package; `@ketvietlab/ketsuite` cannot reach past the public entry
 because the audit rejects it. What used to be rules about which file may import what
 are now facts about which package declares what.
 

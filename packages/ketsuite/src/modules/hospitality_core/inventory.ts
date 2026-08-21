@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, defineFn, eq, from, gt, gte, lte, or } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { and, asc, defineFn, eq, from, gt, gte, lte, or } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn } from './calendar.ts'
 import { MEAL_PLANS, RATE_TYPES } from './types.ts'
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMenu, compose, defineModule, restrictManifest } from 'ketjs'
+import { buildMenu, compose, defineModule, restrictManifest } from '@ketvietlab/ketjs'
 
 /** Composition reports every violation at once, so a test asks what is in the pile. */
 const violations = (fn: () => unknown): Array<{ code: string; message: string }> => {

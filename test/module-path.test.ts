@@ -5,8 +5,14 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { composeWorkspace, defineApp, defineModule, defineWorkspace, resolveWorkspace } from 'ketjs'
-import type { WorkspaceDeclaration } from 'ketjs'
+import {
+  composeWorkspace,
+  defineApp,
+  defineModule,
+  defineWorkspace,
+  resolveWorkspace,
+} from '@ketvietlab/ketjs'
+import type { WorkspaceDeclaration } from '@ketvietlab/ketjs'
 
 const moduleBody = (name: string, depends: string[] = [], kind: 'module' | 'theme' = 'module') => `
 export default Object.freeze({

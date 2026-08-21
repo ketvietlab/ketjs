@@ -9,8 +9,8 @@ import {
   compositionSchema,
   defineApp,
   defineModule,
-} from 'ketjs'
-import { catalog, defaultTheme as theme, inventory } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import { catalog, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
 test('umbrella: one codebase composes several apps from overlapping modules', () => {
   const ws = workspace()

@@ -1,4 +1,4 @@
-import type { JointDef } from 'ketjs'
+import type { JointDef } from '@ketvietlab/ketjs'
 
 /**
  * What the backend screens let other modules into.

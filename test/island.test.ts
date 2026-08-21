@@ -2,8 +2,15 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseFragment, document } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
-import { compose, createKetServer, createTheme, defineModule, defineTheme, sqliteAdapter } from 'ketjs'
-import type { KetError } from 'ketjs'
+import {
+  compose,
+  createKetServer,
+  createTheme,
+  defineModule,
+  defineTheme,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
+import type { KetError } from '@ketvietlab/ketjs'
 import {
   ISLAND_TAG,
   createIslandManager,
@@ -12,9 +19,9 @@ import {
   hydrateIslands,
   renderIsland,
   signal,
-} from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
-import { address, partner, website, websiteSearch } from 'ketsuite'
+} from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { address, partner, website, websiteSearch } from '@ketvietlab/ketsuite'
 
 // A module provides behaviour...
 let cartInstances = 0

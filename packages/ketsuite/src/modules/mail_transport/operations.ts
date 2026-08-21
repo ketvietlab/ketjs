@@ -1,5 +1,5 @@
-import { eq, from, inArray, KetError, validateOutboundMessage } from 'ketjs'
-import type { Ctx, OutboundMessage, Row, TransportAddress } from 'ketjs'
+import { eq, from, inArray, KetError, validateOutboundMessage } from '@ketvietlab/ketjs'
+import type { Ctx, OutboundMessage, Row, TransportAddress } from '@ketvietlab/ketjs'
 import { DELIVERY_STATES } from './types.ts'
 import type { MailAddress } from './types.ts'
 import { jsonValue, renderTemplate, templateKeys } from './template.ts'

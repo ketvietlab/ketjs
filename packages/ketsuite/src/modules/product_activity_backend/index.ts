@@ -1,5 +1,5 @@
-import { defineModule, eq, from, KetError } from 'ketjs'
-import type { Ctx } from 'ketjs'
+import { defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
 import { targetActivityFunctions } from '../activity/index.ts'
 
 const functions = targetActivityFunctions({
