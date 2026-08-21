@@ -18,10 +18,10 @@ deployment contracts may still change before 1.0.
 
 ## Scaffold an application
 
-Run the `ket` binary from the `ketjs` package:
+Run the `ket` binary from the `@ketvietlab/ketjs` package:
 
 ```bash
-npx --package ketjs ket new notes
+npx --package @ketvietlab/ketjs ket new notes
 cd notes
 npm install
 npm run dev
@@ -52,7 +52,7 @@ notes/
 `modules/notes.ts` declares its data and callable surface together:
 
 ```ts
-import { defineModule, from } from 'ketjs'
+import { defineModule, from } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'notes',
@@ -87,7 +87,7 @@ function cannot read another model unless its effects declare that model.
 `ket.workspace.ts` makes the module deployable:
 
 ```ts
-import { defineApp, defineWorkspace, json } from 'ketjs'
+import { defineApp, defineWorkspace, json } from '@ketvietlab/ketjs'
 import notes from './modules/notes.ts'
 
 export const app = defineApp({

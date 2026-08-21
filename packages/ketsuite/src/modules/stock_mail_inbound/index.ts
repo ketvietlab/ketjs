@@ -1,5 +1,5 @@
-import { defineModule, eq, from, KetError } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { ensureThread } from '../mail/index.ts'
 import {
   inboundInput,

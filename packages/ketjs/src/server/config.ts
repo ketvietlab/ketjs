@@ -129,7 +129,7 @@ export const sqliteStore: OpenStore = async (config) => {
       module: 'ketjs',
       message: `DATABASE_URL is set, but this app only knows how to open SQLite`,
       hint:
-        'give the app a serve.openStore that imports a driver package (ketjs-postgres, say); ' +
+        'give the app a serve.openStore that imports a driver package (@ketvietlab/ketjs-postgres, say); ' +
         'the framework cannot depend on one without becoming a cycle',
     })
   }

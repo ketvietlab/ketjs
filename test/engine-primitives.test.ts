@@ -10,7 +10,7 @@ import {
   renderSql,
   schemaFromManifest,
   sqliteAdapter,
-} from 'ketjs'
+} from '@ketvietlab/ketjs'
 
 const ledger = defineModule({
   name: 'ledger',

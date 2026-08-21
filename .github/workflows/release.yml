@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish, for example v0.1.0
+        description: Existing release tag to publish, for example v0.1.1
         required: true
         type: string
 
@@ -49,23 +49,11 @@ jobs:
       - name: verify packages and clean-room scaffold
         run: npm run release:check
 
-      # Internal dependencies use exact versions, so publish from the bottom of
-      # the graph upward. The npm environment may require a human reviewer.
-      - name: publish ketjs-view
-        run: npm publish --workspace ketjs-view --access public --provenance
+      # Internal dependencies use exact versions, so the release tool publishes
+      # in dependency order. A retry skips an identical package already on npm
+      # and stops if the registry contains different bytes for the same version.
+      - name: publish packages resumably
+        run: node tools/release.mjs publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: publish ketjs
-        run: npm publish --workspace ketjs --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: publish ketjs-postgres
-        run: npm publish --workspace ketjs-postgres --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: publish ketsuite
-        run: npm publish --workspace ketsuite --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}

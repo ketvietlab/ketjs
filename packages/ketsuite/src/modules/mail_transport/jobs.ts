@@ -1,5 +1,5 @@
-import { eq, from } from 'ketjs'
-import type { JobContext, JobSpec, Row } from 'ketjs'
+import { eq, from } from '@ketvietlab/ketjs'
+import type { JobContext, JobSpec, Row } from '@ketvietlab/ketjs'
 import { deliveryEnvelope } from './operations.ts'
 
 const notificationIds = async (ctx: JobContext, deliveryId: string): Promise<string[]> => {

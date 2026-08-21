@@ -1,5 +1,5 @@
-import { KetError } from 'ketjs'
-import type { Row } from 'ketjs'
+import { KetError } from '@ketvietlab/ketjs'
+import type { Row } from '@ketvietlab/ketjs'
 import { RECURRENCE_FREQUENCIES, WEEKDAYS } from './types.ts'
 
 const calendarError = (code: string, message: string): never => {

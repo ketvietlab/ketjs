@@ -1,5 +1,5 @@
-import { deleteFrom, eq, from } from 'ketjs'
-import type { JobContext, JobSpec } from 'ketjs'
+import { deleteFrom, eq, from } from '@ketvietlab/ketjs'
+import type { JobContext, JobSpec } from '@ketvietlab/ketjs'
 
 export const jobs: Record<string, JobSpec> = {
   retain: {

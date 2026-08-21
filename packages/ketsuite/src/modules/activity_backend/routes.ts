@@ -1,5 +1,5 @@
-import { text } from 'ketjs'
-import type { Route, ServeContext } from 'ketjs'
+import { text } from '@ketvietlab/ketjs'
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'

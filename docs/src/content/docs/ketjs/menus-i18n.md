@@ -52,7 +52,7 @@ Unknown parents, duplicate IDs, dependency violations, and invalid depths are co
 Build navigation for one viewer:
 
 ```ts
-import { activeApp, buildMenu } from 'ketjs'
+import { activeApp, buildMenu } from '@ketvietlab/ketjs'
 
 const tree = buildMenu(liveManifest, {
   allow: grantedFunctionKeys,
@@ -114,7 +114,7 @@ Messages may be strings or plural-category maps using `Intl.PluralRules` categor
 ## Translate
 
 ```ts
-import { translator } from 'ketjs'
+import { translator } from '@ketvietlab/ketjs'
 
 const t = translator(manifest, 'en', {
   fallback: 'vi',
@@ -148,7 +148,7 @@ The filter is used instead of putting a function in template scope. KTL scope re
 ## Find missing messages
 
 ```ts
-import { formatMissing, missingMessages } from 'ketjs'
+import { formatMissing, missingMessages } from '@ketvietlab/ketjs'
 
 console.log(formatMissing(missingMessages(manifest, ['en', 'vi', 'fr'])))
 ```

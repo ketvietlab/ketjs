@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compileKtl, loadTemplates } from 'ketjs'
+import { compileKtl, loadTemplates } from '@ketvietlab/ketjs'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -1,5 +1,5 @@
-import { asc, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { asc, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { postMessage } from '../mail/index.ts'
 import { ACTIVITY_CATEGORIES, ASSIGNEE_STRATEGIES, CHAINING_POLICIES } from './types.ts'
 import type { ActivityState } from './types.ts'

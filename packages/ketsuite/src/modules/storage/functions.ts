@@ -1,5 +1,5 @@
-import { deleteFrom, defineFn, eq, from, KetError } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { deleteFrom, defineFn, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 const output = {
   id: 'id',

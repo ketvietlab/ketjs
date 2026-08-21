@@ -1,4 +1,4 @@
-import type { Ctx, Row } from 'ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import type { EligibilityResult, OrderLineSnapshot, OrderSnapshot, RewardQuote } from './types.ts'
 import {
   DISCOUNT_APPLICABILITY,

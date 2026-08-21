@@ -1,5 +1,5 @@
-import { defineModule, eq, from, KetError } from 'ketjs'
-import type { Ctx, FnSpec, RelationDef, Row } from 'ketjs'
+import { defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, RelationDef, Row } from '@ketvietlab/ketjs'
 import { cancelActivity } from '../activity/index.ts'
 import { saveEvent } from '../calendar/index.ts'
 import { datePartsIn } from '../calendar/index.ts'

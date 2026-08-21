@@ -1,5 +1,5 @@
-import { defineJob, from, inArray } from 'ketjs'
-import type { JobContext, JobSpec } from 'ketjs'
+import { defineJob, from, inArray } from '@ketvietlab/ketjs'
+import type { JobContext, JobSpec } from '@ketvietlab/ketjs'
 
 export const jobs: Record<string, JobSpec> = {
   sweep: defineJob({

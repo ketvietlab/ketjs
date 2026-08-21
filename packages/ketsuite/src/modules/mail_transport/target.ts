@@ -1,5 +1,5 @@
-import { from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 /**
  * Enrich a concrete Chatter target bridge without making Mail depend on delivery.

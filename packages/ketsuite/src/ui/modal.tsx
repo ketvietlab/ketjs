@@ -1,7 +1,7 @@
 // URL-addressable modal workspace. The route owns whether it is open; this
 // component only provides the accessible overlay and sheet hierarchy.
 
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { icon } from './icons.ts'
 
 export const HOOKS = [

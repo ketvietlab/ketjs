@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderToString } from 'ketjs-view'
-import { compose, translator } from 'ketjs'
-import backend from 'ketsuite/backend'
-import { listChrome, PAGE_SIZE, pageOf, pager, searchOf, withParam } from 'ketsuite/backend'
-import type { ListChrome } from 'ketsuite/backend'
+import { renderToString } from '@ketvietlab/ketjs-view'
+import { compose, translator } from '@ketvietlab/ketjs'
+import backend from '@ketvietlab/ketsuite/backend'
+import { listChrome, PAGE_SIZE, pageOf, pager, searchOf, withParam } from '@ketvietlab/ketsuite/backend'
+import type { ListChrome } from '@ketvietlab/ketsuite/backend'
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 const at = (href: string): URL => new URL(href, 'http://x')

@@ -1,6 +1,14 @@
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, createTheme, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import { address, paperTheme, partner, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
+import { callFn, compose, createTheme, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  address,
+  paperTheme,
+  partner,
+  website,
+  websiteForm,
+  websiteMenu,
+  websiteSeo,
+} from '@ketvietlab/ketsuite'
 
 const siteCount = Number(process.env.KET_BENCH_SITES ?? 8)
 const entriesPerSite = Number(process.env.KET_BENCH_ENTRIES ?? 50)

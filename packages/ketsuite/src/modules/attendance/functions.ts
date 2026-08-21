@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { defineFn, eq, from, localDateTimeToUtc } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn, eq, from, localDateTimeToUtc } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, verifyPassword } from '../user/password.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }

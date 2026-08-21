@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from } from 'ketjs'
-import type { FnSpec, ModelDef, Row } from 'ketjs'
+import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { FnSpec, ModelDef, Row } from '@ketvietlab/ketjs'
 
 export const savedSearchModels: Record<string, ModelDef> = {
   SavedSearch: {

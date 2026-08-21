@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { resolveAddress, validateAddress } from '../address/format.ts'
 import { appendContentChange } from './content.ts'
 import {

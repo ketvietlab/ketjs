@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { desc, defineFn, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { desc, defineFn, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { receiveInbound, tokenDigest } from './operations.ts'
 
 export const inboundMutationEffects = [

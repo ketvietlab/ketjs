@@ -8,7 +8,7 @@
 // A heading carries no path. It is a place to hang things, and it disappears when
 // nothing is left hanging on it.
 
-import type { MenuDef } from 'ketjs'
+import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
   admin: { label: 'menu.admin', icon: 'settings', sequence: 90 },

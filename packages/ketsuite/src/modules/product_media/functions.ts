@@ -1,5 +1,5 @@
-import { asc, defineFn, deleteFrom, eq, from, KetError } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 const mediaOutput = {
   id: 'id',

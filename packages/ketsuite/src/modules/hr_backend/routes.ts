@@ -1,5 +1,5 @@
-import { page, text } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
+import { page, text } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { employeesScreen, leavesScreen, rosterScreen } from './screens.tsx'

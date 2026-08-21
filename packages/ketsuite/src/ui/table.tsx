@@ -4,9 +4,9 @@
 // whether it is on by default. It does not write a <table>. Optional columns and
 // sorting live in the URL, so the back button and shared links keep their meaning.
 
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import { icon } from './icons.ts'
 
 export type Cell = TemplateResult | string

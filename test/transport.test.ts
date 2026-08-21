@@ -13,8 +13,8 @@ import {
   memoryTransport,
   sqliteAdapter,
   validateOutboundMessage,
-} from 'ketjs'
-import type { JobContext, OutboundMessage, WorkerLog } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { JobContext, OutboundMessage, WorkerLog } from '@ketvietlab/ketjs'
 
 const message = (idempotencyKey = 'delivery-1'): OutboundMessage => ({
   idempotencyKey,

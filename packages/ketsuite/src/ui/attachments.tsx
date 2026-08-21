@@ -1,5 +1,5 @@
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { button } from './actions.tsx'
 import { emptyState } from './state.tsx'
 

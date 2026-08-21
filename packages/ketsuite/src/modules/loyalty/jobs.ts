@@ -1,5 +1,5 @@
-import { defineFn, defineJob } from 'ketjs'
-import type { FnSpec, JobContext, JobSpec } from 'ketjs'
+import { defineFn, defineJob } from '@ketvietlab/ketjs'
+import type { FnSpec, JobContext, JobSpec } from '@ketvietlab/ketjs'
 import { n, now } from './engine.ts'
 import { postDelta, release } from './ledger.ts'
 import { refreshMembershipRow } from './membership-functions.ts'

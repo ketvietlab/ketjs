@@ -5,9 +5,9 @@
 // because it needs the running server. Dispatch checks the live manifest, so these
 // stop answering the moment the module is switched off.
 
-import { isTimezone } from 'ketjs'
-import type { ServeContext, Route } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import { isTimezone } from '@ketvietlab/ketjs'
+import type { ServeContext, Route } from '@ketvietlab/ketjs'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
 import type { Extras, Frame, Viewer } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'

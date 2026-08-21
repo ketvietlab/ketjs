@@ -1,4 +1,4 @@
-import { KetError } from 'ketjs'
+import { KetError } from '@ketvietlab/ketjs'
 
 const placeholder = /\{\{\s*([A-Za-z][A-Za-z0-9_.]*)\s*\}\}/g
 

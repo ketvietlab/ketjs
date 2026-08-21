@@ -13,8 +13,8 @@ import {
   renderToString,
   signal,
   trustedMarkup,
-} from 'ketjs-view'
-import type { HostNode } from 'ketjs-view'
+} from '@ketvietlab/ketjs-view'
+import type { HostNode } from '@ketvietlab/ketjs-view'
 
 test('events: on:click attaches a listener, not an attribute', () => {
   const host = countingHost()

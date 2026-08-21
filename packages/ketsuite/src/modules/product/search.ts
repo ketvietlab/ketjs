@@ -1,5 +1,5 @@
-import { defineListSearch, eq } from 'ketjs'
-import type { ListState, Table } from 'ketjs'
+import { defineListSearch, eq } from '@ketvietlab/ketjs'
+import type { ListState, Table } from '@ketvietlab/ketjs'
 
 export const emptyProductListState = (): ListState => ({
   presets: [],

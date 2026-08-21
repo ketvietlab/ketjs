@@ -3,20 +3,20 @@ title: Rendering and islands
 description: Build first-party UI with ketjs-view signals, templates, SSR, hydration, JSX, and interactive islands.
 ---
 
-`ketjs-view` is KetJS's browser-safe, zero-dependency rendering package. It uses runtime signals and
+`@ketvietlab/ketjs-view` is KetJS's browser-safe, zero-dependency rendering package. It uses runtime signals and
 cached template shapes instead of a virtual DOM. Server rendering and hydration walk the same static
 template structure, so updates touch only changed holes.
 
 ## Install and import
 
-`ketjs` already depends on `ketjs-view`. Applications may also install and use the view package alone:
+`@ketvietlab/ketjs` already depends on `@ketvietlab/ketjs-view`. Applications may also install and use the view package alone:
 
 ```bash
-npm install ketjs-view
+npm install @ketvietlab/ketjs-view
 ```
 
 ```ts
-import { each, html, signal, when } from 'ketjs-view'
+import { each, html, signal, when } from '@ketvietlab/ketjs-view'
 ```
 
 ## HTML templates
@@ -82,7 +82,7 @@ current callback without detach/reattach churn.
 ## Signals
 
 ```ts
-import { batch, computed, effect, signal } from 'ketjs-view'
+import { batch, computed, effect, signal } from '@ketvietlab/ketjs-view'
 
 const quantity = signal(2)
 const unitPrice = signal(15)
@@ -113,7 +113,7 @@ total.dispose()
 Mount a reactive view into a DOM container:
 
 ```ts
-import { domHost, mount } from 'ketjs-view'
+import { domHost, mount } from '@ketvietlab/ketjs-view'
 
 const mounted = mount(domHost(document), container, Counter)
 
@@ -126,7 +126,7 @@ mounted.dispose()
 ## Server rendering
 
 ```ts
-import { renderToString } from 'ketjs-view'
+import { renderToString } from '@ketvietlab/ketjs-view'
 
 const markup = renderToString(orderCard(order))
 ```
@@ -151,7 +151,7 @@ Configure TypeScript's automatic runtime:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "ketjs-view"
+    "jsxImportSource": "@ketvietlab/ketjs-view"
   }
 }
 ```
@@ -159,7 +159,7 @@ Configure TypeScript's automatic runtime:
 Then write TSX without React:
 
 ```tsx
-import { signal } from 'ketjs-view'
+import { signal } from '@ketvietlab/ketjs-view'
 
 const count = signal(0)
 
@@ -179,9 +179,9 @@ An island is the boundary between server-rendered pages and browser behavior. A 
 behavior; a theme may place it but cannot write code.
 
 ```ts
-import { defineModule } from 'ketjs'
-import { html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { defineModule } from '@ketvietlab/ketjs'
+import { html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 
 const islands: Record<string, IslandDefinition> = {
   'cart.counter': {
@@ -238,7 +238,7 @@ DOM node, signals, subscriptions, focus, and local state. If props changed, pres
 A factory may still return a plain view, or return a lifecycle controller:
 
 ```ts
-import type { IslandController, IslandFactory } from 'ketjs-view'
+import type { IslandController, IslandFactory } from '@ketvietlab/ketjs-view'
 
 const cartCounter: IslandFactory = (initialProps) => {
   const props = signal(initialProps)
@@ -266,7 +266,7 @@ always stops the reactive root first, then calls the controller cleanup once. An
 Framework pages normally load the generated bootstrap. Low-level applications can hydrate a registry:
 
 ```ts
-import { createIslandManager, domHost, hydrateIslands } from 'ketjs-view'
+import { createIslandManager, domHost, hydrateIslands } from '@ketvietlab/ketjs-view'
 
 const live = hydrateIslands(domHost(document), document.body, registry)
 
@@ -308,7 +308,7 @@ Plain strings in template holes are escaped. `trustedMarkup()` exists for markup
 restricted compiler such as KTL:
 
 ```ts
-import { trustedMarkup } from 'ketjs-view'
+import { trustedMarkup } from '@ketvietlab/ketjs-view'
 
 html`<section>${trustedMarkup(compiledThemeOutput)}</section>`
 ```

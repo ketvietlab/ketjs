@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from 'ketjs/testing'
-import type { Row, Scope } from 'ketjs'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
+import type { Row, Scope } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const scope: Scope = { company: 'default', companies: ['default'], branches: null }

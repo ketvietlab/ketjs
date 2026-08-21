@@ -11,8 +11,8 @@ import {
   hydrateRoot,
   renderToString,
   when,
-} from 'ketjs-view'
-import type { HostNode } from 'ketjs-view'
+} from '@ketvietlab/ketjs-view'
+import type { HostNode } from '@ketvietlab/ketjs-view'
 
 type Item = { id: number; name: string }
 const list = (items: Item[]) =>

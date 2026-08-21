@@ -3,8 +3,8 @@
 // The driver is an optionalDependency, so it is imported dynamically: an app that
 // only ever uses SQLite never loads it and never needs it installed.
 
-import { assertAdapter } from 'ketjs'
-import type { Adapter, FieldBase, Row } from 'ketjs'
+import { assertAdapter } from '@ketvietlab/ketjs'
+import type { Adapter, FieldBase, Row } from '@ketvietlab/ketjs'
 
 const SQL: Record<FieldBase, string> = {
   id: 'TEXT PRIMARY KEY',

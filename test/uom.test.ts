@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Row } from 'ketjs'
-import { compareQty, convertQty, isZero, product, roundTo, uom } from 'ketsuite'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Row } from '@ketvietlab/ketjs'
+import { compareQty, convertQty, isZero, product, roundTo, uom } from '@ketvietlab/ketsuite'
 
 const manifest = compose([uom, product], { headless: true })
 

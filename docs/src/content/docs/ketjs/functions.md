@@ -9,7 +9,7 @@ exposure, and safety properties are declared beside its handler and composed int
 ## Declare a function
 
 ```ts
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
   name: 'sales',

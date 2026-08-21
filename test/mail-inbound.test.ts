@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { test } from 'node:test'
-import { defineApp, defineModule } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
-import { createTestApp, TestHttpError } from 'ketjs/testing'
+import { defineApp, defineModule } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
 import {
   address,
   company,
@@ -17,7 +17,7 @@ import {
   storage,
   uom,
   user,
-} from 'ketsuite'
+} from '@ketvietlab/ketsuite'
 import { inboundPlainText } from '../packages/ketsuite/src/modules/mail_inbound/index.ts'
 
 const webhookSecret = 'inbound-provider-secret-for-tests'

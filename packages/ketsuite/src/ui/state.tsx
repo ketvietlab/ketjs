@@ -3,8 +3,8 @@
 // Both are components rather than markup in a screen, because "empty" and "broken"
 // are the states most often written twice and styled once.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 /** The data-ui names this file emits. See ui/hooks.ts. */
 export const HOOKS = [

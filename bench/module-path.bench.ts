@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
-import { resolveWorkspace } from 'ketjs'
+import { resolveWorkspace } from '@ketvietlab/ketjs'
 
 const CANDIDATES = 250
 const SELECTED = 40

@@ -1,5 +1,5 @@
-import { desc, defineFn, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { desc, defineFn, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { queueTemplate } from './operations.ts'
 import { jsonValue, templateKeys } from './template.ts'
 import { PROVIDER_EVENT_TYPES } from './types.ts'

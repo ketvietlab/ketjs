@@ -20,10 +20,18 @@ import {
   PSEUDO_LOCALE,
   page,
   document,
-} from 'ketjs'
-import { html, each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
-import { address, paperTheme, partner, website, websiteMenu, websiteSearch, websiteSeo } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import { html, each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import {
+  address,
+  paperTheme,
+  partner,
+  website,
+  websiteMenu,
+  websiteSearch,
+  websiteSeo,
+} from '@ketvietlab/ketsuite'
 import backend, {
   appsScreen,
   attachmentPanel,
@@ -32,7 +40,7 @@ import backend, {
   pagesScreen,
   settingsScreen,
   surface,
-} from 'ketsuite/backend'
+} from '@ketvietlab/ketsuite/backend'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 

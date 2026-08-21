@@ -3,7 +3,7 @@ title: Testing
 description: Exercise KetJS applications through real HTTP, isolated datastores, sessions, tenants, and durable workers.
 ---
 
-`ketjs/testing` boots a real `AppSpec` on an ephemeral port and provides a cookie-aware HTTP client.
+`@ketvietlab/ketjs/testing` boots a real `AppSpec` on an ephemeral port and provides a cookie-aware HTTP client.
 This boundary covers request parsing, tenant resolution, sessions, permissions, output projection, and
 error serialization. Direct `callFn()` tests remain useful integration tests, but they do not cover those
 HTTP seams.
@@ -13,7 +13,7 @@ HTTP seams.
 ```ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from 'ketjs/testing'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ordersApp } from '../app.ts'
 
 test('an order can be listed', async (t) => {
@@ -72,7 +72,7 @@ own the directory; `close()` does not remove caller-owned artifacts.
 - non-2xx parsed calls throw `TestHttpError` with `status`, `response`, and `body`.
 
 ```ts
-import { TestHttpError } from 'ketjs/testing'
+import { TestHttpError } from '@ketvietlab/ketjs/testing'
 
 const response = await e2e.client.get('/health')
 assert.equal(response.status, 200)
@@ -129,7 +129,7 @@ The cookie jar captures cookies across same-origin redirects and applies deletio
 another client or save it with file mode `0600`:
 
 ```ts
-import { CookieJar } from 'ketjs/testing'
+import { CookieJar } from '@ketvietlab/ketjs/testing'
 
 await e2e.client.jar.save('.ket/admin.cookies.json')
 const jar = await CookieJar.load('.ket/admin.cookies.json')

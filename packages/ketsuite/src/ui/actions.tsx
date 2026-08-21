@@ -5,8 +5,8 @@
 // form actions stay buttons, so keyboard, open-in-new-tab and no-JavaScript flows
 // keep their native behaviour.
 
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { icon } from './icons.ts'
 
 export const HOOKS = ['action', 'action-icon', 'action-label', 'action-spinner', 'action-group'] as const

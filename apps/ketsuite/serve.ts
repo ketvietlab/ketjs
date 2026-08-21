@@ -8,7 +8,7 @@
 // There is nothing else here on purpose: `ket serve` does this from ket.workspace.ts,
 // and this file exists only so `node apps/ketsuite/serve.ts` keeps working.
 
-import { serveApp } from 'ketjs'
+import { serveApp } from '@ketvietlab/ketjs'
 import { ketsuite } from './app.ts'
 
 await serveApp(ketsuite)

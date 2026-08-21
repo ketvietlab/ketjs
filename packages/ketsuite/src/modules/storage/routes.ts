@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from 'ketjs'
-import type { MultipartPart, Route, RouteEntry, ServeContext } from 'ketjs'
+import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from '@ketvietlab/ketjs'
+import type { MultipartPart, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 
 export type Attachment = {
   id: string

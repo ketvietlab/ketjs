@@ -1,5 +1,5 @@
-import type { Translator } from 'ketjs'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { framedPage as Framed, stack } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 

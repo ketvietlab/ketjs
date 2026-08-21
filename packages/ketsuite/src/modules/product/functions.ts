@@ -1,5 +1,16 @@
-import { asc, bucketEq, compileListFilter, defineFn, deleteFrom, desc, eq, from, isNull, like } from 'ketjs'
-import type { Ctx, FnSpec, ListState, Row } from 'ketjs'
+import {
+  asc,
+  bucketEq,
+  compileListFilter,
+  defineFn,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  isNull,
+  like,
+} from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
 import { PRODUCT_TYPES } from './types.ts'
 import { emptyProductListState, productListSearch } from './search.ts'
 

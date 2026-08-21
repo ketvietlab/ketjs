@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { json, parseCookies, text, withHeaders } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
+import { json, parseCookies, text, withHeaders } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import {
   discoverOidc,
   exchangeOidcCode,

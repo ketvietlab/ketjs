@@ -1,9 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter, schemaFromManifest } from 'ketjs'
-import type { Adapter, Manifest, Scope } from 'ketjs'
-import { partner, company, user, hashPassword, verifyPassword, needsRehash } from 'ketsuite'
-import { address } from 'ketsuite'
+import {
+  callFn,
+  compose,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
+  schemaFromManifest,
+} from '@ketvietlab/ketjs'
+import type { Adapter, Manifest, Scope } from '@ketvietlab/ketjs'
+import { partner, company, user, hashPassword, verifyPassword, needsRehash } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const mods = [address, partner, company, user]
 const SCOPE: Scope = { company: 'c1' }

@@ -1,5 +1,5 @@
-import { eq, from } from 'ketjs'
-import type { JobContext, JobSpec } from 'ketjs'
+import { eq, from } from '@ketvietlab/ketjs'
+import type { JobContext, JobSpec } from '@ketvietlab/ketjs'
 import { postMessage } from '../mail/index.ts'
 
 export const jobs: Record<string, JobSpec> = {

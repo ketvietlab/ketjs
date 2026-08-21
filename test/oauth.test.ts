@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import { company, oauth, partner, user } from 'ketsuite'
-import { address } from 'ketsuite'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import { company, oauth, partner, user } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const modules = [address, partner, company, user, oauth]
 

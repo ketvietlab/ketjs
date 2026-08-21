@@ -1,4 +1,4 @@
-import type { ViewDef } from 'ketjs'
+import type { ViewDef } from '@ketvietlab/ketjs'
 
 /** What a theme may read of a party. Deliberately not vat, not ref, not email. */
 export const views: Record<string, ViewDef> = {

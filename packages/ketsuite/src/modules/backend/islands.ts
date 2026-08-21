@@ -1,5 +1,5 @@
-import { each, html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 import { createRelationSelectView } from './design/client/relation-select-view.mjs'
 
 const runtime = { each, html, signal }

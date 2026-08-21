@@ -55,7 +55,7 @@ out of the descriptor prevents a second manifest from drifting away from executa
 The entry default-exports a normal module:
 
 ```ts
-import { defineModule } from 'ketjs'
+import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'sale_discount',
@@ -75,7 +75,7 @@ restricted because its entry must export `defineTheme()`.
 Declare roots relative to the workspace artifact or as absolute deployment paths:
 
 ```ts
-import { defineApp, defineWorkspace } from 'ketjs'
+import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
 import { pricing } from './modules/pricing.ts'
 
 export default defineWorkspace({
@@ -185,7 +185,7 @@ when KetJS can identify one.
 ## Programmatic resolution
 
 ```ts
-import { composeWorkspace, resolveWorkspace } from 'ketjs'
+import { composeWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(workspace, {
   baseUrl: new URL('./ket.workspace.js', import.meta.url),

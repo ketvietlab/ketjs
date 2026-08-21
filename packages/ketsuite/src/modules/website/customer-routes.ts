@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
-import { json, text, withHeaders } from 'ketjs'
-import type { Route, RouteEntry, RouteResult, ServeContext } from 'ketjs'
+import { json, text, withHeaders } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, RouteResult, ServeContext } from '@ketvietlab/ketjs'
 
 type Req = Parameters<Route>[1]
 type Account = {

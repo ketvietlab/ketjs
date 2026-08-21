@@ -1,6 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { batch, computed, countingHost, createRoot, each, effect, html, signal, when } from 'ketjs-view'
+import {
+  batch,
+  computed,
+  countingHost,
+  createRoot,
+  each,
+  effect,
+  html,
+  signal,
+  when,
+} from '@ketvietlab/ketjs-view'
 
 test('signals: effects track what they read, and a no-op write costs nothing', () => {
   const a = signal(1),

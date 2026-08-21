@@ -10,7 +10,7 @@ side effects; composition is explicit and deterministic.
 ## Define a module
 
 ```ts
-import { defineModule, from } from 'ketjs'
+import { defineModule, from } from '@ketvietlab/ketjs'
 
 export const inventory = defineModule({
   name: 'inventory',
@@ -119,7 +119,7 @@ behavior over the preserved data.
 ## Compose the manifest
 
 ```ts
-import { compose } from 'ketjs'
+import { compose } from '@ketvietlab/ketjs'
 
 const manifest = compose([inventory, stockForecast])
 ```
@@ -145,7 +145,7 @@ upgrade diffs, generated types, and agent capability inspection.
 Composition includes everything the deployment ships. Runtime module state belongs to a database:
 
 ```ts
-import { createAppRegistry, restrictManifest } from 'ketjs'
+import { createAppRegistry, restrictManifest } from '@ketvietlab/ketjs'
 
 const registry = await createAppRegistry(manifest, adapter)
 await registry.install('inventory')

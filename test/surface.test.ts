@@ -1,8 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, compose, defineApp, defineModule, defineTheme, restrictManifest, page } from 'ketjs'
-import type { ServeContext, Route } from 'ketjs'
-import { html } from 'ketjs-view'
+import {
+  bootApp,
+  compose,
+  defineApp,
+  defineModule,
+  defineTheme,
+  restrictManifest,
+  page,
+} from '@ketvietlab/ketjs'
+import type { ServeContext, Route } from '@ketvietlab/ketjs'
+import { html } from '@ketvietlab/ketjs-view'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

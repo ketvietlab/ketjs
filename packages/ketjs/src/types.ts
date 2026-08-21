@@ -115,7 +115,7 @@ export type ReportDef = {
   target: string
   /** Read-only function receiving `{ id }` and returning a JSON view model. */
   source: string
-  /** KTL which must render the constrained report markup accepted by `ketjs/pdf`. */
+  /** KTL which must render the constrained report markup accepted by `@ketvietlab/ketjs/pdf`. */
   template: string
   filename?: string
   paper?: 'A4' | 'A5'
@@ -379,7 +379,7 @@ export type ModuleSpec = AppMeta & {
    */
   routes?: Record<string, RouteEntry>
   /** Interactive views a theme may place but never write. */
-  islands?: Record<string, import('ketjs-view').IslandDefinition>
+  islands?: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
   sections?: Record<string, SectionDef>
   contentTypes?: Record<string, ContentTypeDef>
   taxonomies?: Record<string, TaxonomyDef>
@@ -410,7 +410,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly assets: string | URL | null
   readonly styles: readonly string[]
   readonly routes: Record<string, RouteEntry>
-  readonly islands: Record<string, import('ketjs-view').IslandDefinition>
+  readonly islands: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
   readonly sections: Record<string, SectionDef>
   readonly contentTypes: Record<string, ContentTypeDef>
   readonly taxonomies: Record<string, TaxonomyDef>
