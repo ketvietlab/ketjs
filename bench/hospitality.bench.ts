@@ -979,6 +979,7 @@ try {
     throw new Error('benchmark needs one available destination for each room move')
   const folioCorrectionCount = Math.min(4, transitionCount)
   let concurrentFolioCorrectionSingleAdjustment = true
+  let earlyCheckoutInventoryReleased = 0
   const transitionStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1058,11 +1059,16 @@ try {
           if (!(nightlyService.value as { ok: boolean }).ok)
             throw new Error(`${key}: audit service intention failed`)
         }
-        if (index % 2 === 0)
-          await call(key, 'hospitality_core.checkOut', {
+        if (index % 2 === 0) {
+          const checkedOut = await call(key, 'hospitality_core.checkOut', {
             stayId: `reservation:${index}:stay`,
-            at: '2026-09-03T12:00:00.000Z',
+            at: '2026-09-02T12:00:00.000Z',
           })
+          const value = checkedOut.value as { ok: boolean; inventoryReleased?: number }
+          if (!value.ok || value.inventoryReleased !== 1)
+            throw new Error(`${key}: early check-out did not release its remaining night`)
+          earlyCheckoutInventoryReleased += value.inventoryReleased
+        }
       }
     }),
   )
@@ -1906,6 +1912,7 @@ try {
         ),
         idempotentServiceCountsMatch,
         checkInChargeCheckoutCycles: totalTransitions,
+        earlyCheckoutInventoryReleased,
         roomMoves: databaseCount * moveRooms.length,
         folioCorrections: databaseCount * folioCorrectionCount,
         transitionMs: Number(transitionMs.toFixed(1)),

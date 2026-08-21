@@ -683,6 +683,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.checkedOut': 'Đã trả phòng',
     'reservation.feedback.checkedOutHint':
       'Hồ sơ lưu trú đã đóng, phòng chuyển sang chờ dọn và công việc buồng phòng đã được tạo.',
+    'reservation.feedback.checkedOutEarly': 'Đã trả phòng sớm',
+    'reservation.feedback.checkedOutEarlyHint':
+      'Tồn phòng các đêm còn lại đã được hoàn; các khoản phí được giữ nguyên để lễ tân đối soát.',
     'reservation.feedback.cancelled': 'Đã hủy đặt phòng',
     'reservation.feedback.cancelledHint':
       'Tồn phòng đã được hoàn lại và các khoản phí chưa hoàn tất đã được vô hiệu hóa.',
@@ -1770,6 +1773,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.checkedOut': 'Guest checked out',
     'reservation.feedback.checkedOutHint':
       'The stay is closed, the room is awaiting service, and a housekeeping task was created.',
+    'reservation.feedback.checkedOutEarly': 'Guest checked out early',
+    'reservation.feedback.checkedOutEarlyHint':
+      'Inventory for the remaining nights was released; current charges were retained for front-desk reconciliation.',
     'reservation.feedback.cancelled': 'Reservation cancelled',
     'reservation.feedback.cancelledHint': 'Room inventory was released and unfinished charges were voided.',
     'reservation.feedback.amended': 'Reservation updated',
