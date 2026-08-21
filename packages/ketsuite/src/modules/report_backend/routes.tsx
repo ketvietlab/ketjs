@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { bytes, page, text } from 'ketjs'
+import { bytes, compileReportTemplate, interFontUrl, page, renderPdf, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
-import { compileReportTemplate, interFontUrl, renderPdf } from 'ketjs/pdf'
 import { each } from 'ketjs-view'
 import { actionGroup, button, contentCard, linkButton, shell, stack, surface } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
