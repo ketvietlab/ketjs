@@ -619,6 +619,27 @@ test('form: required, help and error states are visible and semantically connect
   assert.match(html, /data-kind="color"[\s\S]*type="color"[\s\S]*value="#2563eb"/)
 })
 
+test('form: a record action bar can submit a form without duplicating its action', () => {
+  const html = renderToString(
+    recordForm({
+      id: 'partner-identity-form',
+      action: '/partners/one',
+      submit: 'Save',
+      submitVariant: 'primary',
+      submitPlacement: 'external',
+      fields: [{ name: 'name', label: 'Name', value: 'ACME' }],
+    }),
+  )
+  assert.match(html, /<form id="partner-identity-form"/)
+  assert.doesNotMatch(html, /data-ui="form-actions"/)
+  assert.match(
+    renderToString(
+      button({ label: 'Save', type: 'submit', form: 'partner-identity-form', variant: 'primary' }),
+    ),
+    /type="submit"[^>]*form="partner-identity-form"/,
+  )
+})
+
 test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {
   const html = renderToString(
     formCluster({
