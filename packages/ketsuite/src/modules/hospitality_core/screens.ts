@@ -27,7 +27,14 @@ import {
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
-import { ACCOMMODATION_TYPES, CHARGE_TYPES, ROOM_STATUSES, ROOM_VIEW_TYPES } from './types.ts'
+import {
+  ACCOMMODATION_TYPES,
+  CHARGE_TYPES,
+  DOCUMENT_TYPES,
+  GENDERS,
+  ROOM_STATUSES,
+  ROOM_VIEW_TYPES,
+} from './types.ts'
 
 export type PropertyRow = {
   id: string
@@ -493,6 +500,18 @@ export type StayGuestRow = {
   partnerId?: string | null
   displayName: string
   primary: boolean
+}
+
+export type GuestDocumentRow = {
+  id: string
+  stayId?: string | null
+  partnerId: string
+  type: string
+  numberLast4?: string | null
+  fullName: string
+  nationality?: string | null
+  ocrState: string
+  dateOfBirthPresent: boolean
 }
 
 export type FolioRow = {
@@ -5573,6 +5592,43 @@ const stayGuestColumns = (_: Translator): Array<Column<StayGuestRow>> => [
   },
 ]
 
+const guestDocumentColumns = (_: Translator): Array<Column<GuestDocumentRow>> => [
+  {
+    key: 'name',
+    label: _('hospitality_core.stay.document.fullName'),
+    cell: (row) => person(row.fullName),
+    kind: 'person',
+    priority: 'primary',
+  },
+  {
+    key: 'type',
+    label: _('hospitality_core.stay.document.type'),
+    cell: (row) => _(`hospitality_core.document.${row.type}`),
+  },
+  {
+    key: 'number',
+    label: _('hospitality_core.stay.document.number'),
+    cell: (row) => (row.numberLast4 ? code(`•••• ${row.numberLast4}`) : '—'),
+  },
+  {
+    key: 'nationality',
+    label: _('hospitality_core.stay.document.nationality'),
+    cell: (row) => row.nationality || '—',
+  },
+  {
+    key: 'readiness',
+    label: _('hospitality_core.stay.document.readiness'),
+    cell: (row) =>
+      badge(
+        row.numberLast4 && row.dateOfBirthPresent
+          ? _('hospitality_core.stay.document.ready')
+          : _('hospitality_core.stay.document.attention'),
+        row.numberLast4 && row.dateOfBirthPresent ? 'positive' : 'warning',
+      ),
+    kind: 'status',
+  },
+]
+
 const stayDetailFeedback = (
   _: Translator,
   status?: string | null,
@@ -5590,6 +5646,12 @@ const stayDetailFeedback = (
       message: _('hospitality_core.stay.feedback.roomMovedHint'),
       tone: 'positive',
     })
+  if (status === 'document-saved')
+    return notice({
+      title: _('hospitality_core.stay.feedback.documentSaved'),
+      message: _('hospitality_core.stay.feedback.documentSavedHint'),
+      tone: 'positive',
+    })
   if (errors.length)
     return notice({
       title: _('hospitality_core.feedback.invalid'),
@@ -5604,6 +5666,8 @@ export const stayDetailScreen = (
   stay: StayRow,
   rooms: RoomRow[],
   partners: Choice[],
+  documents: GuestDocumentRow[],
+  documentId: string,
   locale: string,
   timezone: string,
   frame: Frame,
@@ -5618,6 +5682,9 @@ export const stayDetailScreen = (
     roomName: roomNames.get(assignment.roomId) ?? assignment.roomId,
   }))
   const guests = stay.guests ?? []
+  const registeredGuests = guests.filter(
+    (registered): registered is StayGuestRow & { partnerId: string } => !!registered.partnerId,
+  )
   const availableRooms = rooms.filter(
     (room) => room.active && room.status === 'available' && room.id !== stay.currentRoomId,
   )
@@ -5806,6 +5873,114 @@ export const stayDetailScreen = (
                       },
                     ],
                   })
+                : null,
+            ]),
+          }),
+          section({
+            title: _('hospitality_core.stay.section.documents'),
+            description: _('hospitality_core.stay.section.documentsHint'),
+            body: stack([
+              documents.length
+                ? dataTable(_, {
+                    columns: guestDocumentColumns(_),
+                    rows: documents,
+                    id: (row) => row.id,
+                  })
+                : emptyState(
+                    _('hospitality_core.stay.empty.documents'),
+                    _('hospitality_core.stay.empty.documentsHint'),
+                  ),
+              stay.state !== 'cancelled'
+                ? registeredGuests.length
+                  ? recordForm({
+                      action,
+                      method: 'post',
+                      submit: _('hospitality_core.stay.action.saveDocument'),
+                      submitVariant: 'secondary',
+                      hidden: {
+                        operation: 'save-document',
+                        documentId,
+                        lang: locale,
+                      },
+                      fields: [
+                        {
+                          name: 'partnerId',
+                          label: _('hospitality_core.stay.document.guest'),
+                          type: 'select',
+                          required: true,
+                          options: registeredGuests.map((registered) => ({
+                            value: registered.partnerId,
+                            label: registered.displayName,
+                          })),
+                        },
+                        {
+                          name: 'type',
+                          label: _('hospitality_core.stay.document.type'),
+                          type: 'select',
+                          required: true,
+                          value: 'cccd',
+                          options: DOCUMENT_TYPES.map((value) => ({
+                            value,
+                            label: _(`hospitality_core.document.${value}`),
+                          })),
+                        },
+                        {
+                          name: 'number',
+                          label: _('hospitality_core.stay.document.number'),
+                          required: true,
+                          help: _('hospitality_core.stay.document.numberHint'),
+                        },
+                        {
+                          name: 'fullName',
+                          label: _('hospitality_core.stay.document.fullName'),
+                          required: true,
+                          value: registeredGuests[0]?.displayName ?? '',
+                        },
+                        {
+                          name: 'dateOfBirth',
+                          label: _('hospitality_core.stay.document.dateOfBirth'),
+                          type: 'date',
+                          required: true,
+                        },
+                        {
+                          name: 'gender',
+                          label: _('hospitality_core.stay.document.gender'),
+                          type: 'select',
+                          options: [
+                            { value: '', label: _('hospitality_core.stay.document.genderUnknown') },
+                            ...GENDERS.map((value) => ({
+                              value,
+                              label: _(`hospitality_core.gender.${value}`),
+                            })),
+                          ],
+                        },
+                        {
+                          name: 'nationality',
+                          label: _('hospitality_core.stay.document.nationality'),
+                          value: 'VN',
+                          help: _('hospitality_core.stay.document.nationalityHint'),
+                        },
+                        {
+                          name: 'permanentAddress',
+                          label: _('hospitality_core.stay.document.permanentAddress'),
+                          type: 'textarea',
+                        },
+                        {
+                          name: 'issueDate',
+                          label: _('hospitality_core.stay.document.issueDate'),
+                          type: 'date',
+                        },
+                        {
+                          name: 'issuePlace',
+                          label: _('hospitality_core.stay.document.issuePlace'),
+                        },
+                      ],
+                    })
+                  : notice({
+                      title: _('hospitality_core.stay.empty.documentGuests'),
+                      message: _('hospitality_core.stay.empty.documentGuestsHint'),
+                      tone: 'warning',
+                    })
                 : null,
             ]),
           }),

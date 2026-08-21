@@ -1198,6 +1198,7 @@ export const operations: Record<string, FnSpec> = {
     effects: [
       'read:partner.Partner',
       'read:hospitality_core.Stay',
+      'read:hospitality_core.StayGuest',
       'read:hospitality_core.GuestDocument',
       'read:storage.Attachment',
       'write:hospitality_core.GuestDocument',
@@ -1208,9 +1209,22 @@ export const operations: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const partner = await record(ctx, 'partner.Partner', args.partnerId)
       const stay = args.stayId ? await record(ctx, 'hospitality_core.Stay', args.stayId) : null
+      const existing = await record(ctx, 'hospitality_core.GuestDocument', args.id)
       const errors: Issue[] = []
       if (!partner) errors.push(issue('partnerId', 'partner_missing'))
       if (args.stayId && !stay) errors.push(issue('stayId', 'stay_missing'))
+      if (stay) {
+        const G = ctx.table('hospitality_core.StayGuest')
+        const registered = await ctx.db.one(
+          from(G).where(eq(G.stayId, stay.id), eq(G.partnerId, args.partnerId)),
+        )
+        if (!registered) errors.push(issue('partnerId', 'guest_not_registered'))
+      }
+      if (
+        existing &&
+        (existing.partnerId !== args.partnerId || String(existing.stayId ?? '') !== String(args.stayId ?? ''))
+      )
+        errors.push(issue('id', 'document_owner_immutable'))
       if (!oneOf(DOCUMENT_TYPES, args.type)) errors.push(issue('type', 'document_type'))
       if (!text(args.fullName)) errors.push(issue('fullName', 'required'))
       if (args.gender && !oneOf(GENDERS, args.gender)) errors.push(issue('gender', 'gender'))
@@ -1220,7 +1234,6 @@ export const operations: Record<string, FnSpec> = {
         if (args[field] && !(await record(ctx, 'storage.Attachment', args[field])))
           errors.push(issue(field, 'attachment_missing'))
       if (errors.length) return failure(...errors)
-      const existing = await record(ctx, 'hospitality_core.GuestDocument', args.id)
       const values = {
         stayId: args.stayId,
         partnerId: args.partnerId,
@@ -1259,10 +1272,11 @@ export const operations: Record<string, FnSpec> = {
       stayId: 'id?',
       partnerId: 'id',
       type: 'text',
-      number: 'text?',
+      numberLast4: 'text?',
       fullName: 'text',
       nationality: 'text?',
       ocrState: 'text',
+      dateOfBirthPresent: 'bool',
     },
     effects: ['read:hospitality_core.GuestDocument'],
     agent: true,
@@ -1271,7 +1285,11 @@ export const operations: Record<string, FnSpec> = {
       let query = from(D).orderBy(asc(D.fullName))
       if (args.stayId) query = query.where(eq(D.stayId, args.stayId))
       if (args.partnerId) query = query.where(eq(D.partnerId, args.partnerId))
-      return ctx.db.all(query)
+      return (await ctx.db.all(query)).map((row) => ({
+        ...row,
+        numberLast4: text(row.number).slice(-4) || undefined,
+        dateOfBirthPresent: date(row.dateOfBirth) !== null,
+      }))
     },
   }),
 

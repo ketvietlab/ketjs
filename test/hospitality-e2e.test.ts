@@ -713,17 +713,32 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   )
   assert.equal(booked.value.ok, true)
   assert.equal(booked.writes.length, 9, 'booking, room-night inventory and change signal commit together')
-  const guestDocument = await e2e.client.call<Row>('hospitality_core.saveGuestDocument', {
-    id: 'booking-1-document',
-    stayId: 'booking-1:stay',
-    partnerId: 'guest',
-    type: 'cccd',
-    number: '079203001234',
-    fullName: 'Nguyễn An',
-    dateOfBirth: '1990-05-12T00:00:00.000Z',
-    ocrState: 'done',
-  })
-  assert.equal(guestDocument.value.ok, true)
+  const stayIntake = await e2e.client.get('/admin/hospitality/stays/booking-1%3Astay?lang=vi')
+  assert.equal(stayIntake.status, 200)
+  assert.match(await stayIntake.text(), /Lưu giấy tờ tùy thân/)
+  const guestDocument = await e2e.client.post(
+    '/admin/hospitality/stays/booking-1%3Astay?lang=vi',
+    new URLSearchParams({
+      operation: 'save-document',
+      lang: 'vi',
+      documentId: 'booking-1-document',
+      partnerId: 'guest',
+      type: 'cccd',
+      number: '079203001234',
+      fullName: 'Nguyễn An',
+      dateOfBirth: '1990-05-12',
+      nationality: 'VN',
+      permanentAddress: '12 Đường Riêng Tư',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(guestDocument.status, 303, await guestDocument.clone().text())
+  assert.match(guestDocument.headers.get('location') ?? '', /status=document-saved/)
+  const documentPage = await e2e.client.get(guestDocument.headers.get('location')!)
+  const documentHtml = await documentPage.text()
+  assert.match(documentHtml, /Đã lưu giấy tờ tùy thân/)
+  assert.match(documentHtml, /•••• 1234/)
+  assert.doesNotMatch(documentHtml, /079203001234|12 Đường Riêng Tư|hospitality_core\./)
 
   const rateSaved = await e2e.client.post(
     '/admin/hospitality/rate-plans?lang=vi',

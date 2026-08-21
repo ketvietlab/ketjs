@@ -1950,3 +1950,21 @@ row as their default. Concurrent requests converge on one setup row and one code
 company. A company outside Vietnam is refused instead of receiving plausible-looking
 Vietnam accounting data silently. Future country packs remain data inside `account`;
 they do not become hundreds of installable source modules.
+
+## D65 — Front-desk identity intake is stay-scoped and exposes only a safe projection
+
+An identity document entered from a Stay belongs permanently to the selected Contact
+and that Stay. The Contact must already be a registered `StayGuest`; an arbitrary
+Contact cannot be attached through a forged form post. Reusing an existing document ID
+with another guest or Stay is rejected instead of silently moving protected data.
+
+Operational lists expose the document type, holder name, nationality, OCR state, date-
+of-birth readiness and only the final four number characters. They do not expose the
+full number, date of birth, address, OCR payload or attachment references. The complete
+record remains available only inside effect-checked business functions that need it,
+such as statutory stay-notice preparation. Default logs, screenshots and browser
+acceptance fixtures use synthetic values and must never contain real guest PII.
+
+Manual entry is the complete first front-desk path. Storage-backed front/back images
+and OCR state remain supported by the domain model, but automated scanning is a later
+adapter slice and is not required to receive or operate a stay.
