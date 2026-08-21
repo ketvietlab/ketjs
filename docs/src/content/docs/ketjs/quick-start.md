@@ -21,10 +21,18 @@ deployment contracts may still change before 1.0.
 Run the `ket` binary from the `@ketvietlab/ketjs` package:
 
 ```bash
-npx --package @ketvietlab/ketjs ket new notes
+npx -y @ketvietlab/ketjs new notes
 cd notes
 npm install
 npm run dev
+```
+
+Use an exact version such as `@ketvietlab/ketjs@0.1.2` when the scaffold must be reproducible. App
+names accept lowercase letters, digits, and underscores and must start with a letter. To separate
+the app identifier from its directory name:
+
+```bash
+npx -y @ketvietlab/ketjs new my_app --dir ./my-app
 ```
 
 The generated app listens on `http://127.0.0.1:3000`. Its first boot creates `.ket/app.db`, applies
@@ -46,6 +54,12 @@ notes/
 ├── biome.json
 └── .gitignore
 ```
+
+:::note[Projects generated with 0.1.1]
+The `0.1.1` scaffold wrote the old unscoped CLI path into `tools/dev.mjs`. Upgrade the dependency to
+`@ketvietlab/ketjs@^0.1.2` and replace `node_modules/ketjs/dist/cli.js` with
+`node_modules/@ketvietlab/ketjs/dist/cli.js`, or scaffold the project again with the current release.
+:::
 
 ## The module
 

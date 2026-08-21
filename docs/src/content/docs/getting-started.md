@@ -59,6 +59,10 @@ description: One sentence explaining the problem this page solves.
 Navigation is declared explicitly in `astro.config.mjs`. Extend the taxonomy as legacy documents
 are translated and migrated.
 
+Do not add documentation pages beside `docs/package.json` or update legacy `docs/*.md` files in
+place. Move useful material into a correctly categorized page under `src/content/docs/`, add
+frontmatter, and link it from the Starlight sidebar when it should be discoverable.
+
 ## Add a Mermaid diagram
 
 Use a fenced `mermaid` block. Diagrams are rendered only on pages that contain one and automatically

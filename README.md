@@ -7,6 +7,27 @@ A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
 > APIs, data formats, CLI behavior, and deployment assumptions may change without
 > notice. Do not use Ket for production workloads yet.
 
+## Install and create an application
+
+KetJS requires Node.js 24 or newer. Scaffold a runnable application from the public package:
+
+```bash
+npx -y @ketvietlab/ketjs new my_app --dir ./my-app
+cd my-app
+npm install
+npm run dev
+```
+
+The application listens on `http://127.0.0.1:3000` and uses SQLite by default. The application
+identifier must start with a lowercase letter and contain only lowercase letters, digits, and
+underscores; the directory name may use hyphens.
+
+Install the framework into an existing project with `npm install @ketvietlab/ketjs`. Optional
+packages are `@ketvietlab/ketjs-postgres` for PostgreSQL, `@ketvietlab/ketsuite` for business
+modules, and `@ketvietlab/ketjs-view` when consuming the view layer directly. See the
+[KetJS quick start](docs/src/content/docs/ketjs/quick-start.md) for the generated layout and next
+commands.
+
 A zero-dependency fullstack framework for Node, built on five pillars:
 
 1. **Lego** — modules compose through extension points the base module *publishes*, not through arbitrary patching
@@ -53,12 +74,6 @@ S3-compatible service; attachment metadata remains in each tenant database. Set
 `KET_S3_SECRET` for S3/MinIO. Local storage defaults to `.ket/storage`. Uploads are
 streamed through a bounded multipart parser, and cleanup runs on the existing
 `maintenance` queue.
-
-```bash
-npx ket new shop && cd shop && npm install && npm run dev
-```
-
-writes an app that runs unedited: a module, a model, a function and a route.
 
 ## Custom module paths
 
@@ -224,3 +239,9 @@ supported source/config files; `npm run verify` refuses unformatted or lint-inva
 changes before building and testing.
 
 See [docs/00-decisions.md](docs/00-decisions.md) for the reasoning behind each choice.
+
+## License
+
+KetJS is released under the [MIT License](LICENSE).
+
+Copyright © 2026 KETVIET JSC, Vietnam.

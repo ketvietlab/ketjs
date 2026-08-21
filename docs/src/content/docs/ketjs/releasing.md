@@ -66,7 +66,7 @@ No publish command is part of either local script.
 6. Run the public smoke path without local tarballs:
 
 ```bash
-npx --package @ketvietlab/ketjs@0.1.2 ket new public_smoke
+npx -y @ketvietlab/ketjs@0.1.2 new public_smoke
 cd public_smoke
 npm install
 npm test
