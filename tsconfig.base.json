@@ -23,6 +23,7 @@
       "@ketvietlab/ketjs/testing": ["./packages/ketjs/src/testing.ts"],
       "@ketvietlab/ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
       "@ketvietlab/ketsuite": ["./packages/ketsuite/src/index.ts"],
+      "@ketvietlab/ketsuite/app": ["./packages/ketsuite/src/app.ts"],
       "@ketvietlab/ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
       "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"]
     },

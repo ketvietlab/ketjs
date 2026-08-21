@@ -11,7 +11,7 @@ export default defineModule({
   depends: ['product', 'uom'],
   app: true,
   title: 'Kho',
-  summary: 'Tồn kho, dịch chuyển và bổ sung hàng theo Odoo 19.',
+  summary: 'Tồn kho, dịch chuyển và bổ sung hàng.',
   category: 'Kho vận',
   models,
   extend: {
@@ -23,7 +23,7 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Kho',
-      'app.summary': 'Tồn kho, dịch chuyển và bổ sung hàng theo Odoo 19.',
+      'app.summary': 'Tồn kho, dịch chuyển và bổ sung hàng.',
       'app.category': 'Kho vận',
       'report.receipt': 'PHIẾU NHẬP KHO',
       'report.delivery': 'PHIẾU XUẤT KHO',
@@ -38,7 +38,7 @@ export default defineModule({
     },
     en: {
       'app.title': 'Inventory',
-      'app.summary': 'Odoo 19 stock, transfers, and replenishment.',
+      'app.summary': 'Stock, transfers, and replenishment.',
       'app.category': 'Inventory',
       'report.receipt': 'RECEIPT',
       'report.delivery': 'DELIVERY SLIP',

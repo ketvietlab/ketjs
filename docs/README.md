@@ -22,6 +22,11 @@ The docs application owns every dependency and its lockfile within this director
 workspace includes only `packages/*`; do not add `docs` to the root `workspaces` list or add Astro
 dependencies to the root manifest.
 
-All published documentation must be written in English. The current content collection documents
-the KetJS framework. KetSuite application documentation is intentionally deferred until the
-application suite is complete; legacy Markdown remains available as historical design material.
+All published documentation must be written in English. The content collection documents the KetJS
+framework and the supported KetSuite application startup flow. Broader KetSuite business-module
+documentation remains deferred; legacy Markdown is historical design material.
+
+Documentation pages must live under `src/content/docs/`. Do not create or extend Markdown pages at
+the root of this directory. `README.md` documents the standalone docs application itself; the other
+root-level Markdown files are legacy inputs that should be translated and migrated into the content
+collection before they are updated.

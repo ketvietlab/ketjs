@@ -123,6 +123,12 @@ test('product media: backend retains named integration joints and Product stays 
   ])
   assert.deepEqual(manifest.joints['product_backend:template.media']!.props, { templateId: 'id' })
   assert.deepEqual(manifest.joints['product_backend:variant.media']!.props, { productId: 'id' })
+  assert.deepEqual(manifest.joints['product_backend:media.upload']!.props, {
+    identity: 'text',
+    action: 'text',
+    label: 'text',
+  })
+  assert.ok(manifest.islands['product.media-upload'])
   assert.equal('product.Media' in manifest.models, false)
   assert.ok(manifest.models['product_media.Media'])
 })

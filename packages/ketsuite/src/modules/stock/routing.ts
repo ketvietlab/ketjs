@@ -65,7 +65,7 @@ async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unkno
   return []
 }
 
-/** Create the next move(s) for Odoo-style push and pull-push rules. */
+/** Create the next move(s) for the domain contract-style push and pull-push rules. */
 export async function pushFromCompletedMove(ctx: Ctx, move: Row, quantity: number): Promise<string[]> {
   if (!(quantity > 0)) return []
   const product = (await ctx.db.select('product.Product', { id: move.productId }))[0]

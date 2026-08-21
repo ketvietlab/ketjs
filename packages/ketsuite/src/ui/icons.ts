@@ -7,7 +7,7 @@
 // is the reason a `ket` app is one `node` away from running.
 //
 // Source: https://lucide.dev — ISC licence, © Lucide Contributors.
-// These are the same glyphs the Odoo backend theme vendors, so the two products
+// These are the same glyphs the domain contract backend theme vendors, so the two products
 // look like one product.
 
 import { trustedMarkup } from '@ketvietlab/ketjs-view'

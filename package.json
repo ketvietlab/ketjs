@@ -1,7 +1,7 @@
 {
   "name": "ketjs-monorepo",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.3",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -42,12 +42,13 @@
     "type-proof": "npm run build --silent && node .build/tools/type-proof.js",
     "audit:zero-dep": "npm run build --silent && node .build/tools/zero-dep-audit.js",
     "audit:ui": "npm run build --silent && node .build/tools/ui-audit.js",
+    "audit:terminology": "node tools/terminology-audit.mjs",
     "release:check": "npm run verify && node tools/release.mjs check",
     "release:pack": "npm run build --silent && node tools/release.mjs pack",
     "format": "biome format --write",
     "format:check": "biome format",
     "lint": "biome lint",
-    "verify": "npm run format:check && npm run lint && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run check && npm run test:built && node .build/tools/type-proof.js",
+    "verify": "npm run format:check && npm run lint && npm run audit:terminology && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run check && npm run test:built && node .build/tools/type-proof.js",
     "design": "npm run build --silent && node .build/apps/admin/serve.js",
     "start": "npm run build --silent && node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
     "start:pg": "npm run build --silent && DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",

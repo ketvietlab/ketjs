@@ -42,7 +42,7 @@ async function nextOrderNumber(ctx: Ctx, sessionId: unknown) {
 }
 function taxAmounts(tax: Row | null, gross: number, quantity: number) {
   if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported Odoo 19 POS subset')
+  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported POS subset')
   const amount = n(tax.amount),
     rate = amount / 100
   let untaxed = money(gross),

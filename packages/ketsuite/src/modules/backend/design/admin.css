@@ -78,8 +78,7 @@
   }
 
   /* ── Sidebar ───────────────────────────────────────────────────────────────
-     Ported from vidoo_backend_theme, so the framework and the Odoo deployment
-     look like one product: 228px, a quiet tinted ground, and one column that
+     The shell uses a 228px quiet tinted ground and one column that
      carries the brand, a menu search, the apps, the open app's menu, and the
      systray at the foot. There is no application bar across the top — the row
      above the content is the control panel, and it belongs to the view. */
@@ -2583,21 +2582,21 @@
      screens already render their own RecordWorkspace; flatten only the generic
      wrapper in that case so no duplicate card or heading appears. */
   [data-ui="record-workspace"][data-page-frame="true"]:has(
-    > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+    > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
   ),
   [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
     )
     > [data-ui="record-sheet"],
   [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
     )
     > [data-ui="record-sheet"]
     > [data-ui="record-body"] {
     display: contents;
   }
   [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] > [data-ui="record-workspace"]
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
     )
     > [data-ui="record-sheet"]
     > [data-ui="record-header"] {

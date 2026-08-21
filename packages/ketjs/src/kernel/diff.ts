@@ -1,4 +1,4 @@
-// Upgrade diff — the thing Odoo, WordPress and Shopify structurally cannot do.
+// Upgrade diff — the thing the domain contract, WordPress and Shopify structurally cannot do.
 //
 // Because the manifest records every joint, field and signature with provenance,
 // two manifests can be compared and every downstream breakage named BEFORE deploy
