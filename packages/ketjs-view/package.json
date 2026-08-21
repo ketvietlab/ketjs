@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketjs-view",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Ket view layer — signals, surgical DOM rendering, SSR, hydration and islands. Browser-safe, zero dependencies.",
   "type": "module",
   "license": "MIT",

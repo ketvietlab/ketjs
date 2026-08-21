@@ -190,8 +190,10 @@ try {
         cpSync(join(stageDist, name), dist, { recursive: true })
       }
 
-      const cli = join(PACKAGES, 'ketjs', 'dist', 'cli.js')
-      if (existsSync(cli)) chmodSync(cli, 0o755)
+      for (const name of ['ketjs', 'ketsuite']) {
+        const cli = join(PACKAGES, name, 'dist', 'cli.js')
+        if (existsSync(cli)) chmodSync(cli, 0o755)
+      }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
     } finally {
       rmSync(stage, { recursive: true, force: true })

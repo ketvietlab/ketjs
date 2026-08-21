@@ -1,11 +1,14 @@
 {
   "name": "@ketvietlab/ketsuite",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "ketsuite": "./dist/cli.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ketvietlab/ketjs.git",
@@ -33,6 +36,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    },
     "./ui": {
       "types": "./dist/ui/index.d.ts",
       "default": "./dist/ui/index.js"
@@ -43,8 +50,8 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "0.1.2",
-    "@ketvietlab/ketjs-view": "0.1.2"
+    "@ketvietlab/ketjs": "0.1.3",
+    "@ketvietlab/ketjs-view": "0.1.3"
   },
   "publishConfig": {
     "access": "public",

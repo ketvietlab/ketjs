@@ -60,13 +60,13 @@ No publish command is part of either local script.
 
 1. Merge the release preparation into `develop` and let required checks pass.
 2. Promote the verified commit according to the repository branch policy.
-3. Create and publish GitHub release `v0.1.2` at that exact commit.
+3. Create and publish GitHub release `v0.1.3` at that exact commit.
 4. Approve the protected `npm` environment when prompted.
 5. Confirm all four packages and provenance attestations on npm.
 6. Run the public smoke path without local tarballs:
 
 ```bash
-npx -y @ketvietlab/ketjs@0.1.2 new public_smoke
+npx -y @ketvietlab/ketjs@0.1.3 new public_smoke
 cd public_smoke
 npm install
 npm test
