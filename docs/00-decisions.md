@@ -1927,3 +1927,10 @@ functions and location-changing room writes lock the same active rows inside the
 transactions, so a concurrent archive and room/floor move cannot leave an inactive
 container with an active child. Archived locations remain readable in room history but
 are excluded from choices for new operational work.
+
+Physical rooms follow the same reversible rule. A room may be archived only from
+`available`, with no checked-in stay and no `todo`/`in_progress` housekeeping task.
+Archiving, check-in, manual status changes and task creation all compare the same
+`active + status` row version, so only one concurrent operation can win. Restoration
+requires the property, room type, building and floor to be active and returns the room
+to the front-desk candidate set without deleting its assignment, stay or task history.

@@ -120,10 +120,11 @@ export const housekeeping: Record<string, FnSpec> = {
         if (existing) return success(existing.id, { state: existing.state })
         const room = await record(tx, 'hospitality_core.Room', args.roomId)
         if (!room) return failure(issue('roomId', 'room_missing'))
+        if (room.active !== true) return failure(issue('roomId', 'room_archived'))
         const locked = await tx.db.compareAndSet(
           'hospitality_core.Room',
           { id: room.id },
-          { status: room.status },
+          { status: room.status, active: true },
           { status: room.status },
         )
         if (!('matched' in locked) || !locked.matched) return failure(issue('roomId', 'transition_conflict'))
@@ -278,6 +279,7 @@ export const housekeeping: Record<string, FnSpec> = {
       if (task.state !== 'todo') return failure(issue('state', 'cleaning_cannot_start'))
       const room = await record(ctx, 'hospitality_core.Room', task.roomId)
       if (!room) return failure(issue('roomId', 'room_missing'))
+      if (room.active !== true) return failure(issue('roomId', 'room_archived'))
       const at = args.at ?? new Date().toISOString()
       return transition(() =>
         ctx.tx(async (tx) => {
@@ -285,7 +287,7 @@ export const housekeeping: Record<string, FnSpec> = {
             const roomClaim = await tx.db.compareAndSet(
               'hospitality_core.Room',
               { id: room.id },
-              { status: room.status },
+              { status: room.status, active: true },
               { status: 'cleaning' },
             )
             if (!('matched' in roomClaim) || !roomClaim.matched)
