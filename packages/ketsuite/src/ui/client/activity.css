@@ -1,4 +1,4 @@
-@layer components {
+@layer ket.app {
   [data-ui="activity-record"] {
     display: grid;
     min-inline-size: 0;

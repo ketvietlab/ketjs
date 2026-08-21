@@ -16,6 +16,7 @@
 import { renderToString, html, when, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { IncomingMessage } from 'node:http'
+import { LAYER_ORDER_CSS } from '../theme/tokens.ts'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */
 export type Html = TemplateResult
@@ -131,6 +132,22 @@ export function withHeaders(result: RouteResult, headers: Record<string, string>
 }
 
 /**
+ * The cascade order, declared before the first stylesheet can define a layer.
+ *
+ * `@layer a, b, c;` is what fixes the order; where the layers are then written no
+ * longer matters. Without it the order is first-appearance across whatever
+ * stylesheets happened to load, so `ket.theme` could outrank `ket.app` purely
+ * because a theme's file came second — and `ket.user`, the layer that is supposed
+ * to have the last word, had no guarantee at all. It was documented in three
+ * places and emitted in none.
+ */
+// Written out rather than interpolated: a hole would put hydration markers
+// (`<!--k[-->`) inside the stylesheet, and CSS treats `<!--` as a token it then has
+// to recover from — which can swallow the statement it is here to make. The
+// literal is kept honest by a test against LAYER_ORDER_CSS.
+const layerOrder = html`<style>@layer ket.reset, ket.theme, ket.app, ket.user;</style>`
+
+/**
  * The document every screen sits in, as markup rather than as a string.
  *
  * `lang` reaches the first attribute on the page, which is where i18n starts and
@@ -140,5 +157,5 @@ export function document(o: { lang: string; title?: string; head?: Html; body: H
   return html`<html lang=${o.lang}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${when(
     o.title !== undefined,
     () => html`<title>${o.title}</title>`,
-  )}${o.head ?? ''}</head><body>${o.body}</body></html>`
+  )}${layerOrder}${o.head ?? ''}</head><body>${o.body}</body></html>`
 }

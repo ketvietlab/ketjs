@@ -473,32 +473,6 @@
     text-decoration: none;
   }
 
-  [data-ui="crumbs"] {
-    display: flex;
-    min-inline-size: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--admin-gap-xs);
-  }
-
-  [data-ui="crumb"] {
-    color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
-    text-decoration: none;
-  }
-
-  [data-ui="crumb"][aria-current="page"] {
-    color: var(--admin-ink);
-    font-weight: 600;
-  }
-
-  /* The separator is CSS, so the markup stays a plain list of names. */
-  [data-ui="crumb"] + [data-ui="crumb"]::before {
-    margin-inline-end: var(--admin-gap-xs);
-    color: var(--admin-ink-muted);
-    content: "/";
-  }
-
   [data-ui="chrome-search"] {
     display: flex;
     inline-size: min(100%, 32rem);
@@ -1755,81 +1729,6 @@
     [data-ui="content"] {
       padding: 0;
     }
-  }
-}
-
-/* The compact shell is two useful rows: identity/search, then a horizontally
-   scrollable menu for the current app. The old responsive rules changed the
-   sidebar to a row but left its flexing navigation at desktop height, producing
-   more than 500px of empty space above every mobile screen. */
-@media (max-width: 47.9375rem) {
-  [data-ui="sidebar-main"] {
-    display: contents;
-  }
-
-  [data-ui="sidebar"],
-  body > [data-ui="shell"] > [data-ui="sidebar"] {
-    display: grid;
-    grid-template-columns: auto minmax(8rem, 1fr);
-    align-items: center;
-    gap: var(--admin-gap-sm);
-    block-size: auto;
-    padding: var(--admin-gap-sm);
-  }
-  [data-ui="sidebar-header"] {
-    padding: 0;
-  }
-  [data-ui="sidebar-search"] {
-    margin: 0;
-  }
-  [data-ui="sidebar-nav"] {
-    display: block;
-    grid-column: 1 / -1;
-    padding: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  [data-ui="sidebar-section-label"],
-  [data-ui="app-list"],
-  [data-ui="menu-section-title"],
-  [data-ui="sidebar-foot"] {
-    display: none;
-  }
-  [data-ui="menu"] {
-    display: flex;
-    inline-size: max-content;
-    gap: var(--admin-gap-xs);
-  }
-  [data-ui="menu-item-wrap"],
-  [data-ui="menu-section"] {
-    display: block;
-  }
-  [data-ui="menu-section-children"] {
-    display: flex;
-    inline-size: max-content;
-    gap: var(--admin-gap-xs);
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-  [data-ui="menu-item"] {
-    min-block-size: 2.5rem;
-    padding-inline: var(--admin-gap);
-  }
-  [data-ui="menu-dot"] {
-    display: none;
-  }
-
-  /* A list remains a readable list on a narrow screen. Let its own scroll box
-     carry the width instead of squeezing identifiers into one-character lines. */
-  [data-ui="table"] {
-    inline-size: max-content;
-    min-inline-size: 100%;
-  }
-  [data-ui="row"] td,
-  [data-ui="cell"] code {
-    overflow-wrap: normal;
-    white-space: nowrap;
   }
 }
 
@@ -4219,10 +4118,85 @@
       transform: none !important;
     }
   }
-}
 
-@media (max-width: 47.9375rem) {
-  [data-ui="sidebar-foot"] {
-    display: none;
+  /* The compact shell is two useful rows: identity/search, then a horizontally
+     scrollable menu for the current app. The old responsive rules changed the
+     sidebar to a row but left its flexing navigation at desktop height, producing
+     more than 500px of empty space above every mobile screen. */
+  @media (max-width: 47.9375rem) {
+    [data-ui="sidebar-main"] {
+      display: contents;
+    }
+
+    [data-ui="sidebar"],
+    body > [data-ui="shell"] > [data-ui="sidebar"] {
+      display: grid;
+      grid-template-columns: auto minmax(8rem, 1fr);
+      align-items: center;
+      gap: var(--admin-gap-sm);
+      block-size: auto;
+      padding: var(--admin-gap-sm);
+    }
+    [data-ui="sidebar-header"] {
+      padding: 0;
+    }
+    [data-ui="sidebar-search"] {
+      margin: 0;
+    }
+    [data-ui="sidebar-nav"] {
+      display: block;
+      grid-column: 1 / -1;
+      padding: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    [data-ui="sidebar-section-label"],
+    [data-ui="app-list"],
+    [data-ui="menu-section-title"],
+    [data-ui="sidebar-foot"] {
+      display: none;
+    }
+    [data-ui="menu"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+    }
+    [data-ui="menu-item-wrap"],
+    [data-ui="menu-section"] {
+      display: block;
+    }
+    [data-ui="menu-section-children"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    [data-ui="menu-item"] {
+      min-block-size: 2.5rem;
+      padding-inline: var(--admin-gap);
+    }
+    [data-ui="menu-dot"] {
+      display: none;
+    }
+
+    /* A list remains a readable list on a narrow screen. Let its own scroll box
+       carry the width instead of squeezing identifiers into one-character lines. */
+    [data-ui="table"] {
+      inline-size: max-content;
+      min-inline-size: 100%;
+    }
+    [data-ui="row"] td,
+    [data-ui="cell"] code {
+      overflow-wrap: normal;
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="sidebar-foot"] {
+      display: none;
+    }
   }
 }

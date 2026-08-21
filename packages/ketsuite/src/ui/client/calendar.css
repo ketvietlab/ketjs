@@ -1,4 +1,4 @@
-@layer components {
+@layer ket.app {
   [data-ui="calendar-board"] {
     display: grid;
     gap: var(--admin-gap-sm);
@@ -151,7 +151,7 @@
     color: var(--admin-ink-muted);
     font-size: 0.75rem;
   }
-  @media (max-width: 900px) {
+  @media (max-width: 63.9375rem) {
     [data-ui="calendar-head"] {
       grid-template-columns: 1fr;
     }

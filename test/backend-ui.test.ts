@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { renderToString } from '@ketvietlab/ketjs-view'
-import { compose, translator } from '@ketvietlab/ketjs'
+import { globSync, readFileSync } from 'node:fs'
+import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
+import { compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
+import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
 import type { MenuNode } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from '@ketvietlab/ketsuite/backend'
@@ -445,17 +446,91 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
   assert.deepEqual(undocumented, [], 'a new hook needs a line in admin.css before it ships')
 })
 
+/** Every stylesheet the kit's hooks are styled by. */
+const STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/admin.css',
+  'packages/ketsuite/src/ui/client/mail.css',
+  'packages/ketsuite/src/ui/client/activity.css',
+  'packages/ketsuite/src/ui/client/calendar.css',
+]
+
+/** And the ones a module owns for its own island. */
+const MODULE_STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/tokens.css',
+  'packages/ketsuite/src/modules/crm_backend/client/crm.css',
+  'packages/ketsuite/src/modules/partner_backend/client/address.css',
+]
+
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
+})
+
+test('ui contract: the stylesheet targets no hook nothing emits', () => {
+  // The contract runs both ways. The existing test catches a rule with no hook;
+  // this catches a hook with no markup — `[data-ui="crumb"]` outlived the component
+  // that emitted it and sat there being maintained.
+  //
+  // Two sources beyond the kit are legitimate. `nav-item` belongs to whatever a
+  // third party hangs off `backend:nav.items`, so the kit never emits it. The login
+  // screen and the design catalogue still write their own markup — they are on
+  // ui-audit's pending list — so their hooks are read from the source that emits
+  // them, and stop being read from there the day that markup moves into the kit.
+  const RESERVED_FOR_FILLS = ['nav-item']
+  // An island's markup is behaviour, so it lives in the browser file rather than in
+  // the kit; the login screen and the design catalogue are on ui-audit's pending
+  // list. Both are read from the source that emits them, so the day that markup
+  // moves into the kit this stops reading them and nothing has to be remembered.
+  const OTHER_SOURCES = [
+    'packages/ketsuite/src/modules/user/login.ts',
+    'packages/ketsuite/src/modules/backend/catalogue.ts',
+    ...globSync('packages/ketsuite/src/**/client/*.mjs'),
+  ]
+  const emitted = new Set<string>([
+    ...HOOKS,
+    ...RESERVED_FOR_FILLS,
+    ...OTHER_SOURCES.flatMap((path) =>
+      [...readFileSync(path, 'utf8').matchAll(/data-ui=(?:"|\{?')([a-z0-9-]+)/g)].map((m) => m[1] as string),
+    ),
+  ])
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+  const targeted = new Set([...css.matchAll(/\[data-ui="([a-z0-9-]+)"/g)].map((m) => m[1] as string))
+  const orphans = [...targeted].filter((name) => !emitted.has(name)).sort()
+  assert.deepEqual(orphans, [], 'a rule outlived the component that emitted its hook')
+})
+
+test('design tokens: the cascade order is declared before the first stylesheet', () => {
+  // `@layer a, b, c;` is what fixes precedence; without it the order is whatever
+  // first-appearance across the loaded stylesheets happens to be, and `ket.theme`
+  // outranked `ket.app` on every backend page purely because admin.css linked first.
+  const rendered = renderToString(
+    ketDocument({
+      lang: 'vi',
+      title: 'x',
+      head: html2`<link rel="stylesheet" href="/a.css">`,
+      body: html2``,
+    }),
+  )
+  const order = rendered.indexOf(LAYER_ORDER_CSS)
+  assert.ok(order > 0, 'every document declares the layer order')
+  assert.ok(order < rendered.indexOf('/a.css'), 'before any stylesheet can define a layer')
+  assert.equal(LAYER_ORDER_CSS, '@layer ket.reset, ket.theme, ket.app, ket.user;')
+})
+
+test('design tokens: no rule sits outside a cascade layer, where it outranks ket.user', () => {
+  // Unlayered CSS beats every layer, including the one the design handoff promises
+  // always wins. Seventy-nine lines of mobile shell rules used to sit out here.
+  for (const path of [...STYLESHEETS, ...MODULE_STYLESHEETS]) {
+    const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    let depth = 0
+    for (const [index, line] of source.split('\n').entries()) {
+      const text = line.trim()
+      if (depth === 0 && text && !text.startsWith('@layer '))
+        assert.fail(`${path}:${index + 1} is outside a cascade layer, so it outranks ket.user\n  ${text}`)
+      depth += (line.match(/{/g)?.length ?? 0) - (line.match(/}/g)?.length ?? 0)
+    }
+  }
 })
 
 test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
@@ -562,14 +637,7 @@ test('backend responder: a fragment request never renders document infrastructur
 })
 
 test('design tokens: every admin role used by components is declared', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
   const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
