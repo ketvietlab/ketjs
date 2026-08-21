@@ -2,10 +2,10 @@
 // manifest entry, an agent tool descriptor and a dry-runnable test handle.
 // Written once, never restated.
 
-import { createContext } from './ctx.ts'
-import { createIdempotency } from './idem.ts'
 import { createHash } from 'node:crypto'
 import { KetError } from '../kernel/errors.ts'
+import { createContext } from './ctx.ts'
+import { createIdempotency } from './idem.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { queueFor } from './queue.ts'
@@ -96,6 +96,7 @@ const idemFor = (adapter: Adapter): Promise<Idem> => {
   }
   return p
 }
+
 export const _resetIdempotency = (): void => {
   /* records are durable; nothing to clear */
 }
@@ -111,6 +112,28 @@ const canonical = (value: unknown): string => {
 
 const requestDigest = (args: Record<string, unknown>): string =>
   createHash('sha256').update(canonical(args)).digest('hex')
+
+const idempotencyKey = (
+  fnKey: string,
+  key: string,
+  o: {
+    actor?: string | null
+    idempotencyNamespace?: string | null
+    scope?: import('../types.ts').Scope
+  },
+): string => {
+  const digest = requestDigest({
+    actor: o.actor ?? null,
+    branch: o.scope?.branch ?? null,
+    branches: [...(o.scope?.branches ?? [])].sort(),
+    companies: [...(o.scope?.companies ?? [])].sort(),
+    company: o.scope?.company ?? null,
+    fn: fnKey,
+    key,
+    namespace: o.idempotencyNamespace ?? null,
+  })
+  return `v2:${digest}`
+}
 
 export async function callFn(
   fnKey: string,
@@ -179,9 +202,7 @@ export async function callFn(
   // an in-memory "initialized" marker pointing at a table that no longer exists.
   if (Object.keys(o.manifest.jobs).length) await queueFor(o.adapter)
 
-  const idemKey = o.idempotencyKey
-    ? `${o.idempotencyNamespace ? `${o.idempotencyNamespace}:` : ''}${fnKey}:${o.idempotencyKey}`
-    : null
+  const idemKey = o.idempotencyKey ? idempotencyKey(fnKey, o.idempotencyKey, o) : null
   const idemDigest = idemKey ? (o.idempotencyDigest ?? requestDigest(args)) : null
   let idem: Idem | null = null
 
