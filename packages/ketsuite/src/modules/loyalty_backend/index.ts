@@ -28,13 +28,11 @@ import {
   walletDetailScreen,
   walletsScreen,
 } from './screens.tsx'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
 type Translator = ReturnType<ServeContext['translate']>
-
-const localeSuffix = (url: URL) =>
-  url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : ''
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Req, activePath = url.pathname): Promise<Frame> => {
   const menuUrl = new URL(url)
@@ -333,7 +331,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           req,
         )
         if ((result as AnyRow).ok)
-          return seeOther(`/admin/loyalty/programs/${String((result as AnyRow).id)}${localeSuffix(url)}`)
+          return seeOther(inLocale(url, `/admin/loyalty/programs/${String((result as AnyRow).id)}`))
         const _ = ctx.translate(ctx.localeOf(url, req))
         const rows = (await ctx.call('loyalty.program.list', { includeArchived: true }, url, req)) as AnyRow[]
         return document(ctx, url, req, 'loyalty_backend.programs.title', (_, frame) =>
@@ -404,7 +402,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             req,
           )
         else return text('unknown action', { status: 400 })
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [program, data] = await Promise.all([
@@ -444,7 +442,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           url,
           req,
         )
-        if ((result as AnyRow).ok) return seeOther(`/admin/loyalty/wallets/${id}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, `/admin/loyalty/wallets/${id}`))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const wallets = (await ctx.call('loyalty.wallet.list', { includeArchived: true }, url, req)) as AnyRow[]
@@ -499,7 +497,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           url,
           req,
         )
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const wallet = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
@@ -583,7 +581,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 url,
                 req,
               )
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [tiers, memberships, config] = await Promise.all([
@@ -700,7 +698,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             req,
           )
         else return text('unknown action', { status: 400 })
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [evaluated, order] = await Promise.all([
@@ -722,8 +720,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           orderName,
           backHref:
             params.channel === 'sale'
-              ? `/admin/sales/${['draft', 'sent'].includes(String(order.state)) ? 'quotations' : 'orders'}/${params.id}${localeSuffix(url)}`
-              : `/admin/pos/orders/${params.id}${localeSuffix(url)}`,
+              ? `/admin/sales/${['draft', 'sent'].includes(String(order.state)) ? 'quotations' : 'orders'}/${params.id}${localeQuery(url)}`
+              : `/admin/pos/orders/${params.id}${localeQuery(url)}`,
           result: evaluated,
           errors,
         }),

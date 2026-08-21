@@ -8,20 +8,13 @@ import {
   recordWorkspace as RecordWorkspace,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 type ProductCreateOptions = {
   uoms: FormOption[]
   categories: FormOption[]
   stockEnabled?: boolean
   errors?: string[]
-}
-
-const localized = (path: string, locale: string): string => {
-  if (!locale) return path
-  const target = new URL(path, 'http://ket.local')
-  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
 }
 
 const selectionLabel = (_: Translator, group: string, value: unknown): string => {

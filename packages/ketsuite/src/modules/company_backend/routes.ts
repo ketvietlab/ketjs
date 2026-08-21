@@ -12,21 +12,10 @@ import {
   hierarchyScreen,
 } from './screens.tsx'
 import type { BranchRow, CompanyRow } from './screens.tsx'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -89,7 +78,7 @@ const renderCompany = async (ctx: ServeContext, url: URL, req: Req, id: string, 
       row,
       { ...form, branches: row.branches, errors },
       await frameFor(ctx, url, req),
-      localeSuffix(url),
+      localeQuery(url),
     ),
   )
 }
@@ -138,7 +127,7 @@ const renderBranch = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     held.branch.name,
     branchFormScreen(_, held.company, held.branch, parents, await frameFor(ctx, url, req), {
       errors,
-      locale: localeSuffix(url),
+      locale: localeQuery(url),
     }),
   )
 }
@@ -166,7 +155,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('company_backend.screen.title'),
-        companiesScreen(_, rows, await frameFor(ctx, url, req), localeSuffix(url), includeArchived),
+        companiesScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url), includeArchived),
       )
     },
 
@@ -190,7 +179,7 @@ export const routes: Record<string, RouteEntry> = {
             form as never,
             { ...options, errors: translatedErrors(result, _) },
             await frameFor(ctx, url, req),
-            localeSuffix(url),
+            localeQuery(url),
           ),
         )
       }
@@ -200,7 +189,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('company_backend.create.title'),
-        companyFormScreen(_, {}, options, await frameFor(ctx, url, req), localeSuffix(url)),
+        companyFormScreen(_, {}, options, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -234,7 +223,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('company_backend.hierarchy.title'),
-        hierarchyScreen(_, rows, await frameFor(ctx, url, req), localeSuffix(url)),
+        hierarchyScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -307,7 +296,7 @@ export const routes: Record<string, RouteEntry> = {
           _('company_backend.branch.createTitle'),
           branchFormScreen(_, company, form as never, parents, await frameFor(ctx, url, req), {
             errors: translatedErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -324,7 +313,7 @@ export const routes: Record<string, RouteEntry> = {
           parents,
           await frameFor(ctx, url, req),
           {
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           },
         ),
       )
@@ -416,7 +405,7 @@ export const routes: Record<string, RouteEntry> = {
                 errors,
               },
               awaitFrame,
-              localeSuffix(url),
+              localeQuery(url),
             ),
           )
         const awaitFrame = await frameFor(ctx, url, req)

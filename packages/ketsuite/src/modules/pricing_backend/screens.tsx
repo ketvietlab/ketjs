@@ -13,6 +13,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 export type PricelistRow = { id: string; name: string; currency: string; state: string; sequence: string }
 
@@ -21,7 +22,6 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const key = `pricing_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
 }
-const localized = (path: string, locale: string): string => `${path}${locale}`
 
 export const pricelistsScreen = (
   _: Translator,

@@ -37,6 +37,7 @@ import { backendPage } from '../../ui/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { productListSearch } from '../product/search.ts'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type MediaRow = {
   id: string
@@ -63,16 +64,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
   }
 }
 
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 const productTabOf = (url: URL): ProductDetailTab => {
   const asked = url.searchParams.get('tab')
   return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
@@ -661,7 +652,7 @@ export const routes: Record<string, RouteEntry> = {
             },
           },
           { shown: colsOf(url), colsHref: colsHref(url), groups },
-          localeSuffix(url),
+          localeQuery(url),
         ),
       })
     },
@@ -700,7 +691,7 @@ export const routes: Record<string, RouteEntry> = {
         return backendPage(ctx, req, {
           lang,
           title: _('product_backend.favorite.create'),
-          body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeSuffix(url), [
+          body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeQuery(url), [
             _('product_backend.favorite.invalid'),
           ]),
         })
@@ -708,7 +699,7 @@ export const routes: Record<string, RouteEntry> = {
       return backendPage(ctx, req, {
         lang,
         title: _('product_backend.favorite.create'),
-        body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeSuffix(url)),
+        body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeQuery(url)),
       })
     },
   '/admin/products/new':
@@ -758,7 +749,7 @@ export const routes: Record<string, RouteEntry> = {
           _,
           { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
           await frameFor(ctx, url, req),
-          localeSuffix(url),
+          localeQuery(url),
         ),
       })
     },
@@ -798,7 +789,7 @@ export const routes: Record<string, RouteEntry> = {
           rows,
           await frameFor(ctx, url, req),
           invalidErrors(url, _),
-          localeSuffix(url),
+          localeQuery(url),
         ),
       })
     },
@@ -975,7 +966,7 @@ export const routes: Record<string, RouteEntry> = {
               lang,
             }),
         savedPartial ? {} : await frameFor(ctx, url, req),
-        localeSuffix(url),
+        localeQuery(url),
         activeTab,
         savedPartial,
       )
@@ -1183,7 +1174,7 @@ export const routes: Record<string, RouteEntry> = {
             }),
         savedPartial ? {} : await frameFor(ctx, url, req),
         invalidErrors(url, _),
-        localeSuffix(url),
+        localeQuery(url),
         savedPartial
           ? ''
           : await ctx.joint(url, req, 'product_backend:variant.editor', {

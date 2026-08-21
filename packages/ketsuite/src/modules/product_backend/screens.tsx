@@ -21,6 +21,7 @@ import {
   tabs,
 } from '../../ui/index.ts'
 import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 const mediaLabels = (_: Translator) => ({
   unavailable: _('product_backend.media.unavailable'),
@@ -41,13 +42,6 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   const raw = String(value)
   const key = `product_backend.${group}.${raw}`
   return _.resolves(key) ? _(key) : raw
-}
-const localized = (path: string, locale: string): string => {
-  if (!locale) return path
-  const target = new URL(path, 'http://ket.local')
-  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
 }
 
 export type TemplateRow = {

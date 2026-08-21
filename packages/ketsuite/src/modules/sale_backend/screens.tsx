@@ -18,6 +18,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 export const labelOf = (_: Translator, group: string, value: unknown) => {
@@ -30,10 +31,8 @@ const pathOf = (order: AnyRow) =>
     ? `/admin/sales/quotations/${String(order.id)}`
     : `/admin/sales/orders/${String(order.id)}`
 const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_backend.emptyHint'))
-const localized = (path: string, localeSuffix: string): string =>
-  localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuffix = ''): TemplateResult => (
+export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, locale = ''): TemplateResult => (
   <Framed
     translator={_}
     title={_('sale_backend.dashboard.title')}
@@ -42,7 +41,7 @@ export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuf
       inline([
         linkButton({
           label: _('sale_backend.action.create'),
-          href: `${localized('/admin/sales/quotations', localeSuffix)}#quotation-create-form`,
+          href: `${localized('/admin/sales/quotations', locale)}#quotation-create-form`,
           variant: 'primary',
         }),
       ]),
@@ -52,25 +51,25 @@ export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuf
             id: 'draft',
             title: _('sale_backend.dashboard.draft'),
             value: rows.filter((r) => r.state === 'draft').length,
-            href: localized('/admin/sales/quotations?state=draft', localeSuffix),
+            href: localized('/admin/sales/quotations?state=draft', locale),
           },
           {
             id: 'sent',
             title: _('sale_backend.dashboard.sent'),
             value: rows.filter((r) => r.state === 'sent').length,
-            href: localized('/admin/sales/quotations?state=sent', localeSuffix),
+            href: localized('/admin/sales/quotations?state=sent', locale),
           },
           {
             id: 'orders',
             title: _('sale_backend.menu.orders'),
             value: rows.filter((r) => r.state === 'sale').length,
-            href: localized('/admin/sales/orders', localeSuffix),
+            href: localized('/admin/sales/orders', locale),
           },
           {
             id: 'invoice',
             title: _('sale_backend.dashboard.toInvoice'),
             value: rows.filter((r) => r.invoiceStatus === 'to invoice').length,
-            href: localized('/admin/sales/orders', localeSuffix),
+            href: localized('/admin/sales/orders', locale),
           },
         ],
         id: (item) => item.id,

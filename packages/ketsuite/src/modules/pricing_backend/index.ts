@@ -5,17 +5,7 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { pricelistDetailScreen, pricelistsScreen } from './screens.tsx'
 import { backendPage } from '../../ui/index.ts'
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -82,7 +72,7 @@ export default defineModule({
         return backendPage(ctx, req, {
           lang,
           title: _('pricing_backend.title'),
-          body: pricelistsScreen(_, rows, { ...(await frame(ctx, url, req)) }, localeSuffix(url)),
+          body: pricelistsScreen(_, rows, { ...(await frame(ctx, url, req)) }, localeQuery(url)),
         })
       },
     '/admin/pricelists/{id}':
@@ -154,7 +144,7 @@ export default defineModule({
         return backendPage(ctx, req, {
           lang,
           title: String(row.name),
-          body: pricelistDetailScreen(_, row, items, await frame(ctx, url, req), localeSuffix(url)),
+          body: pricelistDetailScreen(_, row, items, await frame(ctx, url, req), localeQuery(url)),
         })
       },
   },

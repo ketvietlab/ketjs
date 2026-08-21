@@ -30,6 +30,7 @@ import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
+import { localeQuery } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -67,10 +68,6 @@ const resultRedirect = (result: unknown, ok: string, fail = ok) =>
     : seeOther(`${fail}${fail.includes('?') ? '&' : '?'}invalid=1`)
 
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
-const localeSuffix = (url: URL) => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -290,7 +287,7 @@ const accountMoveRoute =
                 url,
                 req,
               )
-      return resultRedirect(result, `${url.pathname}${localeSuffix(url)}`)
+      return resultRedirect(result, `${url.pathname}${localeQuery(url)}`)
     }
     if (req.method !== 'GET') return text('GET or POST', { status: 405 })
     const [move, accounts] = (await Promise.all([
@@ -324,7 +321,7 @@ const accountMoveRoute =
           (move.lines as AnyRow[]) ?? [],
           shell,
           choices(accounts),
-          `${url.pathname}${localeSuffix(url)}`,
+          `${url.pathname}${localeQuery(url)}`,
           collaboration,
           printable.length
             ? actionGroup({
@@ -462,7 +459,7 @@ export default defineModule({
               unpaid: moves.filter((move) => move.paymentState === 'not_paid').length,
             },
             frame: shell,
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
             standard: String(setup.standard),
           }),
         )
@@ -486,7 +483,7 @@ export default defineModule({
               url,
               req,
             ),
-            `/admin/accounts${localeSuffix(url)}`,
+            `/admin/accounts${localeQuery(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -494,7 +491,7 @@ export default defineModule({
         return document(ctx, url, req, 'account_backend.accounts.title', (_, tr, shell) =>
           accountsScreen(tr, {
             frame: shell,
-            action: `/admin/accounts${localeSuffix(url)}`,
+            action: `/admin/accounts${localeQuery(url)}`,
             rows,
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
@@ -532,14 +529,14 @@ export default defineModule({
               url,
               req,
             ),
-            `/admin/journals${localeSuffix(url)}`,
+            `/admin/journals${localeQuery(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         return document(ctx, url, req, 'account_backend.journals.title', (_, tr, shell) =>
           journalsScreen(tr, {
             frame: shell,
-            action: `/admin/journals${localeSuffix(url)}`,
+            action: `/admin/journals${localeQuery(url)}`,
             rows: data.journals,
             accounts: data.accounts,
             errors:
@@ -589,7 +586,7 @@ export default defineModule({
               url,
               req,
             ),
-            `/admin/taxes${localeSuffix(url)}`,
+            `/admin/taxes${localeQuery(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -597,7 +594,7 @@ export default defineModule({
           const currency = currencyOf(data.companies, shell)
           return taxesScreen(tr, {
             frame: shell,
-            action: `/admin/taxes${localeSuffix(url)}`,
+            action: `/admin/taxes${localeQuery(url)}`,
             rows: data.taxes,
             accounts: data.accounts,
             currency,
@@ -676,14 +673,14 @@ export default defineModule({
                   url,
                   req,
                 )
-          return resultRedirect(result, `/admin/payment-terms${localeSuffix(url)}`)
+          return resultRedirect(result, `/admin/payment-terms${localeQuery(url)}`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listPaymentTerms', {}, url, req)) as AnyRow[]
         return document(ctx, url, req, 'account_backend.terms.title', (_, tr, shell) =>
           paymentTermsScreen(tr, {
             frame: shell,
-            action: `/admin/payment-terms${localeSuffix(url)}`,
+            action: `/admin/payment-terms${localeQuery(url)}`,
             rows,
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
@@ -762,7 +759,7 @@ export default defineModule({
               url,
               req,
             ),
-            `/admin/journal-entries${localeSuffix(url)}`,
+            `/admin/journal-entries${localeQuery(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -776,10 +773,10 @@ export default defineModule({
         return document(ctx, url, req, 'account_backend.entries.title', (_, tr, shell) =>
           journalEntriesScreen(tr, {
             frame: shell,
-            action: `/admin/journal-entries${localeSuffix(url)}`,
+            action: `/admin/journal-entries${localeQuery(url)}`,
             fields: moveFields(tr, data, ['entry']),
             rows,
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
@@ -790,7 +787,7 @@ export default defineModule({
       async (url, req) => {
         const data = await common(ctx, url, req)
         if (req.method === 'POST')
-          return createInvoice(ctx, url, req, `/admin/customer-invoices${localeSuffix(url)}`)
+          return createInvoice(ctx, url, req, `/admin/customer-invoices${localeQuery(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
         const rows = all.filter((move) =>
@@ -799,10 +796,10 @@ export default defineModule({
         return document(ctx, url, req, 'account_backend.customerInvoices.title', (_, tr, shell) =>
           customerInvoicesScreen(tr, {
             frame: shell,
-            action: `/admin/customer-invoices${localeSuffix(url)}`,
+            action: `/admin/customer-invoices${localeQuery(url)}`,
             fields: invoiceFields(tr, data, ['out_invoice', 'out_refund', 'out_receipt']),
             rows,
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
@@ -813,7 +810,7 @@ export default defineModule({
       async (url, req) => {
         const data = await common(ctx, url, req)
         if (req.method === 'POST')
-          return createInvoice(ctx, url, req, `/admin/vendor-bills${localeSuffix(url)}`)
+          return createInvoice(ctx, url, req, `/admin/vendor-bills${localeQuery(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
         const rows = all.filter((move) =>
@@ -822,10 +819,10 @@ export default defineModule({
         return document(ctx, url, req, 'account_backend.vendorBills.title', (_, tr, shell) =>
           vendorBillsScreen(tr, {
             frame: shell,
-            action: `/admin/vendor-bills${localeSuffix(url)}`,
+            action: `/admin/vendor-bills${localeQuery(url)}`,
             fields: invoiceFields(tr, data, ['in_invoice', 'in_refund', 'in_receipt']),
             rows,
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
@@ -863,7 +860,7 @@ export default defineModule({
               url,
               req,
             ),
-            `/admin/payments${localeSuffix(url)}`,
+            `/admin/payments${localeQuery(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -871,7 +868,7 @@ export default defineModule({
         return document(ctx, url, req, 'account_backend.payments.title', (_, tr, shell) =>
           paymentsScreen(tr, {
             frame: shell,
-            action: `/admin/payments${localeSuffix(url)}`,
+            action: `/admin/payments${localeQuery(url)}`,
             rows,
             openItems: openItems.length,
             errors:
@@ -957,7 +954,7 @@ export default defineModule({
           const currency = currencyOf(companies, shell)
           return trialBalanceScreen(tr, {
             frame: shell,
-            action: `/admin/trial-balance${localeSuffix(url)}`,
+            action: `/admin/trial-balance${localeQuery(url)}`,
             rows,
             currency,
             fields: [
@@ -994,7 +991,7 @@ export default defineModule({
           const currency = currencyOf(data.companies, shell)
           return generalLedgerScreen(tr, {
             frame: shell,
-            action: `/admin/general-ledger${localeSuffix(url)}`,
+            action: `/admin/general-ledger${localeQuery(url)}`,
             rows,
             currency,
             fields: [
@@ -1029,7 +1026,7 @@ export default defineModule({
           const currency = currencyOf(data.companies, shell)
           return partnerLedgerScreen(tr, {
             frame: shell,
-            action: `/admin/partner-statement${localeSuffix(url)}`,
+            action: `/admin/partner-statement${localeQuery(url)}`,
             rows,
             currency,
             selected: Boolean(partnerId),

@@ -17,9 +17,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { DataTable, FormOption, Frame } from '../../ui/index.ts'
-
-const localized = (path: string, locale: string): string =>
-  !locale ? path : path.includes('?') ? `${path}&${locale.slice(1)}` : `${path}${locale}`
+import { localized } from '../backend/screen.ts'
 
 export type PartnerListRow = {
   id: string

@@ -9,6 +9,7 @@ import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
+import { localeQuery } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -40,10 +41,6 @@ const document = async (
 const redirect = (result: unknown, ok: string) =>
   (result as { ok?: boolean }).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
-const localeSuffix = (url: URL) => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -521,14 +518,14 @@ export default defineModule({
                 _,
                 (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
                 shell,
-                localeSuffix(url),
+                localeQuery(url),
               ),
             )
           : text('GET', { status: 405 }),
     '/admin/purchase/rfqs':
       (ctx): Route =>
       async (url, req) => {
-        const rfqPath = `/admin/purchase/rfqs${localeSuffix(url)}`
+        const rfqPath = `/admin/purchase/rfqs${localeQuery(url)}`
         if (req.method === 'POST') {
           const form = await readForm(req)
           const result = await ctx.call(

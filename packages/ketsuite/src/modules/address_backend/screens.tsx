@@ -14,6 +14,7 @@ import {
   stack,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 export type CatalogRow = {
   countryCode: string
@@ -34,9 +35,6 @@ export type DivisionRow = {
   kind: string
   level: number
 }
-
-const localized = (path: string, locale: string): string =>
-  !locale ? path : path.includes('?') ? `${path}&${locale.slice(1)}` : `${path}${locale}`
 
 export const catalogsScreen = (
   _: Translator,

@@ -17,6 +17,7 @@ import { stockRoutesScreen } from './stock-routes-screen.tsx'
 import { transferDetailScreen } from './transfer-screen.tsx'
 import { transfersScreen } from './transfers-screen.tsx'
 import { warehousesScreen } from './warehouses-screen.tsx'
+import { inLocale } from '../backend/screen.ts'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
@@ -125,12 +126,6 @@ const dateTimeLabel = (value: unknown, lang: string): string => {
         dateStyle: 'short',
         timeStyle: 'short',
       }).format(date)
-}
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
 }
 
 const common = async (ctx: ServeContext, url: URL, req: Req) => {

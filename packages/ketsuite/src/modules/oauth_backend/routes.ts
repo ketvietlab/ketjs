@@ -12,21 +12,10 @@ import {
   providersScreen,
 } from './screens.tsx'
 import type { IdentityRow, ProviderRow } from './screens.tsx'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -113,7 +102,7 @@ const renderProvider = async (
       row,
       { ...(await formOptions(ctx, url, req)), errors },
       await frameFor(ctx, url, req),
-      localeSuffix(url),
+      localeQuery(url),
     ),
   )
 }
@@ -152,7 +141,7 @@ const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: s
     url,
     req,
     _('oauth_backend.identities.title'),
-    identitiesScreen(_, rows, await frameFor(ctx, url, req), localeSuffix(url), errors),
+    identitiesScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url), errors),
   )
 }
 
@@ -171,7 +160,7 @@ export const routes: Record<string, RouteEntry> = {
           _,
           await providersOf(ctx, url, req, includeArchived),
           await frameFor(ctx, url, req),
-          localeSuffix(url),
+          localeQuery(url),
           includeArchived,
         ),
       )
@@ -249,7 +238,7 @@ export const routes: Record<string, RouteEntry> = {
             row,
             { ...(await identityOptions(ctx, url, req)), errors },
             await frameFor(ctx, url, req),
-            localeSuffix(url),
+            localeQuery(url),
           ),
         )
       if (req.method === 'GET') return render({ providerId: url.searchParams.get('provider') ?? undefined })
@@ -305,7 +294,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('oauth_backend.link.title'),
-        linkProviderScreen(_, providers, identities, await frameFor(ctx, url, req), localeSuffix(url)),
+        linkProviderScreen(_, providers, identities, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
   },

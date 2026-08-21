@@ -7,16 +7,10 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
 import { partnerRelationControl } from './relation-control.ts'
+import { inLocale } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',

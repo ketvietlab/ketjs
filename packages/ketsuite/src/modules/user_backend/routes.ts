@@ -13,21 +13,10 @@ import {
   usersScreen,
 } from './screens.tsx'
 import type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens.tsx'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -150,7 +139,7 @@ const renderUser = async (
         integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
       },
       await frameFor(ctx, url, req),
-      localeSuffix(url),
+      localeQuery(url),
     ),
   )
 }
@@ -197,7 +186,7 @@ const renderRole = async (ctx: ServeContext, url: URL, req: Req, id: string, err
       row,
       await permissionGroups(ctx, url, req, row.grants ?? []),
       await frameFor(ctx, url, req),
-      localeSuffix(url),
+      localeQuery(url),
       errors,
     ),
   )
@@ -224,7 +213,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('user_backend.users.title'),
-        usersScreen(_, rows, await frameFor(ctx, url, req), localeSuffix(url), includeArchived),
+        usersScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url), includeArchived),
       )
     },
 
@@ -262,7 +251,7 @@ export const routes: Record<string, RouteEntry> = {
             form as Partial<UserRow>,
             { ...options, errors: translatedErrors(ctx, url, req, result) },
             await frameFor(ctx, url, req),
-            localeSuffix(url),
+            localeQuery(url),
           ),
         )
       }
@@ -272,7 +261,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('user_backend.users.create'),
-        userFormScreen(_, {}, options, await frameFor(ctx, url, req), localeSuffix(url)),
+        userFormScreen(_, {}, options, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -506,7 +495,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('user_backend.roles.title'),
-        rolesScreen(_, await rolesOf(ctx, url, req), await frameFor(ctx, url, req), localeSuffix(url)),
+        rolesScreen(_, await rolesOf(ctx, url, req), await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -535,7 +524,7 @@ export const routes: Record<string, RouteEntry> = {
             form,
             [],
             await frameFor(ctx, url, req),
-            localeSuffix(url),
+            localeQuery(url),
             translatedErrors(ctx, url, req, result),
           ),
         )
@@ -546,7 +535,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('user_backend.roles.create'),
-        roleScreen(_, {}, [], await frameFor(ctx, url, req), localeSuffix(url)),
+        roleScreen(_, {}, [], await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -628,7 +617,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('user_backend.presets.title'),
-        presetsScreen(_, modules, await frameFor(ctx, url, req), localeSuffix(url), resultText),
+        presetsScreen(_, modules, await frameFor(ctx, url, req), localeQuery(url), resultText),
       )
     },
 
@@ -654,7 +643,7 @@ export const routes: Record<string, RouteEntry> = {
           row,
           await sessionRows(ctx, url, req, row.id),
           await frameFor(ctx, url, req),
-          localeSuffix(url),
+          localeQuery(url),
           undefined,
           await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
         ),
@@ -705,7 +694,7 @@ export const routes: Record<string, RouteEntry> = {
             row,
             await sessionRows(ctx, url, req, row.id),
             await frameFor(ctx, url, req),
-            localeSuffix(url),
+            localeQuery(url),
             translatedErrors(ctx, url, req, result),
             await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
           ),

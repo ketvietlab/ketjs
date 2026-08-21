@@ -15,16 +15,9 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 type AttributeRow = Record<string, unknown>
-
-const localized = (path: string, locale: string): string => {
-  if (!locale) return path
-  const target = new URL(path, 'http://ket.local')
-  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const selectionLabel = (_: Translator, group: string, value: unknown): string => {
   const raw = String(value)

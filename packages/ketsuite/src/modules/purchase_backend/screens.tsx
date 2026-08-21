@@ -18,6 +18,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 
@@ -33,15 +34,8 @@ const pathOf = (order: AnyRow) =>
     : `/admin/purchase/orders/${String(order.id)}`
 
 const empty = (_: Translator) => emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'))
-const localized = (path: string, localeSuffix: string): string =>
-  localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (
-  _: Translator,
-  orders: AnyRow[],
-  frame: Frame,
-  localeSuffix = '',
-): TemplateResult => {
+export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale = ''): TemplateResult => {
   const count = (states: string[]) => orders.filter((row) => states.includes(String(row.state))).length
   return (
     <Framed
@@ -52,7 +46,7 @@ export const dashboard = (
         inline([
           linkButton({
             label: _('purchase_backend.action.createRfq'),
-            href: `${localized('/admin/purchase/rfqs', localeSuffix)}#rfq-create-form`,
+            href: `${localized('/admin/purchase/rfqs', locale)}#rfq-create-form`,
             variant: 'primary',
           }),
         ]),
@@ -62,31 +56,31 @@ export const dashboard = (
               id: 'draft',
               title: _('purchase_backend.dashboard.toSend'),
               value: count(['draft']),
-              href: localized('/admin/purchase/rfqs?state=draft', localeSuffix),
+              href: localized('/admin/purchase/rfqs?state=draft', locale),
             },
             {
               id: 'waiting',
               title: _('purchase_backend.dashboard.waiting'),
               value: count(['sent']),
-              href: localized('/admin/purchase/rfqs?state=sent', localeSuffix),
+              href: localized('/admin/purchase/rfqs?state=sent', locale),
             },
             {
               id: 'approval',
               title: _('purchase_backend.dashboard.toApprove'),
               value: count(['to approve']),
-              href: localized('/admin/purchase/rfqs?state=to%20approve', localeSuffix),
+              href: localized('/admin/purchase/rfqs?state=to%20approve', locale),
             },
             {
               id: 'orders',
               title: _('purchase_backend.menu.orders'),
               value: count(['purchase']),
-              href: localized('/admin/purchase/orders', localeSuffix),
+              href: localized('/admin/purchase/orders', locale),
             },
             {
               id: 'bill',
               title: _('purchase_backend.dashboard.toBill'),
               value: orders.filter((row) => row.invoiceStatus === 'to invoice').length,
-              href: localized('/admin/purchase/orders', localeSuffix),
+              href: localized('/admin/purchase/orders', locale),
             },
           ],
           id: (item) => item.id,

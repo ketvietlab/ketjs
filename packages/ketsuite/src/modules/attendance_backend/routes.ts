@@ -1,18 +1,16 @@
 import { page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
+import { adminPage } from '../backend/screen.ts'
+import type { Req } from '../backend/screen.ts'
 import { credentialScreen, kioskScreen, myWorkScreen, periodScreen } from './screens.tsx'
-type Req = Parameters<Route>[1]
-const frame = async (ctx: ServeContext, url: URL, req: Req) => ({
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (ctx: ServeContext, url: URL, req: Req, title: string, body: unknown) =>
+
+/**
+ * The kiosk is the one screen here that is not the backend: it is answered
+ * anonymously on a shared tablet, so it gets no sidebar, no viewer and no menu —
+ * building them would leak who was last signed in on that device.
+ */
+const kioskPage = async (ctx: ServeContext, url: URL, req: Req, title: string, body: unknown) =>
   page({
     body: ctx.document({
       lang: ctx.localeOf(url, req),
@@ -65,21 +63,19 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('hr.schedule.mine', { dateFrom, dateTo }, url, req),
         ctx.call('hr.leave.mine', {}, url, req),
       ])
-      return document(
-        ctx,
-        url,
-        req,
-        _('attendance_backend.my.title'),
-        myWorkScreen(
-          _,
-          await frame(ctx, url, req),
-          profile as never,
-          sessions as never,
-          shifts as never,
-          leaves as never,
-          message,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'attendance_backend.my.title',
+        body: (_, frame) =>
+          myWorkScreen(
+            _,
+            frame,
+            profile as never,
+            sessions as never,
+            shifts as never,
+            leaves as never,
+            message,
+          ),
+      })
     },
   '/attendance/kiosk/{secret}': {
     anonymous: true,
@@ -106,7 +102,7 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as Record<string, unknown>
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        return document(
+        return kioskPage(
           ctx,
           url,
           req,
@@ -136,13 +132,10 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const period = await ctx.call('attendance.period.report', { month }, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('attendance_backend.admin.title'),
-        periodScreen(_, await frame(ctx, url, req), month, period as never),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'attendance_backend.admin.title',
+        body: (_, frame) => periodScreen(_, frame, month, period as never),
+      })
     },
   '/admin/attendance/credentials':
     (ctx: ServeContext): Route =>
@@ -167,13 +160,10 @@ export const routes: Record<string, RouteEntry> = {
         )) as Record<string, unknown>
         result = { ...result, credentialKind: form.action }
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('attendance_backend.credentials.title'),
-        credentialScreen(_, await frame(ctx, url, req), result),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'attendance_backend.credentials.title',
+        body: (_, frame) => credentialScreen(_, frame, result),
+      })
     },
   '/admin/attendance/export/{month}':
     (ctx: ServeContext): Route =>

@@ -5,16 +5,10 @@ import { viewerOf } from '../backend/routes.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountingTermsScreen } from './screens.tsx'
 import { backendPage } from '../../ui/index.ts'
+import { inLocale } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)

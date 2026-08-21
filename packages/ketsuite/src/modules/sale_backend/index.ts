@@ -14,6 +14,7 @@ import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
 import { dashboard, labelOf } from './screens.tsx'
+import { localeQuery } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -52,12 +53,8 @@ const callIfInstalled = async (
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
-const localeSuffix = (url: URL) => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
 const orderPath = (order: AnyRow, url: URL) =>
-  `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeSuffix(url)}`
+  `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeQuery(url)}`
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((r) => ({
@@ -294,7 +291,7 @@ const detail =
     ]
     const integration = await ctx.joint(url, req, 'sale_backend:order.loyalty', {
       orderId: params.id,
-      locale: localeSuffix(url),
+      locale: localeQuery(url),
     })
     const reportId = ['draft', 'sent'].includes(String(order.state))
       ? 'sale.quotation'
@@ -329,7 +326,7 @@ const detail =
         invoiceFields,
         integration,
         printActions,
-        locale: localeSuffix(url),
+        locale: localeQuery(url),
         collaboration: savedPartial
           ? ''
           : await ctx.joint(url, req, 'sale_backend:order.collaboration', {
@@ -671,7 +668,7 @@ export default defineModule({
                 _,
                 (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
                 shell,
-                localeSuffix(url),
+                localeQuery(url),
               ),
             )
           : text('GET', { status: 405 }),
@@ -725,7 +722,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const detailSuffix = localeSuffix(url)
+        const detailSuffix = localeQuery(url)
         const [rows, d] = await Promise.all([
             ctx.call('sale.listOrders', { state: 'sale' }, url, req) as Promise<AnyRow[]>,
             common(ctx, url, req),
@@ -746,7 +743,7 @@ export default defineModule({
       async (url, req) => {
         if (req.method === 'POST') {
           const form = await readForm(req)
-          const target = `/admin/sales/invoicing-policies${localeSuffix(url)}`
+          const target = `/admin/sales/invoicing-policies${localeQuery(url)}`
           return redirect(
             await ctx.call(
               'sale.setInvoicePolicy',
@@ -763,7 +760,7 @@ export default defineModule({
         return document(ctx, url, req, 'sale_backend.policies.title', (_, shell) =>
           invoicingPoliciesScreen(_, {
             frame: shell,
-            action: `/admin/sales/invoicing-policies${localeSuffix(url)}`,
+            action: `/admin/sales/invoicing-policies${localeQuery(url)}`,
             errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
             fields: [
               {

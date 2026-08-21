@@ -22,20 +22,9 @@ import {
   taxonomyFormScreen,
 } from './screens.tsx'
 import type { EntryDetail, EntryKind, EntryRow, MediaRow, MenuRow, SiteRow, TaxonomyRow } from './screens.tsx'
+import { inLocale, localeQuery } from '../backend/screen.ts'
 
 type Req = Parameters<Route>[1]
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
 
 const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
@@ -161,7 +150,7 @@ const renderEntry = async (
     detail?.entry.title ?? _(`website_backend.${kind.titleKey}.newTitle`),
     entryFormScreen(_, detail, siteId, kind, await frameFor(ctx, url, req), {
       ...options,
-      locale: localeSuffix(url),
+      locale: localeQuery(url),
     }),
   )
 }
@@ -188,7 +177,7 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
           siteOptions(sites),
           siteId,
           await frameFor(ctx, url, req),
-          localeSuffix(url),
+          localeQuery(url),
           kind,
         ),
       )
@@ -291,7 +280,7 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
           detail.entry,
           rows,
           await frameFor(ctx, url, req),
-          localeSuffix(url),
+          localeQuery(url),
           kind.basePath,
         ),
       )
@@ -387,7 +376,7 @@ const menuEditRoute =
           { ...existing, ...form, id: params.id, siteId } as never,
           parents,
           await frameFor(ctx, url, req),
-          { errors: resultErrors(result, _), locale: localeSuffix(url) },
+          { errors: resultErrors(result, _), locale: localeQuery(url) },
         ),
       )
     }
@@ -398,7 +387,7 @@ const menuEditRoute =
       req,
       existing?.label ?? _('website_backend.menus.newTitle'),
       menuFormScreen(_, existing ?? { siteId, position: 0 }, parents, await frameFor(ctx, url, req), {
-        locale: localeSuffix(url),
+        locale: localeQuery(url),
       }),
     )
   }
@@ -416,7 +405,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.sites.title'),
-        sitesScreen(_, await sitesOf(ctx, url, req), await frameFor(ctx, url, req), localeSuffix(url)),
+        sitesScreen(_, await sitesOf(ctx, url, req), await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -449,7 +438,7 @@ export const routes: Record<string, RouteEntry> = {
           _('website_backend.sites.newTitle'),
           siteFormScreen(_, form as never, themes, await frameFor(ctx, url, req), {
             errors: resultErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -464,7 +453,7 @@ export const routes: Record<string, RouteEntry> = {
           { theme: themes[0]?.value, defaultLocale: 'vi', active: true },
           themes,
           await frameFor(ctx, url, req),
-          { locale: localeSuffix(url) },
+          { locale: localeQuery(url) },
         ),
       )
     },
@@ -502,7 +491,7 @@ export const routes: Record<string, RouteEntry> = {
             { ...site, ...form, active: form.active === '1' },
             themes,
             await frameFor(ctx, url, req),
-            { errors: resultErrors(result, _), locale: localeSuffix(url) },
+            { errors: resultErrors(result, _), locale: localeQuery(url) },
           ),
         )
       }
@@ -512,7 +501,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         site.title,
-        siteFormScreen(_, site, themes, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
+        siteFormScreen(_, site, themes, await frameFor(ctx, url, req), { locale: localeQuery(url) }),
       )
     },
 
@@ -646,7 +635,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.revisions.title'),
-        revisionsScreen(_, detail.entry, rows, await frameFor(ctx, url, req), localeSuffix(url)),
+        revisionsScreen(_, detail.entry, rows, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -685,7 +674,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.taxonomies.title'),
-        taxonomyScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
+        taxonomyScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -702,7 +691,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.media.title'),
-        mediaScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
+        mediaScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -721,7 +710,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.menus.title'),
-        menusScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
+        menusScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -772,7 +761,7 @@ export const routes: Record<string, RouteEntry> = {
             await frameFor(ctx, url, req),
             {
               errors: resultErrors(result, _),
-              locale: localeSuffix(url),
+              locale: localeQuery(url),
             },
           ),
         )
@@ -789,7 +778,7 @@ export const routes: Record<string, RouteEntry> = {
           taxonomies,
           parents,
           await frameFor(ctx, url, req),
-          { locale: localeSuffix(url) },
+          { locale: localeQuery(url) },
         ),
       )
     },
@@ -839,7 +828,7 @@ export const routes: Record<string, RouteEntry> = {
           row.name,
           taxonomyFormScreen(_, { ...row, ...form }, taxonomies, parents, await frameFor(ctx, url, req), {
             errors: resultErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -850,7 +839,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
         row.name,
         taxonomyFormScreen(_, row, taxonomies, parents, await frameFor(ctx, url, req), {
-          locale: localeSuffix(url),
+          locale: localeQuery(url),
         }),
       )
     },
@@ -900,7 +889,7 @@ export const routes: Record<string, RouteEntry> = {
           _('website_backend.media.newTitle'),
           mediaFormScreen(_, { ...form, siteId } as never, await frameFor(ctx, url, req), {
             errors: resultErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -910,7 +899,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.media.newTitle'),
-        mediaFormScreen(_, { siteId }, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
+        mediaFormScreen(_, { siteId }, await frameFor(ctx, url, req), { locale: localeQuery(url) }),
       )
     },
 
@@ -936,7 +925,7 @@ export const routes: Record<string, RouteEntry> = {
           row.attachmentId,
           mediaFormScreen(_, { ...row, ...form } as never, await frameFor(ctx, url, req), {
             errors: resultErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -946,7 +935,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         row.attachmentId,
-        mediaFormScreen(_, row, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
+        mediaFormScreen(_, row, await frameFor(ctx, url, req), { locale: localeQuery(url) }),
       )
     },
 
@@ -991,7 +980,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.forms.title'),
-        formsScreen(_, rows, siteId, await frameFor(ctx, url, req), localeSuffix(url)),
+        formsScreen(_, rows, siteId, await frameFor(ctx, url, req), localeQuery(url)),
       )
     },
 
@@ -1015,7 +1004,7 @@ export const routes: Record<string, RouteEntry> = {
             formCreateScreen(_, siteId, await frameFor(ctx, url, req), {
               values: form,
               errors: [_('website_backend.error.invalidJson')],
-              locale: localeSuffix(url),
+              locale: localeQuery(url),
             }),
           )
         const result = await ctx.call(
@@ -1042,7 +1031,7 @@ export const routes: Record<string, RouteEntry> = {
           formCreateScreen(_, siteId, await frameFor(ctx, url, req), {
             values: form,
             errors: resultErrors(result, _),
-            locale: localeSuffix(url),
+            locale: localeQuery(url),
           }),
         )
       }
@@ -1052,7 +1041,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('website_backend.forms.newTitle'),
-        formCreateScreen(_, siteId, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
+        formCreateScreen(_, siteId, await frameFor(ctx, url, req), { locale: localeQuery(url) }),
       )
     },
 
