@@ -5,6 +5,7 @@ import { housekeeping } from './housekeeping.ts'
 import { content } from './content.ts'
 import { inventory } from './inventory.ts'
 import { nightAuditFunctions, nightAuditJobs } from './night-audit.ts'
+import { onlineBooking } from './online-booking.ts'
 import { operations } from './operations.ts'
 import { services } from './services.ts'
 import { stayNoticeFunctions, stayNoticeJobs } from './stay-notices.ts'
@@ -28,6 +29,7 @@ export default defineModule({
     ...functions,
     ...catalog,
     ...inventory,
+    ...onlineBooking,
     ...operations,
     ...housekeeping,
     ...content,

@@ -227,13 +227,16 @@ const planReservation = async (ctx: Ctx, args: ReservationPlanInput) => {
 
 const reservationOutput = {
   id: 'id',
+  companyId: 'id',
   code: 'text',
   propertyId: 'id',
   roomTypeId: 'id',
+  ratePlanId: 'id?',
   folioId: 'id',
   stayId: 'id?',
   partnerId: 'id',
   provider: 'text',
+  requestKey: 'text?',
   externalId: 'text?',
   channelRef: 'text?',
   bookingType: 'text',
@@ -241,10 +244,13 @@ const reservationOutput = {
   checkOut: 'datetime',
   adults: 'int',
   children: 'int',
+  infants: 'int?',
+  roomQuantity: 'int?',
   rate: 'decimal',
   quantity: 'decimal',
   billingMode: 'text',
   amountTotal: 'decimal',
+  currency: 'text?',
   state: 'text',
   cancelReason: 'text?',
   noShowAt: 'datetime?',
@@ -502,6 +508,8 @@ export const operations: Record<string, FnSpec> = {
             checkOut: schedule.checkOut,
             adults: Number(args.adults ?? 1),
             children: Number(args.children ?? 0),
+            infants: 0,
+            roomQuantity: 1,
             rate: plan.rate,
             quantity: schedule.quantity,
             billingMode: plan.billingMode,
@@ -523,6 +531,8 @@ export const operations: Record<string, FnSpec> = {
             checkOut: schedule.checkOut,
             adults: Number(args.adults ?? 1),
             children: Number(args.children ?? 0),
+            infants: 0,
+            roomQuantity: 1,
             billingMode: plan.billingMode,
             rate: plan.rate,
             state: 'draft',
@@ -845,7 +855,13 @@ export const operations: Record<string, FnSpec> = {
           for (const charge of charges)
             await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
           if (inventoryDates.length)
-            await releaseInventory(tx, reservation.propertyId, reservation.roomTypeId, inventoryDates)
+            await releaseInventory(
+              tx,
+              reservation.propertyId,
+              reservation.roomTypeId,
+              inventoryDates,
+              Number(reservation.roomQuantity ?? 1),
+            )
           if (inventoryDates.length)
             await recordInventoryChange(tx, {
               propertyId: reservation.propertyId,
@@ -929,7 +945,13 @@ export const operations: Record<string, FnSpec> = {
           if (!('matched' in folioClaim) || !folioClaim.matched)
             throw new TransitionConflict(issue('folioId', 'transition_conflict'))
           if (inventoryDates.length)
-            await releaseInventory(tx, reservation.propertyId, reservation.roomTypeId, inventoryDates)
+            await releaseInventory(
+              tx,
+              reservation.propertyId,
+              reservation.roomTypeId,
+              inventoryDates,
+              Number(reservation.roomQuantity ?? 1),
+            )
           if (inventoryDates.length)
             await recordInventoryChange(tx, {
               propertyId: reservation.propertyId,
@@ -1196,6 +1218,7 @@ export const operations: Record<string, FnSpec> = {
             previousDates,
             stay.roomTypeId,
             nextDates,
+            Number(stay.roomQuantity ?? 1),
           )
           if (previousDates.join(',') !== nextDates.join(',')) {
             const changedDates = [...previousDates, ...nextDates].sort()
@@ -1414,7 +1437,13 @@ export const operations: Record<string, FnSpec> = {
             { state: 'closed', closedAt: at.toISOString() },
           )
           if (remainingInventoryDates.length) {
-            await releaseInventory(tx, stay.propertyId, stay.roomTypeId, remainingInventoryDates)
+            await releaseInventory(
+              tx,
+              stay.propertyId,
+              stay.roomTypeId,
+              remainingInventoryDates,
+              Number(stay.roomQuantity ?? 1),
+            )
             await recordInventoryChange(tx, {
               propertyId: stay.propertyId,
               roomTypeId: stay.roomTypeId,
