@@ -16,12 +16,14 @@ import {
   metric,
   mediaPanel,
   notice,
+  recordActions,
   person,
   recordForm,
   recordWorkspace,
   scheduleBoard,
   section,
   stack,
+  surface,
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
@@ -108,9 +110,17 @@ export type BuildingRow = {
   name: string
   sequence: number
   active: boolean
-  floors?: Array<{ id?: string }>
-  rooms?: Array<{ id?: string }>
+  floors?: Array<{ id?: string; active?: boolean }>
+  rooms?: Array<{ id?: string; active?: boolean }>
 }
+
+export type BuildingDetail = BuildingRow & {
+  property?: { code?: string; name?: string; active?: boolean } | null
+  floors: FloorRow[]
+  rooms: RoomRow[]
+}
+
+export type BuildingFormValues = Pick<BuildingRow, 'id' | 'propertyId' | 'code' | 'name' | 'sequence'>
 
 export type FloorRow = {
   id: string
@@ -121,8 +131,19 @@ export type FloorRow = {
   sequence: number
   active: boolean
   building?: { code?: string; name?: string } | null
-  rooms?: Array<{ id?: string }>
+  rooms?: Array<{ id?: string; active?: boolean }>
 }
+
+export type FloorDetail = FloorRow & {
+  property?: { code?: string; name?: string; active?: boolean } | null
+  building?: { id?: string; code?: string; name?: string; active?: boolean } | null
+  rooms: RoomRow[]
+}
+
+export type FloorFormValues = Pick<
+  FloorRow,
+  'id' | 'propertyId' | 'buildingId' | 'code' | 'name' | 'sequence'
+>
 
 export type RoomRow = {
   id: string
@@ -689,16 +710,26 @@ const buildingColumns = (_: Translator): Array<Column<BuildingRow>> => [
   {
     key: 'floors',
     label: _('hospitality_core.room.metric.floors'),
-    cell: (row) => String(row.floors?.length ?? 0),
+    cell: (row) => String(row.floors?.filter((floor) => floor.active !== false).length ?? 0),
     align: 'end',
     kind: 'number',
   },
   {
     key: 'rooms',
     label: _('hospitality_core.col.rooms'),
-    cell: (row) => String(row.rooms?.length ?? 0),
+    cell: (row) => String(row.rooms?.filter((room) => room.active !== false).length ?? 0),
     align: 'end',
     kind: 'number',
+  },
+  {
+    key: 'active',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(
+        _(row.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+        row.active ? 'positive' : 'neutral',
+      ),
+    kind: 'status',
   },
 ]
 
@@ -720,9 +751,19 @@ const floorColumns = (_: Translator): Array<Column<FloorRow>> => [
   {
     key: 'rooms',
     label: _('hospitality_core.col.rooms'),
-    cell: (row) => String(row.rooms?.length ?? 0),
+    cell: (row) => String(row.rooms?.filter((room) => room.active !== false).length ?? 0),
     align: 'end',
     kind: 'number',
+  },
+  {
+    key: 'active',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(
+        _(row.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+        row.active ? 'positive' : 'neutral',
+      ),
+    kind: 'status',
   },
 ]
 
@@ -1474,6 +1515,8 @@ export const roomsScreen = (
   const query = new URLSearchParams({ lang: locale })
   if (data.propertyId) query.set('property', data.propertyId)
   const action = `/admin/hospitality/rooms?${query.toString()}`
+  const activeBuildings = data.buildings.filter((row) => row.active)
+  const activeFloors = data.floors.filter((row) => row.active)
   const canCreateRoom = Boolean(data.propertyId && data.roomTypes.length)
   return framed(
     _,
@@ -1515,9 +1558,9 @@ export const roomsScreen = (
           {
             id: 'buildings',
             label: _('hospitality_core.property.metric.buildings'),
-            value: data.buildings.length,
+            value: activeBuildings.length,
           },
-          { id: 'floors', label: _('hospitality_core.room.metric.floors'), value: data.floors.length },
+          { id: 'floors', label: _('hospitality_core.room.metric.floors'), value: activeFloors.length },
           {
             id: 'available',
             label: _('hospitality_core.metric.available'),
@@ -1560,7 +1603,7 @@ export const roomsScreen = (
                       },
                     ],
                   }),
-                  ...(data.buildings.length
+                  ...(activeBuildings.length
                     ? [
                         recordForm({
                           action,
@@ -1572,7 +1615,7 @@ export const roomsScreen = (
                               name: 'buildingId',
                               label: _('hospitality_core.room.field.building'),
                               type: 'select' as const,
-                              options: choices(data.buildings),
+                              options: choices(activeBuildings),
                               required: true,
                             },
                             {
@@ -1603,7 +1646,13 @@ export const roomsScreen = (
               title: _('hospitality_core.room.section.buildings'),
               description: _('hospitality_core.room.section.buildingsHint'),
               body: data.buildings.length
-                ? dataTable(_, { columns: buildingColumns(_), rows: data.buildings, id: (row) => row.id })
+                ? dataTable(_, {
+                    columns: buildingColumns(_),
+                    rows: data.buildings,
+                    id: (row) => row.id,
+                    rowHref: (row) =>
+                      `/admin/hospitality/buildings/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                  })
                 : emptyState(
                     _('hospitality_core.room.empty.buildings'),
                     _('hospitality_core.room.empty.buildingsHint'),
@@ -1613,7 +1662,13 @@ export const roomsScreen = (
               title: _('hospitality_core.room.section.floors'),
               description: _('hospitality_core.room.section.floorsHint'),
               body: data.floors.length
-                ? dataTable(_, { columns: floorColumns(_), rows: data.floors, id: (row) => row.id })
+                ? dataTable(_, {
+                    columns: floorColumns(_),
+                    rows: data.floors,
+                    id: (row) => row.id,
+                    rowHref: (row) =>
+                      `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                  })
                 : emptyState(
                     _('hospitality_core.room.empty.floors'),
                     _('hospitality_core.room.empty.floorsHint'),
@@ -1636,6 +1691,324 @@ export const roomsScreen = (
               _('hospitality_core.screen.rooms.empty'),
               _('hospitality_core.screen.rooms.emptyHint'),
             ),
+      }),
+    ]),
+  )
+}
+
+const locationFeedback = (
+  _: Translator,
+  resource: 'building' | 'floor',
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult | null => {
+  if (status === 'saved' || status === 'archived' || status === 'restored')
+    return notice({
+      title: _(`hospitality_core.${resource}.feedback.${status}`),
+      message: _(`hospitality_core.${resource}.feedback.${status}Hint`),
+      tone: 'positive',
+    })
+  if (errors.length)
+    return notice({
+      title: _('hospitality_core.feedback.invalid'),
+      message: errors.join(' '),
+      tone: 'danger',
+    })
+  return null
+}
+
+const buildingForm = (_: Translator, values: BuildingFormValues, locale: string): TemplateResult =>
+  recordForm({
+    action: `/admin/hospitality/buildings/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`,
+    hidden: { propertyId: values.propertyId },
+    submit: _('hospitality_core.building.action.save'),
+    submitVariant: 'primary',
+    fields: [
+      {
+        name: 'code',
+        label: _('hospitality_core.building.field.code'),
+        value: values.code,
+        required: true,
+      },
+      {
+        name: 'name',
+        label: _('hospitality_core.building.field.name'),
+        value: values.name,
+        required: true,
+      },
+      {
+        name: 'sequence',
+        label: _('hospitality_core.building.field.sequence'),
+        type: 'number',
+        value: values.sequence,
+        step: '1',
+      },
+    ],
+  })
+
+export const buildingDetailScreen = (
+  _: Translator,
+  building: BuildingDetail,
+  values: BuildingFormValues,
+  locale: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult => {
+  const query = `lang=${encodeURIComponent(locale)}`
+  const propertyName = building.property?.name ?? building.property?.code ?? building.propertyId
+  const activeFloors = building.floors.filter((row) => row.active)
+  const activeRooms = building.rooms.filter((row) => row.active)
+  return framed(
+    _,
+    building.name,
+    frame,
+    stack([
+      locationFeedback(_, 'building', status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.building.detail.kicker'),
+        title: building.name,
+        subtitle: `${building.code} · ${propertyName}`,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(
+            _(building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+            building.active ? 'positive' : 'neutral',
+          ),
+        ],
+        summary: [
+          {
+            id: 'floors',
+            label: _('hospitality_core.room.metric.floors'),
+            value: activeFloors.length,
+          },
+          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
+          {
+            id: 'sequence',
+            label: _('hospitality_core.building.field.sequence'),
+            value: building.sequence,
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.building.action.back'),
+          href: `/admin/hospitality/rooms?property=${encodeURIComponent(building.propertyId)}&${query}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.building.section.information'),
+            description: _('hospitality_core.building.section.informationHint'),
+            body: definitionList({
+              title: building.name,
+              items: [
+                {
+                  key: 'property',
+                  term: _('hospitality_core.building.field.property'),
+                  value: propertyName,
+                },
+                { key: 'code', term: _('hospitality_core.building.field.code'), value: building.code },
+                {
+                  key: 'status',
+                  term: _('hospitality_core.col.status'),
+                  value: _(
+                    building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                  ),
+                },
+              ],
+            }),
+          }),
+          section({
+            title: _('hospitality_core.building.section.settings'),
+            description: _('hospitality_core.building.section.settingsHint'),
+            body: buildingForm(_, values, locale),
+          }),
+          section({
+            title: _('hospitality_core.building.section.floors'),
+            description: _('hospitality_core.building.section.floorsHint'),
+            body: building.floors.length
+              ? dataTable(_, {
+                  columns: floorColumns(_),
+                  rows: building.floors,
+                  id: (row) => row.id,
+                  rowHref: (row) =>
+                    `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                })
+              : emptyState(
+                  _('hospitality_core.building.empty.floors'),
+                  _('hospitality_core.building.empty.floorsHint'),
+                ),
+          }),
+          section({
+            title: _('hospitality_core.building.section.lifecycle'),
+            description: _('hospitality_core.building.section.lifecycleHint'),
+            body: surface({
+              body: recordActions({
+                action: `/admin/hospitality/buildings/${encodeURIComponent(building.id)}/archive?${query}`,
+                actions: [
+                  building.active
+                    ? {
+                        value: 'archive',
+                        label: _('hospitality_core.building.action.archive'),
+                        variant: 'destructive',
+                      }
+                    : {
+                        value: 'restore',
+                        label: _('hospitality_core.building.action.restore'),
+                        variant: 'secondary',
+                      },
+                ],
+              }),
+            }),
+          }),
+        ]),
+      }),
+    ]),
+  )
+}
+
+const floorForm = (_: Translator, values: FloorFormValues, locale: string): TemplateResult =>
+  recordForm({
+    action: `/admin/hospitality/levels/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`,
+    hidden: { propertyId: values.propertyId, buildingId: values.buildingId },
+    submit: _('hospitality_core.floor.action.save'),
+    submitVariant: 'primary',
+    fields: [
+      {
+        name: 'code',
+        label: _('hospitality_core.floor.field.code'),
+        value: values.code,
+        required: true,
+      },
+      {
+        name: 'name',
+        label: _('hospitality_core.floor.field.name'),
+        value: values.name,
+        required: true,
+      },
+      {
+        name: 'sequence',
+        label: _('hospitality_core.floor.field.sequence'),
+        type: 'number',
+        value: values.sequence,
+        step: '1',
+      },
+    ],
+  })
+
+export const floorDetailScreen = (
+  _: Translator,
+  floor: FloorDetail,
+  values: FloorFormValues,
+  locale: string,
+  frame: Frame,
+  status?: string | null,
+  errors: readonly string[] = [],
+): TemplateResult => {
+  const query = `lang=${encodeURIComponent(locale)}`
+  const propertyName = floor.property?.name ?? floor.property?.code ?? floor.propertyId
+  const buildingName = floor.building?.name ?? floor.building?.code ?? floor.buildingId
+  const activeRooms = floor.rooms.filter((row) => row.active)
+  return framed(
+    _,
+    floor.name,
+    frame,
+    stack([
+      locationFeedback(_, 'floor', status, errors),
+      recordWorkspace({
+        kicker: _('hospitality_core.floor.detail.kicker'),
+        title: floor.name,
+        subtitle: `${floor.code} · ${buildingName}`,
+        imageFallback: icon('hotel'),
+        badges: [
+          badge(
+            _(floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+            floor.active ? 'positive' : 'neutral',
+          ),
+        ],
+        summary: [
+          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
+          {
+            id: 'building',
+            label: _('hospitality_core.floor.field.building'),
+            value: buildingName,
+          },
+          {
+            id: 'sequence',
+            label: _('hospitality_core.floor.field.sequence'),
+            value: floor.sequence,
+          },
+        ],
+        navigation: linkButton({
+          label: _('hospitality_core.floor.action.back'),
+          href: `/admin/hospitality/buildings/${encodeURIComponent(floor.buildingId)}?${query}`,
+          variant: 'tertiary',
+          icon: 'chevron-left',
+        }),
+        body: stack([
+          section({
+            title: _('hospitality_core.floor.section.information'),
+            description: _('hospitality_core.floor.section.informationHint'),
+            body: definitionList({
+              title: floor.name,
+              items: [
+                { key: 'property', term: _('hospitality_core.floor.field.property'), value: propertyName },
+                { key: 'building', term: _('hospitality_core.floor.field.building'), value: buildingName },
+                { key: 'code', term: _('hospitality_core.floor.field.code'), value: floor.code },
+                {
+                  key: 'status',
+                  term: _('hospitality_core.col.status'),
+                  value: _(
+                    floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                  ),
+                },
+              ],
+            }),
+          }),
+          section({
+            title: _('hospitality_core.floor.section.settings'),
+            description: _('hospitality_core.floor.section.settingsHint'),
+            body: floorForm(_, values, locale),
+          }),
+          section({
+            title: _('hospitality_core.floor.section.rooms'),
+            description: _('hospitality_core.floor.section.roomsHint'),
+            body: floor.rooms.length
+              ? dataTable(_, {
+                  columns: roomColumns(_),
+                  rows: floor.rooms,
+                  id: (row) => row.id,
+                  rowHref: (row) =>
+                    `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                })
+              : emptyState(
+                  _('hospitality_core.floor.empty.rooms'),
+                  _('hospitality_core.floor.empty.roomsHint'),
+                ),
+          }),
+          section({
+            title: _('hospitality_core.floor.section.lifecycle'),
+            description: _('hospitality_core.floor.section.lifecycleHint'),
+            body: surface({
+              body: recordActions({
+                action: `/admin/hospitality/levels/${encodeURIComponent(floor.id)}/archive?${query}`,
+                actions: [
+                  floor.active
+                    ? {
+                        value: 'archive',
+                        label: _('hospitality_core.floor.action.archive'),
+                        variant: 'destructive',
+                      }
+                    : {
+                        value: 'restore',
+                        label: _('hospitality_core.floor.action.restore'),
+                        variant: 'secondary',
+                      },
+                ],
+              }),
+            }),
+          }),
+        ]),
       }),
     ]),
   )

@@ -385,6 +385,101 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const floorHtml = await floorPage.text()
   assert.match(floorHtml, /Đã thêm tầng/)
   assert.match(floorHtml, /Tầng sông/)
+  const floorDetailPath = floorHtml
+    .match(/\/admin\/hospitality\/levels\/([^"?]+)\?lang=vi/)?.[0]
+    .split('?')[0]
+  assert.ok(floorDetailPath)
+
+  const buildingDetailPage = await e2e.client.get(`/admin/hospitality/buildings/${buildingId}?lang=en`)
+  const buildingDetailHtml = await buildingDetailPage.text()
+  assert.equal(buildingDetailPage.status, 200, buildingDetailHtml)
+  assert.match(buildingDetailHtml, /Building record/)
+  assert.match(buildingDetailHtml, /Archive building/)
+  assert.match(buildingDetailHtml, /River Tower/)
+  assert.doesNotMatch(buildingDetailHtml, /hospitality_core\./)
+
+  const buildingUpdated = await e2e.client.post(
+    `/admin/hospitality/buildings/${buildingId}?lang=en`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      code: 'RIVER',
+      name: 'River Wing',
+      sequence: '12',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(buildingUpdated.status, 303, await buildingUpdated.clone().text())
+  const buildingUpdatedHtml = await (await e2e.client.get(buildingUpdated.headers.get('location')!)).text()
+  assert.match(buildingUpdatedHtml, /Building saved/)
+  assert.match(buildingUpdatedHtml, /River Wing/)
+
+  const floorDetailPage = await e2e.client.get(`${floorDetailPath}?lang=vi`)
+  const floorDetailHtml = await floorDetailPage.text()
+  assert.equal(floorDetailPage.status, 200, floorDetailHtml)
+  assert.match(floorDetailHtml, /Hồ sơ tầng/)
+  assert.match(floorDetailHtml, /Lưu trữ tầng/)
+  assert.match(floorDetailHtml, /River Wing/)
+  assert.doesNotMatch(floorDetailHtml, /hospitality_core\./)
+
+  const floorUpdated = await e2e.client.post(
+    `${floorDetailPath}?lang=vi`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      buildingId,
+      code: '01',
+      name: 'Tầng ven sông',
+      sequence: '2',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(floorUpdated.status, 303, await floorUpdated.clone().text())
+  const floorUpdatedHtml = await (await e2e.client.get(floorUpdated.headers.get('location')!)).text()
+  assert.match(floorUpdatedHtml, /Đã lưu tầng/)
+  assert.match(floorUpdatedHtml, /Tầng ven sông/)
+
+  const blockedBuildingArchive = await e2e.client.post(
+    `/admin/hospitality/buildings/${buildingId}/archive?lang=vi`,
+    new URLSearchParams({ action: 'archive' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const blockedBuildingArchiveHtml = await blockedBuildingArchive.text()
+  assert.equal(blockedBuildingArchive.status, 200, blockedBuildingArchiveHtml)
+  assert.match(blockedBuildingArchiveHtml, /vẫn còn tầng hoạt động/)
+
+  const floorArchived = await e2e.client.post(
+    `${floorDetailPath}/archive?lang=en`,
+    new URLSearchParams({ action: 'archive' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(floorArchived.status, 303, await floorArchived.clone().text())
+  const buildingArchived = await e2e.client.post(
+    `/admin/hospitality/buildings/${buildingId}/archive?lang=en`,
+    new URLSearchParams({ action: 'archive' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(buildingArchived.status, 303, await buildingArchived.clone().text())
+
+  const blockedFloorRestore = await e2e.client.post(
+    `${floorDetailPath}/archive?lang=en`,
+    new URLSearchParams({ action: 'restore' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const blockedFloorRestoreHtml = await blockedFloorRestore.text()
+  assert.equal(blockedFloorRestore.status, 200, blockedFloorRestoreHtml)
+  assert.match(blockedFloorRestoreHtml, /location is archived/)
+
+  const buildingRestored = await e2e.client.post(
+    `/admin/hospitality/buildings/${buildingId}/archive?lang=en`,
+    new URLSearchParams({ action: 'restore' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(buildingRestored.status, 303, await buildingRestored.clone().text())
+  const floorRestored = await e2e.client.post(
+    `${floorDetailPath}/archive?lang=en`,
+    new URLSearchParams({ action: 'restore' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(floorRestored.status, 303, await floorRestored.clone().text())
 
   const newRoom = await e2e.client.get(
     `/admin/hospitality/rooms/new?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
@@ -418,9 +513,18 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const physicalRoomHtml = await physicalRoomPage.text()
   assert.match(physicalRoomHtml, /Đã tạo phòng vật lý/)
   assert.match(physicalRoomHtml, /Phòng ven sông 101/)
-  assert.match(physicalRoomHtml, /River Tower · Tầng sông/)
+  assert.match(physicalRoomHtml, /River Wing · Tầng ven sông/)
   assert.doesNotMatch(physicalRoomHtml, /name="status"/)
   assert.doesNotMatch(physicalRoomHtml, /hospitality_core\./)
+
+  const blockedFloorWithRoom = await e2e.client.post(
+    `${floorDetailPath}/archive?lang=en`,
+    new URLSearchParams({ action: 'archive' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  )
+  const blockedFloorWithRoomHtml = await blockedFloorWithRoom.text()
+  assert.equal(blockedFloorWithRoom.status, 200, blockedFloorWithRoomHtml)
+  assert.match(blockedFloorWithRoomHtml, /still has active rooms/)
 
   const physicalRoomUpdated = await e2e.client.post(
     `${roomDetailPath}?lang=en`,
