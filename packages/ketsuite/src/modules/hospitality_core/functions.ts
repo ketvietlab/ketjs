@@ -220,18 +220,7 @@ const writable = (name: string): string[] =>
       'cancellationPolicyId',
       'published',
     ],
-    Room: [
-      'id',
-      'propertyId',
-      'roomTypeId',
-      'buildingId',
-      'floorId',
-      'code',
-      'name',
-      'capacity',
-      'status',
-      'note',
-    ],
+    Room: ['id', 'propertyId', 'roomTypeId', 'buildingId', 'floorId', 'code', 'name', 'capacity'],
   })[name] ?? []
 
 const result = { ok: 'bool', id: 'id?', errors: 'json?' }
@@ -513,15 +502,24 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listBuildings: defineFn({
-    input: { propertyId: 'id' },
-    output: { id: 'id', propertyId: 'id', code: 'text', name: 'text', sequence: 'int', active: 'bool' },
-    effects: ['read:hospitality_core.Building'],
+    input: { propertyId: 'id', includeArchived: 'bool?' },
+    output: {
+      id: 'id',
+      propertyId: 'id',
+      code: 'text',
+      name: 'text',
+      sequence: 'int',
+      active: 'bool',
+      floors: 'json?',
+      rooms: 'json?',
+    },
+    effects: ['read:hospitality_core.Building', 'read:hospitality_core.Floor', 'read:hospitality_core.Room'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const B = ctx.table('hospitality_core.Building')
-      return ctx.db.all(
-        from(B).where(eq(B.propertyId, args.propertyId), eq(B.active, true)).orderBy(asc(B.sequence)),
-      )
+      let query = from(B).where(eq(B.propertyId, args.propertyId))
+      if (args.includeArchived !== true) query = query.where(eq(B.active, true))
+      return ctx.db.all(query.orderBy(asc(B.sequence), asc(B.name)).preload('floors', 'rooms'))
     },
   }),
 
@@ -536,6 +534,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
+      const current = await record(ctx, 'hospitality_core.Building', raw.id)
       const args = normalized(raw, {
         code: cleanCode(raw.code),
         name: cleanText(raw.name),
@@ -544,6 +543,8 @@ export const functions: Record<string, FnSpec> = {
       const errors: Issue[] = []
       if (!(await record(ctx, 'hospitality_core.Property', args.propertyId)))
         errors.push(issue('propertyId', 'property_missing'))
+      if (current && current.propertyId !== args.propertyId)
+        errors.push(issue('propertyId', 'property_mismatch'))
       if (!args.code) errors.push(issue('code', 'required'))
       if (!args.name) errors.push(issue('name', 'required'))
       if (
@@ -559,7 +560,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listFloors: defineFn({
-    input: { propertyId: 'id', buildingId: 'id?' },
+    input: { propertyId: 'id', buildingId: 'id?', includeArchived: 'bool?' },
     output: {
       id: 'id',
       propertyId: 'id',
@@ -568,14 +569,17 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       sequence: 'int',
       active: 'bool',
+      building: 'json?',
+      rooms: 'json?',
     },
-    effects: ['read:hospitality_core.Floor'],
+    effects: ['read:hospitality_core.Floor', 'read:hospitality_core.Building', 'read:hospitality_core.Room'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const F = ctx.table('hospitality_core.Floor')
-      let query = from(F).where(eq(F.propertyId, args.propertyId), eq(F.active, true))
+      let query = from(F).where(eq(F.propertyId, args.propertyId))
+      if (args.includeArchived !== true) query = query.where(eq(F.active, true))
       if (args.buildingId) query = query.where(eq(F.buildingId, args.buildingId))
-      return ctx.db.all(query.orderBy(asc(F.sequence)))
+      return ctx.db.all(query.orderBy(asc(F.sequence), asc(F.name)).preload('building', 'rooms'))
     },
   }),
 
@@ -590,6 +594,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
+      const current = await record(ctx, 'hospitality_core.Floor', raw.id)
       const args = normalized(raw, {
         code: cleanCode(raw.code),
         name: cleanText(raw.name),
@@ -599,6 +604,10 @@ export const functions: Record<string, FnSpec> = {
       const errors: Issue[] = []
       if (!building) errors.push(issue('buildingId', 'building_missing'))
       else if (building.propertyId !== args.propertyId) errors.push(issue('buildingId', 'property_mismatch'))
+      if (current && current.propertyId !== args.propertyId)
+        errors.push(issue('propertyId', 'property_mismatch'))
+      if (current && current.buildingId !== args.buildingId)
+        errors.push(issue('buildingId', 'location_immutable'))
       if (!args.code) errors.push(issue('code', 'required'))
       if (!args.name) errors.push(issue('name', 'required'))
       if (
@@ -827,6 +836,39 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  getRoom: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      propertyId: 'id',
+      roomTypeId: 'id',
+      buildingId: 'id?',
+      floorId: 'id?',
+      code: 'text',
+      name: 'text',
+      capacity: 'int',
+      status: 'text',
+      note: 'text?',
+      active: 'bool',
+      property: 'json?',
+      roomType: 'json?',
+      building: 'json?',
+      floor: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Room',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Floor',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const R = ctx.table('hospitality_core.Room')
+      return ctx.db.one(from(R).where(eq(R.id, args.id)).preload('property', 'roomType', 'building', 'floor'))
+    },
+  }),
+
   saveRoom: defineFn({
     input: {
       id: 'id',
@@ -851,30 +893,40 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, raw) => {
+      const current = await record(ctx, 'hospitality_core.Room', raw.id)
       const type = await record(ctx, 'hospitality_core.RoomType', raw.roomTypeId)
-      const building = raw.buildingId ? await record(ctx, 'hospitality_core.Building', raw.buildingId) : null
       const floor = raw.floorId ? await record(ctx, 'hospitality_core.Floor', raw.floorId) : null
+      const buildingId = raw.buildingId || floor?.buildingId || null
+      const building = buildingId ? await record(ctx, 'hospitality_core.Building', buildingId) : null
       const args = normalized(raw, {
+        buildingId,
+        floorId: raw.floorId || null,
         code: cleanCode(raw.code),
         name: cleanText(raw.name),
         capacity: Number(raw.capacity ?? type?.defaultCapacity ?? 1),
-        status: String(raw.status ?? 'available'),
       })
       const errors: Issue[] = []
       if (!type) errors.push(issue('roomTypeId', 'room_type_missing'))
       else if (type.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
-      if (raw.buildingId && !building) errors.push(issue('buildingId', 'building_missing'))
+      if (buildingId && !building) errors.push(issue('buildingId', 'building_missing'))
       else if (building && building.propertyId !== args.propertyId)
         errors.push(issue('buildingId', 'property_mismatch'))
       if (raw.floorId && !floor) errors.push(issue('floorId', 'floor_missing'))
       else if (floor && floor.propertyId !== args.propertyId)
         errors.push(issue('floorId', 'property_mismatch'))
-      else if (floor && raw.buildingId && floor.buildingId !== raw.buildingId)
+      else if (floor && buildingId && floor.buildingId !== buildingId)
         errors.push(issue('floorId', 'building_mismatch'))
+      if (current && current.propertyId !== args.propertyId)
+        errors.push(issue('propertyId', 'property_mismatch'))
       if (!args.code) errors.push(issue('code', 'required'))
       if (!args.name) errors.push(issue('name', 'required'))
       if (!Number.isInteger(args.capacity) || args.capacity < 1) errors.push(issue('capacity', 'capacity'))
-      if (!isOneOf(ROOM_STATUSES, args.status)) errors.push(issue('status', 'room_status'))
+      if (raw.status != null) {
+        const requestedStatus = String(raw.status)
+        if (!isOneOf(ROOM_STATUSES, requestedStatus)) errors.push(issue('status', 'room_status'))
+        else if (requestedStatus !== String(current?.status ?? 'available'))
+          errors.push(issue('status', 'room_status_configuration_managed'))
+      }
       if (
         await duplicate(ctx, 'hospitality_core.Room', 'code', args.code, args.id, [
           'propertyId',
@@ -883,7 +935,11 @@ export const functions: Record<string, FnSpec> = {
       )
         errors.push(issue('code', 'unique'))
       if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.Room', args, writable('Room'), { active: true })
+      return save(ctx, 'hospitality_core.Room', args, writable('Room'), {
+        status: 'available',
+        note: null,
+        active: true,
+      })
     },
   }),
 

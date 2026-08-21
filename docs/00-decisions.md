@@ -1900,3 +1900,21 @@ provider-specific identifiers. The fallback rate is not an invoice or accounting
 entry and never replaces a matching Rate Plan. Physical location, room lifecycle and
 archive controls belong to the following Room configuration slice so sellable content
 cannot directly bypass operational room transitions.
+
+## D63 — Physical room configuration cannot mutate the operational lifecycle
+
+The Room workspace owns property-scoped buildings, floors and physical room records.
+A building cannot move to another property, and an existing floor cannot move to
+another building because rooms already reference that location. A selected floor
+canonically supplies its building when the room form omits it. Room type, building,
+floor and capacity remain editable inside the same property so operators can correct
+physical setup without recreating the asset.
+
+`saveRoom` never writes `status` or the operational note. New rooms start as
+`available`; later transitions continue through stay and housekeeping functions with
+their occupancy, open-task and compare-and-set guards. An explicit status passed to
+the configuration function is rejected when it differs from the live state. Physical
+room count is not sellable availability and does not emit an OTA content mutation:
+availability remains durable in `AvailabilityLedger`, exactly as in the legacy
+hospitality inventory boundary. No payment, invoice or accounting behavior is opened
+by this workspace.
