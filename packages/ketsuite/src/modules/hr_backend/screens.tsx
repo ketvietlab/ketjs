@@ -46,7 +46,7 @@ export const employeesScreen = (
                 submitVariant="primary"
                 fields={[
                   { name: 'code', label: _('hr_backend.field.code'), required: true },
-                  { name: 'partnerId', label: _('hr_backend.field.partnerId'), required: true },
+                  { name: 'name', label: _('hr_backend.field.name'), required: true },
                   { name: 'userId', label: _('hr_backend.field.userId') },
                   { name: 'homeBranchId', label: _('hr_backend.field.branchId'), required: true },
                   {
