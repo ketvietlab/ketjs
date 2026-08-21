@@ -215,9 +215,14 @@ try {
           floorId: `floor:${floor}`,
           code: String(101 + room),
           name: String(101 + room),
-          status: room % 17 === 0 ? 'maintenance' : room % 5 === 0 ? 'occupied' : 'available',
         })
       }
+      await call(key, 'hospitality_core.setRoomStatus', {
+        id: 'room:0',
+        expectedStatus: 'available',
+        status: 'maintenance',
+        note: 'Initial benchmark maintenance evidence',
+      })
     }),
   )
   const writeMs = performance.now() - writeStarted
@@ -331,6 +336,71 @@ try {
     throw new Error(
       `room type workspace settings, property, policy or room preloads did not persist: ${JSON.stringify(
         roomTypeSettingsResults.filter((result) => !result.match),
+      )}`,
+    )
+
+  const roomConfigurationStarted = performance.now()
+  const roomConfigurationResults = await Promise.all(
+    keys.map(async (key) => {
+      const saved = await call(key, 'hospitality_core.saveRoom', {
+        id: 'room:0',
+        propertyId: 'property',
+        roomTypeId: 'type:0',
+        buildingId: 'building',
+        floorId: 'floor:0',
+        code: '101',
+        name: `Configured room ${key}`,
+        capacity: 4,
+      })
+      const bypass = await call(key, 'hospitality_core.saveRoom', {
+        id: 'room:0',
+        propertyId: 'property',
+        roomTypeId: 'type:0',
+        buildingId: 'building',
+        floorId: 'floor:0',
+        code: '101',
+        name: `Configured room ${key}`,
+        capacity: 4,
+        status: 'dirty',
+      })
+      const detail = await call(key, 'hospitality_core.getRoom', { id: 'room:0' })
+      const buildings = await call(key, 'hospitality_core.listBuildings', { propertyId: 'property' })
+      const floors = await call(key, 'hospitality_core.listFloors', { propertyId: 'property' })
+      const value = detail.value as Record<string, unknown>
+      const building = value.building as Record<string, unknown> | null
+      const floor = value.floor as Record<string, unknown> | null
+      const buildingRows = buildings.value as Array<Record<string, unknown>>
+      const floorRows = floors.value as Array<Record<string, unknown>>
+      const buildingFloors = buildingRows[0]?.floors
+      const buildingRooms = buildingRows[0]?.rooms
+      const floorBuilding = floorRows[0]?.building as Record<string, unknown> | undefined
+      return {
+        key,
+        match:
+          (saved.value as { ok: boolean }).ok === true &&
+          (bypass.value as { ok: boolean }).ok === false &&
+          value.name === `Configured room ${key}` &&
+          Number(value.capacity) === 4 &&
+          value.status === 'maintenance' &&
+          building?.id === 'building' &&
+          floor?.id === 'floor:0' &&
+          Array.isArray(buildingFloors) &&
+          buildingFloors.length === 10 &&
+          Array.isArray(buildingRooms) &&
+          buildingRooms.length === roomsPerDatabase &&
+          floorBuilding?.id === 'building',
+        saved: saved.value,
+        bypass: bypass.value,
+        value,
+      }
+    }),
+  )
+  const roomConfigurationMatch = roomConfigurationResults.every((result) => result.match)
+  const roomConfigurationMs = performance.now() - roomConfigurationStarted
+  if (!roomConfigurationMatch)
+    throw new Error(
+      `room configuration, location preloads or status guard did not persist: ${JSON.stringify(
+        roomConfigurationResults.filter((result) => !result.match),
       )}`,
     )
 
@@ -1276,6 +1346,10 @@ try {
         roomTypeSettingsMs: Number(roomTypeSettingsMs.toFixed(1)),
         roomTypeSettingsPerSecond: Math.round((databaseCount * 1_000) / roomTypeSettingsMs),
         roomTypeSettingsMatch,
+        roomConfigurationUpdates: databaseCount,
+        roomConfigurationMs: Number(roomConfigurationMs.toFixed(1)),
+        roomConfigurationPerSecond: Math.round((databaseCount * 1_000) / roomConfigurationMs),
+        roomConfigurationMatch,
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),
