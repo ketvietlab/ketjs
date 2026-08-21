@@ -12,7 +12,7 @@ A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
 KetJS requires Node.js 24 or newer. Scaffold a runnable application from the public package:
 
 ```bash
-npx -y @ketvietlab/ketjs new my_app --dir ./my-app
+npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 cd my-app
 npm install
 npm run dev
@@ -21,6 +21,9 @@ npm run dev
 The application listens on `http://127.0.0.1:3000` and uses SQLite by default. The application
 identifier must start with a lowercase letter and contain only lowercase letters, digits, and
 underscores; the directory name may use hyphens.
+
+Keep the explicit `@latest` tag: when this command runs inside an older KetJS project, npm may
+otherwise reuse that project's locally installed CLI instead of downloading the current scaffold.
 
 Install the framework into an existing project with `npm install @ketvietlab/ketjs`. Optional
 packages are `@ketvietlab/ketjs-postgres` for PostgreSQL, `@ketvietlab/ketsuite` for business
