@@ -19,14 +19,14 @@ test.describe.configure({ mode: 'serial' })
 test.beforeAll(async () => mkdir(artifacts, { recursive: true }))
 test.beforeEach(async ({ page }) => login(page))
 
-test('creates, revises and publishes content through the backend', async ({ page }) => {
+test('keeps pages and posts separate while creating, revising and publishing', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Website', exact: true }).first()).toBeVisible()
-  await page.goto('/admin/content/new?site=hospitality-site&lang=vi')
-  await expect(page.getByRole('heading', { name: 'Nội dung mới', level: 1 })).toBeVisible()
+  await page.goto('/admin/website/pages/new?site=hospitality-site&lang=vi')
+  await expect(page.getByRole('heading', { name: 'Trang mới', level: 1 })).toBeVisible()
+  await expect(page.locator('select[name="type"]')).toHaveCount(0)
   await page.locator('input[name="title"]').fill('Câu chuyện của Mây')
   await page.locator('input[name="slug"]').fill('cau-chuyen')
   await page.locator('input[name="path"]').fill('/cau-chuyen')
-  await page.locator('select[name="type"]').selectOption('website.page')
   await page.locator('textarea[name="fields"]').fill('{}')
   await page
     .locator('textarea[name="layout"]')
@@ -36,13 +36,70 @@ test('creates, revises and publishes content through the backend', async ({ page
       ]),
     )
   await page.getByRole('button', { name: 'Lưu bản nháp' }).click()
-  await expect(page).toHaveURL(/\/admin\/content\/[^/?]+\?lang=vi/)
+  await expect(page).toHaveURL(/\/admin\/website\/pages\/[^/?]+\?lang=vi/)
   await expect(page.getByText('Bản nháp', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Xuất bản ngay' }).click()
   await expect(page.getByText('Đã xuất bản', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Revision' }).click()
   await expect(page.getByRole('heading', { name: 'Lịch sử phiên bản' })).toBeVisible()
   await expect(page.locator('[data-ui="row"]')).toHaveCount(1)
+
+  await page.goto('/admin/website/posts/new?site=hospitality-site&lang=vi')
+  await expect(page.getByRole('heading', { name: 'Bài viết mới', level: 1 })).toBeVisible()
+  await page.locator('input[name="title"]').fill('Tin mới từ Mây')
+  await page.locator('input[name="slug"]').fill('tin-moi')
+  await page.locator('input[name="path"]').fill('/tin-moi')
+  await page.locator('textarea[name="fields"]').fill('{}')
+  await page
+    .locator('textarea[name="layout"]')
+    .fill(JSON.stringify([{ type: 'website.rich_text', settings: { body: 'Tin mới.' } }]))
+  await page.getByRole('button', { name: 'Lưu bản nháp' }).click()
+  await expect(page).toHaveURL(/\/admin\/website\/posts\/[^/?]+\?lang=vi/)
+  await page.goto('/admin/website/pages?site=hospitality-site&lang=vi')
+  await expect(page.getByText('Tin mới từ Mây')).toHaveCount(0)
+  await page.goto('/admin/website/posts?site=hospitality-site&lang=vi')
+  await expect(page.getByText('Tin mới từ Mây')).toBeVisible()
+})
+
+test('creates, edits and deletes taxonomy, media and menu records', async ({ page }) => {
+  await page.goto('/admin/taxonomies/new?site=hospitality-site&lang=vi')
+  await page.locator('input[name="name"]').fill('Tin doanh nghiệp')
+  await page.locator('input[name="slug"]').fill('tin-doanh-nghiep')
+  await page.locator('select[name="taxonomy"]').selectOption('website.category')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page).toHaveURL(/\/admin\/taxonomies\/[^/?]+\?lang=vi/)
+  await page.locator('input[name="name"]').fill('Tin công ty')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page.locator('input[name="name"]')).toHaveValue('Tin công ty')
+  await page.getByRole('button', { name: 'Xóa term' }).click()
+  await expect(page).toHaveURL(/\/admin\/taxonomies\?site=hospitality-site&lang=vi/)
+  await expect(page.getByText('Tin công ty')).toHaveCount(0)
+
+  await page.goto('/admin/media/new?site=hospitality-site&lang=vi')
+  await page.locator('input[name="attachmentId"]').fill('attachment-e2e')
+  await page.locator('input[name="alt"]').fill('Ảnh E2E')
+  await page.locator('input[name="width"]').fill('1200')
+  await page.locator('input[name="height"]').fill('800')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page).toHaveURL(/\/admin\/media\/[^/?]+\?lang=vi/)
+  await page.locator('input[name="alt"]').fill('Ảnh E2E đã sửa')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page.locator('input[name="alt"]')).toHaveValue('Ảnh E2E đã sửa')
+  await page.getByRole('button', { name: 'Xóa metadata media' }).click()
+  await expect(page).toHaveURL(/\/admin\/media\?site=hospitality-site&lang=vi/)
+
+  await page.goto('/admin/menus/new?site=hospitality-site&lang=vi')
+  await page.locator('input[name="label"]').fill('Khuyến mại')
+  await page.locator('input[name="href"]').fill('/khuyen-mai')
+  await page.locator('input[name="position"]').fill('30')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page).toHaveURL(/\/admin\/menus\/[^/?]+\?site=hospitality-site&lang=vi/)
+  await page.locator('input[name="label"]').fill('Ưu đãi')
+  await page.getByRole('button', { name: 'Lưu' }).click()
+  await expect(page.locator('input[name="label"]')).toHaveValue('Ưu đãi')
+  await page.getByRole('button', { name: 'Xóa mục menu' }).click()
+  await expect(page).toHaveURL(/\/admin\/menus\?site=hospitality-site&lang=vi/)
+  await expect(page.getByText('Ưu đãi')).toHaveCount(0)
 })
 
 test('creates a schema-backed form and keeps the English backend translated', async ({ page }) => {
@@ -194,14 +251,22 @@ test('captures every website backend screen and the KTL storefront', async ({ pa
     ['sites', '/admin/sites?lang=vi'],
     ['site-new', '/admin/sites/new?lang=vi'],
     ['site-edit', '/admin/sites/hospitality-site?lang=vi'],
-    ['content', '/admin/content?site=hospitality-site&lang=vi'],
-    ['content-new', '/admin/content/new?site=hospitality-site&lang=vi'],
-    ['content-edit', '/admin/content/home-hospitality?lang=vi'],
-    ['revisions', '/admin/content/home-hospitality/revisions?lang=vi'],
-    ['preview', '/admin/content/home-hospitality/preview?lang=vi'],
+    ['pages', '/admin/website/pages?site=hospitality-site&lang=vi'],
+    ['page-new', '/admin/website/pages/new?site=hospitality-site&lang=vi'],
+    ['page-edit', '/admin/website/pages/home-hospitality?lang=vi'],
+    ['posts', '/admin/website/posts?site=hospitality-site&lang=vi'],
+    ['post-new', '/admin/website/posts/new?site=hospitality-site&lang=vi'],
+    ['revisions', '/admin/website/pages/home-hospitality/revisions?lang=vi'],
+    ['preview', '/admin/website/pages/home-hospitality/preview?lang=vi'],
     ['taxonomies', '/admin/taxonomies?site=hospitality-site&lang=vi'],
+    ['taxonomy-new', '/admin/taxonomies/new?site=hospitality-site&lang=vi'],
+    ['taxonomy-edit', '/admin/taxonomies/journal?lang=vi'],
     ['media', '/admin/media?site=hospitality-site&lang=vi'],
+    ['media-new', '/admin/media/new?site=hospitality-site&lang=vi'],
+    ['media-edit', '/admin/media/hero-media?lang=vi'],
     ['menus', '/admin/menus?site=hospitality-site&lang=vi'],
+    ['menu-new', '/admin/menus/new?site=hospitality-site&lang=vi'],
+    ['menu-edit', '/admin/menus/menu-home?site=hospitality-site&lang=vi'],
     ['forms', '/admin/forms?site=hospitality-site&lang=vi'],
     ['form-new', '/admin/forms/new?site=hospitality-site&lang=vi'],
     ['submissions', '/admin/forms/contact-form/submissions?lang=vi'],
@@ -230,11 +295,11 @@ test('captures every website backend screen and the KTL storefront', async ({ pa
   await expect(page.locator('body')).toHaveClass(/retail-site/)
   await page.screenshot({ path: join(artifacts, 'storefront-retail-desktop.png'), fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/admin/content?site=hospitality-site&lang=vi')
+  await page.goto('/admin/website/pages?site=hospitality-site&lang=vi')
   const mobileWidth = await page.evaluate(() => ({
     document: document.documentElement.scrollWidth,
     viewport: innerWidth,
   }))
   expect(mobileWidth.document).toBeLessThanOrEqual(mobileWidth.viewport)
-  await page.screenshot({ path: join(artifacts, 'content-mobile.png'), fullPage: true })
+  await page.screenshot({ path: join(artifacts, 'pages-mobile.png'), fullPage: true })
 })
