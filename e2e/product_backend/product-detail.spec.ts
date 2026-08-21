@@ -28,7 +28,7 @@ for (const viewport of [
     for (const tab of ['general', 'variants', 'media'] as const) {
       test(`renders ${tab} in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
-        await page.goto(`/admin/products/tpl-review?tab=${tab}&lang=${locale}`)
+        await page.goto(`/admin/product/templates/tpl-review?tab=${tab}&lang=${locale}`)
         await expect(page.locator('[data-ui="main"]')).toBeVisible()
         await expect(page.locator('form[action="/login"]')).toHaveCount(0)
         await expect(page.locator(`[data-ui="tab"][data-active="true"]`)).toBeVisible()
@@ -57,7 +57,7 @@ for (const viewport of [
 }
 
 test('saves atomically and manages variants and template media', async ({ page }) => {
-  await page.goto('/admin/products/tpl-review?tab=general&lang=vi')
+  await page.goto('/admin/product/templates/tpl-review?tab=general&lang=vi')
   await expect(page.getByRole('heading', { name: 'Áo khoác vận hành KETSUITE' })).toBeVisible()
   await expect(page.locator('[data-ui="chatter-error"]')).toHaveCount(0)
 
@@ -75,7 +75,7 @@ test('saves atomically and manages variants and template media', async ({ page }
   await page.getByRole('button', { name: 'Lưu' }).click()
   await expect(page.getByLabel('Giá bán')).toHaveValue('1399000')
 
-  await page.goto('/admin/products/tpl-review?tab=variants&lang=vi')
+  await page.goto('/admin/product/templates/tpl-review?tab=variants&lang=vi')
   const attributeForm = page.locator('form[data-ui="record-form"]:has(select[name="attributeId"])')
   await attributeForm.locator('select[name="attributeId"]').selectOption('color')
   await attributeForm.locator('input[name="valueIds"]').fill('color-blue,color-orange')
@@ -84,7 +84,7 @@ test('saves atomically and manages variants and template media', async ({ page }
   await expect(page.locator('[data-ui="row"]')).not.toHaveCount(0)
   await expect(page.getByRole('link', { name: /JACKET-REVIEW/ })).toBeVisible()
 
-  await page.goto('/admin/products/tpl-review?tab=media&lang=vi')
+  await page.goto('/admin/product/templates/tpl-review?tab=media&lang=vi')
   await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)
   await expect
     .poll(() =>

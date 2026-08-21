@@ -186,15 +186,26 @@ const searchMenu = (menu: SearchMenu): TemplateResult => (
   </details>
 )
 
-export const listChrome = (_: Translator, title: string, chrome: ListChrome): TemplateResult => (
+/**
+ * `titled` is false when the screen below opens with its own heading, which is
+ * every framed list: the name was printed twice, once here and once a line down in
+ * a larger size. The row keeps its shape either way — the lead still holds the
+ * create action, and the search stays centred.
+ */
+export const listChrome = (
+  _: Translator,
+  title: string,
+  chrome: ListChrome,
+  titled = true,
+): TemplateResult => (
   <>
-    {chromeLead(title, chrome)}
+    {chromeLead(title, chrome, titled)}
     {!!chrome.search && topbarSearch(_, chrome)}
     {chromeTail(_, chrome)}
   </>
 )
 
-const chromeLead = (title: string, chrome: ListChrome): TemplateResult => (
+const chromeLead = (title: string, chrome: ListChrome, titled: boolean): TemplateResult => (
   <div data-ui="chrome-lead">
     {!!chrome.create && (
       <a data-ui="chrome-create" href={chrome.create.path}>
@@ -202,7 +213,7 @@ const chromeLead = (title: string, chrome: ListChrome): TemplateResult => (
         {chrome.create.label}
       </a>
     )}
-    <h1 data-ui="title">{title}</h1>
+    {titled && <h1 data-ui="title">{title}</h1>}
   </div>
 )
 

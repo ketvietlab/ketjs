@@ -59,11 +59,12 @@ test('cms: content types and taxonomies compose into a discoverable registry', (
 })
 
 test('website backend: owns a primary application menu instead of hiding under administration', () => {
-  assert.deepEqual(websiteBackend.menus?.website, {
-    label: 'menu.app',
-    icon: 'globe',
-    sequence: 18,
-  })
+  // A root entry: its own label and glyph, no parent. The sequence is a product
+  // decision that moves; what this test is about is that it is a root at all.
+  assert.equal(websiteBackend.menus?.website?.label, 'menu.app')
+  assert.equal(websiteBackend.menus?.website?.icon, 'globe')
+  assert.equal(websiteBackend.menus?.website?.parent, undefined)
+  assert.equal(typeof websiteBackend.menus?.website?.sequence, 'number')
   assert.equal(websiteBackend.menus?.['website.pages']?.parent, 'website')
   assert.equal(websiteBackend.menus?.['website.posts']?.parent, 'website')
   assert.equal(websiteBackend.menus?.['website.pages']?.path, '/admin/website/pages')

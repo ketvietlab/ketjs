@@ -222,11 +222,11 @@ export function createCalendarView(runtime, props, seed = {}) {
       </header>
       <form data-ui="calendar-create" on:submit=${create}>
         <h3 data-ui="calendar-create-title">${labels.create}</h3>
-        <label data-ui="calendar-field">${labels.name}<input name="name" required maxlength="500" disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.start}<input type="datetime-local" name="start" required disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.stop}<input type="datetime-local" name="stop" required disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.location}<input name="location" disabled=${busy()}></label>
-        <label data-ui="calendar-all-day"><input type="checkbox" name="allDay" disabled=${busy()}>${labels.allDay}</label>
+        <label data-ui="calendar-field">${labels.name}<input data-ui="form-control" name="name" required maxlength="500" disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.start}<input data-ui="form-control" type="datetime-local" name="start" required disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.stop}<input data-ui="form-control" type="datetime-local" name="stop" required disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.location}<input data-ui="form-control" name="location" disabled=${busy()}></label>
+        <label data-ui="calendar-all-day"><input data-ui="form-control" type="checkbox" name="allDay" disabled=${busy()}>${labels.allDay}</label>
         <button data-ui="calendar-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.saving : labels.save}</button>
       </form>
       ${error() ? html`<div data-ui="calendar-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}

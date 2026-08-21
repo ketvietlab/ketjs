@@ -1,21 +1,21 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  attachmentPanel,
+  AttachmentPanel,
   badge,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  recordActions,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
-  tabs,
+  Surface,
+  Tabs,
 } from '../../ui/index.ts'
 import type { FormField, Frame, TableGroup } from '../../ui/index.ts'
 
@@ -170,9 +170,9 @@ export const caseDetailScreen = (
   const main =
     activeTab === 'sales'
       ? stack([
-          definitionList({
-            title: _('crm_backend.case.tab.sales'),
-            items: [
+          <DefinitionList
+            title={_('crm_backend.case.tab.sales')}
+            items={[
               {
                 key: 'revenue',
                 term: _('crm_backend.field.expectedRevenue'),
@@ -188,8 +188,8 @@ export const caseDetailScreen = (
                 term: _('crm_backend.field.forecastCategory'),
                 value: String(sales?.forecastCategory ?? '—'),
               },
-            ],
-          }),
+            ]}
+          />,
           ...(row.kind === 'opportunity' && options.warehouses.length
             ? [
                 <Surface
@@ -307,9 +307,9 @@ export const caseDetailScreen = (
               })
             : empty(_)
           : stack([
-              definitionList({
-                title: _('crm_backend.case.detail'),
-                items: [
+              <DefinitionList
+                title={_('crm_backend.case.detail')}
+                items={[
                   { key: 'kind', term: _('crm_backend.field.kind'), value: local(_, 'kind', row.kind) },
                   { key: 'stage', term: _('crm_backend.field.stage'), value: String(row.stageName ?? '—') },
                   {
@@ -322,8 +322,8 @@ export const caseDetailScreen = (
                     term: _('crm_backend.field.assignee'),
                     value: String(row.assigneeName ?? '—'),
                   },
-                ],
-              }),
+                ]}
+              />,
               <Surface
                 body={
                   <RecordForm
@@ -393,55 +393,59 @@ export const caseDetailScreen = (
             { id: 'score', label: _('crm_backend.field.score'), value: String(row.score ?? 0) },
             { id: 'version', label: _('crm_backend.field.version'), value: String(row.version ?? 0) },
           ]}
-          navigation={tabs({
-            label: _('crm_backend.case.detail'),
-            items: [
-              {
-                id: 'overview',
-                label: _('crm_backend.case.tab.overview'),
-                href: href('overview'),
-                active: activeTab === 'overview',
-              },
-              {
-                id: 'sales',
-                label: _('crm_backend.case.tab.sales'),
-                href: href('sales'),
-                active: activeTab === 'sales',
-              },
-              {
-                id: 'activities',
-                label: _('crm_backend.case.tab.activities'),
-                href: href('activities'),
-                active: activeTab === 'activities',
-              },
-              {
-                id: 'timeline',
-                label: _('crm_backend.case.tab.timeline'),
-                href: href('timeline'),
-                active: activeTab === 'timeline',
-                count: timeline.length + messages.length,
-              },
-            ],
-          })}
-          controller={recordActions({ action: endpoint, actions })}
+          navigation={
+            <Tabs
+              label={_('crm_backend.case.detail')}
+              items={[
+                {
+                  id: 'overview',
+                  label: _('crm_backend.case.tab.overview'),
+                  href: href('overview'),
+                  active: activeTab === 'overview',
+                },
+                {
+                  id: 'sales',
+                  label: _('crm_backend.case.tab.sales'),
+                  href: href('sales'),
+                  active: activeTab === 'sales',
+                },
+                {
+                  id: 'activities',
+                  label: _('crm_backend.case.tab.activities'),
+                  href: href('activities'),
+                  active: activeTab === 'activities',
+                },
+                {
+                  id: 'timeline',
+                  label: _('crm_backend.case.tab.timeline'),
+                  href: href('timeline'),
+                  active: activeTab === 'timeline',
+                  count: timeline.length + messages.length,
+                },
+              ]}
+            />
+          }
+          controller={<RecordActions action={endpoint} actions={actions} />}
           body={main}
           aside={stack([
             <Section
               title={_('crm_backend.attachments.title')}
-              body={attachmentPanel({
-                items: attachments.map((item) => ({
-                  id: String(item.id),
-                  name: String(item.name),
-                  href: `/files/${String(item.id)}`,
-                  size: Number(item.size ?? 0),
-                  mimetype: String(item.mimetype ?? ''),
-                })),
-                uploadAction: `${endpoint}/attachments`,
-                emptyTitle: _('crm_backend.attachments.empty'),
-                emptyHint: _('crm_backend.attachments.emptyHint'),
-                chooseLabel: _('crm_backend.attachments.choose'),
-                uploadLabel: _('crm_backend.attachments.upload'),
-              })}
+              body={
+                <AttachmentPanel
+                  items={attachments.map((item) => ({
+                    id: String(item.id),
+                    name: String(item.name),
+                    href: `/files/${String(item.id)}`,
+                    size: Number(item.size ?? 0),
+                    mimetype: String(item.mimetype ?? ''),
+                  }))}
+                  uploadAction={`${endpoint}/attachments`}
+                  emptyTitle={_('crm_backend.attachments.empty')}
+                  emptyHint={_('crm_backend.attachments.emptyHint')}
+                  chooseLabel={_('crm_backend.attachments.choose')}
+                  uploadLabel={_('crm_backend.attachments.upload')}
+                />
+              }
             />,
             <Section
               title={_('crm_backend.messages.title')}
@@ -496,15 +500,15 @@ export const plannerScreen = (
       title={_('crm_backend.planner.title')}
       frame={frame}
       body={stack([
-        tabs({
-          label: _('crm_backend.planner.title'),
-          items: ['mine', 'plans', 'calendar'].map((id) => ({
+        <Tabs
+          label={_('crm_backend.planner.title')}
+          items={['mine', 'plans', 'calendar'].map((id) => ({
             id,
             label: _(`crm_backend.planner.${id}`),
             href: `/admin/crm/activities?tab=${id}`,
             active: options.tab === id,
-          })),
-        }),
+          }))}
+        />,
         ...(options.tab === 'mine'
           ? [
               <Surface
@@ -594,15 +598,15 @@ export const configurationScreen = (
     title={_('crm_backend.configuration.title')}
     frame={frame}
     body={stack([
-      tabs({
-        label: _('crm_backend.configuration.title'),
-        items: ['teams', 'stages', 'assignmentRules', 'scoreRules'].map((id) => ({
+      <Tabs
+        label={_('crm_backend.configuration.title')}
+        items={['teams', 'stages', 'assignmentRules', 'scoreRules'].map((id) => ({
           id,
           label: _(`crm_backend.configuration.${id}`),
           href: `/admin/crm/configuration?tab=${id}`,
           active: tab === id,
-        })),
-      }),
+        }))}
+      />,
       <Surface
         body={
           <RecordForm

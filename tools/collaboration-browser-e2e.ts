@@ -274,72 +274,72 @@ try {
   for (const screen of [
     {
       name: 'product-chatter',
-      path: '/admin/products/tpl-collab?lang=vi',
+      path: '/admin/product/templates/tpl-collab?lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="failed"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
       name: 'product-variant-chatter',
-      path: '/admin/products/tpl-collab/variants/variant-collab?tab=general&lang=vi',
+      path: '/admin/product/templates/tpl-collab/variants/variant-collab?tab=general&lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
       name: 'product-attributes',
-      path: '/admin/product-attributes?lang=vi',
+      path: '/admin/product/attributes?lang=vi',
       ready: `document.querySelector('#product-attribute-create') && document.querySelectorAll('[data-ui="content-card"]').length >= 3`,
     },
     {
       name: 'product-create',
-      path: '/admin/products/new?lang=vi',
+      path: '/admin/product/templates/new?lang=vi',
       ready: `document.querySelector('#product-create-form') && document.querySelectorAll('[data-ui="record-toggle-input"]').length >= 3`,
     },
     {
       name: 'transfer-chatter',
-      path: '/admin/transfers/pick-collab?lang=vi',
+      path: '/admin/stock/transfers/pick-collab?lang=vi',
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="chatter-delivery"][data-state="sent"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
       name: 'inventory-adjustment',
-      path: '/admin/inventory?lang=vi',
+      path: '/admin/stock/inventory?lang=vi',
       ready: `document.querySelector('#inventory-adjustment-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'transfer-list',
-      path: '/admin/transfers?lang=vi',
+      path: '/admin/stock/transfers?lang=vi',
       ready: `document.querySelector('#transfer-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'warehouse-list',
-      path: '/admin/warehouses?lang=vi',
+      path: '/admin/stock/warehouses?lang=vi',
       ready: `document.querySelector('#warehouse-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'location-list',
-      path: '/admin/locations?lang=vi',
+      path: '/admin/stock/locations?lang=vi',
       ready: `document.querySelector('#location-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'operation-type-list',
-      path: '/admin/picking-types?lang=vi',
+      path: '/admin/stock/picking-types?lang=vi',
       ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'route-list',
-      path: '/admin/stock-routes?lang=vi',
+      path: '/admin/stock/routes?lang=vi',
       ready: `document.querySelector('#stock-route-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'route-detail',
-      path: '/admin/stock-routes/wh:receipt-route?lang=vi',
+      path: '/admin/stock/routes/wh:receipt-route?lang=vi',
       ready: `document.querySelector('#stock-route-detail-form') && document.querySelector('#stock-route-rule-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'replenishment',
-      path: '/admin/replenishment?lang=vi',
+      path: '/admin/stock/replenishment?lang=vi',
       ready: `document.querySelector('#replenishment-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'forecast',
-      path: '/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi',
+      path: '/admin/stock/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi',
       ready: `document.querySelector('#forecast-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length === 1`,
     },
     {
@@ -364,7 +364,7 @@ try {
     },
     {
       name: 'accounting-customer-invoice',
-      path: '/admin/customer-invoices/invoice-collab?lang=vi',
+      path: '/admin/accounting/customer-invoices/invoice-collab?lang=vi',
       ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]')`,
     },
     {
@@ -374,67 +374,67 @@ try {
     },
     {
       name: 'accounting-customer-invoices',
-      path: '/admin/customer-invoices?lang=vi',
+      path: '/admin/accounting/customer-invoices?lang=vi',
       ready: `document.querySelector('#customer-invoice-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-vendor-bills',
-      path: '/admin/vendor-bills?lang=vi',
+      path: '/admin/accounting/vendor-bills?lang=vi',
       ready: `document.querySelector('#vendor-bill-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-journal-entries',
-      path: '/admin/journal-entries?lang=vi',
+      path: '/admin/accounting/entries?lang=vi',
       ready: `document.querySelector('#journal-entry-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-payments',
-      path: '/admin/payments?lang=vi',
+      path: '/admin/accounting/payments?lang=vi',
       ready: `document.querySelector('#payment-register-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-chart-of-accounts',
-      path: '/admin/accounts?lang=vi',
+      path: '/admin/accounting/accounts?lang=vi',
       ready: `document.querySelector('#account-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-journals',
-      path: '/admin/journals?lang=vi',
+      path: '/admin/accounting/journals?lang=vi',
       ready: `document.querySelector('#journal-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-taxes',
-      path: '/admin/taxes?lang=vi',
+      path: '/admin/accounting/taxes?lang=vi',
       ready: `document.querySelector('#tax-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-payment-terms',
-      path: '/admin/payment-terms?lang=vi',
+      path: '/admin/accounting/terms?lang=vi',
       ready: `document.querySelector('#payment-term-create-form') && document.querySelector('#payment-term-line-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-trial-balance',
-      path: '/admin/trial-balance?lang=vi',
+      path: '/admin/accounting/trial-balance?lang=vi',
       ready: `document.querySelector('#trial-balance-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-general-ledger',
-      path: '/admin/general-ledger?accountId=account-bank-collab&lang=vi',
+      path: '/admin/accounting/general-ledger?accountId=account-bank-collab&lang=vi',
       ready: `document.querySelector('#general-ledger-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-partner-ledger',
-      path: '/admin/partner-statement?partnerId=member-party&lang=vi',
+      path: '/admin/accounting/partner-statement?partnerId=member-party&lang=vi',
       ready: `document.querySelector('#partner-ledger-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
-      path: '/admin/lots?lang=vi',
+      path: '/admin/stock/lots?lang=vi',
       ready: `document.querySelector('#lot-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-detail-chatter',
-      path: '/admin/lots/lot-collab?lang=vi',
+      path: '/admin/stock/lots/lot-collab?lang=vi',
       ready: `document.querySelector('#lot-detail-form') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
@@ -588,7 +588,7 @@ try {
         cdp,
         `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`,
       )
-      await navigate(cdp, `${e2e.baseUrl}/admin/products/tpl-collab?tab=variants&lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/product/templates/tpl-collab?tab=variants&lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="tab"][data-active="true"]')?.textContent.includes('Thuộc tính')`,
@@ -767,7 +767,7 @@ try {
       )
       await navigate(
         cdp,
-        `${e2e.baseUrl}/admin/products/tpl-collab/variants/variant-collab?tab=media&lang=vi`,
+        `${e2e.baseUrl}/admin/product/templates/tpl-collab/variants/variant-collab?tab=media&lang=vi`,
       )
       await waitFor(
         cdp,
@@ -1141,7 +1141,7 @@ try {
           `({
             workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
-            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock-routes/"]')),
+            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock/routes/"]')),
             ruleCount: [...document.querySelectorAll('[data-ui="table"] [data-ui="row"]')].some((row) => /[1-9]/.test(row.lastElementChild?.textContent ?? '')),
             formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
@@ -1168,8 +1168,8 @@ try {
           return true
         })()`,
       )
-      await waitFor(cdp, `location.pathname.startsWith('/admin/stock-routes/')`)
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=vi`)
+      await waitFor(cdp, `location.pathname.startsWith('/admin/stock/routes/')`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="table"]')?.textContent.includes('Tuyến Browser hai bước')`,
@@ -1180,7 +1180,7 @@ try {
       )
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-desktop.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
@@ -1197,7 +1197,7 @@ try {
         deviceScaleFactor: 1,
         mobile: true,
       })
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'vi'`,
@@ -1215,7 +1215,7 @@ try {
       )
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-mobile.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
@@ -1285,12 +1285,12 @@ try {
         ),
         { error: true, unrelatedError: false, chatter: false },
       )
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes/wh:receipt-route?lang=vi`)
       await waitFor(cdp, `document.querySelector('#stock-route-rule-form')`)
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-vi-desktop.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes/wh:receipt-route?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'en'`,
@@ -1306,7 +1306,7 @@ try {
         deviceScaleFactor: 1,
         mobile: true,
       })
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes/wh:receipt-route?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'vi'`,
@@ -1331,7 +1331,7 @@ try {
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(routeDetailEvidenceDir, 'route-detail-vi-mobile.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock-routes/wh:receipt-route?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes/wh:receipt-route?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#stock-route-rule-form') && document.documentElement.lang === 'en'`,
@@ -1361,7 +1361,7 @@ try {
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             forecast: document.querySelector('[data-ui="table"]')?.textContent.includes('Dự báo'),
             proposal: Boolean(document.querySelector('[data-ui="table"] [data-ui="badge"][data-tone="warning"]')),
-            runAction: Boolean(document.querySelector('[data-ui="table"] form[action*="/admin/replenishment/"]')),
+            runAction: Boolean(document.querySelector('[data-ui="table"] form[action*="/admin/stock/replenishment/"]')),
             formRowsAtLeast28: Array.from(document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
@@ -1408,7 +1408,7 @@ try {
         { error: true, chatter: false },
       )
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
@@ -1416,7 +1416,7 @@ try {
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-desktop.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
@@ -1431,7 +1431,7 @@ try {
         deviceScaleFactor: 1,
         mobile: true,
       })
-      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
@@ -1450,7 +1450,7 @@ try {
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-mobile.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/replenishment?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
@@ -1500,7 +1500,7 @@ try {
         },
       )
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/forecast?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/forecast?lang=vi`)
       await waitFor(cdp, `document.querySelector('#forecast-filter-form')`)
       assert.deepEqual(
         await evaluate(
@@ -1516,7 +1516,7 @@ try {
 
       await navigate(
         cdp,
-        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
+        `${e2e.baseUrl}/admin/stock/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
       )
       await waitFor(
         cdp,
@@ -1527,7 +1527,7 @@ try {
 
       await navigate(
         cdp,
-        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
+        `${e2e.baseUrl}/admin/stock/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
       )
       await waitFor(
         cdp,
@@ -1545,7 +1545,7 @@ try {
       })
       await navigate(
         cdp,
-        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
+        `${e2e.baseUrl}/admin/stock/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=vi`,
       )
       await waitFor(
         cdp,
@@ -1567,7 +1567,7 @@ try {
 
       await navigate(
         cdp,
-        `${e2e.baseUrl}/admin/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
+        `${e2e.baseUrl}/admin/stock/forecast?productId=variant-collab&warehouseId=wh&locationId=wh:stock&lang=en`,
       )
       await waitFor(
         cdp,
@@ -2124,7 +2124,7 @@ try {
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts)
         await capture(cdp, join(accountingInvoiceEvidenceDir, 'customer-invoice-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices/invoice-collab?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices/invoice-collab?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.documentElement.lang === 'en'`,
@@ -2143,7 +2143,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices/invoice-collab?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices/invoice-collab?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.documentElement.lang === '${lang}'`,
@@ -2180,7 +2180,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(vendorBillsEvidenceDir, 'vendor-bills-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/vendor-bills?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#vendor-bill-create-form') && document.documentElement.lang === 'en'`,
@@ -2201,7 +2201,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/vendor-bills?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#vendor-bill-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2238,7 +2238,7 @@ try {
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts)
         await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === 'en'`,
@@ -2260,7 +2260,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2297,7 +2297,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(journalEntriesEvidenceDir, 'journal-entries-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/journal-entries?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#journal-entry-create-form') && document.documentElement.lang === 'en'`,
@@ -2318,7 +2318,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/journal-entries?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#journal-entry-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2355,7 +2355,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(paymentsEvidenceDir, 'payments-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/payments?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/payments?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#payment-register-form') && document.documentElement.lang === 'en'`,
@@ -2376,7 +2376,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/payments?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/payments?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#payment-register-form') && document.documentElement.lang === '${lang}'`,
@@ -2412,7 +2412,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(accountsEvidenceDir, 'chart-of-accounts-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/accounts?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/accounts?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#account-create-form') && document.documentElement.lang === 'en'`,
@@ -2433,7 +2433,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/accounts?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/accounts?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#account-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2479,7 +2479,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(journalsEvidenceDir, 'journals-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/journals?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/journals?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#journal-create-form') && document.documentElement.lang === 'en'`,
@@ -2500,7 +2500,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/journals?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/journals?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#journal-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2545,7 +2545,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(taxesEvidenceDir, 'taxes-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/taxes?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/taxes?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#tax-create-form') && document.documentElement.lang === 'en'`,
@@ -2566,7 +2566,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/taxes?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/taxes?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#tax-create-form') && document.documentElement.lang === '${lang}'`,
@@ -2611,7 +2611,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(paymentTermsEvidenceDir, 'payment-terms-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/payment-terms?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#payment-term-line-form') && document.documentElement.lang === 'en'`,
@@ -2632,7 +2632,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/payment-terms?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#payment-term-line-form') && document.documentElement.lang === '${lang}'`,
@@ -2678,7 +2678,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(trialBalanceEvidenceDir, 'trial-balance-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/trial-balance?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/trial-balance?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#trial-balance-filter-form') && document.documentElement.lang === 'en'`,
@@ -2699,7 +2699,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/trial-balance?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/trial-balance?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#trial-balance-filter-form') && document.documentElement.lang === '${lang}'`,
@@ -2745,7 +2745,10 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(generalLedgerEvidenceDir, 'general-ledger-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=en`)
+      await navigate(
+        cdp,
+        `${e2e.baseUrl}/admin/accounting/general-ledger?accountId=account-bank-collab&lang=en`,
+      )
       await waitFor(
         cdp,
         `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === 'en'`,
@@ -2766,7 +2769,10 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=${lang}`)
+        await navigate(
+          cdp,
+          `${e2e.baseUrl}/admin/accounting/general-ledger?accountId=account-bank-collab&lang=${lang}`,
+        )
         await waitFor(
           cdp,
           `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === '${lang}'`,
@@ -2812,7 +2818,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(partnerLedgerEvidenceDir, 'partner-ledger-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/partner-statement?partnerId=member-party&lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/partner-statement?partnerId=member-party&lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#partner-ledger-filter-form') && document.documentElement.lang === 'en'`,
@@ -2833,7 +2839,10 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/partner-statement?partnerId=member-party&lang=${lang}`)
+        await navigate(
+          cdp,
+          `${e2e.baseUrl}/admin/accounting/partner-statement?partnerId=member-party&lang=${lang}`,
+        )
         await waitFor(
           cdp,
           `document.querySelector('#partner-ledger-filter-form') && document.documentElement.lang === '${lang}'`,
@@ -2863,7 +2872,7 @@ try {
             productSelector: document.querySelector('#lot-create-form [name="productId"]')?.tagName === 'SELECT',
             productLabel: document.querySelector('#lot-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
             onHand: document.querySelector('[data-ui="table"]')?.textContent.includes('12'),
-            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/lots/lot-collab"]')),
+            detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock/lots/lot-collab"]')),
             formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
@@ -2903,7 +2912,7 @@ try {
       )
       if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-vi-desktop.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
@@ -2920,7 +2929,7 @@ try {
         deviceScaleFactor: 1,
         mobile: true,
       })
-      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=vi`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=vi`)
       await waitFor(
         cdp,
         `document.querySelector('#lot-create-form') && document.documentElement.lang === 'vi'`,
@@ -2944,7 +2953,7 @@ try {
       )
       if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-vi-mobile.png'))
 
-      await navigate(cdp, `${e2e.baseUrl}/admin/lots?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,

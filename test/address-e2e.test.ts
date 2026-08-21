@@ -35,7 +35,7 @@ test('address HTTP: trusted settings route installs VN while generic transport h
   const before = await e2e.client.get('/admin/addresses', { headers: { accept: 'text/html' } })
   assert.equal(before.status, 200)
   assert.match(await before.text(), /Sẵn sàng cài/)
-  const partnerBefore = await e2e.client.get('/admin/partners/acme-party')
+  const partnerBefore = await e2e.client.get('/admin/partner/partners/acme-party')
   assert.match(await partnerBefore.text(), /Catalog địa giới chưa được cài/)
 
   const hidden = await e2e.client.request('/_ket/fn/address.installCatalog', {
@@ -70,7 +70,7 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   await fixture('address.installCatalog', { countryCode: 'VN' })
   await fixture('partner.savePartner', { id: 'customer', kind: 'company', name: 'Công ty Minh An' })
   const saved = await e2e.client.post(
-    '/admin/partners/customer/addresses',
+    '/admin/partner/partners/customer/addresses',
     new URLSearchParams({
       use: 'delivery',
       street1: '12 Nguyễn Huệ',
@@ -82,7 +82,7 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   )
   assert.equal(saved.status, 303)
 
-  const detail = await e2e.client.get('/admin/partners/customer')
+  const detail = await e2e.client.get('/admin/partner/partners/customer')
   const html = await detail.text()
   assert.equal(detail.status, 200)
   assert.match(html, /12 Nguyễn Huệ/)
@@ -96,7 +96,7 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   assert.match(html, /name="divisionId"/)
   assert.doesNotMatch(html, /src="(?:undefined|null)?"/)
 
-  const english = await e2e.client.get('/admin/partners/customer?lang=en')
+  const english = await e2e.client.get('/admin/partner/partners/customer?lang=en')
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Province\/City/)
 })

@@ -3,18 +3,19 @@ import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   emptyState,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   icon,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormOption, Frame } from '../../ui/index.ts'
 import { stockRowsTable } from './screens.tsx'
 import type { StockRow } from './screens.tsx'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 export type TransferDetail = {
   id: string
@@ -39,11 +40,9 @@ export type TransferDetailOptions = {
   errors?: string[]
 }
 
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `stock_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable stock code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'stock_backend', group, value)
 
 const stateTone = (state: string) =>
   state === 'done' ? 'positive' : state === 'cancel' ? 'danger' : state === 'draft' ? 'neutral' : 'info'

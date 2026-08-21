@@ -6,14 +6,14 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   icon,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { labelOf } from './screens.tsx'

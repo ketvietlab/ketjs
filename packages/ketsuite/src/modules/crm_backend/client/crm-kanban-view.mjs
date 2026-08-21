@@ -105,7 +105,7 @@ export function createCrmKanbanView(runtime, props, seed = {}) {
             <input type="hidden" name="id" value=${entry.id}>
             <input type="hidden" name="expectedVersion" value=${String(entry.version)}>
             <input type="hidden" name="idempotencyKey" value=${`pipeline:${entry.id}:${entry.version}`}>
-            <label>${labels.move}<select name="stageId" on:change=${(event) => move(entry, event.target.value)} disabled=${busy() === entry.id}>
+            <label>${labels.move}<select data-ui="form-control" name="stageId" on:change=${(event) => move(entry, event.target.value)} disabled=${busy() === entry.id}>
               ${each(
                 initial.stages,
                 (option) => option.id,

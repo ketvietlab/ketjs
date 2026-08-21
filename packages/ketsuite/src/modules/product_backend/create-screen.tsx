@@ -1,13 +1,9 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  framedPage as Framed,
-  icon,
-  recordForm as RecordForm,
-  recordToggle as RecordToggle,
-  recordWorkspace as RecordWorkspace,
-} from '../../ui/index.ts'
+import { Framed, icon, RecordForm, RecordToggle, RecordWorkspace } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 type ProductCreateOptions = {
   uoms: FormOption[]
@@ -16,19 +12,9 @@ type ProductCreateOptions = {
   errors?: string[]
 }
 
-const localized = (path: string, locale: string): string => {
-  if (!locale) return path
-  const target = new URL(path, 'http://ket.local')
-  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
-
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `product_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable product code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'product_backend', group, value)
 
 export const newProductScreen = (
   _: Translator,
@@ -61,10 +47,10 @@ export const newProductScreen = (
     <RecordForm
       id={formId}
       scope="product-create"
-      action={localized('/admin/products/new', locale)}
+      action={localized('/admin/product/templates/new', locale)}
       submit={_('product_backend.action.create')}
       submitVariant="primary"
-      cancelHref={localized('/admin/products', locale)}
+      cancelHref={localized('/admin/product/templates', locale)}
       cancelLabel={_('product_backend.action.cancel')}
       errors={options.errors}
       fields={[

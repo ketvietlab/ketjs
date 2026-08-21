@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { renderToString } from '@ketvietlab/ketjs-view'
-import { compose, translator } from '@ketvietlab/ketjs'
+import { globSync, readFileSync } from 'node:fs'
+import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
+import { buildMenu, compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
+import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
 import type { MenuNode } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from '@ketvietlab/ketsuite/backend'
@@ -26,7 +27,7 @@ import {
   emptyState,
   errorState,
   formCluster,
-  framed,
+  Framed,
   HOOKS,
   hasIcon,
   icon,
@@ -36,6 +37,7 @@ import {
   kanbanGrid,
   linkButton,
   loadingState,
+  loginScreen,
   mailContractCases,
   metric,
   modalSheet,
@@ -426,6 +428,14 @@ const everything = [
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
   settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
   errorState('E_X', 'msg', 'hint'),
+  // The sign-in screen, in the one state that shows every hook it owns at once.
+  loginScreen(_, {
+    next: '/admin/settings',
+    failed: true,
+    providers: [{ code: 'google', name: 'Google', href: '/oauth/google' }],
+    locales: ['vi', 'en'],
+    locale: 'vi',
+  }),
   ...componentContract,
   ...mailContractCases(),
   ...activityContractCases(),
@@ -445,17 +455,183 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
   assert.deepEqual(undocumented, [], 'a new hook needs a line in admin.css before it ships')
 })
 
+/** Every stylesheet the kit's hooks are styled by. */
+const STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/admin.css',
+  'packages/ketsuite/src/ui/client/mail.css',
+  'packages/ketsuite/src/ui/client/activity.css',
+  'packages/ketsuite/src/ui/client/calendar.css',
+]
+
+/** And the ones a module owns for its own island. */
+const MODULE_STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/tokens.css',
+  'packages/ketsuite/src/modules/crm_backend/client/crm.css',
+  'packages/ketsuite/src/modules/partner_backend/client/address.css',
+]
+
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
+})
+
+test('ui contract: the stylesheet targets no hook nothing emits', () => {
+  // The contract runs both ways. The existing test catches a rule with no hook;
+  // this catches a hook with no markup — `[data-ui="crumb"]` outlived the component
+  // that emitted it and sat there being maintained.
+  //
+  // Two sources beyond the kit are legitimate. `nav-item` belongs to whatever a
+  // third party hangs off `backend:nav.items`, so the kit never emits it. The login
+  // screen and the design catalogue still write their own markup — they are on
+  // ui-audit's pending list — so their hooks are read from the source that emits
+  // them, and stop being read from there the day that markup moves into the kit.
+  const RESERVED_FOR_FILLS = ['nav-item']
+  // An island's markup is behaviour, so it lives in the browser file rather than in
+  // the kit; the login screen and the design catalogue are on ui-audit's pending
+  // list. Both are read from the source that emits them, so the day that markup
+  // moves into the kit this stops reading them and nothing has to be remembered.
+  const OTHER_SOURCES = [
+    'packages/ketsuite/src/modules/user/login.ts',
+    'packages/ketsuite/src/modules/backend/catalogue.ts',
+    ...globSync('packages/ketsuite/src/**/client/*.mjs'),
+  ]
+  const emitted = new Set<string>([
+    ...HOOKS,
+    ...RESERVED_FOR_FILLS,
+    ...OTHER_SOURCES.flatMap((path) =>
+      [...readFileSync(path, 'utf8').matchAll(/data-ui=(?:"|\{?')([a-z0-9-]+)/g)].map((m) => m[1] as string),
+    ),
+  ])
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+  const targeted = new Set([...css.matchAll(/\[data-ui="([a-z0-9-]+)"/g)].map((m) => m[1] as string))
+  const orphans = [...targeted].filter((name) => !emitted.has(name)).sort()
+  assert.deepEqual(orphans, [], 'a rule outlived the component that emitted its hook')
+})
+
+test('design tokens: the cascade order is declared before the first stylesheet', () => {
+  // `@layer a, b, c;` is what fixes precedence; without it the order is whatever
+  // first-appearance across the loaded stylesheets happens to be, and `ket.theme`
+  // outranked `ket.app` on every backend page purely because admin.css linked first.
+  const rendered = renderToString(
+    ketDocument({
+      lang: 'vi',
+      title: 'x',
+      head: html2`<link rel="stylesheet" href="/a.css">`,
+      body: html2``,
+    }),
+  )
+  const order = rendered.indexOf(LAYER_ORDER_CSS)
+  assert.ok(order > 0, 'every document declares the layer order')
+  assert.ok(order < rendered.indexOf('/a.css'), 'before any stylesheet can define a layer')
+  assert.equal(LAYER_ORDER_CSS, '@layer ket.reset, ket.theme, ket.app, ket.user;')
+})
+
+test('design tokens: no rule sits outside a cascade layer, where it outranks ket.user', () => {
+  // Unlayered CSS beats every layer, including the one the design handoff promises
+  // always wins. Seventy-nine lines of mobile shell rules used to sit out here.
+  for (const path of [...STYLESHEETS, ...MODULE_STYLESHEETS]) {
+    const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    let depth = 0
+    for (const [index, line] of source.split('\n').entries()) {
+      const text = line.trim()
+      if (depth === 0 && text && !text.startsWith('@layer '))
+        assert.fail(`${path}:${index + 1} is outside a cascade layer, so it outranks ket.user\n  ${text}`)
+      depth += (line.match(/{/g)?.length ?? 0) - (line.match(/}/g)?.length ?? 0)
+    }
+  }
+})
+
+test('routes: the segment after /admin names the app, so a path says where it lives', () => {
+  // Two conventions used to run side by side: /admin/crm/cases said which app it
+  // belonged to, /admin/transfers and /admin/accounts did not — and website_backend
+  // used both, with pages and posts namespaced and forms, media, menus, sites and
+  // taxonomies flat. A reader could not tell what owned a screen from its URL, and
+  // /admin/pages and /admin/website/pages were two page lists in two apps.
+  const APPS = new Set([
+    // one per root menu entry
+    'accounting',
+    'activities',
+    'attendance',
+    'calendar',
+    'crm',
+    'hospitality',
+    'hr',
+    'inbound-email',
+    'inbox',
+    'loyalty',
+    'oauth',
+    'outbox',
+    'partner',
+    'pos',
+    'pricing',
+    'product',
+    'purchase',
+    'reports',
+    'sales',
+    'stock',
+    'website',
+    // and the administration app's own screens, which sit directly under /admin
+    'apps',
+    'settings',
+    'profile',
+    'context',
+    'addresses',
+    'companies',
+    'users',
+    'roles',
+    'permission-presets',
+  ])
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const stray = Object.keys(manifest.routes)
+    .filter((path) => path === '/admin' || path.startsWith('/admin/'))
+    .filter((path) => {
+      const app = path.split('/')[2]
+      return app !== undefined && !APPS.has(app)
+    })
+    .sort()
+  assert.deepEqual(stray, [], 'a backend path must start with the app it belongs to')
+})
+
+test('sidebar: every menu entry says where it goes in the list', () => {
+  // Without `sequence` an entry falls to 100 and ties with every other one, and the
+  // tie-break is the label — so a Vietnamese menu came out in the order its English
+  // message keys happened to sort in. Purchasing read Đơn mua · RFQ · Bảng giá,
+  // which is the workflow backwards.
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const entries = Object.entries(manifest.menus)
+  assert.deepEqual(
+    entries
+      .filter(([, entry]) => entry.sequence === undefined)
+      .map(([id]) => id)
+      .sort(),
+    [],
+    'an entry with no sequence is an entry nobody decided the position of',
+  )
+
+  const bySibling = new Map<string, Map<number, string[]>>()
+  for (const [id, entry] of entries) {
+    const siblings = bySibling.get(entry.parent ?? '') ?? new Map()
+    siblings.set(entry.sequence as number, [...(siblings.get(entry.sequence as number) ?? []), id])
+    bySibling.set(entry.parent ?? '', siblings)
+  }
+  const tied = [...bySibling.values()]
+    .flatMap((siblings) => [...siblings.values()])
+    .filter((ids) => ids.length > 1)
+  assert.deepEqual(tied, [], 'two entries at one position leave the order to registration order')
+})
+
+test('sidebar: equal sequences fall back to the language being read, not the message key', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const order = (locale: string) =>
+    buildMenu(manifest, {
+      translate: (key) => translator(manifest, locale)(key),
+      locale,
+    }).map((node) => node.label)
+  // Vietnamese and English disagree about where "Bán hàng"/"Sales" sits relative to
+  // its neighbours, which is the whole point: the reader's alphabet decides.
+  assert.notDeepEqual(order('vi'), order('en'))
+  assert.ok(order('vi').every((label) => !label.startsWith('menu.')))
 })
 
 test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
@@ -514,16 +690,16 @@ test('backend layout: framed list and form screens share the accounting workspac
   assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
 
   const rich = renderToString(
-    framed(
-      _,
-      'Record',
-      {},
-      recordWorkspace({
+    Framed({
+      translator: _,
+      title: 'Record',
+      frame: {},
+      body: recordWorkspace({
         title: 'Record identity',
         imageFallback: icon('package'),
         body: surface({ body: 'Record body' }),
       }),
-    ),
+    }),
   )
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
   assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
@@ -562,14 +738,7 @@ test('backend responder: a fragment request never renders document infrastructur
 })
 
 test('design tokens: every admin role used by components is declared', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
   const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
@@ -594,6 +763,98 @@ test('design tokens: status surfaces stay fixed across light and dark themes', (
       `${name} is a self-contained status surface, not a theme role`,
     )
   }
+})
+
+test('ui kit: every PascalCase export takes the one props object JSX hands it', async () => {
+  // A positional helper exported under a JSX name is a trap: `<Stack items={…} />`
+  // would hand `stack(items, gap)` a props object where it wants a list, and the
+  // page renders empty rather than failing. So the entry rule for the PascalCase
+  // block is arity one.
+  const kit = (await import('@ketvietlab/ketsuite/ui')) as unknown as Record<string, unknown>
+  const wrong = Object.entries(kit)
+    .filter(([name]) => /^[A-Z][a-zA-Z]*$/.test(name))
+    .filter(([, value]) => typeof value === 'function')
+    .filter(([, value]) => (value as (...args: unknown[]) => unknown).length !== 1)
+    .map(([name]) => name)
+    .sort()
+  assert.deepEqual(wrong, [], 'a JSX component takes props, not a positional argument list')
+})
+
+test('ui contract: an island control carries the same hook a form control does', () => {
+  // An island's markup is behaviour, so it lives in a browser file rather than in
+  // the kit — but the control inside it is still a control. Three of them wrote
+  // their own: a heavier border, and no focus ring, no disabled state, no invalid
+  // state. `<input type="datetime-local">` with no `data-ui` at all got whatever a
+  // descendant selector two files away happened to say.
+  const bare: string[] = []
+  for (const path of globSync('packages/ketsuite/src/**/client/*.mjs')) {
+    // the storefront search island is on ui-audit's pending list, markup and all
+    if (path.includes('website_search')) continue
+    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+      for (const match of line.matchAll(/<(input|select|textarea)\s[^>]*>/g)) {
+        if (match[0].includes('data-ui=') || match[0].includes('type="hidden"')) continue
+        bare.push(`${path}:${index + 1} ${match[0].slice(0, 60)}`)
+      }
+    }
+  }
+  assert.deepEqual(bare, [], 'an island control needs data-ui="form-control", like every other control')
+})
+
+test('design tokens: the native date picker glyph follows the theme', () => {
+  // The browser draws the calendar and clock marks itself, in its own colour, which
+  // on a dark canvas is a dark mark on a dark field. It is a bitmap: invertible,
+  // not recolourable.
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  assert.match(css, /::-webkit-calendar-picker-indicator[\s\S]*?filter: invert\(var\(--admin-picker-invert/)
+  assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
+})
+
+test('backend layout: a framed screen names itself once, and not with a placeholder', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const vi = translator(manifest, 'vi')
+  const menu = buildMenu(manifest, {
+    translate: (key) => vi(key),
+    locale: 'vi',
+    active: '/admin/stock/transfers',
+  })
+  const framed = renderToString(
+    Framed({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
+  )
+  // The title was printed twice — once in the bar, once in the heading a line below.
+  assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
+  assert.equal(framed.match(/data-ui="record-heading"/g)?.length, 1)
+  // And the header was a title beside a placeholder grid icon and nothing else.
+  assert.match(framed, /data-ui="record-kicker"[^>]*>(?:<!--k\[-->)?Kho/)
+
+  // A list keeps its toolbar; it just stops naming the page twice.
+  const listed = renderToString(
+    Framed({
+      translator: vi,
+      title: 'Điều chuyển',
+      frame: { menu, chrome: { create: { label: 'Mới', path: '/x' } } },
+      body: surface({ body: 'x' }),
+    }),
+  )
+  assert.match(listed, /data-ui="chrome-create"/)
+  assert.equal(listed.match(/data-ui="title"/g), null)
+
+  // The apps screen has no heading of its own, so the bar is still where it says it.
+  assert.match(renderToString(appsScreen(_, [app()], { menu: MENU })), /data-ui="title"/)
+})
+
+test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
+  // As a plain grid item the sidebar stretched to the shell's row — the content's
+  // height — so on a long list the systray, the message and activity counts and the
+  // settings link sat hundreds of pixels below the fold. It is the window's height
+  // and it sticks; `sidebar-nav` takes the overflow inside it.
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /position:\s*sticky;/)
+  assert.match(rule, /inset-block-start:\s*0;/)
+  assert.match(rule, /block-size:\s*100dvh;/)
+  assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
+  assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
 test('design density: desktop controls share the 28px operational height', () => {
