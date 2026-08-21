@@ -39,6 +39,10 @@ const document = async (
 const redirect = (result: unknown, ok: string) =>
   (result as { ok?: boolean }).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
+const localeSuffix = (url: URL) => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -283,7 +287,7 @@ const vi = {
   'bills.title': 'Hoá đơn nhà cung cấp',
   empty: 'Chưa có dữ liệu.',
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
-  'action.createRfq': 'Tạo RFQ',
+  'action.createRfq': 'Tạo yêu cầu báo giá',
   'action.addLine': 'Thêm dòng',
   'action.send': 'Đánh dấu đã gửi',
   'action.confirm': 'Xác nhận đơn',
@@ -476,12 +480,18 @@ export default defineModule({
       async (url, req) =>
         req.method === 'GET'
           ? document(ctx, url, req, 'purchase_backend.dashboard.title', async (_, shell) =>
-              dashboard(_, (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[], shell),
+              dashboard(
+                _,
+                (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
+                shell,
+                localeSuffix(url),
+              ),
             )
           : text('GET', { status: 405 }),
     '/admin/purchase/rfqs':
       (ctx): Route =>
       async (url, req) => {
+        const rfqPath = `/admin/purchase/rfqs${localeSuffix(url)}`
         if (req.method === 'POST') {
           const form = await readForm(req)
           const result = await ctx.call(
@@ -498,7 +508,7 @@ export default defineModule({
             url,
             req,
           )
-          return redirect(result, '/admin/purchase/rfqs')
+          return redirect(result, rfqPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [orders, data] = await Promise.all([
@@ -519,6 +529,7 @@ export default defineModule({
             frame: shell,
             rows,
             createFields: orderFields(_, data),
+            createAction: rfqPath,
           }),
         )
       },
