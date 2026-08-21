@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import {
   presetsScreen,
   profileScreen,
@@ -13,10 +11,8 @@ import {
   usersScreen,
 } from './screens.tsx'
 import type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens.tsx'
-import { inLocale, localeQuery } from '../backend/screen.ts'
-
-type Req = Parameters<Route>[1]
-type AnyRow = Record<string, unknown>
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -27,25 +23,6 @@ const crossSite = (req: Req): boolean => {
     return true
   }
 }
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
 
 const translatedErrors = (ctx: ServeContext, url: URL, req: Req, result: unknown): string[] => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -124,24 +101,23 @@ const renderUser = async (
   const externalIdentities = await ctx.joint(url, req, 'user_backend:user.external-identities', {
     userId: id,
   })
-  return document(
-    ctx,
-    url,
-    req,
-    row.name,
-    userFormScreen(
-      _,
-      row,
-      {
-        ...options,
-        sessions,
-        ...state,
-        integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
-      },
-      await frameFor(ctx, url, req),
-      localeQuery(url),
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: row.name,
+    translate: false,
+    body: (_, frame) =>
+      userFormScreen(
+        _,
+        row,
+        {
+          ...options,
+          sessions,
+          ...state,
+          integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
+        },
+        frame,
+        localeQuery(url),
+      ),
+  })
 }
 
 const permissionGroups = async (
@@ -176,20 +152,19 @@ const renderRole = async (ctx: ServeContext, url: URL, req: Req, id: string, err
   const _ = ctx.translate(ctx.localeOf(url, req))
   const row = (await ctx.call('user.getRole', { id }, url, req)) as RoleRow | null
   if (!row) return text(_('user_backend.error.roleNotFound'), { status: 404 })
-  return document(
-    ctx,
-    url,
-    req,
-    row.name,
-    roleScreen(
-      _,
-      row,
-      await permissionGroups(ctx, url, req, row.grants ?? []),
-      await frameFor(ctx, url, req),
-      localeQuery(url),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: row.name,
+    translate: false,
+    body: async (_, frame) =>
+      roleScreen(
+        _,
+        row,
+        await permissionGroups(ctx, url, req, row.grants ?? []),
+        frame,
+        localeQuery(url),
+        errors,
+      ),
+  })
 }
 
 const desired = (form: Record<string, string>, prefix: string): string[] =>
@@ -208,13 +183,10 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
       const rows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.users.title'),
-        usersScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url), includeArchived),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.users.title',
+        body: (_, frame) => usersScreen(_, rows, frame, localeQuery(url), includeArchived),
+      })
     },
 
   '/admin/users/new':
@@ -241,28 +213,23 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/users/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('user_backend.users.create'),
-          userFormScreen(
-            _,
-            form as Partial<UserRow>,
-            { ...options, errors: translatedErrors(ctx, url, req, result) },
-            await frameFor(ctx, url, req),
-            localeQuery(url),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'user_backend.users.create',
+          body: (_, frame) =>
+            userFormScreen(
+              _,
+              form as Partial<UserRow>,
+              { ...options, errors: translatedErrors(ctx, url, req, result) },
+              frame,
+              localeQuery(url),
+            ),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.users.create'),
-        userFormScreen(_, {}, options, await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.users.create',
+        body: (_, frame) => userFormScreen(_, {}, options, frame, localeQuery(url)),
+      })
     },
 
   '/admin/users/{id}':
@@ -490,13 +457,10 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.roles.title'),
-        rolesScreen(_, await rolesOf(ctx, url, req), await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.roles.title',
+        body: async (_, frame) => rolesScreen(_, await rolesOf(ctx, url, req), frame, localeQuery(url)),
+      })
     },
 
   '/admin/roles/new':
@@ -514,29 +478,17 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/roles/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('user_backend.roles.create'),
-          roleScreen(
-            _,
-            form,
-            [],
-            await frameFor(ctx, url, req),
-            localeQuery(url),
-            translatedErrors(ctx, url, req, result),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'user_backend.roles.create',
+          body: (_, frame) =>
+            roleScreen(_, form, [], frame, localeQuery(url), translatedErrors(ctx, url, req, result)),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.roles.create'),
-        roleScreen(_, {}, [], await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.roles.create',
+        body: (_, frame) => roleScreen(_, {}, [], frame, localeQuery(url)),
+      })
     },
 
   '/admin/roles/{id}':
@@ -612,13 +564,10 @@ export const routes: Record<string, RouteEntry> = {
         if (!result.ok) return failure(ctx, url, req, result)
         resultText = `${result.roleId}: ${result.granted ?? 0}`
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.presets.title'),
-        presetsScreen(_, modules, await frameFor(ctx, url, req), localeQuery(url), resultText),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.presets.title',
+        body: (_, frame) => presetsScreen(_, modules, frame, localeQuery(url), resultText),
+      })
     },
 
   '/admin/profile':
@@ -633,21 +582,19 @@ export const routes: Record<string, RouteEntry> = {
       if (!row)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.unauthorized'), { status: 401 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      return document(
-        ctx,
-        url,
-        req,
-        _('user_backend.profile.title'),
-        profileScreen(
-          _,
-          row,
-          await sessionRows(ctx, url, req, row.id),
-          await frameFor(ctx, url, req),
-          localeQuery(url),
-          undefined,
-          await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'user_backend.profile.title',
+        body: async (_, frame) =>
+          profileScreen(
+            _,
+            row,
+            await sessionRows(ctx, url, req, row.id),
+            frame,
+            localeQuery(url),
+            undefined,
+            await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
+          ),
+      })
     },
 
   '/admin/profile/password':
@@ -684,21 +631,19 @@ export const routes: Record<string, RouteEntry> = {
             status: 401,
           })
         const _ = ctx.translate(ctx.localeOf(url, req))
-        return document(
-          ctx,
-          url,
-          req,
-          _('user_backend.profile.title'),
-          profileScreen(
-            _,
-            row,
-            await sessionRows(ctx, url, req, row.id),
-            await frameFor(ctx, url, req),
-            localeQuery(url),
-            translatedErrors(ctx, url, req, result),
-            await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'user_backend.profile.title',
+          body: async (_, frame) =>
+            profileScreen(
+              _,
+              row,
+              await sessionRows(ctx, url, req, row.id),
+              frame,
+              localeQuery(url),
+              translatedErrors(ctx, url, req, result),
+              await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
+            ),
+        })
       }
       await sessions.endUserExcept(record.userId, record.id)
       const context: SessionContext = {

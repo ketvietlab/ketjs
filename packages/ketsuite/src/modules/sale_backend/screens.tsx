@@ -18,14 +18,12 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
+import { localized, selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
-export const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? ''),
-    key = `sale_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable sale code in the reader's language; the code itself survives as data. */
+export const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'sale_backend', group, value)
 const pathOf = (order: AnyRow) =>
   ['draft', 'sent'].includes(String(order.state))
     ? `/admin/sales/quotations/${String(order.id)}`

@@ -9,6 +9,7 @@ import {
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 type ProductCreateOptions = {
   uoms: FormOption[]
@@ -17,11 +18,9 @@ type ProductCreateOptions = {
   errors?: string[]
 }
 
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `product_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable product code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'product_backend', group, value)
 
 export const newProductScreen = (
   _: Translator,

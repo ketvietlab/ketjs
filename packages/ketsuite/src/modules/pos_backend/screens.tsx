@@ -17,14 +17,13 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 const empty = (_: Translator) => emptyState(_('pos_backend.empty'), _('pos_backend.emptyHint'))
-export const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? ''),
-    key = `pos_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable pos code in the reader's language; the code itself survives as data. */
+export const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'pos_backend', group, value)
 
 export const dashboard = (
   _: Translator,

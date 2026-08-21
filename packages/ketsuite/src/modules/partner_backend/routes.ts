@@ -1,35 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
 import { partnerRelationControl } from './relation-control.ts'
-import { inLocale } from '../backend/screen.ts'
-
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
+import { adminPage, inLocale } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
   (
@@ -195,19 +172,18 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     id,
     Array.isArray(row.addresses) ? (row.addresses as AnyRow[]) : [],
   )
-  return document(
-    ctx,
-    url,
-    req,
-    String(row.name),
-    partnerDetailScreen(
-      _,
-      row as never,
-      { parents, terms: terms as never, errors, integration, addressForms, parentControl },
-      await frameFor(ctx, url, req),
-      url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: String(row.name),
+    translate: false,
+    body: (_, frame) =>
+      partnerDetailScreen(
+        _,
+        row as never,
+        { parents, terms: terms as never, errors, integration, addressForms, parentControl },
+        frame,
+        url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+      ),
+  })
 }
 
 const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Record<string, string>) =>
@@ -249,39 +225,36 @@ export const routes: Record<string, RouteEntry> = {
         ) as Promise<AnyRow[]>,
         ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
       ])
-      const frame = await frameFor(ctx, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('partner_backend.screen.title'),
-        partnersScreen(
-          _,
-          rows as never,
-          {
-            ...frame,
-            chrome: {
-              search: {
-                name: 'q',
-                value: search ?? '',
-                placeholder: _('partner_backend.chrome.search'),
-                keep: {
-                  ...(role ? { role } : {}),
-                  ...(includeArchived ? { archived: '1' } : {}),
-                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+      return adminPage(ctx, url, req, {
+        title: 'partner_backend.screen.title',
+        body: (_, frame) =>
+          partnersScreen(
+            _,
+            rows as never,
+            {
+              ...frame,
+              chrome: {
+                search: {
+                  name: 'q',
+                  value: search ?? '',
+                  placeholder: _('partner_backend.chrome.search'),
+                  keep: {
+                    ...(role ? { role } : {}),
+                    ...(includeArchived ? { archived: '1' } : {}),
+                    ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                  },
+                  facets: role
+                    ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
+                    : [],
                 },
-                facets: role
-                  ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
-                  : [],
+                pager: pager(url, current, rows.length, total.count),
               },
-              pager: pager(url, current, rows.length, total.count),
             },
-          },
-          {},
-          url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-          includeArchived,
-        ),
-      )
+            {},
+            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            includeArchived,
+          ),
+      })
     },
 
   '/admin/partners/new':
@@ -295,40 +268,38 @@ export const routes: Record<string, RouteEntry> = {
         const result = await savePartner(ctx, url, req, id, form)
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${id}`))
         const parents = await partnerOptions(ctx, url, req)
-        return document(
-          ctx,
-          url,
-          req,
-          _('partner_backend.create.title'),
-          newPartnerScreen(
-            _,
-            parents,
-            await frameFor(ctx, url, req),
-            translatedErrors(result, _),
-            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-            await parentControlFor(ctx, url, req, _, parents, {
-              id: 'partner-parent-new',
-              value: form.parentId,
-            }),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'partner_backend.create.title',
+          body: async (_, frame) =>
+            newPartnerScreen(
+              _,
+              parents,
+              frame,
+              translatedErrors(result, _),
+              url.searchParams.get('lang')
+                ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+                : '',
+              await parentControlFor(ctx, url, req, _, parents, {
+                id: 'partner-parent-new',
+                value: form.parentId,
+              }),
+            ),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const parents = await partnerOptions(ctx, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('partner_backend.create.title'),
-        newPartnerScreen(
-          _,
-          parents,
-          await frameFor(ctx, url, req),
-          undefined,
-          url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-          await parentControlFor(ctx, url, req, _, parents, { id: 'partner-parent-new' }),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'partner_backend.create.title',
+        body: async (_, frame) =>
+          newPartnerScreen(
+            _,
+            parents,
+            frame,
+            undefined,
+            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            await parentControlFor(ctx, url, req, _, parents, { id: 'partner-parent-new' }),
+          ),
+      })
     },
 
   '/admin/partners/{id}':

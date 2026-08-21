@@ -10,6 +10,7 @@ import {
   stack,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 export type StockRow = {
   id: string
@@ -20,11 +21,9 @@ export type StockRow = {
   href?: string | null
 }
 
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `stock_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable stock code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'stock_backend', group, value)
 
 const columns = (_: Translator): Array<Column<StockRow>> => [
   {

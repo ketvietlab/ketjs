@@ -19,16 +19,15 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 
 const empty = (_: Translator) => emptyState(_('loyalty_backend.empty.title'), _('loyalty_backend.empty.hint'))
 
-const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? '')
-  const key = `loyalty_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable loyalty code in the reader's language; the code itself survives as data. */
+const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'loyalty_backend', group, value)
 
 const activeBadge = (_: Translator, active: unknown) =>
   active

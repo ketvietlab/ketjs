@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
 import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
@@ -14,34 +12,10 @@ import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
 import { dashboard, labelOf } from './screens.tsx'
-import { localeQuery } from '../backend/screen.ts'
+import { adminPage, choices, frameOf, localeQuery, optional } from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 
-type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Frame> => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Parameters<Route>[1],
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-) => {
-  const lang = ctx.localeOf(url, req),
-    _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(title),
-    body: await body(_, await frame(ctx, url, req)),
-  })
-}
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
 const callIfInstalled = async (
@@ -52,16 +26,8 @@ const callIfInstalled = async (
   fallback: string,
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
-const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
 const orderPath = (order: AnyRow, url: URL) =>
   `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeQuery(url)}`
-const choices = (rows: AnyRow[], empty = false) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((r) => ({
-    value: String(r.id),
-    label: `${String(r.code ?? '')}${r.code ? ' · ' : ''}${String(r.name)}`,
-  })),
-]
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, warehouses, pricelists, taxes, journals, accounts, terms] =
     await Promise.all([
@@ -343,7 +309,7 @@ const detail =
             }),
         errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
       },
-      savedPartial ? {} : await frame(ctx, url, req),
+      savedPartial ? {} : await frameOf(ctx, url, req),
       savedPartial,
     )
     if (savedPartial)
@@ -663,14 +629,16 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) =>
         req.method === 'GET'
-          ? document(ctx, url, req, 'sale_backend.dashboard.title', async (_, shell) =>
-              dashboard(
-                _,
-                (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
-                shell,
-                localeQuery(url),
-              ),
-            )
+          ? adminPage(ctx, url, req, {
+              title: 'sale_backend.dashboard.title',
+              body: async (_, shell) =>
+                dashboard(
+                  _,
+                  (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
+                  shell,
+                  localeQuery(url),
+                ),
+            })
           : text('GET', { status: 405 }),
     '/admin/sales/quotations':
       (ctx): Route =>
@@ -705,18 +673,20 @@ export default defineModule({
           ]),
           state = url.searchParams.get('state'),
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
-        return document(ctx, url, req, 'sale_backend.quotations.title', async (_, shell) =>
-          quotationsScreen(_, {
-            frame: shell,
-            fields: await orderFields(ctx, url, req, _, d),
-            rows: rows
-              .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
-              .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-            action: quotationPath,
-            detailSuffix,
-            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.quotations.title',
+          body: async (_, shell) =>
+            quotationsScreen(_, {
+              frame: shell,
+              fields: await orderFields(ctx, url, req, _, d),
+              rows: rows
+                .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
+                .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              action: quotationPath,
+              detailSuffix,
+              errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+            }),
+        })
       },
     '/admin/sales/orders':
       (ctx): Route =>
@@ -728,13 +698,15 @@ export default defineModule({
             common(ctx, url, req),
           ]),
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
-        return document(ctx, url, req, 'sale_backend.orders.title', (_, shell) =>
-          salesOrdersScreen(_, {
-            frame: shell,
-            rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-            detailSuffix,
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.orders.title',
+          body: (_, shell) =>
+            salesOrdersScreen(_, {
+              frame: shell,
+              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              detailSuffix,
+            }),
+        })
       },
     '/admin/sales/quotations/{id}': detail,
     '/admin/sales/orders/{id}': detail,
@@ -757,30 +729,32 @@ export default defineModule({
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[],
           _ = ctx.translate(ctx.localeOf(url, req))
-        return document(ctx, url, req, 'sale_backend.policies.title', (_, shell) =>
-          invoicingPoliciesScreen(_, {
-            frame: shell,
-            action: `/admin/sales/invoicing-policies${localeQuery(url)}`,
-            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-            fields: [
-              {
-                name: 'templateId',
-                label: _('sale_backend.field.product'),
-                type: 'select',
-                options: choices(rows),
-                required: true,
-              },
-              {
-                name: 'invoicePolicy',
-                label: _('sale_backend.field.invoicePolicy'),
-                type: 'radio',
-                options: INVOICE_POLICIES.map((v) => ({ value: v, label: labelOf(_, 'invoicePolicy', v) })),
-                required: true,
-              },
-            ],
-            rows,
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.policies.title',
+          body: (_, shell) =>
+            invoicingPoliciesScreen(_, {
+              frame: shell,
+              action: `/admin/sales/invoicing-policies${localeQuery(url)}`,
+              errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+              fields: [
+                {
+                  name: 'templateId',
+                  label: _('sale_backend.field.product'),
+                  type: 'select',
+                  options: choices(rows),
+                  required: true,
+                },
+                {
+                  name: 'invoicePolicy',
+                  label: _('sale_backend.field.invoicePolicy'),
+                  type: 'radio',
+                  options: INVOICE_POLICIES.map((v) => ({ value: v, label: labelOf(_, 'invoicePolicy', v) })),
+                  required: true,
+                },
+              ],
+              rows,
+            }),
+        })
       },
   },
   messages: { vi, en },

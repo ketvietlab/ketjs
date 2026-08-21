@@ -1,53 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
-import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
+import { actionGroup, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
-import { localeQuery } from '../backend/screen.ts'
+import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 
-type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Frame> => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Parameters<Route>[1],
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-) => {
-  const lang = ctx.localeOf(url, req),
-    _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(title),
-    body: await body(_, await frame(ctx, url, req)),
-  })
-}
 const redirect = (result: unknown, ok: string) =>
   (result as { ok?: boolean }).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
-const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
-const choices = (rows: AnyRow[], empty = false) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((row) => ({
-    value: String(row.id),
-    label: `${String(row.code ?? '')}${row.code ? ' · ' : ''}${String(row.name)}`,
-  })),
-]
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, pickingTypes, taxes, journals, accounts] = await Promise.all([
@@ -268,26 +234,28 @@ const detailHandler =
     const printable = (await ctx.reportsOf(url, req, 'purchase.Order')).filter(
       (report) => report.id === reportId,
     )
-    return document(ctx, url, req, 'purchase_backend.detail.title', (_, shell) =>
-      orderDetail(_, {
-        frame: shell,
-        order: { ...order, partnerName: vendor?.name },
-        actionPath: path,
-        lineFields,
-        billFields,
-        printActions: printable.length
-          ? actionGroup({
-              label: 'Print',
-              actions: printable.map((report) =>
-                linkButton({
-                  label: _(report.title),
-                  href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
-                }),
-              ),
-            })
-          : undefined,
-      }),
-    )
+    return adminPage(ctx, url, req, {
+      title: 'purchase_backend.detail.title',
+      body: (_, shell) =>
+        orderDetail(_, {
+          frame: shell,
+          order: { ...order, partnerName: vendor?.name },
+          actionPath: path,
+          lineFields,
+          billFields,
+          printActions: printable.length
+            ? actionGroup({
+                label: 'Print',
+                actions: printable.map((report) =>
+                  linkButton({
+                    label: _(report.title),
+                    href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
+                  }),
+                ),
+              })
+            : undefined,
+        }),
+    })
   }
 
 const vi = {
@@ -513,14 +481,16 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) =>
         req.method === 'GET'
-          ? document(ctx, url, req, 'purchase_backend.dashboard.title', async (_, shell) =>
-              dashboard(
-                _,
-                (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
-                shell,
-                localeQuery(url),
-              ),
-            )
+          ? adminPage(ctx, url, req, {
+              title: 'purchase_backend.dashboard.title',
+              body: async (_, shell) =>
+                dashboard(
+                  _,
+                  (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
+                  shell,
+                  localeQuery(url),
+                ),
+            })
           : text('GET', { status: 405 }),
     '/admin/purchase/rfqs':
       (ctx): Route =>
@@ -557,15 +527,17 @@ export default defineModule({
               ['draft', 'sent', 'to approve'].includes(String(row.state)) && (!state || row.state === state),
           )
           .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
-        return document(ctx, url, req, 'purchase_backend.rfqs.title', async (_, shell) =>
-          ordersScreen(_, {
-            title: _('purchase_backend.rfqs.title'),
-            frame: shell,
-            rows,
-            createFields: await orderFields(ctx, url, req, _, data),
-            createAction: rfqPath,
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'purchase_backend.rfqs.title',
+          body: async (_, shell) =>
+            ordersScreen(_, {
+              title: _('purchase_backend.rfqs.title'),
+              frame: shell,
+              rows,
+              createFields: await orderFields(ctx, url, req, _, data),
+              createAction: rfqPath,
+            }),
+        })
       },
     '/admin/purchase/orders':
       (ctx): Route =>
@@ -576,13 +548,15 @@ export default defineModule({
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
-        return document(ctx, url, req, 'purchase_backend.orders.title', (_, shell) =>
-          ordersScreen(_, {
-            title: _('purchase_backend.orders.title'),
-            frame: shell,
-            rows: orders.map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) })),
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'purchase_backend.orders.title',
+          body: (_, shell) =>
+            ordersScreen(_, {
+              title: _('purchase_backend.orders.title'),
+              frame: shell,
+              rows: orders.map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) })),
+            }),
+        })
       },
     '/admin/purchase/rfqs/{id}': detailHandler,
     '/admin/purchase/orders/{id}': detailHandler,
@@ -695,19 +669,21 @@ export default defineModule({
             options: PURCHASE_METHODS.map((value) => ({ value, label: labelOf(_, 'purchaseMethod', value) })),
           },
         ]
-        return document(ctx, url, req, 'purchase_backend.pricelists.title', (_, shell) =>
-          supplierInfoScreen(_, {
-            frame: shell,
-            currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
-            fields,
-            methodFields,
-            rows: rows.map((row) => ({
-              ...row,
-              partnerName: vendors.get(String(row.partnerId)),
-              productNameDisplay: templates.get(String(row.productTemplateId)),
-            })),
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'purchase_backend.pricelists.title',
+          body: (_, shell) =>
+            supplierInfoScreen(_, {
+              frame: shell,
+              currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
+              fields,
+              methodFields,
+              rows: rows.map((row) => ({
+                ...row,
+                partnerName: vendors.get(String(row.partnerId)),
+                productNameDisplay: templates.get(String(row.productTemplateId)),
+              })),
+            }),
+        })
       },
   },
   messages: { vi, en },

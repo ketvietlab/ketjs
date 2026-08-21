@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   branchFormScreen,
@@ -12,29 +10,8 @@ import {
   hierarchyScreen,
 } from './screens.tsx'
 import type { BranchRow, CompanyRow } from './screens.tsx'
-import { inLocale, localeQuery } from '../backend/screen.ts'
-
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -68,19 +45,12 @@ const renderCompany = async (ctx: ServeContext, url: URL, req: Req, id: string, 
   const _ = ctx.translate(ctx.localeOf(url, req))
   const [row, form] = await Promise.all([companyOf(ctx, url, req, id), dataForCompanyForm(ctx, url, req, id)])
   if (!row) return text(_('company_backend.error.notFound'), { status: 404 })
-  return document(
-    ctx,
-    url,
-    req,
-    row.name,
-    companyFormScreen(
-      _,
-      row,
-      { ...form, branches: row.branches, errors },
-      await frameFor(ctx, url, req),
-      localeQuery(url),
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: row.name,
+    translate: false,
+    body: (_, frame) =>
+      companyFormScreen(_, row, { ...form, branches: row.branches, errors }, frame, localeQuery(url)),
+  })
 }
 
 const saveCompany = (ctx: ServeContext, url: URL, req: Req, id: string, form: Record<string, string>) =>
@@ -120,16 +90,15 @@ const renderBranch = async (ctx: ServeContext, url: URL, req: Req, id: string, e
   const parents = held.company.branches
     .filter((branch) => branch.id !== id && branch.active)
     .map((branch) => ({ value: branch.id, label: branch.name }))
-  return document(
-    ctx,
-    url,
-    req,
-    held.branch.name,
-    branchFormScreen(_, held.company, held.branch, parents, await frameFor(ctx, url, req), {
-      errors,
-      locale: localeQuery(url),
-    }),
-  )
+  return adminPage(ctx, url, req, {
+    title: held.branch.name,
+    translate: false,
+    body: (_, frame) =>
+      branchFormScreen(_, held.company, held.branch, parents, frame, {
+        errors,
+        locale: localeQuery(url),
+      }),
+  })
 }
 
 const crossSite = (req: Req): boolean => {
@@ -150,13 +119,10 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
       const rows = (await ctx.call('company.listCompanies', { includeArchived }, url, req)) as CompanyRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('company_backend.screen.title'),
-        companiesScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url), includeArchived),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'company_backend.screen.title',
+        body: (_, frame) => companiesScreen(_, rows, frame, localeQuery(url), includeArchived),
+      })
     },
 
   '/admin/companies/new':
@@ -169,28 +135,23 @@ export const routes: Record<string, RouteEntry> = {
         const id = randomUUID()
         const result = await saveCompany(ctx, url, req, id, form)
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/companies/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('company_backend.create.title'),
-          companyFormScreen(
-            _,
-            form as never,
-            { ...options, errors: translatedErrors(result, _) },
-            await frameFor(ctx, url, req),
-            localeQuery(url),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'company_backend.create.title',
+          body: (_, frame) =>
+            companyFormScreen(
+              _,
+              form as never,
+              { ...options, errors: translatedErrors(result, _) },
+              frame,
+              localeQuery(url),
+            ),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('company_backend.create.title'),
-        companyFormScreen(_, {}, options, await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'company_backend.create.title',
+        body: (_, frame) => companyFormScreen(_, {}, options, frame, localeQuery(url)),
+      })
     },
 
   '/admin/companies/hierarchy':
@@ -218,13 +179,10 @@ export const routes: Record<string, RouteEntry> = {
         }
       }
       walk('', 0)
-      return document(
-        ctx,
-        url,
-        req,
-        _('company_backend.hierarchy.title'),
-        hierarchyScreen(_, rows, await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'company_backend.hierarchy.title',
+        body: (_, frame) => hierarchyScreen(_, rows, frame, localeQuery(url)),
+      })
     },
 
   '/admin/companies/{id}':
@@ -289,34 +247,30 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/branches/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('company_backend.branch.createTitle'),
-          branchFormScreen(_, company, form as never, parents, await frameFor(ctx, url, req), {
-            errors: translatedErrors(result, _),
-            locale: localeQuery(url),
-          }),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'company_backend.branch.createTitle',
+          body: (_, frame) =>
+            branchFormScreen(_, company, form as never, parents, frame, {
+              errors: translatedErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('company_backend.branch.createTitle'),
-        branchFormScreen(
-          _,
-          company,
-          { parentId: company.branches.find((branch) => branch.isRoot)?.id },
-          parents,
-          await frameFor(ctx, url, req),
-          {
-            locale: localeQuery(url),
-          },
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'company_backend.branch.createTitle',
+        body: (_, frame) =>
+          branchFormScreen(
+            _,
+            company,
+            { parentId: company.branches.find((branch) => branch.isRoot)?.id },
+            parents,
+            frame,
+            {
+              locale: localeQuery(url),
+            },
+          ),
+      })
     },
 
   '/admin/branches/{id}':
@@ -389,26 +343,23 @@ export const routes: Record<string, RouteEntry> = {
           }>
         }
         const render = (errors?: string[]) =>
-          document(
-            ctx,
-            url,
-            req,
-            _('company_backend.context.title'),
-            contextScreen(
-              _,
-              {
-                ...options,
-                selectedCompanies: record.companies,
-                selectedBranches: record.branches ?? options.branches.map((branch) => branch.id),
-                companyId: record.company ?? '',
-                branchId: record.branch ?? '',
-                errors,
-              },
-              awaitFrame,
-              localeQuery(url),
-            ),
-          )
-        const awaitFrame = await frameFor(ctx, url, req)
+          adminPage(ctx, url, req, {
+            title: 'company_backend.context.title',
+            body: (_, frame) =>
+              contextScreen(
+                _,
+                {
+                  ...options,
+                  selectedCompanies: record.companies,
+                  selectedBranches: record.branches ?? options.branches.map((branch) => branch.id),
+                  companyId: record.company ?? '',
+                  branchId: record.branch ?? '',
+                  errors,
+                },
+                frame,
+                localeQuery(url),
+              ),
+          })
         if (req.method === 'GET') return render()
         if (req.method !== 'POST') return text('GET or POST', { status: 405 })
         if (crossSite(req)) return text('Forbidden', { status: 403 })

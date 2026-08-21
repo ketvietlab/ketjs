@@ -14,14 +14,13 @@ import {
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 export type PricelistRow = { id: string; name: string; currency: string; state: string; sequence: string }
 
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `pricing_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable pricing code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'pricing_backend', group, value)
 
 export const pricelistsScreen = (
   _: Translator,

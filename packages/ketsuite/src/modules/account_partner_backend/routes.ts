@@ -1,14 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountingTermsScreen } from './screens.tsx'
-import { backendPage } from '../../ui/index.ts'
-import { inLocale } from '../backend/screen.ts'
-
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
+import { adminPage, inLocale } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
@@ -29,28 +25,20 @@ const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, 
       .filter((row) => row.accountType === 'liability_payable')
       .map((row) => ({ value: String(row.id), label: `${row.code} · ${row.name}` })),
   }
-  const title = _('account_partner_backend.screen.title', { name: String(partner.name) })
-  return backendPage(ctx, req, {
-    lang,
-    title,
-    body: accountingTermsScreen(
-      _,
-      partner as never,
-      terms as never,
-      options,
-      {
-        navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-        viewer: await viewerOf(ctx, url, req),
-        menu: await ctx.menu(url, req),
-        extras: {
-          'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-          'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-        },
-      },
-      inLocale(url, `/admin/partners/${partnerId}/accounting`),
-      inLocale(url, `/admin/partners/${partnerId}`),
-      errors,
-    ),
+  return adminPage(ctx, url, req, {
+    title: _('account_partner_backend.screen.title', { name: String(partner.name) }),
+    translate: false,
+    body: (_, frame) =>
+      accountingTermsScreen(
+        _,
+        partner as never,
+        terms as never,
+        options,
+        frame,
+        inLocale(url, `/admin/partners/${partnerId}/accounting`),
+        inLocale(url, `/admin/partners/${partnerId}`),
+        errors,
+      ),
   })
 }
 

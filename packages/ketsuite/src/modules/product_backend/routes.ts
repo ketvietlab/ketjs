@@ -30,14 +30,13 @@ import {
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
-import { timezoneOf, viewerOf } from '../backend/routes.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import type { Extras, SearchMenu, TableGroup } from '../../ui/index.ts'
+import type { SearchMenu, TableGroup } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { productListSearch } from '../product/search.ts'
-import { inLocale, localeQuery } from '../backend/screen.ts'
+import { adminPage, frameOf, inLocale, localeQuery, timezoneOf } from '../backend/screen.ts'
 
 type MediaRow = {
   id: string
@@ -88,22 +87,6 @@ const seeVariant = (
   url: URL,
   tab: VariantDetailTab = variantTabOf(url),
 ) => seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}?tab=${tab}`))
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', {
-            lang: ctx.localeOf(url, req),
-          }),
-  },
-})
 
 const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [units, categories, attributes] = (await Promise.all([
@@ -607,53 +590,42 @@ export const routes: Record<string, RouteEntry> = {
           })
         : undefined
 
-      const extras: Extras = {
-        'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-        'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-        'sidebar.foot':
-          req.headers['x-ket-navigation'] === 'fragment-v1'
-            ? undefined
-            : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
-      }
-      return backendPage(ctx, req, {
-        lang,
+      return adminPage(ctx, url, req, {
         title: 'KetSuite',
-        body: productsScreen(
-          _,
-          rows.map(templateRow),
-          view,
-          {
-            navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-            viewer: await viewerOf(ctx, url, req),
-            extras,
-            menu: await ctx.menu(url, req),
-            menuFilter: url.searchParams.get('menu')?.trim() || null,
-            chrome: {
-              create: {
-                label: _('product_backend.action.create'),
-                path: inLocale(url, '/admin/products/new'),
+        translate: false,
+        body: (_, frame) =>
+          productsScreen(
+            _,
+            rows.map(templateRow),
+            view,
+            {
+              ...frame,
+              chrome: {
+                create: {
+                  label: _('product_backend.action.create'),
+                  path: inLocale(url, '/admin/products/new'),
+                },
+                search: {
+                  name: 'q',
+                  value: state.q ?? '',
+                  placeholder: _('product_backend.chrome.search'),
+                  keep: keepForSearch(url),
+                  facets: productFacets(_, url, state, spec),
+                  menus: productMenus(_, url, state, spec, favorites),
+                },
+                pager: grouped ? null : pager(url, current, rows.length, count),
+                views: VIEWS.map((v) => ({
+                  id: v,
+                  label: _(`backend.chrome.view.${v}`),
+                  icon: v === 'kanban' ? 'layout-grid' : 'list',
+                  path: withParam(url, 'view', v),
+                  active: v === view,
+                })),
               },
-              search: {
-                name: 'q',
-                value: state.q ?? '',
-                placeholder: _('product_backend.chrome.search'),
-                keep: keepForSearch(url),
-                facets: productFacets(_, url, state, spec),
-                menus: productMenus(_, url, state, spec, favorites),
-              },
-              pager: grouped ? null : pager(url, current, rows.length, count),
-              views: VIEWS.map((v) => ({
-                id: v,
-                label: _(`backend.chrome.view.${v}`),
-                icon: v === 'kanban' ? 'layout-grid' : 'list',
-                path: withParam(url, 'view', v),
-                active: v === view,
-              })),
             },
-          },
-          { shown: colsOf(url), colsHref: colsHref(url), groups },
-          localeQuery(url),
-        ),
+            { shown: colsOf(url), colsHref: colsHref(url), groups },
+            localeQuery(url),
+          ),
       })
     },
   '/admin/products/favorites/new':
@@ -688,18 +660,15 @@ export const routes: Record<string, RouteEntry> = {
           state.favoriteId = id
           return seeOther(encodeListState(state, new URL(returnTo, 'http://ket.local')))
         }
-        return backendPage(ctx, req, {
-          lang,
-          title: _('product_backend.favorite.create'),
-          body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeQuery(url), [
-            _('product_backend.favorite.invalid'),
-          ]),
+        return adminPage(ctx, url, req, {
+          title: 'product_backend.favorite.create',
+          body: (_, frame) =>
+            favoriteScreen(_, frame, returnTo, localeQuery(url), [_('product_backend.favorite.invalid')]),
         })
       }
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.favorite.create'),
-        body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeQuery(url)),
+      return adminPage(ctx, url, req, {
+        title: 'product_backend.favorite.create',
+        body: (_, frame) => favoriteScreen(_, frame, returnTo, localeQuery(url)),
       })
     },
   '/admin/products/new':
@@ -742,15 +711,15 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.create.title'),
-        body: newProductScreen(
-          _,
-          { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
-          await frameFor(ctx, url, req),
-          localeQuery(url),
-        ),
+      return adminPage(ctx, url, req, {
+        title: 'product_backend.create.title',
+        body: (_, frame) =>
+          newProductScreen(
+            _,
+            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
+            frame,
+            localeQuery(url),
+          ),
       })
     },
   '/admin/product-attributes':
@@ -781,16 +750,9 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('product.listAttributes', {}, url, req)) as Array<Record<string, unknown>>
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.attributes.title'),
-        body: attributesScreen(
-          _,
-          rows,
-          await frameFor(ctx, url, req),
-          invalidErrors(url, _),
-          localeQuery(url),
-        ),
+      return adminPage(ctx, url, req, {
+        title: 'product_backend.attributes.title',
+        body: (_, frame) => attributesScreen(_, rows, frame, invalidErrors(url, _), localeQuery(url)),
       })
     },
   '/admin/product-attributes/{id}/values':
@@ -965,7 +927,7 @@ export const routes: Record<string, RouteEntry> = {
               resId: row.id,
               lang,
             }),
-        savedPartial ? {} : await frameFor(ctx, url, req),
+        savedPartial ? {} : await frameOf(ctx, url, req),
         localeQuery(url),
         activeTab,
         savedPartial,
@@ -1172,7 +1134,7 @@ export const routes: Record<string, RouteEntry> = {
               resId: params.variantId,
               lang,
             }),
-        savedPartial ? {} : await frameFor(ctx, url, req),
+        savedPartial ? {} : await frameOf(ctx, url, req),
         invalidErrors(url, _),
         localeQuery(url),
         savedPartial

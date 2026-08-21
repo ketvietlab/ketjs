@@ -6,7 +6,6 @@ import type { CatalogRow, DivisionRow } from './screens.tsx'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
-
 const catalogRows = async (ctx: ServeContext, url: URL, req: Req): Promise<CatalogRow[]> => {
   const [available, statuses] = await Promise.all([
     ctx.call('address.availableCatalogs', {}, url, req) as Promise<AnyRow[]>,
