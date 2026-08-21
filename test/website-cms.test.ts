@@ -37,8 +37,11 @@ const boot = async (): Promise<{ db: Adapter; manifest: Manifest }> => {
 
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
+const callAs = async (db: Adapter, actor: string, name: string, input: Record<string, unknown>) =>
+  (await callFn(name, input, { adapter: db, manifest, scope: SCOPE, actor })).value
 
 const layout = [{ type: 'website.rich_text', settings: { heading: 'About', body: 'Independent content.' } }]
+const dateAfter = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
 
 test('cms: content types and taxonomies compose into a discoverable registry', () => {
   assert.deepEqual(Object.keys(manifest.contentTypes).sort(), ['website.page', 'website.post'])
@@ -76,6 +79,70 @@ test('cms: domains resolve isolated sites with their locale and selected KTL the
     theme: 'theme_alt_test',
     tokens: null,
   })
+  assert.equal(await call(db, 'website.resolveSite', { host: 'unknown.example.test' }), null)
+  await db.close()
+})
+
+test('cms hardening: site membership filters reads and blocks cross-tenant ownership changes', async () => {
+  const { db } = await boot()
+  for (const id of ['alpha', 'beta'])
+    await call(db, 'website.saveSite', {
+      id,
+      name: id,
+      title: id.toUpperCase(),
+      defaultLocale: 'en',
+      theme: 'theme_paper',
+    })
+  await call(db, 'website.saveSiteMember', {
+    id: 'alpha:alice',
+    siteId: 'alpha',
+    userId: 'alice',
+    role: 'administrator',
+  })
+  await call(db, 'website.saveSiteMember', {
+    id: 'beta:bob',
+    siteId: 'beta',
+    userId: 'bob',
+    role: 'editor',
+  })
+  assert.deepEqual(
+    ((await callAs(db, 'alice', 'website.listSites', {})) as Array<{ id: string }>).map((site) => site.id),
+    ['alpha'],
+  )
+  assert.equal(
+    ((await callAs(db, 'alice', 'website.listSiteMembers', { siteId: 'alpha' })) as unknown[]).length,
+    1,
+  )
+  assert.deepEqual(await callAs(db, 'bob', 'website.listSiteMembers', { siteId: 'alpha' }), [])
+  const lastAdmin = (await callAs(db, 'alice', 'website.removeSiteMember', {
+    id: 'alpha:alice',
+  })) as { ok: boolean; errors: Array<{ message: string }> }
+  assert.equal(lastAdmin.ok, false)
+  assert.equal(lastAdmin.errors[0]?.message, 'website.error.lastAdministrator')
+  const created = (await callAs(db, 'alice', 'website.saveEntry', {
+    id: 'alpha-page',
+    siteId: 'alpha',
+    type: 'website.page',
+    slug: 'alpha-page',
+    path: '/alpha-page',
+    title: 'Alpha page',
+    layout,
+    fields: {},
+  })) as { ok: boolean }
+  assert.equal(created.ok, true)
+  assert.equal(await callAs(db, 'bob', 'website.getEntry', { id: 'alpha-page' }), null)
+  const moved = (await callAs(db, 'alice', 'website.saveEntry', {
+    id: 'alpha-page',
+    siteId: 'beta',
+    type: 'website.page',
+    slug: 'alpha-page',
+    path: '/alpha-page',
+    title: 'Moved',
+    layout,
+    fields: {},
+  })) as { ok: boolean; errors: Array<{ message: string }> }
+  assert.equal(moved.ok, false)
+  assert.equal(moved.errors[0]?.message, 'website.error.immutableOwnership')
   await db.close()
 })
 
@@ -128,6 +195,99 @@ test('cms: saves immutable revisions and publishes a stable revision per site', 
   await db.close()
 })
 
+test('cms hardening: optimistic saves, pinned schedules and one-time previews reject replay', async () => {
+  const { db } = await boot()
+  await call(db, 'website.saveSite', {
+    id: 'site',
+    name: 'Main',
+    title: 'Main site',
+    defaultLocale: 'en',
+    theme: 'theme_paper',
+  })
+  const first = (await call(db, 'website.saveEntry', {
+    id: 'news',
+    siteId: 'site',
+    type: 'website.post',
+    slug: 'news',
+    path: '/blog/news',
+    title: 'First',
+    layout,
+    fields: {},
+  })) as { revisionId: string }
+  await call(db, 'website.publishEntry', { id: 'news', expectedRevisionId: first.revisionId })
+  const second = (await call(db, 'website.saveEntry', {
+    id: 'news',
+    siteId: 'site',
+    type: 'website.post',
+    slug: 'news',
+    path: '/blog/news',
+    title: 'Second',
+    layout,
+    fields: {},
+    expectedRevisionId: first.revisionId,
+  })) as { revisionId: string }
+  const stale = (await call(db, 'website.saveEntry', {
+    id: 'news',
+    siteId: 'site',
+    type: 'website.post',
+    slug: 'news',
+    path: '/blog/news',
+    title: 'Stale writer',
+    layout,
+    fields: {},
+    expectedRevisionId: first.revisionId,
+  })) as { ok: boolean; errors: Array<{ message: string }> }
+  assert.equal(stale.ok, false)
+  assert.equal(stale.errors[0]?.message, 'website.error.editConflict')
+
+  await call(db, 'website.publishEntry', {
+    id: 'news',
+    expectedRevisionId: second.revisionId,
+    publishAt: new Date(Date.now() + 60_000).toISOString(),
+  })
+  const third = (await call(db, 'website.saveEntry', {
+    id: 'news',
+    siteId: 'site',
+    type: 'website.post',
+    slug: 'news',
+    path: '/blog/news',
+    title: 'Third after schedule',
+    layout,
+    fields: {},
+    expectedRevisionId: second.revisionId,
+  })) as { revisionId: string }
+  const row = (await db.all('SELECT * FROM website_entry WHERE id = ?', ['news']))[0] as {
+    scheduledRevisionId: string
+  }
+  assert.equal(row.scheduledRevisionId, second.revisionId)
+  assert.notEqual(row.scheduledRevisionId, third.revisionId)
+  assert.equal(
+    (
+      (await call(db, 'website.getEntryByPath', { siteId: 'site', path: '/blog/news' })) as {
+        title: string
+      }
+    ).title,
+    'First',
+  )
+  assert.deepEqual(await call(db, 'website.searchPublished', { siteId: 'site', q: 'Third' }), [])
+  assert.equal(
+    (
+      (await call(db, 'website.searchPublished', { siteId: 'site', q: 'First' })) as Array<{
+        title: string
+      }>
+    )[0]?.title,
+    'First',
+  )
+
+  const preview = (await call(db, 'website.createPreviewToken', {
+    entryId: 'news',
+    oneTime: true,
+  })) as { token: string }
+  assert.ok(await call(db, 'website.previewEntry', { token: preview.token }))
+  assert.equal(await call(db, 'website.previewEntry', { token: preview.token }), null)
+  await db.close()
+})
+
 test('cms: forms validate schema, store consent and rate-limit anonymous submissions', async () => {
   const { db } = await boot()
   await call(db, 'website.saveSite', {
@@ -158,7 +318,8 @@ test('cms: forms validate schema, store consent and rate-limit anonymous submiss
       consent: true,
       rateKey: 'browser-a',
     })) as { ok: boolean; message: string }
-    assert.deepEqual(result, { ok: true, message: 'Thank you' })
+    assert.equal(result.ok, true)
+    assert.equal(result.message, 'Thank you')
   }
   const limited = (await call(db, 'website_form.submitForm', {
     formId: 'contact',
@@ -166,10 +327,19 @@ test('cms: forms validate schema, store consent and rate-limit anonymous submiss
     rateKey: 'browser-a',
   })) as { ok: boolean; errors: Array<{ message: string }> }
   assert.equal(limited.ok, false)
-  assert.equal(limited.errors[0]?.message, 'rate limit exceeded')
+  assert.equal(limited.errors[0]?.message, 'website_form.error.rateLimit')
+  const replayArgs = {
+    formId: 'contact',
+    payload: { email: 'once@example.test' },
+    rateKey: 'browser-b',
+    submissionKey: 'contact-once',
+  }
+  const once = (await call(db, 'website_form.submitForm', replayArgs)) as { id: string }
+  const replay = (await call(db, 'website_form.submitForm', replayArgs)) as { id: string }
+  assert.equal(replay.id, once.id)
   assert.equal(
     ((await call(db, 'website_form.listSubmissions', { formId: 'contact' })) as unknown[]).length,
-    5,
+    6,
   )
   await db.close()
 })
@@ -213,8 +383,8 @@ test('verticals: hospitality captures booking leads and retail converts a catalo
     siteId: 'hospitality',
     guestName: 'Minh Anh',
     email: 'minhanh@example.test',
-    checkIn: '2026-09-10',
-    checkOut: '2026-09-12',
+    checkIn: dateAfter(10),
+    checkOut: dateAfter(12),
     adults: 2,
   })) as { ok: boolean; id: string }
   assert.equal(lead.ok, true)
@@ -251,7 +421,16 @@ test('verticals: hospitality captures booking leads and retail converts a catalo
     templateId: 'canvas-bag',
     defaultCode: 'BAG-NATURAL',
   })
-  const catalog = (await fullCall('website_retail.listCatalog', {})) as Array<{ id: string }>
+  await fullCall('website_retail.saveCatalogItem', {
+    id: 'retail:canvas-bag-natural',
+    siteId: 'retail',
+    productId: 'canvas-bag-natural',
+    active: true,
+    position: 10,
+  })
+  const catalog = (await fullCall('website_retail.listCatalog', { siteId: 'retail' })) as Array<{
+    id: string
+  }>
   assert.deepEqual(
     catalog.map((item) => item.id),
     ['canvas-bag-natural'],
@@ -271,11 +450,35 @@ test('verticals: hospitality captures booking leads and retail converts a catalo
   }
   assert.equal(held.lines.length, 1)
   assert.equal(held.total, '500000')
+  await Promise.all([
+    fullCall('website_retail.addCartLine', {
+      token: cart.token,
+      productId: 'canvas-bag-natural',
+      quantity: '0.1',
+    }),
+    fullCall('website_retail.addCartLine', {
+      token: cart.token,
+      productId: 'canvas-bag-natural',
+      quantity: '0.1',
+    }),
+  ])
+  assert.equal(
+    ((await fullCall('website_retail.getCart', { token: cart.token })) as { total: string }).total,
+    '550000',
+  )
   const checkout = (await fullCall('website_retail.checkoutCart', {
     token: cart.token,
     customerName: 'Alex',
     customerEmail: 'alex@example.test',
   })) as { ok: boolean; id: string }
   assert.deepEqual(checkout, { ok: true, id: cart.id })
+  assert.deepEqual(
+    await fullCall('website_retail.checkoutCart', {
+      token: cart.token,
+      customerName: 'Alex',
+      customerEmail: 'alex@example.test',
+    }),
+    { ok: true, id: cart.id },
+  )
   await db.close()
 })

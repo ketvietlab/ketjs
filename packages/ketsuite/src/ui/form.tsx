@@ -295,6 +295,7 @@ export const formCluster = (o: {
 export const recordActions = (o: {
   action: string
   label?: string | null
+  hidden?: Record<string, string>
   actions: ReadonlyArray<{
     value: string
     label: string
@@ -310,6 +311,9 @@ export const recordActions = (o: {
 
   return (
     <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
+      {Object.entries(o.hidden ?? {}).map(([name, value]) => (
+        <input type="hidden" name={name} value={value} />
+      ))}
       {actionGroup({
         label: o.label,
         actions: o.actions.map((action) =>
