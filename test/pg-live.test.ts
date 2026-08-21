@@ -30,6 +30,7 @@ import {
   checkout,
   company,
   defaultTheme as theme,
+  hospitalityCore,
   inventory,
   oauth,
   partner,
@@ -39,12 +40,14 @@ import {
   sale,
   pos,
   stock,
+  storage,
   TT99_ACCOUNTS,
   uom,
   user,
   VIETNAM_TAXES,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import backend from '@ketvietlab/ketsuite/backend'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }
@@ -1198,4 +1201,106 @@ test('live pg: OAuth provider, identity and transaction races settle atomically'
       1,
     )
   })
+})
+
+test('live pg: concurrent online reservations admit one winner without overselling', live, async () => {
+  const first = postgresAdapter(URL, { max: 4 })
+  const second = postgresAdapter(URL, { max: 2 })
+  const future = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+  const checkIn = future(10)
+  const checkOut = future(12)
+  await first.open()
+  await second.open()
+  try {
+    const hospitalityModules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
+    const hospitalityManifest = compose(hospitalityModules, { headless: true })
+    const schema = schemaFromManifest(hospitalityManifest)
+    for (const tableName of Object.keys(schema.tables))
+      await first.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, schema), first)) await first.exec(sql)
+    registerFunctions(hospitalityModules)
+    const options = (adapter: Adapter) => ({
+      adapter,
+      manifest: hospitalityManifest,
+      scope: { company: 'hotel-company', companies: ['hotel-company'], branches: null },
+      actor: 'website-bff',
+    })
+    await callFn(
+      'partner.savePartner',
+      { id: 'hotel-company-party', kind: 'company', name: 'Hotel Company' },
+      options(first),
+    )
+    await callFn(
+      'company.saveCompany',
+      {
+        id: 'hotel-company',
+        code: 'HOTEL',
+        partnerId: 'hotel-company-party',
+        currency: 'VND',
+      },
+      options(first),
+    )
+    await callFn(
+      'partner.savePartner',
+      { id: 'web-guest', kind: 'person', name: 'Web Guest' },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveProperty',
+      { id: 'hotel', code: 'HOTEL', name: 'Hotel', accommodationType: 'hotel' },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: 'DLX',
+        name: 'Deluxe',
+        baseRate: '1000000',
+        published: true,
+      },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'deluxe', code: '101', name: '101' },
+      options(first),
+    )
+    const create = (adapter: Adapter, id: string) =>
+      callFn(
+        'hospitality_core.createOnlineReservation',
+        {
+          id,
+          requestKey: id,
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          partnerId: 'web-guest',
+          checkIn,
+          checkOut,
+          adults: 2,
+        },
+        options(adapter),
+      )
+    const attempts = await Promise.all([create(first, 'web-race-a'), create(second, 'web-race-b')])
+    const values = attempts.map((attempt) => attempt.value as Record<string, unknown>)
+    assert.equal(values.filter((value) => value.ok === true).length, 1)
+    assert.equal(
+      values.filter(
+        (value) =>
+          value.ok === false &&
+          (value.errors as Array<Record<string, unknown>>).some(
+            (error) => error.messageKey === 'hospitality_core.error.inventoryUnavailable',
+          ),
+      ).length,
+      1,
+    )
+    assert.equal(Number((await first.all('SELECT COUNT(*) AS n FROM hospitality_core_reservation'))[0]?.n), 1)
+    const ledger = await first.all('SELECT sold, total, available FROM hospitality_core_availability_ledger')
+    assert.ok(
+      ledger.every((row) => Number(row.sold) === 1 && Number(row.total) === 1 && Number(row.available) === 0),
+    )
+  } finally {
+    await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
+  }
 })
