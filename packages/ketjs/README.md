@@ -27,7 +27,7 @@ Application names use lowercase letters, digits, and underscores and must start 
 `--dir ./my-app` when the filesystem directory should have a different name.
 
 Keep `@latest` when scaffolding inside another project so npm does not reuse an older locally
-installed KetJS CLI. Use an exact tag such as `@0.1.2` for reproducible generation.
+installed KetJS CLI. Use an exact tag such as `@0.1.3` for reproducible generation.
 
 ## Install in an existing project
 

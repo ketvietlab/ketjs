@@ -6,8 +6,8 @@ export type PartnerKind = (typeof PARTNER_KINDS)[number]
  * What a party is *to us*, as rows rather than as columns.
  *
  * SAP keeps these in BUT100, one row per role, and a party can hold several at
- * once — a supplier who is also a customer is one party with two rows. Odoo uses
- * counters on the party itself (`customer_rank`, `supplier_rank`), which means
+ * once — a supplier who is also a customer is one party with two rows. the domain contract uses
+ * counters on the party itself, which means
  * adding a role means adding a column to a table that already has about 120.
  */
 export const PARTNER_ROLES = ['customer', 'supplier', 'employee'] as const

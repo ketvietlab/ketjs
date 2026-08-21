@@ -11,7 +11,7 @@ import { menus } from './menus.ts'
  * API could not have products. But a screen in the admin genuinely needs both.
  *
  * So it is a bridge, and it installs itself once both sides are there — what
- * `install: 'auto'` was built for, and what Odoo does with `sale_stock` and its
+ * `install: 'auto'` was built for, and what the domain contract does with sales/inventory bridge and its
  * kin. Install only product and there is no screen and no link; install the admin
  * too and both appear without anyone asking.
  *
