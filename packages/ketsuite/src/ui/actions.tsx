@@ -28,6 +28,8 @@ export type ButtonSpec = ActionBase & {
   type?: 'button' | 'submit' | 'reset'
   name?: string | null
   value?: string | null
+  /** Associate a submit control with a form elsewhere in the document. */
+  form?: string | null
 }
 
 export type LinkButtonSpec = ActionBase & { href: string }
@@ -49,6 +51,7 @@ export const button = (o: ButtonSpec): TemplateResult => (
     type={o.type ?? 'button'}
     name={o.name ?? null}
     value={o.value ?? null}
+    form={o.form ?? null}
     disabled={o.disabled === true || o.loading === true}
     aria-busy={o.loading === true ? 'true' : null}
     aria-describedby={o.describedBy ?? null}
