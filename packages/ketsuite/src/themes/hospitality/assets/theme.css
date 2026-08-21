@@ -1,0 +1,109 @@
+@layer ket.theme {
+  body.hospitality-site {
+    margin: 0;
+    color: var(--ket-color-ink, #322e29);
+    background: var(--ket-color-bg, #faf6ee);
+    font-family: var(--ket-font-sans, "Avenir Next", sans-serif);
+  }
+  .site-masthead,
+  .site-footer {
+    display: flex;
+    justify-content: center;
+    padding: 1.4rem 5vw;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .site-wordmark {
+    color: inherit;
+    font:
+      600 1rem Georgia,
+      serif;
+    text-decoration: none;
+  }
+  .editorial-page {
+    overflow: hidden;
+  }
+  .hero {
+    min-height: 76vh;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    background: #173b34;
+    color: #fff;
+  }
+  .hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    min-height: 76vh;
+  }
+  .hero-copy {
+    align-self: end;
+    padding: clamp(2rem, 8vw, 7rem);
+  }
+  .hero h1,
+  .prose h2,
+  .stays h2,
+  .booking h2 {
+    font-family: Georgia, serif;
+    font-weight: 400;
+    line-height: 0.98;
+  }
+  .hero h1 {
+    font-size: clamp(3rem, 8vw, 7.5rem);
+    margin: 0.2em 0;
+  }
+  .eyebrow {
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+  }
+  .cta {
+    display: inline-block;
+    color: inherit;
+    border-bottom: 1px solid currentColor;
+    padding: 0.7rem 0;
+    text-decoration: none;
+  }
+  .prose,
+  .stays,
+  .enquiry,
+  .booking {
+    max-width: var(--ket-page-max-width, 76rem);
+    margin: 0 auto;
+    padding: clamp(4rem, 10vw, 9rem) 6vw;
+  }
+  .prose h2,
+  .stays h2,
+  .booking h2 {
+    font-size: clamp(2.4rem, 5vw, 5rem);
+    max-width: 12ch;
+  }
+  .stay-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: #a49b7c;
+  }
+  .stay-grid article {
+    min-height: 13rem;
+    padding: 2rem;
+    background: var(--ket-color-bg, #faf6ee);
+    font-family: Georgia, serif;
+    font-size: 1.6rem;
+  }
+  .booking {
+    background: #d9b98d;
+    max-width: none;
+  }
+  @media (max-width: 720px) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+    .hero-image {
+      min-height: 45vh;
+    }
+    .stay-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

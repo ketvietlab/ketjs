@@ -1,0 +1,1 @@
+<section class="cart" data-ket-section="cart"><p class="drop">Your selection</p><h2>{{ heading | default: 'Ready when you are.' }}</h2><a class="buy" href="/cart">{{ checkoutLabel | default: 'Open bag' }} →</a></section>

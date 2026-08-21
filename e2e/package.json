@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "pretest:product": "npm --prefix .. run build --silent",
-    "test:product": "E2E_MODULE=product_backend playwright test"
+    "test:product": "E2E_MODULE=product_backend playwright test",
+    "pretest:website": "npm --prefix .. run build --silent",
+    "test:website": "E2E_MODULE=website_backend playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"
