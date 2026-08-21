@@ -1387,11 +1387,17 @@ const roomFeedback = (
     status === 'building-created' ||
     status === 'floor-created' ||
     status === 'created' ||
-    status === 'saved'
+    status === 'saved' ||
+    status === 'archived' ||
+    status === 'restored'
   )
     return notice({
       title: _(`hospitality_core.room.feedback.${status}`),
-      message: _('hospitality_core.room.feedback.savedHint'),
+      message: _(
+        status === 'archived' || status === 'restored'
+          ? `hospitality_core.room.feedback.${status}Hint`
+          : 'hospitality_core.room.feedback.savedHint',
+      ),
       tone: 'positive',
     })
   if (status === 'invalid' || errors.length)
@@ -2150,11 +2156,31 @@ export const roomDetailScreen = (
           section({
             title: _('hospitality_core.room.section.lifecycle'),
             description: _('hospitality_core.room.section.lifecycleHint'),
-            body: linkButton({
-              label: _('hospitality_core.room.action.openHousekeeping'),
-              href: `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(room.id)}?${query}`,
-              variant: 'secondary',
-            }),
+            body: stack([
+              linkButton({
+                label: _('hospitality_core.room.action.openHousekeeping'),
+                href: `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(room.id)}?${query}`,
+                variant: 'secondary',
+              }),
+              surface({
+                body: recordActions({
+                  action: `/admin/hospitality/rooms/${encodeURIComponent(room.id)}/archive?${query}`,
+                  actions: [
+                    room.active
+                      ? {
+                          value: 'archive',
+                          label: _('hospitality_core.room.action.archive'),
+                          variant: 'destructive',
+                        }
+                      : {
+                          value: 'restore',
+                          label: _('hospitality_core.room.action.restore'),
+                          variant: 'secondary',
+                        },
+                  ],
+                }),
+              }),
+            ]),
           }),
         ]),
       }),

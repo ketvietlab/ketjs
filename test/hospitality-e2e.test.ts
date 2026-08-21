@@ -547,6 +547,31 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(physicalRoomUpdatedHtml, /value="4"/)
   assert.doesNotMatch(physicalRoomUpdatedHtml, /hospitality_core\./)
 
+  const physicalRoomArchived = await e2e.client.post(
+    `${roomDetailPath}/archive?lang=vi`,
+    new URLSearchParams({ action: 'archive' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(physicalRoomArchived.status, 303, await physicalRoomArchived.clone().text())
+  const physicalRoomArchivedPage = await e2e.client.get(physicalRoomArchived.headers.get('location')!)
+  const physicalRoomArchivedHtml = await physicalRoomArchivedPage.text()
+  assert.match(physicalRoomArchivedHtml, /Đã lưu trữ phòng/)
+  assert.match(physicalRoomArchivedHtml, /Khôi phục phòng/)
+  assert.doesNotMatch(physicalRoomArchivedHtml, /hospitality_core\./)
+
+  const physicalRoomRestored = await e2e.client.post(
+    `${roomDetailPath}/archive?lang=en`,
+    new URLSearchParams({ action: 'restore' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(physicalRoomRestored.status, 303, await physicalRoomRestored.clone().text())
+  const physicalRoomRestoredHtml = await (
+    await e2e.client.get(physicalRoomRestored.headers.get('location')!)
+  ).text()
+  assert.match(physicalRoomRestoredHtml, /Room restored/)
+  assert.match(physicalRoomRestoredHtml, /Archive room/)
+  assert.doesNotMatch(physicalRoomRestoredHtml, /hospitality_core\./)
+
   const directQuote = await e2e.client.post(
     '/admin/hospitality/reservations',
     new URLSearchParams({
