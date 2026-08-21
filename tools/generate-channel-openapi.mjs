@@ -22,7 +22,13 @@ if (process.argv.includes('--check')) {
   }
   const target = resolve(output)
   const current = await readFile(target, 'utf8').catch(() => '')
-  if (current !== rendered) {
+  let matches = false
+  try {
+    matches = JSON.stringify(JSON.parse(current)) === JSON.stringify(document)
+  } catch {
+    matches = false
+  }
+  if (!matches) {
     console.error(`Channel API document is stale: ${target}`)
     process.exit(1)
   }

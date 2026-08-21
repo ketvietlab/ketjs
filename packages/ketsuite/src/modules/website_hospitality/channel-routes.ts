@@ -241,6 +241,7 @@ export const channelRoutes = routesOf(
     method: 'POST',
     path: 'hospitality/bookings',
     operationId: 'customer.hospitality.bookings.create',
+    auth: 'customer',
     capability: { key: 'website_hospitality.bookings', action: 'create' },
     request: { body: object },
     responses: { '201': envelope },
@@ -295,6 +296,7 @@ export const channelRoutes = routesOf(
     method: 'GET',
     path: 'hospitality/bookings/{id}',
     operationId: 'customer.hospitality.bookings.get',
+    auth: 'customer',
     capability: { key: 'website_hospitality.bookings', action: 'read' },
     responses: { '200': envelope },
     handler: async (ctx, url, req, params) => {
