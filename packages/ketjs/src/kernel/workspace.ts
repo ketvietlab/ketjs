@@ -60,7 +60,7 @@ export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme' | 'themes'> & {
 export type ModulePath = string | URL
 export type WorkspaceDeclaration = {
   apps: AppDeclaration[]
-  /** Odoo-like roots whose direct children may contain ket.module.json. */
+  /** the domain contract-like roots whose direct children may contain ket.module.json. */
   modulePaths?: ModulePath[]
 }
 

@@ -125,7 +125,7 @@ re-render, 2 moves for a swap. It proves the algorithm touches the right nodes.
 It cannot prove the work *around* those touches is cheap — which is exactly the
 gap the browser benchmark closed.
 
-## Odoo 19 product, pricing and stock domain
+## Product, pricing and stock domain
 
 Measured on 2026-08-20 with Node 24.19.0 on Apple Silicon, after the complete
 Product/Media/Pricelist/Stock/Inventory admin flows passed the repository verify

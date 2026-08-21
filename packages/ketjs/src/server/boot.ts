@@ -177,7 +177,7 @@ export type ServeSpec = {
   /** Revalidate live account state and memberships before scope and permissions. */
   resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
   /**
-   * Serve several tenants, one database each — Odoo's model, and the one that
+   * Serve several tenants, one database each — the domain contract's model, and the one that
    * makes per-tenant module sets work. Absent, the app has a single datastore.
    */
   tenants?: TenantSpec

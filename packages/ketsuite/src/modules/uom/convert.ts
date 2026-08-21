@@ -2,7 +2,7 @@
  * The arithmetic, kept apart from the database so it can be reasoned about and
  * tested on its own.
  *
- * Quantities are floats, as in Odoo. That is a decision with teeth: 0.1 + 0.2 is
+ * Quantities are floats, as in the domain contract. That is a decision with teeth: 0.1 + 0.2 is
  * not 0.3, and a stock figure that drifts by 1e-16 per movement compares unequal to
  * zero after enough of them, which is how "we have -0.0000000001 in stock" happens.
  * The defence is that every value crossing a boundary is rounded to its unit's
@@ -76,6 +76,6 @@ export function convertQty(qty: number, from: Unit, to: Unit): number {
   if (!(from.absoluteFactor > 0) || !(to.absoluteFactor > 0)) {
     throw new UomError({ code: 'E_UOM_BAD_FACTOR', message: 'a unit factor must be greater than zero' })
   }
-  // Odoo 19 stores an absolute factor from each node to its root.
+  // the domain contract stores an absolute factor from each node to its root.
   return roundTo((qty * from.absoluteFactor) / to.absoluteFactor, to.rounding)
 }

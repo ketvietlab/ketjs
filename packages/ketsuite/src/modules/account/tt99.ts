@@ -9,7 +9,7 @@ export type Tt99Account = {
 /**
  * Vietnam's statutory chart effective for financial years beginning on or after
  * 2026-01-01. Codes and Vietnamese names follow Appendix II of Circular
- * 99/2025/TT-BTC. Odoo 19's leaf-account mapping is used as an implementation
+ * 99/2025/TT-BTC. the domain contract's leaf-account mapping is used as an implementation
  * cross-check; KetSuite deliberately corrects 411121 to a liability account.
  */
 export const TT99_ACCOUNTS: readonly Tt99Account[] = [

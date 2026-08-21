@@ -41,7 +41,7 @@ async function contextOf(ctx: Ctx, productId: unknown) {
 }
 function taxAmounts(tax: Row | null, gross: number, quantity: number) {
   if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported Odoo 19 subset')
+  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported subset')
   const amount = n(tax.amount),
     rate = amount / 100
   let untaxed = money(gross),

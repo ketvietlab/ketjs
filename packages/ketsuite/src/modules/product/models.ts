@@ -3,7 +3,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * Master data: one catalogue across every company in the tenant, by decision.
  *
- * The template/variant split follows Odoo, including the name `Product` for the
+ * The template/variant split follows the domain contract, including the name `Product` for the
  * variant. It reads oddly — a "product" here is one sellable combination, not the
  * thing a customer would call a product — but keeping the name makes the migration
  * map one to one, and a comment costs less than a translation table.
@@ -39,7 +39,7 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
-  /** One sellable combination of a template. Odoo calls this product.product. */
+  /** One sellable combination of a template. the domain contract calls this product.product. */
   Product: {
     scope: 'shared',
     timestamps: true,

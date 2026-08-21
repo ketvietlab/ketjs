@@ -1,6 +1,6 @@
 // One adapter per database, kept warm and bounded.
 //
-// This is where the Odoo model hurts most in practice: a database per tenant means
+// This is where the domain contract model hurts most in practice: a database per tenant means
 // connections multiply by tenant, and a Postgres cluster has a hard ceiling on them.
 // So the pool caps how many databases stay open at once, evicts the least recently
 // used, and refuses to close one that a request is still holding.

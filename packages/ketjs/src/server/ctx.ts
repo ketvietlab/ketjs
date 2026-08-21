@@ -107,7 +107,7 @@ export function createContext(o: {
   //
   // Both adapters store and return a decimal as a string, which is what keeps it
   // exact across the round trip. Arithmetic still happens on numbers, as it does in
-  // Odoo — the conversion is here, in the one place that knows both the model and
+  // the domain contract — the conversion is here, in the one place that knows both the model and
   // the row, rather than in the adapter, which sees only untyped columns.
   const decimalsOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})

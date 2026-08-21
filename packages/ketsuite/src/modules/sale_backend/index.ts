@@ -395,7 +395,7 @@ const vi = {
   'policy.summary.order': 'Theo số lượng đặt',
   'policy.summary.delivery': 'Theo số lượng giao',
   'policy.edit.title': 'Cập nhật chính sách',
-  'policy.edit.hint': 'Theo Odoo 19, chính sách được lưu trên từng mẫu sản phẩm.',
+  'policy.edit.hint': 'Chính sách được lưu trên từng mẫu sản phẩm.',
   'policy.products.title': 'Chính sách theo sản phẩm',
   'policy.products.hint':
     'Số lượng đặt cho phép lập hoá đơn ngay; số lượng giao chỉ cho phép sau khi giao hàng.',
@@ -523,7 +523,7 @@ const en = {
   'policy.summary.order': 'Ordered quantities',
   'policy.summary.delivery': 'Delivered quantities',
   'policy.edit.title': 'Update a policy',
-  'policy.edit.hint': 'As in Odoo 19, the policy is stored on each product template.',
+  'policy.edit.hint': 'The policy is stored on each product template.',
   'policy.products.title': 'Policies by product',
   'policy.products.hint':
     'Ordered quantities invoice immediately; delivered quantities invoice only after delivery.',

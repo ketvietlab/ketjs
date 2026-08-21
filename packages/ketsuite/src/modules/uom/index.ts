@@ -9,7 +9,7 @@ export default defineModule({
   version: '0.1.0',
   app: true,
   title: 'Đơn vị tính',
-  summary: 'Cây đơn vị tương đối và quy đổi theo Odoo 19.',
+  summary: 'Cây đơn vị tương đối và quy đổi.',
   category: 'Bán hàng',
   models,
   relations,

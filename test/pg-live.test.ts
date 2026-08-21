@@ -414,7 +414,11 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
 
       const cols = (await a.introspect())['uom_unit']!
       assert.equal(cols['relativeFactor'], 'numeric')
-      assert.equal(cols['absoluteFactor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
+      assert.equal(
+        cols['absoluteFactor'],
+        'numeric',
+        'exact decimal storage, as the domain contract uses for quantities',
+      )
       assert.equal(cols['rounding'], 'numeric')
 
       registerFunctions([uom])

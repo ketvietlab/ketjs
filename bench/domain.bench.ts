@@ -1,4 +1,4 @@
-// Measures the new Odoo-derived hot paths separately from setup and migration.
+// Measures business-domain hot paths separately from setup and migration.
 // The numbers are deliberately end-to-end through the public function boundary.
 import { performance } from 'node:perf_hooks'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'

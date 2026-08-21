@@ -1,6 +1,6 @@
 // Filesystem module discovery, kept entirely at the workspace boundary.
 //
-// Odoo's addons_path gets one thing exactly right: a deployment may draw modules
+// the domain contract's module search paths gets one thing exactly right: a deployment may draw modules
 // from several roots without teaching the application where every package lives.
 // Ket keeps the useful half and rejects the dangerous half. Discovery builds a
 // catalogue, explicitly selected modules and their dependency closure are loaded,

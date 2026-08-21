@@ -2,7 +2,7 @@
 //
 // A role is a named list of function keys, additive across roles, the way
 // Salesforce permission sets are additive over a minimal profile. It is not a set
-// of models with CRUD flags — that is ir.model.access, and it is what makes Odoo's
+// of models with CRUD flags — that is model-level CRUD grants, and it is what makes the domain contract's
 // permissions unanswerable, because granting read on a table grants it everywhere
 // the table is used.
 

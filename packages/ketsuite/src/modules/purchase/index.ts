@@ -9,7 +9,7 @@ export default defineModule({
   depends: ['company', 'partner', 'product', 'uom', 'stock', 'account'],
   app: true,
   title: 'Mua hàng',
-  summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp theo Odoo 19.',
+  summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Mua hàng',
   models,
   extend: {
@@ -22,12 +22,12 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Mua hàng',
-      'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp theo Odoo 19.',
+      'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
       'app.category': 'Mua hàng',
     },
     en: {
       'app.title': 'Purchase',
-      'app.summary': 'Odoo 19 RFQs, purchase orders, receipts, and vendor bills.',
+      'app.summary': 'RFQs, purchase orders, receipts, and vendor bills.',
       'app.category': 'Purchase',
     },
   },

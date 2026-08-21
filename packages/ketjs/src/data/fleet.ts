@@ -1,6 +1,6 @@
 // Migrating many databases from one manifest.
 //
-// Odoo lets each database install a different set of modules, so there is no single
+// the domain contract lets each database install a different set of modules, so there is no single
 // schema to reason about and every fleet upgrade is N unknown migrations. Ket takes
 // the opposite position: one manifest, many databases, the same target schema
 // everywhere. Each database records the schema it is actually on, so a tenant

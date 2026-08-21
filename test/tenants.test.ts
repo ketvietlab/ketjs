@@ -13,7 +13,7 @@ import {
 import type { Adapter, ServeContext, Route } from '@ketvietlab/ketjs'
 
 /**
- * One deployment, many databases — Odoo's model, and the one that makes per-tenant
+ * One deployment, many databases — the domain contract's model, and the one that makes per-tenant
  * module sets work at all.
  *
  * What this guards is subtler than a missing feature. `bootApp` used to open one
@@ -69,7 +69,7 @@ const app = defineApp({
     }),
     tenants: {
       /**
-       * A deployment would read Host, the way Odoo's dbfilter does. The tests read
+       * A deployment would read Host, the way the domain contract's host-to-database routing does. The tests read
        * a header instead, because Node's fetch refuses to set Host — and the
        * resolver being the app's means either is equally legitimate.
        */
