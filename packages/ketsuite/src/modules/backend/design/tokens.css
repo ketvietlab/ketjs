@@ -107,6 +107,9 @@
     --admin-row-height: 2.25rem;
     --admin-page-max: 100rem;
     --admin-motion-fast: 140ms ease;
+    /* The native date/time picker glyph is a bitmap the page cannot recolour, only
+       invert. 0 in light, 1 in dark. */
+    --admin-picker-invert: light-dark(0, 1);
   }
 
   /* A reader who has chosen overrides the system; `light-dark()` above reads

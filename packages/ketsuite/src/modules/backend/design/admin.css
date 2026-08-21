@@ -3396,6 +3396,18 @@
     min-block-size: 5rem;
     resize: vertical;
   }
+  /* The browser draws the calendar and clock glyphs in its own colour, which on a
+     dark canvas is a dark mark on a dark field. `color-scheme` on the root tells it
+     which set to use; this makes the mark follow the ink like every other glyph. */
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+    filter: invert(var(--admin-picker-invert, 0));
+  }
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
   input[type="checkbox"][data-ui="form-control"] {
     inline-size: 1rem;
     min-block-size: 1rem;

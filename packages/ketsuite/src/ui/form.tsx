@@ -35,6 +35,8 @@ export type FormField = {
     | 'color'
     | 'date'
     | 'datetime-local'
+    | 'month'
+    | 'week'
     | 'select'
     | 'radio'
     | 'checkbox'

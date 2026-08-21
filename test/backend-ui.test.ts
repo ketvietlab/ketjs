@@ -780,6 +780,36 @@ test('ui kit: every PascalCase export takes the one props object JSX hands it', 
   assert.deepEqual(wrong, [], 'a JSX component takes props, not a positional argument list')
 })
 
+test('ui contract: an island control carries the same hook a form control does', () => {
+  // An island's markup is behaviour, so it lives in a browser file rather than in
+  // the kit — but the control inside it is still a control. Three of them wrote
+  // their own: a heavier border, and no focus ring, no disabled state, no invalid
+  // state. `<input type="datetime-local">` with no `data-ui` at all got whatever a
+  // descendant selector two files away happened to say.
+  const bare: string[] = []
+  for (const path of globSync('packages/ketsuite/src/**/client/*.mjs')) {
+    // the storefront search island is on ui-audit's pending list, markup and all
+    if (path.includes('website_search')) continue
+    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+      for (const match of line.matchAll(/<(input|select|textarea)\s[^>]*>/g)) {
+        if (match[0].includes('data-ui=') || match[0].includes('type="hidden"')) continue
+        bare.push(`${path}:${index + 1} ${match[0].slice(0, 60)}`)
+      }
+    }
+  }
+  assert.deepEqual(bare, [], 'an island control needs data-ui="form-control", like every other control')
+})
+
+test('design tokens: the native date picker glyph follows the theme', () => {
+  // The browser draws the calendar and clock marks itself, in its own colour, which
+  // on a dark canvas is a dark mark on a dark field. It is a bitmap: invertible,
+  // not recolourable.
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  assert.match(css, /::-webkit-calendar-picker-indicator[\s\S]*?filter: invert\(var\(--admin-picker-invert/)
+  assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
+})
+
 test('backend layout: a framed screen names itself once, and not with a placeholder', () => {
   const manifest = compose(ketsuite.modules, { headless: true })
   const vi = translator(manifest, 'vi')

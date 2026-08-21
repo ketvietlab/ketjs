@@ -254,7 +254,13 @@ export const periodScreen = (
               submit={_('attendance_backend.action.openPeriod')}
               submitVariant="secondary"
               fields={[
-                { name: 'month', label: _('attendance_backend.field.month'), value: month, required: true },
+                {
+                  name: 'month',
+                  label: _('attendance_backend.field.month'),
+                  type: 'month',
+                  value: month,
+                  required: true,
+                },
               ]}
             />
           }
