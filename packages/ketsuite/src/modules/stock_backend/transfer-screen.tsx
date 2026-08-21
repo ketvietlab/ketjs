@@ -13,8 +13,8 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormOption, Frame } from '../../ui/index.ts'
-import { stockRowsTable } from './screens.ts'
-import type { StockRow } from './screens.ts'
+import { stockRowsTable } from './screens.tsx'
+import type { StockRow } from './screens.tsx'
 
 export type TransferDetail = {
   id: string

@@ -16,7 +16,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type Row = Record<string, unknown>
 

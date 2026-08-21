@@ -20,7 +20,7 @@ import {
   surface,
   tabs,
 } from '../../ui/index.ts'
-import type { Column, DataTable, FormOption, Frame } from '../../ui/index.ts'
+import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
 
 const mediaLabels = (_: Translator) => ({
   unavailable: _('product_backend.media.unavailable'),
@@ -210,7 +210,7 @@ export const productDetailScreen = (
     isStorable?: boolean
     tracking?: string
   },
-  media: Parameters<typeof mediaPanel>[0],
+  media: MediaPanelProps,
   management: {
     uoms: FormOption[]
     categories: FormOption[]
@@ -467,7 +467,7 @@ export const variantScreen = (
   _: Translator,
   templateId: string,
   row: Record<string, unknown>,
-  media: Parameters<typeof mediaPanel>[0],
+  media: MediaPanelProps,
   uoms: FormOption[],
   template: { name: string },
   collaboration: JSXChild,

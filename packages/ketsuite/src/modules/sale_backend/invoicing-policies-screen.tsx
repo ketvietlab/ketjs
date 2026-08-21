@@ -13,7 +13,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type ProductRow = Record<string, unknown>
 

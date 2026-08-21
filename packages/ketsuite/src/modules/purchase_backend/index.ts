@@ -8,7 +8,7 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.ts'
+import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>

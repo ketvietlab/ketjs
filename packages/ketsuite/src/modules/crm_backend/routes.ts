@@ -14,7 +14,7 @@ import {
   permissionScreen,
   pipelineScreen,
   plannerScreen,
-} from './screens.ts'
+} from './screens.tsx'
 import { CRM_PAGE_SIZE, keepForListSearch, listFacets, listMenus, loadListGroups } from './list-search.ts'
 
 type AnyRow = Record<string, unknown>

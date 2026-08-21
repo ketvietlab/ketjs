@@ -3,8 +3,8 @@ import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
 import { seeOther } from '../backend/forms.ts'
-import { catalogsScreen, countryScreen } from './screens.ts'
-import type { CatalogRow, DivisionRow } from './screens.ts'
+import { catalogsScreen, countryScreen } from './screens.tsx'
+import type { CatalogRow, DivisionRow } from './screens.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>

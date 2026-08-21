@@ -13,7 +13,7 @@ import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { dashboard, labelOf } from './screens.ts'
+import { dashboard, labelOf } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>

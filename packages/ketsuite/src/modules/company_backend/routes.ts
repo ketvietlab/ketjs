@@ -10,8 +10,8 @@ import {
   companyFormScreen,
   contextScreen,
   hierarchyScreen,
-} from './screens.ts'
-import type { BranchRow, CompanyRow } from './screens.ts'
+} from './screens.tsx'
+import type { BranchRow, CompanyRow } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]

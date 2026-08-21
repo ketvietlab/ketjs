@@ -27,7 +27,7 @@ import {
   programsScreen,
   walletDetailScreen,
   walletsScreen,
-} from './screens.ts'
+} from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
