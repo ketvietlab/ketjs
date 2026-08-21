@@ -5046,7 +5046,8 @@ const folioStayColumns = (_: Translator, locale: string, timezone: string): Arra
 export const frontDeskScreen = (
   _: Translator,
   rows: StayRow[],
-  totals: { arrivals: number; inHouse: number; departures: number; openFolios: number },
+  overdueRows: StayRow[],
+  totals: { arrivals: number; inHouse: number; departures: number; overdue: number; openFolios: number },
   locale: string,
   timezone: string,
   frame: Frame,
@@ -5061,11 +5062,25 @@ export const frontDeskScreen = (
           { id: 'arrivals', label: _('hospitality_core.metric.arrivals'), value: totals.arrivals },
           { id: 'in-house', label: _('hospitality_core.metric.inHouse'), value: totals.inHouse },
           { id: 'departures', label: _('hospitality_core.metric.departures'), value: totals.departures },
+          { id: 'overdue', label: _('hospitality_core.metric.overdue'), value: totals.overdue },
           { id: 'folios', label: _('hospitality_core.metric.openFolios'), value: totals.openFolios },
         ],
         id: (item) => item.id,
         card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
       }),
+      overdueRows.length
+        ? section({
+            title: _('hospitality_core.screen.frontDesk.overdue'),
+            description: _('hospitality_core.screen.frontDesk.overdueHint', {
+              count: overdueRows.length,
+            }),
+            body: dataTable(_, {
+              columns: stayColumns(_, locale, timezone),
+              rows: overdueRows,
+              id: (row) => row.id,
+            }),
+          })
+        : null,
       rows.length
         ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
         : emptyState(

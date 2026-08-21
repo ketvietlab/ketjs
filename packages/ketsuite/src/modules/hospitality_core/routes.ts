@@ -895,11 +895,17 @@ export const routes: Record<string, RouteEntry> = {
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
       const range = calendarRange(url.searchParams.get('date'), 1, timezone)
-      const [stays, openFolios] = (await Promise.all([
+      const [stays, inHouseStays, openFolios] = (await Promise.all([
         ctx.call('hospitality_core.listStays', { propertyId, from: range.from, to: range.to }, url, req),
+        ctx.call('hospitality_core.listStays', { propertyId, state: 'checked_in' }, url, req),
         ctx.call('hospitality_core.listFolios', { propertyId, state: 'open' }, url, req),
-      ])) as [StayRow[], FolioRow[]]
+      ])) as [StayRow[], StayRow[], FolioRow[]]
       const inRange = (value: string) => value >= range.from && value < range.to
+      const now = new Date().toISOString()
+      const overdue = inHouseStays
+        .filter((stay) => stay.checkOut < now)
+        .sort((left, right) => left.checkOut.localeCompare(right.checkOut))
+      const overdueIds = new Set(overdue.map((stay) => stay.id))
       return document(
         ctx,
         url,
@@ -907,11 +913,13 @@ export const routes: Record<string, RouteEntry> = {
         _('hospitality_core.screen.frontDesk.title'),
         frontDeskScreen(
           _,
-          stays,
+          stays.filter((stay) => !overdueIds.has(stay.id)),
+          overdue,
           {
             arrivals: stays.filter((stay) => stay.state === 'draft' && inRange(stay.checkIn)).length,
-            inHouse: stays.filter((stay) => stay.state === 'checked_in').length,
+            inHouse: inHouseStays.length,
             departures: stays.filter((stay) => stay.state === 'checked_in' && inRange(stay.checkOut)).length,
+            overdue: overdue.length,
             openFolios: openFolios.length,
           },
           lang,
