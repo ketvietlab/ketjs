@@ -78,7 +78,7 @@ async function bootSale(t: TestContext) {
   return { e2e, call }
 }
 
-test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (t) => {
+test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) => {
   const { e2e, call } = await bootSale(t)
   await call('sale.setInvoicePolicy', { templateId: 'goods', invoicePolicy: 'delivery' })
   await call('sale.createOrder', {

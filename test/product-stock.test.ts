@@ -34,7 +34,7 @@ async function boot() {
   return adapter
 }
 
-test('product 19: company cost, UoM links and concurrent-safe variant generation', async () => {
+test('product-stock: company cost, UoM links and concurrent-safe variant generation', async () => {
   const adapter = await boot()
   try {
     await call('product.setCost', { productId: 'p1', standardPrice: '60.25' }, adapter)
@@ -59,7 +59,7 @@ test('product 19: company cost, UoM links and concurrent-safe variant generation
   }
 })
 
-test('product 19: default/no-variant behavior, archive/reactivate, barcode and company cost invariants', async () => {
+test('product-stock: default/no-variant behavior, archive/reactivate, barcode and company cost invariants', async () => {
   const adapter = await boot()
   try {
     const initial = (await call('product.generateVariants', { templateId: 'tpl' }, adapter)).value as Row
@@ -145,7 +145,7 @@ test('product 19: default/no-variant behavior, archive/reactivate, barcode and c
   }
 })
 
-test('pricing 19: Odoo precedence and percentage formula use company currency only', async () => {
+test('product-stock: rule precedence and percentage formulas use company currency only', async () => {
   const adapter = await boot()
   try {
     await call('pricing.savePricelist', { id: 'retail', name: 'Retail' }, adapter)
@@ -213,7 +213,7 @@ test('pricing 19: Odoo precedence and percentage formula use company currency on
   }
 })
 
-test('pricing 19: ancestor scope, UoM quantity, date bounds, nesting, margins and loops are deterministic', async () => {
+test('product-stock: ancestor scope, UoM quantity, date bounds, nesting, margins and loops are deterministic', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -340,7 +340,7 @@ test('pricing 19: ancestor scope, UoM quantity, date bounds, nesting, margins an
   }
 })
 
-test('stock 19: reservation lives on move lines, partial completion creates a backorder', async () => {
+test('product-stock: reservation lives on move lines, partial completion creates a backorder', async () => {
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
@@ -456,7 +456,7 @@ test('stock 19: reservation lives on move lines, partial completion creates a ba
   }
 })
 
-test('routes 19: mts_else_mto chooses stock or procurement and links upstream moves', async () => {
+test('product-stock: mts_else_mto chooses stock or procurement and links upstream moves', async () => {
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
@@ -512,7 +512,7 @@ test('routes 19: mts_else_mto chooses stock or procurement and links upstream mo
   }
 })
 
-test('routes 19: listRules applies the Odoo active-test default', async () => {
+test('product-stock: listRules applies the active-record default', async () => {
   const adapter = await boot()
   try {
     await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, adapter)
@@ -528,7 +528,7 @@ test('routes 19: listRules applies the Odoo active-test default', async () => {
   }
 })
 
-test('routes 19: completing a move triggers assigned push rules exactly once', async () => {
+test('product-stock: completing a move triggers assigned push rules exactly once', async () => {
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
@@ -595,7 +595,7 @@ test('routes 19: completing a move triggers assigned push rules exactly once', a
   }
 })
 
-test('warehouse 19: two and three step settings generate idempotent route chains', async () => {
+test('product-stock: two and three step settings generate idempotent route chains', async () => {
   const cases = [
     {
       receptionSteps: 'two_steps',
@@ -686,7 +686,7 @@ test('warehouse 19: two and three step settings generate idempotent route chains
   }
 })
 
-test('stock 19: serial tracking reserves and completes one unit per serial', async () => {
+test('product-stock: serial tracking reserves and completes one unit per serial', async () => {
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'serial' }, adapter)
@@ -781,7 +781,7 @@ test('stock 19: serial tracking reserves and completes one unit per serial', asy
   }
 })
 
-test('replenishment 19: orderpoint forecasts its location and uses replenishment UoM', async () => {
+test('product-stock: orderpoint forecasts its location and uses replenishment UoM', async () => {
   const adapter = await boot()
   try {
     await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)

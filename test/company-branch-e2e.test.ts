@@ -55,7 +55,7 @@ const bootCompany = async (t: TestContext) => {
   return { e2e, fixture }
 }
 
-test('e2e company 19: company, hierarchy, branch and context screens cross real HTTP', async (t) => {
+test('company-branch-e2e: company, hierarchy, branch and context screens cross real HTTP', async (t) => {
   const { e2e } = await bootCompany(t)
   const pages: Array<[string, RegExp]> = [
     ['/admin/companies', /Công ty Kết Việt/],
@@ -78,7 +78,7 @@ test('e2e company 19: company, hierarchy, branch and context screens cross real 
   assert.match(await english.text(), /Working context/)
 })
 
-test('e2e company 19: context switch is atomic, actor-bound and same-origin', async (t) => {
+test('company-branch-e2e: context switch is atomic, actor-bound and same-origin', async (t) => {
   const { e2e } = await bootCompany(t)
   const forbidden = await e2e.client.post('/admin/context', new URLSearchParams(), {
     headers: {
@@ -110,7 +110,7 @@ test('e2e company 19: context switch is atomic, actor-bound and same-origin', as
   assert.deepEqual(who.companies.sort(), ['acme', 'globex'])
 })
 
-test('e2e company 19: membership revoke and archive affect an existing session next request', async (t) => {
+test('company-branch-e2e: membership revoke and archive affect an existing session next request', async (t) => {
   const { e2e, fixture } = await bootCompany(t)
   await e2e.client.form<string>('/admin/context', {
     companyId: 'globex',

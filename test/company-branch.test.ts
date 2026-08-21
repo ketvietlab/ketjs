@@ -40,7 +40,7 @@ const createCompany = async (
   })
 }
 
-test('company 19: creation atomically creates one root branch and one partner represents one company', async () => {
+test('company-branch: creation atomically creates one root branch and one partner represents one company', async () => {
   const runtime = await boot()
   const created = await createCompany(runtime, 'acme', 'ACME')
   assert.equal(created.ok, true)
@@ -63,7 +63,7 @@ test('company 19: creation atomically creates one root branch and one partner re
   await runtime.adapter.close()
 })
 
-test('company 19: company and branch trees reject deep cycles and cross-company parents', async () => {
+test('company-branch: company and branch trees reject deep cycles and cross-company parents', async () => {
   const runtime = await boot()
   await createCompany(runtime, 'a', 'A')
   await createCompany(runtime, 'b', 'B', 'a')
@@ -114,7 +114,7 @@ test('company 19: company and branch trees reject deep cycles and cross-company 
   await runtime.adapter.close()
 })
 
-test('company 19: company membership grants root branch and explicit branch grants stay idempotent', async () => {
+test('company-branch: company membership grants root branch and explicit branch grants stay idempotent', async () => {
   const runtime = await boot()
   await createCompany(runtime, 'acme', 'ACME')
   await call(runtime, 'company.saveBranch', {
@@ -157,7 +157,7 @@ test('company 19: company membership grants root branch and explicit branch gran
   await runtime.adapter.close()
 })
 
-test('company 19: context is actor-bound and write branch must belong to the active company', async () => {
+test('company-branch: context is actor-bound and write branch must belong to the active company', async () => {
   const runtime = await boot()
   await createCompany(runtime, 'acme', 'ACME')
   await createCompany(runtime, 'globex', 'Globex')
@@ -200,7 +200,7 @@ test('company 19: context is actor-bound and write branch must belong to the act
   await runtime.adapter.close()
 })
 
-test('company 19: active-user defaults protect company and branch archive', async () => {
+test('company-branch: active-user defaults protect company and branch archive', async () => {
   const runtime = await boot()
   await createCompany(runtime, 'acme', 'ACME')
   await createCompany(runtime, 'globex', 'Globex')

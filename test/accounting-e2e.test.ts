@@ -34,7 +34,7 @@ async function bootAccounting(t: TestContext) {
   return { e2e, call }
 }
 
-test('e2e accounting 19: invoice, payment reconciliation and reports cross real HTTP', async (t) => {
+test('e2e accounting: invoice, payment reconciliation and reports cross real HTTP', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
   const dashboard = await e2e.client.get('/admin/accounting', { headers: { accept: 'text/html' } })

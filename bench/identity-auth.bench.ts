@@ -1,4 +1,4 @@
-// PostgreSQL benchmark for the Odoo 19 User/Auth slice.
+// PostgreSQL benchmark for the User/Auth slice.
 // Migration, fixture creation and password hashing during fixture setup are excluded.
 
 import { performance } from 'node:perf_hooks'

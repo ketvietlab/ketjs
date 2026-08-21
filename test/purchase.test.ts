@@ -88,7 +88,7 @@ async function boot() {
   return adapter
 }
 
-test('purchase 19: supplier price, confirmation and receipt integrate with Stock', async () => {
+test('purchase: supplier price, confirmation and receipt integrate with Stock', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -138,7 +138,7 @@ test('purchase 19: supplier price, confirmation and receipt integrate with Stock
   }
 })
 
-test('purchase 19: received-quantity billing creates one balanced multi-line vendor bill', async () => {
+test('purchase: received-quantity billing creates one balanced multi-line vendor bill', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -206,7 +206,7 @@ test('purchase 19: received-quantity billing creates one balanced multi-line ven
   }
 })
 
-test('purchase 19: approval, locking, idempotency and exact Odoo state codes', async () => {
+test('purchase: approval, locking, idempotency and stable state codes', async () => {
   const adapter = await boot()
   try {
     const first = (
@@ -246,7 +246,7 @@ test('purchase 19: approval, locking, idempotency and exact Odoo state codes', a
   }
 })
 
-test('purchase 19: services bill ordered quantities without an empty receipt and price-included tax stays included', async () => {
+test('purchase: services bill ordered quantities without an empty receipt and price-included tax stays included', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -310,7 +310,7 @@ test('purchase 19: services bill ordered quantities without an empty receipt and
   }
 })
 
-test('purchase 19: cancelling an unreceived PO also cancels its receipt', async () => {
+test('purchase: cancelling an unreceived PO also cancels its receipt', async () => {
   const adapter = await boot()
   try {
     await call(

@@ -27,7 +27,7 @@ async function save(
   )
 }
 
-test('uom 19: conversion follows the absolute factor and shared root', () => {
+test('uom: conversion follows the absolute factor and shared root', () => {
   const kg = { id: 'kg', parentPath: 'kg/', absoluteFactor: 1, rounding: 0.01 }
   const g = { id: 'g', parentPath: 'kg/g/', absoluteFactor: 0.001, rounding: 0.01 }
   assert.equal(convertQty(2.5, kg, g), 2500)
@@ -38,7 +38,7 @@ test('uom 19: conversion follows the absolute factor and shared root', () => {
   )
 })
 
-test('uom 19: roots have factor one, descendants derive factor and parent path', async () => {
+test('uom: roots have factor one, descendants derive factor and parent path', async () => {
   const adapter = await boot()
   try {
     assert.deepEqual((await save(adapter, 'kg', '1')).value, { ok: true, id: 'kg' })
@@ -55,7 +55,7 @@ test('uom 19: roots have factor one, descendants derive factor and parent path',
   }
 })
 
-test('uom 19: invalid roots, missing parents and cycles are refused', async () => {
+test('uom: invalid roots, missing parents and cycles are refused', async () => {
   const adapter = await boot()
   try {
     const root = await save(adapter, 'bad', '2')
@@ -71,7 +71,7 @@ test('uom 19: invalid roots, missing parents and cycles are refused', async () =
   }
 })
 
-test('uom 19: changing an ancestor recomputes all descendant factors', async () => {
+test('uom: changing an ancestor recomputes all descendant factors', async () => {
   const adapter = await boot()
   try {
     await save(adapter, 'kg', '1')
@@ -85,7 +85,7 @@ test('uom 19: changing an ancestor recomputes all descendant factors', async () 
   }
 })
 
-test('uom 19: Product Unit precision is singleton and immutable after units exist', async () => {
+test('uom: Product Unit precision is singleton and immutable after units exist', async () => {
   const adapter = await boot()
   try {
     assert.deepEqual((await callFn('uom.savePrecision', { digits: 3 }, { adapter, manifest })).value, {
@@ -104,7 +104,7 @@ test('uom 19: Product Unit precision is singleton and immutable after units exis
   }
 })
 
-test('uom 19: an ancestor cannot change after a descendant conversion identity is used', async () => {
+test('uom: an ancestor cannot change after a descendant conversion identity is used', async () => {
   const adapter = await boot()
   try {
     await save(adapter, 'unit', '1')

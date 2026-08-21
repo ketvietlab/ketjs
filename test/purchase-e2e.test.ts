@@ -71,7 +71,7 @@ async function bootPurchase(t: TestContext) {
   return { e2e, call }
 }
 
-test('e2e purchase 19: RFQ to receipt and vendor bill crosses real HTTP', async (t) => {
+test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t) => {
   const { e2e, call } = await bootPurchase(t)
   await call('purchase.saveSupplierInfo', {
     id: 'vendor:desk',

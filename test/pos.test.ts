@@ -120,7 +120,7 @@ async function boot() {
   return adapter
 }
 
-test('pos 19: exact session/order states, pricing, payment, stock and accounting form one retail flow', async () => {
+test('pos: exact session/order states, pricing, payment, stock and accounting form one retail flow', async () => {
   const adapter = await boot()
   try {
     assert.deepEqual(POS_SESSION_STATES, ['opening_control', 'opened', 'closing_control', 'closed'])
@@ -205,7 +205,7 @@ test('pos 19: exact session/order states, pricing, payment, stock and accounting
   }
 })
 
-test('pos 19: refunds use a new open session, reverse accounting and return stock', async () => {
+test('pos: refunds use a new open session, reverse accounting and return stock', async () => {
   const adapter = await boot()
   try {
     await call('pos.createSession', { id: 's1', configId: 'shop', userId: 'cashier' }, adapter)
@@ -269,7 +269,7 @@ test('pos 19: refunds use a new open session, reverse accounting and return stoc
   }
 })
 
-test('pos 19: customer invoice is posted and reconciled by the POS payment', async () => {
+test('pos: customer invoice is posted and reconciled by the POS payment', async () => {
   const adapter = await boot()
   try {
     await call('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' }, adapter)

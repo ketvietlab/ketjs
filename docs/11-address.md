@@ -1,6 +1,6 @@
 # Address và dữ liệu địa giới Việt Nam
 
-KetSuite port hành vi địa chỉ cần thiết từ Odoo 19 nhưng không sao chép schema
+KetSuite port hành vi địa chỉ cần thiết từ the domain contract nhưng không sao chép schema
 `res.country.state`. Module `address` là một bounded context dùng chung cho mọi
 quốc gia; dữ liệu từng nước nằm trong thư mục mang mã ISO 3166-1 alpha-2 và chỉ
 được đọc khi quản trị viên yêu cầu cài catalog.
@@ -128,11 +128,11 @@ Country, một Catalog, một CurrentCatalog và 3.355 Division. Function instal
 
 ## Dữ liệu Việt Nam đầu tiên
 
-Nguồn nhập là addon LGPL-3 `vidoo_vn_address_core` tại workspace Kingfruit:
+Nguồn nhập là bộ dữ liệu LGPL-3 Vidoo Vietnam Address Core. Bản đã chuẩn hoá và
+manifest checksum nằm ngay trong module:
 
 ```text
-apps/odoo/source/custom_addons/vidoo_vn_address_core/data/provinces.json
-apps/odoo/source/custom_addons/vidoo_vn_address_core/data/wards.json
+packages/ketsuite/src/modules/address/data/VN/catalogs/2025-07-01/
 ```
 
 Bundle có hiệu lực `2025-07-01` gồm:
@@ -208,7 +208,7 @@ npm run test:one -- \
   test/address-postgres.test.ts \
   test/address-e2e.test.ts \
   test/identity.test.ts \
-  test/odoo19-partner-e2e.test.ts
+  test/partner-e2e.test.ts
 ```
 
 PostgreSQL test tạo database riêng, chạy hai adapter tranh cài VN và tranh địa chỉ
@@ -223,5 +223,5 @@ KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:address
 KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:identity
 ```
 
-Kết quả và phương pháp đo nằm tại [docs/benchmarks/address-odoo19.md](benchmarks/address-odoo19.md).
+Kết quả và phương pháp đo nằm tại [docs/benchmarks/address.md](benchmarks/address.md).
 Full suite chỉ chạy trên CI khi PR được mở vào `develop`.

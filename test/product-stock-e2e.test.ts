@@ -56,7 +56,7 @@ async function seedProduct(call: HttpCall) {
   })
 }
 
-test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (t) => {
+test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
 
@@ -399,7 +399,7 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.match(pricingHtml, /action="\/admin\/pricelists\/retail\?lang=vi"/)
 })
 
-test('e2e stock 19: inventory, reservation, partial completion and backorder cross HTTP', async (t) => {
+test('product-stock-e2e: inventory, reservation, partial completion and backorder cross HTTP', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
   await call('uom.saveUnit', {
@@ -573,7 +573,7 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   )
 
   // Exercise the same partial flow through the rendered backend form, including
-  // the Odoo `ask` backorder choice rather than bypassing it with a direct call.
+  // the domain contract `ask` backorder choice rather than bypassing it with a direct call.
   await call('stock.createPicking', {
     id: 'ui-pick',
     name: 'WH/OUT/UI',
@@ -932,7 +932,7 @@ test('e2e stock 19: inventory, reservation, partial completion and backorder cro
   }
 })
 
-test('e2e stock 19: serial reservation keeps one unit on each move line', async (t) => {
+test('product-stock-e2e: serial reservation keeps one unit on each move line', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
   await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'serial' })
@@ -985,7 +985,7 @@ test('e2e stock 19: serial reservation keeps one unit on each move line', async 
   }
 })
 
-test('e2e multi-warehouse 19: forecast, routes and replenishment remain warehouse-local', async (t) => {
+test('product-stock-e2e: forecast, routes and replenishment remain warehouse-local', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
   await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' })

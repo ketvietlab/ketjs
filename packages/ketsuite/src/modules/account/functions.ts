@@ -100,7 +100,7 @@ async function dueDate(ctx: Ctx, paymentTermId: unknown, date: Date): Promise<st
 function taxAmounts(tax: Row | null, quantity: number, priceUnit: number, discount: number) {
   const gross = money(quantity * priceUnit * (1 - discount / 100))
   if (!tax) return { untaxed: gross, tax: 0, total: gross }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported Odoo 19 subset')
+  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported subset')
   const rate = n(tax.amount) / 100
   let untaxed = gross
   let taxAmount = 0
@@ -223,7 +223,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       if (!ACCOUNT_TYPES.includes(args.accountType as never))
-        return invalid('accountType', 'unsupported Odoo 19 account type')
+        return invalid('accountType', 'unsupported account type')
       if (!/^[A-Za-z0-9.]+$/.test(String(args.code)))
         return invalid('code', 'account code may contain only letters, numbers, and dots')
       const forced = ['asset_receivable', 'liability_payable'].includes(String(args.accountType))
@@ -260,8 +260,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!JOURNAL_TYPES.includes(args.type as never))
-        return invalid('type', 'unsupported Odoo 19 journal type')
+      if (!JOURNAL_TYPES.includes(args.type as never)) return invalid('type', 'unsupported journal type')
       if (!/^[A-Za-z0-9]+$/.test(String(args.code)))
         return invalid('code', 'journal code must be alphanumeric')
       if (args.defaultAccountId && !(await accountOf(ctx, args.defaultAccountId)))
@@ -314,10 +313,9 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!TAX_USES.includes(args.typeTaxUse as never))
-        return invalid('typeTaxUse', 'unsupported Odoo 19 tax use')
+      if (!TAX_USES.includes(args.typeTaxUse as never)) return invalid('typeTaxUse', 'unsupported tax use')
       if (!TAX_AMOUNT_TYPES.includes(args.amountType as never))
-        return invalid('amountType', 'unsupported Odoo 19 tax computation')
+        return invalid('amountType', 'unsupported tax computation')
       if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope)))
         return invalid('taxScope', 'tax scope must be service or consu')
       if (args.accountId && !(await accountOf(ctx, args.accountId)))
@@ -401,7 +399,7 @@ export const functions: Record<string, FnSpec> = {
       if (!PAYMENT_TERM_VALUES.includes(args.value as never))
         return invalid('value', 'value must be percent or fixed')
       if (!PAYMENT_TERM_DELAY_TYPES.includes(args.delayType as never))
-        return invalid('delayType', 'unsupported Odoo 19 delay type')
+        return invalid('delayType', 'unsupported delay type')
       if (args.value === 'percent' && (n(args.valueAmount) < 0 || n(args.valueAmount) > 100))
         return invalid('valueAmount', 'percentage must be between 0 and 100')
       const existing = (await ctx.db.select('account.PaymentTermLine', { id: args.id }))[0]
@@ -483,7 +481,7 @@ export const functions: Record<string, FnSpec> = {
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
       if (!journal) return invalid('journalId', 'journal does not exist')
       const moveType = String(args.moveType ?? 'entry')
-      if (!MOVE_TYPES.includes(moveType as never)) return invalid('moveType', 'unsupported Odoo 19 move type')
+      if (!MOVE_TYPES.includes(moveType as never)) return invalid('moveType', 'unsupported move type')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id }
       const date = String(args.date ?? today())

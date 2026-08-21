@@ -61,7 +61,7 @@ async function boot() {
   return adapter
 }
 
-test('account 19: customer invoice computes tax, due date, and balanced posting', async () => {
+test('accounting: customer invoice computes tax, due date, and balanced posting', async () => {
   const adapter = await boot()
   try {
     const created = await call(
@@ -109,7 +109,7 @@ test('account 19: customer invoice computes tax, due date, and balanced posting'
   }
 })
 
-test('account 19: draft entries refuse imbalance and journal sequences advance without gaps', async () => {
+test('accounting: draft entries refuse imbalance and journal sequences advance without gaps', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -156,7 +156,7 @@ test('account 19: draft entries refuse imbalance and journal sequences advance w
   }
 })
 
-test('account 19: partial payments reconcile residuals and update invoice payment state', async () => {
+test('accounting: partial payments reconcile residuals and update invoice payment state', async () => {
   const adapter = await boot()
   try {
     await call(
@@ -208,7 +208,7 @@ test('account 19: partial payments reconcile residuals and update invoice paymen
   }
 })
 
-test('account 19: reports read posted lines only and preserve Odoo selection codes', async () => {
+test('accounting: reports read posted lines only and preserve stable selection codes', async () => {
   const adapter = await boot()
   try {
     await call(

@@ -108,7 +108,7 @@ async function bootPos(t: TestContext) {
   return { e2e, call }
 }
 
-test('e2e pos 19: real HTTP session carries a register sale through stock and accounting', async (t) => {
+test('pos-e2e: real HTTP session carries a register sale through stock and accounting', async (t) => {
   const { e2e, call } = await bootPos(t)
   await call('pos.createOrder', {
     id: 'order-1',

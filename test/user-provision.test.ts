@@ -34,7 +34,7 @@ const boot = async () => {
   return { adapter, manifest, call }
 }
 
-test('provision 19: an empty database becomes one complete legal entity and superuser', async () => {
+test('user-provision: an empty database becomes one complete legal entity and superuser', async () => {
   const runtime = await boot()
   try {
     const meta = runtime.manifest.functions['user.provisionAdmin']
@@ -84,7 +84,7 @@ test('provision 19: an empty database becomes one complete legal entity and supe
   }
 })
 
-test('provision 19: only the trusted command actor may bootstrap and input errors are coded', async () => {
+test('user-provision: only the trusted command actor may bootstrap and input errors are coded', async () => {
   const runtime = await boot()
   try {
     const denied = await runtime.call<{ ok: boolean; errors: Array<{ code: string }> }>(input, 'admin')
@@ -111,7 +111,29 @@ test('provision 19: only the trusted command actor may bootstrap and input error
   }
 })
 
-test('provision 19: a late database failure rolls the entire bootstrap back', async () => {
+test('user-provision: admin/admin is restricted to the exact development scaffold actor', async () => {
+  const runtime = await boot()
+  const short = {
+    ...input,
+    adminLogin: 'admin',
+    adminPassword: 'admin',
+  }
+  try {
+    const production = await runtime.call<{ ok: boolean; errors: Array<{ code: string }> }>(
+      short,
+      'system:provision',
+    )
+    assert.equal(production.ok, false)
+    assert.ok(production.errors.some((error) => error.code === 'user.error.passwordLength'))
+
+    const development = await runtime.call<{ ok: boolean }>(short, 'system:scaffold')
+    assert.equal(development.ok, true)
+  } finally {
+    await runtime.adapter.close()
+  }
+})
+
+test('user-provision: a late database failure rolls the entire bootstrap back', async () => {
   const runtime = await boot()
   try {
     await runtime.adapter.exec(`

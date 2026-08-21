@@ -1,4 +1,4 @@
-# Loyalty Odoo 19 parity
+# Loyalty
 
 KetSuite Loyalty is split by responsibility while keeping one public business contract:
 
@@ -62,5 +62,5 @@ images are in [the Loyalty screen manifest](./screenshots/loyalty/README.md).
 
 ## Deliberate non-scope
 
-Website checkout is not enabled in this PR. `/my/loyalty` is read-only. No Odoo history importer is
+Website checkout is not enabled in this PR. `/my/loyalty` is read-only. No the domain contract history importer is
 provided; state begins in KetSuite and future backfills must be idempotent and support dry-run.

@@ -1,6 +1,6 @@
-# Company và Branch theo Odoo 19
+# Company và Branch
 
-Tài liệu này mô tả Company/Branch được port từ Odoo 19 vào KetSuite, cách phạm vi
+Tài liệu này mô tả Company/Branch được port từ the domain contract vào KetSuite, cách phạm vi
 đọc/ghi đi từ membership tới session, interface công khai và các bất biến được
 cưỡng chế ở PostgreSQL.
 
@@ -79,7 +79,7 @@ flowchart LR
 | Membership | Cho phép đọc/ghi dữ liệu pháp nhân | Cho phép đọc/ghi dữ liệu theo điểm vận hành |
 | Mặc định | `User.defaultCompanyId` | `User.defaultBranchId` |
 
-Đây là phần giữ đúng ý nghĩa đa công ty của Odoo 19 nhưng tránh dùng cây pháp nhân
+Đây là phần giữ đúng ý nghĩa đa công ty của the domain contract nhưng tránh dùng cây pháp nhân
 để mô phỏng kho, cửa hàng hoặc văn phòng.
 
 ## Mô hình và bất biến
@@ -160,7 +160,7 @@ Trong app có User, archive phải đi qua `user.archiveCompany` hoặc
 
 ## Session context
 
-Session phân biệt tập đọc và đích ghi như Odoo 19:
+Session phân biệt tập đọc và đích ghi như the domain contract:
 
 ```text
 companies[]  -> các company được đọc
@@ -259,8 +259,8 @@ node --test \
   .build/test/identity.test.js \
   .build/test/session.test.js \
   .build/test/identity-engine.test.js \
-  .build/test/odoo19-company-branch.test.js \
-  .build/test/odoo19-company-branch-e2e.test.js \
+  .build/test/company-branch.test.js \
+  .build/test/company-branch-e2e.test.js \
   .build/test/backend-ui.test.js \
   .build/test/ketsuite-i18n.test.js
 ```

@@ -4,7 +4,7 @@ description: Resolve selected KetJS modules from filesystem roots without making
 ---
 
 KetJS can compose modules imported by the workspace and modules selected by name from filesystem
-roots. The layout resembles an `addons_path`, but discovering a descriptor does not install, ship, or
+roots. The layout resembles an module search paths, but discovering a descriptor does not install, ship, or
 execute that module.
 
 ```text

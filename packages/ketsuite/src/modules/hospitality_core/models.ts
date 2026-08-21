@@ -3,7 +3,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * The operational and sellable hotel structure.
  *
- * The Odoo source spreads these records over core, content and inventory addons.
+ * The the domain contract source spreads these records over core, content and inventory addons.
  * KetSuite keeps them together because a room without its sellable description is
  * not a useful bounded context. Accounting remains outside this boundary.
  */

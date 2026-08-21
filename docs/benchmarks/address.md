@@ -1,4 +1,4 @@
-# Address Odoo 19 benchmark evidence
+# Address benchmark evidence
 
 Đo ngày 2026-08-20 trên working tree `feat/address-vn`, ngay trước commit triển
 khai. Benchmark gọi qua public/internal function boundary thật và PostgreSQL thật;

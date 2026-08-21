@@ -22,7 +22,7 @@ Các thông số đã chốt:
 Ngôn ngữ thị giác kế thừa KétViệt Design System: warm-neutral canvas, white/dark
 surface, border mảnh và indigo chỉ dành cho primary action, focus và selection.
 Primary action dùng `brand-600`; active navigation dùng label `brand-700` trên nền
-sáng, đóng hai migration gap còn tồn tại trong theme Odoo.
+sáng, đóng hai migration gap còn tồn tại trong theme the domain contract.
 
 ## Chạy lên trong 30 giây
 
@@ -301,7 +301,7 @@ bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên 
 kia — mục tiêu là hai sản phẩm trông như một.
 
 Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
-theme Odoo làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
+theme the domain contract làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
 design system sở hữu glyph. Tên app không có glyph thì rơi về monogram (chữ đầu),
 tên menu con không có glyph thì rơi về dot; cả hai đều không làm mất dòng.
 

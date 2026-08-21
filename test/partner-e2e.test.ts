@@ -27,7 +27,7 @@ async function bootPartner(t: TestContext) {
   }
 }
 
-test('e2e partner 19: directory, defaults, roles and accounting bridge cross real HTTP', async (t) => {
+test('partner-e2e: directory, defaults, roles and accounting bridge cross real HTTP', async (t) => {
   const { e2e, call } = await bootPartner(t)
   await call('partner.savePartner', {
     id: 'customer',

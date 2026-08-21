@@ -1,6 +1,6 @@
 // One deployment, many databases.
 //
-// This is Odoo's model and it is the one that makes per-tenant module sets work at
+// This is the domain contract's model and it is the one that makes per-tenant module sets work at
 // all: the code ships with the deployment, the decision about what is switched on
 // lives in each database. `ket_app` per database is `ir_module_module` per
 // database, and D7 makes it cheaper here — every schema exists everywhere, so

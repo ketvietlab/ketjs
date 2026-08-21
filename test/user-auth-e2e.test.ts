@@ -35,7 +35,7 @@ const bootIdentity = async (t: TestContext) => {
   return { e2e, fixture, scope }
 }
 
-test('e2e user 19: every administration and profile screen crosses real HTTP', async (t) => {
+test('user-auth-e2e: every administration and profile screen crosses real HTTP', async (t) => {
   const { e2e } = await bootIdentity(t)
   for (const [path, expected] of [
     ['/admin/users?lang=vi', /Người dùng/],
@@ -52,7 +52,7 @@ test('e2e user 19: every administration and profile screen crosses real HTTP', a
   }
 })
 
-test('e2e user 19: invitation is digest-only, single-use and accepted over HTTP', async (t) => {
+test('user-auth-e2e: invitation is digest-only, single-use and accepted over HTTP', async (t) => {
   const { e2e, fixture } = await bootIdentity(t)
   await fixture('user.createUser', {
     id: 'invited',
@@ -94,7 +94,7 @@ test('e2e user 19: invitation is digest-only, single-use and accepted over HTTP'
   assert.equal(replay.ok, false)
 })
 
-test('e2e user 19: self password rotation keeps this session and closes the others', async (t) => {
+test('user-auth-e2e: self password rotation keeps this session and closes the others', async (t) => {
   const { e2e } = await bootIdentity(t)
   const other = e2e.client.anonymous()
   await other.login({ login: 'admin', password: 'correct horse' })
@@ -110,7 +110,7 @@ test('e2e user 19: self password rotation keeps this session and closes the othe
   await e2e.client.login({ login: 'admin', password: 'battery staple' })
 })
 
-test("e2e user 19: self-service cannot revoke another user's session", async (t) => {
+test("user-auth-e2e: self-service cannot revoke another user's session", async (t) => {
   const { e2e, fixture } = await bootIdentity(t)
   await fixture('user.createUser', {
     id: 'operator',
@@ -141,7 +141,7 @@ test("e2e user 19: self-service cannot revoke another user's session", async (t)
   assert.equal((await e2e.client.get('/whoami')).status, 200)
 })
 
-test('e2e user 19: auth mutations are POST-only and reject cross-site origins', async (t) => {
+test('user-auth-e2e: auth mutations are POST-only and reject cross-site origins', async (t) => {
   const { e2e } = await bootIdentity(t)
   assert.equal((await e2e.client.get('/logout')).status, 405)
   for (const [path, body] of [
@@ -161,7 +161,7 @@ test('e2e user 19: auth mutations are POST-only and reject cross-site origins', 
   assert.equal((await e2e.client.get('/whoami')).status, 200)
 })
 
-test('e2e user 19: generic HTTP cannot call internal authentication functions', async (t) => {
+test('user-auth-e2e: generic HTTP cannot call internal authentication functions', async (t) => {
   const { e2e } = await bootIdentity(t)
   for (const name of ['user.authenticate', 'user.consumeAuthToken', 'user.issueAuthToken']) {
     const response = await e2e.client.request(`/_ket/fn/${encodeURIComponent(name)}`, {

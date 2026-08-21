@@ -86,7 +86,7 @@ async function boot() {
   return adapter
 }
 
-test('sale 19: quotation pricing, confirmation and delivery integrate with Stock', async () => {
+test('sale: quotation pricing, confirmation and delivery integrate with Stock', async () => {
   const adapter = await boot()
   try {
     await call('sale.setInvoicePolicy', { templateId: 'goods', invoicePolicy: 'delivery' }, adapter)
@@ -138,7 +138,7 @@ test('sale 19: quotation pricing, confirmation and delivery integrate with Stock
   }
 })
 
-test('sale 19: delivered quantity creates a balanced multi-line customer invoice', async () => {
+test('sale: delivered quantity creates a balanced multi-line customer invoice', async () => {
   const adapter = await boot()
   try {
     await call('sale.setInvoicePolicy', { templateId: 'goods', invoicePolicy: 'delivery' }, adapter)
@@ -194,7 +194,7 @@ test('sale 19: delivered quantity creates a balanced multi-line customer invoice
   }
 })
 
-test('sale 19: service orders invoice ordered quantities without an empty delivery', async () => {
+test('sale: service orders invoice ordered quantities without an empty delivery', async () => {
   const adapter = await boot()
   try {
     await call(

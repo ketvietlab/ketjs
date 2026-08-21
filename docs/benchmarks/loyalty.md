@@ -1,4 +1,4 @@
-# Loyalty Odoo 19 benchmark evidence
+# Loyalty benchmark evidence
 
 Generated on 2026-08-20 immediately before the implementation commit.
 
@@ -7,7 +7,7 @@ Generated on 2026-08-20 immediately before the implementation commit.
 | Item | Value |
 | --- | --- |
 | Base | `884d9a1806a8b8f7c9ccacca481f04798dd5aa80` (`origin/develop`) |
-| Head under test | `feat/loyalty-odoo19` working tree based on `884d9a1` |
+| Head under test | `feat/loyalty-domain` working tree based on `884d9a1` |
 | Node / npm | Node `v26.7.0`, npm `11.19.0` |
 | OS | macOS `26.2` (`darwin 25.2.0`) |
 | CPU | Apple M1 Pro (`MacBookPro18,1`) |
@@ -32,11 +32,11 @@ KET_BENCH_PG=postgres://dev:devpassword@127.0.0.1:5435/ket_loyalty_identity_benc
   npm run bench:identity
 
 # Loyalty, first SQLite and then PostgreSQL.
-KET_BENCH_DRIVER=sqlite KET_BENCH_COMMIT=feat/loyalty-odoo19@884d9a1 \
+KET_BENCH_DRIVER=sqlite KET_BENCH_COMMIT=feat/loyalty-domain@884d9a1 \
   npm run bench:loyalty
 KET_BENCH_DRIVER=postgres \
   KET_BENCH_PG=postgres://dev:devpassword@127.0.0.1:5435/postgres \
-  KET_BENCH_COMMIT=feat/loyalty-odoo19@884d9a1 npm run bench:loyalty
+  KET_BENCH_COMMIT=feat/loyalty-domain@884d9a1 npm run bench:loyalty
 ```
 
 `bench:loyalty` calls the public function boundary. Each driver receives one warm-up plus seven measured

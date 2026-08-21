@@ -78,8 +78,7 @@
   }
 
   /* ── Sidebar ───────────────────────────────────────────────────────────────
-     Ported from vidoo_backend_theme, so the framework and the Odoo deployment
-     look like one product: 228px, a quiet tinted ground, and one column that
+     The shell uses a 228px quiet tinted ground and one column that
      carries the brand, a menu search, the apps, the open app's menu, and the
      systray at the foot. There is no application bar across the top — the row
      above the content is the control panel, and it belongs to the view. */

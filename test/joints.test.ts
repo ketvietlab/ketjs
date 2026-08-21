@@ -11,7 +11,7 @@ import { html, renderToString } from '@ketvietlab/ketjs-view'
  * storefront makes: the code that runs is ours, the code that extends is theirs
  * and cannot run.
  *
- * A fill addresses a joint *by name*. That is the whole difference from Odoo's
+ * A fill addresses a joint *by name*. That is the whole difference from the domain contract's
  * XPath, where an extension addresses a node upstream never promised would exist:
  * rename the field and every extension breaks. Here the markup around a joint can
  * change freely.
@@ -254,7 +254,7 @@ test('bridge: a module does not depend on the admin just to add a button to it',
   // because I had touched product without thinking of it that way.
   //
   // The fill belongs in a bridge that installs itself once both sides are there,
-  // which is what install:'auto' was built for and what Odoo does with sale_stock.
+  // which is what install:'auto' was built for and what the domain contract does with sales/inventory bridge.
   const { address, company, partner, product, productBackend, productMedia, storage, uom } = await import(
     '@ketvietlab/ketsuite'
   )

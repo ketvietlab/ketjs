@@ -1,7 +1,7 @@
-# Partner theo Odoo 19
+# Partner domain
 
-Tài liệu này mô tả subset Partner được port từ Odoo 19 vào KetSuite, các điểm chủ
-đích giữ khác schema Odoo, interface công khai và cách kiểm tra cụm này. Source
+Tài liệu này mô tả subset Partner được port từ the domain contract vào KetSuite, các điểm chủ
+đích giữ khác schema the domain contract, interface công khai và cách kiểm tra cụm này. Source
 chính nằm trong `packages/ketsuite/src/modules/partner`; phần nối kế toán nằm trong
 `packages/ketsuite/src/modules/account_partner`.
 
@@ -20,7 +20,7 @@ Cụm Partner quản lý:
 Country và đơn vị hành chính nay tham chiếu module `address`; `divisionText` và
 input text cũ chỉ là fallback tương thích khi catalog của quốc gia chưa được cài.
 Email và VAT không bị ép unique. Mail, chatter, activity và cơ chế record rule của
-Odoo không thuộc phạm vi này.
+the domain contract không thuộc phạm vi này.
 
 ## Thiết kế module
 
@@ -67,12 +67,12 @@ tách riêng để domain không phụ thuộc giao diện hoặc Accounting. Br
 được auto-install khi cả `account` và `partner` có mặt; vì vậy một app không cài
 Accounting không nhận thêm field, route hay UI giả.
 
-## Khác biệt có chủ đích với Odoo 19
+## Khác biệt có chủ đích với the domain contract
 
 KetSuite giữ hành vi nghiệp vụ cần thiết nhưng không sao chép nguyên schema
 `res.partner`:
 
-| Odoo 19 | KetSuite | Lý do |
+| the domain contract | KetSuite | Lý do |
 |---|---|---|
 | Partner đồng thời biểu diễn party và address | `Partner` và `Address` tách rời | Chứng từ luôn trỏ đúng đối tác, không cần suy lại commercial partner từ cây địa chỉ |
 | Vai trò thường được suy từ dữ liệu bán/mua | `Role` là các row rõ ràng | Một đối tác có nhiều vai trò; unique constraint bảo vệ khi ghi đồng thời |
@@ -205,12 +205,12 @@ Khi phát triển cụm này, chạy test đúng phần thay đổi theo `AGENT.
 ```sh
 npm run build
 node --test .build/test/identity.test.js \
-  .build/test/odoo19-partner-e2e.test.js \
+  .build/test/partner-e2e.test.js \
   .build/test/ketsuite-i18n.test.js
 ```
 
 PostgreSQL integration test trong `test/pg-live.test.ts` kiểm tra concurrent default
-address, role và company terms. HTTP E2E trong `test/odoo19-partner-e2e.test.ts`
+address, role và company terms. HTTP E2E trong `test/partner-e2e.test.ts`
 khởi chạy app thật, đăng nhập và đi qua các route Partner. Full suite chỉ chạy trong
 CI khi PR được mở vào `develop`.
 

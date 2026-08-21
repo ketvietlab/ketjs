@@ -1,10 +1,10 @@
-# Authentication và Users theo Odoo 19
+# Authentication và Users
 
-Tài liệu này mô tả identity realm nội bộ được port từ Odoo 19 vào KetSuite: User,
+Tài liệu này mô tả identity realm nội bộ được port từ the domain contract vào KetSuite: User,
 Role, session, invitation/reset token, login protection, security audit và UI quản
 trị. KetSuite giữ kiến trúc User tách Partner, quyền theo function allow-list và
-company/branch scope; không sao chép `_inherits`, `ir.model.access`, record rules
-hay implied groups của Odoo.
+company/branch scope; không sao chép `_inherits`, model-level CRUD grants, record rules
+hay implied groups của the domain contract.
 
 Source chính:
 
@@ -176,7 +176,7 @@ sequenceDiagram
 ```
 
 Chỉ SHA-256 digest được lưu. Invitation hết hạn sau 144 giờ, reset sau 4 giờ theo
-subset Odoo 19. Token cùng user/kind thay thế token trước; token gắn auth realm và
+subset the domain contract. Token cùng user/kind thay thế token trước; token gắn auth realm và
 `securityVersion`, nên thay đổi credential hoặc trạng thái làm token cũ mất hiệu
 lực. CAS nullable dùng `IS NULL`, vì vậy hai pod tiêu thụ đồng thời chỉ có một pod
 thắng.
@@ -322,17 +322,17 @@ horizontal overflow. Không có console error hoặc viewport overflow.
 
 ## Kiểm thử theo phạm vi
 
-`test/odoo19-user-auth.test.ts` kiểm tra login normalization, backend realm,
+`test/user-auth.test.ts` kiểm tra login normalization, backend realm,
 actor-bound password, last-superuser guard, token TTL/replacement/CAS, DB throttle,
-audit secret hygiene và scrypt bounds. `test/odoo19-user-auth-e2e.test.ts` đi qua
+audit secret hygiene và scrypt bounds. `test/user-auth-e2e.test.ts` đi qua
 HTTP thật cho admin/profile screens, token acceptance, session rotation và generic
 internal-function protection.
 
 `test/pg-live.test.ts` dùng PostgreSQL và hai adapter độc lập để mô phỏng nhiều
 pod, kiểm tra unique login/assignment, single-use token và rate-limit counter dưới
 concurrency, đồng thời dùng bốn adapter tranh bootstrap để xác nhận chỉ một kết quả
-thắng. `test/odoo19-user-provision.test.ts` kiểm tra empty database, second run,
-actor, mã i18n và rollback toàn transaction. `test/odoo19-user-provision-cli.test.ts`
+thắng. `test/user-provision.test.ts` kiểm tra empty database, second run,
+actor, mã i18n và rollback toàn transaction. `test/user-provision-cli.test.ts`
 kiểm tra stdin secret hygiene, exit code và tenant selection. Engine/session
 regressions nằm trong `engine-primitives.test.ts` và `session.test.ts`.
 

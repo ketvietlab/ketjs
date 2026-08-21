@@ -22,7 +22,7 @@ const boot = async () => {
   return { adapter, manifest, call }
 }
 
-test('user 19: normalized login and role edges remain unique and idempotent', async () => {
+test('user-auth: normalized login and role edges remain unique and idempotent', async () => {
   const runtime = await boot()
   try {
     const first = await runtime.call<{ ok: boolean }>('user.createUser', {
@@ -75,7 +75,7 @@ test('user 19: normalized login and role edges remain unique and idempotent', as
   }
 })
 
-test('user 19: password change is actor-bound and the final superuser is protected', async () => {
+test('user-auth: password change is actor-bound and the final superuser is protected', async () => {
   const runtime = await boot()
   try {
     await runtime.call('user.createUser', {
@@ -162,7 +162,7 @@ test('user 19: password change is actor-bound and the final superuser is protect
   }
 })
 
-test('user 19: invitation consumption is single-use under concurrency', async () => {
+test('user-auth: invitation consumption is single-use under concurrency', async () => {
   const runtime = await boot()
   try {
     await runtime.call('user.createUser', {
@@ -198,7 +198,7 @@ test('user 19: invitation consumption is single-use under concurrency', async ()
   }
 })
 
-test('user 19: invitation and reset TTLs follow Odoo 19 and old tokens are invalidated', async () => {
+test('user-auth: invitation and reset TTLs expire predictably and old tokens are invalidated', async () => {
   const runtime = await boot()
   try {
     await runtime.call('user.createUser', {
@@ -245,7 +245,7 @@ test('user 19: invitation and reset TTLs follow Odoo 19 and old tokens are inval
   }
 })
 
-test('user 19: rate limit is PostgreSQL-shaped and audit contains no secrets', async () => {
+test('user-auth: rate limit is PostgreSQL-shaped and audit contains no secrets', async () => {
   const runtime = await boot()
   try {
     await runtime.call('user.createUser', {

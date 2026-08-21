@@ -11,7 +11,7 @@ all five are now tests in `test/apps.test.ts`.
 | Install an app with uninstalled dependencies | dependencies come along | an app whose dependency is off is broken, not "partly installed" |
 | Install something already installed | no-op, returns nothing changed | idempotent, so a retry is safe |
 | Install something the deployment does not ship | `E_UNKNOWN_APP` naming what *is* shipped | the code has to be built in first — this is the whole point of the model |
-| An `install: 'auto'` app whose dependencies just arrived | installs itself, and the sweep repeats until nothing more qualifies | matches Odoo's `auto_install`; the loop terminates because each pass strictly grows the installed set |
+| An `install: 'auto'` app whose dependencies just arrived | installs itself, and the sweep repeats until nothing more qualifies | matches the domain contract's `auto_install`; the loop terminates because each pass strictly grows the installed set |
 | Two `install: 'auto'` apps depending on each other | both install, sweep settles | **probed** — it does not loop |
 | Two requests install at once | the primary key settles it | `ON CONFLICT DO NOTHING`, same as idempotency |
 | Install an `install: 'never'` app by name | `E_APP_NOT_INSTALLABLE`, pointing at the modules that depend on it | the module drew the boundary: it is machinery, and the honest way in is for something that needs it to ask |
@@ -67,7 +67,7 @@ all five are now tests in `test/apps.test.ts`.
 ## Still open
 
 - **Exactly one storefront theme.** Nothing stops two themes being installed at once,
-  and the last one composed wins the template. Odoo makes installing a theme uninstall
+  and the last one composed wins the template. the domain contract makes installing a theme uninstall
   the previous one. That rule is not written here yet.
 - **Backend UI.** There is none. See the note in `00-decisions.md` on why a backend
   screen should not be a KTL theme.
