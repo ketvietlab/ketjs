@@ -18,7 +18,7 @@ production-ready.
 Create a new SQLite-backed application directly from npm:
 
 ```bash
-npx -y @ketvietlab/ketjs new my_app --dir ./my-app
+npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 cd my-app
 npm install
 npm run dev
