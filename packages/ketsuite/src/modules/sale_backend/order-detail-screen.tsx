@@ -7,7 +7,7 @@ import {
   emptyState,
   formatMoney,
   formCluster as FormCluster,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -17,7 +17,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 
@@ -389,5 +389,9 @@ export const orderDetailScreen = (
       }}
     />
   )
-  return partial ? workspace : framed(_, _('sale_backend.detail.title'), frame, workspace)
+  return partial ? (
+    workspace
+  ) : (
+    <Framed translator={_} title={_('sale_backend.detail.title')} frame={frame} body={workspace} />
+  )
 }

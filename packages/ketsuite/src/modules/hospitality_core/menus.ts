@@ -38,6 +38,20 @@ export const menus: Record<string, MenuDef> = {
     needs: 'hospitality_core.listFolios',
     sequence: 50,
   },
+  'hospitality.services': {
+    parent: 'hospitality.operations',
+    label: 'menu.services',
+    path: '/admin/hospitality/services',
+    needs: 'hospitality_core.listExtraLines',
+    sequence: 52,
+  },
+  'hospitality.nightAudit': {
+    parent: 'hospitality.operations',
+    label: 'menu.nightAudit',
+    path: '/admin/hospitality/night-audit',
+    needs: 'hospitality_core.listNightAudits',
+    sequence: 54,
+  },
   'hospitality.inventory': {
     parent: 'hospitality.operations',
     label: 'menu.inventory',
@@ -73,6 +87,14 @@ export const menus: Record<string, MenuDef> = {
     path: '/admin/hospitality/housekeeping/rooms',
     needs: 'hospitality_core.listRooms',
     sequence: 20,
+  },
+  'hospitality.compliance': { parent: 'hospitality', label: 'menu.compliance', sequence: 80 },
+  'hospitality.stayNotices': {
+    parent: 'hospitality.compliance',
+    label: 'menu.stayNotices',
+    path: '/admin/hospitality/stay-notices',
+    needs: 'hospitality_core.listStayNotices',
+    sequence: 10,
   },
   'hospitality.configuration': { parent: 'hospitality', label: 'menu.configuration', sequence: 90 },
   'hospitality.roomTypes': {

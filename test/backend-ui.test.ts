@@ -8,6 +8,7 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
+  attachmentPanel,
   activityContractCases,
   calendarContractCases,
   appsScreen,
@@ -25,6 +26,7 @@ import {
   emptyState,
   errorState,
   formCluster,
+  framed,
   HOOKS,
   hasIcon,
   icon,
@@ -36,14 +38,15 @@ import {
   loadingState,
   mailContractCases,
   metric,
+  modalSheet,
   mediaPanel,
   notice,
   pagesScreen,
   person,
-  qrCode,
   recordList,
   recordActions,
   recordForm,
+  qrCode,
   recordToggle,
   recordWorkspace,
   scheduleBoard,
@@ -182,6 +185,12 @@ const componentContract = [
     body: surface({ body: 'Product form', padding: 'compact' }),
     aside: surface({ body: 'Collaboration', padding: 'compact' }),
     asideLabel: 'Collaboration',
+  }),
+  modalSheet({
+    title: 'Follow-up',
+    closeHref: '/admin/crm/followups',
+    closeLabel: 'Close',
+    body: surface({ body: 'Follow-up workspace', padding: 'compact' }),
   }),
   stack([
     notice({
@@ -368,6 +377,22 @@ const componentContract = [
       },
     ],
   }),
+  attachmentPanel({
+    items: [
+      {
+        id: 'attachment',
+        name: 'customer-note.pdf',
+        href: '/files/attachment',
+        size: 1024,
+        mimetype: 'application/pdf',
+      },
+    ],
+    uploadAction: '/records/r/attachments',
+    emptyTitle: 'No attachments',
+    emptyHint: 'Upload a supporting file.',
+    chooseLabel: 'Choose file',
+    uploadLabel: 'Upload',
+  }),
 ]
 
 const everything = [
@@ -483,6 +508,30 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
+test('backend layout: framed list and form screens share the accounting workspace', () => {
+  const list = renderToString(pagesScreen(_, [page()], {}))
+  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
+  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
+
+  const rich = renderToString(
+    framed(
+      _,
+      'Record',
+      {},
+      recordWorkspace({
+        title: 'Record identity',
+        imageFallback: icon('package'),
+        body: surface({ body: 'Record body' }),
+      }),
+    ),
+  )
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
+  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
+
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /data-page-frame="true"\]:has/)
+})
+
 test('backend responder: a fragment request never renders document infrastructure', async () => {
   let styles = 0
   let documents = 0
@@ -578,6 +627,8 @@ test('form: required, help and error states are visible and semantically connect
           error: 'Enter a name',
         },
         { name: 'active', label: 'Active', type: 'checkbox', value: true },
+        { name: 'checkIn', label: 'Check-in', type: 'time', value: '14:00', step: '60' },
+        { name: 'identityColor', label: 'Colour', type: 'color', value: '#2563eb' },
       ],
     }),
   )
@@ -589,6 +640,29 @@ test('form: required, help and error states are visible and semantically connect
   assert.match(html, /data-ui="form-help" id="field--records-name-help"/)
   assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
   assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
+  assert.match(html, /data-kind="time"[\s\S]*type="time"[\s\S]*value="14:00"[\s\S]*step="60"/)
+  assert.match(html, /data-kind="color"[\s\S]*type="color"[\s\S]*value="#2563eb"/)
+})
+
+test('form: a record action bar can submit a form without duplicating its action', () => {
+  const html = renderToString(
+    recordForm({
+      id: 'partner-identity-form',
+      action: '/partners/one',
+      submit: 'Save',
+      submitVariant: 'primary',
+      submitPlacement: 'external',
+      fields: [{ name: 'name', label: 'Name', value: 'ACME' }],
+    }),
+  )
+  assert.match(html, /<form id="partner-identity-form"/)
+  assert.doesNotMatch(html, /data-ui="form-actions"/)
+  assert.match(
+    renderToString(
+      button({ label: 'Save', type: 'submit', form: 'partner-identity-form', variant: 'primary' }),
+    ),
+    /type="submit"[^>]*form="partner-identity-form"/,
+  )
 })
 
 test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {

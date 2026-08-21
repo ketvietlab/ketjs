@@ -283,6 +283,8 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     ),
     jobs: pick(manifest.jobs),
     sections: pick(manifest.sections),
+    contentTypes: pick(manifest.contentTypes),
+    taxonomies: pick(manifest.taxonomies),
     islands: pick(manifest.islands),
     views: pick(manifest.views),
     joints,

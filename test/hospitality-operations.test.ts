@@ -2,11 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
-import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
-const modules = [address, partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
@@ -93,6 +93,52 @@ test('hospitality operations: booking engine creates one atomic reservation, fol
   }
 })
 
+test('hospitality operations: quote is read-only and reflects committed room-night inventory', async () => {
+  const adapter = await boot()
+  try {
+    const args = {
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      bookingType: 'nightly',
+      checkIn: '2026-09-01T14:00:00.000Z',
+      checkOut: '2026-09-03T12:00:00.000Z',
+    }
+    const initial = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.deepEqual(
+      {
+        ok: initial.ok,
+        rate: initial.rate,
+        quantity: initial.quantity,
+        amountTotal: initial.amountTotal,
+        minimumAvailable: initial.minimumAvailable,
+      },
+      { ok: true, rate: '100', quantity: '2', amountTotal: '200', minimumAvailable: 2 },
+    )
+    assert.equal(
+      Number((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger'))[0]?.n),
+      0,
+      'quoting does not materialize inventory rows',
+    )
+
+    await call('hospitality_core.createReservation', reservation('quoted-r1'), adapter)
+    const afterOne = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.equal(afterOne.ok, true)
+    assert.equal(afterOne.minimumAvailable, 1)
+    assert.equal(
+      Number((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_availability_ledger'))[0]?.n),
+      2,
+      're-quoting does not mutate the committed ledger',
+    )
+
+    await call('hospitality_core.createReservation', reservation('quoted-r2'), adapter)
+    const full = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
+    assert.equal(full.ok, false)
+    assert.equal(((full.errors as Row[])[0] as Row).code, 'no_availability')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality operations: room assignments are append-only across check-in, move and checkout', async () => {
   const adapter = await boot()
   try {
@@ -133,6 +179,23 @@ test('hospitality operations: room assignments are append-only across check-in, 
     assert.equal(
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'dirty',
+    )
+    const moveTasks = await adapter.all(
+      `SELECT "roomId", "stayId", "taskType", priority, state, notes
+         FROM hospitality_core_cleaning_task
+        WHERE id = ?`,
+      ['move:a1:clean'],
+    )
+    assert.deepEqual(
+      { ...moveTasks[0] },
+      {
+        roomId: '101',
+        stayId: 'r1:stay',
+        taskType: 'daily_clean',
+        priority: 'normal',
+        state: 'todo',
+        notes: 'upgrade',
+      },
     )
 
     const checkedOut = await call(
@@ -222,6 +285,55 @@ test('hospitality operations: charges are idempotent and guest lists do not expo
       (await adapter.all('SELECT "amountTotal" FROM hospitality_core_folio'))[0]!.amountTotal,
       '225',
     )
+    const tampered = await call(
+      'hospitality_core.voidCharge',
+      { id: 'spa-1', folioId: 'another:folio', reason: 'tampered route scope' },
+      adapter,
+    )
+    assert.equal((tampered.value as Row).ok, false)
+    assert.equal(((tampered.value as Row).errors as Row[])[0]!.code, 'folio_mismatch')
+    assert.equal(
+      (await adapter.all('SELECT state FROM hospitality_core_charge WHERE id = ?', ['spa-1']))[0]!.state,
+      'active',
+    )
+    const voided = await call(
+      'hospitality_core.voidCharge',
+      {
+        id: 'spa-1',
+        folioId: 'r1:folio',
+        reason: 'posted twice',
+        voidedAt: '2026-08-25T10:00:00.000Z',
+      },
+      adapter,
+    )
+    const voidRetry = await call(
+      'hospitality_core.voidCharge',
+      { id: 'spa-1', folioId: 'r1:folio', reason: 'retry must not change evidence' },
+      adapter,
+    )
+    assert.deepEqual(
+      {
+        ok: (voided.value as Row).ok,
+        amount: (voided.value as Row).amount,
+        amountTotal: (voided.value as Row).amountTotal,
+        existing: (voided.value as Row).existing,
+      },
+      { ok: true, amount: 25, amountTotal: '200', existing: false },
+    )
+    assert.equal((voidRetry.value as Row).existing, true)
+    const storedCharge = (
+      await adapter.all('SELECT state, "voidedAt", "voidReason" FROM hospitality_core_charge WHERE id = ?', [
+        'spa-1',
+      ])
+    )[0]!
+    assert.deepEqual(
+      { ...storedCharge },
+      { state: 'void', voidedAt: '2026-08-25T10:00:00.000Z', voidReason: 'posted twice' },
+    )
+    assert.equal(
+      (await adapter.all('SELECT "amountTotal" FROM hospitality_core_folio'))[0]!.amountTotal,
+      '200',
+    )
 
     await call(
       'hospitality_core.addStayGuest',
@@ -246,7 +358,22 @@ test('hospitality operations: identity documents use storage references and safe
   const adapter = await boot()
   try {
     await call('hospitality_core.createReservation', reservation('r1'), adapter)
-    await call(
+    const unregistered = await call(
+      'hospitality_core.saveGuestDocument',
+      {
+        id: 'doc1',
+        stayId: 'r1:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        number: 'P7654321',
+        fullName: 'TRAN BINH',
+      },
+      adapter,
+    )
+    assert.equal((unregistered.value as Row).ok, false)
+    assert.equal(((unregistered.value as Row).errors as Row[])[0]?.code, 'guest_not_registered')
+
+    const saved = await call(
       'hospitality_core.saveGuestDocument',
       {
         id: 'doc1',
@@ -255,17 +382,41 @@ test('hospitality operations: identity documents use storage references and safe
         type: 'passport',
         number: 'P1234567',
         fullName: 'NGUYEN AN',
+        dateOfBirth: '1990-05-12T00:00:00.000Z',
         nationality: 'VN',
         permanentAddress: 'private address',
         ocrRaw: { confidence: 0.99 },
       },
       adapter,
     )
+    assert.equal((saved.value as Row).ok, true)
+    await call(
+      'hospitality_core.addStayGuest',
+      { id: 'g2', stayId: 'r1:stay', partnerId: 'companion', displayName: 'Trần Bình' },
+      adapter,
+    )
+    const reassigned = await call(
+      'hospitality_core.saveGuestDocument',
+      {
+        id: 'doc1',
+        stayId: 'r1:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        fullName: 'TRAN BINH',
+      },
+      adapter,
+    )
+    assert.equal((reassigned.value as Row).ok, false)
+    assert.equal(((reassigned.value as Row).errors as Row[])[0]?.code, 'document_owner_immutable')
+
     const documents = (await call('hospitality_core.listGuestDocuments', { stayId: 'r1:stay' }, adapter))
       .value as Row[]
-    assert.equal(documents[0]!.number, 'P1234567')
+    assert.equal(documents[0]!.numberLast4, '4567')
+    assert.equal(documents[0]!.dateOfBirthPresent, true)
+    assert.equal('number' in documents[0]!, false)
     assert.equal('permanentAddress' in documents[0]!, false)
     assert.equal('ocrRaw' in documents[0]!, false)
+    assert.doesNotMatch(JSON.stringify(documents), /P1234567|private address|confidence/)
   } finally {
     await adapter.close()
   }
@@ -376,6 +527,17 @@ test('hospitality housekeeping: checkout creates one urgent task and cleaning re
         },
       ],
     )
+    const detail = (await call('hospitality_core.getCleaningTask', { id: 'checkout:clean:stay' }, adapter))
+      .value as Row
+    assert.equal((detail.room as Row).status, 'dirty')
+    assert.equal((detail.property as Row).name, 'Ket Hotel')
+    assert.equal((detail.stay as Row).code, 'S-CLEAN')
+    const hidden = await callFn(
+      'hospitality_core.getCleaningTask',
+      { id: 'checkout:clean:stay' },
+      { adapter, manifest, scope: { company: 'globex', branches: null } },
+    )
+    assert.equal(hidden.value, null, 'a company cannot open another company’s housekeeping task')
     assert.equal(
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'dirty',
@@ -402,6 +564,144 @@ test('hospitality housekeeping: checkout creates one urgent task and cleaning re
       (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!.status,
       'available',
     )
+    const summary = (await call('hospitality_core.cleaningTaskSummary', { propertyId: 'hotel' }, adapter))
+      .value as Row
+    assert.deepEqual(summary, { todo: 0, inProgress: 0, done: 1, cancelled: 0 })
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality housekeeping: room board is scoped, exact and rejects unsafe status changes', async () => {
+  const adapter = await boot()
+  try {
+    const missingReason = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'maintenance' },
+      adapter,
+    )
+    assert.equal((missingReason.value as Row).ok, false)
+    assert.equal(((missingReason.value as Row).errors as Row[])[0]!.code, 'room_status_note_required')
+
+    const bypassHousekeeping = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'available' },
+      adapter,
+    )
+    assert.equal(
+      ((bypassHousekeeping.value as Row).errors as Row[])[0]!.code,
+      'room_status_available_managed',
+    )
+
+    const serviced = await call(
+      'hospitality_core.setRoomStatus',
+      {
+        id: '101',
+        expectedStatus: 'available',
+        status: 'maintenance',
+        note: 'Khóa nước tầng 1.',
+      },
+      adapter,
+    )
+    assert.equal((serviced.value as Row).status, 'maintenance')
+    const serviceRetry = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'maintenance' },
+      adapter,
+    )
+    assert.equal((serviceRetry.value as Row).status, 'maintenance')
+    const stale = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'available', status: 'dirty' },
+      adapter,
+    )
+    assert.equal(((stale.value as Row).errors as Row[])[0]!.code, 'transition_conflict')
+
+    const summary = (await call('hospitality_core.roomStatusSummary', { propertyId: 'hotel' }, adapter))
+      .value as Row
+    assert.deepEqual(summary, {
+      available: 1,
+      occupied: 0,
+      dirty: 0,
+      cleaning: 0,
+      maintenance: 1,
+      outOfOrder: 0,
+    })
+    const detail = (await call('hospitality_core.getHousekeepingRoom', { id: '101' }, adapter)).value as Row
+    assert.equal((detail.property as Row).name, 'Ket Hotel')
+    assert.equal((detail.roomType as Row).name, 'Deluxe')
+    assert.equal(detail.note, 'Khóa nước tầng 1.')
+    const hidden = await callFn(
+      'hospitality_core.getHousekeepingRoom',
+      { id: '101' },
+      { adapter, manifest, scope: { company: 'globex', branches: null } },
+    )
+    assert.equal(hidden.value, null)
+
+    const wrongTaskType = await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'wrong-service-task', code: 'HK-WRONG', roomId: '101', taskType: 'inspection' },
+      adapter,
+    )
+    assert.equal(((wrongTaskType.value as Row).errors as Row[])[0]!.code, 'cleaning_room_status')
+    await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'maintenance-task', code: 'HK-MAINT', roomId: '101', taskType: 'maintenance' },
+      adapter,
+    )
+    const releaseBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'dirty' },
+      adapter,
+    )
+    assert.equal(((releaseBlocked.value as Row).errors as Row[])[0]!.code, 'room_task_open')
+    await call('hospitality_core.cancelCleaningTask', { id: 'maintenance-task' }, adapter)
+    await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'maintenance', status: 'dirty' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.createCleaningTask',
+      { id: 'room-board-clean', code: 'HK-ROOM-BOARD', roomId: '101', taskType: 'inspection' },
+      adapter,
+    )
+    const taskBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'dirty', status: 'out_of_order', note: 'Khóa phòng.' },
+      adapter,
+    )
+    assert.equal(((taskBlocked.value as Row).errors as Row[])[0]!.code, 'room_task_open')
+
+    await call('hospitality_core.startCleaningTask', { id: 'room-board-clean' }, adapter)
+    const cleaningBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '101', expectedStatus: 'cleaning', status: 'maintenance', note: 'Dừng việc.' },
+      adapter,
+    )
+    assert.equal(((cleaningBlocked.value as Row).errors as Row[])[0]!.code, 'room_cleaning')
+    await call('hospitality_core.completeCleaningTask', { id: 'room-board-clean' }, adapter)
+
+    await call('hospitality_core.createReservation', reservation('occupied-board'), adapter)
+    await call(
+      'hospitality_core.checkIn',
+      {
+        stayId: 'occupied-board:stay',
+        roomId: '102',
+        assignmentId: 'occupied-board:assignment',
+        at: '2026-09-01T14:05:00.000Z',
+      },
+      adapter,
+    )
+    const occupiedBlocked = await call(
+      'hospitality_core.setRoomStatus',
+      { id: '102', expectedStatus: 'occupied', status: 'maintenance', note: 'Không an toàn.' },
+      adapter,
+    )
+    assert.equal(((occupiedBlocked.value as Row).errors as Row[])[0]!.code, 'room_occupied')
+    const occupied = (await call('hospitality_core.getHousekeepingRoom', { id: '102' }, adapter)).value as Row
+    assert.equal((occupied.currentStay as Row).code, 'S-OCCUPIED-BOARD')
+    assert.equal(((occupied.currentStay as Row).partner as Row).name, 'Nguyễn An')
   } finally {
     await adapter.close()
   }

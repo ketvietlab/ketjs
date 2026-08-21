@@ -1,7 +1,7 @@
 import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { Translator } from 'ketjs'
 import {
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordToggle as RecordToggle,
@@ -123,17 +123,21 @@ export const newProductScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('product_backend.create.title'),
-    frame,
-    <RecordWorkspace
-      kicker={_('product_backend.create.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('product_backend.create.title')}
-      subtitle={_('product_backend.create.subtitle')}
-      imageFallback={icon('package')}
-      badges={badges}
-      body={form}
-    />,
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('product_backend.create.kicker')}
+          title={_('product_backend.create.title')}
+          subtitle={_('product_backend.create.subtitle')}
+          imageFallback={icon('package')}
+          badges={badges}
+          body={form}
+        />
+      }
+    />
   )
 }

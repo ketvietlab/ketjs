@@ -3,7 +3,7 @@ import type { Route, ServeContext } from 'ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
-import { outboxScreen } from './screens.ts'
+import { outboxScreen } from './screens.tsx'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], lang: string) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',

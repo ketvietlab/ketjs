@@ -3,11 +3,11 @@ import { test } from 'node:test'
 import { compose, translator } from 'ketjs'
 import { renderToString } from 'ketjs-view'
 import backend, { formatMoney } from 'ketsuite/backend'
-import { movesScreen } from '../packages/ketsuite/src/modules/account_backend/screens.ts'
-import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.ts'
-import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.ts'
-import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.ts'
-import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.ts'
+import { customerInvoicesScreen } from '../packages/ketsuite/src/modules/account_backend/customer-invoices-screen.tsx'
+import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.tsx'
+import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
+import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.tsx'
+import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.tsx'
 
 const manifest = compose([backend], { headless: true })
 const vi = translator(manifest, 'vi')
@@ -69,10 +69,10 @@ test('money format: every money-bearing backend module renders formatted list va
         currency: 'VND',
       },
     ]),
-    movesScreen(vi, {
-      title: 'Moves',
+    customerInvoicesScreen(vi, {
       frame: {},
       action: '/moves',
+      locale: '',
       fields: [],
       rows: [
         {
@@ -92,13 +92,30 @@ test('money format: every money-bearing backend module renders formatted list va
       [
         {
           id: 'room-type-1',
+          propertyId: 'property-1',
           code: 'DLX',
           name: 'Deluxe',
           defaultCapacity: 2,
           baseRate: 1234567,
           published: true,
+          active: true,
         },
       ],
+      [
+        {
+          id: 'property-1',
+          code: 'PROP',
+          name: 'Property',
+          accommodationType: 'hotel',
+          starRating: 0,
+          active: true,
+          rooms: 0,
+          availableRooms: 0,
+          attentionRooms: 0,
+        },
+      ],
+      'property-1',
+      'vi',
       {},
     ),
   ]

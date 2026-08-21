@@ -14,7 +14,7 @@ import {
   signal,
 } from 'ketjs-view'
 import type { IslandDefinition, IslandProps } from 'ketjs-view'
-import { website, websiteSearch } from 'ketsuite'
+import { address, partner, website, websiteSearch } from 'ketsuite'
 
 // A module provides behaviour...
 let cartInstances = 0
@@ -268,7 +268,7 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
       'website.page': '<main></main>',
     },
   })
-  const modules = [website, websiteSearch, shell]
+  const modules = [address, partner, website, websiteSearch, shell]
   const manifest = compose(modules)
   const theme = createTheme(manifest, modules)
   const adapter = sqliteAdapter()

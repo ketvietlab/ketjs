@@ -40,6 +40,8 @@ export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './sc
 export { kanbanCard, kanbanGrid, recordList } from './data.tsx'
 export { mediaPanel } from './media.tsx'
 export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
+export { attachmentPanel } from './attachments.tsx'
+export type { AttachmentItem } from './attachments.tsx'
 export { recordForm, recordActions, formCluster } from './form.tsx'
 export { authTokenScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
@@ -48,12 +50,22 @@ export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
 export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
+export { modalSheet } from './modal.tsx'
 export type { RecordSummaryItem, RecordWorkspaceSlots } from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
-export { backendPage, shell, framed, appCard, card, cardGroups, definitionList } from './layout.tsx'
+export {
+  backendPage,
+  shell,
+  framed,
+  framedPage,
+  appCard,
+  card,
+  cardGroups,
+  definitionList,
+} from './layout.tsx'
 export type { CardMeta, Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'

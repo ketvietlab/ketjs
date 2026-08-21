@@ -211,11 +211,18 @@ const saleOrderEvidenceDir = resolve('docs/assets/sales-order-detail')
 const salesOrderListEvidenceDir = resolve('docs/assets/sales-order-list')
 const invoicingPolicyEvidenceDir = resolve('docs/assets/sales-invoicing-policy')
 const accountingInvoiceEvidenceDir = resolve('docs/assets/accounting-customer-invoice')
+const accountingOverviewEvidenceDir = resolve('docs/assets/accounting-overview')
+const customerInvoicesEvidenceDir = resolve('docs/assets/accounting-customer-invoices')
 const vendorBillsEvidenceDir = resolve('docs/assets/accounting-vendor-bills')
 const journalEntriesEvidenceDir = resolve('docs/assets/accounting-journal-entries')
 const paymentsEvidenceDir = resolve('docs/assets/accounting-payments')
 const accountsEvidenceDir = resolve('docs/assets/accounting-chart-of-accounts')
 const journalsEvidenceDir = resolve('docs/assets/accounting-journals')
+const taxesEvidenceDir = resolve('docs/assets/accounting-taxes')
+const paymentTermsEvidenceDir = resolve('docs/assets/accounting-payment-terms')
+const trialBalanceEvidenceDir = resolve('docs/assets/accounting-trial-balance')
+const generalLedgerEvidenceDir = resolve('docs/assets/accounting-general-ledger')
+const partnerLedgerEvidenceDir = resolve('docs/assets/accounting-partner-ledger')
 const report: Array<{ screen: string; readyMs: number; navigationMs: number }> = []
 const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
@@ -231,11 +238,18 @@ try {
   await mkdir(salesOrderListEvidenceDir, { recursive: true })
   await mkdir(invoicingPolicyEvidenceDir, { recursive: true })
   await mkdir(accountingInvoiceEvidenceDir, { recursive: true })
+  await mkdir(accountingOverviewEvidenceDir, { recursive: true })
+  await mkdir(customerInvoicesEvidenceDir, { recursive: true })
   await mkdir(vendorBillsEvidenceDir, { recursive: true })
   await mkdir(journalEntriesEvidenceDir, { recursive: true })
   await mkdir(paymentsEvidenceDir, { recursive: true })
   await mkdir(accountsEvidenceDir, { recursive: true })
   await mkdir(journalsEvidenceDir, { recursive: true })
+  await mkdir(taxesEvidenceDir, { recursive: true })
+  await mkdir(paymentTermsEvidenceDir, { recursive: true })
+  await mkdir(trialBalanceEvidenceDir, { recursive: true })
+  await mkdir(generalLedgerEvidenceDir, { recursive: true })
+  await mkdir(partnerLedgerEvidenceDir, { recursive: true })
   chrome = await startChrome()
   const { cdp } = chrome
   await cdp.send('Page.enable')
@@ -354,6 +368,16 @@ try {
       ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelector('[data-ui="activity-record"][data-state="ready"]')`,
     },
     {
+      name: 'accounting-overview',
+      path: '/admin/accounting?lang=vi',
+      ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelectorAll('[data-ui="content-card"]').length >= 10`,
+    },
+    {
+      name: 'accounting-customer-invoices',
+      path: '/admin/customer-invoices?lang=vi',
+      ready: `document.querySelector('#customer-invoice-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
       name: 'accounting-vendor-bills',
       path: '/admin/vendor-bills?lang=vi',
       ready: `document.querySelector('#vendor-bill-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
@@ -377,6 +401,31 @@ try {
       name: 'accounting-journals',
       path: '/admin/journals?lang=vi',
       ready: `document.querySelector('#journal-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-taxes',
+      path: '/admin/taxes?lang=vi',
+      ready: `document.querySelector('#tax-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-payment-terms',
+      path: '/admin/payment-terms?lang=vi',
+      ready: `document.querySelector('#payment-term-create-form') && document.querySelector('#payment-term-line-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-trial-balance',
+      path: '/admin/trial-balance?lang=vi',
+      ready: `document.querySelector('#trial-balance-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-general-ledger',
+      path: '/admin/general-ledger?accountId=account-bank-collab&lang=vi',
+      ready: `document.querySelector('#general-ledger-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'accounting-partner-ledger',
+      path: '/admin/partner-statement?partnerId=member-party&lang=vi',
+      ready: `document.querySelector('#partner-ledger-filter-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'lot-list',
@@ -1993,6 +2042,63 @@ try {
         mobile: false,
       })
     }
+    if (screen.name === 'accounting-overview') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+          workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+          cards: document.querySelectorAll('[data-ui="content-card"]').length,
+          operations: document.body.textContent.includes('Nghiệp vụ hằng ngày'),
+          chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+          overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+        })`,
+        ),
+        { workspace: true, cards: 11, operations: true, chatter: false, overflow: false },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(accountingOverviewEvidenceDir, 'overview-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelectorAll('[data-ui="content-card"]').length >= 10 && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Daily operations') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(accountingOverviewEvidenceDir, 'overview-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelectorAll('[data-ui="content-card"]').length >= 10 && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(accountingOverviewEvidenceDir, `overview-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
     if (screen.name === 'accounting-customer-invoice') {
       assert.deepEqual(
         await evaluate(
@@ -2106,6 +2212,66 @@ try {
         )
         await evaluate(cdp, `scrollTo(0, 0)`)
         if (!noArtifacts) await capture(cdp, join(vendorBillsEvidenceDir, `vendor-bills-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-customer-invoices') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#customer-invoice-create-form')),
+        invoice: document.querySelector('[data-ui="table"]')?.textContent.includes('invoice-collab'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#customer-invoice-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        { workspace: true, form: true, invoice: true, chatter: false, rowsAtLeast28: true, overflow: false },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Current customer invoices') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts)
+        await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/customer-invoices?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(customerInvoicesEvidenceDir, `customer-invoices-${lang}-mobile.png`))
       }
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
@@ -2345,6 +2511,340 @@ try {
         )
         await evaluate(cdp, `scrollTo(0, 0)`)
         if (!noArtifacts) await capture(cdp, join(journalsEvidenceDir, `journals-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-taxes') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#tax-create-form')),
+        tax: document.querySelector('[data-ui="table"]')?.textContent.includes('VAT 10%'),
+        amountLabel: document.querySelector('#tax-create-form')?.textContent.includes('Số tiền / tỷ lệ'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#tax-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          tax: true,
+          amountLabel: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(taxesEvidenceDir, 'taxes-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/taxes?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#tax-create-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Current taxes') && document.querySelector('#tax-create-form')?.textContent.includes('Amount / rate') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(taxesEvidenceDir, 'taxes-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/taxes?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#tax-create-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts) await capture(cdp, join(taxesEvidenceDir, `taxes-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-payment-terms') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        termForm: Boolean(document.querySelector('#payment-term-create-form')),
+        lineForm: Boolean(document.querySelector('#payment-term-line-form')),
+        term: document.querySelector('[data-ui="table"]')?.textContent.includes('30 ngày'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#payment-term-create-form [data-ui="form-field"], #payment-term-line-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          termForm: true,
+          lineForm: true,
+          term: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(paymentTermsEvidenceDir, 'payment-terms-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/payment-terms?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#payment-term-line-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Current payment terms') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(paymentTermsEvidenceDir, 'payment-terms-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/payment-terms?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#payment-term-line-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(paymentTermsEvidenceDir, `payment-terms-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-trial-balance') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#trial-balance-filter-form')),
+        rows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+        totals: document.querySelector('[data-ui="record-facts"]')?.textContent.includes('Tổng Nợ'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#trial-balance-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          rows: true,
+          totals: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(trialBalanceEvidenceDir, 'trial-balance-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/trial-balance?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#trial-balance-filter-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Balances by account') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(trialBalanceEvidenceDir, 'trial-balance-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/trial-balance?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#trial-balance-filter-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(trialBalanceEvidenceDir, `trial-balance-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-general-ledger') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#general-ledger-filter-form')),
+        rows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+        entry: document.querySelector('[data-ui="table"]')?.textContent.includes('Khách hàng thanh toán một phần'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#general-ledger-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          rows: true,
+          entry: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(generalLedgerEvidenceDir, 'general-ledger-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Account movements') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(generalLedgerEvidenceDir, 'general-ledger-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/general-ledger?accountId=account-bank-collab&lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#general-ledger-filter-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(generalLedgerEvidenceDir, `general-ledger-${lang}-mobile.png`))
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'accounting-partner-ledger') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        form: Boolean(document.querySelector('#partner-ledger-filter-form')),
+        rows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+        movement: document.querySelector('[data-ui="table"]')?.textContent.includes('Khách hàng thanh toán một phần'),
+        chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#partner-ledger-filter-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`,
+        ),
+        {
+          workspace: true,
+          form: true,
+          rows: true,
+          movement: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(partnerLedgerEvidenceDir, 'partner-ledger-vi-desktop.png'))
+      await navigate(cdp, `${e2e.baseUrl}/admin/partner-statement?partnerId=member-party&lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#partner-ledger-filter-form') && document.documentElement.lang === 'en'`,
+      )
+      assert.equal(
+        await evaluate(
+          cdp,
+          `document.body.textContent.includes('Partner movements') && document.documentElement.scrollWidth === document.documentElement.clientWidth`,
+        ),
+        true,
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(partnerLedgerEvidenceDir, 'partner-ledger-en-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/partner-statement?partnerId=member-party&lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#partner-ledger-filter-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        await evaluate(cdp, `scrollTo(0, 0)`)
+        if (!noArtifacts)
+          await capture(cdp, join(partnerLedgerEvidenceDir, `partner-ledger-${lang}-mobile.png`))
       }
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,

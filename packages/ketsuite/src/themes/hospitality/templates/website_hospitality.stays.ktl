@@ -1,0 +1,1 @@
+<section class="stays" data-ket-section="stays"><p class="eyebrow">Rooms & suites</p><h2>{{ heading | default: 'Find your place to pause' }}</h2><div class="stay-grid"><article>Quiet rooms</article><article>Thoughtful details</article><article>Local character</article></div></section>

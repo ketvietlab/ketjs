@@ -1,0 +1,1 @@
+<section class="booking" id="contact" data-ket-section="booking"><p class="eyebrow">Plan your stay</p><h2>{{ heading | default: 'Dates in mind?' }}</h2><a class="cta" href="mailto:stay@example.com">Request availability</a></section>

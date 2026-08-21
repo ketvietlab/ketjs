@@ -14,6 +14,12 @@ export type {
   ResolvedWorkspace,
   ResolveWorkspaceOptions,
 } from './kernel/modules.ts'
+export type {
+  ContentTypeDef,
+  TaxonomyDef,
+  ComposedContentType,
+  ComposedTaxonomy,
+} from './types.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
 export { createAppRegistry, restrictManifest } from './kernel/apps.ts'

@@ -13,6 +13,7 @@ import { defineModule } from 'ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 import { joints } from './joints.ts'
+import { islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
@@ -36,18 +37,29 @@ export default defineModule({
   functions: savedSearchFunctions,
   menus,
   joints,
+  islands,
+  fills: { 'backend:relation.select': `{% island "backend.relation-select" %}` },
   messages,
 })
 
 // The screens this module owns: data assembly, no markup.
-export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.ts'
-export type { AppRow, PageRow, Screen } from './screens.ts'
+export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.tsx'
+export type { AppRow, PageRow, Screen } from './screens.tsx'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'
 export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes, viewerOf, timezoneOf } from './routes.ts'
+export { relationControl, relationLabels } from './relation-select.ts'
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from './relation-select.ts'
+export { readForm, seeOther } from './forms.ts'
 
 /**
  * The kit, re-exported.
@@ -104,6 +116,8 @@ export {
   breadcrumbs,
   tabs,
   mediaPanel,
+  attachmentPanel,
+  modalSheet,
   recordForm,
   formCluster,
   recordActions,

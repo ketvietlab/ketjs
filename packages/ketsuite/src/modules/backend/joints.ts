@@ -11,6 +11,8 @@ import type { JointDef } from 'ketjs'
  * `props` says what a fill receives, and receives nothing else.
  */
 export const joints: Record<string, JointDef> = {
+  /** Function-backed relational selector; owning screens supply model-specific capabilities. */
+  'relation.select': { props: { id: 'id', config: 'json' } },
   /**
    * Sidebar entries, after the ones backend owns.
    *
