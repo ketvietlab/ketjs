@@ -34,6 +34,7 @@ export function compose(
     functions: {},
     jobs: {},
     views: {},
+    reports: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
     sections: {},
@@ -557,6 +558,51 @@ export function compose(
         dryRun: def.dryRun !== false,
         agent: def.agent === true,
       }
+    }
+  }
+
+  // --- printable reports ---------------------------------------------------
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.reports ?? {})) {
+      const id = qualify(m.name, name)
+      if (!/^[a-z][a-zA-Z0-9_]*$/.test(name)) {
+        diag.add({ code: 'E_REPORT_NAME', module: m.name, message: `invalid report name "${name}"` })
+        continue
+      }
+      if (!manifest.models[def.target]) {
+        diag.add({
+          code: 'E_REPORT_UNKNOWN_MODEL',
+          module: m.name,
+          message: `report "${id}" targets unknown model "${def.target}"`,
+        })
+        continue
+      }
+      const source = manifest.functions[def.source]
+      if (!source) {
+        diag.add({
+          code: 'E_REPORT_UNKNOWN_SOURCE',
+          module: m.name,
+          message: `report "${id}" uses unknown function "${def.source}"`,
+        })
+        continue
+      }
+      if (source.effects.some((effect) => effect.startsWith('write:') || effect.startsWith('enqueue:'))) {
+        diag.add({
+          code: 'E_REPORT_SOURCE_WRITES',
+          module: m.name,
+          message: `report "${id}" source "${def.source}" is not read-only`,
+        })
+        continue
+      }
+      if (!def.template.trim()) {
+        diag.add({
+          code: 'E_REPORT_TEMPLATE_EMPTY',
+          module: m.name,
+          message: `report "${id}" has no template`,
+        })
+        continue
+      }
+      manifest.reports[id] = { ...def, by: m.name, id }
     }
   }
 

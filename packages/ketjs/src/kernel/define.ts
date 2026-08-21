@@ -16,6 +16,7 @@ const MODULE_KEYS = new Set([
   'functions',
   'jobs',
   'views',
+  'reports',
   'requires',
   'tokens',
   'templates',
@@ -73,6 +74,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     functions: spec.functions ?? {},
     jobs: spec.jobs ?? {},
     views: spec.views ?? {},
+    reports: spec.reports ?? {},
     requires: Object.freeze([...(spec.requires ?? [])]),
     tokens: spec.tokens ?? {},
     templates: spec.templates ?? {},
@@ -109,6 +111,7 @@ const THEME_FORBIDDEN = [
   'islands',
   'contentTypes',
   'taxonomies',
+  'reports',
 ] as const
 
 /**

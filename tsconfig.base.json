@@ -19,6 +19,7 @@
       "@ketvietlab/ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
       "@ketvietlab/ketjs": ["./packages/ketjs/src/index.ts"],
       "@ketvietlab/ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
+      "@ketvietlab/ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],
       "@ketvietlab/ketjs/testing": ["./packages/ketjs/src/testing.ts"],
       "@ketvietlab/ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
       "@ketvietlab/ketsuite": ["./packages/ketsuite/src/index.ts"],

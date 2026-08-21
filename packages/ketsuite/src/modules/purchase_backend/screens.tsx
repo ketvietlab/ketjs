@@ -1,5 +1,5 @@
 import type { Translator } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   cardGrid,
@@ -259,6 +259,7 @@ export const orderDetail = (
     actionPath?: string
     lineFields: FormField[]
     billFields: FormField[]
+    printActions?: JSXChild
   },
 ): TemplateResult => {
   const path = o.actionPath ?? pathOf(o.order)
@@ -326,6 +327,7 @@ export const orderDetail = (
             contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
         }),
         ...(actions.length ? [<Surface body={recordActions({ action: path, actions })} />] : []),
+        ...(o.printActions === undefined ? [] : [<Surface body={o.printActions} />]),
         <Section
           title={_('purchase_backend.lines.title')}
           body={
