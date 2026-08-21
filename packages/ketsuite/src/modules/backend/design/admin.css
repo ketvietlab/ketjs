@@ -2969,6 +2969,191 @@
     font: inherit;
   }
 
+  /* Relational selectors keep the short path compact and put full CRUD in the
+     modal. The footer action remains visible even when the relation is empty. */
+  [data-ui="relation-select"] {
+    position: relative;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+  [data-ui="relation-native"] {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-ui="relation-trigger"] {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--admin-control-height);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-trigger"][data-empty="true"] {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="relation-trigger"]:focus-visible {
+    border-color: var(--admin-focus-border);
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    outline: none;
+  }
+  [data-ui="relation-value"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="relation-menu"] {
+    position: absolute;
+    inset-block-start: calc(100% + 0.25rem);
+    inset-inline: 0;
+    z-index: 40;
+    display: grid;
+    min-inline-size: min(22rem, calc(100vw - 2rem));
+    overflow: hidden;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+  [data-ui="relation-search"] {
+    inline-size: calc(100% - var(--admin-gap-sm) * 2);
+    min-block-size: var(--admin-control-height);
+    margin: var(--admin-gap-sm);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+  }
+  [data-ui="relation-options"] {
+    display: grid;
+    max-block-size: 16rem;
+    overflow: auto;
+  }
+  [data-ui="relation-option"] {
+    display: grid;
+    min-block-size: var(--admin-control-height);
+    padding: 0.375rem 0.625rem;
+    border: 0;
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-option"]:is(:hover, :focus-visible),
+  [data-ui="relation-option"][aria-selected="true"] {
+    background: var(--admin-accent-soft);
+    outline: none;
+  }
+  [data-ui="relation-option"] small {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="relation-footer"] {
+    display: flex;
+    justify-content: flex-start;
+    padding: var(--admin-gap-xs) var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-line);
+  }
+  [data-ui="relation-dialog-toolbar"] {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    margin-block-end: var(--admin-gap);
+  }
+  [data-ui="relation-dialog-toolbar"] [data-ui="form-control"] {
+    flex: 1 1 auto;
+  }
+  [data-ui="relation-dialog-list"] {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    border-block-start: 1px solid var(--admin-line);
+    list-style: none;
+  }
+  [data-ui="relation-dialog-row"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm) 0;
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="relation-dialog-main"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: 0.125rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-dialog-main"]:focus-visible {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 2px;
+  }
+  [data-ui="relation-dialog-meta"] {
+    overflow: hidden;
+    color: var(--admin-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="relation-dialog-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="relation-editor"] {
+    display: grid;
+    gap: var(--admin-gap);
+    margin-block-end: var(--admin-gap);
+    padding: var(--admin-gap);
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="relation-empty"] {
+    margin: 0;
+    padding: var(--admin-gap);
+    color: var(--admin-ink-muted);
+    text-align: center;
+  }
+  [data-ui="modal-sheet"][data-size="large"] {
+    inline-size: min(56rem, calc(100vw - var(--admin-gap-lg)));
+  }
+  [data-ui="modal-layer"][data-presentation="dialog"] {
+    place-items: center;
+    padding: var(--admin-gap-lg);
+  }
+  [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"] {
+    inline-size: min(56rem, 100%);
+    block-size: auto;
+    max-block-size: calc(100dvh - var(--admin-gap-lg) * 2);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-lg);
+    overflow: hidden;
+  }
+
   /* URL-addressable modal workspace. The backdrop is a real close link and
      the sheet owns its scroll, so the document never grows horizontally. */
   [data-ui="modal-layer"] {
@@ -2985,6 +3170,11 @@
     display: block;
     background: color-mix(in srgb, #000 36%, transparent);
     text-decoration: none;
+  }
+  button[data-ui="modal-backdrop"] {
+    padding: 0;
+    border: 0;
+    cursor: pointer;
   }
   [data-ui="modal-backdrop"] > span {
     position: absolute;
@@ -3554,6 +3744,41 @@
     [data-ui="record-form"][data-layout="inline"][data-has-fields="false"] {
       min-inline-size: 100%;
     }
+    [data-ui="relation-menu"] {
+      position: fixed;
+      inset: auto var(--admin-gap-sm) var(--admin-gap-sm);
+      max-block-size: min(28rem, calc(100dvh - var(--admin-gap-lg)));
+    }
+    [data-ui="relation-options"] {
+      max-block-size: min(18rem, 45dvh);
+    }
+    [data-ui="relation-dialog-toolbar"],
+    [data-ui="relation-dialog-row"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="relation-dialog-toolbar"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    [data-ui="relation-dialog-row"] {
+      align-items: stretch;
+    }
+    [data-ui="relation-dialog-actions"] {
+      justify-content: flex-end;
+    }
+    [data-ui="relation-dialog-actions"] [data-ui="action"] {
+      flex: 0 0 auto;
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"] {
+      padding: 0;
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"] {
+      inline-size: 100%;
+      block-size: 100dvh;
+      max-block-size: 100dvh;
+      border: 0;
+      border-radius: 0;
+    }
   }
 
   [data-ui="card-grid"] {
@@ -3925,6 +4150,11 @@
   @media (max-width: 47.9375rem) {
     :where([data-ui="action"], [data-control="action"])[data-size] {
       min-block-size: 2.75rem;
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"]
+      [data-ui="relation-dialog-actions"]
+      [data-ui="action"][data-size="compact"] {
+      min-block-size: var(--admin-control-height);
     }
     :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
       inline-size: 2.75rem;

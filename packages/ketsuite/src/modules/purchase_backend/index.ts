@@ -6,6 +6,7 @@ import type { FormField, Frame } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
+import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.ts'
 
@@ -72,6 +73,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   return {
     companies,
     partners: partners.filter((row) => !own.has(row.id)),
+    excludedPartnerIds: [...own].map(String),
     templates: purchasable,
     variants,
     units,
@@ -82,11 +84,25 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
-const orderFields = (_: Translator, data: Awaited<ReturnType<typeof common>>): FormField[] => [
+const orderFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  data: Awaited<ReturnType<typeof common>>,
+): Promise<FormField[]> => [
   {
     name: 'partnerId',
     label: _('purchase_backend.field.vendor'),
     type: 'select',
+    control: await partnerRelationControl(ctx, url, req, _, {
+      id: 'purchase-vendor',
+      partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+      fieldLabel: _('purchase_backend.field.vendor'),
+      title: _('purchase_backend.relation.vendors'),
+      required: true,
+      excludeIds: data.excludedPartnerIds,
+    }),
     options: choices(data.partners),
     required: true,
   },
@@ -302,6 +318,7 @@ const vi = {
   'action.saveMethod': 'Lưu chính sách',
   'field.name': 'Số đơn',
   'field.vendor': 'Nhà cung cấp',
+  'relation.vendors': 'Quản lý nhà cung cấp',
   'field.partnerRef': 'Tham chiếu nhà cung cấp',
   'field.state': 'Trạng thái',
   'field.dateOrder': 'Ngày đặt hàng',
@@ -390,6 +407,7 @@ const en = {
   'action.saveMethod': 'Save Policy',
   'field.name': 'Order Reference',
   'field.vendor': 'Vendor',
+  'relation.vendors': 'Manage vendors',
   'field.partnerRef': 'Vendor Reference',
   'field.state': 'Status',
   'field.dateOrder': 'Order Deadline',
@@ -438,7 +456,7 @@ const en = {
 export default defineModule({
   name: 'purchase_backend',
   version: '0.1.0',
-  depends: ['purchase', 'backend'],
+  depends: ['purchase', 'backend', 'partner_backend'],
   install: 'auto',
   app: true,
   title: 'Mua hàng trong quản trị',
@@ -523,12 +541,12 @@ export default defineModule({
               ['draft', 'sent', 'to approve'].includes(String(row.state)) && (!state || row.state === state),
           )
           .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
-        return document(ctx, url, req, 'purchase_backend.rfqs.title', (_, shell) =>
+        return document(ctx, url, req, 'purchase_backend.rfqs.title', async (_, shell) =>
           ordersScreen(_, {
             title: _('purchase_backend.rfqs.title'),
             frame: shell,
             rows,
-            createFields: orderFields(_, data),
+            createFields: await orderFields(ctx, url, req, _, data),
             createAction: rfqPath,
           }),
         )

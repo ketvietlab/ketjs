@@ -13,6 +13,7 @@ import { defineModule } from 'ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 import { joints } from './joints.ts'
+import { islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
@@ -36,6 +37,8 @@ export default defineModule({
   functions: savedSearchFunctions,
   menus,
   joints,
+  islands,
+  fills: { 'backend:relation.select': `{% island "backend.relation-select" %}` },
   messages,
 })
 
@@ -48,6 +51,14 @@ export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes, viewerOf, timezoneOf } from './routes.ts'
+export { relationControl, relationLabels } from './relation-select.ts'
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from './relation-select.ts'
 export { readForm, seeOther } from './forms.ts'
 
 /**

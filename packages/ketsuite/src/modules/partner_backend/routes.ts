@@ -6,6 +6,7 @@ import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.ts'
+import { partnerRelationControl } from './relation-control.ts'
 
 type AnyRow = Record<string, unknown>
 type Req = Parameters<Route>[1]
@@ -47,6 +48,26 @@ const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: s
   )
     .filter((row) => row.id !== exclude)
     .map((row) => ({ value: String(row.id), label: String(row.name) }))
+
+const parentControlFor = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: ReturnType<ServeContext['translate']>,
+  parents: Array<{ value: string; label: string }>,
+  options: { id: string; value?: string | null; excludeIds?: string[] },
+) =>
+  partnerRelationControl(ctx, url, req, _, {
+    id: options.id,
+    name: 'parentId',
+    value: options.value,
+    partners: parents.map((parent) => ({ id: parent.value, name: parent.label })),
+    fieldLabel: _('partner_backend.field.parent'),
+    title: _('partner_backend.relation.parents'),
+    allowEmpty: true,
+    excludeIds: options.excludeIds,
+    companiesOnly: true,
+  })
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -168,6 +189,11 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     }),
   ])
   if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
+  const parentControl = await parentControlFor(ctx, url, req, _, parents, {
+    id: `partner-parent-${id}`,
+    value: row.parentId ? String(row.parentId) : '',
+    excludeIds: [id],
+  })
   const addressForms = await addressFormsFor(
     ctx,
     url,
@@ -183,7 +209,7 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     partnerDetailScreen(
       _,
       row as never,
-      { parents, terms: terms as never, errors, integration, addressForms },
+      { parents, terms: terms as never, errors, integration, addressForms, parentControl },
       await frameFor(ctx, url, req),
       url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
     ),
@@ -274,6 +300,7 @@ export const routes: Record<string, RouteEntry> = {
         const id = randomUUID()
         const result = await savePartner(ctx, url, req, id, form)
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${id}`))
+        const parents = await partnerOptions(ctx, url, req)
         return document(
           ctx,
           url,
@@ -281,14 +308,19 @@ export const routes: Record<string, RouteEntry> = {
           _('partner_backend.create.title'),
           newPartnerScreen(
             _,
-            await partnerOptions(ctx, url, req),
+            parents,
             await frameFor(ctx, url, req),
             translatedErrors(result, _),
             url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            await parentControlFor(ctx, url, req, _, parents, {
+              id: 'partner-parent-new',
+              value: form.parentId,
+            }),
           ),
         )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const parents = await partnerOptions(ctx, url, req)
       return document(
         ctx,
         url,
@@ -296,10 +328,11 @@ export const routes: Record<string, RouteEntry> = {
         _('partner_backend.create.title'),
         newPartnerScreen(
           _,
-          await partnerOptions(ctx, url, req),
+          parents,
           await frameFor(ctx, url, req),
           undefined,
           url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+          await parentControlFor(ctx, url, req, _, parents, { id: 'partner-parent-new' }),
         ),
       )
     },
