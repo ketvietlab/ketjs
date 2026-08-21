@@ -654,14 +654,46 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(directDetailVi.status, 200)
   const directDetailViHtml = await directDetailVi.text()
   assert.match(directDetailViHtml, /WEB-001/)
+  assert.match(directDetailViHtml, /Cập nhật đặt phòng/)
   assert.match(directDetailViHtml, /Nhận phòng/)
   assert.doesNotMatch(directDetailViHtml, /hospitality_core\./)
   const directDetailEn = await e2e.client.get('/admin/hospitality/reservations/direct-web?lang=en')
   assert.equal(directDetailEn.status, 200)
   const directDetailEnHtml = await directDetailEn.text()
   assert.match(directDetailEnHtml, /Check in/)
+  assert.match(directDetailEnHtml, /Update reservation/)
   assert.match(directDetailEnHtml, /Cancel reservation/)
   assert.doesNotMatch(directDetailEnHtml, /hospitality_core\./)
+  const directAmended = await e2e.client.post(
+    '/admin/hospitality/reservations/direct-web?lang=vi',
+    new URLSearchParams({
+      operation: 'amend',
+      lang: 'vi',
+      partnerId: 'guest',
+      roomTypeId: 'deluxe',
+      checkIn: '2026-08-23T14:00',
+      checkOut: '2026-08-25T12:00',
+      adults: '2',
+      children: '0',
+      rate: '120',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(directAmended.status, 303, await directAmended.clone().text())
+  assert.match(directAmended.headers.get('location') ?? '', /status=amended/)
+  const amendedPage = await e2e.client.get(directAmended.headers.get('location')!)
+  const amendedHtml = await amendedPage.text()
+  assert.match(amendedHtml, /Đã cập nhật đặt phòng/)
+  assert.match(amendedHtml, /240/)
+  assert.doesNotMatch(amendedHtml, /hospitality_core\./)
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    await adapter.exec(`UPDATE hospitality_core_reservation SET provider = 'exely' WHERE id = 'direct-web'`)
+  })
+  const externalDetail = await e2e.client.get('/admin/hospitality/reservations/direct-web?lang=en')
+  const externalDetailHtml = await externalDetail.text()
+  assert.match(externalDetailHtml, /Exely/)
+  assert.doesNotMatch(externalDetailHtml, /Update reservation/)
+  assert.doesNotMatch(externalDetailHtml, /hospitality_core\.provider/)
   const directCancelled = await e2e.client.post(
     '/admin/hospitality/reservations/direct-web?lang=vi',
     new URLSearchParams({ operation: 'cancel', lang: 'vi', reason: 'Khách đổi lịch' }),

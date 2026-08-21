@@ -29,12 +29,18 @@ import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
 import {
   ACCOMMODATION_TYPES,
+  BOOKING_PROVIDERS,
   CHARGE_TYPES,
   DOCUMENT_TYPES,
   GENDERS,
   ROOM_STATUSES,
   ROOM_VIEW_TYPES,
 } from './types.ts'
+
+const providerName = (_: Translator, provider: string): string =>
+  BOOKING_PROVIDERS.includes(provider as (typeof BOOKING_PROVIDERS)[number])
+    ? _(`hospitality_core.provider.${provider}`)
+    : provider.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 
 export type PropertyRow = {
   id: string
@@ -449,6 +455,16 @@ export type ReservationIntakeValues = {
   roomTypeId: string
   partnerId: string
   bookingType: string
+  checkIn: string
+  checkOut: string
+  adults: number
+  children: number
+  rate: string
+}
+
+export type ReservationAmendmentValues = {
+  partnerId: string
+  roomTypeId: string
   checkIn: string
   checkOut: string
   adults: number
@@ -4781,7 +4797,7 @@ const reservationColumns = (
   {
     key: 'provider',
     label: _('hospitality_core.col.provider'),
-    cell: (row) => badge(_(`hospitality_core.provider.${row.provider}`), 'neutral'),
+    cell: (row) => badge(providerName(_, row.provider), 'neutral'),
     kind: 'status',
   },
   {
@@ -5323,6 +5339,12 @@ const reservationDetailFeedback = (
       message: _('hospitality_core.reservation.feedback.cancelledHint'),
       tone: 'warning',
     })
+  if (status === 'amended')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.amended'),
+      message: _('hospitality_core.reservation.feedback.amendedHint'),
+      tone: 'positive',
+    })
   if (errors.length)
     return notice({
       title: _('hospitality_core.feedback.invalid'),
@@ -5336,6 +5358,9 @@ export const reservationDetailScreen = (
   _: Translator,
   reservation: ReservationDetail,
   rooms: RoomRow[],
+  roomTypes: Choice[],
+  partners: Choice[],
+  amendment: ReservationAmendmentValues,
   locale: string,
   timezone: string,
   frame: Frame,
@@ -5347,6 +5372,77 @@ export const reservationDetailScreen = (
   const backHref = `/admin/hospitality/reservations?property=${encodeURIComponent(reservation.propertyId)}&lang=${encodeURIComponent(locale)}`
   const action = `/admin/hospitality/reservations/${encodeURIComponent(reservation.id)}?lang=${encodeURIComponent(locale)}`
   const actions: TemplateResult[] = []
+
+  if (reservation.state === 'confirmed' && reservation.provider === 'direct') {
+    actions.push(
+      section({
+        title: _('hospitality_core.reservation.action.amend'),
+        description: _('hospitality_core.reservation.action.amendHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.reservation.action.amend'),
+          submitVariant: 'secondary',
+          hidden: { operation: 'amend', lang: locale },
+          fields: [
+            {
+              name: 'partnerId',
+              label: _('hospitality_core.reservation.field.guest'),
+              type: 'select',
+              value: amendment.partnerId,
+              options: choices(partners),
+              required: true,
+            },
+            {
+              name: 'roomTypeId',
+              label: _('hospitality_core.reservation.field.roomType'),
+              type: 'select',
+              value: amendment.roomTypeId,
+              options: choices(roomTypes),
+              required: true,
+            },
+            {
+              name: 'checkIn',
+              label: _('hospitality_core.col.checkIn'),
+              type: 'datetime-local',
+              value: amendment.checkIn,
+              required: true,
+            },
+            {
+              name: 'checkOut',
+              label: _('hospitality_core.col.checkOut'),
+              type: 'datetime-local',
+              value: amendment.checkOut,
+              required: true,
+            },
+            {
+              name: 'adults',
+              label: _('hospitality_core.reservation.field.adults'),
+              type: 'number',
+              value: amendment.adults,
+              step: '1',
+              required: true,
+            },
+            {
+              name: 'children',
+              label: _('hospitality_core.reservation.field.children'),
+              type: 'number',
+              value: amendment.children,
+              step: '1',
+              required: true,
+            },
+            {
+              name: 'rate',
+              label: _('hospitality_core.reservation.field.rate'),
+              type: 'decimal',
+              value: amendment.rate,
+              required: true,
+            },
+          ],
+        }),
+      }),
+    )
+  }
 
   if (reservation.state === 'confirmed' && reservation.stayId) {
     actions.push(
@@ -5439,7 +5535,7 @@ export const reservationDetailScreen = (
             workflowTone(reservation.state),
             reservation.state,
           ),
-          badge(_(`hospitality_core.provider.${reservation.provider}`), 'neutral'),
+          badge(providerName(_, reservation.provider), 'neutral'),
         ],
         summary: [
           {
@@ -6320,7 +6416,7 @@ export const tapeChartScreen = (
       start: Math.min(dayCount - 1, eventStart),
       span: Math.max(1, eventEnd - eventStart),
       label: event.guest,
-      detail: _(`hospitality_core.provider.${event.provider}`),
+      detail: providerName(_, event.provider),
       state: event.state,
       tone: workflowTone(event.state),
     }
