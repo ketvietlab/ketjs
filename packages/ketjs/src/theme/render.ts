@@ -3,10 +3,12 @@
 
 import { compileKtl } from './ktl/compile.ts'
 import type { Compiled, Filter, Scope } from './ktl/compile.ts'
-import { renderIsland } from '@ketvietlab/ketjs-view'
 import type { IslandRegistry } from '@ketvietlab/ketjs-view'
 import { sealScope } from './viewmodel.ts'
-import { contractProps } from './contracts.ts'
+import { sectionSettings } from './contracts.ts'
+import { assertFillReach, createJointWiring } from './joint-runtime.ts'
+import type { CompiledFill } from './joint-runtime.ts'
+import { tokensToCss } from './tokens.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { KetModule, Manifest } from '../types.ts'
 
@@ -15,6 +17,14 @@ export type ThemeRuntime = {
   templates: Record<string, Compiled>
   islands: IslandRegistry
   clients: Record<string, { src: string; export: string }>
+  /**
+   * The declared tokens of everything this theme actually renders with, as CSS.
+   *
+   * Composed here rather than from `manifest.tokens` because the manifest merges
+   * every installed module's tokens flat: with two themes installed the one that
+   * happens to sort later would win over the one the site selected.
+   */
+  tokensCss: string
 }
 
 export function createTheme(
@@ -47,11 +57,34 @@ export function createTheme(
       .map(([name, island]) => [name, island.client as { src: string; export: string }]),
   )
   const sources: Record<string, string> = {}
+  const templateOwner: Record<string, KetModule> = {}
+  // Tokens follow the templates exactly: whatever renders this page is what gets to
+  // name a colour. Reading manifest.tokens instead would hand a deployment with two
+  // themes installed the tokens of whichever one composed last.
+  const tokens: Record<string, string> = {}
   for (const m of modules) {
     if (off.has(m.name)) continue // a removed theme contributes no templates
     if (m.kind === 'theme' && opts.theme && m.name !== opts.theme) continue
-    for (const [name, src] of Object.entries(m.templates)) sources[name] = src
+    Object.assign(tokens, m.tokens)
+    for (const [name, src] of Object.entries(m.templates)) {
+      const previous = templateOwner[name]
+      // A theme overriding a module's template is the whole point of a theme. Two
+      // modules claiming one name is not an override, it is a collision, and it used
+      // to resolve silently by composition order — so which markup rendered depended
+      // on the dependency graph rather than on anybody's decision.
+      if (previous && previous.kind !== 'theme' && m.kind !== 'theme') {
+        throw new KetError({
+          code: 'E_TEMPLATE_DUPLICATE',
+          module: m.name,
+          message: `template "${name}" is already provided by "${previous.name}"`,
+          hint: 'rename one of them, or move the shared markup into a template both render',
+        })
+      }
+      templateOwner[name] = m
+      sources[name] = src
+    }
   }
+  const tokensCss = Object.keys(tokens).length ? tokensToCss(tokens) : ''
 
   const fillSources: Record<string, Array<{ by: string; template: string }>> = {}
   for (const fill of manifest.fills) {
@@ -61,36 +94,13 @@ export function createTheme(
   }
 
   const templates: Record<string, Compiled> = {}
-  const fills: Record<string, Compiled[]> = {}
+  const fills: Record<string, CompiledFill[]> = {}
 
-  const jointStack: string[] = []
-  const renderJoint = (joint: string, scope: Scope): string => {
-    const definition = manifest.joints[joint]
-    if (!definition) {
-      throw new KetError({
-        code: 'E_TEMPLATE_UNKNOWN_JOINT',
-        message: `renders joint "${joint}", which no installed module publishes`,
-      })
-    }
-    if (definition.omittedBy.length) return ''
-    if (jointStack.includes(joint)) {
-      throw new KetError({
-        code: 'E_JOINT_CYCLE',
-        message: `joint recursion: ${[...jointStack, joint].join(' -> ')}`,
-        hint: 'a fill may render another joint, but never itself through any chain',
-      })
-    }
-    if (jointStack.length >= 16) {
-      throw new KetError({ code: 'E_JOINT_TOO_DEEP', message: 'joint rendering exceeds 16 levels' })
-    }
-    jointStack.push(joint)
-    try {
-      const props = contractProps(manifest, 'joint', joint, definition.props, scope)
-      return (fills[joint] ?? []).map((compiled) => compiled.render(props)).join('')
-    } finally {
-      jointStack.pop()
-    }
-  }
+  const wiring = createJointWiring(manifest, {
+    fillsFor: (joint) => fills[joint] ?? [],
+    islands,
+    atRuntime,
+  })
 
   /**
    * A page's body is its layout: an ordered list of placements, each rendered by
@@ -120,25 +130,16 @@ export function createTheme(
           hint: `available sections: ${Object.keys(manifest.sections).join(', ') || '(none)'}`,
         })
       }
-      out.push(renderRegion(placement.type, { ...(placement.settings ?? {}), page: scope['page'] }))
+      out.push(
+        renderRegion(placement.type, {
+          ...sectionSettings(manifest.sections[placement.type]?.settings ?? {}, placement.settings ?? {}),
+          // The one key a section gets that is not one of its settings: which page
+          // it sits on. Declared nowhere because it is not the author's to declare.
+          page: scope['page'],
+        }),
+      )
     }
     return out.join('')
-  }
-
-  const renderIslandAt = (name: string, scope: Scope): string => {
-    const factory = islands[name]
-    const definition = manifest.islands[name]
-    if (!factory || !definition) {
-      if (atRuntime) return ''
-      throw new KetError({
-        code: 'E_UNKNOWN_ISLAND',
-        message: `a template places island "${name}", which no installed module provides`,
-        hint: `available islands: ${Object.keys(islands).join(', ') || '(none)'}`,
-      })
-    }
-    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope), {
-      key: definition.key,
-    })
   }
 
   const renderRegion = (name: string, scope: Scope): string => {
@@ -184,57 +185,23 @@ export function createTheme(
     }
   }
 
-  const wiring = {
-    renderJoint,
+  const compileOpts = {
+    renderJoint: wiring.renderJoint,
+    renderIsland: wiring.renderIsland,
     renderRegion,
-    renderIsland: renderIslandAt,
     renderSections: renderSectionsAt,
     renderTemplate,
   }
 
   for (const [joint, sourcesForJoint] of Object.entries(fillSources)) {
     fills[joint] = sourcesForJoint.map((fill, i) => {
-      const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...wiring })
-      const module = manifest.modules[fill.by]
-      for (const used of compiled.jointsUsed) {
-        const target = manifest.joints[used]
-        if (!target) {
-          throw new KetError({
-            code: 'E_FILL_UNKNOWN_JOINT',
-            module: fill.by,
-            message: `fill for "${joint}" renders unknown joint "${used}"`,
-          })
-        }
-        if (target.owner !== fill.by && !module?.depends?.includes(target.owner)) {
-          throw new KetError({
-            code: 'E_FILL_NOT_DEPENDED',
-            module: fill.by,
-            message: `fill for "${joint}" renders "${used}" without depending on "${target.owner}"`,
-          })
-        }
-      }
-      for (const used of compiled.islandsUsed) {
-        const target = manifest.islands[used]
-        if (!target) {
-          throw new KetError({
-            code: 'E_FILL_UNKNOWN_ISLAND',
-            module: fill.by,
-            message: `fill for "${joint}" places unknown island "${used}"`,
-          })
-        }
-        if (target.by !== fill.by && !module?.depends?.includes(target.by)) {
-          throw new KetError({
-            code: 'E_FILL_NOT_DEPENDED',
-            module: fill.by,
-            message: `fill for "${joint}" places "${used}" without depending on "${target.by}"`,
-          })
-        }
-      }
-      return compiled
+      const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...compileOpts })
+      assertFillReach(manifest, { joint, by: fill.by }, compiled, { atRuntime })
+      return { by: fill.by, compiled }
     })
   }
   for (const [name, src] of Object.entries(sources)) {
-    templates[name] = compileKtl(src, { ...opts, name, ...wiring })
+    templates[name] = compileKtl(src, { ...opts, name, ...compileOpts })
   }
 
   // A theme that points at a joint nobody publishes is a build error, not a blank spot.
@@ -263,5 +230,5 @@ export function createTheme(
     }
   }
 
-  return { renderRegion, templates, islands, clients }
+  return { renderRegion, templates, islands, clients, tokensCss }
 }
