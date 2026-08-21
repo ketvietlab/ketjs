@@ -1,5 +1,5 @@
-import { asc, defineFn, defineJob, desc, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, JobContext, JobSpec, Row } from 'ketjs'
+import { asc, defineFn, defineJob, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, JobContext, JobSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
 import { occupancyDates } from './inventory.ts'
 import { postCharge } from './services.ts'

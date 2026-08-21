@@ -1,4 +1,4 @@
-import type { Message } from 'ketjs'
+import type { Message } from '@ketvietlab/ketjs'
 
 /**
  * Every string the backend shows. Keys are prefixed with the module name by the

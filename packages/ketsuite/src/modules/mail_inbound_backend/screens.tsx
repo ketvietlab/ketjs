@@ -1,5 +1,5 @@
-import type { Row, Translator } from 'ketjs'
-import type { TemplateResult } from 'ketjs-view'
+import type { Row, Translator } from '@ketvietlab/ketjs'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { badge, contentCard, emptyState, framedPage as Framed, inline, stack } from '../../ui/index.ts'
 import type { Frame, Tone } from '../../ui/index.ts'
 

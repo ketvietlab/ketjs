@@ -3,7 +3,7 @@
 // A module says which rows, which columns, which labels. What a card or a table
 // looks like is one decision, and a decision made in forty screens is forty
 // answers — which is how the `data-ui` contract drifted four times in one
-// afternoon before `ketsuite/ui` existed.
+// afternoon before `@ketvietlab/ketsuite/ui` existed.
 //
 // So: no tag inside a trusted `html` template outside `packages/ketsuite/src/ui`.
 // KTL fills are deliberately not included: they are the restricted extension

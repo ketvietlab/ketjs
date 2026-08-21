@@ -1,4 +1,4 @@
-import type { MenuDef } from 'ketjs'
+import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
   hospitality: { label: 'menu.app', icon: 'hotel', sequence: 10 },

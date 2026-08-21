@@ -1,5 +1,5 @@
-import { html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 
 /**
  * The interactive half a theme is not allowed to write. The theme decides whether

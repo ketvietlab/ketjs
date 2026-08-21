@@ -1,9 +1,9 @@
 // The one bar above a list: primary action, title, search, filters, paging and view.
 // Every state-changing navigation remains a link or a method=get form.
 
-import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import { each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import { icon } from './icons.ts'
 
 export const HOOKS = [

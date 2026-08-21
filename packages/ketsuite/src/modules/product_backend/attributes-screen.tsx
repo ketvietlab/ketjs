@@ -1,6 +1,6 @@
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
-import type { Translator } from 'ketjs'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   cardGrid as CardGrid,

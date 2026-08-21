@@ -5,8 +5,8 @@
 // the business form several screens down. The module supplies meaning and data;
 // this component owns only that stable arrangement.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'record-workspace',

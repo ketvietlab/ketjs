@@ -14,19 +14,19 @@
     "skipLibCheck": true,
     "types": ["node"],
     "paths": {
-      "ketjs-view": ["./packages/ketjs-view/src/index.ts"],
-      "ketjs-view/jsx-runtime": ["./packages/ketjs-view/src/jsx-runtime.ts"],
-      "ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
-      "ketjs": ["./packages/ketjs/src/index.ts"],
-      "ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
-      "ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],
-      "ketjs/testing": ["./packages/ketjs/src/testing.ts"],
-      "ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
-      "ketsuite": ["./packages/ketsuite/src/index.ts"],
-      "ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
-      "ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"]
+      "@ketvietlab/ketjs-view": ["./packages/ketjs-view/src/index.ts"],
+      "@ketvietlab/ketjs-view/jsx-runtime": ["./packages/ketjs-view/src/jsx-runtime.ts"],
+      "@ketvietlab/ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
+      "@ketvietlab/ketjs": ["./packages/ketjs/src/index.ts"],
+      "@ketvietlab/ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
+      "@ketvietlab/ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],
+      "@ketvietlab/ketjs/testing": ["./packages/ketjs/src/testing.ts"],
+      "@ketvietlab/ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
+      "@ketvietlab/ketsuite": ["./packages/ketsuite/src/index.ts"],
+      "@ketvietlab/ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
+      "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"]
     },
     "jsx": "react-jsx",
-    "jsxImportSource": "ketjs-view"
+    "jsxImportSource": "@ketvietlab/ketjs-view"
   }
 }

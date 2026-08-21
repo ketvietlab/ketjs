@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { FnSpec, ReportDef } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { FnSpec, ReportDef } from '@ketvietlab/ketjs'
 
 const template = (title: string) => `<report paper="A4" margin="42">
   <header><row gap="6"><text size="10" weight="bold" tone="accent">{{ company.name }}</text><text size="8" weight="semibold" tone="muted" align="right">KETSUITE · INVENTORY</text></row></header>

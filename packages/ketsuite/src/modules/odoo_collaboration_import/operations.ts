@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { eq, from, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { inboundPlainText } from '../mail_inbound/index.ts'
 import type {
   OdooImportBatch,

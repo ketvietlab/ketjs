@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter, Manifest } from 'ketjs'
-import { company, partner, user } from 'ketsuite'
-import { address } from 'ketsuite'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Adapter, Manifest } from '@ketvietlab/ketjs'
+import { company, partner, user } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const modules = [address, partner, company, user]
 const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }

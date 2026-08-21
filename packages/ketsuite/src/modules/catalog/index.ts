@@ -1,4 +1,4 @@
-import { defineFn, defineModule, desc, eq, from, gte } from 'ketjs'
+import { defineFn, defineModule, desc, eq, from, gte } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'catalog',

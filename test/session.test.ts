@@ -10,8 +10,8 @@ import {
   parseCookies,
   sqliteAdapter,
   SESSION_COOKIE,
-} from 'ketjs'
-import type { SessionStore } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { SessionStore } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 /**

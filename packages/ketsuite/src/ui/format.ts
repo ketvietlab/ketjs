@@ -1,4 +1,4 @@
-import type { Translator } from 'ketjs'
+import type { Translator } from '@ketvietlab/ketjs'
 
 const DEFAULT_CURRENCY = 'VND'
 const PSEUDO_LOCALE = 'qps'

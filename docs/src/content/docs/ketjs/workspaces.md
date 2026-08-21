@@ -12,7 +12,7 @@ an HTTP role, and a worker role.
 Prefer a default export from `ket.workspace.ts`:
 
 ```ts
-import { defineApp, defineWorkspace } from 'ketjs'
+import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
 import { catalog, checkout, storefrontTheme } from './modules/index.ts'
 
 const storefront = defineApp({
@@ -100,7 +100,7 @@ const api = defineApp({
 })
 ```
 
-Import `json` from `ketjs` in the complete file. Headless affects presentation only; the app may still
+Import `json` from `@ketvietlab/ketjs` in the complete file. Headless affects presentation only; the app may still
 declare models, functions, jobs, storage, sessions, and routes.
 
 ## HTTP and worker roles
@@ -151,7 +151,7 @@ only one app.
 Build tools can use the same boundary as the CLI:
 
 ```ts
-import { composeWorkspace, explainWorkspace, resolveWorkspace } from 'ketjs'
+import { composeWorkspace, explainWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(declaration, {
   baseUrl: new URL('./ket.workspace.js', import.meta.url),

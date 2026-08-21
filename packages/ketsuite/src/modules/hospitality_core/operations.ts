@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   BILLING_MODES,
   BOOKING_PROVIDERS,

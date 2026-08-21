@@ -1,4 +1,4 @@
-import type { RelationDef } from 'ketjs'
+import type { RelationDef } from '@ketvietlab/ketjs'
 
 /** Declared both ways where both are useful. Nothing loads itself (D10). */
 export const relations: Record<string, Record<string, RelationDef>> = {

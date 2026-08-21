@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
 
 export const ACCOUNT_TYPES = [

@@ -1,5 +1,5 @@
-import { asc, defineFn, deleteFrom, eq, from } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
 
 const validHref = (value: unknown): boolean => {

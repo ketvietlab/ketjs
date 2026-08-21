@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { convertQty, type Unit } from '../uom/convert.ts'
 
 export const RULE_ACTIONS = ['pull', 'push', 'pull_push'] as const

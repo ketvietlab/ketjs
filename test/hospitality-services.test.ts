@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter, Row } from 'ketjs'
-import { address, company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
-import backend from 'ketsuite/backend'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Adapter, Row } from '@ketvietlab/ketjs'
+import { address, company, hospitalityCore, partner, product, storage, uom } from '@ketvietlab/ketsuite'
+import backend from '@ketvietlab/ketsuite/backend'
 
 const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })

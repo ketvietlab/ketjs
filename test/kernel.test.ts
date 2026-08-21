@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { type KetError, compose, defineModule, defineTheme, diffManifests } from 'ketjs'
+import { type KetError, compose, defineModule, defineTheme, diffManifests } from '@ketvietlab/ketjs'
 
 const base = defineModule({
   name: 'base',

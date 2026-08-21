@@ -13,9 +13,9 @@ import {
   renderSql,
   schemaFromManifest,
   sqliteAdapter,
-} from 'ketjs'
-import type { Adapter, Manifest } from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Manifest } from '@ketvietlab/ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }

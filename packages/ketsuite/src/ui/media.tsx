@@ -1,5 +1,5 @@
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { button, iconButton } from './actions.tsx'
 import { badge } from './primitives.tsx'
 import { errorState, loadingState } from './state.tsx'

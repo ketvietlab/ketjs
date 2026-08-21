@@ -1,10 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderToString } from 'ketjs-view'
-import { compose, translator } from 'ketjs'
-import backend from 'ketsuite/backend'
-import { badge, colsHref, colsOf, dataTable, initials, person, visibleColumns } from 'ketsuite/backend'
-import type { Column, DataTable } from 'ketsuite/backend'
+import { renderToString } from '@ketvietlab/ketjs-view'
+import { compose, translator } from '@ketvietlab/ketjs'
+import backend from '@ketvietlab/ketsuite/backend'
+import {
+  badge,
+  colsHref,
+  colsOf,
+  dataTable,
+  initials,
+  person,
+  visibleColumns,
+} from '@ketvietlab/ketsuite/backend'
+import type { Column, DataTable } from '@ketvietlab/ketsuite/backend'
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 

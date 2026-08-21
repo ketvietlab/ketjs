@@ -1,4 +1,4 @@
-import type { MenuDef } from 'ketjs'
+import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
   'admin.oauth-providers': {

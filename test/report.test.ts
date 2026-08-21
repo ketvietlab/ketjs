@@ -18,10 +18,10 @@ import {
   registerFunctions,
   restrictManifest,
   sqliteAdapter,
-} from 'ketjs'
-import type { KetError } from 'ketjs'
-import { compileReportTemplate, interFontUrl, renderPdf, renderReportHtml } from 'ketjs/pdf'
-import { report } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import type { KetError } from '@ketvietlab/ketjs'
+import { compileReportTemplate, interFontUrl, renderPdf, renderReportHtml } from '@ketvietlab/ketjs/pdf'
+import { report } from '@ketvietlab/ketsuite'
 
 const source = defineModule({
   name: 'orders',

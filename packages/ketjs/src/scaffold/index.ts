@@ -5,7 +5,7 @@
 // the CLI finds by convention. Nothing is a placeholder waiting to be filled in.
 //
 // The templates are files rather than string literals on purpose. A literal
-// containing `from 'ketjs'` is indistinguishable, to anything reading the source,
+// containing `from '@ketvietlab/ketjs'` is indistinguishable, to anything reading the source,
 // from an actual import — and the dependency audit reads the source. Keeping them
 // out of the .ts files makes "this is data, not code" a shape rather than an
 // exception someone has to remember.
@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
 /** Template file → path it is written to, relative to the new app's directory. */

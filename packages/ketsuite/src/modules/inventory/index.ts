@@ -1,4 +1,4 @@
-import { defineFn, defineModule } from 'ketjs'
+import { defineFn, defineModule } from '@ketvietlab/ketjs'
 
 // The lego pillar in one file: this module adds a typed field to a model it does
 // not own, and fills an extension point the owner published — without importing,

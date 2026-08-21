@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
 const issue = (field: string, code: string, params?: Record<string, unknown>): Issue => ({

@@ -124,7 +124,7 @@ watcher. Read [Quick start](/ketjs/quick-start/) for the file-by-file walkthroug
 | `KET_AUTO_INSTALL` | enabled | Set to `0` to hold back modules declaring `install: 'auto'`. |
 
 KetJS ships `sqliteStore`. An app using `DATABASE_URL` must provide `serve.openStore`, typically with
-`postgresAdapter()` from `ketjs-postgres`.
+`postgresAdapter()` from `@ketvietlab/ketjs-postgres`.
 
 ### Identity and localization
 
@@ -159,7 +159,7 @@ Never reuse `KET_SECRET` as a webhook or provider secret.
 Use defaults for embedded runtimes or tests without mutating `process.env`:
 
 ```ts
-import { readConfig } from 'ketjs'
+import { readConfig } from '@ketvietlab/ketjs'
 
 const config = readConfig(process.env, {
   host: '0.0.0.0',

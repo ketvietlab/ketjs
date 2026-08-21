@@ -1,4 +1,4 @@
-import type { SectionDef } from 'ketjs'
+import type { SectionDef } from '@ketvietlab/ketjs'
 
 /**
  * Sections this module provides. The settings schema is doing two jobs at once:

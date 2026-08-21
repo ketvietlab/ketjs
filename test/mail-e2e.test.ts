@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defineApp, defineModule, eq, from, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
-import { createTestApp, TestHttpError } from 'ketjs/testing'
-import { company, mail, partner, storage, user } from 'ketsuite'
-import { address } from 'ketsuite'
+import { defineApp, defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
+import { createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
+import { company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 import { ensureThread, followThread, postMessage } from '../packages/ketsuite/src/modules/mail/index.ts'
 
 const recordBridge = defineModule({

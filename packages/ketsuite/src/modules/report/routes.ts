@@ -1,6 +1,14 @@
 import { readFile } from 'node:fs/promises'
-import { bytes, compileReportTemplate, interFontUrl, renderPdf, sha256, text, withHeaders } from 'ketjs'
-import type { Route, ServeContext } from 'ketjs'
+import {
+  bytes,
+  compileReportTemplate,
+  interFontUrl,
+  renderPdf,
+  sha256,
+  text,
+  withHeaders,
+} from '@ketvietlab/ketjs'
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
 
 const stable = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
