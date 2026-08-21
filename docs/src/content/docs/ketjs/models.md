@@ -107,7 +107,9 @@ type Scope = {
 ```
 
 If `companies` is absent, reads default to `company`. Writes are refused when the write company or
-branch is outside the corresponding readable set.
+branch is outside the corresponding readable set. Scope columns are stamped on insert and immutable
+afterward: `ctx.db.update()` rejects patches containing `companyId`, or `branchId` on a
+`company+branch` model.
 
 ## Indexes
 
@@ -122,6 +124,8 @@ indexes: {
 
 Include scope columns in a unique index when uniqueness belongs inside a company or branch. KetJS
 validates indexed fields while composing and uses stable index identities while planning migrations.
+The derived schema also adds non-unique framework indexes for mandatory company/branch filters and
+declared `hasMany` preload keys when no authored index already covers that prefix.
 
 `ctx.db.insertIfAbsent()` relies on declared unique constraints to settle concurrent inserts.
 
@@ -165,10 +169,14 @@ export const sales = defineModule({
 
 Relations never lazy-load. A query receives related rows only when it explicitly calls
 `.preload('customer', 'lines')`. KetJS fetches parents and related sets, avoiding an implicit query per
-row.
+row. Large related sets are split into bounded parameter batches before they reach an adapter.
 
 The function must declare read effects for every preloaded target. Effect checks run before the query,
 even when the parent table is empty.
+
+Composition also verifies that qualified model names remain unique after conversion to physical table
+names. For example, `foo.BarBaz` and `foo_bar.Baz` are rejected because both would otherwise map to
+`foo_bar_baz` and bypass model-level effect isolation.
 
 ## Extend another module's model
 

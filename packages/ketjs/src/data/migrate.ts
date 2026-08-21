@@ -33,6 +33,25 @@ export const tableNameFor = (modelKey: string): string =>
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .toLowerCase()
 
+const indexCovers = (indexes: Record<string, Index>, fields: string[]): boolean =>
+  Object.values(indexes).some((index) => fields.every((field, position) => index.fields[position] === field))
+
+const autoIndexName = (kind: 'scope' | 'relation', seed: string): string => {
+  let hash = 2166136261
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `ket_${kind}_${(hash >>> 0).toString(36)}`
+}
+
+const addAutoIndex = (indexes: Record<string, Index>, name: string, fields: string[]): void => {
+  let candidate = name
+  let suffix = 2
+  while (indexes[candidate]) candidate = `${name}_${suffix++}`
+  indexes[candidate] = { fields, unique: false, by: '(framework)' }
+}
+
 export function schemaFromManifest(manifest: Manifest): Schema {
   const tables: Record<string, Table> = {}
   for (const [modelKey, model] of Object.entries(manifest.models)) {
@@ -46,7 +65,27 @@ export function schemaFromManifest(manifest: Manifest): Schema {
         target: f.target ?? null,
       }
     }
-    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns, indexes: model.indexes }
+    const indexes = Object.fromEntries(
+      Object.entries(model.indexes).map(([name, index]) => [name, { ...index, fields: [...index.fields] }]),
+    )
+    if (model.scope !== 'shared') {
+      const fields = model.scope === 'company+branch' ? ['companyId', 'branchId'] : ['companyId']
+      if (!indexCovers(indexes, fields)) {
+        addAutoIndex(indexes, autoIndexName('scope', modelKey), fields)
+      }
+    }
+    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns, indexes }
+  }
+  for (const relations of Object.values(manifest.relations)) {
+    for (const relation of Object.values(relations)) {
+      if (relation.kind !== 'hasMany') continue
+      const target = manifest.models[relation.target]
+      const table = tables[tableNameFor(relation.target)]
+      if (!target || !table) continue
+      const fields = [...new Set([...(target.scope === 'shared' ? [] : ['companyId']), relation.by])]
+      if (indexCovers(table.indexes, fields)) continue
+      addAutoIndex(table.indexes, autoIndexName('relation', `${relation.target}:${relation.by}`), fields)
+    }
   }
   return { version: 1, tables }
 }
