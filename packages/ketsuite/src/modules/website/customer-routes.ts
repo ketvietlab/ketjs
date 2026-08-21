@@ -26,7 +26,11 @@ const privateHeaders = { 'cache-control': 'private, no-store' }
 const bodyOf = async (req: Req): Promise<Record<string, unknown>> => {
   const declared = Number(req.headers['content-length'] ?? 0)
   if (Number.isFinite(declared) && declared > BODY_LIMIT) throw new Error('payload_too_large')
-  if (!String(req.headers['content-type'] ?? '').toLowerCase().includes('application/json'))
+  if (
+    !String(req.headers['content-type'] ?? '')
+      .toLowerCase()
+      .includes('application/json')
+  )
     throw new Error('unsupported_media_type')
   const chunks: Buffer[] = []
   let size = 0
@@ -43,7 +47,10 @@ const bodyOf = async (req: Req): Promise<Record<string, unknown>> => {
     : {}
 }
 
-const hostOf = (req: Req): string => String(req.headers.host ?? '').trim().toLowerCase()
+const hostOf = (req: Req): string =>
+  String(req.headers.host ?? '')
+    .trim()
+    .toLowerCase()
 const siteHostOf = (req: Req): string => {
   try {
     return new URL(`http://${hostOf(req)}`).hostname.toLowerCase()
@@ -124,10 +131,7 @@ const startSession = async (
     req,
   )) as CustomerSession | null
   if (!session) return null
-  const maxAge = Math.max(
-    0,
-    Math.floor((new Date(session.absoluteExpiresAt).getTime() - Date.now()) / 1000),
-  )
+  const maxAge = Math.max(0, Math.floor((new Date(session.absoluteExpiresAt).getTime() - Date.now()) / 1000))
   return { session, token, cookie: cookie(req, token, maxAge) }
 }
 
@@ -150,13 +154,7 @@ const publicAccount = (account: Account | CustomerSession) => ({
   email: account.email,
 })
 
-const errorResult = (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  result: unknown,
-  fallbackStatus = 422,
-) => {
+const errorResult = (ctx: ServeContext, url: URL, req: Req, result: unknown, fallbackStatus = 422) => {
   const errors =
     result && typeof result === 'object' && Array.isArray((result as { errors?: unknown }).errors)
       ? ((result as { errors: Array<{ field?: string; message?: string }> }).errors ?? [])
@@ -212,7 +210,10 @@ const authorizedMutation = async (
 
 const route = (handler: (ctx: ServeContext, url: URL, req: Req) => ReturnType<Route>): RouteEntry => ({
   anonymous: true,
-  handler: (ctx: ServeContext): Route => (url, req) => handler(ctx, url, req),
+  handler:
+    (ctx: ServeContext): Route =>
+    (url, req) =>
+      handler(ctx, url, req),
 })
 
 export const customerRoutes: Record<string, RouteEntry> = {
@@ -273,9 +274,15 @@ export const customerRoutes: Record<string, RouteEntry> = {
     try {
       const context = await siteAndRealm(ctx, url, req)
       if (!context)
-        return errorResult(ctx, url, req, {
-          errors: [{ field: 'email', message: 'website.customer.error.invalidCredentials' }],
-        }, 401)
+        return errorResult(
+          ctx,
+          url,
+          req,
+          {
+            errors: [{ field: 'email', message: 'website.customer.error.invalidCredentials' }],
+          },
+          401,
+        )
       const body = await bodyOf(req)
       const result = (await ctx.call(
         'website.authenticateCustomer',

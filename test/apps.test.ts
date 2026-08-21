@@ -221,10 +221,13 @@ test('theme: a typo in a template is still a build error against the full manife
   const bad = { ...paperTheme, templates: { ...paperTheme.templates, p: '{% island "website.ghost" %}' } }
   assert.throws(
     () =>
-      createTheme(
-        compose([address, partner, website, websiteSearch, bad as never]),
-        [address, partner, website, websiteSearch, bad as never],
-      ),
+      createTheme(compose([address, partner, website, websiteSearch, bad as never]), [
+        address,
+        partner,
+        website,
+        websiteSearch,
+        bad as never,
+      ]),
     /places island "website.ghost", which no installed module provides/,
   )
 })

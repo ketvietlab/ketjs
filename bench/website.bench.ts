@@ -143,15 +143,13 @@ try {
   )
   console.log(`parallel site lists : ${readMs.toFixed(2)} ms (${rows} rows)`)
   console.log(
-    `customer register+login: ${customerAuthMs.toFixed(2)} ms (${(
-      customerAuthMs /
-      (siteCount * 2)
-    ).toFixed(2)} ms/password op)`,
+    `customer register+login: ${customerAuthMs.toFixed(2)} ms (${(customerAuthMs / (siteCount * 2)).toFixed(
+      2,
+    )} ms/password op)`,
   )
   console.log(
     `customer session pair : ${customerSessionMs.toFixed(2)} ms (${(
-      customerSessionMs /
-      (siteCount * 2)
+      customerSessionMs / (siteCount * 2)
     ).toFixed(3)} ms/op)`,
   )
   console.log(
