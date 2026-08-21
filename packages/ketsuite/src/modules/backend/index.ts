@@ -43,8 +43,8 @@ export default defineModule({
 })
 
 // The screens this module owns: data assembly, no markup.
-export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.ts'
-export type { AppRow, PageRow, Screen } from './screens.ts'
+export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.tsx'
+export type { AppRow, PageRow, Screen } from './screens.tsx'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'
 export { menus } from './menus.ts'

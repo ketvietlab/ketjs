@@ -4,10 +4,10 @@ import { compose, translator } from 'ketjs'
 import { renderToString } from 'ketjs-view'
 import backend, { formatMoney } from 'ketsuite/backend'
 import { customerInvoicesScreen } from '../packages/ketsuite/src/modules/account_backend/customer-invoices-screen.tsx'
-import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.ts'
-import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.ts'
-import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.ts'
-import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.ts'
+import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.tsx'
+import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
+import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.tsx'
+import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.tsx'
 
 const manifest = compose([backend], { headless: true })
 const vi = translator(manifest, 'vi')

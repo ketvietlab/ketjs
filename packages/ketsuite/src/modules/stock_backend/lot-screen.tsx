@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -131,48 +131,54 @@ export const lotDetailScreen = (_: Translator, options: LotDetailOptions, frame:
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.lot.kicker'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.lot.kicker')}
-      title={options.lot.name}
-      subtitle={`${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`}
-      imageFallback={icon('package')}
-      badges={[
-        badge(
-          options.lot.active ? _('stock_backend.lot.status.active') : _('stock_backend.lot.status.archived'),
-          options.lot.active ? 'positive' : 'danger',
-        ),
-      ]}
-      summary={[
-        { id: 'on-hand', label: _('stock_backend.lot.summary.onHand'), value: totalOnHand },
-        { id: 'available', label: _('stock_backend.lot.summary.available'), value: totalAvailable },
-        {
-          id: 'locations',
-          label: _('stock_backend.lot.summary.locations'),
-          value: options.rows.length,
-        },
-      ]}
-      controller={options.editor}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.lot.information.title')}
-            description={_('stock_backend.lot.information.hint')}
-            body={<Surface padding="compact" body={lotForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.lot.inventory.title')}
-            description={_('stock_backend.lot.inventory.hint')}
-            body={inventory}
-          />,
-        ],
-        'loose',
-      )}
-      aside={options.collaboration}
-      asideLabel={_('stock_backend.lot.collaboration.label')}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.lot.kicker')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.lot.kicker')}
+          title={options.lot.name}
+          subtitle={`${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`}
+          imageFallback={icon('package')}
+          badges={[
+            badge(
+              options.lot.active
+                ? _('stock_backend.lot.status.active')
+                : _('stock_backend.lot.status.archived'),
+              options.lot.active ? 'positive' : 'danger',
+            ),
+          ]}
+          summary={[
+            { id: 'on-hand', label: _('stock_backend.lot.summary.onHand'), value: totalOnHand },
+            { id: 'available', label: _('stock_backend.lot.summary.available'), value: totalAvailable },
+            {
+              id: 'locations',
+              label: _('stock_backend.lot.summary.locations'),
+              value: options.rows.length,
+            },
+          ]}
+          controller={options.editor}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.lot.information.title')}
+                description={_('stock_backend.lot.information.hint')}
+                body={<Surface padding="compact" body={lotForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.lot.inventory.title')}
+                description={_('stock_backend.lot.inventory.hint')}
+                body={inventory}
+              />,
+            ],
+            'loose',
+          )}
+          aside={options.collaboration}
+          asideLabel={_('stock_backend.lot.collaboration.label')}
+        />
+      }
+    />
   )
 }

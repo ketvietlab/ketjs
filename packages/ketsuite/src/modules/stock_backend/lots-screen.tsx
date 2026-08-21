@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -121,39 +121,43 @@ export const lotsScreen = (_: Translator, options: LotsScreenOptions, frame: Fra
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.lots'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.lot.list.kicker')}
-      title={_('stock_backend.lot.list.title')}
-      subtitle={_('stock_backend.lot.list.subtitle')}
-      imageFallback={icon('package')}
-      summary={[
-        { id: 'total', label: _('stock_backend.lot.list.summary.total'), value: options.rows.length },
-        { id: 'active', label: _('stock_backend.lot.list.summary.active'), value: activeCount },
-        {
-          id: 'with-stock',
-          label: _('stock_backend.lot.list.summary.withStock'),
-          value: withStockCount,
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.lot.create.title')}
-            description={_('stock_backend.lot.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.lot.list.records.title')}
-            description={_('stock_backend.lot.list.records.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.lots')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.lot.list.kicker')}
+          title={_('stock_backend.lot.list.title')}
+          subtitle={_('stock_backend.lot.list.subtitle')}
+          imageFallback={icon('package')}
+          summary={[
+            { id: 'total', label: _('stock_backend.lot.list.summary.total'), value: options.rows.length },
+            { id: 'active', label: _('stock_backend.lot.list.summary.active'), value: activeCount },
+            {
+              id: 'with-stock',
+              label: _('stock_backend.lot.list.summary.withStock'),
+              value: withStockCount,
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.lot.create.title')}
+                description={_('stock_backend.lot.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.lot.list.records.title')}
+                description={_('stock_backend.lot.list.records.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

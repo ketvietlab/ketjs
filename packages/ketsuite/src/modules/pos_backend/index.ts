@@ -15,7 +15,7 @@ import {
   registerScreen,
   sessionDetail,
   sessionsScreen,
-} from './screens.ts'
+} from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>

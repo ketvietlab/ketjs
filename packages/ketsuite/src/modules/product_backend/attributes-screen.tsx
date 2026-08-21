@@ -6,7 +6,7 @@ import {
   cardGrid as CardGrid,
   contentCard as ContentCard,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   inline,
   recordForm as RecordForm,
@@ -149,24 +149,26 @@ export const attributesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('product_backend.attributes.title'),
-    frame,
-    stack(
-      [
-        <Section
-          title={_('product_backend.attributes.createTitle')}
-          description={_('product_backend.attributes.createHint')}
-          body={<Surface padding="compact" body={createForm} />}
-        />,
-        <Section
-          title={_('product_backend.attributes.configuredTitle')}
-          description={_('product_backend.attributes.configuredHint')}
-          body={configured}
-        />,
-      ],
-      'loose',
-    ),
+  return (
+    <Framed
+      translator={_}
+      title={_('product_backend.attributes.title')}
+      frame={frame}
+      body={stack(
+        [
+          <Section
+            title={_('product_backend.attributes.createTitle')}
+            description={_('product_backend.attributes.createHint')}
+            body={<Surface padding="compact" body={createForm} />}
+          />,
+          <Section
+            title={_('product_backend.attributes.configuredTitle')}
+            description={_('product_backend.attributes.configuredHint')}
+            body={configured}
+          />,
+        ],
+        'loose',
+      )}
+    />
   )
 }

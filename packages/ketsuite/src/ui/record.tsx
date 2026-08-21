@@ -74,6 +74,8 @@ const summaryContent = (item: RecordSummaryItem): TemplateResult => (
 )
 
 type RecordWorkspaceOptions = {
+  /** Marks the generic page frame added by `framed`; nested record workspaces flatten it. */
+  pageFrame?: boolean
   kicker?: string | null
   title: string
   subtitle?: string | null
@@ -140,7 +142,11 @@ export const recordWorkspace = (options: RecordWorkspaceOptions): TemplateResult
       </ket-fragments>
     )
   return (
-    <div data-ui="record-workspace" data-has-aside={String(options.aside !== undefined)}>
+    <div
+      data-ui="record-workspace"
+      data-page-frame={String(options.pageFrame === true)}
+      data-has-aside={String(options.aside !== undefined)}
+    >
       <section data-ui="record-sheet">
         <header data-ui="record-header" data-ket-slot={options.slots?.header}>
           {recordHeader(options)}
