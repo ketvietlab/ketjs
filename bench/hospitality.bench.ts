@@ -404,6 +404,127 @@ try {
       )}`,
     )
 
+  const locationLifecycleStarted = performance.now()
+  const locationLifecycleResults = await Promise.all(
+    keys.map(async (key) => {
+      await call(key, 'hospitality_core.saveBuilding', {
+        id: 'lifecycle-building',
+        propertyId: 'property',
+        code: 'LIFE',
+        name: `Lifecycle building ${key}`,
+        sequence: 99,
+      })
+      await call(key, 'hospitality_core.saveFloor', {
+        id: 'lifecycle-floor',
+        propertyId: 'property',
+        buildingId: 'lifecycle-building',
+        code: 'L1',
+        name: `Lifecycle floor ${key}`,
+        sequence: 99,
+      })
+      const blockedBuilding = await call(key, 'hospitality_core.archiveBuilding', {
+        id: 'lifecycle-building',
+        active: false,
+      })
+      const floorArchived = await call(key, 'hospitality_core.archiveFloor', {
+        id: 'lifecycle-floor',
+        active: false,
+      })
+      const buildingArchived = await call(key, 'hospitality_core.archiveBuilding', {
+        id: 'lifecycle-building',
+        active: false,
+      })
+      const buildingDetail = await call(key, 'hospitality_core.getBuilding', {
+        id: 'lifecycle-building',
+      })
+      const floorDetail = await call(key, 'hospitality_core.getFloor', { id: 'lifecycle-floor' })
+      const blockedFloorRestore = await call(key, 'hospitality_core.archiveFloor', {
+        id: 'lifecycle-floor',
+        active: true,
+      })
+      const buildingRestored = await call(key, 'hospitality_core.archiveBuilding', {
+        id: 'lifecycle-building',
+        active: true,
+      })
+      const floorRestored = await call(key, 'hospitality_core.archiveFloor', {
+        id: 'lifecycle-floor',
+        active: true,
+      })
+      const building = buildingDetail.value as Record<string, unknown>
+      const floor = floorDetail.value as Record<string, unknown>
+      return {
+        key,
+        match:
+          (blockedBuilding.value as { ok: boolean }).ok === false &&
+          (floorArchived.value as { ok: boolean }).ok === true &&
+          (buildingArchived.value as { ok: boolean }).ok === true &&
+          building.active === false &&
+          (building.property as Record<string, unknown> | undefined)?.id === 'property' &&
+          floor.active === false &&
+          (floor.building as Record<string, unknown> | undefined)?.id === 'lifecycle-building' &&
+          (blockedFloorRestore.value as { ok: boolean }).ok === false &&
+          (buildingRestored.value as { ok: boolean }).ok === true &&
+          (floorRestored.value as { ok: boolean }).ok === true,
+      }
+    }),
+  )
+  const locationLifecycleMatch = locationLifecycleResults.every((result) => result.match)
+  const locationLifecycleMs = performance.now() - locationLifecycleStarted
+  if (!locationLifecycleMatch)
+    throw new Error(
+      `building and floor lifecycle did not preserve dependency order: ${JSON.stringify(
+        locationLifecycleResults.filter((result) => !result.match),
+      )}`,
+    )
+
+  let concurrentLocationMutationConsistent = true
+  if (driver === 'postgres') {
+    const races = await Promise.all(
+      keys.map(async (key) => {
+        await call(key, 'hospitality_core.saveBuilding', {
+          id: 'location-race-building',
+          propertyId: 'property',
+          code: 'RACE',
+          name: `Location race ${key}`,
+          sequence: 100,
+        })
+        const contender = open(key)
+        await contender.open()
+        try {
+          const [archive, createFloor] = await Promise.all([
+            call(key, 'hospitality_core.archiveBuilding', {
+              id: 'location-race-building',
+              active: false,
+            }),
+            callWith(contender, key, 'hospitality_core.saveFloor', {
+              id: 'location-race-floor',
+              propertyId: 'property',
+              buildingId: 'location-race-building',
+              code: 'R1',
+              name: `Location race floor ${key}`,
+              sequence: 100,
+            }),
+          ])
+          const building = (
+            await call(key, 'hospitality_core.getBuilding', {
+              id: 'location-race-building',
+            })
+          ).value as Record<string, unknown>
+          const floors = building.floors as Array<Record<string, unknown>>
+          return (
+            [archive, createFloor].filter((result) => (result.value as { ok: boolean }).ok).length === 1 &&
+            (building.active === true || !floors.some((floor) => floor.active === true))
+          )
+        } finally {
+          await contender.close()
+        }
+      }),
+    )
+    concurrentLocationMutationConsistent = races.every(Boolean)
+    if (!concurrentLocationMutationConsistent)
+      throw new Error('concurrent location archive and floor creation left an inconsistent hierarchy')
+  }
+
   const contentImagesPerTarget = 3
   const contentStarted = performance.now()
   await Promise.all(
@@ -1350,6 +1471,11 @@ try {
         roomConfigurationMs: Number(roomConfigurationMs.toFixed(1)),
         roomConfigurationPerSecond: Math.round((databaseCount * 1_000) / roomConfigurationMs),
         roomConfigurationMatch,
+        locationLifecycleTransitions: databaseCount * 4,
+        locationLifecycleMs: Number(locationLifecycleMs.toFixed(1)),
+        locationLifecycleTransitionsPerSecond: Math.round((databaseCount * 4 * 1_000) / locationLifecycleMs),
+        locationLifecycleMatch,
+        concurrentLocationMutationConsistent,
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),

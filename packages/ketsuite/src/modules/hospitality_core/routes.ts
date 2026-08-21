@@ -8,10 +8,12 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import {
   amenitiesScreen,
+  buildingDetailScreen,
   cleaningTaskDetailScreen,
   cleaningTasksScreen,
   folioDetailScreen,
   foliosScreen,
+  floorDetailScreen,
   frontDeskScreen,
   housekeepingRoomDetailScreen,
   housekeepingRoomsScreen,
@@ -39,11 +41,15 @@ import {
 } from './screens.ts'
 import type {
   AmenityRow,
+  BuildingDetail,
+  BuildingFormValues,
   BuildingRow,
   CleaningTaskSummary,
   CleaningTaskRow,
   FolioRow,
   FloorRow,
+  FloorDetail,
+  FloorFormValues,
   PolicyRow,
   PropertyDetail,
   PropertyFormValues,
@@ -630,6 +636,87 @@ const renderRoomTypeDetail = async (
   )
 }
 
+const buildingFormValues = (
+  id: string,
+  form: Record<string, string>,
+  current: BuildingDetail | null = null,
+): BuildingFormValues => ({
+  id,
+  propertyId: form.propertyId?.trim() ?? current?.propertyId ?? '',
+  code: form.code?.trim() ?? current?.code ?? '',
+  name: form.name?.trim() ?? current?.name ?? '',
+  sequence: integer(form.sequence, current?.sequence ?? 10),
+})
+
+const renderBuildingDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+  attempted?: BuildingFormValues,
+) => {
+  const building = (await ctx.call('hospitality_core.getBuilding', { id }, url, req)) as BuildingDetail | null
+  if (!building) return text('Not found', { status: 404 })
+  const lang = ctx.localeOf(url, req)
+  return document(
+    ctx,
+    url,
+    req,
+    building.name,
+    buildingDetailScreen(
+      ctx.translate(lang),
+      building,
+      attempted ?? building,
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
+const floorFormValues = (
+  id: string,
+  form: Record<string, string>,
+  current: FloorDetail | null = null,
+): FloorFormValues => ({
+  id,
+  propertyId: form.propertyId?.trim() ?? current?.propertyId ?? '',
+  buildingId: form.buildingId?.trim() ?? current?.buildingId ?? '',
+  code: form.code?.trim() ?? current?.code ?? '',
+  name: form.name?.trim() ?? current?.name ?? '',
+  sequence: integer(form.sequence, current?.sequence ?? 10),
+})
+
+const renderFloorDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+  attempted?: FloorFormValues,
+) => {
+  const floor = (await ctx.call('hospitality_core.getFloor', { id }, url, req)) as FloorDetail | null
+  if (!floor) return text('Not found', { status: 404 })
+  const lang = ctx.localeOf(url, req)
+  return document(
+    ctx,
+    url,
+    req,
+    floor.name,
+    floorDetailScreen(
+      ctx.translate(lang),
+      floor,
+      attempted ?? floor,
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+    ),
+  )
+}
+
 const roomFormValues = (
   id: string,
   form: Record<string, string>,
@@ -708,14 +795,23 @@ const renderRooms = async (
 ) => {
   const requestedProperty = url.searchParams.get('property')?.trim() || undefined
   const options = await roomOptions(ctx, url, req, requestedProperty)
-  const rows = options.propertyId
-    ? ((await ctx.call(
-        'hospitality_core.listRooms',
-        { propertyId: options.propertyId },
-        url,
-        req,
-      )) as RoomRow[])
-    : []
+  const [rows, buildings, floors] = options.propertyId
+    ? ((await Promise.all([
+        ctx.call('hospitality_core.listRooms', { propertyId: options.propertyId }, url, req),
+        ctx.call(
+          'hospitality_core.listBuildings',
+          { propertyId: options.propertyId, includeArchived: true },
+          url,
+          req,
+        ),
+        ctx.call(
+          'hospitality_core.listFloors',
+          { propertyId: options.propertyId, includeArchived: true },
+          url,
+          req,
+        ),
+      ])) as [RoomRow[], BuildingRow[], FloorRow[]])
+    : [[], [], []]
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
   return document(
@@ -725,7 +821,7 @@ const renderRooms = async (
     _('hospitality_core.screen.rooms.title'),
     roomsScreen(
       _,
-      { rows, ...options },
+      { rows, ...options, buildings, floors },
       lang,
       await frame(ctx, url, req),
       url.searchParams.get('status'),
@@ -1311,6 +1407,88 @@ export const routes: Record<string, RouteEntry> = {
         return renderPropertyDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
       const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
       return seeOther(`${url.pathname}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/buildings/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderBuildingDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const current = (await ctx.call(
+        'hospitality_core.getBuilding',
+        { id: params.id },
+        url,
+        req,
+      )) as BuildingDetail | null
+      if (!current) return text('Not found', { status: 404 })
+      const values = buildingFormValues(params.id, await readForm(req), current)
+      const result = (await ctx.call('hospitality_core.saveBuilding', values, url, req)) as OperationResult
+      if (!result.ok)
+        return renderBuildingDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
+      const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
+      return seeOther(`${url.pathname}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/buildings/{id}/archive':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const form = await readForm(req)
+      const active = form.action === 'restore'
+      const result = (await ctx.call(
+        'hospitality_core.archiveBuilding',
+        { id: params.id, active },
+        url,
+        req,
+      )) as OperationResult
+      if (!result.ok)
+        return renderBuildingDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams({
+        status: active ? 'restored' : 'archived',
+        lang: ctx.localeOf(url, req),
+      })
+      return seeOther(`/admin/hospitality/buildings/${encodeURIComponent(params.id)}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/levels/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderFloorDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const current = (await ctx.call(
+        'hospitality_core.getFloor',
+        { id: params.id },
+        url,
+        req,
+      )) as FloorDetail | null
+      if (!current) return text('Not found', { status: 404 })
+      const values = floorFormValues(params.id, await readForm(req), current)
+      const result = (await ctx.call('hospitality_core.saveFloor', values, url, req)) as OperationResult
+      if (!result.ok)
+        return renderFloorDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
+      const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
+      return seeOther(`${url.pathname}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/levels/{id}/archive':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const form = await readForm(req)
+      const active = form.action === 'restore'
+      const result = (await ctx.call(
+        'hospitality_core.archiveFloor',
+        { id: params.id, active },
+        url,
+        req,
+      )) as OperationResult
+      if (!result.ok)
+        return renderFloorDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result))
+      const query = new URLSearchParams({
+        status: active ? 'restored' : 'archived',
+        lang: ctx.localeOf(url, req),
+      })
+      return seeOther(`/admin/hospitality/levels/${encodeURIComponent(params.id)}?${query.toString()}`)
     },
 
   '/admin/hospitality/rooms':

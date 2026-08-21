@@ -89,6 +89,21 @@ class RoomStatusGuard extends Error {
   }
 }
 
+class LocationLifecycleGuard extends Error {
+  readonly problem: Issue
+
+  constructor(problem: Issue) {
+    super(problem.code)
+    this.problem = problem
+  }
+}
+
+const lockActiveFlag = async (ctx: Ctx, model: string, row: Row): Promise<boolean> => {
+  const active = row.active === true
+  const locked = await ctx.db.compareAndSet(model, { id: row.id }, { active }, { active })
+  return 'matched' in locked && locked.matched
+}
+
 const duplicate = async (
   ctx: Ctx,
   model: string,
@@ -523,6 +538,41 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  getBuilding: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      propertyId: 'id',
+      code: 'text',
+      name: 'text',
+      sequence: 'int',
+      active: 'bool',
+      property: 'json?',
+      floors: 'json?',
+      rooms: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Room',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const B = ctx.table('hospitality_core.Building')
+      const building = await ctx.db.one(from(B).where(eq(B.id, args.id)).preload('property', 'rooms'))
+      if (!building) return null
+      const F = ctx.table('hospitality_core.Floor')
+      const floors = await ctx.db.all(
+        from(F)
+          .where(eq(F.buildingId, building.id))
+          .orderBy(asc(F.sequence), asc(F.name))
+          .preload('building', 'rooms'),
+      )
+      return { ...building, floors }
+    },
+  }),
+
   saveBuilding: defineFn({
     input: { id: 'id', propertyId: 'id', code: 'text', name: 'text', sequence: 'int?' },
     output: result,
@@ -559,6 +609,57 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  archiveBuilding: defineFn({
+    input: { id: 'id', active: 'bool' },
+    output: result,
+    effects: [
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Room',
+      'write:hospitality_core.Building',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      try {
+        return await ctx.tx(async (tx) => {
+          const building = await record(tx, 'hospitality_core.Building', args.id)
+          if (!building) return failure(issue('id', 'building_missing'))
+          if (building.active === args.active) return success(args.id)
+          if (args.active) {
+            const property = await record(tx, 'hospitality_core.Property', building.propertyId)
+            if (!property) return failure(issue('propertyId', 'property_missing'))
+            if (property.active !== true) return failure(issue('propertyId', 'property_archived'))
+          }
+          const changed = await tx.db.compareAndSet(
+            'hospitality_core.Building',
+            { id: args.id },
+            { active: building.active },
+            { active: args.active },
+          )
+          if (!('matched' in changed) || !changed.matched) return failure(issue('id', 'transition_conflict'))
+          if (!args.active) {
+            const F = tx.table('hospitality_core.Floor')
+            const activeFloor = await tx.db.one(
+              from(F).where(eq(F.buildingId, args.id), eq(F.active, true)).limit(1),
+            )
+            if (activeFloor) throw new LocationLifecycleGuard(issue('id', 'location_has_active_floors'))
+            const R = tx.table('hospitality_core.Room')
+            const activeRoom = await tx.db.one(
+              from(R).where(eq(R.buildingId, args.id), eq(R.active, true)).limit(1),
+            )
+            if (activeRoom) throw new LocationLifecycleGuard(issue('id', 'location_has_active_rooms'))
+          }
+          return success(args.id)
+        })
+      } catch (error) {
+        if (error instanceof LocationLifecycleGuard) return failure(error.problem)
+        throw error
+      }
+    },
+  }),
+
   listFloors: defineFn({
     input: { propertyId: 'id', buildingId: 'id?', includeArchived: 'bool?' },
     output: {
@@ -583,42 +684,129 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  getFloor: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      propertyId: 'id',
+      buildingId: 'id',
+      code: 'text',
+      name: 'text',
+      sequence: 'int',
+      active: 'bool',
+      property: 'json?',
+      building: 'json?',
+      rooms: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.RoomType',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const F = ctx.table('hospitality_core.Floor')
+      const floor = await ctx.db.one(from(F).where(eq(F.id, args.id)).preload('property', 'building'))
+      if (!floor) return null
+      const R = ctx.table('hospitality_core.Room')
+      const rooms = await ctx.db.all(
+        from(R).where(eq(R.floorId, floor.id)).orderBy(asc(R.name)).preload('roomType', 'building', 'floor'),
+      )
+      return { ...floor, rooms }
+    },
+  }),
+
   saveFloor: defineFn({
     input: { id: 'id', propertyId: 'id', buildingId: 'id', code: 'text', name: 'text', sequence: 'int?' },
     output: result,
     effects: [
       'read:hospitality_core.Building',
       'read:hospitality_core.Floor',
+      'write:hospitality_core.Building',
       'write:hospitality_core.Floor',
     ],
     idempotent: true,
     agent: true,
-    handler: async (ctx: Ctx, raw) => {
-      const current = await record(ctx, 'hospitality_core.Floor', raw.id)
-      const args = normalized(raw, {
-        code: cleanCode(raw.code),
-        name: cleanText(raw.name),
-        sequence: Number(raw.sequence ?? 10),
-      })
-      const building = await record(ctx, 'hospitality_core.Building', args.buildingId)
-      const errors: Issue[] = []
-      if (!building) errors.push(issue('buildingId', 'building_missing'))
-      else if (building.propertyId !== args.propertyId) errors.push(issue('buildingId', 'property_mismatch'))
-      if (current && current.propertyId !== args.propertyId)
-        errors.push(issue('propertyId', 'property_mismatch'))
-      if (current && current.buildingId !== args.buildingId)
-        errors.push(issue('buildingId', 'location_immutable'))
-      if (!args.code) errors.push(issue('code', 'required'))
-      if (!args.name) errors.push(issue('name', 'required'))
-      if (
-        await duplicate(ctx, 'hospitality_core.Floor', 'code', args.code, args.id, [
-          'buildingId',
-          args.buildingId,
-        ])
-      )
-        errors.push(issue('code', 'unique'))
-      if (errors.length) return failure(...errors)
-      return save(ctx, 'hospitality_core.Floor', args, writable('Floor'), { active: true })
+    handler: (ctx: Ctx, raw) =>
+      ctx.tx(async (tx) => {
+        const current = await record(tx, 'hospitality_core.Floor', raw.id)
+        const args = normalized(raw, {
+          code: cleanCode(raw.code),
+          name: cleanText(raw.name),
+          sequence: Number(raw.sequence ?? 10),
+        })
+        const building = await record(tx, 'hospitality_core.Building', args.buildingId)
+        const errors: Issue[] = []
+        if (!building) errors.push(issue('buildingId', 'building_missing'))
+        else if (building.propertyId !== args.propertyId)
+          errors.push(issue('buildingId', 'property_mismatch'))
+        else if (!current && building.active !== true) errors.push(issue('buildingId', 'location_archived'))
+        if (current && current.propertyId !== args.propertyId)
+          errors.push(issue('propertyId', 'property_mismatch'))
+        if (current && current.buildingId !== args.buildingId)
+          errors.push(issue('buildingId', 'location_immutable'))
+        if (!args.code) errors.push(issue('code', 'required'))
+        if (!args.name) errors.push(issue('name', 'required'))
+        if (
+          await duplicate(tx, 'hospitality_core.Floor', 'code', args.code, args.id, [
+            'buildingId',
+            args.buildingId,
+          ])
+        )
+          errors.push(issue('code', 'unique'))
+        if (errors.length) return failure(...errors)
+        if (!(await lockActiveFlag(tx, 'hospitality_core.Building', building!)))
+          return failure(issue('buildingId', 'transition_conflict'))
+        return save(tx, 'hospitality_core.Floor', args, writable('Floor'), { active: true })
+      }),
+  }),
+
+  archiveFloor: defineFn({
+    input: { id: 'id', active: 'bool' },
+    output: result,
+    effects: [
+      'read:hospitality_core.Building',
+      'read:hospitality_core.Floor',
+      'read:hospitality_core.Room',
+      'write:hospitality_core.Building',
+      'write:hospitality_core.Floor',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      try {
+        return await ctx.tx(async (tx) => {
+          const floor = await record(tx, 'hospitality_core.Floor', args.id)
+          if (!floor) return failure(issue('id', 'floor_missing'))
+          if (floor.active === args.active) return success(args.id)
+          const building = await record(tx, 'hospitality_core.Building', floor.buildingId)
+          if (!building) return failure(issue('buildingId', 'building_missing'))
+          if (!(await lockActiveFlag(tx, 'hospitality_core.Building', building)))
+            return failure(issue('buildingId', 'transition_conflict'))
+          if (args.active && building.active !== true)
+            return failure(issue('buildingId', 'location_archived'))
+          const changed = await tx.db.compareAndSet(
+            'hospitality_core.Floor',
+            { id: args.id },
+            { active: floor.active },
+            { active: args.active },
+          )
+          if (!('matched' in changed) || !changed.matched) return failure(issue('id', 'transition_conflict'))
+          if (!args.active) {
+            const R = tx.table('hospitality_core.Room')
+            const activeRoom = await tx.db.one(
+              from(R).where(eq(R.floorId, args.id), eq(R.active, true)).limit(1),
+            )
+            if (activeRoom) throw new LocationLifecycleGuard(issue('id', 'location_has_active_rooms'))
+          }
+          return success(args.id)
+        })
+      } catch (error) {
+        if (error instanceof LocationLifecycleGuard) return failure(error.problem)
+        throw error
+      }
     },
   }),
 
@@ -888,62 +1076,73 @@ export const functions: Record<string, FnSpec> = {
       'read:hospitality_core.RoomType',
       'read:hospitality_core.Building',
       'read:hospitality_core.Floor',
+      'write:hospitality_core.Building',
+      'write:hospitality_core.Floor',
       'write:hospitality_core.Room',
     ],
     idempotent: true,
     agent: true,
-    handler: async (ctx: Ctx, raw) => {
-      const current = await record(ctx, 'hospitality_core.Room', raw.id)
-      const type = await record(ctx, 'hospitality_core.RoomType', raw.roomTypeId)
-      const floor = raw.floorId ? await record(ctx, 'hospitality_core.Floor', raw.floorId) : null
-      const buildingId = raw.buildingId || floor?.buildingId || null
-      const building = buildingId ? await record(ctx, 'hospitality_core.Building', buildingId) : null
-      const args = normalized(raw, {
-        buildingId,
-        floorId: raw.floorId || null,
-        code: cleanCode(raw.code),
-        name: cleanText(raw.name),
-        capacity: Number(raw.capacity ?? type?.defaultCapacity ?? 1),
-      })
-      const errors: Issue[] = []
-      if (!type) errors.push(issue('roomTypeId', 'room_type_missing'))
-      else if (type.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
-      if (buildingId && !building) errors.push(issue('buildingId', 'building_missing'))
-      else if (building && building.propertyId !== args.propertyId)
-        errors.push(issue('buildingId', 'property_mismatch'))
-      if (raw.floorId && !floor) errors.push(issue('floorId', 'floor_missing'))
-      else if (floor && floor.propertyId !== args.propertyId)
-        errors.push(issue('floorId', 'property_mismatch'))
-      else if (floor && buildingId && floor.buildingId !== buildingId)
-        errors.push(issue('floorId', 'building_mismatch'))
-      if (current && current.propertyId !== args.propertyId)
-        errors.push(issue('propertyId', 'property_mismatch'))
-      if (!args.code) errors.push(issue('code', 'required'))
-      if (!args.name) errors.push(issue('name', 'required'))
-      if (!Number.isInteger(args.capacity) || args.capacity < 1) errors.push(issue('capacity', 'capacity'))
-      if (raw.status != null) {
-        const requestedStatus = String(raw.status)
-        if (!isOneOf(ROOM_STATUSES, requestedStatus)) errors.push(issue('status', 'room_status'))
-        else if (requestedStatus !== String(current?.status ?? 'available'))
-          errors.push(issue('status', 'room_status_configuration_managed'))
-      }
-      if (
-        await duplicate(ctx, 'hospitality_core.Room', 'code', args.code, args.id, [
-          'propertyId',
-          args.propertyId,
-        ])
-      )
-        errors.push(issue('code', 'unique'))
-      if (errors.length) return failure(...errors)
-      const configuration = { ...args }
-      delete configuration.status
-      delete configuration.note
-      return save(ctx, 'hospitality_core.Room', configuration, writable('Room'), {
-        status: 'available',
-        note: null,
-        active: true,
-      })
-    },
+    handler: (ctx: Ctx, raw) =>
+      ctx.tx(async (tx) => {
+        const current = await record(tx, 'hospitality_core.Room', raw.id)
+        const type = await record(tx, 'hospitality_core.RoomType', raw.roomTypeId)
+        const floor = raw.floorId ? await record(tx, 'hospitality_core.Floor', raw.floorId) : null
+        const buildingId = raw.buildingId || floor?.buildingId || null
+        const building = buildingId ? await record(tx, 'hospitality_core.Building', buildingId) : null
+        const args = normalized(raw, {
+          buildingId,
+          floorId: raw.floorId || null,
+          code: cleanCode(raw.code),
+          name: cleanText(raw.name),
+          capacity: Number(raw.capacity ?? type?.defaultCapacity ?? 1),
+        })
+        const errors: Issue[] = []
+        if (!type) errors.push(issue('roomTypeId', 'room_type_missing'))
+        else if (type.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
+        if (buildingId && !building) errors.push(issue('buildingId', 'building_missing'))
+        else if (building && building.propertyId !== args.propertyId)
+          errors.push(issue('buildingId', 'property_mismatch'))
+        else if (building && building.active !== true && current?.buildingId !== building.id)
+          errors.push(issue('buildingId', 'location_archived'))
+        if (raw.floorId && !floor) errors.push(issue('floorId', 'floor_missing'))
+        else if (floor && floor.propertyId !== args.propertyId)
+          errors.push(issue('floorId', 'property_mismatch'))
+        else if (floor && buildingId && floor.buildingId !== buildingId)
+          errors.push(issue('floorId', 'building_mismatch'))
+        else if (floor && floor.active !== true && current?.floorId !== floor.id)
+          errors.push(issue('floorId', 'location_archived'))
+        if (current && current.propertyId !== args.propertyId)
+          errors.push(issue('propertyId', 'property_mismatch'))
+        if (!args.code) errors.push(issue('code', 'required'))
+        if (!args.name) errors.push(issue('name', 'required'))
+        if (!Number.isInteger(args.capacity) || args.capacity < 1) errors.push(issue('capacity', 'capacity'))
+        if (raw.status != null) {
+          const requestedStatus = String(raw.status)
+          if (!isOneOf(ROOM_STATUSES, requestedStatus)) errors.push(issue('status', 'room_status'))
+          else if (requestedStatus !== String(current?.status ?? 'available'))
+            errors.push(issue('status', 'room_status_configuration_managed'))
+        }
+        if (
+          await duplicate(tx, 'hospitality_core.Room', 'code', args.code, args.id, [
+            'propertyId',
+            args.propertyId,
+          ])
+        )
+          errors.push(issue('code', 'unique'))
+        if (errors.length) return failure(...errors)
+        if (building && !(await lockActiveFlag(tx, 'hospitality_core.Building', building)))
+          return failure(issue('buildingId', 'transition_conflict'))
+        if (floor && !(await lockActiveFlag(tx, 'hospitality_core.Floor', floor)))
+          return failure(issue('floorId', 'transition_conflict'))
+        const configuration = { ...args }
+        delete configuration.status
+        delete configuration.note
+        return save(tx, 'hospitality_core.Room', configuration, writable('Room'), {
+          status: 'available',
+          note: null,
+          active: true,
+        })
+      }),
   }),
 
   setRoomStatus: defineFn({
