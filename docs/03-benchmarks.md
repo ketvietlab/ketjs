@@ -327,6 +327,21 @@ These figures measure the guarded domain update plus detail read, not form rende
 operator input. The same runs kept every prior booking, inventory, folio, housekeeping,
 night-audit, stay-notice and PostgreSQL contention assertion green.
 
+The room-type workspace extension then updates a populated sellable product and reads
+its complete detail through every physical database. It verifies capacity, view, colour,
+property and cancellation-policy preloads, the exact physical-room count, one additional
+durable content signal and isolation between tenant databases.
+
+| driver | physical databases | room-type updates | elapsed | updates/s | settings, relations and room count |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 5.1 ms | 1,576 | complete |
+| PostgreSQL 17 | 4 | 4 | 19.5 ms | 205 | complete |
+
+The full runs used 2,000 rooms on SQLite and 1,000 rooms on PostgreSQL. These timings
+cover the guarded update and relation-rich detail read; form rendering and operator
+input are intentionally excluded. All earlier booking, inventory, folio, housekeeping,
+night-audit, contention, durable-feed and cross-database assertions remained green.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
