@@ -50,6 +50,8 @@ test('channel api: OpenAPI is generated from composed route contracts', () => {
   assert.ok(document.paths['/hospitality/bookings'])
   const booking = document.paths['/hospitality/bookings']?.post as Record<string, unknown>
   assert.equal(booking.operationId, 'customer.hospitality.bookings.create')
+  assert.equal(booking['x-ket-auth'], 'customer')
+  assert.deepEqual(booking.security, [{ bearer: [] }, { customerCookie: [] }])
   assert.deepEqual(booking['x-ket-capability'], {
     key: 'website_hospitality.bookings',
     action: 'create',

@@ -6,6 +6,11 @@ description: Define KetJS operations with checked signatures, explicit effects, 
 A server function is a named business operation. Its input, output, data reach, external effects,
 exposure, and safety properties are declared beside its handler and composed into the manifest.
 
+Public channel clients do not call the generic `/_ket/fn` transport. Customer, POS, staff, and integration
+credentials are classified before generic function dispatch and must use their profile-specific Channel API.
+Idempotent calls are scoped by namespace and include a canonical request digest, so the same caller key cannot
+silently replay a result for a different body.
+
 ## Declare a function
 
 ```ts

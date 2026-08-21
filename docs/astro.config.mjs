@@ -78,6 +78,8 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'HTTP routes and responses', slug: 'ketjs/http' },
+                { label: 'Channel API architecture', slug: 'ketjs/channel-api' },
+                { label: 'Customer API reference', slug: 'ketjs/channel-api-reference' },
                 { label: 'Sessions and tenants', slug: 'ketjs/sessions-tenants' },
                 { label: 'Durable jobs and workers', slug: 'ketjs/jobs' },
                 { label: 'Storage, transport, streams', slug: 'ketjs/integrations' },

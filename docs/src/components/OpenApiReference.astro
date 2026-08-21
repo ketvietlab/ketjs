@@ -1,0 +1,447 @@
+---
+import rawDocument from '../../public/api/customer-v1.openapi.json'
+
+type Schema = Record<string, unknown>
+type Operation = {
+  operationId?: string
+  summary?: string
+  parameters?: Array<{ name: string; in: string; required?: boolean; schema?: Schema }>
+  requestBody?: { content?: { 'application/json'?: { schema?: Schema } } }
+  responses?: Record<string, { description?: string; content?: { 'application/json'?: { schema?: Schema } } }>
+  'x-ket-capability'?: { key?: string; action?: string } | null
+  'x-ket-auth'?: 'public' | 'optional-customer' | 'customer'
+  'x-ket-idempotent'?: boolean
+}
+type OpenApi = {
+  openapi: string
+  info: { title: string; version: string }
+  servers?: Array<{ url: string }>
+  paths: Record<string, Record<string, Operation>>
+}
+
+const api = rawDocument as OpenApi
+const methods = new Set(['get', 'post', 'put', 'patch', 'delete'])
+const operations = Object.entries(api.paths).flatMap(([path, pathItem]) =>
+  Object.entries(pathItem)
+    .filter(([method]) => methods.has(method.toLowerCase()))
+    .map(([method, operation]) => ({
+      method: method.toUpperCase(),
+      path,
+      group: path.split('/').filter(Boolean)[0] ?? 'root',
+      ...operation,
+    })),
+)
+// biome-ignore lint/correctness/noUnusedVariables: referenced by the Astro template below.
+const groups = [...new Set(operations.map(({ group }) => group))]
+// biome-ignore lint/correctness/noUnusedVariables: referenced by the Astro template below.
+const server = api.servers?.[0]?.url ?? '/api/customer/v1'
+// biome-ignore lint/correctness/noUnusedVariables: referenced by the Astro template below.
+const schemaOf = (value: unknown): string => JSON.stringify(value ?? {}, null, 2)
+// biome-ignore lint/correctness/noUnusedVariables: referenced by the Astro template below.
+const labelOf = (group: string): string =>
+  ({ auth: 'Authentication', hospitality: 'Hospitality', bootstrap: 'Bootstrap', me: 'Customer profile' })[
+    group
+  ] ?? group
+---
+
+<section class="api-reference" data-api-reference>
+  <header class="api-hero">
+    <div>
+      <p class="eyebrow">OpenAPI {api.openapi} · contract-generated</p>
+      <h2>{api.info.title}</h2>
+      <p class="lede">
+        A stable customer boundary for headless websites and native applications. Every operation below is
+        generated from the composed server manifest.
+      </p>
+    </div>
+    <div class="api-facts" aria-label="API facts">
+      <div><span>Version</span><strong>{api.info.version}</strong></div>
+      <div><span>Base path</span><code>{server}</code></div>
+      <div><span>Operations</span><strong>{operations.length}</strong></div>
+    </div>
+  </header>
+
+  <div class="reference-toolbar" role="search">
+    <label>
+      <span>Filter operations</span>
+      <input data-api-filter type="search" placeholder="Path, operation, capability…" autocomplete="off" />
+    </label>
+    <a class="download" href="/api/customer-v1.openapi.json" download>Download OpenAPI JSON</a>
+  </div>
+
+  <div class="reference-status" aria-live="polite">
+    <span data-api-count>{operations.length}</span> operations across {groups.length} groups
+  </div>
+
+  <div class="operation-groups">
+    {
+      groups.map((group) => {
+        const entries = operations.filter((operation) => operation.group === group)
+        return (
+          <section class="operation-group" data-api-group>
+            <div class="group-heading">
+              <h3>{labelOf(group)}</h3>
+              <span>{entries.length}</span>
+            </div>
+            <div class="operations">
+              {entries.map((operation) => {
+                const capability = operation['x-ket-capability']
+                const requestSchema = operation.requestBody?.content?.['application/json']?.schema
+                const search = [
+                  operation.method,
+                  operation.path,
+                  operation.operationId,
+                  operation.summary,
+                  capability?.key,
+                  capability?.action,
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+                  .toLowerCase()
+                return (
+                  <article class="operation" data-api-operation data-search={search}>
+                    <details>
+                      <summary>
+                        <span class={`method method-${operation.method.toLowerCase()}`}>{operation.method}</span>
+                        <code class="path">{operation.path}</code>
+                        <span class="summary">{operation.summary ?? operation.operationId}</span>
+                        <span class="chevron" aria-hidden="true">⌄</span>
+                      </summary>
+                      <div class="operation-body">
+                        <div class="operation-meta">
+                          {operation.operationId && <code>{operation.operationId}</code>}
+                          <span class={`auth auth-${operation['x-ket-auth'] ?? 'public'}`}>
+                            {operation['x-ket-auth'] === 'customer'
+                              ? 'Customer auth'
+                              : operation['x-ket-auth'] === 'optional-customer'
+                                ? 'Optional auth'
+                                : 'Public'}
+                          </span>
+                          {capability?.key && (
+                            <span class="capability">{capability.key}:{capability.action}</span>
+                          )}
+                          {operation['x-ket-idempotent'] && <span class="idempotent">Idempotency-Key</span>}
+                        </div>
+
+                        {operation.parameters?.length ? (
+                          <section class="contract-block">
+                            <h4>Parameters</h4>
+                            <div class="parameter-list">
+                              {operation.parameters.map((parameter) => (
+                                <div class="parameter">
+                                  <code>{parameter.name}</code>
+                                  <span>{parameter.in}</span>
+                                  {parameter.required && <strong>required</strong>}
+                                  <small>{String(parameter.schema?.type ?? 'value')}</small>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        ) : null}
+
+                        {requestSchema && (
+                          <section class="contract-block">
+                            <h4>JSON request body</h4>
+                            <pre><code>{schemaOf(requestSchema)}</code></pre>
+                          </section>
+                        )}
+
+                        <section class="contract-block">
+                          <h4>Responses</h4>
+                          <div class="responses">
+                            {Object.entries(operation.responses ?? {}).map(([status, response]) => (
+                              <details class="response">
+                                <summary>
+                                  <span class:list={['status-code', { success: status.startsWith('2') }]}>{status}</span>
+                                  <span>{response.description ?? 'Response'}</span>
+                                </summary>
+                                <pre><code>{schemaOf(response.content?.['application/json']?.schema)}</code></pre>
+                              </details>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    </details>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })
+    }
+  </div>
+
+  <p class="empty-state" data-api-empty hidden>No operation matches this filter.</p>
+</section>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-api-reference]')
+    if (!root || root.dataset.ready === 'true') return
+    root.dataset.ready = 'true'
+    const input = root.querySelector('[data-api-filter]')
+    const operations = [...root.querySelectorAll('[data-api-operation]')]
+    const groups = [...root.querySelectorAll('[data-api-group]')]
+    const count = root.querySelector('[data-api-count]')
+    const empty = root.querySelector('[data-api-empty]')
+    const update = () => {
+      const query = input.value.trim().toLowerCase()
+      let visible = 0
+      for (const operation of operations) {
+        const show = !query || operation.dataset.search.includes(query)
+        operation.hidden = !show
+        if (show) visible += 1
+      }
+      for (const group of groups) {
+        group.hidden = !group.querySelector('[data-api-operation]:not([hidden])')
+      }
+      count.textContent = String(visible)
+      empty.hidden = visible !== 0
+    }
+    input.addEventListener('input', update)
+  })()
+</script>
+
+<style>
+  .api-reference {
+    --api-line: color-mix(in srgb, var(--ks-line) 82%, transparent);
+    --api-panel: color-mix(in srgb, var(--ks-surface) 92%, var(--ks-bg));
+    display: grid;
+    gap: 1rem;
+    margin-block-start: 1rem;
+  }
+
+  .api-hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1.5rem;
+    overflow: hidden;
+    padding: 1.25rem;
+    border: 1px solid var(--ks-accent-line);
+    border-radius: var(--ks-radius);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--ks-accent-soft) 78%, transparent), transparent 62%),
+      var(--api-panel);
+  }
+
+  .api-hero::after {
+    position: absolute;
+    inset: auto -3rem -4rem auto;
+    inline-size: 11rem;
+    block-size: 11rem;
+    border: 1px solid var(--ks-accent-line);
+    border-radius: 50%;
+    content: '';
+    opacity: 0.42;
+  }
+
+  .api-hero h2 {
+    margin: 0.2rem 0 0.4rem;
+    padding: 0;
+    border: 0;
+    font-size: 1.35rem;
+  }
+
+  .eyebrow {
+    margin: 0;
+    color: var(--ks-accent);
+    font-family: var(--sl-font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lede {
+    max-inline-size: 42rem;
+    margin: 0;
+    color: var(--ks-ink-secondary);
+    font-size: 0.84rem;
+  }
+
+  .api-facts {
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    align-self: center;
+    overflow: hidden;
+    border: 1px solid var(--api-line);
+    border-radius: var(--ks-radius-sm);
+    background: color-mix(in srgb, var(--ks-bg) 68%, transparent);
+  }
+
+  .api-facts div {
+    display: grid;
+    gap: 0.2rem;
+    min-inline-size: 5.2rem;
+    padding: 0.65rem 0.75rem;
+    border-inline-start: 1px solid var(--api-line);
+  }
+
+  .api-facts div:first-child { border-inline-start: 0; }
+  .api-facts span { color: var(--ks-ink-muted); font-size: 0.66rem; text-transform: uppercase; }
+  .api-facts strong, .api-facts code { color: var(--ks-ink); font-size: 0.76rem; }
+
+  .reference-toolbar {
+    display: flex;
+    align-items: end;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--api-line);
+    border-radius: var(--ks-radius);
+    background: var(--api-panel);
+  }
+
+  .reference-toolbar label { display: grid; flex: 1; gap: 0.3rem; }
+  .reference-toolbar label span { color: var(--ks-ink-muted); font-size: 0.68rem; font-weight: 650; text-transform: uppercase; }
+  .reference-toolbar input {
+    inline-size: 100%;
+    block-size: 2.25rem;
+    padding-inline: 0.7rem;
+    border: 1px solid var(--ks-line-strong);
+    border-radius: var(--ks-radius-sm);
+    background: var(--ks-bg);
+    color: var(--ks-ink);
+    font: inherit;
+  }
+  .reference-toolbar input:focus { border-color: var(--ks-accent); outline: 2px solid var(--ks-accent-soft); }
+  .download {
+    display: inline-flex;
+    align-items: center;
+    block-size: 2.25rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--ks-accent-line);
+    border-radius: var(--ks-radius-sm);
+    background: var(--ks-accent-soft);
+    color: var(--sl-color-accent-high);
+    font-size: 0.76rem;
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .reference-status { color: var(--ks-ink-muted); font-size: 0.72rem; }
+  .reference-status span { color: var(--ks-ink); font-family: var(--sl-font-mono); font-weight: 700; }
+  .operation-groups { display: grid; gap: 1.25rem; }
+  .operation-group { display: grid; gap: 0.5rem; }
+  .group-heading { display: flex; align-items: center; gap: 0.5rem; }
+  .group-heading h3 { margin: 0; font-size: 0.85rem; }
+  .group-heading span {
+    display: inline-grid;
+    min-inline-size: 1.3rem;
+    block-size: 1.3rem;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--ks-surface-subtle);
+    color: var(--ks-ink-secondary);
+    font: 700 0.66rem var(--sl-font-mono);
+  }
+  .operations { display: grid; gap: 0.42rem; }
+  .operation {
+    overflow: hidden;
+    border: 1px solid var(--api-line);
+    border-radius: var(--ks-radius-sm);
+    background: var(--api-panel);
+    box-shadow: var(--ks-shadow-card);
+  }
+  .operation > details > summary {
+    display: grid;
+    grid-template-columns: 4.1rem minmax(9rem, 0.75fr) minmax(10rem, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    min-block-size: 3.15rem;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .operation > details > summary::-webkit-details-marker { display: none; }
+  .operation > details > summary::before,
+  .operation > details > summary::marker { display: none; content: none; }
+  .operation > details[open] > summary { border-block-end: 1px solid var(--api-line); }
+  .method {
+    display: inline-grid;
+    inline-size: 4rem;
+    block-size: 1.55rem;
+    place-items: center;
+    border-radius: 0.25rem;
+    font: 800 0.66rem var(--sl-font-mono);
+    letter-spacing: 0.05em;
+  }
+  .method-get { background: #173e36; color: #74d9b4; }
+  .method-post { background: #3e3419; color: #f4cc6a; }
+  .method-put, .method-patch { background: #26375b; color: #9eb8ff; }
+  .method-delete { background: #4a2529; color: #ff9fa7; }
+  :global(:root[data-theme='light']) .method-get { background: #e0f5ed; color: #17684f; }
+  :global(:root[data-theme='light']) .method-post { background: #fff1c9; color: #725512; }
+  :global(:root[data-theme='light']) .method-put,
+  :global(:root[data-theme='light']) .method-patch { background: #e5ebff; color: #365497; }
+  :global(:root[data-theme='light']) .method-delete { background: #ffe5e7; color: #953944; }
+  .path { overflow: hidden; color: var(--ks-ink); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+  .summary { overflow: hidden; color: var(--ks-ink-secondary); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+  .chevron { color: var(--ks-ink-muted); transition: transform 160ms ease; }
+  details[open] > summary .chevron { transform: rotate(180deg); }
+  .operation-body { display: grid; gap: 1rem; padding: 0.9rem; }
+  .operation-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .operation-meta > * {
+    padding: 0.22rem 0.42rem;
+    border: 1px solid var(--api-line);
+    border-radius: 0.25rem;
+    color: var(--ks-ink-secondary);
+    font-size: 0.68rem;
+  }
+  .operation-meta .capability { border-color: var(--ks-accent-line); color: var(--sl-color-accent-high); }
+  .operation-meta .auth-customer { border-color: #3f765f; color: #69cda8; }
+  .operation-meta .auth-optional-customer { border-color: #526996; color: #9eb8ff; }
+  .operation-meta .auth-public { color: var(--ks-ink-muted); }
+  .operation-meta .idempotent { border-color: #7b6426; color: #ddbd68; }
+  .contract-block { display: grid; gap: 0.45rem; }
+  .contract-block h4 { margin: 0; color: var(--ks-ink); font-size: 0.74rem; text-transform: uppercase; }
+  .parameter-list { display: grid; border: 1px solid var(--api-line); border-radius: 0.3rem; }
+  .parameter { display: grid; grid-template-columns: 1fr 4rem 4.5rem 4rem; gap: 0.5rem; padding: 0.45rem 0.55rem; border-block-start: 1px solid var(--api-line); font-size: 0.7rem; }
+  .parameter:first-child { border-block-start: 0; }
+  .parameter span, .parameter small { color: var(--ks-ink-muted); }
+  .parameter strong { color: #d6a747; font-size: 0.64rem; }
+  pre {
+    max-block-size: 24rem;
+    margin: 0;
+    padding: 0.7rem;
+    overflow: auto;
+    border: 1px solid var(--api-line);
+    border-radius: 0.3rem;
+    background: var(--ks-bg);
+    font-size: 0.68rem;
+    line-height: 1.55;
+  }
+  .responses { display: grid; gap: 0.35rem; }
+  .response { overflow: hidden; border: 1px solid var(--api-line); border-radius: 0.3rem; }
+  .response > summary { display: flex; align-items: center; gap: 0.55rem; padding: 0.42rem 0.55rem; color: var(--ks-ink-secondary); cursor: pointer; font-size: 0.72rem; list-style: none; }
+  .response > summary::-webkit-details-marker { display: none; }
+  .response > summary::before,
+  .response > summary::marker { display: none; content: none; }
+  .response pre { border: 0; border-block-start: 1px solid var(--api-line); border-radius: 0; }
+  .status-code { color: #ee9aa2; font: 800 0.68rem var(--sl-font-mono); }
+  .status-code.success { color: #69cda8; }
+  .empty-state { padding: 2rem; border: 1px dashed var(--ks-line-strong); border-radius: var(--ks-radius); color: var(--ks-ink-muted); text-align: center; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 58rem) {
+    .api-hero { grid-template-columns: 1fr; }
+    .api-facts { justify-self: stretch; }
+    .api-facts div { min-inline-size: 0; }
+  }
+
+  @media (max-width: 40rem) {
+    .api-hero { padding: 1rem; }
+    .api-facts { grid-template-columns: 1fr; }
+    .api-facts div { grid-template-columns: 5rem 1fr; align-items: center; border-block-start: 1px solid var(--api-line); border-inline-start: 0; }
+    .api-facts div:first-child { border-block-start: 0; }
+    .reference-toolbar { align-items: stretch; flex-direction: column; }
+    .download { justify-content: center; }
+    .operation > details > summary { grid-template-columns: 4.1rem minmax(0, 1fr) auto; gap: 0.5rem; }
+    .operation .summary { grid-column: 1 / -1; white-space: normal; }
+    .parameter { grid-template-columns: 1fr auto; }
+    .parameter strong, .parameter small { text-align: end; }
+  }
+</style>

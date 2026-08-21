@@ -21,6 +21,12 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
       [contract.method.toLowerCase()]: {
         operationId: contract.operationId,
         ...(contract.summary ? { summary: contract.summary } : {}),
+        security:
+          contract.auth === 'customer'
+            ? [{ bearer: [] }, { customerCookie: [] }]
+            : contract.auth === 'optional-customer'
+              ? [{}, { bearer: [] }, { customerCookie: [] }]
+              : [],
         ...(parameters.length ? { parameters } : {}),
         ...(contract.request?.body
           ? {
@@ -40,6 +46,7 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
           ]),
         ),
         'x-ket-capability': contract.capability ?? null,
+        'x-ket-auth': contract.auth ?? 'public',
         'x-ket-idempotent': contract.idempotent === true,
       },
     }

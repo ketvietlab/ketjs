@@ -30,6 +30,13 @@ claiming the same path fail during composition.
 Module route dispatch checks the live manifest. Disabling a module therefore returns `404` for its
 routes instead of leaving stale handlers mounted.
 
+## Reserved API prefixes
+
+A contract-owning module can reserve a static prefix such as `/api/customer/v1/`. Routes below a reserved
+prefix must come from the owner or from a dependent extension using the owner's route factory. KetJS records
+the route method, request schema, response schemas, capability, and idempotency behavior in the manifest so
+OpenAPI can be generated from the deployed composition rather than maintained as a separate document.
+
 ## Anonymous routes
 
 Routes default to requiring a session. Public endpoints must opt in:

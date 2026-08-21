@@ -316,6 +316,7 @@ export const customerRoutes = routesOf(
     path: 'bootstrap',
     operationId: 'customer.bootstrap',
     summary: 'Resolve the customer channel context and live capabilities.',
+    auth: 'optional-customer',
     responses: { '200': envelope },
     handler: async (ctx, url, req) => {
       const context = await realmContext(ctx, url, req)
@@ -451,6 +452,7 @@ export const customerRoutes = routesOf(
     method: 'POST',
     path: 'auth/logout',
     operationId: 'customer.auth.logout',
+    auth: 'customer',
     responses: { '200': envelope },
     handler: async (ctx, url, req) => {
       const identity = await customerIdentity(ctx, url, req)
@@ -481,6 +483,7 @@ export const customerRoutes = routesOf(
     method: 'GET',
     path: 'me',
     operationId: 'customer.me',
+    auth: 'customer',
     responses: { '200': envelope },
     capability: { key: 'channel_api.customer_account', action: 'read' },
     handler: async (ctx, url, req) => {
