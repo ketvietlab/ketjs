@@ -1,4 +1,4 @@
-@layer components {
+@layer ket.app {
   [data-ui="chatter"] {
     display: grid;
     min-inline-size: 0;

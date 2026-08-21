@@ -26,6 +26,7 @@ import { HOOKS as activity } from './activity.ts'
 import { HOOKS as calendar } from './calendar.ts'
 import { HOOKS as record } from './record.tsx'
 import { HOOKS as modal } from './modal.tsx'
+import { HOOKS as auth } from './auth.tsx'
 
 const ALL = [
   ...icons,
@@ -49,6 +50,7 @@ const ALL = [
   ...calendar,
   ...record,
   ...modal,
+  ...auth,
 ]
 
 /** Sorted and de-duplicated: two files may legitimately share `title`. */
@@ -82,6 +84,7 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['calendar', calendar],
           ['record', record],
           ['modal', modal],
+          ['auth', auth],
         ] as Array<[string, readonly string[]]>
       )
         .filter(([, list]) => (list as readonly string[]).includes(h))

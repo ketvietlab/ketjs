@@ -33,7 +33,7 @@ const boot = async (t: TestContext) => {
 test('relational select HTTP: empty partner relations keep create flows available', async (t) => {
   const e2e = await boot(t)
   for (const [path, identity, title] of [
-    ['/admin/partners/new', 'partner-parent-new', 'Quản lý tổ chức'],
+    ['/admin/partner/partners/new', 'partner-parent-new', 'Quản lý tổ chức'],
     ['/admin/sales/quotations', 'sale-customer', 'Quản lý khách hàng'],
     ['/admin/purchase/rfqs', 'purchase-vendor', 'Quản lý nhà cung cấp'],
   ]) {

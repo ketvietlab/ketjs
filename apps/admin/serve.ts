@@ -25,8 +25,11 @@ import { html, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   address,
+  company,
   paperTheme,
   partner,
+  storage,
+  user,
   website,
   websiteMenu,
   websiteSearch,
@@ -54,7 +57,26 @@ const DESIGN = join(HERE, '../../packages/ketsuite/src/modules/backend/design')
  */
 const DEMO_SCOPE = { company: 'design', branches: null }
 
-const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme, backend]
+// `user` is here for its message catalogue, not its routes: the catalogue renders
+// the sign-in screen, and without it every string on that case showed as its own key
+// — which is exactly what the pseudo-locale pass is supposed to make visible.
+// `user`, and the two modules it needs, are here for their message catalogues
+// rather than their routes: the catalogue renders the sign-in screen, and without
+// them every string on that case showed as its own key — which is exactly what the
+// pseudo-locale pass exists to make visible.
+const mods = [
+  address,
+  partner,
+  company,
+  storage,
+  user,
+  website,
+  websiteMenu,
+  websiteSeo,
+  websiteSearch,
+  paperTheme,
+  backend,
+]
 const manifest = compose(mods)
 
 const db = sqliteAdapter()

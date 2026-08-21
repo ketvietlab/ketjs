@@ -4,14 +4,14 @@ import {
   badge,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { labelOf } from './screens.tsx'
@@ -43,7 +43,7 @@ export const journalEntriesScreen = (
           cell: (row) =>
             linkButton({
               label: String(row.name),
-              href: `/admin/journal-entries/${String(row.id)}${options.locale}`,
+              href: `/admin/accounting/entries/${String(row.id)}${options.locale}`,
               variant: 'tertiary',
             }),
         },

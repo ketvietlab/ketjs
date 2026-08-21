@@ -1,11 +1,6 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  framedPage as Framed,
-  recordForm as RecordForm,
-  section as Section,
-  surface as Surface,
-} from '../../ui/index.ts'
+import { Framed, RecordForm, Section, Surface } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 
 export const accountingTermsScreen = (

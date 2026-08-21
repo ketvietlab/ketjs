@@ -50,7 +50,28 @@ export { joints } from './joints.ts'
 export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
-export { routes, viewerOf, timezoneOf } from './routes.ts'
+export { routes } from './routes.ts'
+/**
+ * The shell every backend screen sits in, and the small helpers a route needs
+ * before it can render one. A module composes these instead of writing its own
+ * frame: see the note at the top of `screen.ts` for what went wrong when it did.
+ */
+export {
+  adminPage,
+  choices,
+  frameOf,
+  inLocale,
+  localeQuery,
+  localized,
+  optional,
+  resultErrors,
+  screen,
+  selectionLabel,
+  selectionOptions,
+  timezoneOf,
+  viewerOf,
+} from './screen.ts'
+export type { AnyRow, FrameOptions, Req, ScreenOptions } from './screen.ts'
 export { relationControl, relationLabels } from './relation-select.ts'
 export type {
   RelationEditorField,
@@ -73,7 +94,7 @@ export {
   backendPage,
   shell,
   formatMoney,
-  framed,
+  Framed,
   listChrome,
   topbarSearch,
   emptyState,
@@ -87,7 +108,6 @@ export {
   icon,
   hasIcon,
   appCard,
-  card,
   cardGroups,
   definitionList,
   actionButton,
@@ -102,6 +122,7 @@ export {
   countBadge,
   notice,
   loadingState,
+  loginScreen,
   stack,
   section,
   surface,

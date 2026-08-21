@@ -1,12 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  notice,
-  recordForm as RecordForm,
-  section as Section,
-  stack,
-  surface as Surface,
-} from '../../ui/index.ts'
+import { Notice, RecordForm, Section, stack, Surface } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 
 export const websiteLeadScreen = (
@@ -18,11 +12,11 @@ export const websiteLeadScreen = (
   stack([
     ...(success
       ? [
-          notice({
-            title: _('crm_website.website.successTitle'),
-            message: _('crm_website.website.success'),
-            tone: 'positive',
-          }),
+          <Notice
+            title={_('crm_website.website.successTitle')}
+            message={_('crm_website.website.success')}
+            tone="positive"
+          />,
         ]
       : []),
     <Section

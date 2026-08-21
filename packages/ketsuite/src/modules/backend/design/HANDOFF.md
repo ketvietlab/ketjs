@@ -34,7 +34,6 @@ npm run design
 |---|---|
 | `http://127.0.0.1:4000/catalogue` | **mọi màn hình, mọi trạng thái** — đây là chỗ làm việc chính |
 | `http://127.0.0.1:4000/admin/apps` | màn hình thật, dữ liệu thật |
-| `http://127.0.0.1:4000/admin/pages` | |
 | `http://127.0.0.1:4000/admin/settings` | |
 
 Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Cài app, gỡ app, làm hỏng
@@ -86,8 +85,21 @@ chiếu tới chúng. Thứ tự tầng đã cố định:
 ket.reset  <  ket.theme  <  ket.app  <  ket.user
 ```
 
-Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đấu specificity. Chế độ
-tối chỉ cần đổi token, không cần viết lại quy tắc.
+Thứ tự này **được phát ra thật** trong `<head>` của mọi trang, trước link stylesheet
+đầu tiên. Trước đây nó chỉ nằm trong tài liệu, nên thứ tự thật là thứ tự file nào nạp
+trước — và `ket.theme` đứng trên `ket.app` ở mọi trang backend.
+
+Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đấu specificity.
+**Không viết quy tắc nào ngoài `@layer`**: CSS không layer thắng mọi layer, kể cả
+`ket.user`. Có test giữ điều này.
+
+Chế độ tối chỉ cần đổi token: mỗi vai trò khai một lần bằng `light-dark(sáng, tối)`,
+còn `[data-theme="light"|"dark"]` chỉ đổi `color-scheme`.
+
+Breakpoint đã chốt thành một thang, liệt kê trong `tokens.css` (`--admin-bp-*`).
+`@media` không nhận custom property nên vẫn phải viết số, nhưng chỉ dùng số trong thang
+đó — mỗi giá trị lẻ hơn round number một pixel để một quy tắc và cái shell bao quanh nó
+không bao giờ lệch pha ngay tại ranh giới.
 
 ## Đa ngôn ngữ — thêm sau bản thiết kế đầu
 
@@ -148,7 +160,8 @@ thuộc behavior hoặc workflow chưa có contract:
 - thêm status label semantic riêng cho app đã cài/chưa cài;
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
-- thêm toggle `data-theme="light|dark"`; system preference hiện là fallback;
+- thêm toggle `data-theme="light|dark"`; hiện chưa có UI nào đặt thuộc tính này, nên
+  chế độ tối vẫn chỉ chạy theo system preference;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
@@ -249,7 +262,6 @@ trong HTML.
 | --- | --- |
 | `[data-ui="list-chrome"]` | cả hàng; `chrome-lead` bên trái, `chrome-tail` bên phải |
 | `[data-ui="chrome-create"]` | nút chính (“Mới”) — hiện tại chưa màn hình nào bật |
-| `[data-ui="crumbs"]`, `[data-ui="crumb"]` | đường dẫn; mục cuối có `aria-current="page"` và **không** phải link |
 | `[data-ui="chrome-search"]` | form tìm kiếm; style trạng thái gõ bằng `:focus-within` |
 | `[data-ui="chrome-search-input"]` | ô nhập bên trong nó |
 | `[data-ui="facet"]`, `[data-ui="facet-label"]`, `[data-ui="facet-remove"]` | một bộ lọc đang bật, và dấu × để bỏ |
@@ -295,10 +307,16 @@ Người đang đăng nhập nằm ở **đáy sidebar**, cùng hàng đếm vi�
 
 ## Sidebar — port từ vidoo_backend_theme
 
-Sidebar ở đây **là** sidebar của `vidoo_backend_theme` trong repo kingfruit: 228px,
-không có thanh ứng dụng ngang trên desktop, systray nằm ở chân. Cùng số đo, cùng
-bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên nào thì phải nói bên
-kia — mục tiêu là hai sản phẩm trông như một.
+Sidebar ở đây **là** sidebar của `vidoo_backend_theme` trong repo kingfruit: `224px`
+(`--admin-sidebar-width: 14rem`), không có thanh ứng dụng ngang trên desktop, systray
+nằm ở chân. Cùng số đo, cùng bảng màu — token của admin lấy từ đó nhưng mang tiền tố
+`--admin-*`, không phải `--kv-*`. Sửa bên nào thì phải nói bên kia — mục tiêu là hai
+sản phẩm trông như một.
+
+Sidebar cao đúng **một màn hình** (`position: sticky` + `block-size: 100dvh`), phần
+menu tự cuộn bên trong. Trước đây nó là grid item nên bị kéo cao bằng nội dung, và trên
+một danh sách dài thì systray, số đếm tin nhắn/hoạt động và link Cài đặt nằm dưới màn
+hình vài trăm pixel.
 
 Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
 theme the domain contract làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;

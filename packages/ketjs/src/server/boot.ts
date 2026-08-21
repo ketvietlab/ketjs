@@ -521,7 +521,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       // menu is a link and the back button walks out of it.
       const q = url.searchParams.get('menu')?.trim() || undefined
       return tenants.ofRequest(url, req, async (t) =>
-        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }),
+        buildMenu(t.live, { allow, translate: (k) => _(k), locale: _.locale, active: url.pathname, q }),
       )
     },
     reportsOf: async (url, req, target) => {

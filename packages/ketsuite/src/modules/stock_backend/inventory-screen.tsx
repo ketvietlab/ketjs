@@ -5,15 +5,15 @@ import {
   code,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  notice,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  Notice,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Column, FormOption, Frame } from '../../ui/index.ts'
 
@@ -199,14 +199,14 @@ export const inventoryScreen = (
           ]}
           body={stack(
             [
-              options.applied
-                ? notice({
-                    tone: 'positive',
-                    title: _('stock_backend.inventory.applied.title'),
-                    message: _('stock_backend.inventory.applied.message'),
-                    icon: icon('check-circle'),
-                  })
-                : null,
+              options.applied ? (
+                <Notice
+                  tone="positive"
+                  title={_('stock_backend.inventory.applied.title')}
+                  message={_('stock_backend.inventory.applied.message')}
+                  icon={icon('check-circle')}
+                />
+              ) : null,
               <Section
                 title={_('stock_backend.adjustment.title')}
                 description={_('stock_backend.adjustment.hint')}
@@ -214,17 +214,17 @@ export const inventoryScreen = (
                   configured ? (
                     <Surface padding="compact" body={adjustmentForm(_, options)} />
                   ) : (
-                    notice({
-                      tone: 'warning',
-                      title: _('stock_backend.inventory.configuration.title'),
-                      message: _('stock_backend.inventory.configuration.message'),
-                      icon: icon('alert-triangle'),
-                      actions: linkButton({
+                    <Notice
+                      tone="warning"
+                      title={_('stock_backend.inventory.configuration.title')}
+                      message={_('stock_backend.inventory.configuration.message')}
+                      icon={icon('alert-triangle')}
+                      actions={linkButton({
                         label: _('stock_backend.inventory.configuration.action'),
                         href: options.locationsHref,
                         variant: 'secondary',
-                      }),
-                    })
+                      })}
+                    />
                   )
                 }
               />,

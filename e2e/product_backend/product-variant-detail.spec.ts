@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const artifacts = join(moduleDir, 'artifacts', 'product-variant-detail')
 const uploadFixture = join(moduleDir, 'fixtures', 'product-primary.png')
-const variantPath = '/admin/products/tpl-review/variants/variant-review'
+const variantPath = '/admin/product/templates/tpl-review/variants/variant-review'
 
 const login = async (page: Page) => {
   await page.goto('/login?lang=vi')

@@ -27,6 +27,8 @@ export type MenuOptions = {
   allow?: readonly string[] | null
   /** Resolves a label. Given a key it does not know, it should return it unchanged. */
   translate?: (key: string) => string
+  /** The locale the labels come back in, so equal sequences sort the way it reads. */
+  locale?: string
   /** The path currently showing, used to mark the branch leading to it. */
   active?: string
   /**
@@ -35,9 +37,6 @@ export type MenuOptions = {
    */
   q?: string
 }
-
-const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
-  (a[1].sequence ?? 100) - (b[1].sequence ?? 100) || a[1].label.localeCompare(b[1].label)
 
 export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   const entries = Object.entries(manifest.menus)
@@ -60,6 +59,20 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
     // literal rather than a key gets the literal.
     return out && out !== key ? out : (o.translate?.(def.label) ?? def.label)
   }
+
+  /**
+   * Sequence first, then the words the reader actually sees.
+   *
+   * The tie-break used to compare `def.label`, which is the message *key*: every
+   * app declares `menu.app`, so every root with the same sequence compared equal
+   * and the sidebar fell back to the order modules happened to be registered in.
+   * Below a heading it was worse — an untranslated key sorts in English, so the
+   * Vietnamese Purchasing menu read Đơn mua · RFQ · Bảng giá because `orders` <
+   * `rfqs` < `vendorPricelists`. Comparing the translation puts a Vietnamese menu
+   * in Vietnamese order, and `sequence` remains the way to say what you mean.
+   */
+  const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
+    (a[1].sequence ?? 100) - (b[1].sequence ?? 100) || label(a[1]).localeCompare(label(b[1]), o.locale)
 
   const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
   const matches = (text: string): boolean => !needle || text.toLocaleLowerCase('vi').includes(needle)

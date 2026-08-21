@@ -89,11 +89,11 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   )
 
   const pages: Array<[string, RegExp]> = [
-    ['/admin/partners', /Công ty Minh An/],
-    ['/admin/partners?role=customer', /Khách hàng/],
-    ['/admin/partners/new', /Tạo đối tác/],
-    ['/admin/partners/customer', /12 Nguyễn Huệ/],
-    ['/admin/partners/customer/accounting', /Phải thu khách hàng/],
+    ['/admin/partner/partners', /Công ty Minh An/],
+    ['/admin/partner/partners?role=customer', /Khách hàng/],
+    ['/admin/partner/partners/new', /Tạo đối tác/],
+    ['/admin/partner/partners/customer', /12 Nguyễn Huệ/],
+    ['/admin/partner/partners/customer/accounting', /Phải thu khách hàng/],
   ]
   for (const [path, expected] of pages) {
     const response = await e2e.client.get(path, { headers: { accept: 'text/html' } })
@@ -103,31 +103,38 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]/, path)
   }
 
-  const keptSearch = await (await e2e.client.get('/admin/partners?role=customer&archived=1&lang=en')).text()
+  const keptSearch = await (
+    await e2e.client.get('/admin/partner/partners?role=customer&archived=1&lang=en')
+  ).text()
   assert.match(keptSearch, /name="role" value="customer"/)
   assert.match(keptSearch, /name="archived" value="1"/)
   assert.match(keptSearch, /name="lang" value="en"/)
 
-  const english = await e2e.client.get('/admin/partners?lang=en', { headers: { accept: 'text/html' } })
+  const english = await e2e.client.get('/admin/partner/partners?lang=en', {
+    headers: { accept: 'text/html' },
+  })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Partner directory|Partners/)
 
   const archived = await e2e.client.post(
-    '/admin/partners/customer/archive?lang=en',
+    '/admin/partner/partners/customer/archive?lang=en',
     new URLSearchParams({ action: 'archive' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
   )
   assert.equal(archived.status, 200)
-  assert.doesNotMatch(await (await e2e.client.get('/admin/partners?lang=en')).text(), /Công ty Minh An/)
-  assert.match(await (await e2e.client.get('/admin/partners?archived=1&lang=en')).text(), /Archived/)
+  assert.doesNotMatch(
+    await (await e2e.client.get('/admin/partner/partners?lang=en')).text(),
+    /Công ty Minh An/,
+  )
+  assert.match(await (await e2e.client.get('/admin/partner/partners?archived=1&lang=en')).text(), /Archived/)
   await e2e.client.post(
-    '/admin/partners/customer/archive?lang=en',
+    '/admin/partner/partners/customer/archive?lang=en',
     new URLSearchParams({ action: 'restore' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' } },
   )
 
   const created = await e2e.client.post(
-    '/admin/partners/new',
+    '/admin/partner/partners/new',
     new URLSearchParams({ kind: 'person', name: 'Nguyễn An', email: 'an@example.test' }),
     {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -135,5 +142,5 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     },
   )
   assert.equal(created.status, 303)
-  assert.match(created.headers.get('location') ?? '', /^\/admin\/partners\/[0-9a-f-]+$/)
+  assert.match(created.headers.get('location') ?? '', /^\/admin\/partner\/partners\/[0-9a-f-]+$/)
 })

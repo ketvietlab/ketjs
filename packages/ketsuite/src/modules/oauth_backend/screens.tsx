@@ -2,26 +2,24 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  cardGrid,
+  CardGrid,
   code,
-  contentCard,
+  ContentCard,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  notice,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Notice,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
-
-const localized = (path: string, locale: string): string =>
-  !locale ? path : path.includes('?') ? `${path}&${locale.slice(1)}` : `${path}${locale}`
+import { localized } from '../backend/screen.ts'
 
 export type ProviderRow = {
   id: string
@@ -268,22 +266,24 @@ export const providerFormScreen = (
                 title={_('oauth_backend.status.title')}
                 body={
                   <Surface
-                    body={recordActions({
-                      action: localized(`/admin/oauth/providers/${row.id}/archive`, locale),
-                      actions: [
-                        row.active
-                          ? {
-                              value: 'archive',
-                              label: _('oauth_backend.action.archive'),
-                              variant: 'destructive' as const,
-                            }
-                          : {
-                              value: 'restore',
-                              label: _('oauth_backend.action.restore'),
-                              variant: 'secondary' as const,
-                            },
-                      ],
-                    })}
+                    body={
+                      <RecordActions
+                        action={localized(`/admin/oauth/providers/${row.id}/archive`, locale)}
+                        actions={[
+                          row.active
+                            ? {
+                                value: 'archive',
+                                label: _('oauth_backend.action.archive'),
+                                variant: 'destructive' as const,
+                              }
+                            : {
+                                value: 'restore',
+                                label: _('oauth_backend.action.restore'),
+                                variant: 'secondary' as const,
+                              },
+                        ]}
+                      />
+                    }
                   />
                 }
               />,
@@ -316,22 +316,24 @@ export const providerFormScreen = (
               <Section
                 title={_('oauth_backend.integration.title')}
                 description={_('oauth_backend.integration.hint')}
-                body={definitionList({
-                  title: _('oauth_backend.integration.values'),
-                  items: [
-                    { key: 'issuer', term: _('oauth_backend.field.issuer'), value: String(row.issuer) },
-                    {
-                      key: 'redirect',
-                      term: _('oauth_backend.field.redirectUri'),
-                      value: String(row.redirectUri),
-                    },
-                    {
-                      key: 'secret',
-                      term: _('oauth_backend.field.clientSecretEnv'),
-                      value: row.clientSecretEnv || _('oauth_backend.clientAuth.none'),
-                    },
-                  ],
-                })}
+                body={
+                  <DefinitionList
+                    title={_('oauth_backend.integration.values')}
+                    items={[
+                      { key: 'issuer', term: _('oauth_backend.field.issuer'), value: String(row.issuer) },
+                      {
+                        key: 'redirect',
+                        term: _('oauth_backend.field.redirectUri'),
+                        value: String(row.redirectUri),
+                      },
+                      {
+                        key: 'secret',
+                        term: _('oauth_backend.field.clientSecretEnv'),
+                        value: row.clientSecretEnv || _('oauth_backend.clientAuth.none'),
+                      },
+                    ]}
+                  />
+                }
                 actions={linkButton({
                   label: _('oauth_backend.action.viewIdentities'),
                   href: localized(`/admin/oauth/identities?provider=${row.id}`, locale),
@@ -357,7 +359,7 @@ export const identitiesScreen = (
     frame={frame}
     body={stack([
       ...(errors.length
-        ? [notice({ tone: 'danger', title: _('oauth_backend.error.title'), message: errors.join(' ') })]
+        ? [<Notice tone="danger" title={_('oauth_backend.error.title')} message={errors.join(' ')} />]
         : []),
       inline([
         linkButton({
@@ -398,17 +400,18 @@ export const identitiesScreen = (
                 key: 'actions',
                 label: _('oauth_backend.field.actions'),
                 kind: 'status',
-                cell: (row) =>
-                  recordActions({
-                    action: localized(`/admin/oauth/identities/${row.id}/unlink`, locale),
-                    actions: [
+                cell: (row) => (
+                  <RecordActions
+                    action={localized(`/admin/oauth/identities/${row.id}/unlink`, locale)}
+                    actions={[
                       {
                         value: 'unlink',
                         label: _('oauth_backend.action.unlink'),
                         variant: 'destructive',
                       },
-                    ],
-                  }),
+                    ]}
+                  />
+                ),
               },
             ],
           }),
@@ -503,30 +506,35 @@ export const linkProviderScreen = (
           title={_('oauth_backend.link.choose')}
           description={_('oauth_backend.link.hint')}
           body={
-            providers.length === 0
-              ? emptyState(_('oauth_backend.link.empty'), _('oauth_backend.link.emptyHint'))
-              : cardGrid({
-                  items: providers,
-                  id: (provider) => provider.id,
-                  card: (provider) =>
-                    contentCard({
-                      title: provider.name,
-                      summary: linked.has(provider.id)
+            providers.length === 0 ? (
+              emptyState(_('oauth_backend.link.empty'), _('oauth_backend.link.emptyHint'))
+            ) : (
+              <CardGrid
+                items={providers}
+                id={(provider) => provider.id}
+                card={(provider) => (
+                  <ContentCard
+                    title={provider.name}
+                    summary={
+                      linked.has(provider.id)
                         ? _('oauth_backend.link.alreadyLinked')
-                        : _('oauth_backend.link.ready'),
-                      meta: code(provider.code),
-                      actions: linkButton({
-                        label: linked.has(provider.id)
-                          ? _('oauth_backend.link.linkAnother')
-                          : _('oauth_backend.link.action'),
-                        href: localized(
-                          `/auth/oauth/${provider.code}/start?mode=link&next=/admin/profile`,
-                          locale,
-                        ),
-                        variant: 'primary',
-                      }),
-                    }),
-                })
+                        : _('oauth_backend.link.ready')
+                    }
+                    meta={code(provider.code)}
+                    actions={linkButton({
+                      label: linked.has(provider.id)
+                        ? _('oauth_backend.link.linkAnother')
+                        : _('oauth_backend.link.action'),
+                      href: localized(
+                        `/auth/oauth/${provider.code}/start?mode=link&next=/admin/profile`,
+                        locale,
+                      ),
+                      variant: 'primary',
+                    })}
+                  />
+                )}
+              />
+            )
           }
         />
       }

@@ -2,28 +2,28 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  cardGrid,
+  CardGrid,
   code,
   dataTable,
-  datePicker,
-  definitionList,
+  DatePicker,
+  DefinitionList,
   emptyState,
-  formCluster as FormCluster,
   formatMoney,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   icon,
   linkButton,
-  metric,
-  mediaPanel,
-  notice,
-  recordActions,
+  MediaPanel,
+  Metric,
+  Notice,
   person,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  scheduleBoard,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  RecordWorkspace,
+  ScheduleBoard,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
@@ -1227,16 +1227,16 @@ export const propertiesScreen = (
         href: `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
         variant: 'primary',
       }),
-      cardGrid({
-        items: [
+      <CardGrid
+        items={[
           { id: 'properties', label: _('hospitality_core.metric.properties'), value: rows.length },
           { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: totals.rooms },
           { id: 'available', label: _('hospitality_core.metric.available'), value: totals.available },
           { id: 'attention', label: _('hospitality_core.metric.attention'), value: totals.attention },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
+        ]}
+        id={(item) => item.id}
+        card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+      />,
       rows.length
         ? dataTable(_, {
             columns: propertyColumns(_),
@@ -1259,17 +1259,15 @@ const propertyFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'created' || status === 'saved')
-    return notice({
-      title: _(`hospitality_core.property.feedback.${status}`),
-      message: _('hospitality_core.property.feedback.savedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.property.feedback.${status}`)}
+        message={_('hospitality_core.property.feedback.savedHint')}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -1368,39 +1366,41 @@ export const propertyDetailScreen = (
             <Section
               title={_('hospitality_core.property.section.information')}
               description={_('hospitality_core.property.section.informationHint')}
-              body={definitionList({
-                title: property.publicName || property.name,
-                items: [
-                  {
-                    key: 'address',
-                    term: _('hospitality_core.property.field.address'),
-                    value: property.addressLine || '—',
-                  },
-                  {
-                    key: 'timezone',
-                    term: _('hospitality_core.property.field.timezone'),
-                    value: property.timezone,
-                  },
-                  {
-                    key: 'check-in',
-                    term: _('hospitality_core.property.field.defaultCheckIn'),
-                    value: property.defaultCheckIn,
-                  },
-                  {
-                    key: 'check-out',
-                    term: _('hospitality_core.property.field.defaultCheckOut'),
-                    value: property.defaultCheckOut,
-                  },
-                  {
-                    key: 'policy',
-                    term: _('hospitality_core.property.field.defaultCancellationPolicy'),
-                    value:
-                      property.defaultCancellationPolicy?.name ??
-                      property.defaultCancellationPolicy?.code ??
-                      _('hospitality_core.property.value.noDefaultPolicy'),
-                  },
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={property.publicName || property.name}
+                  items={[
+                    {
+                      key: 'address',
+                      term: _('hospitality_core.property.field.address'),
+                      value: property.addressLine || '—',
+                    },
+                    {
+                      key: 'timezone',
+                      term: _('hospitality_core.property.field.timezone'),
+                      value: property.timezone,
+                    },
+                    {
+                      key: 'check-in',
+                      term: _('hospitality_core.property.field.defaultCheckIn'),
+                      value: property.defaultCheckIn,
+                    },
+                    {
+                      key: 'check-out',
+                      term: _('hospitality_core.property.field.defaultCheckOut'),
+                      value: property.defaultCheckOut,
+                    },
+                    {
+                      key: 'policy',
+                      term: _('hospitality_core.property.field.defaultCancellationPolicy'),
+                      value:
+                        property.defaultCancellationPolicy?.name ??
+                        property.defaultCancellationPolicy?.code ??
+                        _('hospitality_core.property.value.noDefaultPolicy'),
+                    },
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.property.section.settings')}
@@ -1465,21 +1465,25 @@ const roomFeedback = (
     status === 'archived' ||
     status === 'restored'
   )
-    return notice({
-      title: _(`hospitality_core.room.feedback.${status}`),
-      message: _(
-        status === 'archived' || status === 'restored'
-          ? `hospitality_core.room.feedback.${status}Hint`
-          : 'hospitality_core.room.feedback.savedHint',
-      ),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.room.feedback.${status}`)}
+        message={_(
+          status === 'archived' || status === 'restored'
+            ? `hospitality_core.room.feedback.${status}Hint`
+            : 'hospitality_core.room.feedback.savedHint',
+        )}
+        tone="positive"
+      />
+    )
   if (status === 'invalid' || errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' ') || _('hospitality_core.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={errors.join(' ') || _('hospitality_core.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
@@ -1623,19 +1627,21 @@ export const roomsScreen = (
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />,
-        canCreateRoom
-          ? linkButton({
-              label: _('hospitality_core.room.action.create'),
-              href: `/admin/hospitality/rooms/new?${query.toString()}`,
-              variant: 'primary',
-            })
-          : notice({
-              title: _('hospitality_core.room.empty.prerequisite'),
-              message: _('hospitality_core.room.empty.prerequisiteHint'),
-              tone: 'warning',
-            }),
-        cardGrid({
-          items: [
+        canCreateRoom ? (
+          linkButton({
+            label: _('hospitality_core.room.action.create'),
+            href: `/admin/hospitality/rooms/new?${query.toString()}`,
+            variant: 'primary',
+          })
+        ) : (
+          <Notice
+            title={_('hospitality_core.room.empty.prerequisite')}
+            message={_('hospitality_core.room.empty.prerequisiteHint')}
+            tone="warning"
+          />
+        ),
+        <CardGrid
+          items={[
             { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: data.rows.length },
             {
               id: 'buildings',
@@ -1648,10 +1654,10 @@ export const roomsScreen = (
               label: _('hospitality_core.metric.available'),
               value: data.rows.filter((row) => row.status === 'available').length,
             },
-          ],
-          id: (item) => item.id,
-          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+        />,
         ...(data.propertyId
           ? [
               <Section
@@ -1802,17 +1808,15 @@ const locationFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'saved' || status === 'archived' || status === 'restored')
-    return notice({
-      title: _(`hospitality_core.${resource}.feedback.${status}`),
-      message: _(`hospitality_core.${resource}.feedback.${status}Hint`),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.${resource}.feedback.${status}`)}
+        message={_(`hospitality_core.${resource}.feedback.${status}Hint`)}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -1900,24 +1904,26 @@ export const buildingDetailScreen = (
             <Section
               title={_('hospitality_core.building.section.information')}
               description={_('hospitality_core.building.section.informationHint')}
-              body={definitionList({
-                title: building.name,
-                items: [
-                  {
-                    key: 'property',
-                    term: _('hospitality_core.building.field.property'),
-                    value: propertyName,
-                  },
-                  { key: 'code', term: _('hospitality_core.building.field.code'), value: building.code },
-                  {
-                    key: 'status',
-                    term: _('hospitality_core.col.status'),
-                    value: _(
-                      building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
-                    ),
-                  },
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={building.name}
+                  items={[
+                    {
+                      key: 'property',
+                      term: _('hospitality_core.building.field.property'),
+                      value: propertyName,
+                    },
+                    { key: 'code', term: _('hospitality_core.building.field.code'), value: building.code },
+                    {
+                      key: 'status',
+                      term: _('hospitality_core.col.status'),
+                      value: _(
+                        building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                      ),
+                    },
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.building.section.settings')}
@@ -1947,22 +1953,24 @@ export const buildingDetailScreen = (
               description={_('hospitality_core.building.section.lifecycleHint')}
               body={
                 <Surface
-                  body={recordActions({
-                    action: `/admin/hospitality/buildings/${encodeURIComponent(building.id)}/archive?${query}`,
-                    actions: [
-                      building.active
-                        ? {
-                            value: 'archive',
-                            label: _('hospitality_core.building.action.archive'),
-                            variant: 'destructive',
-                          }
-                        : {
-                            value: 'restore',
-                            label: _('hospitality_core.building.action.restore'),
-                            variant: 'secondary',
-                          },
-                    ],
-                  })}
+                  body={
+                    <RecordActions
+                      action={`/admin/hospitality/buildings/${encodeURIComponent(building.id)}/archive?${query}`}
+                      actions={[
+                        building.active
+                          ? {
+                              value: 'archive',
+                              label: _('hospitality_core.building.action.archive'),
+                              variant: 'destructive',
+                            }
+                          : {
+                              value: 'restore',
+                              label: _('hospitality_core.building.action.restore'),
+                              variant: 'secondary',
+                            },
+                      ]}
+                    />
+                  }
                 />
               }
             />,
@@ -2057,21 +2065,31 @@ export const floorDetailScreen = (
             <Section
               title={_('hospitality_core.floor.section.information')}
               description={_('hospitality_core.floor.section.informationHint')}
-              body={definitionList({
-                title: floor.name,
-                items: [
-                  { key: 'property', term: _('hospitality_core.floor.field.property'), value: propertyName },
-                  { key: 'building', term: _('hospitality_core.floor.field.building'), value: buildingName },
-                  { key: 'code', term: _('hospitality_core.floor.field.code'), value: floor.code },
-                  {
-                    key: 'status',
-                    term: _('hospitality_core.col.status'),
-                    value: _(
-                      floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
-                    ),
-                  },
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={floor.name}
+                  items={[
+                    {
+                      key: 'property',
+                      term: _('hospitality_core.floor.field.property'),
+                      value: propertyName,
+                    },
+                    {
+                      key: 'building',
+                      term: _('hospitality_core.floor.field.building'),
+                      value: buildingName,
+                    },
+                    { key: 'code', term: _('hospitality_core.floor.field.code'), value: floor.code },
+                    {
+                      key: 'status',
+                      term: _('hospitality_core.col.status'),
+                      value: _(
+                        floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                      ),
+                    },
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.floor.section.settings')}
@@ -2101,22 +2119,24 @@ export const floorDetailScreen = (
               description={_('hospitality_core.floor.section.lifecycleHint')}
               body={
                 <Surface
-                  body={recordActions({
-                    action: `/admin/hospitality/levels/${encodeURIComponent(floor.id)}/archive?${query}`,
-                    actions: [
-                      floor.active
-                        ? {
-                            value: 'archive',
-                            label: _('hospitality_core.floor.action.archive'),
-                            variant: 'destructive',
-                          }
-                        : {
-                            value: 'restore',
-                            label: _('hospitality_core.floor.action.restore'),
-                            variant: 'secondary',
-                          },
-                    ],
-                  })}
+                  body={
+                    <RecordActions
+                      action={`/admin/hospitality/levels/${encodeURIComponent(floor.id)}/archive?${query}`}
+                      actions={[
+                        floor.active
+                          ? {
+                              value: 'archive',
+                              label: _('hospitality_core.floor.action.archive'),
+                              variant: 'destructive',
+                            }
+                          : {
+                              value: 'restore',
+                              label: _('hospitality_core.floor.action.restore'),
+                              variant: 'secondary',
+                            },
+                      ]}
+                    />
+                  }
                 />
               }
             />,
@@ -2224,27 +2244,29 @@ export const roomDetailScreen = (
             <Section
               title={_('hospitality_core.room.section.information')}
               description={_('hospitality_core.room.section.informationHint')}
-              body={definitionList({
-                title: room.name,
-                items: [
-                  { key: 'property', term: _('hospitality_core.room.field.property'), value: propertyName },
-                  {
-                    key: 'type',
-                    term: _('hospitality_core.room.field.roomType'),
-                    value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
-                  },
-                  {
-                    key: 'location',
-                    term: _('hospitality_core.col.location'),
-                    value: location || _('hospitality_core.room.value.unassignedLocation'),
-                  },
-                  {
-                    key: 'status',
-                    term: _('hospitality_core.col.status'),
-                    value: _(`hospitality_core.roomStatus.${room.status}`),
-                  },
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={room.name}
+                  items={[
+                    { key: 'property', term: _('hospitality_core.room.field.property'), value: propertyName },
+                    {
+                      key: 'type',
+                      term: _('hospitality_core.room.field.roomType'),
+                      value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
+                    },
+                    {
+                      key: 'location',
+                      term: _('hospitality_core.col.location'),
+                      value: location || _('hospitality_core.room.value.unassignedLocation'),
+                    },
+                    {
+                      key: 'status',
+                      term: _('hospitality_core.col.status'),
+                      value: _(`hospitality_core.roomStatus.${room.status}`),
+                    },
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.room.section.settings')}
@@ -2272,22 +2294,24 @@ export const roomDetailScreen = (
                   variant: 'secondary',
                 }),
                 <Surface
-                  body={recordActions({
-                    action: `/admin/hospitality/rooms/${encodeURIComponent(room.id)}/archive?${query}`,
-                    actions: [
-                      room.active
-                        ? {
-                            value: 'archive',
-                            label: _('hospitality_core.room.action.archive'),
-                            variant: 'destructive',
-                          }
-                        : {
-                            value: 'restore',
-                            label: _('hospitality_core.room.action.restore'),
-                            variant: 'secondary',
-                          },
-                    ],
-                  })}
+                  body={
+                    <RecordActions
+                      action={`/admin/hospitality/rooms/${encodeURIComponent(room.id)}/archive?${query}`}
+                      actions={[
+                        room.active
+                          ? {
+                              value: 'archive',
+                              label: _('hospitality_core.room.action.archive'),
+                              variant: 'destructive',
+                            }
+                          : {
+                              value: 'restore',
+                              label: _('hospitality_core.room.action.restore'),
+                              variant: 'secondary',
+                            },
+                      ]}
+                    />
+                  }
                 />,
               ])}
             />,
@@ -2322,19 +2346,19 @@ export const cleaningTasksScreen = (
   if (data.state !== 'all') query.set('state', data.state)
   const action = `/admin/hospitality/housekeeping?${query.toString()}`
   const feedback =
-    status === 'created'
-      ? notice({
-          title: _('hospitality_core.housekeeping.feedback.created'),
-          message: _('hospitality_core.housekeeping.feedback.createdHint'),
-          tone: 'positive',
-        })
-      : status === 'invalid'
-        ? notice({
-            title: _('hospitality_core.feedback.invalid'),
-            message: _('hospitality_core.housekeeping.feedback.invalidHint'),
-            tone: 'danger',
-          })
-        : null
+    status === 'created' ? (
+      <Notice
+        title={_('hospitality_core.housekeeping.feedback.created')}
+        message={_('hospitality_core.housekeeping.feedback.createdHint')}
+        tone="positive"
+      />
+    ) : status === 'invalid' ? (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={_('hospitality_core.housekeeping.feedback.invalidHint')}
+        tone="danger"
+      />
+    ) : null
 
   return (
     <Framed
@@ -2371,8 +2395,8 @@ export const cleaningTasksScreen = (
             },
           ]}
         />,
-        cardGrid({
-          items: ['todo', 'in_progress', 'done'].map((state) => ({
+        <CardGrid
+          items={['todo', 'in_progress', 'done'].map((state) => ({
             state,
             count:
               state === 'todo'
@@ -2380,15 +2404,16 @@ export const cleaningTasksScreen = (
                 : state === 'in_progress'
                   ? data.summary.inProgress
                   : data.summary.done,
-          })),
-          id: (item) => item.state,
-          card: (item) =>
-            metric({
-              label: _(`hospitality_core.cleaningState.${item.state}`),
-              value: String(item.count),
-              tone: item.state,
-            }),
-        }),
+          }))}
+          id={(item) => item.state}
+          card={(item) => (
+            <Metric
+              label={_(`hospitality_core.cleaningState.${item.state}`)}
+              value={String(item.count)}
+              tone={item.state}
+            />
+          )}
+        />,
         <Section
           title={_('hospitality_core.housekeeping.section.create')}
           description={_('hospitality_core.housekeeping.section.createHint')}
@@ -2491,17 +2516,15 @@ const cleaningTaskFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'started' || status === 'completed' || status === 'cancelled')
-    return notice({
-      title: _(`hospitality_core.housekeeping.feedback.${status}`),
-      message: _(`hospitality_core.housekeeping.feedback.${status}Hint`),
-      tone: status === 'cancelled' ? 'warning' : 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.housekeeping.feedback.${status}`)}
+        message={_(`hospitality_core.housekeeping.feedback.${status}Hint`)}
+        tone={status === 'cancelled' ? 'warning' : 'positive'}
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -2625,62 +2648,64 @@ export const cleaningTaskDetailScreen = (
             <Section
               title={_('hospitality_core.housekeeping.section.information')}
               description={_('hospitality_core.housekeeping.section.informationHint')}
-              body={definitionList({
-                title: task.code,
-                items: [
-                  {
-                    key: 'property',
-                    term: _('hospitality_core.menu.properties'),
-                    value: task.property?.name ?? task.property?.code ?? task.propertyId,
-                  },
-                  {
-                    key: 'room',
-                    term: _('hospitality_core.col.room'),
-                    value: room,
-                  },
-                  {
-                    key: 'requested',
-                    term: _('hospitality_core.col.requestedAt'),
-                    value: dateTime(task.requestedAt, locale, timezone),
-                  },
-                  ...(task.startedAt
-                    ? [
-                        {
-                          key: 'started',
-                          term: _('hospitality_core.housekeeping.field.startedAt'),
-                          value: dateTime(task.startedAt, locale, timezone),
-                        },
-                      ]
-                    : []),
-                  ...(task.doneAt
-                    ? [
-                        {
-                          key: 'done',
-                          term: _('hospitality_core.housekeeping.field.doneAt'),
-                          value: dateTime(task.doneAt, locale, timezone),
-                        },
-                      ]
-                    : []),
-                  ...(task.stayId
-                    ? [
-                        {
-                          key: 'stay',
-                          term: _('hospitality_core.menu.stays'),
-                          value: task.stay?.code ?? task.stayId,
-                        },
-                      ]
-                    : []),
-                  ...(task.notes
-                    ? [
-                        {
-                          key: 'notes',
-                          term: _('hospitality_core.housekeeping.field.notes'),
-                          value: task.notes,
-                        },
-                      ]
-                    : []),
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={task.code}
+                  items={[
+                    {
+                      key: 'property',
+                      term: _('hospitality_core.menu.properties'),
+                      value: task.property?.name ?? task.property?.code ?? task.propertyId,
+                    },
+                    {
+                      key: 'room',
+                      term: _('hospitality_core.col.room'),
+                      value: room,
+                    },
+                    {
+                      key: 'requested',
+                      term: _('hospitality_core.col.requestedAt'),
+                      value: dateTime(task.requestedAt, locale, timezone),
+                    },
+                    ...(task.startedAt
+                      ? [
+                          {
+                            key: 'started',
+                            term: _('hospitality_core.housekeeping.field.startedAt'),
+                            value: dateTime(task.startedAt, locale, timezone),
+                          },
+                        ]
+                      : []),
+                    ...(task.doneAt
+                      ? [
+                          {
+                            key: 'done',
+                            term: _('hospitality_core.housekeeping.field.doneAt'),
+                            value: dateTime(task.doneAt, locale, timezone),
+                          },
+                        ]
+                      : []),
+                    ...(task.stayId
+                      ? [
+                          {
+                            key: 'stay',
+                            term: _('hospitality_core.menu.stays'),
+                            value: task.stay?.code ?? task.stayId,
+                          },
+                        ]
+                      : []),
+                    ...(task.notes
+                      ? [
+                          {
+                            key: 'notes',
+                            term: _('hospitality_core.housekeeping.field.notes'),
+                            value: task.notes,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              }
             />,
             ...actions,
           ])}
@@ -2782,16 +2807,17 @@ export const housekeepingRoomsScreen = (
             },
           ]}
         />,
-        cardGrid({
-          items: metrics,
-          id: (item) => item.id,
-          card: (item) =>
-            metric({
-              label: _(`hospitality_core.metric.${item.id}`),
-              value: String(item.value),
-              tone: item.id,
-            }),
-        }),
+        <CardGrid
+          items={metrics}
+          id={(item) => item.id}
+          card={(item) => (
+            <Metric
+              label={_(`hospitality_core.metric.${item.id}`)}
+              value={String(item.value)}
+              tone={item.id}
+            />
+          )}
+        />,
         <Section
           title={_('hospitality_core.housekeeping.rooms.section.board')}
           description={_('hospitality_core.housekeeping.rooms.section.boardHint')}
@@ -2821,17 +2847,15 @@ const housekeepingRoomFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'updated')
-    return notice({
-      title: _('hospitality_core.housekeeping.rooms.feedback.updated'),
-      message: _('hospitality_core.housekeeping.rooms.feedback.updatedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.housekeeping.rooms.feedback.updated')}
+        message={_('hospitality_core.housekeeping.rooms.feedback.updatedHint')}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -2958,9 +2982,9 @@ export const housekeepingRoomDetailScreen = (
               title={_('hospitality_core.housekeeping.rooms.section.information')}
               description={_('hospitality_core.housekeeping.rooms.section.informationHint')}
               body={stack([
-                definitionList({
-                  title: room.name,
-                  items: [
+                <DefinitionList
+                  title={room.name}
+                  items={[
                     {
                       key: 'property',
                       term: _('hospitality_core.menu.properties'),
@@ -2986,8 +3010,8 @@ export const housekeepingRoomDetailScreen = (
                       term: _('hospitality_core.housekeeping.field.notes'),
                       value: room.note || '—',
                     },
-                  ],
-                }),
+                  ]}
+                />,
                 currentStay?.id
                   ? linkButton({
                       label: _('hospitality_core.housekeeping.rooms.action.openStay'),
@@ -3195,17 +3219,15 @@ const roomTypeFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'created' || status === 'saved')
-    return notice({
-      title: _(`hospitality_core.roomType.feedback.${status}`),
-      message: _('hospitality_core.roomType.feedback.savedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.roomType.feedback.${status}`)}
+        message={_('hospitality_core.roomType.feedback.savedHint')}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -3241,19 +3263,21 @@ export const roomTypesScreen = (
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />,
-        properties.length
-          ? linkButton({
-              label: _('hospitality_core.roomType.action.create'),
-              href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
-              variant: 'primary',
-            })
-          : notice({
-              title: _('hospitality_core.roomType.empty.noProperty'),
-              message: _('hospitality_core.roomType.empty.noPropertyHint'),
-              tone: 'warning',
-            }),
-        cardGrid({
-          items: [
+        properties.length ? (
+          linkButton({
+            label: _('hospitality_core.roomType.action.create'),
+            href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
+            variant: 'primary',
+          })
+        ) : (
+          <Notice
+            title={_('hospitality_core.roomType.empty.noProperty')}
+            message={_('hospitality_core.roomType.empty.noPropertyHint')}
+            tone="warning"
+          />
+        ),
+        <CardGrid
+          items={[
             { id: 'types', label: _('hospitality_core.roomType.metric.types'), value: rows.length },
             {
               id: 'published',
@@ -3265,10 +3289,10 @@ export const roomTypesScreen = (
               label: _('hospitality_core.metric.rooms'),
               value: rows.reduce((sum, row) => sum + (row.rooms?.length ?? 0), 0),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+        />,
         rows.length
           ? dataTable(_, {
               columns: roomTypeColumns(_),
@@ -3385,38 +3409,40 @@ export const roomTypeDetailScreen = (
             <Section
               title={_('hospitality_core.roomType.section.information')}
               description={_('hospitality_core.roomType.section.informationHint')}
-              body={definitionList({
-                title: roomType.publicName || roomType.name,
-                items: [
-                  {
-                    key: 'property',
-                    term: _('hospitality_core.roomType.field.property'),
-                    value: propertyName,
-                  },
-                  {
-                    key: 'capacity',
-                    term: _('hospitality_core.roomType.field.defaultCapacity'),
-                    value: _('hospitality_core.roomType.value.capacity', {
-                      default: roomType.defaultCapacity,
-                      adults: roomType.maxAdults,
-                      children: roomType.maxChildren,
-                    }),
-                  },
-                  {
-                    key: 'rate',
-                    term: _('hospitality_core.roomType.field.baseRate'),
-                    value: formatMoney(_, roomType.baseRate),
-                  },
-                  {
-                    key: 'policy',
-                    term: _('hospitality_core.roomType.field.cancellationPolicy'),
-                    value:
-                      roomType.cancellationPolicy?.name ??
-                      roomType.cancellationPolicy?.code ??
-                      _('hospitality_core.roomType.value.inheritPolicy'),
-                  },
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={roomType.publicName || roomType.name}
+                  items={[
+                    {
+                      key: 'property',
+                      term: _('hospitality_core.roomType.field.property'),
+                      value: propertyName,
+                    },
+                    {
+                      key: 'capacity',
+                      term: _('hospitality_core.roomType.field.defaultCapacity'),
+                      value: _('hospitality_core.roomType.value.capacity', {
+                        default: roomType.defaultCapacity,
+                        adults: roomType.maxAdults,
+                        children: roomType.maxChildren,
+                      }),
+                    },
+                    {
+                      key: 'rate',
+                      term: _('hospitality_core.roomType.field.baseRate'),
+                      value: formatMoney(_, roomType.baseRate),
+                    },
+                    {
+                      key: 'policy',
+                      term: _('hospitality_core.roomType.field.cancellationPolicy'),
+                      value:
+                        roomType.cancellationPolicy?.name ??
+                        roomType.cancellationPolicy?.code ??
+                        _('hospitality_core.roomType.value.inheritPolicy'),
+                    },
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.roomType.section.settings')}
@@ -3503,17 +3529,21 @@ export const policiesScreen = (_: Translator, rows: PolicyRow[], frame: Frame): 
 
 const contentFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
-    return notice({
-      title: _('hospitality_core.content.feedback.saved'),
-      message: _('hospitality_core.content.feedback.savedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.content.feedback.saved')}
+        message={_('hospitality_core.content.feedback.savedHint')}
+        tone="positive"
+      />
+    )
   if (state === 'invalid')
-    return notice({
-      title: _('hospitality_core.content.feedback.invalid'),
-      message: _('hospitality_core.content.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.content.feedback.invalid')}
+        message={_('hospitality_core.content.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
@@ -3596,8 +3626,8 @@ export const contentScreen = (
         ),
         ...(property
           ? [
-              cardGrid({
-                items: [
+              <CardGrid
+                items={[
                   {
                     id: 'target',
                     label: _('hospitality_core.content.metric.target'),
@@ -3617,80 +3647,85 @@ export const contentScreen = (
                       total: completeness.total,
                     }),
                   },
-                ],
-                id: (item) => item.id,
-                card: (item) =>
-                  metric({
-                    label: item.label,
-                    value: item.value,
-                    detail: 'detail' in item ? item.detail : null,
-                    tone: item.id,
-                  }),
-              }),
+                ]}
+                id={(item) => item.id}
+                card={(item) => (
+                  <Metric
+                    label={item.label}
+                    value={item.value}
+                    detail={'detail' in item ? item.detail : null}
+                    tone={item.id}
+                  />
+                )}
+              />,
               <Section
                 title={_('hospitality_core.screen.content.library')}
                 description={_('hospitality_core.screen.content.libraryHint')}
-                body={mediaPanel({
-                  status: 'ready',
-                  images: images.map((image, index) => ({
-                    id: image.id,
-                    src: `/files/${image.attachmentId}`,
-                    alt: image.caption || image.attachment?.name || selectedLabel,
-                    primary: image.primary,
-                    actions: {
-                      primary: `/admin/hospitality/content/images/${image.id}/primary${suffix}`,
-                      remove: `/admin/hospitality/content/images/${image.id}/remove${suffix}`,
-                      ...(index > 0
-                        ? { moveUp: `/admin/hospitality/content/images/${image.id}/move-up${suffix}` }
-                        : {}),
-                      ...(index < images.length - 1
-                        ? { moveDown: `/admin/hospitality/content/images/${image.id}/move-down${suffix}` }
-                        : {}),
-                    },
-                  })),
-                  uploadAction: `/admin/hospitality/content/upload${suffix}`,
-                  labels: {
-                    empty: _('hospitality_core.content.media.empty'),
-                    primary: _('hospitality_core.content.media.primary'),
-                    makePrimary: _('hospitality_core.content.media.makePrimary'),
-                    moveUp: _('hospitality_core.content.media.moveUp'),
-                    moveDown: _('hospitality_core.content.media.moveDown'),
-                    remove: _('hospitality_core.content.media.remove'),
-                    choose: _('hospitality_core.content.media.choose'),
-                    add: _('hospitality_core.content.media.add'),
-                  },
-                  extension: images.length ? (
-                    <FormCluster
-                      label={_('hospitality_core.content.metadata.group')}
-                      forms={images.map((image) => (
-                        <RecordForm
-                          action={`/admin/hospitality/content/images/${image.id}/metadata${suffix}`}
-                          layout="inline"
-                          fields={[
-                            {
-                              name: 'category',
-                              label: _('hospitality_core.content.field.category'),
-                              type: 'select',
-                              value: image.category,
-                              options: categoryOptions,
-                              required: true,
-                            },
-                            {
-                              name: 'caption',
-                              label: _('hospitality_core.content.field.caption'),
-                              value: image.caption,
-                              placeholder: image.attachment?.name ?? null,
-                            },
-                          ]}
-                          hidden={{ id: image.id }}
-                          submit={_('hospitality_core.content.action.saveMetadata')}
-                          submitVariant="secondary"
-                          submitSize="compact"
+                body={
+                  <MediaPanel
+                    status="ready"
+                    images={images.map((image, index) => ({
+                      id: image.id,
+                      src: `/files/${image.attachmentId}`,
+                      alt: image.caption || image.attachment?.name || selectedLabel,
+                      primary: image.primary,
+                      actions: {
+                        primary: `/admin/hospitality/content/images/${image.id}/primary${suffix}`,
+                        remove: `/admin/hospitality/content/images/${image.id}/remove${suffix}`,
+                        ...(index > 0
+                          ? { moveUp: `/admin/hospitality/content/images/${image.id}/move-up${suffix}` }
+                          : {}),
+                        ...(index < images.length - 1
+                          ? { moveDown: `/admin/hospitality/content/images/${image.id}/move-down${suffix}` }
+                          : {}),
+                      },
+                    }))}
+                    uploadAction={`/admin/hospitality/content/upload${suffix}`}
+                    labels={{
+                      empty: _('hospitality_core.content.media.empty'),
+                      primary: _('hospitality_core.content.media.primary'),
+                      makePrimary: _('hospitality_core.content.media.makePrimary'),
+                      moveUp: _('hospitality_core.content.media.moveUp'),
+                      moveDown: _('hospitality_core.content.media.moveDown'),
+                      remove: _('hospitality_core.content.media.remove'),
+                      choose: _('hospitality_core.content.media.choose'),
+                      add: _('hospitality_core.content.media.add'),
+                    }}
+                    extension={
+                      images.length ? (
+                        <FormCluster
+                          label={_('hospitality_core.content.metadata.group')}
+                          forms={images.map((image) => (
+                            <RecordForm
+                              action={`/admin/hospitality/content/images/${image.id}/metadata${suffix}`}
+                              layout="inline"
+                              fields={[
+                                {
+                                  name: 'category',
+                                  label: _('hospitality_core.content.field.category'),
+                                  type: 'select',
+                                  value: image.category,
+                                  options: categoryOptions,
+                                  required: true,
+                                },
+                                {
+                                  name: 'caption',
+                                  label: _('hospitality_core.content.field.caption'),
+                                  value: image.caption,
+                                  placeholder: image.attachment?.name ?? null,
+                                },
+                              ]}
+                              hidden={{ id: image.id }}
+                              submit={_('hospitality_core.content.action.saveMetadata')}
+                              submitVariant="secondary"
+                              submitSize="compact"
+                            />
+                          ))}
                         />
-                      ))}
-                    />
-                  ) : undefined,
-                })}
+                      ) : undefined
+                    }
+                  />
+                }
               />,
             ]
           : []),
@@ -3709,33 +3744,41 @@ const choices = (rows: readonly Choice[]) =>
 
 const feedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
-    return notice({
-      title: _('hospitality_core.feedback.saved'),
-      message: _('hospitality_core.feedback.savedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.saved')}
+        message={_('hospitality_core.feedback.savedHint')}
+        tone="positive"
+      />
+    )
   if (state === 'invalid')
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: _('hospitality_core.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={_('hospitality_core.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
 const nightAuditFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'queued')
-    return notice({
-      title: _('hospitality_core.nightAudit.feedback.queued'),
-      message: _('hospitality_core.nightAudit.feedback.queuedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.nightAudit.feedback.queued')}
+        message={_('hospitality_core.nightAudit.feedback.queuedHint')}
+        tone="positive"
+      />
+    )
   if (state === 'invalid')
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: _('hospitality_core.nightAudit.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={_('hospitality_core.nightAudit.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
@@ -3858,10 +3901,10 @@ export const nightAuditScreen = (
                 },
               ]}
             />,
-            datePicker({
-              action: '/admin/hospitality/night-audit',
-              label: _('hospitality_core.nightAudit.field.auditDate'),
-              fields: [
+            <DatePicker
+              action="/admin/hospitality/night-audit"
+              label={_('hospitality_core.nightAudit.field.auditDate')}
+              fields={[
                 {
                   name: 'auditDate',
                   label: _('hospitality_core.nightAudit.field.auditDate'),
@@ -3869,40 +3912,40 @@ export const nightAuditScreen = (
                   max: data.today,
                   required: true,
                 },
-              ],
-              hidden: { ...lang, property: data.propertyId },
-              submit: _('hospitality_core.nightAudit.action.preview'),
-            }),
+              ]}
+              hidden={{ ...lang, property: data.propertyId }}
+              submit={_('hospitality_core.nightAudit.action.preview')}
+            />,
           ]}
         />,
-        data.preview
-          ? cardGrid({
-              items: [
-                {
-                  id: 'in-house',
-                  label: _('hospitality_core.nightAudit.metric.inHouse'),
-                  value: data.preview.inHouseCount,
-                },
-                {
-                  id: 'services',
-                  label: _('hospitality_core.nightAudit.metric.servicesDue'),
-                  value: data.preview.serviceDue,
-                },
-                {
-                  id: 'rent',
-                  label: _('hospitality_core.nightAudit.metric.rentDue'),
-                  value: data.preview.rentDue,
-                },
-                {
-                  id: 'night-audit-amount',
-                  label: _('hospitality_core.nightAudit.metric.estimated'),
-                  value: formatMoney(_, data.preview.estimatedAmount),
-                },
-              ],
-              id: (item) => item.id,
-              card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-            })
-          : null,
+        data.preview ? (
+          <CardGrid
+            items={[
+              {
+                id: 'in-house',
+                label: _('hospitality_core.nightAudit.metric.inHouse'),
+                value: data.preview.inHouseCount,
+              },
+              {
+                id: 'services',
+                label: _('hospitality_core.nightAudit.metric.servicesDue'),
+                value: data.preview.serviceDue,
+              },
+              {
+                id: 'rent',
+                label: _('hospitality_core.nightAudit.metric.rentDue'),
+                value: data.preview.rentDue,
+              },
+              {
+                id: 'night-audit-amount',
+                label: _('hospitality_core.nightAudit.metric.estimated'),
+                value: formatMoney(_, data.preview.estimatedAmount),
+              },
+            ]}
+            id={(item) => item.id}
+            card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+          />
+        ) : null,
         <Section
           title={_('hospitality_core.nightAudit.section.run')}
           description={_('hospitality_core.nightAudit.section.runHint')}
@@ -3941,17 +3984,21 @@ export const nightAuditScreen = (
 
 const stayNoticeFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'refreshed' || state === 'submitted' || state === 'confirmed')
-    return notice({
-      title: _(`hospitality_core.stayNotice.feedback.${state}`),
-      message: _(`hospitality_core.stayNotice.feedback.${state}Hint`),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_(`hospitality_core.stayNotice.feedback.${state}`)}
+        message={_(`hospitality_core.stayNotice.feedback.${state}Hint`)}
+        tone="positive"
+      />
+    )
   if (state === 'invalid')
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: _('hospitality_core.stayNotice.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={_('hospitality_core.stayNotice.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
@@ -4151,11 +4198,11 @@ export const stayNoticesScreen = (
       frame={frame}
       body={stack([
         stayNoticeFeedback(_, feedbackState),
-        notice({
-          tone: 'info',
-          title: _('hospitality_core.stayNotice.privacy.title'),
-          message: _('hospitality_core.stayNotice.privacy.hint'),
-        }),
+        <Notice
+          tone="info"
+          title={_('hospitality_core.stayNotice.privacy.title')}
+          message={_('hospitality_core.stayNotice.privacy.hint')}
+        />,
         <RecordForm
           action="/admin/hospitality/stay-notices"
           method="get"
@@ -4184,28 +4231,29 @@ export const stayNoticesScreen = (
             },
           ]}
         />,
-        cardGrid({
-          items: ['attention', 'ready', 'submitted', 'confirmed'].map((state) => ({
+        <CardGrid
+          items={['attention', 'ready', 'submitted', 'confirmed'].map((state) => ({
             state,
             count: Number(counts[state] ?? 0),
-          })),
-          id: (item) => item.state,
-          card: (item) =>
-            metric({
-              label: _(`hospitality_core.stayNotice.state.${item.state}`),
-              value: String(item.count),
-              tone: item.state,
-            }),
-        }),
+          }))}
+          id={(item) => item.state}
+          card={(item) => (
+            <Metric
+              label={_(`hospitality_core.stayNotice.state.${item.state}`)}
+              value={String(item.count)}
+              tone={item.state}
+            />
+          )}
+        />,
         ...(data.selected
           ? [
               <Section
                 title={_('hospitality_core.stayNotice.section.selected')}
                 description={_('hospitality_core.stayNotice.section.selectedHint')}
                 body={stack([
-                  definitionList({
-                    title: data.selected.guestName,
-                    items: [
+                  <DefinitionList
+                    title={data.selected.guestName}
+                    items={[
                       {
                         key: 'state',
                         term: _('hospitality_core.col.status'),
@@ -4233,8 +4281,8 @@ export const stayNoticesScreen = (
                         term: _('hospitality_core.stayNotice.field.evidenceRef'),
                         value: data.selected.receiptRef || _('hospitality_core.stayNotice.value.missing'),
                       },
-                    ],
-                  }),
+                    ]}
+                  />,
                   action,
                 ])}
               />,
@@ -4440,8 +4488,8 @@ export const servicesScreen = (
             },
           ]}
         />,
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             {
               id: 'fees',
               label: _('hospitality_core.services.metric.fees'),
@@ -4462,10 +4510,10 @@ export const servicesScreen = (
               label: _('hospitality_core.services.metric.postedValue'),
               value: formatMoney(_, totalPosted),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+        />,
         <Section
           title={_('hospitality_core.services.section.fees')}
           description={_('hospitality_core.services.section.feesHint')}
@@ -4833,10 +4881,10 @@ export const inventoryScreen = (
                 },
               ]}
             />,
-            datePicker({
-              action: '/admin/hospitality/inventory',
-              label: _('hospitality_core.screen.inventory.dateRange'),
-              fields: [
+            <DatePicker
+              action="/admin/hospitality/inventory"
+              label={_('hospitality_core.screen.inventory.dateRange')}
+              fields={[
                 {
                   name: 'from',
                   label: _('hospitality_core.field.from'),
@@ -4844,17 +4892,17 @@ export const inventoryScreen = (
                   required: true,
                 },
                 { name: 'to', label: _('hospitality_core.field.to'), value: selected.to, required: true },
-              ],
-              hidden: {
+              ]}
+              hidden={{
                 property: selected.propertyId ?? '',
                 roomType: selected.roomTypeId ?? '',
-              },
-              submit: _('hospitality_core.action.apply'),
-            }),
+              }}
+              submit={_('hospitality_core.action.apply')}
+            />,
           ]}
         />,
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             { id: 'days', label: _('hospitality_core.metric.inventoryDays'), value: rows.length },
             {
               id: 'available',
@@ -4871,10 +4919,10 @@ export const inventoryScreen = (
               label: _('hospitality_core.metric.blocked'),
               value: rows.reduce((sum, row) => sum + row.blocked, 0),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+        />,
         <Section
           title={_('hospitality_core.screen.inventory.allotment')}
           description={_('hospitality_core.screen.inventory.allotmentHint')}
@@ -5249,17 +5297,17 @@ export const frontDeskScreen = (
     title={_('hospitality_core.screen.frontDesk.title')}
     frame={frame}
     body={stack([
-      cardGrid({
-        items: [
+      <CardGrid
+        items={[
           { id: 'arrivals', label: _('hospitality_core.metric.arrivals'), value: totals.arrivals },
           { id: 'in-house', label: _('hospitality_core.metric.inHouse'), value: totals.inHouse },
           { id: 'departures', label: _('hospitality_core.metric.departures'), value: totals.departures },
           { id: 'overdue', label: _('hospitality_core.metric.overdue'), value: totals.overdue },
           { id: 'folios', label: _('hospitality_core.metric.openFolios'), value: totals.openFolios },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
+        ]}
+        id={(item) => item.id}
+        card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+      />,
       overdueRows.length ? (
         <Section
           title={_('hospitality_core.screen.frontDesk.overdue')}
@@ -5285,23 +5333,29 @@ export const frontDeskScreen = (
 
 const reservationFeedback = (_: Translator, status?: string | null): TemplateResult | null => {
   if (status === 'saved')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.saved'),
-      message: _('hospitality_core.reservation.feedback.savedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.saved')}
+        message={_('hospitality_core.reservation.feedback.savedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'quoted')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.quoted'),
-      message: _('hospitality_core.reservation.feedback.quotedHint'),
-      tone: 'info',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.quoted')}
+        message={_('hospitality_core.reservation.feedback.quotedHint')}
+        tone="info"
+      />
+    )
   if (status === 'invalid')
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: _('hospitality_core.reservation.feedback.invalidHint'),
-      tone: 'danger',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.feedback.invalid')}
+        message={_('hospitality_core.reservation.feedback.invalidHint')}
+        tone="danger"
+      />
+    )
   return null
 }
 
@@ -5460,8 +5514,8 @@ export const reservationsScreen = (
                 title={_('hospitality_core.reservation.section.quote')}
                 description={_('hospitality_core.reservation.section.quoteHint')}
                 body={stack([
-                  cardGrid({
-                    items: [
+                  <CardGrid
+                    items={[
                       {
                         id: 'rate',
                         label: _('hospitality_core.reservation.quote.rate'),
@@ -5482,10 +5536,10 @@ export const reservationsScreen = (
                         label: _('hospitality_core.reservation.quote.total'),
                         value: formatMoney(_, quote.amountTotal ?? 0),
                       },
-                    ],
-                    id: (item) => item.id,
-                    card: (item) => metric({ label: item.label, value: item.value, tone: item.id }),
-                  }),
+                    ]}
+                    id={(item) => item.id}
+                    card={(item) => <Metric label={item.label} value={item.value} tone={item.id} />}
+                  />,
                   <RecordForm
                     action="/admin/hospitality/reservations"
                     method="post"
@@ -5539,53 +5593,63 @@ const reservationDetailFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'checked-in')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.checkedIn'),
-      message: _('hospitality_core.reservation.feedback.checkedInHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.checkedIn')}
+        message={_('hospitality_core.reservation.feedback.checkedInHint')}
+        tone="positive"
+      />
+    )
   if (status === 'checked-out')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.checkedOut'),
-      message: _('hospitality_core.reservation.feedback.checkedOutHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.checkedOut')}
+        message={_('hospitality_core.reservation.feedback.checkedOutHint')}
+        tone="positive"
+      />
+    )
   if (status === 'checked-out-early')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.checkedOutEarly'),
-      message: _('hospitality_core.reservation.feedback.checkedOutEarlyHint'),
-      tone: 'warning',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.checkedOutEarly')}
+        message={_('hospitality_core.reservation.feedback.checkedOutEarlyHint')}
+        tone="warning"
+      />
+    )
   if (status === 'cancelled')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.cancelled'),
-      message: _('hospitality_core.reservation.feedback.cancelledHint'),
-      tone: 'warning',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.cancelled')}
+        message={_('hospitality_core.reservation.feedback.cancelledHint')}
+        tone="warning"
+      />
+    )
   if (status === 'amended')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.amended'),
-      message: _('hospitality_core.reservation.feedback.amendedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.amended')}
+        message={_('hospitality_core.reservation.feedback.amendedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'departure-adjusted')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.departureAdjusted'),
-      message: _('hospitality_core.reservation.feedback.departureAdjustedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.departureAdjusted')}
+        message={_('hospitality_core.reservation.feedback.departureAdjustedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'no-show')
-    return notice({
-      title: _('hospitality_core.reservation.feedback.noShow'),
-      message: _('hospitality_core.reservation.feedback.noShowHint'),
-      tone: 'warning',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.reservation.feedback.noShow')}
+        message={_('hospitality_core.reservation.feedback.noShowHint')}
+        tone="warning"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -5858,65 +5922,67 @@ export const reservationDetailScreen = (
             <Section
               title={_('hospitality_core.reservation.detail.stay')}
               description={_('hospitality_core.reservation.detail.stayHint')}
-              body={definitionList({
-                title: reservation.code,
-                items: [
-                  {
-                    key: 'guest',
-                    term: _('hospitality_core.reservation.field.guest'),
-                    value: guest,
-                  },
-                  {
-                    key: 'room',
-                    term: _('hospitality_core.reservation.field.room'),
-                    value: room?.name ?? room?.code ?? _('hospitality_core.reservation.value.unassigned'),
-                  },
-                  {
-                    key: 'check-in',
-                    term: _('hospitality_core.col.checkIn'),
-                    value: dateTime(reservation.checkIn, locale, timezone),
-                  },
-                  {
-                    key: 'check-out',
-                    term: _('hospitality_core.col.checkOut'),
-                    value: dateTime(reservation.checkOut, locale, timezone),
-                  },
-                  {
-                    key: 'booking-type',
-                    term: _('hospitality_core.reservation.field.bookingType'),
-                    value: _(`hospitality_core.bookingType.${reservation.bookingType}`),
-                  },
-                  {
-                    key: 'billing',
-                    term: _('hospitality_core.reservation.field.billingMode'),
-                    value: _(`hospitality_core.billing.${reservation.billingMode}`),
-                  },
-                  {
-                    key: 'rate',
-                    term: _('hospitality_core.reservation.field.rate'),
-                    value: formatMoney(_, reservation.rate),
-                  },
-                  {
-                    key: 'quantity',
-                    term: _('hospitality_core.reservation.quote.quantity'),
-                    value: String(reservation.quantity),
-                  },
-                  {
-                    key: 'folio',
-                    term: _('hospitality_core.reservation.field.folio'),
-                    value: reservation.folio?.code ?? reservation.folioId,
-                  },
-                  ...(reservation.cancelReason
-                    ? [
-                        {
-                          key: 'cancel-reason',
-                          term: _('hospitality_core.reservation.field.cancelReason'),
-                          value: reservation.cancelReason,
-                        },
-                      ]
-                    : []),
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={reservation.code}
+                  items={[
+                    {
+                      key: 'guest',
+                      term: _('hospitality_core.reservation.field.guest'),
+                      value: guest,
+                    },
+                    {
+                      key: 'room',
+                      term: _('hospitality_core.reservation.field.room'),
+                      value: room?.name ?? room?.code ?? _('hospitality_core.reservation.value.unassigned'),
+                    },
+                    {
+                      key: 'check-in',
+                      term: _('hospitality_core.col.checkIn'),
+                      value: dateTime(reservation.checkIn, locale, timezone),
+                    },
+                    {
+                      key: 'check-out',
+                      term: _('hospitality_core.col.checkOut'),
+                      value: dateTime(reservation.checkOut, locale, timezone),
+                    },
+                    {
+                      key: 'booking-type',
+                      term: _('hospitality_core.reservation.field.bookingType'),
+                      value: _(`hospitality_core.bookingType.${reservation.bookingType}`),
+                    },
+                    {
+                      key: 'billing',
+                      term: _('hospitality_core.reservation.field.billingMode'),
+                      value: _(`hospitality_core.billing.${reservation.billingMode}`),
+                    },
+                    {
+                      key: 'rate',
+                      term: _('hospitality_core.reservation.field.rate'),
+                      value: formatMoney(_, reservation.rate),
+                    },
+                    {
+                      key: 'quantity',
+                      term: _('hospitality_core.reservation.quote.quantity'),
+                      value: String(reservation.quantity),
+                    },
+                    {
+                      key: 'folio',
+                      term: _('hospitality_core.reservation.field.folio'),
+                      value: reservation.folio?.code ?? reservation.folioId,
+                    },
+                    ...(reservation.cancelReason
+                      ? [
+                          {
+                            key: 'cancel-reason',
+                            term: _('hospitality_core.reservation.field.cancelReason'),
+                            value: reservation.cancelReason,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              }
             />,
             ...actions,
           ])}
@@ -6026,29 +6092,31 @@ const stayDetailFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'guest-added')
-    return notice({
-      title: _('hospitality_core.stay.feedback.guestAdded'),
-      message: _('hospitality_core.stay.feedback.guestAddedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.stay.feedback.guestAdded')}
+        message={_('hospitality_core.stay.feedback.guestAddedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'room-moved')
-    return notice({
-      title: _('hospitality_core.stay.feedback.roomMoved'),
-      message: _('hospitality_core.stay.feedback.roomMovedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.stay.feedback.roomMoved')}
+        message={_('hospitality_core.stay.feedback.roomMovedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'document-saved')
-    return notice({
-      title: _('hospitality_core.stay.feedback.documentSaved'),
-      message: _('hospitality_core.stay.feedback.documentSavedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.stay.feedback.documentSaved')}
+        message={_('hospitality_core.stay.feedback.documentSavedHint')}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -6126,59 +6194,61 @@ export const stayDetailScreen = (
             <Section
               title={_('hospitality_core.stay.section.information')}
               description={_('hospitality_core.stay.section.informationHint')}
-              body={definitionList({
-                title: stay.code,
-                items: [
-                  {
-                    key: 'guest',
-                    term: _('hospitality_core.reservation.field.guest'),
-                    value: guest,
-                  },
-                  {
-                    key: 'room-type',
-                    term: _('hospitality_core.col.roomType'),
-                    value: stay.roomType?.name ?? stay.roomTypeId,
-                  },
-                  {
-                    key: 'check-in',
-                    term: _('hospitality_core.col.checkIn'),
-                    value: dateTime(stay.checkIn, locale, timezone),
-                  },
-                  {
-                    key: 'check-out',
-                    term: _('hospitality_core.col.checkOut'),
-                    value: dateTime(stay.checkOut, locale, timezone),
-                  },
-                  {
-                    key: 'billing',
-                    term: _('hospitality_core.reservation.field.billingMode'),
-                    value: _(`hospitality_core.billing.${stay.billingMode}`),
-                  },
-                  ...(stay.nextBillDate
-                    ? [
-                        {
-                          key: 'next-bill',
-                          term: _('hospitality_core.stay.field.nextBillDate'),
-                          value: stay.nextBillDate,
-                        },
-                      ]
-                    : []),
-                  {
-                    key: 'folio',
-                    term: _('hospitality_core.reservation.field.folio'),
-                    value: stay.folioId,
-                  },
-                  ...(stay.reservationId
-                    ? [
-                        {
-                          key: 'reservation',
-                          term: _('hospitality_core.stay.field.reservation'),
-                          value: stay.reservation?.code ?? stay.reservationId,
-                        },
-                      ]
-                    : []),
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={stay.code}
+                  items={[
+                    {
+                      key: 'guest',
+                      term: _('hospitality_core.reservation.field.guest'),
+                      value: guest,
+                    },
+                    {
+                      key: 'room-type',
+                      term: _('hospitality_core.col.roomType'),
+                      value: stay.roomType?.name ?? stay.roomTypeId,
+                    },
+                    {
+                      key: 'check-in',
+                      term: _('hospitality_core.col.checkIn'),
+                      value: dateTime(stay.checkIn, locale, timezone),
+                    },
+                    {
+                      key: 'check-out',
+                      term: _('hospitality_core.col.checkOut'),
+                      value: dateTime(stay.checkOut, locale, timezone),
+                    },
+                    {
+                      key: 'billing',
+                      term: _('hospitality_core.reservation.field.billingMode'),
+                      value: _(`hospitality_core.billing.${stay.billingMode}`),
+                    },
+                    ...(stay.nextBillDate
+                      ? [
+                          {
+                            key: 'next-bill',
+                            term: _('hospitality_core.stay.field.nextBillDate'),
+                            value: stay.nextBillDate,
+                          },
+                        ]
+                      : []),
+                    {
+                      key: 'folio',
+                      term: _('hospitality_core.reservation.field.folio'),
+                      value: stay.folioId,
+                    },
+                    ...(stay.reservationId
+                      ? [
+                          {
+                            key: 'reservation',
+                            term: _('hospitality_core.stay.field.reservation'),
+                            value: stay.reservation?.code ?? stay.reservationId,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.stay.section.assignments')}
@@ -6223,11 +6293,11 @@ export const stayDetailScreen = (
                       ]}
                     />
                   ) : (
-                    notice({
-                      title: _('hospitality_core.stay.empty.availableRooms'),
-                      message: _('hospitality_core.stay.empty.availableRoomsHint'),
-                      tone: 'warning',
-                    })
+                    <Notice
+                      title={_('hospitality_core.stay.empty.availableRooms')}
+                      message={_('hospitality_core.stay.empty.availableRoomsHint')}
+                      tone="warning"
+                    />
                   )
                 ) : null,
               ])}
@@ -6371,11 +6441,11 @@ export const stayDetailScreen = (
                       ]}
                     />
                   ) : (
-                    notice({
-                      title: _('hospitality_core.stay.empty.documentGuests'),
-                      message: _('hospitality_core.stay.empty.documentGuestsHint'),
-                      tone: 'warning',
-                    })
+                    <Notice
+                      title={_('hospitality_core.stay.empty.documentGuests')}
+                      message={_('hospitality_core.stay.empty.documentGuestsHint')}
+                      tone="warning"
+                    />
                   )
                 ) : null,
               ])}
@@ -6412,23 +6482,23 @@ const folioDetailFeedback = (
   errors: readonly string[] = [],
 ): TemplateResult | null => {
   if (status === 'charge-posted')
-    return notice({
-      title: _('hospitality_core.folio.feedback.chargePosted'),
-      message: _('hospitality_core.folio.feedback.chargePostedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.folio.feedback.chargePosted')}
+        message={_('hospitality_core.folio.feedback.chargePostedHint')}
+        tone="positive"
+      />
+    )
   if (status === 'charge-voided')
-    return notice({
-      title: _('hospitality_core.folio.feedback.chargeVoided'),
-      message: _('hospitality_core.folio.feedback.chargeVoidedHint'),
-      tone: 'positive',
-    })
+    return (
+      <Notice
+        title={_('hospitality_core.folio.feedback.chargeVoided')}
+        message={_('hospitality_core.folio.feedback.chargeVoidedHint')}
+        tone="positive"
+      />
+    )
   if (errors.length)
-    return notice({
-      title: _('hospitality_core.feedback.invalid'),
-      message: errors.join(' '),
-      tone: 'danger',
-    })
+    return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
 
@@ -6456,11 +6526,11 @@ export const folioDetailScreen = (
       frame={frame}
       body={stack([
         folioDetailFeedback(_, status, errors),
-        notice({
-          title: _('hospitality_core.folio.notice.operational'),
-          message: _('hospitality_core.folio.notice.operationalHint'),
-          tone: 'info',
-        }),
+        <Notice
+          title={_('hospitality_core.folio.notice.operational')}
+          message={_('hospitality_core.folio.notice.operationalHint')}
+          tone="info"
+        />,
         <RecordWorkspace
           kicker={_('hospitality_core.folio.detail.kicker')}
           title={folio.code}
@@ -6496,30 +6566,32 @@ export const folioDetailScreen = (
             <Section
               title={_('hospitality_core.folio.section.information')}
               description={_('hospitality_core.folio.section.informationHint')}
-              body={definitionList({
-                title: folio.code,
-                items: [
-                  {
-                    key: 'guest',
-                    term: _('hospitality_core.col.guest'),
-                    value: guest,
-                  },
-                  {
-                    key: 'opened',
-                    term: _('hospitality_core.folio.field.openedAt'),
-                    value: dateTime(folio.openedAt, locale, timezone),
-                  },
-                  ...(folio.closedAt
-                    ? [
-                        {
-                          key: 'closed',
-                          term: _('hospitality_core.folio.field.closedAt'),
-                          value: dateTime(folio.closedAt, locale, timezone),
-                        },
-                      ]
-                    : []),
-                ],
-              })}
+              body={
+                <DefinitionList
+                  title={folio.code}
+                  items={[
+                    {
+                      key: 'guest',
+                      term: _('hospitality_core.col.guest'),
+                      value: guest,
+                    },
+                    {
+                      key: 'opened',
+                      term: _('hospitality_core.folio.field.openedAt'),
+                      value: dateTime(folio.openedAt, locale, timezone),
+                    },
+                    ...(folio.closedAt
+                      ? [
+                          {
+                            key: 'closed',
+                            term: _('hospitality_core.folio.field.closedAt'),
+                            value: dateTime(folio.closedAt, locale, timezone),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              }
             />,
             <Section
               title={_('hospitality_core.folio.section.charges')}
@@ -6739,16 +6811,18 @@ export const tapeChartScreen = (
       translator={_}
       title={_('hospitality_core.screen.tapeChart.title')}
       frame={frame}
-      body={scheduleBoard({
-        corner: _('hospitality_core.screen.tapeChart.corner'),
-        days,
-        rows,
-        events,
-        empty: emptyState(
-          _('hospitality_core.screen.tapeChart.empty'),
-          _('hospitality_core.screen.tapeChart.emptyHint'),
-        ),
-      })}
+      body={
+        <ScheduleBoard
+          corner={_('hospitality_core.screen.tapeChart.corner')}
+          days={days}
+          rows={rows}
+          events={events}
+          empty={emptyState(
+            _('hospitality_core.screen.tapeChart.empty'),
+            _('hospitality_core.screen.tapeChart.emptyHint'),
+          )}
+        />
+      }
     />
   )
 }

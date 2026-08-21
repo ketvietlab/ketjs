@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { encodeListState, page, parseListState, table, text } from '@ketvietlab/ketjs'
+import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { ListState, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { timezoneOf, viewerOf } from '../backend/routes.ts'
+import { choices, adminPage, inLocale, optional, timezoneOf } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { caseListSearch } from '../crm/search.ts'
 import {
@@ -17,13 +17,8 @@ import {
 } from './screens.tsx'
 import { CRM_PAGE_SIZE, keepForListSearch, listFacets, listMenus, loadListGroups } from './list-search.ts'
 
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
 type Translator = ReturnType<ServeContext['translate']>
 const bool = (value: string | undefined) => ['1', 'true', 'on'].includes(value ?? '')
-const optional = (form: Record<string, string>, key: string) => (form[key] ? { [key]: form[key] } : {})
-const suffix = (url: URL) =>
-  url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : ''
 const errorsOf = (result: unknown, _: Translator) =>
   (((result as AnyRow | null)?.errors as AnyRow[] | undefined) ?? []).map((error) => {
     const code = String(error.code ?? '')
@@ -32,39 +27,6 @@ const errorsOf = (result: unknown, _: Translator) =>
       : String(error.message ?? code)
   })
 
-const frameFor = async (ctx: ServeContext, url: URL, req: Req, active = url.pathname): Promise<Frame> => ({
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(Object.assign(new URL(url), { pathname: active }), req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-  active?: string,
-  status = 200,
-) => {
-  const lang = ctx.localeOf(url, req)
-  const _ = ctx.translate(lang)
-  return page({
-    body: ctx.document({
-      lang,
-      title: _(title),
-      head: await ctx.styles(req),
-      body: await body(_, await frameFor(ctx, url, req, active)),
-    }),
-    status,
-  })
-}
-const choices = (rows: AnyRow[], empty = true) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((row) => ({ value: String(row.id), label: String(row.name ?? row.code ?? row.id) })),
-]
 const configuration = (ctx: ServeContext, url: URL, req: Req) =>
   ctx.call('crm.configuration.get', {}, url, req) as Promise<Record<string, AnyRow[]>>
 const references = async (ctx: ServeContext, url: URL, req: Req) => {
@@ -101,7 +63,7 @@ const caseFields = (
     label: _('crm_backend.field.partner'),
     type: 'select',
     value: String(row.partnerId ?? ''),
-    options: choices(data.partners),
+    options: choices(data.partners, true),
   },
   { name: 'contactName', label: _('crm_backend.field.contactName'), value: String(row.contactName ?? '') },
   { name: 'email', label: _('crm_backend.field.email'), value: String(row.email ?? '') },
@@ -111,14 +73,14 @@ const caseFields = (
     label: _('crm_backend.field.team'),
     type: 'select',
     value: String(row.teamId ?? ''),
-    options: choices(data.config.teams),
+    options: choices(data.config.teams, true),
   },
   {
     name: 'assigneeUserId',
     label: _('crm_backend.field.assignee'),
     type: 'select',
     value: String(row.assigneeUserId ?? ''),
-    options: choices(data.users),
+    options: choices(data.users, true),
   },
   {
     name: 'priority',
@@ -179,7 +141,7 @@ const pager = (url: URL, state: ListState, rows: number, total: number) => {
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/crm': () => async (url, req) =>
-    req.method === 'GET' ? seeOther(`/admin/crm/pipeline${suffix(url)}`) : text('GET', { status: 405 }),
+    req.method === 'GET' ? seeOther(inLocale(url, '/admin/crm/pipeline')) : text('GET', { status: 405 }),
 
   '/admin/crm/pipeline':
     (ctx): Route =>
@@ -217,9 +179,10 @@ export const routes: Record<string, RouteEntry> = {
           stages: pages.map((item) => item.stage),
         }),
       })
-      return document(ctx, url, req, 'crm_backend.pipeline.title', (_, frame) =>
-        pipelineScreen(_, frame, board),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'crm_backend.pipeline.title',
+        body: (_, frame) => pipelineScreen(_, frame, board),
+      })
     },
 
   '/admin/crm/pipeline/move':
@@ -239,7 +202,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow
       return result.ok
-        ? seeOther(`/admin/crm/pipeline${suffix(url)}`)
+        ? seeOther(inLocale(url, '/admin/crm/pipeline'))
         : text(errorsOf(result, ctx.translate(ctx.localeOf(url, req))).join('\n'), { status: 409 })
     },
 
@@ -252,7 +215,7 @@ export const routes: Record<string, RouteEntry> = {
         const form = await readForm(req)
         const id = randomUUID()
         const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
-        if (result.ok) return seeOther(`/admin/crm/cases/${id}${suffix(url)}`)
+        if (result.ok) return seeOther(inLocale(url, `/admin/crm/cases/${id}`))
         errors = errorsOf(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const spec = caseListSearch(table(ctx.manifest, 'crm.Case'))
@@ -275,28 +238,31 @@ export const routes: Record<string, RouteEntry> = {
             label: (_field, value) => String(value ?? '—'),
           })
         : []
-      return document(ctx, url, req, 'crm_backend.cases.title', (_, frame) => {
-        frame.chrome = {
-          search: {
-            name: 'q',
-            value: state.q ?? '',
-            placeholder: _('crm_backend.search.cases'),
-            keep: keepForListSearch(url),
-            facets: listFacets(_, url, state, spec),
-            menus: listMenus(_, url, state, spec),
-          },
-          pager: grouped
-            ? null
-            : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
-        }
-        return casesScreen(
-          _,
-          frame,
-          grouped ? [] : ((result.rows as AnyRow[]) ?? []),
-          caseFields(_, data),
-          errors,
-          groups,
-        )
+      return adminPage(ctx, url, req, {
+        title: 'crm_backend.cases.title',
+        body: (_, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: state.q ?? '',
+              placeholder: _('crm_backend.search.cases'),
+              keep: keepForListSearch(url),
+              facets: listFacets(_, url, state, spec),
+              menus: listMenus(_, url, state, spec),
+            },
+            pager: grouped
+              ? null
+              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+          }
+          return casesScreen(
+            _,
+            frame,
+            grouped ? [] : ((result.rows as AnyRow[]) ?? []),
+            caseFields(_, data),
+            errors,
+            groups,
+          )
+        },
       })
     },
 
@@ -421,7 +387,7 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
         else return text('unknown action', { status: 400 })
         if (result.ok || result.activity || Array.isArray(result.activities))
-          return seeOther(`${url.pathname}${suffix(url)}`)
+          return seeOther(inLocale(url, url.pathname))
         errors = errorsOf(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [row, data] = await Promise.all([
@@ -429,15 +395,12 @@ export const routes: Record<string, RouteEntry> = {
         references(ctx, url, req),
       ])
       if (!row)
-        return document(
-          ctx,
-          url,
-          req,
-          'crm_backend.permission.title',
-          (_, frame) => permissionScreen(_, frame),
-          '/admin/crm/cases',
-          404,
-        )
+        return adminPage(ctx, url, req, {
+          title: 'crm_backend.permission.title',
+          active: '/admin/crm/cases',
+          status: 404,
+          body: (_, frame) => permissionScreen(_, frame),
+        })
       const [warehouses, plans, activityTypes, duplicateResult] = await Promise.all([
         ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
         ctx.call('activity.listPlans', {}, url, req) as Promise<AnyRow>,
@@ -449,24 +412,27 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<AnyRow>,
       ])
-      return document(ctx, url, req, 'crm_backend.case.detail', (_, frame) =>
-        caseDetailScreen(_, frame, row, {
-          fields: caseFields(_, data, row),
-          stages: data.config.stages.filter(
-            (item) => Array.isArray(item.allowedKinds) && (item.allowedKinds as unknown[]).includes(row.kind),
-          ),
-          users: data.users,
-          teams: data.config.teams,
-          warehouses,
-          plans: (plans.plans as AnyRow[]) ?? [],
-          activityTypes,
-          duplicates: (duplicateResult.rows as AnyRow[]) ?? [],
-          errors,
-          tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
-            ? String(url.searchParams.get('tab'))
-            : 'overview',
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'crm_backend.case.detail',
+        body: (_, frame) =>
+          caseDetailScreen(_, frame, row, {
+            fields: caseFields(_, data, row),
+            stages: data.config.stages.filter(
+              (item) =>
+                Array.isArray(item.allowedKinds) && (item.allowedKinds as unknown[]).includes(row.kind),
+            ),
+            users: data.users,
+            teams: data.config.teams,
+            warehouses,
+            plans: (plans.plans as AnyRow[]) ?? [],
+            activityTypes,
+            duplicates: (duplicateResult.rows as AnyRow[]) ?? [],
+            errors,
+            tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
+              ? String(url.searchParams.get('tab'))
+              : 'overview',
+          }),
+      })
     },
 
   '/admin/crm/cases/{id}/attachments':
@@ -539,7 +505,7 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
         else return text('unknown action', { status: 400 })
         if (result.ok || result.activity || Array.isArray(result.activities))
-          return seeOther(`${url.pathname}${suffix(url)}`)
+          return seeOther(inLocale(url, url.pathname))
         errors = errorsOf(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [activities, plans, calendar, cases, activityTypes, users] = await Promise.all([
@@ -558,18 +524,20 @@ export const routes: Record<string, RouteEntry> = {
       const tab = ['mine', 'plans', 'calendar'].includes(url.searchParams.get('tab') ?? '')
         ? String(url.searchParams.get('tab'))
         : 'mine'
-      return document(ctx, url, req, 'crm_backend.planner.title', (_, frame) =>
-        plannerScreen(_, frame, {
-          tab,
-          activities: (activities.activities as AnyRow[]) ?? [],
-          plans: (plans.plans as AnyRow[]) ?? [],
-          events: (calendar.events as AnyRow[]) ?? [],
-          cases: (cases.rows as AnyRow[]) ?? [],
-          activityTypes,
-          users,
-          errors,
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'crm_backend.planner.title',
+        body: (_, frame) =>
+          plannerScreen(_, frame, {
+            tab,
+            activities: (activities.activities as AnyRow[]) ?? [],
+            plans: (plans.plans as AnyRow[]) ?? [],
+            events: (calendar.events as AnyRow[]) ?? [],
+            cases: (cases.rows as AnyRow[]) ?? [],
+            activityTypes,
+            users,
+            errors,
+          }),
+      })
     },
 
   '/admin/crm/configuration':
@@ -674,8 +642,10 @@ export const routes: Record<string, RouteEntry> = {
           },
         ],
       }
-      return document(ctx, url, req, 'crm_backend.configuration.title', (_, frame) =>
-        configurationScreen(_, frame, tab, config[tab] ?? [], [...common, ...(extras[tab] ?? [])], errors),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'crm_backend.configuration.title',
+        body: (_, frame) =>
+          configurationScreen(_, frame, tab, config[tab] ?? [], [...common, ...(extras[tab] ?? [])], errors),
+      })
     },
 }

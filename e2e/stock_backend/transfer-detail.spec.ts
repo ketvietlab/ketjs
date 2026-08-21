@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const artifacts = join(moduleDir, 'artifacts', 'transfer-detail')
-const transferPath = '/admin/transfers/transfer-review'
+const transferPath = '/admin/stock/transfers/transfer-review'
 
 const login = async (page: Page) => {
   await page.goto('/login?lang=vi')

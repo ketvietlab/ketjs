@@ -4,6 +4,7 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
+import { activeApp } from '@ketvietlab/ketjs'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
@@ -54,13 +55,29 @@ export type Frame = {
   menu?: MenuNode[]
   chrome?: ListChrome | null
   navigation?: boolean
+  /** False when the body opens with its own heading, so the topbar does not repeat it. */
+  titled?: boolean
 }
 
+/**
+ * The topbar shows the page's name only when nothing below it does.
+ *
+ * A framed screen already opens with `record-heading`, so putting the title in the
+ * bar too printed it twice, one line apart, in a different size — the second one
+ * adding nothing. A list's chrome owns the row instead, and the apps screen has no
+ * heading of its own, so both of those still name themselves here.
+ */
 const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResult => {
   const { viewer = null, extras = {} } = frame
   return (
     <>
-      {frame.chrome ? listChrome(_, title, frame.chrome) : <h1 data-ui="title">{title}</h1>}
+      {frame.chrome ? (
+        listChrome(_, title, frame.chrome, frame.titled !== false)
+      ) : frame.titled === false ? (
+        ''
+      ) : (
+        <h1 data-ui="title">{title}</h1>
+      )}
       {!!viewer?.contextPath && (
         <a
           data-ui="context-switcher"
@@ -142,32 +159,54 @@ export const backendPage = async (
  * A screen that already supplies a richer record workspace is flattened by CSS,
  * so its domain-specific identity, facts, tabs, and collaboration rail remain the
  * only visible workspace rather than being wrapped in a second card.
+ *
+ * One shape, not two: this was `framed(_, title, frame, body)` beside
+ * `framedPage({...})`, the second wrapping the first, and the audit banned only the
+ * first — so which one a screen used depended on whether its filename happened to
+ * contain the word "screen". It is exported as `Framed` for JSX.
+ *
+ * The kicker and the glyph come from the menu when a screen does not name its own.
+ * Ninety screens opened with a title, a placeholder grid icon and nothing else,
+ * which reads as a page that failed to load its header — and the sidebar already
+ * knows which app you are in and which glyph that app chose, so asking each screen
+ * to repeat it would have been ninety translations that can only drift. A screen
+ * with something better to say still says it.
  */
-export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
-  shell(
-    _,
-    title,
-    recordWorkspace({
-      pageFrame: true,
-      title,
-      imageFallback: icon('layout-grid'),
-      body,
-    }),
-    frame,
-  )
-
-/** JSX entry point for backend screens; `framed` remains for extension compatibility. */
 export const framedPage = (options: {
   translator: Translator
   title: string
   frame: Frame
   body: TemplateResult
-}): TemplateResult => framed(options.translator, options.title, options.frame, options.body)
+  /** The section above the title. Defaults to the open app's name. */
+  kicker?: string | null
+  /** One line on what this screen is for. Worth writing; there is no sensible default. */
+  subtitle?: string | null
+  /** A semantic glyph. Defaults to the open app's. */
+  icon?: string | null
+}): TemplateResult => {
+  const app = activeApp(options.frame.menu ?? [])
+  const glyph = options.icon ?? app?.icon ?? 'layout-grid'
+  return shell(
+    options.translator,
+    options.title,
+    recordWorkspace({
+      pageFrame: true,
+      kicker: options.kicker ?? (app?.label === options.title ? null : (app?.label ?? null)),
+      title: options.title,
+      subtitle: options.subtitle ?? null,
+      imageFallback: icon(glyph),
+      body: options.body,
+    }),
+    // The workspace below opens with this same title, so the bar does not repeat it.
+    { ...options.frame, titled: false },
+  )
+}
 
 export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
 
 export const appCard = (options: {
-  key: string
+  /** The module this card is for. Not `key`: JSX reserves that name. */
+  app: string
   state: string
   title: string
   summary: string
@@ -175,7 +214,7 @@ export const appCard = (options: {
   action: { label: string; action: string; disabled?: boolean }
   extra?: JSXChild
 }): TemplateResult => (
-  <article data-ui="app-card" data-state={options.state} data-app={options.key}>
+  <article data-ui="app-card" data-state={options.state} data-app={options.app}>
     <h3 data-ui="app-title">{options.title}</h3>
     <p data-ui="app-summary">{options.summary}</p>
     <dl data-ui="app-meta">
@@ -198,8 +237,6 @@ export const appCard = (options: {
     </div>
   </article>
 )
-
-export const card = appCard
 
 export const cardGroups = <T,>(options: {
   groups: Array<{ key: string; title: string; items: readonly T[] }>

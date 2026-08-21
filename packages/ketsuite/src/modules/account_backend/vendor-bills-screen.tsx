@@ -5,14 +5,14 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { labelOf } from './screens.tsx'
@@ -45,7 +45,7 @@ export const vendorBillsScreen = (
           cell: (row) =>
             linkButton({
               label: String(row.name),
-              href: `/admin/vendor-bills/${String(row.id)}${options.locale}`,
+              href: `/admin/accounting/vendor-bills/${String(row.id)}${options.locale}`,
               variant: 'tertiary',
             }),
         },

@@ -4,14 +4,14 @@ import {
   badge,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Column, FormOption, Frame } from '../../ui/index.ts'
 

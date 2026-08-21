@@ -4,12 +4,12 @@ import {
   badge,
   dataTable,
   emptyState,
-  framedPage as Framed,
-  recordActions as RecordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Framed,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 

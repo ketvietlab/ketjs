@@ -1,8 +1,8 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { adminPage } from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 import { activitiesScreen } from './screens.tsx'
 
 const todayOf = (url: URL): string => {
@@ -12,26 +12,10 @@ const todayOf = (url: URL): string => {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], lang: string) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
-  },
-})
-
 export const routes = {
   '/admin/activities':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
       const today = todayOf(url)
       if (req.method === 'POST') {
         const form = await readForm(req)
@@ -51,12 +35,11 @@ export const routes = {
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const includeDone = url.searchParams.get('done') === '1'
       const result = (await ctx.call('activity.listMy', { today, includeDone }, url, req)) as {
-        activities: Array<Record<string, unknown>>
+        activities: AnyRow[]
       }
-      return backendPage(ctx, req, {
-        lang,
-        title: _('activity_backend.title'),
-        body: activitiesScreen(_, result.activities, await frame(ctx, url, req, lang), today, includeDone),
+      return adminPage(ctx, url, req, {
+        title: 'activity_backend.title',
+        body: (_, frame) => activitiesScreen(_, result.activities, frame, today, includeDone),
       })
     },
 }

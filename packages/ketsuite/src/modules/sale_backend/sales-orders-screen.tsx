@@ -5,13 +5,13 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  Framed,
   icon,
   linkButton,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 import { labelOf } from './screens.tsx'

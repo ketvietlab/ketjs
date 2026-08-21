@@ -1,14 +1,6 @@
 import type { Row, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  badge,
-  contentCard,
-  emptyState,
-  framedPage as Framed,
-  inline,
-  recordForm as RecordForm,
-  stack,
-} from '../../ui/index.ts'
+import { badge, ContentCard, emptyState, Framed, inline, RecordForm, stack } from '../../ui/index.ts'
 import type { Frame, Tone } from '../../ui/index.ts'
 import { jsonValue } from '../mail_transport/template.ts'
 
@@ -39,24 +31,26 @@ export const outboxScreen = (_: Translator, rows: Row[], frame: Frame): Template
       rows.length === 0
         ? emptyState(_('mail_transport_backend.empty'), _('mail_transport_backend.emptyHint'))
         : stack(
-            rows.map((row) =>
-              contentCard({
-                title: String(row.subject),
-                summary: `${recipients(row.to)} · ${String(row.templateName ?? _('mail_transport_backend.direct'))}`,
-                meta: inline([
+            rows.map((row) => (
+              <ContentCard
+                title={String(row.subject)}
+                summary={`${recipients(row.to)} · ${String(row.templateName ?? _('mail_transport_backend.direct'))}`}
+                meta={inline([
                   badge(
                     _(`mail_transport_backend.state.${String(row.state)}`),
                     tone(String(row.state)),
                     String(row.state),
                   ),
                   badge(`${String(row.attempts)} ${_('mail_transport_backend.attempts')}`, 'neutral'),
-                ]),
-                body: row.lastError
-                  ? `${_('mail_transport_backend.failure')}: ${String(row.lastError)}`
-                  : row.targetName
-                    ? `${_('mail_transport_backend.target')}: ${String(row.targetName)}`
-                    : String(row.text).slice(0, 240),
-                actions:
+                ])}
+                body={
+                  row.lastError
+                    ? `${_('mail_transport_backend.failure')}: ${String(row.lastError)}`
+                    : row.targetName
+                      ? `${_('mail_transport_backend.target')}: ${String(row.targetName)}`
+                      : String(row.text).slice(0, 240)
+                }
+                actions={
                   row.state === 'failed' || row.state === 'retryable' ? (
                     <RecordForm
                       action="/admin/outbox"
@@ -73,9 +67,10 @@ export const outboxScreen = (_: Translator, rows: Row[], frame: Frame): Template
                       hidden={{ action: 'cancel', id: String(row.id) }}
                       fields={[]}
                     />
-                  ) : undefined,
-              }),
-            ),
+                  ) : undefined
+                }
+              />
+            )),
           )
     }
   />

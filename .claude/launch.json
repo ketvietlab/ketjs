@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "design",
+      "runtimeExecutable": "/Users/kieuduy/.nvm/versions/node/v26.7.0/bin/node",
+      "runtimeArgs": [".build/apps/admin/serve.js"],
+      "port": 4000
+    },
+    {
+      "name": "ketsuite",
+      "runtimeExecutable": "/Users/kieuduy/.nvm/versions/node/v26.7.0/bin/node",
+      "runtimeArgs": [
+        "packages/ketjs/dist/cli.js",
+        "serve",
+        "--workspace",
+        ".build/ket.workspace.js",
+        "--port",
+        "4100",
+        "--dev-admin"
+      ],
+      "port": 4100
+    }
+  ]
+}

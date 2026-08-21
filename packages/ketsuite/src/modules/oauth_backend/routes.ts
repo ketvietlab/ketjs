@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
-import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import type { RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import {
   identitiesScreen,
   identityFormScreen,
@@ -12,21 +10,8 @@ import {
   providersScreen,
 } from './screens.tsx'
 import type { IdentityRow, ProviderRow } from './screens.tsx'
-
-type Req = Parameters<Route>[1]
-type AnyRow = Record<string, unknown>
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -37,25 +22,6 @@ const crossSite = (req: Req): boolean => {
     return true
   }
 }
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
 
 const translatedErrors = (ctx: ServeContext, url: URL, req: Req, result: unknown): string[] => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -103,19 +69,12 @@ const renderProvider = async (
   errors: string[] = [],
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  return document(
-    ctx,
-    url,
-    req,
-    row.id ? String(row.name) : _('oauth_backend.providers.create'),
-    providerFormScreen(
-      _,
-      row,
-      { ...(await formOptions(ctx, url, req)), errors },
-      await frameFor(ctx, url, req),
-      localeSuffix(url),
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: row.id ? String(row.name) : _('oauth_backend.providers.create'),
+    translate: false,
+    body: async (_, frame) =>
+      providerFormScreen(_, row, { ...(await formOptions(ctx, url, req)), errors }, frame, localeQuery(url)),
+  })
 }
 
 const providerInput = (form: Record<string, string>, id: string, url: URL) => {
@@ -147,13 +106,10 @@ const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: s
   const providerId = url.searchParams.get('provider') ?? undefined
   const userId = url.searchParams.get('user') ?? undefined
   const rows = (await ctx.call('oauth.listIdentities', { providerId, userId }, url, req)) as IdentityRow[]
-  return document(
-    ctx,
-    url,
-    req,
-    _('oauth_backend.identities.title'),
-    identitiesScreen(_, rows, await frameFor(ctx, url, req), localeSuffix(url), errors),
-  )
+  return adminPage(ctx, url, req, {
+    title: 'oauth_backend.identities.title',
+    body: (_, frame) => identitiesScreen(_, rows, frame, localeQuery(url), errors),
+  })
 }
 
 export const routes: Record<string, RouteEntry> = {
@@ -162,19 +118,17 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
-      return document(
-        ctx,
-        url,
-        req,
-        _('oauth_backend.providers.title'),
-        providersScreen(
-          _,
-          await providersOf(ctx, url, req, includeArchived),
-          await frameFor(ctx, url, req),
-          localeSuffix(url),
-          includeArchived,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'oauth_backend.providers.title',
+        body: async (_, frame) =>
+          providersScreen(
+            _,
+            await providersOf(ctx, url, req, includeArchived),
+            frame,
+            localeQuery(url),
+            includeArchived,
+          ),
+      })
     },
   },
   '/admin/oauth/providers/new': {
@@ -239,19 +193,17 @@ export const routes: Record<string, RouteEntry> = {
     handler: (ctx: ServeContext) => async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const render = async (row: Partial<IdentityRow>, errors: string[] = []) =>
-        document(
-          ctx,
-          url,
-          req,
-          _('oauth_backend.identities.link'),
-          identityFormScreen(
-            _,
-            row,
-            { ...(await identityOptions(ctx, url, req)), errors },
-            await frameFor(ctx, url, req),
-            localeSuffix(url),
-          ),
-        )
+        adminPage(ctx, url, req, {
+          title: 'oauth_backend.identities.link',
+          body: async (_, frame) =>
+            identityFormScreen(
+              _,
+              row,
+              { ...(await identityOptions(ctx, url, req)), errors },
+              frame,
+              localeQuery(url),
+            ),
+        })
       if (req.method === 'GET') return render({ providerId: url.searchParams.get('provider') ?? undefined })
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
@@ -300,13 +252,10 @@ export const routes: Record<string, RouteEntry> = {
         >,
         ctx.call('oauth.myIdentities', {}, url, req) as Promise<IdentityRow[]>,
       ])
-      return document(
-        ctx,
-        url,
-        req,
-        _('oauth_backend.link.title'),
-        linkProviderScreen(_, providers, identities, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'oauth_backend.link.title',
+        body: (_, frame) => linkProviderScreen(_, providers, identities, frame, localeQuery(url)),
+      })
     },
   },
 }

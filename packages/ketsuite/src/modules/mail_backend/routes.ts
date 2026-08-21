@@ -1,23 +1,9 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { adminPage } from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 import { inboxScreen } from './screens.tsx'
-
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], lang: string) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
-  },
-})
 
 export const routes = {
   '/admin/inbox':
@@ -36,13 +22,10 @@ export const routes = {
         return seeOther('/admin/inbox')
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('mail.listInbox', { limit: 100 }, url, req)) as Array<
-        Record<string, unknown>
-      >
-      return backendPage(ctx, req, {
-        lang,
-        title: _('mail_backend.inbox.title'),
-        body: inboxScreen(_, rows, await frame(ctx, url, req, lang)),
+      const rows = (await ctx.call('mail.listInbox', { limit: 100 }, url, req)) as AnyRow[]
+      return adminPage(ctx, url, req, {
+        title: 'mail_backend.inbox.title',
+        body: (_, frame) => inboxScreen(_, rows, frame),
       })
     },
 }

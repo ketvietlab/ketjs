@@ -2,13 +2,13 @@ import type { Row, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  contentCard,
+  ContentCard,
   emptyState,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   inline,
   linkButton,
-  recordForm as RecordForm,
+  RecordForm,
   stack,
 } from '../../ui/index.ts'
 import type { Frame, Tone } from '../../ui/index.ts'
@@ -17,8 +17,8 @@ const tone = (state: string): Tone =>
   state === 'overdue' ? 'danger' : state === 'today' ? 'warning' : state === 'done' ? 'positive' : 'neutral'
 
 const targetHref = (row: Row): string | null => {
-  if (row.resModel === 'product.Template') return `/admin/products/${String(row.resId)}`
-  if (row.resModel === 'stock.Picking') return `/admin/transfers/${String(row.resId)}`
+  if (row.resModel === 'product.Template') return `/admin/product/templates/${String(row.resId)}`
+  if (row.resModel === 'stock.Picking') return `/admin/stock/transfers/${String(row.resId)}`
   if (row.resModel === 'sale.Order') return `/admin/sales/quotations/${String(row.resId)}`
   return null
 }
@@ -53,18 +53,18 @@ export const activitiesScreen = (
       rows.length === 0
         ? emptyState(_('activity_backend.empty'), _('activity_backend.emptyHint'))
         : stack(
-            rows.map((row) =>
-              contentCard({
-                title: String(row.summary),
-                href: targetHref(row),
-                summary: `${String(row.typeName)} · ${String(row.targetName)} · ${String(row.dueDate)}`,
-                meta: badge(
+            rows.map((row) => (
+              <ContentCard
+                title={String(row.summary)}
+                href={targetHref(row)}
+                summary={`${String(row.typeName)} · ${String(row.targetName)} · ${String(row.dueDate)}`}
+                meta={badge(
                   _(`activity_backend.state.${String(row.state)}`),
                   tone(String(row.state)),
                   String(row.state),
-                ),
-                body: row.note ? String(row.note) : undefined,
-                actions:
+                )}
+                body={row.note ? String(row.note) : undefined}
+                actions={
                   row.active === true ? (
                     <FormCluster
                       forms={[
@@ -108,9 +108,10 @@ export const activitiesScreen = (
                         />,
                       ]}
                     />
-                  ) : undefined,
-              }),
-            ),
+                  ) : undefined
+                }
+              />
+            )),
           ),
     ])}
   />

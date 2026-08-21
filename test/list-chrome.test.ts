@@ -13,48 +13,52 @@ const render = (c: ListChrome): string => renderToString(listChrome(_, 'Trang', 
 const base: ListChrome = {}
 
 test('paging: the URL is the state, so a page is a link somebody can send', () => {
-  assert.equal(pageOf(at('/admin/pages')), 1, 'no parameter means the first page')
-  assert.equal(pageOf(at('/admin/pages?page=4')), 4)
-  assert.equal(pageOf(at('/admin/pages?page=0')), 1, 'nonsense falls back rather than throwing')
-  assert.equal(pageOf(at('/admin/pages?page=-2')), 1)
-  assert.equal(pageOf(at('/admin/pages?page=abc')), 1)
-  assert.equal(searchOf(at('/admin/pages?q=%20%20')), undefined, 'whitespace is not a search')
-  assert.equal(searchOf(at('/admin/pages?q=hoa')), 'hoa')
+  assert.equal(pageOf(at('/admin/website/pages')), 1, 'no parameter means the first page')
+  assert.equal(pageOf(at('/admin/website/pages?page=4')), 4)
+  assert.equal(pageOf(at('/admin/website/pages?page=0')), 1, 'nonsense falls back rather than throwing')
+  assert.equal(pageOf(at('/admin/website/pages?page=-2')), 1)
+  assert.equal(pageOf(at('/admin/website/pages?page=abc')), 1)
+  assert.equal(searchOf(at('/admin/website/pages?q=%20%20')), undefined, 'whitespace is not a search')
+  assert.equal(searchOf(at('/admin/website/pages?q=hoa')), 'hoa')
 })
 
 test('paging: changing a filter goes back to page one', () => {
   assert.equal(
-    withParam(at('/admin/products?view=list&page=3'), 'q', 'xoai'),
-    '/admin/products?view=list&q=xoai',
+    withParam(at('/admin/product/templates?view=list&page=3'), 'q', 'xoai'),
+    '/admin/product/templates?view=list&q=xoai',
     'a new search on page three would otherwise show an empty page three',
   )
   assert.equal(
-    withParam(at('/admin/products?page=3'), 'page', '4'),
-    '/admin/products?page=4',
+    withParam(at('/admin/product/templates?page=3'), 'page', '4'),
+    '/admin/product/templates?page=4',
     'paging keeps paging',
   )
   assert.equal(
-    withParam(at('/admin/products?q=x&page=2'), 'q', null),
-    '/admin/products',
+    withParam(at('/admin/product/templates?q=x&page=2'), 'q', null),
+    '/admin/product/templates',
     'removing the last one leaves a clean URL',
   )
 })
 
 test('paging: a list that fits on one page has no pager at all', () => {
-  assert.equal(pager(at('/admin/pages'), 1, 12, 12), null)
-  assert.equal(pager(at('/admin/pages'), 1, PAGE_SIZE, PAGE_SIZE), null, 'exactly full is still one page')
+  assert.equal(pager(at('/admin/website/pages'), 1, 12, 12), null)
+  assert.equal(
+    pager(at('/admin/website/pages'), 1, PAGE_SIZE, PAGE_SIZE),
+    null,
+    'exactly full is still one page',
+  )
 })
 
 test('paging: the range says what is on screen, and the ends are dead rather than missing', () => {
-  const first = pager(at('/admin/pages'), 1, 30, 84)!
+  const first = pager(at('/admin/website/pages'), 1, 30, 84)!
   assert.deepEqual([first.from, first.to, first.total], [1, 30, 84])
   assert.equal(first.prev, null, 'no previous page from the first')
-  assert.equal(first.next, '/admin/pages?page=2')
+  assert.equal(first.next, '/admin/website/pages?page=2')
 
-  const last = pager(at('/admin/pages?page=3'), 3, 24, 84)!
+  const last = pager(at('/admin/website/pages?page=3'), 3, 24, 84)!
   assert.deepEqual([last.from, last.to], [61, 84])
   assert.equal(last.next, null)
-  assert.equal(last.prev, '/admin/pages?page=2')
+  assert.equal(last.prev, '/admin/website/pages?page=2')
 })
 
 test('chrome: a control with nothing to say is not rendered', () => {
@@ -86,11 +90,11 @@ test('chrome: a facet shows what was filtered and where the × undoes it', () =>
       name: 'q',
       value: 'xoai',
       placeholder: 'Tìm',
-      facets: [{ label: 'Tìm: xoai', without: '/admin/products' }],
+      facets: [{ label: 'Tìm: xoai', without: '/admin/product/templates' }],
     },
   })
   assert.match(html, /data-ui="facet-label">[\s\S]*Tìm: xoai/)
-  assert.match(html, /<a data-ui="facet-remove" href="\/admin\/products"/)
+  assert.match(html, /<a data-ui="facet-remove" href="\/admin\/product\/templates"/)
   assert.match(html, /value="xoai"/, 'the box still holds what was typed')
 })
 

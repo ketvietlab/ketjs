@@ -5,15 +5,15 @@ import {
   code,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  notice,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Notice,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 
@@ -95,7 +95,7 @@ export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale
       inline([
         linkButton({
           label: _('website_backend.action.newSite'),
-          href: `/admin/sites/new${locale}`,
+          href: `/admin/website/sites/new${locale}`,
           variant: 'primary',
         }),
         linkButton({
@@ -109,7 +109,7 @@ export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale
         : dataTable(_, {
             rows,
             id: (row) => row.id,
-            rowHref: (row) => `/admin/sites/${row.id}${locale}`,
+            rowHref: (row) => `/admin/website/sites/${row.id}${locale}`,
             columns: [
               {
                 key: 'name',
@@ -169,8 +169,8 @@ export const siteFormScreen = (
                 <RecordForm
                   action={
                     existing
-                      ? `/admin/sites/${row.id}${options.locale ?? ''}`
-                      : `/admin/sites/new${options.locale ?? ''}`
+                      ? `/admin/website/sites/${row.id}${options.locale ?? ''}`
+                      : `/admin/website/sites/new${options.locale ?? ''}`
                   }
                   fields={[
                     { name: 'name', label: _('website_backend.field.name'), value: row.name, required: true },
@@ -265,7 +265,7 @@ export const contentScreen = (
         }),
         linkButton({
           label: _('website_backend.action.taxonomies'),
-          href: `/admin/taxonomies?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          href: `/admin/website/taxonomies?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
         }),
       ]),
       !siteId
@@ -416,13 +416,19 @@ export const entryFormScreen = (
                 description={_('website_backend.publish.hint')}
                 body={
                   <Surface
-                    body={recordActions({
-                      action: `${kind.basePath}/${entry.id}/publish${options.locale ?? ''}`,
-                      hidden: revision?.id ? { expectedRevisionId: revision.id } : undefined,
-                      actions: [
-                        { value: 'publish', label: _('website_backend.action.publish'), variant: 'primary' },
-                      ],
-                    })}
+                    body={
+                      <RecordActions
+                        action={`${kind.basePath}/${entry.id}/publish${options.locale ?? ''}`}
+                        hidden={revision?.id ? { expectedRevisionId: revision.id } : undefined}
+                        actions={[
+                          {
+                            value: 'publish',
+                            label: _('website_backend.action.publish'),
+                            variant: 'primary',
+                          },
+                        ]}
+                      />
+                    }
                   />
                 }
               />,
@@ -495,7 +501,7 @@ export const previewScreen = (
     title={_('website_backend.preview.title')}
     frame={frame}
     body={stack([
-      notice({ tone: 'info', title: entry.title, message: _('website_backend.preview.hint') }),
+      <Notice tone="info" title={entry.title} message={_('website_backend.preview.hint')} />,
       <Surface
         body={
           <RecordForm
@@ -569,11 +575,11 @@ export const taxonomyScreen = (
     title={_('website_backend.taxonomies.title')}
     frame={frame}
     body={stack([
-      siteSwitcher(_, '/admin/taxonomies', sites, siteId, locale),
+      siteSwitcher(_, '/admin/website/taxonomies', sites, siteId, locale),
       inline([
         linkButton({
           label: _('website_backend.action.newTerm'),
-          href: `/admin/taxonomies/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          href: `/admin/website/taxonomies/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
           variant: 'primary',
         }),
       ]),
@@ -582,7 +588,7 @@ export const taxonomyScreen = (
         : dataTable(_, {
             rows,
             id: (row) => row.id,
-            rowHref: (row) => `/admin/taxonomies/${row.id}${locale}`,
+            rowHref: (row) => `/admin/website/taxonomies/${row.id}${locale}`,
             columns: [
               {
                 key: 'name',
@@ -627,8 +633,8 @@ export const taxonomyFormScreen = (
                 <RecordForm
                   action={
                     existing
-                      ? `/admin/taxonomies/${row.id}${options.locale ?? ''}`
-                      : `/admin/taxonomies/new${options.locale ?? ''}`
+                      ? `/admin/website/taxonomies/${row.id}${options.locale ?? ''}`
+                      : `/admin/website/taxonomies/new${options.locale ?? ''}`
                   }
                   hidden={{ siteId: String(row.siteId ?? '') }}
                   fields={[
@@ -661,7 +667,7 @@ export const taxonomyFormScreen = (
                   submit={_('website_backend.action.save')}
                   submitVariant="primary"
                   errors={options.errors}
-                  cancelHref={`/admin/taxonomies?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
+                  cancelHref={`/admin/website/taxonomies?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
                   cancelLabel={_('website_backend.action.cancel')}
                 />
               }
@@ -671,16 +677,18 @@ export const taxonomyFormScreen = (
         ...(existing
           ? [
               <Surface
-                body={recordActions({
-                  action: `/admin/taxonomies/${row.id}/delete${options.locale ?? ''}`,
-                  actions: [
-                    {
-                      value: 'delete',
-                      label: _('website_backend.action.deleteTerm'),
-                      variant: 'destructive',
-                    },
-                  ],
-                })}
+                body={
+                  <RecordActions
+                    action={`/admin/website/taxonomies/${row.id}/delete${options.locale ?? ''}`}
+                    actions={[
+                      {
+                        value: 'delete',
+                        label: _('website_backend.action.deleteTerm'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                }
               />,
             ]
           : []),
@@ -702,11 +710,11 @@ export const mediaScreen = (
     title={_('website_backend.media.title')}
     frame={frame}
     body={stack([
-      siteSwitcher(_, '/admin/media', sites, siteId, locale),
+      siteSwitcher(_, '/admin/website/media', sites, siteId, locale),
       inline([
         linkButton({
           label: _('website_backend.action.newMedia'),
-          href: `/admin/media/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          href: `/admin/website/media/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
           variant: 'primary',
         }),
       ]),
@@ -715,7 +723,7 @@ export const mediaScreen = (
         : dataTable(_, {
             rows,
             id: (row) => row.id,
-            rowHref: (row) => `/admin/media/${row.id}${locale}`,
+            rowHref: (row) => `/admin/website/media/${row.id}${locale}`,
             columns: [
               {
                 key: 'attachment',
@@ -757,8 +765,8 @@ export const mediaFormScreen = (
                 <RecordForm
                   action={
                     existing
-                      ? `/admin/media/${row.id}${options.locale ?? ''}`
-                      : `/admin/media/new${options.locale ?? ''}`
+                      ? `/admin/website/media/${row.id}${options.locale ?? ''}`
+                      : `/admin/website/media/new${options.locale ?? ''}`
                   }
                   hidden={{ siteId: String(row.siteId ?? '') }}
                   fields={[
@@ -793,7 +801,7 @@ export const mediaFormScreen = (
                   submit={_('website_backend.action.save')}
                   submitVariant="primary"
                   errors={options.errors}
-                  cancelHref={`/admin/media?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
+                  cancelHref={`/admin/website/media?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
                   cancelLabel={_('website_backend.action.cancel')}
                 />
               }
@@ -803,16 +811,18 @@ export const mediaFormScreen = (
         ...(existing
           ? [
               <Surface
-                body={recordActions({
-                  action: `/admin/media/${row.id}/delete${options.locale ?? ''}`,
-                  actions: [
-                    {
-                      value: 'delete',
-                      label: _('website_backend.action.deleteMedia'),
-                      variant: 'destructive',
-                    },
-                  ],
-                })}
+                body={
+                  <RecordActions
+                    action={`/admin/website/media/${row.id}/delete${options.locale ?? ''}`}
+                    actions={[
+                      {
+                        value: 'delete',
+                        label: _('website_backend.action.deleteMedia'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                }
               />,
             ]
           : []),
@@ -834,11 +844,11 @@ export const menusScreen = (
     title={_('website_backend.menus.title')}
     frame={frame}
     body={stack([
-      siteSwitcher(_, '/admin/menus', sites, siteId, locale),
+      siteSwitcher(_, '/admin/website/menus', sites, siteId, locale),
       inline([
         linkButton({
           label: _('website_backend.action.newMenuItem'),
-          href: `/admin/menus/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          href: `/admin/website/menus/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
           variant: 'primary',
         }),
       ]),
@@ -848,7 +858,7 @@ export const menusScreen = (
             rows,
             id: (row) => row.id,
             rowHref: (row) =>
-              `/admin/menus/${row.id}?site=${encodeURIComponent(row.siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
+              `/admin/website/menus/${row.id}?site=${encodeURIComponent(row.siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
             columns: [
               {
                 key: 'label',
@@ -892,8 +902,8 @@ export const menuFormScreen = (
                 <RecordForm
                   action={
                     existing
-                      ? `/admin/menus/${row.id}${options.locale ?? ''}`
-                      : `/admin/menus/new${options.locale ?? ''}`
+                      ? `/admin/website/menus/${row.id}${options.locale ?? ''}`
+                      : `/admin/website/menus/new${options.locale ?? ''}`
                   }
                   hidden={{ siteId: String(row.siteId ?? '') }}
                   fields={[
@@ -922,7 +932,7 @@ export const menuFormScreen = (
                   submit={_('website_backend.action.save')}
                   submitVariant="primary"
                   errors={options.errors}
-                  cancelHref={`/admin/menus?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
+                  cancelHref={`/admin/website/menus?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
                   cancelLabel={_('website_backend.action.cancel')}
                 />
               }
@@ -932,17 +942,19 @@ export const menuFormScreen = (
         ...(existing
           ? [
               <Surface
-                body={recordActions({
-                  action: `/admin/menus/${row.id}/delete${options.locale ?? ''}`,
-                  hidden: { siteId: String(row.siteId ?? '') },
-                  actions: [
-                    {
-                      value: 'delete',
-                      label: _('website_backend.action.deleteMenuItem'),
-                      variant: 'destructive',
-                    },
-                  ],
-                })}
+                body={
+                  <RecordActions
+                    action={`/admin/website/menus/${row.id}/delete${options.locale ?? ''}`}
+                    hidden={{ siteId: String(row.siteId ?? '') }}
+                    actions={[
+                      {
+                        value: 'delete',
+                        label: _('website_backend.action.deleteMenuItem'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                }
               />,
             ]
           : []),
@@ -966,7 +978,7 @@ export const formsScreen = (
       inline([
         linkButton({
           label: _('website_backend.action.newForm'),
-          href: `/admin/forms/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          href: `/admin/website/forms/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
           variant: 'primary',
         }),
       ]),
@@ -975,7 +987,7 @@ export const formsScreen = (
         : dataTable(_, {
             rows,
             id: (row) => row.id,
-            rowHref: (row) => `/admin/forms/${row.id}/submissions${locale}`,
+            rowHref: (row) => `/admin/website/forms/${row.id}/submissions${locale}`,
             columns: [
               {
                 key: 'name',
@@ -1016,7 +1028,7 @@ export const formCreateScreen = (
           <Surface
             body={
               <RecordForm
-                action={`/admin/forms/new${options.locale ?? ''}`}
+                action={`/admin/website/forms/new${options.locale ?? ''}`}
                 hidden={{ siteId }}
                 fields={[
                   {
@@ -1052,7 +1064,7 @@ export const formCreateScreen = (
                 submit={_('website_backend.action.save')}
                 submitVariant="primary"
                 errors={options.errors}
-                cancelHref={`/admin/forms?site=${encodeURIComponent(siteId)}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
+                cancelHref={`/admin/website/forms?site=${encodeURIComponent(siteId)}${options.locale ? `&${options.locale.slice(1)}` : ''}`}
                 cancelLabel={_('website_backend.action.cancel')}
               />
             }

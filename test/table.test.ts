@@ -89,13 +89,17 @@ test('table: the column menu is links, because a checkbox would need a handler',
 })
 
 test('table: choosing a column keeps the page you are on', () => {
-  const url = new URL('/admin/products?q=xoai&page=3', 'http://x')
+  const url = new URL('/admin/product/templates?q=xoai&page=3', 'http://x')
   assert.equal(
     colsHref(url)(['id']),
-    '/admin/products?q=xoai&page=3&cols=id',
+    '/admin/product/templates?q=xoai&page=3&cols=id',
     'showing one more column is not a new filter, so page three is still page three',
   )
-  assert.equal(colsHref(url)([]), '/admin/products?q=xoai&page=3', 'and the last one off leaves a clean URL')
+  assert.equal(
+    colsHref(url)([]),
+    '/admin/product/templates?q=xoai&page=3',
+    'and the last one off leaves a clean URL',
+  )
 })
 
 test('table: an open group renders its own pager without client state', () => {

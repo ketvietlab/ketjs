@@ -30,6 +30,10 @@ export type ButtonSpec = ActionBase & {
   value?: string | null
   /** Associate a submit control with a form elsewhere in the document. */
   form?: string | null
+  /** Send this form somewhere other than its own action — a preview, a export. */
+  formAction?: string | null
+  /** Where that response lands; `_blank` for something meant to be looked at beside the form. */
+  formTarget?: string | null
 }
 
 export type LinkButtonSpec = ActionBase & { href: string }
@@ -52,6 +56,8 @@ export const button = (o: ButtonSpec): TemplateResult => (
     name={o.name ?? null}
     value={o.value ?? null}
     form={o.form ?? null}
+    formaction={o.formAction ?? null}
+    formtarget={o.formTarget ?? null}
     disabled={o.disabled === true || o.loading === true}
     aria-busy={o.loading === true ? 'true' : null}
     aria-describedby={o.describedBy ?? null}

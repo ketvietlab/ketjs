@@ -43,7 +43,7 @@ export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
 export { attachmentPanel } from './attachments.tsx'
 export type { AttachmentItem } from './attachments.tsx'
 export { recordForm, recordActions, formCluster } from './form.tsx'
-export { authTokenScreen } from './auth.tsx'
+export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
 export { datePicker } from './date-picker.tsx'
 export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
@@ -56,18 +56,41 @@ export { sidebar, sidebarMain, sidebarFoot } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
-export {
-  backendPage,
-  shell,
-  framed,
-  framedPage,
-  appCard,
-  card,
-  cardGroups,
-  definitionList,
-} from './layout.tsx'
+export { backendPage, shell, framedPage, appCard, cardGroups, definitionList } from './layout.tsx'
 export type { CardMeta, Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'
 export { activityContractCases } from './activity.ts'
 export { calendarContractCases } from './calendar.ts'
+
+/**
+ * The same components, under the names JSX wants.
+ *
+ * `tools/ui-audit.ts` requires a screen to write `<Section />` rather than
+ * `section(...)`, because a screen that calls the function can quietly grow an
+ * argument the JSX form cannot express. But the kit only exported camelCase, so
+ * every screen opened with the same five lines of aliasing — `framedPage as
+ * Framed` in fifty-five files, `recordForm as RecordForm` in forty-nine — and the
+ * rule cost more to obey than it was worth.
+ *
+ * These are the same functions, not wrappers: a component here takes one options
+ * object, which is exactly what JSX hands it. That is also the entry rule — a
+ * positional helper (`stack(items, gap)`, `emptyState(message, hint)`,
+ * `dataTable(_, table)`) has no PascalCase name, because JSX would hand it a props
+ * object where it wants a list. `backend-ui.test.ts` checks the arity.
+ */
+export { framedPage as Framed, appCard as AppCard, cardGroups as CardGroups } from './layout.tsx'
+export { section as Section, surface as Surface, contentCard as ContentCard } from './surfaces.tsx'
+export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
+export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'
+export { recordActions as RecordActions } from './form.tsx'
+export { recordWorkspace as RecordWorkspace, recordToggle as RecordToggle } from './record.tsx'
+export { notice as Notice } from './state.tsx'
+export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'
+export { modalSheet as ModalSheet } from './modal.tsx'
+export { datePicker as DatePicker } from './date-picker.tsx'
+export { mediaPanel as MediaPanel } from './media.tsx'
+export { attachmentPanel as AttachmentPanel } from './attachments.tsx'
+export { scheduleBoard as ScheduleBoard } from './schedule.tsx'
+export { kanbanCard as KanbanCard, kanbanGrid as KanbanGrid, recordList as RecordList } from './data.tsx'
+export { definitionList as DefinitionList } from './layout.tsx'

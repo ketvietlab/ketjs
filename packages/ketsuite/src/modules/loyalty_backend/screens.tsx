@@ -2,33 +2,32 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  cardGrid,
+  CardGrid,
   code,
-  contentCard,
+  ContentCard,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
+  Framed,
   linkButton,
-  metric,
-  notice,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Metric,
+  Notice,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 
 const empty = (_: Translator) => emptyState(_('loyalty_backend.empty.title'), _('loyalty_backend.empty.hint'))
 
-const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? '')
-  const key = `loyalty_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable loyalty code in the reader's language; the code itself survives as data. */
+const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'loyalty_backend', group, value)
 
 const activeBadge = (_: Translator, active: unknown) =>
   active
@@ -45,8 +44,8 @@ export const dashboardScreen = (
     title={_('loyalty_backend.dashboard.title')}
     frame={frame}
     body={stack([
-      cardGrid({
-        items: [
+      <CardGrid
+        items={[
           {
             id: 'programs',
             title: _('loyalty_backend.menu.programs'),
@@ -71,23 +70,21 @@ export const dashboardScreen = (
             value: stats.ledger,
             href: '/admin/loyalty/ledger',
           },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({
-            title: item.title,
-            href: item.href,
-            body: metric({
-              label: _('loyalty_backend.dashboard.records'),
-              value: String(item.value),
-            }),
-          }),
-      }),
-      notice({
-        title: _('loyalty_backend.dashboard.ledgerTitle'),
-        message: _('loyalty_backend.dashboard.ledgerHint'),
-        tone: 'info',
-      }),
+        ]}
+        id={(item) => item.id}
+        card={(item) => (
+          <ContentCard
+            title={item.title}
+            href={item.href}
+            body={<Metric label={_('loyalty_backend.dashboard.records')} value={String(item.value)} />}
+          />
+        )}
+      />,
+      <Notice
+        title={_('loyalty_backend.dashboard.ledgerTitle')}
+        message={_('loyalty_backend.dashboard.ledgerHint')}
+        tone="info"
+      />,
     ])}
   />
 )
@@ -183,8 +180,8 @@ export const programDetailScreen = (
       title={String(program.name)}
       frame={frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             {
               id: 'type',
               title: _('loyalty_backend.field.programType'),
@@ -205,29 +202,32 @@ export const programDetailScreen = (
               title: _('loyalty_backend.rewards.title'),
               value: String(rewards.length),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-        }),
-        notice({
-          title: _('loyalty_backend.field.state'),
-          message: program.active ? _('loyalty_backend.state.active') : _('loyalty_backend.state.archived'),
-          tone: program.active ? 'positive' : 'warning',
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
+          )}
+        />,
+        <Notice
+          title={_('loyalty_backend.field.state')}
+          message={program.active ? _('loyalty_backend.state.active') : _('loyalty_backend.state.archived')}
+          tone={program.active ? 'positive' : 'warning'}
+        />,
         <Surface
-          body={recordActions({
-            action: `/admin/loyalty/programs/${String(program.id)}`,
-            actions: [
-              {
-                value: program.active ? 'archive' : 'restore',
-                label: program.active
-                  ? _('loyalty_backend.action.archive')
-                  : _('loyalty_backend.action.restore'),
-                variant: program.active ? 'destructive' : 'secondary',
-              },
-            ],
-          })}
+          body={
+            <RecordActions
+              action={`/admin/loyalty/programs/${String(program.id)}`}
+              actions={[
+                {
+                  value: program.active ? 'archive' : 'restore',
+                  label: program.active
+                    ? _('loyalty_backend.action.archive')
+                    : _('loyalty_backend.action.restore'),
+                  variant: program.active ? 'destructive' : 'secondary',
+                },
+              ]}
+            />
+          }
         />,
         <Section
           title={_('loyalty_backend.program.detail')}
@@ -449,8 +449,8 @@ export const walletDetailScreen = (
       title={String(wallet.code)}
       frame={frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             { id: 'balance', title: _('loyalty_backend.field.balance'), value: String(wallet.balance) },
             { id: 'reserved', title: _('loyalty_backend.field.reserved'), value: String(wallet.reserved) },
             { id: 'available', title: _('loyalty_backend.field.available'), value: String(wallet.available) },
@@ -459,11 +459,12 @@ export const walletDetailScreen = (
               title: _('loyalty_backend.field.unit'),
               value: labelOf(_, 'walletUnit', wallet.unit),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
+          )}
+        />,
         <Section
           title={_('loyalty_backend.wallet.adjust')}
           body={
@@ -694,11 +695,11 @@ export const orderLoyaltyScreen = (
         }),
         ...(options.errors?.length
           ? [
-              notice({
-                title: _('loyalty_backend.validation.title'),
-                message: options.errors.join(' · '),
-                tone: 'danger',
-              }),
+              <Notice
+                title={_('loyalty_backend.validation.title')}
+                message={options.errors.join(' · ')}
+                tone="danger"
+              />,
             ]
           : []),
         <Section
@@ -727,38 +728,40 @@ export const orderLoyaltyScreen = (
                   body={stack([
                     ...(program.ineligibleReasons && (program.ineligibleReasons as unknown[]).length
                       ? [
-                          notice({
-                            title: _('loyalty_backend.order.ineligible'),
-                            message: (program.ineligibleReasons as unknown[]).map(String).join(' · '),
-                            tone: 'warning',
-                          }),
+                          <Notice
+                            title={_('loyalty_backend.order.ineligible')}
+                            message={(program.ineligibleReasons as unknown[]).map(String).join(' · ')}
+                            tone="warning"
+                          />,
                         ]
                       : []),
                     ...(rewards.length
                       ? [
-                          cardGrid({
-                            items: rewards,
-                            id: (reward) => String(reward.rewardId),
-                            card: (reward) =>
-                              contentCard({
-                                title: String(reward.description),
-                                summary: labelOf(_, 'rewardType', reward.rewardType),
-                                body: definitionList({
-                                  title: _('loyalty_backend.order.rewardDetails'),
-                                  items: [
-                                    {
-                                      key: 'points',
-                                      term: _('loyalty_backend.field.requiredPoints'),
-                                      value: String(reward.requiredPoints),
-                                    },
-                                    {
-                                      key: 'discount',
-                                      term: _('loyalty_backend.field.discount'),
-                                      value: String(reward.discountAmount),
-                                    },
-                                  ],
-                                }),
-                                actions: (
+                          <CardGrid
+                            items={rewards}
+                            id={(reward) => String(reward.rewardId)}
+                            card={(reward) => (
+                              <ContentCard
+                                title={String(reward.description)}
+                                summary={labelOf(_, 'rewardType', reward.rewardType)}
+                                body={
+                                  <DefinitionList
+                                    title={_('loyalty_backend.order.rewardDetails')}
+                                    items={[
+                                      {
+                                        key: 'points',
+                                        term: _('loyalty_backend.field.requiredPoints'),
+                                        value: String(reward.requiredPoints),
+                                      },
+                                      {
+                                        key: 'discount',
+                                        term: _('loyalty_backend.field.discount'),
+                                        value: String(reward.discountAmount),
+                                      },
+                                    ]}
+                                  />
+                                }
+                                actions={
                                   <RecordForm
                                     action={action}
                                     hidden={{
@@ -770,9 +773,10 @@ export const orderLoyaltyScreen = (
                                     submit={_('loyalty_backend.action.applyReward')}
                                     submitVariant="primary"
                                   />
-                                ),
-                              }),
-                          }),
+                                }
+                              />
+                            )}
+                          />,
                         ]
                       : [empty(_)]),
                     <RecordForm
@@ -804,8 +808,8 @@ export const portalScreen = (_: Translator, frame: Frame, summary: AnyRow): Temp
       body={stack([
         ...(membership
           ? [
-              cardGrid({
-                items: [
+              <CardGrid
+                items={[
                   {
                     id: 'tier',
                     title: _('loyalty_backend.field.tier'),
@@ -821,11 +825,12 @@ export const portalScreen = (_: Translator, frame: Frame, summary: AnyRow): Temp
                     title: _('loyalty_backend.field.rollingSpend'),
                     value: String(membership.rollingSpend),
                   },
-                ],
-                id: (item) => item.id,
-                card: (item) =>
-                  contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-              }),
+                ]}
+                id={(item) => item.id}
+                card={(item) => (
+                  <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
+                )}
+              />,
             ]
           : []),
         <Section

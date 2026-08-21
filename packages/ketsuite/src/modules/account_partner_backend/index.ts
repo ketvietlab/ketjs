@@ -11,7 +11,7 @@ export default defineModule({
   category: 'Kế toán',
   routes,
   fills: {
-    'partner_backend:record.actions': `<a data-ui="action" data-variant="secondary" href="/admin/partners/{{ partnerId }}/accounting{{ locale }}"><span data-ui="action-label">{{ 'account_partner_backend.action.open' | _ }}</span></a>`,
+    'partner_backend:record.actions': `<a data-ui="action" data-variant="secondary" href="/admin/partner/partners/{{ partnerId }}/accounting{{ locale }}"><span data-ui="action-label">{{ 'account_partner_backend.action.open' | _ }}</span></a>`,
   },
   messages: {
     vi: {

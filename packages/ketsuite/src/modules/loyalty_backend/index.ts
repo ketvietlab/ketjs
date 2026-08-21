@@ -1,11 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import {
   DISCOUNT_APPLICABILITY,
   DISCOUNT_MODES,
@@ -28,47 +25,12 @@ import {
   walletDetailScreen,
   walletsScreen,
 } from './screens.tsx'
+import { adminPage, choices, inLocale, localeQuery, optional } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
 type Translator = ReturnType<ServeContext['translate']>
 
-const localeSuffix = (url: URL) =>
-  url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : ''
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req, activePath = url.pathname): Promise<Frame> => {
-  const menuUrl = new URL(url)
-  menuUrl.pathname = activePath
-  return {
-    navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-    viewer: await viewerOf(ctx, url, req),
-    menu: await ctx.menu(menuUrl, req),
-    extras: {
-      'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: activePath }),
-      'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    },
-  }
-}
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-  activePath?: string,
-) => {
-  const lang = ctx.localeOf(url, req)
-  const _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(title),
-    body: await body(_, await frameFor(ctx, url, req, activePath)),
-  })
-}
-
 const bool = (value: string | undefined) => value === '1' || value === 'true' || value === 'on'
-const optional = (form: Record<string, string>, key: string) => (form[key] ? { [key]: form[key] } : {})
 const resultErrors = (result: unknown, _: Translator): string[] =>
   (
     (
@@ -82,11 +44,6 @@ const resultErrors = (result: unknown, _: Translator): string[] =>
 
 const options = (_: Translator, values: readonly string[], group: string) =>
   values.map((value) => ({ value, label: _(`loyalty_backend.${group}.${value}`) }))
-
-const choices = (rows: AnyRow[], empty = false) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((row) => ({ value: String(row.id), label: String(row.name ?? row.code ?? row.id) })),
-]
 
 const dataFor = async (ctx: ServeContext, url: URL, req: Req) => {
   const [programs, partners, templates] = await Promise.all([
@@ -311,14 +268,16 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         ctx.call('loyalty.membership.list', { limit: 1000 }, url, req) as Promise<AnyRow[]>,
         ctx.call('loyalty.ledger.list', { limit: 1000 }, url, req) as Promise<AnyRow[]>,
       ])
-      return document(ctx, url, req, 'loyalty_backend.dashboard.title', (_, frame) =>
-        dashboardScreen(_, frame, {
-          programs: programs.length,
-          wallets: wallets.length,
-          members: memberships.length,
-          ledger: ledger.length,
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.dashboard.title',
+        body: (_, frame) =>
+          dashboardScreen(_, frame, {
+            programs: programs.length,
+            wallets: wallets.length,
+            members: memberships.length,
+            ledger: ledger.length,
+          }),
+      })
     },
 
   '/admin/loyalty/programs':
@@ -333,18 +292,20 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           req,
         )
         if ((result as AnyRow).ok)
-          return seeOther(`/admin/loyalty/programs/${String((result as AnyRow).id)}${localeSuffix(url)}`)
+          return seeOther(inLocale(url, `/admin/loyalty/programs/${String((result as AnyRow).id)}`))
         const _ = ctx.translate(ctx.localeOf(url, req))
         const rows = (await ctx.call('loyalty.program.list', { includeArchived: true }, url, req)) as AnyRow[]
-        return document(ctx, url, req, 'loyalty_backend.programs.title', (_, frame) =>
-          programsScreen(_, frame, rows, createProgramFields(_), resultErrors(result, _)),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'loyalty_backend.programs.title',
+          body: (_, frame) => programsScreen(_, frame, rows, createProgramFields(_), resultErrors(result, _)),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('loyalty.program.list', { includeArchived: true }, url, req)) as AnyRow[]
-      return document(ctx, url, req, 'loyalty_backend.programs.title', (_, frame) =>
-        programsScreen(_, frame, rows, createProgramFields(_)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.programs.title',
+        body: (_, frame) => programsScreen(_, frame, rows, createProgramFields(_)),
+      })
     },
 
   '/admin/loyalty/programs/{id}':
@@ -404,7 +365,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             req,
           )
         else return text('unknown action', { status: 400 })
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [program, data] = await Promise.all([
@@ -413,14 +374,16 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       ])
       if (!program)
         return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
-      return document(ctx, url, req, 'loyalty_backend.program.detail', (_, frame) =>
-        programDetailScreen(_, frame, program, {
-          programFields: programFields(_, program),
-          ruleFields: ruleFields(_, data.products),
-          rewardFields: rewardFields(_, data.products),
-          errors,
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.program.detail',
+        body: (_, frame) =>
+          programDetailScreen(_, frame, program, {
+            programFields: programFields(_, program),
+            ruleFields: ruleFields(_, data.products),
+            rewardFields: rewardFields(_, data.products),
+            errors,
+          }),
+      })
     },
 
   '/admin/loyalty/wallets':
@@ -444,42 +407,44 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           url,
           req,
         )
-        if ((result as AnyRow).ok) return seeOther(`/admin/loyalty/wallets/${id}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, `/admin/loyalty/wallets/${id}`))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const wallets = (await ctx.call('loyalty.wallet.list', { includeArchived: true }, url, req)) as AnyRow[]
       const names = new Map(data.partners.map((partner) => [String(partner.id), String(partner.name)]))
-      return document(ctx, url, req, 'loyalty_backend.wallets.title', (_, frame) =>
-        walletsScreen(
-          _,
-          frame,
-          wallets.map((wallet) => ({ ...wallet, partnerName: names.get(String(wallet.partnerId)) })),
-          [
-            {
-              name: 'programId',
-              label: _('loyalty_backend.field.program'),
-              type: 'select',
-              options: choices(data.programs.filter((program) => program.active)),
-              required: true,
-            },
-            {
-              name: 'partnerId',
-              label: _('loyalty_backend.field.partner'),
-              type: 'select',
-              options: choices(data.partners, true),
-            },
-            { name: 'code', label: _('loyalty_backend.field.code') },
-            {
-              name: 'initialBalance',
-              label: _('loyalty_backend.field.initialBalance'),
-              type: 'decimal',
-              value: 0,
-            },
-            { name: 'expiresAt', label: _('loyalty_backend.field.expiresAt'), type: 'datetime-local' },
-          ],
-          errors,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.wallets.title',
+        body: (_, frame) =>
+          walletsScreen(
+            _,
+            frame,
+            wallets.map((wallet) => ({ ...wallet, partnerName: names.get(String(wallet.partnerId)) })),
+            [
+              {
+                name: 'programId',
+                label: _('loyalty_backend.field.program'),
+                type: 'select',
+                options: choices(data.programs.filter((program) => program.active)),
+                required: true,
+              },
+              {
+                name: 'partnerId',
+                label: _('loyalty_backend.field.partner'),
+                type: 'select',
+                options: choices(data.partners, true),
+              },
+              { name: 'code', label: _('loyalty_backend.field.code') },
+              {
+                name: 'initialBalance',
+                label: _('loyalty_backend.field.initialBalance'),
+                type: 'decimal',
+                value: 0,
+              },
+              { name: 'expiresAt', label: _('loyalty_backend.field.expiresAt'), type: 'datetime-local' },
+            ],
+            errors,
+          ),
+      })
     },
 
   '/admin/loyalty/wallets/{id}':
@@ -499,30 +464,32 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
           url,
           req,
         )
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const wallet = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
       if (!wallet)
         return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
-      return document(ctx, url, req, 'loyalty_backend.wallets.title', (_, frame) =>
-        walletDetailScreen(
-          _,
-          frame,
-          wallet,
-          [
-            { name: 'amount', label: _('loyalty_backend.field.amount'), type: 'decimal', required: true },
-            {
-              name: 'sourceId',
-              label: _('loyalty_backend.field.sourceId'),
-              value: randomUUID(),
-              required: true,
-            },
-            { name: 'note', label: _('loyalty_backend.field.note'), type: 'textarea', span: 'full' },
-          ],
-          errors,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.wallets.title',
+        body: (_, frame) =>
+          walletDetailScreen(
+            _,
+            frame,
+            wallet,
+            [
+              { name: 'amount', label: _('loyalty_backend.field.amount'), type: 'decimal', required: true },
+              {
+                name: 'sourceId',
+                label: _('loyalty_backend.field.sourceId'),
+                value: randomUUID(),
+                required: true,
+              },
+              { name: 'note', label: _('loyalty_backend.field.note'), type: 'textarea', span: 'full' },
+            ],
+            errors,
+          ),
+      })
     },
 
   '/admin/loyalty/ledger':
@@ -534,13 +501,15 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         ctx.call('loyalty.wallet.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
       ])
       const codes = new Map(wallets.map((wallet) => [String(wallet.id), String(wallet.code)]))
-      return document(ctx, url, req, 'loyalty_backend.ledger.title', (_, frame) =>
-        ledgerScreen(
-          _,
-          frame,
-          rows.map((row) => ({ ...row, walletCode: codes.get(String(row.walletId)) })),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.ledger.title',
+        body: (_, frame) =>
+          ledgerScreen(
+            _,
+            frame,
+            rows.map((row) => ({ ...row, walletCode: codes.get(String(row.walletId)) })),
+          ),
+      })
     },
 
   '/admin/loyalty/memberships':
@@ -583,7 +552,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 url,
                 req,
               )
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [tiers, memberships, config] = await Promise.all([
@@ -592,81 +561,83 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         ctx.call('loyalty.membership.config.get', {}, url, req) as Promise<AnyRow | null>,
       ])
       const names = new Map(data.partners.map((partner) => [String(partner.id), String(partner.name)]))
-      return document(ctx, url, req, 'loyalty_backend.memberships.title', (_, frame) =>
-        membershipsScreen(
-          _,
-          frame,
-          memberships.map((membership) => ({
-            ...membership,
-            partnerName: names.get(String(membership.partnerId)),
-          })),
-          tiers,
-          [
-            { name: 'name', label: _('loyalty_backend.field.name'), required: true },
-            { name: 'code', label: _('loyalty_backend.field.code'), required: true },
-            { name: 'sequence', label: _('loyalty_backend.field.sequence'), type: 'number', value: 10 },
-            {
-              name: 'minimumSpend',
-              label: _('loyalty_backend.field.minimumSpend'),
-              type: 'decimal',
-              value: 0,
-              required: true,
-            },
-            {
-              name: 'redeemPercent',
-              label: _('loyalty_backend.field.redeemPercent'),
-              type: 'decimal',
-              value: 100,
-              required: true,
-            },
-          ],
-          [
-            {
-              name: 'programId',
-              label: _('loyalty_backend.field.program'),
-              type: 'select',
-              value: String(config?.programId ?? loyaltyPrograms[0]?.id ?? ''),
-              options: choices(loyaltyPrograms),
-              required: true,
-            },
-            {
-              name: 'windowMonths',
-              label: _('loyalty_backend.field.windowMonths'),
-              type: 'number',
-              value: Number(config?.windowMonths ?? 12),
-              required: true,
-            },
-            {
-              name: 'pointValue',
-              label: _('loyalty_backend.field.pointValue'),
-              type: 'decimal',
-              value: String(config?.pointValue ?? 1),
-              required: true,
-            },
-            {
-              name: 'minimumRedeemStep',
-              label: _('loyalty_backend.field.minimumRedeemStep'),
-              type: 'decimal',
-              value: String(config?.minimumRedeemStep ?? 1),
-              required: true,
-            },
-            {
-              name: 'fallbackCurrencyPerPoint',
-              label: _('loyalty_backend.field.fallbackCurrencyPerPoint'),
-              type: 'decimal',
-              value: String(config?.fallbackCurrencyPerPoint ?? 1),
-              required: true,
-            },
-            {
-              name: 'fallbackEnabled',
-              label: _('loyalty_backend.field.fallbackEnabled'),
-              type: 'checkbox',
-              value: config ? Boolean(config.fallbackEnabled) : true,
-            },
-          ],
-          errors,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.memberships.title',
+        body: (_, frame) =>
+          membershipsScreen(
+            _,
+            frame,
+            memberships.map((membership) => ({
+              ...membership,
+              partnerName: names.get(String(membership.partnerId)),
+            })),
+            tiers,
+            [
+              { name: 'name', label: _('loyalty_backend.field.name'), required: true },
+              { name: 'code', label: _('loyalty_backend.field.code'), required: true },
+              { name: 'sequence', label: _('loyalty_backend.field.sequence'), type: 'number', value: 10 },
+              {
+                name: 'minimumSpend',
+                label: _('loyalty_backend.field.minimumSpend'),
+                type: 'decimal',
+                value: 0,
+                required: true,
+              },
+              {
+                name: 'redeemPercent',
+                label: _('loyalty_backend.field.redeemPercent'),
+                type: 'decimal',
+                value: 100,
+                required: true,
+              },
+            ],
+            [
+              {
+                name: 'programId',
+                label: _('loyalty_backend.field.program'),
+                type: 'select',
+                value: String(config?.programId ?? loyaltyPrograms[0]?.id ?? ''),
+                options: choices(loyaltyPrograms),
+                required: true,
+              },
+              {
+                name: 'windowMonths',
+                label: _('loyalty_backend.field.windowMonths'),
+                type: 'number',
+                value: Number(config?.windowMonths ?? 12),
+                required: true,
+              },
+              {
+                name: 'pointValue',
+                label: _('loyalty_backend.field.pointValue'),
+                type: 'decimal',
+                value: String(config?.pointValue ?? 1),
+                required: true,
+              },
+              {
+                name: 'minimumRedeemStep',
+                label: _('loyalty_backend.field.minimumRedeemStep'),
+                type: 'decimal',
+                value: String(config?.minimumRedeemStep ?? 1),
+                required: true,
+              },
+              {
+                name: 'fallbackCurrencyPerPoint',
+                label: _('loyalty_backend.field.fallbackCurrencyPerPoint'),
+                type: 'decimal',
+                value: String(config?.fallbackCurrencyPerPoint ?? 1),
+                required: true,
+              },
+              {
+                name: 'fallbackEnabled',
+                label: _('loyalty_backend.field.fallbackEnabled'),
+                type: 'checkbox',
+                value: config ? Boolean(config.fallbackEnabled) : true,
+              },
+            ],
+            errors,
+          ),
+      })
     },
 
   '/admin/loyalty/orders/{channel}/{id}':
@@ -700,7 +671,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             req,
           )
         else return text('unknown action', { status: 400 })
-        if ((result as AnyRow).ok) return seeOther(`${url.pathname}${localeSuffix(url)}`)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [evaluated, order] = await Promise.all([
@@ -715,19 +686,21 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       if (!order)
         return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
       const orderName = String(order.name ?? order.posReference ?? order.id)
-      return document(ctx, url, req, 'loyalty_backend.order.title', (_, frame) =>
-        orderLoyaltyScreen(_, frame, {
-          channel: params.channel as 'sale' | 'pos',
-          orderId: params.id,
-          orderName,
-          backHref:
-            params.channel === 'sale'
-              ? `/admin/sales/${['draft', 'sent'].includes(String(order.state)) ? 'quotations' : 'orders'}/${params.id}${localeSuffix(url)}`
-              : `/admin/pos/orders/${params.id}${localeSuffix(url)}`,
-          result: evaluated,
-          errors,
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.order.title',
+        body: (_, frame) =>
+          orderLoyaltyScreen(_, frame, {
+            channel: params.channel as 'sale' | 'pos',
+            orderId: params.id,
+            orderName,
+            backHref:
+              params.channel === 'sale'
+                ? `/admin/sales/${['draft', 'sent'].includes(String(order.state)) ? 'quotations' : 'orders'}/${params.id}${localeQuery(url)}`
+                : `/admin/pos/orders/${params.id}${localeQuery(url)}`,
+            result: evaluated,
+            errors,
+          }),
+      })
     },
 
   '/my/loyalty':
@@ -747,14 +720,11 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         req,
       )) as AnyRow
       if (summary.ok !== true) return text(resultErrors(summary, _).join('\n'), { status: 400 })
-      return document(
-        ctx,
-        url,
-        req,
-        'loyalty_backend.portal.title',
-        (_, frame) => portalScreen(_, frame, summary),
-        '/admin/loyalty',
-      )
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.portal.title',
+        active: '/admin/loyalty',
+        body: (_, frame) => portalScreen(_, frame, summary),
+      })
     },
 }
 

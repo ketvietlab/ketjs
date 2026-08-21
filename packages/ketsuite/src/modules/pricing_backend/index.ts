@@ -1,37 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
-import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import type { Route } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import { pricelistDetailScreen, pricelistsScreen } from './screens.tsx'
-import { backendPage } from '../../ui/index.ts'
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
-
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', {
-            lang: ctx.localeOf(url, req),
-          }),
-  },
-})
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 
 export default defineModule({
   name: 'pricing_backend',
@@ -43,16 +15,17 @@ export default defineModule({
   summary: 'Danh sách bảng giá theo company.',
   category: 'Hệ thống',
   menus: {
-    pricing: { label: 'menu.app', icon: 'tag', sequence: 25 },
+    pricing: { label: 'menu.app', icon: 'tag', sequence: 21 },
     'pricing.lists': {
       parent: 'pricing',
       label: 'menu.lists',
-      path: '/admin/pricelists',
+      path: '/admin/pricing/pricelists',
       needs: 'pricing.listPricelists',
+      sequence: 10,
     },
   },
   routes: {
-    '/admin/pricelists':
+    '/admin/pricing/pricelists':
       (ctx): Route =>
       async (url, req) => {
         const lang = ctx.localeOf(url, req)
@@ -66,8 +39,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther(inLocale(url, '/admin/pricelists'))
-            : seeOther(inLocale(url, '/admin/pricelists?invalid=1'))
+            ? seeOther(inLocale(url, '/admin/pricing/pricelists'))
+            : seeOther(inLocale(url, '/admin/pricing/pricelists?invalid=1'))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (
@@ -79,13 +52,12 @@ export default defineModule({
           state: row.active ? 'active' : 'archived',
           sequence: String(row.sequence),
         }))
-        return backendPage(ctx, req, {
-          lang,
-          title: _('pricing_backend.title'),
-          body: pricelistsScreen(_, rows, { ...(await frame(ctx, url, req)) }, localeSuffix(url)),
+        return adminPage(ctx, url, req, {
+          title: 'pricing_backend.title',
+          body: (_, frame) => pricelistsScreen(_, rows, { ...frame }, localeQuery(url)),
         })
       },
-    '/admin/pricelists/{id}':
+    '/admin/pricing/pricelists/{id}':
       (ctx): Route =>
       async (url, req, params) => {
         const lang = ctx.localeOf(url, req)
@@ -110,8 +82,8 @@ export default defineModule({
               req,
             )
             return (result as { ok?: boolean }).ok
-              ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
-              : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
+              ? seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}`))
+              : seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}?invalid=1`))
           }
           const optional = (name: string) => (form[name] ? { [name]: form[name] } : {})
           const result = await ctx.call(
@@ -141,8 +113,8 @@ export default defineModule({
             req,
           )
           return (result as { ok?: boolean }).ok
-            ? seeOther(inLocale(url, `/admin/pricelists/${params.id}`))
-            : seeOther(inLocale(url, `/admin/pricelists/${params.id}?invalid=1`))
+            ? seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}`))
+            : seeOther(inLocale(url, `/admin/pricing/pricelists/${params.id}?invalid=1`))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const items = (await ctx.call(
@@ -151,10 +123,10 @@ export default defineModule({
           url,
           req,
         )) as Array<Record<string, unknown>>
-        return backendPage(ctx, req, {
-          lang,
+        return adminPage(ctx, url, req, {
           title: String(row.name),
-          body: pricelistDetailScreen(_, row, items, await frame(ctx, url, req), localeSuffix(url)),
+          translate: false,
+          body: (_, frame) => pricelistDetailScreen(_, row, items, frame, localeQuery(url)),
         })
       },
   },
