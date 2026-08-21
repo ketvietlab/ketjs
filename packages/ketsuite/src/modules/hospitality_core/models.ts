@@ -416,6 +416,8 @@ export const models: Record<string, ModelDef> = {
       amountTotal: 'decimal',
       state: 'text',
       cancelReason: 'text?',
+      noShowAt: 'datetime?',
+      noShowReason: 'text?',
       createdAt: 'datetime',
       updatedAt: 'datetime',
     },
@@ -457,6 +459,7 @@ export const models: Record<string, ModelDef> = {
       state: 'text',
       checkedInAt: 'datetime?',
       checkedOutAt: 'datetime?',
+      noShowAt: 'datetime?',
     },
     indexes: {
       code_company: { fields: ['companyId', 'code'], unique: true },

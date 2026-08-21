@@ -428,6 +428,8 @@ export type ReservationDetail = ReservationRow & {
   rate: string | number
   quantity: string | number
   cancelReason?: string | null
+  noShowAt?: string | null
+  noShowReason?: string | null
   createdAt: string
   updatedAt: string
   folio?: { code?: string; state?: string } | null
@@ -652,7 +654,7 @@ const statusTone = (status: string): 'positive' | 'warning' | 'danger' | 'info' 
 const workflowTone = (status: string): 'positive' | 'warning' | 'danger' | 'info' | 'neutral' => {
   if (status === 'confirmed' || status === 'checked_in' || status === 'open') return 'positive'
   if (status === 'draft') return 'warning'
-  if (status === 'cancelled') return 'danger'
+  if (status === 'cancelled' || status === 'no_show') return 'danger'
   if (status === 'checked_out' || status === 'closed') return 'neutral'
   return 'info'
 }
@@ -5345,6 +5347,12 @@ const reservationDetailFeedback = (
       message: _('hospitality_core.reservation.feedback.amendedHint'),
       tone: 'positive',
     })
+  if (status === 'no-show')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.noShow'),
+      message: _('hospitality_core.reservation.feedback.noShowHint'),
+      tone: 'warning',
+    })
   if (errors.length)
     return notice({
       title: _('hospitality_core.feedback.invalid'),
@@ -5495,6 +5503,29 @@ export const reservationDetailScreen = (
   }
 
   if (reservation.state === 'draft' || reservation.state === 'confirmed') {
+    if (reservation.state === 'confirmed')
+      actions.push(
+        section({
+          title: _('hospitality_core.reservation.action.noShow'),
+          description: _('hospitality_core.reservation.action.noShowHint'),
+          body: recordForm({
+            action,
+            method: 'post',
+            submit: _('hospitality_core.reservation.action.noShow'),
+            submitVariant: 'destructive',
+            hidden: { operation: 'no-show', lang: locale },
+            fields: [
+              {
+                name: 'reason',
+                label: _('hospitality_core.reservation.field.noShowReason'),
+                type: 'textarea',
+                help: _('hospitality_core.reservation.field.noShowReasonHint'),
+                required: true,
+              },
+            ],
+          }),
+        }),
+      )
     actions.push(
       section({
         title: _('hospitality_core.reservation.action.cancel'),

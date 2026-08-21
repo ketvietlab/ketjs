@@ -689,6 +689,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.amended': 'Đã cập nhật đặt phòng',
     'reservation.feedback.amendedHint':
       'Lịch ở, tồn phòng, khách chính và tiền phòng đã được cập nhật trong cùng giao dịch.',
+    'reservation.feedback.noShow': 'Đã ghi nhận khách không đến',
+    'reservation.feedback.noShowHint':
+      'Tồn phòng đã được hoàn, hồ sơ lưu trú đã đóng và các khoản phí hiện có được giữ lại để đối soát.',
     'reservation.field.property': 'Cơ sở lưu trú',
     'reservation.field.code': 'Mã đặt phòng',
     'reservation.field.codeHint': 'Có thể sửa theo quy ước của lễ tân.',
@@ -704,6 +707,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.field.folio': 'Hồ sơ dịch vụ',
     'reservation.field.cancelReason': 'Lý do hủy',
     'reservation.field.cancelReasonHint': 'Lưu lý do để lễ tân và bộ phận kinh doanh cùng theo dõi.',
+    'reservation.field.noShowReason': 'Ghi chú khách không đến',
+    'reservation.field.noShowReasonHint':
+      'Bắt buộc ghi nhận căn cứ để ca sau và bộ phận kinh doanh có thể đối soát.',
     'reservation.value.selectGuest': 'Chọn khách',
     'reservation.value.unassigned': 'Chưa xếp phòng',
     'reservation.action.quote': 'Kiểm tra giá và phòng',
@@ -719,6 +725,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.amend': 'Cập nhật đặt phòng',
     'reservation.action.amendHint':
       'Điều chỉnh đặt phòng trực tiếp trước khi nhận phòng; hệ thống sẽ kiểm tra lại hạn chế và tồn phòng.',
+    'reservation.action.noShow': 'Đánh dấu khách không đến',
+    'reservation.action.noShowHint':
+      'Chỉ thực hiện từ giờ nhận phòng; thao tác sẽ hoàn tồn phòng nhưng giữ nguyên phí để đối soát.',
     'reservation.detail.title': 'Đặt phòng {code}',
     'reservation.detail.kicker': 'Hồ sơ đặt phòng',
     'reservation.detail.stay': 'Thông tin lưu trú',
@@ -889,10 +898,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservationState.checked_in': 'Đã nhận phòng',
     'reservationState.checked_out': 'Đã trả phòng',
     'reservationState.cancelled': 'Đã hủy',
+    'reservationState.no_show': 'Khách không đến',
     'stayState.draft': 'Chờ nhận phòng',
     'stayState.checked_in': 'Đang lưu trú',
     'stayState.checked_out': 'Đã trả phòng',
     'stayState.cancelled': 'Đã hủy',
+    'stayState.no_show': 'Khách không đến',
     'folioState.draft': 'Nháp',
     'folioState.open': 'Đang mở',
     'folioState.closed': 'Đã đóng',
@@ -988,6 +999,10 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.reservation_missing': 'Không tìm thấy đặt phòng.',
     'validation.reservation_cannot_cancel': 'Không thể hủy đặt phòng ở trạng thái hiện tại.',
     'validation.reservation_cannot_amend': 'Chỉ có thể sửa đặt phòng đã xác nhận trước khi khách nhận phòng.',
+    'validation.reservation_cannot_no_show':
+      'Chỉ có thể đánh dấu khách không đến cho đặt phòng đã xác nhận và chưa nhận phòng.',
+    'validation.reservation_no_show_too_early':
+      'Chưa đến giờ nhận phòng nên chưa thể ghi nhận khách không đến.',
     'validation.reservation_external_readonly':
       'Đặt phòng từ OTA được cập nhật theo dữ liệu của kênh; không thể sửa nội dung thương mại tại quầy.',
     'validation.stay_missing': 'Không tìm thấy hồ sơ lưu trú.',
@@ -1050,7 +1065,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.rate_plan_max_stay': 'Kế hoạch giá cho phép tối đa {count} kỳ; đặt phòng có {actual} kỳ.',
     'validation.property_charge_type': 'Loại phụ phí không hợp lệ.',
     'validation.extra_line_target': 'Chọn đúng một đặt phòng hoặc một lượt lưu trú.',
-    'validation.extra_line_target_cancelled': 'Đặt phòng hoặc lượt lưu trú đã bị hủy.',
+    'validation.extra_line_target_cancelled': 'Đặt phòng hoặc lượt lưu trú đã kết thúc trước khi khách đến.',
     'validation.product_missing': 'Không tìm thấy sản phẩm dịch vụ.',
     'validation.product_template_missing': 'Không tìm thấy thông tin sản phẩm dịch vụ.',
     'validation.product_not_saleable': 'Sản phẩm này không còn được phép bán.',
@@ -1752,6 +1767,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.amended': 'Reservation updated',
     'reservation.feedback.amendedHint':
       'The stay schedule, inventory, lead guest, and room charge were updated in one transaction.',
+    'reservation.feedback.noShow': 'Guest marked as no-show',
+    'reservation.feedback.noShowHint':
+      'Inventory was released, the stay was closed, and existing charges were retained for reconciliation.',
     'reservation.field.property': 'Property',
     'reservation.field.code': 'Reservation code',
     'reservation.field.codeHint': 'You can change this to match the front desk convention.',
@@ -1767,6 +1785,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.field.folio': 'Folio',
     'reservation.field.cancelReason': 'Cancellation reason',
     'reservation.field.cancelReasonHint': 'Keep a reason for front desk and sales follow-up.',
+    'reservation.field.noShowReason': 'No-show note',
+    'reservation.field.noShowReasonHint':
+      'Record the evidence so the next shift and sales team can reconcile the case.',
     'reservation.value.selectGuest': 'Select a guest',
     'reservation.value.unassigned': 'Not assigned',
     'reservation.action.quote': 'Check rate and rooms',
@@ -1783,6 +1804,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.amend': 'Update reservation',
     'reservation.action.amendHint':
       'Change a direct reservation before check-in; restrictions and availability are checked again.',
+    'reservation.action.noShow': 'Mark guest as no-show',
+    'reservation.action.noShowHint':
+      'Available from check-in time; inventory is released while current charges remain for reconciliation.',
     'reservation.detail.title': 'Reservation {code}',
     'reservation.detail.kicker': 'Reservation record',
     'reservation.detail.stay': 'Stay information',
@@ -1956,10 +1980,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservationState.checked_in': 'Checked in',
     'reservationState.checked_out': 'Checked out',
     'reservationState.cancelled': 'Cancelled',
+    'reservationState.no_show': 'No-show',
     'stayState.draft': 'Expected',
     'stayState.checked_in': 'In house',
     'stayState.checked_out': 'Checked out',
     'stayState.cancelled': 'Cancelled',
+    'stayState.no_show': 'No-show',
     'folioState.draft': 'Draft',
     'folioState.open': 'Open',
     'folioState.closed': 'Closed',
@@ -2056,6 +2082,10 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.reservation_cannot_cancel': 'The reservation cannot be cancelled in its current state.',
     'validation.reservation_cannot_amend':
       'Only a confirmed reservation can be changed before the guest checks in.',
+    'validation.reservation_cannot_no_show':
+      'Only a confirmed reservation that has not checked in can be marked as a no-show.',
+    'validation.reservation_no_show_too_early':
+      'The reservation cannot be marked as a no-show before its check-in time.',
     'validation.reservation_external_readonly':
       'OTA reservations follow channel revisions and cannot have commercial details edited at the front desk.',
     'validation.stay_missing': 'Stay was not found.',
@@ -2121,7 +2151,7 @@ export const messages: Record<string, Record<string, Message>> = {
       'The rate plan allows at most {count} periods; the booking has {actual}.',
     'validation.property_charge_type': 'Property fee type is invalid.',
     'validation.extra_line_target': 'Select exactly one reservation or stay.',
-    'validation.extra_line_target_cancelled': 'The reservation or stay has been cancelled.',
+    'validation.extra_line_target_cancelled': 'The reservation or stay ended before the guest arrived.',
     'validation.product_missing': 'Service product was not found.',
     'validation.product_template_missing': 'Service product details were not found.',
     'validation.product_not_saleable': 'This product is no longer saleable.',

@@ -706,6 +706,36 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(cancelledHtml, /Đã hủy đặt phòng/)
   assert.match(cancelledHtml, /Khách đổi lịch/)
 
+  const noShowCreated = await e2e.client.call<Row>('hospitality_core.createReservation', {
+    id: 'no-show-web',
+    code: 'WEB-NOSHOW',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    partnerId: 'guest',
+    bookingType: 'nightly',
+    checkIn: '2026-08-20T14:00:00.000Z',
+    checkOut: '2026-08-21T12:00:00.000Z',
+    rate: '100',
+  })
+  assert.equal(noShowCreated.value.ok, true)
+  const noShowDetailEn = await e2e.client.get('/admin/hospitality/reservations/no-show-web?lang=en')
+  const noShowDetailEnHtml = await noShowDetailEn.text()
+  assert.match(noShowDetailEnHtml, /Mark guest as no-show/)
+  assert.match(noShowDetailEnHtml, /No-show note/)
+  assert.doesNotMatch(noShowDetailEnHtml, /hospitality_core\./)
+  const noShowMarked = await e2e.client.post(
+    '/admin/hospitality/reservations/no-show-web?lang=vi',
+    new URLSearchParams({ operation: 'no-show', lang: 'vi', reason: 'Không liên lạc được với khách' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(noShowMarked.status, 303, await noShowMarked.clone().text())
+  assert.match(noShowMarked.headers.get('location') ?? '', /status=no-show/)
+  const noShowPage = await e2e.client.get(noShowMarked.headers.get('location')!)
+  const noShowHtml = await noShowPage.text()
+  assert.match(noShowHtml, /Đã ghi nhận khách không đến/)
+  assert.match(noShowHtml, /Khách không đến/)
+  assert.doesNotMatch(noShowHtml, /hospitality_core\./)
+
   const contentUpload = new FormData()
   contentUpload.set(
     'file',
