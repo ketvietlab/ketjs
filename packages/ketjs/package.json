@@ -38,6 +38,10 @@
       "types": "./dist/theme/index.d.ts",
       "default": "./dist/theme/index.js"
     },
+    "./pdf": {
+      "types": "./dist/pdf/index.d.ts",
+      "default": "./dist/pdf/index.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"

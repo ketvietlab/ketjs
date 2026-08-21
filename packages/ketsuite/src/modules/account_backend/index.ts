@@ -3,7 +3,7 @@ import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage, formatMoney } from '../../ui/index.ts'
+import { actionGroup, backendPage, formatMoney, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -305,6 +305,13 @@ const accountMoveRoute =
       resId: String(move.id),
       lang,
     })
+    const wanted =
+      move.moveType === 'out_invoice'
+        ? 'account.customerInvoice'
+        : move.moveType === 'in_invoice'
+          ? 'account.vendorBill'
+          : null
+    const printable = (await ctx.reportsOf(url, req, 'account.Move')).filter((report) => report.id === wanted)
     return document(
       ctx,
       url,
@@ -319,6 +326,17 @@ const accountMoveRoute =
           choices(accounts),
           `${url.pathname}${localeSuffix(url)}`,
           collaboration,
+          printable.length
+            ? actionGroup({
+                label: 'Print',
+                actions: printable.map((report) =>
+                  linkButton({
+                    label: tr(report.title),
+                    href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(move.id))}${url.search}`,
+                  }),
+                ),
+              })
+            : undefined,
         ),
       false,
     )

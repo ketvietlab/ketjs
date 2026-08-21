@@ -3,7 +3,7 @@ import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
@@ -263,6 +263,14 @@ const detailHandler =
       },
       { name: 'invoiceDate', label: _('purchase_backend.field.invoiceDate'), type: 'date' },
     ]
+    const reportId = ['draft', 'sent', 'to approve'].includes(String(order.state))
+      ? 'purchase.rfq'
+      : ['purchase', 'done'].includes(String(order.state))
+        ? 'purchase.purchaseOrder'
+        : null
+    const printable = (await ctx.reportsOf(url, req, 'purchase.Order')).filter(
+      (report) => report.id === reportId,
+    )
     return document(ctx, url, req, 'purchase_backend.detail.title', (_, shell) =>
       orderDetail(_, {
         frame: shell,
@@ -270,6 +278,17 @@ const detailHandler =
         actionPath: path,
         lineFields,
         billFields,
+        printActions: printable.length
+          ? actionGroup({
+              label: 'Print',
+              actions: printable.map((report) =>
+                linkButton({
+                  label: _(report.title),
+                  href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
+                }),
+              ),
+            })
+          : undefined,
       }),
     )
   }

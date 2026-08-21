@@ -121,6 +121,12 @@ export type ServeContext = {
    * because each filter depends on the one before.
    */
   menu: (url: URL, req: IncomingMessage) => Promise<MenuNode[]>
+  /** Printable reports for a model whose read-only source this viewer may call. */
+  reportsOf: (
+    url: URL,
+    req: IncomingMessage,
+    target: string,
+  ) => Promise<import('../types.ts').ComposedReport[]>
   /**
    * This request's sessions. A function because with subdomain tenants they live
    * in that tenant's database — one per tenant, not one per deployment.
@@ -499,6 +505,17 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       const q = url.searchParams.get('menu')?.trim() || undefined
       return tenants.ofRequest(url, req, async (t) =>
         buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }),
+      )
+    },
+    reportsOf: async (url, req, target) => {
+      const allow = await allowFor(url, req)
+      return tenants.ofRequest(url, req, async (t) =>
+        Object.values(t.live.reports).filter(
+          (report) =>
+            t.live.routes['/reports/{report}/{id}'] !== undefined &&
+            report.target === target &&
+            (allow === null || allow.includes(report.source)),
+        ),
       )
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),

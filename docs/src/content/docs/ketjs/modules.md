@@ -49,6 +49,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 | Navigation and language | `menus`, `messages` |
 | Presentation contracts | `joints`, `fills`, `omits`, `sections`, `islands` |
 | Theme resources | `templates`, `tokens`, `requires`, `provides` |
+| Printable documents | `reports` |
 | Static resources | `assets`, `styles` |
 
 Unknown keys fail with `E_MODULE_UNKNOWN_KEY`. Module names must be snake_case and stable; renaming a
@@ -134,6 +135,7 @@ Composition topologically orders modules and produces one manifest:
 | `routes`, `menus` | Request dispatch and navigation | Duplicate paths/IDs and dependency ownership |
 | `islands`, `sections`, `styles` | Interactive and static presentation | Duplicate providers and asset boundaries |
 | `messages`, `tokens` | Translation and CSS variables | Deterministic merge and provenance |
+| `reports` | Printable documents discovered by target model and source permission | Target and read-only source exist; IDs are unique |
 
 Every contributed field records its source module in `by`. That provenance powers migration errors,
 upgrade diffs, generated types, and agent capability inspection.
@@ -188,6 +190,7 @@ inventory/
 ├── relations.ts
 ├── functions.ts
 ├── jobs.ts
+├── reports.ts
 ├── menus.ts
 ├── messages.ts
 ├── views.ts

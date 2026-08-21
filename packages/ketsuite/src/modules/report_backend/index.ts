@@ -1,0 +1,57 @@
+import { defineModule } from '@ketvietlab/ketjs'
+import { routes } from './routes.tsx'
+
+export default defineModule({
+  name: 'report_backend',
+  version: '0.1.0',
+  depends: ['report', 'backend'],
+  install: 'auto',
+  app: true,
+  title: 'Báo cáo trong quản trị',
+  summary: 'Quản lý KTL, preview, publish và rollback mẫu in.',
+  category: 'Hệ thống',
+  routes,
+  menus: {
+    'admin.reportTemplates': {
+      parent: 'admin.config',
+      label: 'menu.reportTemplates',
+      sequence: 50,
+      path: '/admin/reports',
+      needs: 'report.manageTemplates',
+    },
+  },
+  messages: {
+    vi: {
+      'app.title': 'Báo cáo trong quản trị',
+      'app.summary': 'Quản lý mẫu in và phiên bản.',
+      'app.category': 'Hệ thống',
+      'menu.reportTemplates': 'Mẫu in',
+      title: 'Mẫu in',
+      'action.manage': 'Quản lý mẫu',
+      'action.save': 'Lưu nháp',
+      'action.publish': 'Xuất bản',
+      'action.rollback': 'Khôi phục vào nháp',
+      'action.preview': 'Xem trước PDF',
+      'field.source': 'KTL của mẫu',
+      'field.previewRecord': 'ID chứng từ xem trước',
+      versions: 'Lịch sử xuất bản',
+      emptyVersions: 'Chưa có phiên bản tùy chỉnh.',
+    },
+    en: {
+      'app.title': 'Reports in admin',
+      'app.summary': 'Manage print templates and versions.',
+      'app.category': 'System',
+      'menu.reportTemplates': 'Print templates',
+      title: 'Print templates',
+      'action.manage': 'Manage template',
+      'action.save': 'Save draft',
+      'action.publish': 'Publish',
+      'action.rollback': 'Restore to draft',
+      'action.preview': 'Preview PDF',
+      'field.source': 'Template KTL',
+      'field.previewRecord': 'Preview record ID',
+      versions: 'Published history',
+      emptyVersions: 'No custom version yet.',
+    },
+  },
+})
