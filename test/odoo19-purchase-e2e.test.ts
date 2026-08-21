@@ -163,6 +163,28 @@ test('e2e purchase 19: RFQ to receipt and vendor bill crosses real HTTP', async 
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /purchase_backend\.[A-Za-z]/, path)
   }
+  const purchaseDashboard = await e2e.client.get('/admin/purchase?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const purchaseDashboardHtml = await purchaseDashboard.text()
+  assert.match(purchaseDashboardHtml, /Tạo yêu cầu báo giá/)
+  assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/rfqs\?lang=vi#rfq-create-form"/)
+  assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/orders\?lang=vi"/)
+
+  const rfqsPage = await e2e.client.get('/admin/purchase/rfqs?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const rfqsHtml = await rfqsPage.text()
+  assert.match(rfqsHtml, /id="rfq-create-form"/)
+  assert.match(rfqsHtml, /data-scope="purchase-rfq-create"/)
+  assert.match(rfqsHtml, /action="\/admin\/purchase\/rfqs\?lang=vi"/)
+
+  const englishDashboard = await e2e.client.get('/admin/purchase?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const englishDashboardHtml = await englishDashboard.text()
+  assert.match(englishDashboardHtml, /Create RFQ/)
+  assert.match(englishDashboardHtml, /href="\/admin\/purchase\/rfqs\?lang=en#rfq-create-form"/)
   const english = await e2e.client.get('/admin/purchase/orders/po-1?lang=en', {
     headers: { accept: 'text/html' },
   })
