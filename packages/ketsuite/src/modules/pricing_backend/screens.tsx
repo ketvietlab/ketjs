@@ -5,12 +5,12 @@ import {
   code,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   linkButton,
-  recordForm,
-  section,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, Frame } from '../../ui/index.ts'
 
@@ -50,26 +50,30 @@ export const pricelistsScreen = (
     { key: 'sequence', label: _('pricing_backend.col.sequence'), cell: (row) => row.sequence },
     { key: 'id', label: _('backend.table.id'), cell: (row) => code(row.id), optional: true },
   ]
-  return framed(
-    _,
-    _('pricing_backend.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: localized('/admin/pricelists', locale),
-          submit: _('pricing_backend.action.create'),
-          submitVariant: 'primary',
-          fields: [
-            { name: 'name', label: _('pricing_backend.col.name'), required: true },
-            { name: 'sequence', label: _('pricing_backend.col.sequence'), type: 'number', value: 16 },
-          ],
-        }),
-      }),
-      rows.length
-        ? dataTable(_, { columns, rows, id: (row) => row.id })
-        : emptyState(_('pricing_backend.empty'), _('pricing_backend.emptyHint')),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('pricing_backend.title')}
+      frame={frame}
+      body={stack([
+        <Surface
+          body={
+            <RecordForm
+              action={localized('/admin/pricelists', locale)}
+              submit={_('pricing_backend.action.create')}
+              submitVariant="primary"
+              fields={[
+                { name: 'name', label: _('pricing_backend.col.name'), required: true },
+                { name: 'sequence', label: _('pricing_backend.col.sequence'), type: 'number', value: 16 },
+              ]}
+            />
+          }
+        />,
+        rows.length
+          ? dataTable(_, { columns, rows, id: (row) => row.id })
+          : emptyState(_('pricing_backend.empty'), _('pricing_backend.emptyHint')),
+      ])}
+    />
   )
 }
 
@@ -79,47 +83,56 @@ export const pricelistDetailScreen = (
   items: Array<Record<string, unknown>>,
   frame: Frame,
   locale = '',
-): TemplateResult =>
-  framed(
-    _,
-    String(row.name),
-    frame,
-    stack([
-      section({
-        title: _('pricing_backend.detail.settings'),
-        body: surface({
-          body: recordForm({
-            action: localized(`/admin/pricelists/${String(row.id)}`, locale),
-            submit: _('pricing_backend.action.save'),
-            submitVariant: 'primary',
-            hidden: { action: 'save-pricelist' },
-            fields: [
-              { name: 'name', label: _('pricing_backend.col.name'), value: String(row.name), required: true },
-              {
-                name: 'sequence',
-                label: _('pricing_backend.col.sequence'),
-                type: 'number',
-                value: Number(row.sequence),
-              },
-              {
-                name: 'currency',
-                label: _('pricing_backend.col.currency'),
-                value: String(row.currency),
-                disabled: true,
-              },
-              {
-                name: 'active',
-                label: _('pricing_backend.col.active'),
-                type: 'checkbox',
-                value: row.active === true,
-              },
-            ],
-          }),
-        }),
-      }),
-      section({
-        title: _('pricing_backend.items.title'),
-        body:
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={String(row.name)}
+    frame={frame}
+    body={stack([
+      <Section
+        title={_('pricing_backend.detail.settings')}
+        body={
+          <Surface
+            body={
+              <RecordForm
+                action={localized(`/admin/pricelists/${String(row.id)}`, locale)}
+                submit={_('pricing_backend.action.save')}
+                submitVariant="primary"
+                hidden={{ action: 'save-pricelist' }}
+                fields={[
+                  {
+                    name: 'name',
+                    label: _('pricing_backend.col.name'),
+                    value: String(row.name),
+                    required: true,
+                  },
+                  {
+                    name: 'sequence',
+                    label: _('pricing_backend.col.sequence'),
+                    type: 'number',
+                    value: Number(row.sequence),
+                  },
+                  {
+                    name: 'currency',
+                    label: _('pricing_backend.col.currency'),
+                    value: String(row.currency),
+                    disabled: true,
+                  },
+                  {
+                    name: 'active',
+                    label: _('pricing_backend.col.active'),
+                    type: 'checkbox',
+                    value: row.active === true,
+                  },
+                ]}
+              />
+            }
+          />
+        }
+      />,
+      <Section
+        title={_('pricing_backend.items.title')}
+        body={
           items.length === 0
             ? emptyState(_('pricing_backend.items.empty'), _('pricing_backend.items.hint'))
             : dataTable(_, {
@@ -150,94 +163,110 @@ export const pricelistDetailScreen = (
                     cell: (item) => selectionLabel(_, 'base', item.base),
                   },
                 ],
-              }),
-      }),
-      section({
-        title: _('pricing_backend.items.add'),
-        description: _('pricing_backend.items.formulaHint'),
-        body: surface({
-          body: recordForm({
-            action: localized(`/admin/pricelists/${String(row.id)}`, locale),
-            submit: _('pricing_backend.action.add'),
-            submitVariant: 'secondary',
-            hidden: { action: 'add-item' },
-            fields: [
-              {
-                name: 'appliedOn',
-                label: _('pricing_backend.field.appliedOn'),
-                type: 'select',
-                options: ['3_global', '2_product_category', '1_product', '0_product_variant'].map(
-                  (value) => ({
-                    value,
-                    label: selectionLabel(_, 'appliedOn', value),
-                  }),
-                ),
-              },
-              { name: 'categoryId', label: _('pricing_backend.field.categoryId') },
-              { name: 'templateId', label: _('pricing_backend.field.templateId') },
-              { name: 'productId', label: _('pricing_backend.field.productId') },
-              {
-                name: 'minQuantity',
-                label: _('pricing_backend.field.minQuantity'),
-                type: 'decimal',
-                value: 0,
-              },
-              { name: 'dateStart', label: _('pricing_backend.field.dateStart'), type: 'datetime-local' },
-              { name: 'dateEnd', label: _('pricing_backend.field.dateEnd'), type: 'datetime-local' },
-              {
-                name: 'base',
-                label: _('pricing_backend.field.base'),
-                type: 'select',
-                options: ['list_price', 'standard_price', 'pricelist'].map((value) => ({
-                  value,
-                  label: selectionLabel(_, 'base', value),
-                })),
-              },
-              { name: 'basePricelistId', label: _('pricing_backend.field.basePricelistId') },
-              {
-                name: 'computePrice',
-                label: _('pricing_backend.field.computePrice'),
-                type: 'select',
-                options: ['fixed', 'percentage', 'formula'].map((value) => ({
-                  value,
-                  label: selectionLabel(_, 'compute', value),
-                })),
-              },
-              { name: 'fixedPrice', label: _('pricing_backend.field.fixedPrice'), type: 'decimal', value: 0 },
-              {
-                name: 'percentPrice',
-                label: _('pricing_backend.field.percentPrice'),
-                type: 'decimal',
-                value: 0,
-              },
-              {
-                name: 'priceDiscount',
-                label: _('pricing_backend.field.priceDiscount'),
-                type: 'decimal',
-                value: 0,
-              },
-              { name: 'priceRound', label: _('pricing_backend.field.priceRound'), type: 'decimal', value: 0 },
-              {
-                name: 'priceSurcharge',
-                label: _('pricing_backend.field.priceSurcharge'),
-                type: 'decimal',
-                value: 0,
-              },
-              {
-                name: 'priceMinMargin',
-                label: _('pricing_backend.field.priceMinMargin'),
-                type: 'decimal',
-                value: 0,
-              },
-              {
-                name: 'priceMaxMargin',
-                label: _('pricing_backend.field.priceMaxMargin'),
-                type: 'decimal',
-                value: 0,
-              },
-            ],
-          }),
-        }),
-      }),
-    ]),
-  )
+              })
+        }
+      />,
+      <Section
+        title={_('pricing_backend.items.add')}
+        description={_('pricing_backend.items.formulaHint')}
+        body={
+          <Surface
+            body={
+              <RecordForm
+                action={localized(`/admin/pricelists/${String(row.id)}`, locale)}
+                submit={_('pricing_backend.action.add')}
+                submitVariant="secondary"
+                hidden={{ action: 'add-item' }}
+                fields={[
+                  {
+                    name: 'appliedOn',
+                    label: _('pricing_backend.field.appliedOn'),
+                    type: 'select',
+                    options: ['3_global', '2_product_category', '1_product', '0_product_variant'].map(
+                      (value) => ({
+                        value,
+                        label: selectionLabel(_, 'appliedOn', value),
+                      }),
+                    ),
+                  },
+                  { name: 'categoryId', label: _('pricing_backend.field.categoryId') },
+                  { name: 'templateId', label: _('pricing_backend.field.templateId') },
+                  { name: 'productId', label: _('pricing_backend.field.productId') },
+                  {
+                    name: 'minQuantity',
+                    label: _('pricing_backend.field.minQuantity'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  { name: 'dateStart', label: _('pricing_backend.field.dateStart'), type: 'datetime-local' },
+                  { name: 'dateEnd', label: _('pricing_backend.field.dateEnd'), type: 'datetime-local' },
+                  {
+                    name: 'base',
+                    label: _('pricing_backend.field.base'),
+                    type: 'select',
+                    options: ['list_price', 'standard_price', 'pricelist'].map((value) => ({
+                      value,
+                      label: selectionLabel(_, 'base', value),
+                    })),
+                  },
+                  { name: 'basePricelistId', label: _('pricing_backend.field.basePricelistId') },
+                  {
+                    name: 'computePrice',
+                    label: _('pricing_backend.field.computePrice'),
+                    type: 'select',
+                    options: ['fixed', 'percentage', 'formula'].map((value) => ({
+                      value,
+                      label: selectionLabel(_, 'compute', value),
+                    })),
+                  },
+                  {
+                    name: 'fixedPrice',
+                    label: _('pricing_backend.field.fixedPrice'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'percentPrice',
+                    label: _('pricing_backend.field.percentPrice'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'priceDiscount',
+                    label: _('pricing_backend.field.priceDiscount'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'priceRound',
+                    label: _('pricing_backend.field.priceRound'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'priceSurcharge',
+                    label: _('pricing_backend.field.priceSurcharge'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'priceMinMargin',
+                    label: _('pricing_backend.field.priceMinMargin'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                  {
+                    name: 'priceMaxMargin',
+                    label: _('pricing_backend.field.priceMaxMargin'),
+                    type: 'decimal',
+                    value: 0,
+                  },
+                ]}
+              />
+            }
+          />
+        }
+      />,
+    ])}
+  />
+)

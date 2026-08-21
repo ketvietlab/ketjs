@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -156,35 +156,39 @@ export const pickingTypesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.pickingTypes'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.pickingType.kicker')}
-      title={_('stock_backend.pickingType.title')}
-      subtitle={_('stock_backend.pickingType.subtitle')}
-      imageFallback={icon('truck')}
-      summary={[
-        { id: 'incoming', label: _('stock_backend.pickingType.summary.incoming'), value: incomingCount },
-        { id: 'outgoing', label: _('stock_backend.pickingType.summary.outgoing'), value: outgoingCount },
-        { id: 'internal', label: _('stock_backend.pickingType.summary.internal'), value: internalCount },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.pickingType.create.title')}
-            description={_('stock_backend.pickingType.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.pickingType.configured.title')}
-            description={_('stock_backend.pickingType.configured.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.pickingTypes')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.pickingType.kicker')}
+          title={_('stock_backend.pickingType.title')}
+          subtitle={_('stock_backend.pickingType.subtitle')}
+          imageFallback={icon('truck')}
+          summary={[
+            { id: 'incoming', label: _('stock_backend.pickingType.summary.incoming'), value: incomingCount },
+            { id: 'outgoing', label: _('stock_backend.pickingType.summary.outgoing'), value: outgoingCount },
+            { id: 'internal', label: _('stock_backend.pickingType.summary.internal'), value: internalCount },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.pickingType.create.title')}
+                description={_('stock_backend.pickingType.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.pickingType.configured.title')}
+                description={_('stock_backend.pickingType.configured.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

@@ -4,11 +4,11 @@ import {
   badge,
   contentCard,
   emptyState,
-  formCluster,
-  framed,
+  formCluster as FormCluster,
+  framedPage as Framed,
   inline,
   linkButton,
-  recordForm,
+  recordForm as RecordForm,
   stack,
 } from '../../ui/index.ts'
 import type { Frame, Tone } from '../../ui/index.ts'
@@ -29,12 +29,12 @@ export const activitiesScreen = (
   frame: Frame,
   today: string,
   includeDone: boolean,
-): TemplateResult =>
-  framed(
-    _,
-    _('activity_backend.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('activity_backend.title')}
+    frame={frame}
+    body={stack([
       inline([
         badge(
           `${rows.filter((row) => row.state === 'overdue').length} ${_('activity_backend.overdue')}`,
@@ -65,52 +65,53 @@ export const activitiesScreen = (
                 ),
                 body: row.note ? String(row.note) : undefined,
                 actions:
-                  row.active === true
-                    ? formCluster({
-                        forms: [
-                          recordForm({
-                            action: '/admin/activities',
-                            submit: _('activity_backend.complete'),
-                            submitVariant: 'primary',
-                            layout: 'inline',
-                            hidden: { action: 'complete', id: String(row.id), today },
-                            fields: [
-                              {
-                                name: 'feedback',
-                                label: _('activity_backend.feedback'),
-                                value: '',
-                              },
-                            ],
-                          }),
-                          recordForm({
-                            action: '/admin/activities',
-                            submit: _('activity_backend.reschedule'),
-                            submitVariant: 'secondary',
-                            layout: 'inline',
-                            hidden: { action: 'reschedule', id: String(row.id), today },
-                            fields: [
-                              {
-                                name: 'dueDate',
-                                label: _('activity_backend.dueDate'),
-                                type: 'date',
-                                value: String(row.dueDate),
-                                required: true,
-                              },
-                            ],
-                          }),
-                          recordForm({
-                            action: '/admin/activities',
-                            submit: _('activity_backend.cancel'),
-                            submitVariant: 'destructive',
-                            layout: 'inline',
-                            hidden: { action: 'cancel', id: String(row.id), today },
-                            fields: [],
-                          }),
-                        ],
-                      })
-                    : undefined,
+                  row.active === true ? (
+                    <FormCluster
+                      forms={[
+                        <RecordForm
+                          action="/admin/activities"
+                          submit={_('activity_backend.complete')}
+                          submitVariant="primary"
+                          layout="inline"
+                          hidden={{ action: 'complete', id: String(row.id), today }}
+                          fields={[
+                            {
+                              name: 'feedback',
+                              label: _('activity_backend.feedback'),
+                              value: '',
+                            },
+                          ]}
+                        />,
+                        <RecordForm
+                          action="/admin/activities"
+                          submit={_('activity_backend.reschedule')}
+                          submitVariant="secondary"
+                          layout="inline"
+                          hidden={{ action: 'reschedule', id: String(row.id), today }}
+                          fields={[
+                            {
+                              name: 'dueDate',
+                              label: _('activity_backend.dueDate'),
+                              type: 'date',
+                              value: String(row.dueDate),
+                              required: true,
+                            },
+                          ]}
+                        />,
+                        <RecordForm
+                          action="/admin/activities"
+                          submit={_('activity_backend.cancel')}
+                          submitVariant="destructive"
+                          layout="inline"
+                          hidden={{ action: 'cancel', id: String(row.id), today }}
+                          fields={[]}
+                        />,
+                      ]}
+                    />
+                  ) : undefined,
               }),
             ),
           ),
-    ]),
-  )
+    ])}
+  />
+)

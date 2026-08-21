@@ -1,7 +1,7 @@
 import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import {
-  framed,
+  framedPage as Framed,
   emptyState,
   badge,
   code,
@@ -12,12 +12,12 @@ import {
   kanbanGrid,
   linkButton,
   mediaPanel,
-  recordForm,
+  recordForm as RecordForm,
   recordToggle,
-  recordWorkspace,
-  section,
+  recordWorkspace as RecordWorkspace,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
   tabs,
 } from '../../ui/index.ts'
 import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
@@ -149,23 +149,26 @@ export const productsScreen = (
   frame: Frame = {},
   table: Partial<DataTable<TemplateRow>> = {},
   locale = '',
-): TemplateResult =>
-  framed(
-    _,
-    _('product_backend.screen.title'),
-    frame,
-    rows.length === 0 && !table.groups?.length
-      ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-      : view === 'kanban'
-        ? kanban(_, rows, locale)
-        : dataTable(_, {
-            columns: templateColumns(_),
-            rows,
-            id: (r) => r.id,
-            rowHref: (r) => localized(`/admin/products/${r.id}`, locale),
-            ...table,
-          }),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('product_backend.screen.title')}
+    frame={frame}
+    body={
+      rows.length === 0 && !table.groups?.length
+        ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+        : view === 'kanban'
+          ? kanban(_, rows, locale)
+          : dataTable(_, {
+              columns: templateColumns(_),
+              rows,
+              id: (r) => r.id,
+              rowHref: (r) => localized(`/admin/products/${r.id}`, locale),
+              ...table,
+            })
+    }
+  />
+)
 
 export const favoriteScreen = (
   _: Translator,
@@ -173,25 +176,30 @@ export const favoriteScreen = (
   returnTo: string,
   locale = '',
   errors?: string[],
-): TemplateResult =>
-  framed(
-    _,
-    _('product_backend.favorite.create'),
-    frame,
-    surface({
-      body: recordForm({
-        action: localized('/admin/products/favorites/new', locale),
-        submit: _('product_backend.favorite.save'),
-        submitVariant: 'primary',
-        errors,
-        hidden: { returnTo },
-        fields: [
-          { name: 'name', label: _('product_backend.favorite.name'), required: true },
-          { name: 'default', label: _('product_backend.favorite.default'), type: 'checkbox' },
-        ],
-      }),
-    }),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('product_backend.favorite.create')}
+    frame={frame}
+    body={
+      <Surface
+        body={
+          <RecordForm
+            action={localized('/admin/products/favorites/new', locale)}
+            submit={_('product_backend.favorite.save')}
+            submitVariant="primary"
+            errors={errors}
+            hidden={{ returnTo }}
+            fields={[
+              { name: 'name', label: _('product_backend.favorite.name'), required: true },
+              { name: 'default', label: _('product_backend.favorite.default'), type: 'checkbox' },
+            ]}
+          />
+        }
+      />
+    }
+  />
+)
 
 export type { MenuNode }
 
@@ -245,81 +253,85 @@ export const productDetailScreen = (
       form: activeTab === 'general' ? productFormId : null,
       disabled: activeTab !== 'general',
     })
-  const general = recordForm({
-    id: productFormId,
-    action: localized(`/admin/products/${row.id}?tab=general`, locale),
-    submit: _('product_backend.action.save'),
-    submitVariant: 'primary',
-    scope: 'product-detail',
-    errors: management.errors,
-    fields: [
-      {
-        name: 'type',
-        label: _('product_backend.field.productKind'),
-        type: 'radio',
-        value: row.type,
-        required: true,
-        span: 'full',
-        options: ['goods', 'service'].map((value) => ({
-          value,
-          label: selectionLabel(_, 'type', value),
-        })),
-      },
-      { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
-      {
-        name: 'uomId',
-        label: _('product_backend.field.uom'),
-        type: 'select',
-        value: row.uomId,
-        options: [{ value: '', label: '—' }, ...management.uoms],
-      },
-      {
-        name: 'categoryId',
-        label: _('product_backend.field.category'),
-        type: 'select',
-        value: row.categoryId,
-        options: [{ value: '', label: '—' }, ...management.categories],
-      },
-      {
-        name: 'listPrice',
-        label: _('product_backend.field.listPrice'),
-        type: 'decimal',
-        value: row.listPrice,
-      },
-      ...(management.stockEnabled
-        ? [
-            {
-              name: 'tracking',
-              label: _('product_backend.field.tracking'),
-              type: 'select' as const,
-              value: row.tracking ?? 'none',
-              options: ['none', 'lot', 'serial'].map((value) => ({
-                value,
-                label: selectionLabel(_, 'tracking', value),
-              })),
-            },
-          ]
-        : []),
-      {
-        name: 'description',
-        label: _('product_backend.field.description'),
-        type: 'textarea',
-        value: row.description,
-        span: 'full',
-      },
-    ],
-  })
+  const general = (
+    <RecordForm
+      id={productFormId}
+      action={localized(`/admin/products/${row.id}?tab=general`, locale)}
+      submit={_('product_backend.action.save')}
+      submitVariant="primary"
+      scope="product-detail"
+      errors={management.errors}
+      fields={[
+        {
+          name: 'type',
+          label: _('product_backend.field.productKind'),
+          type: 'radio',
+          value: row.type,
+          required: true,
+          span: 'full',
+          options: ['goods', 'service'].map((value) => ({
+            value,
+            label: selectionLabel(_, 'type', value),
+          })),
+        },
+        { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
+        {
+          name: 'uomId',
+          label: _('product_backend.field.uom'),
+          type: 'select',
+          value: row.uomId,
+          options: [{ value: '', label: '—' }, ...management.uoms],
+        },
+        {
+          name: 'categoryId',
+          label: _('product_backend.field.category'),
+          type: 'select',
+          value: row.categoryId,
+          options: [{ value: '', label: '—' }, ...management.categories],
+        },
+        {
+          name: 'listPrice',
+          label: _('product_backend.field.listPrice'),
+          type: 'decimal',
+          value: row.listPrice,
+        },
+        ...(management.stockEnabled
+          ? [
+              {
+                name: 'tracking',
+                label: _('product_backend.field.tracking'),
+                type: 'select' as const,
+                value: row.tracking ?? 'none',
+                options: ['none', 'lot', 'serial'].map((value) => ({
+                  value,
+                  label: selectionLabel(_, 'tracking', value),
+                })),
+              },
+            ]
+          : []),
+        {
+          name: 'description',
+          label: _('product_backend.field.description'),
+          type: 'textarea',
+          value: row.description,
+          span: 'full',
+        },
+      ]}
+    />
+  )
 
   const variants = stack([
-    section({
-      title: _('product_backend.variants.title'),
-      actions: recordForm({
-        action: localized(`/admin/products/${row.id}/variants/generate?tab=variants`, locale),
-        submit: _('product_backend.variants.generate'),
-        submitVariant: 'secondary',
-        fields: [],
-      }),
-      body:
+    <Section
+      title={_('product_backend.variants.title')}
+      actions={
+        <RecordForm
+          action={localized(`/admin/products/${row.id}/variants/generate?tab=variants`, locale)}
+          submit={_('product_backend.variants.generate')}
+          submitVariant="secondary"
+          fields={[]}
+        />
+      }
+      body={
         management.variants.length === 0
           ? emptyState(_('product_backend.variants.empty'), _('product_backend.variants.generate'))
           : dataTable(_, {
@@ -350,117 +362,133 @@ export const productDetailScreen = (
                   },
                 },
               ],
-            }),
-    }),
-    section({
-      title: _('product_backend.attributes.lines'),
-      description: _('product_backend.attributes.linesHint'),
-      body: surface({
-        padding: 'compact',
-        body: recordForm({
-          action: localized(`/admin/products/${row.id}/attribute-lines?tab=variants`, locale),
-          submit: _('product_backend.action.add'),
-          submitVariant: 'secondary',
-          fields: [
-            {
-              name: 'attributeId',
-              label: _('product_backend.attributes.attribute'),
-              type: 'select',
-              options: management.attributes,
-              required: true,
-            },
-            {
-              name: 'valueIds',
-              label: _('product_backend.attributes.values'),
-              help: _('product_backend.attributes.valuesHint'),
-              required: true,
-            },
-          ],
-        }),
-      }),
-    }),
+            })
+      }
+    />,
+    <Section
+      title={_('product_backend.attributes.lines')}
+      description={_('product_backend.attributes.linesHint')}
+      body={
+        <Surface
+          padding="compact"
+          body={
+            <RecordForm
+              action={localized(`/admin/products/${row.id}/attribute-lines?tab=variants`, locale)}
+              submit={_('product_backend.action.add')}
+              submitVariant="secondary"
+              fields={[
+                {
+                  name: 'attributeId',
+                  label: _('product_backend.attributes.attribute'),
+                  type: 'select',
+                  options: management.attributes,
+                  required: true,
+                },
+                {
+                  name: 'valueIds',
+                  label: _('product_backend.attributes.values'),
+                  help: _('product_backend.attributes.valuesHint'),
+                  required: true,
+                },
+              ]}
+            />
+          }
+        />
+      }
+    />,
   ])
 
-  const mediaTab = section({
-    title: _('product_backend.media.title'),
-    description: _('product_backend.media.description'),
-    body: mediaPanel({ ...media, labels: mediaLabels(_) }),
-  })
+  const mediaTab = (
+    <Section
+      title={_('product_backend.media.title')}
+      description={_('product_backend.media.description')}
+      body={mediaPanel({ ...media, labels: mediaLabels(_) })}
+    />
+  )
 
-  const workspace = recordWorkspace({
-    kicker: _('product_backend.detail.kicker'),
-    title: row.name,
-    subtitle,
-    image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
-    imageFallback: icon('package'),
-    badges: [
-      productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
-      productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
-      ...(management.stockEnabled
-        ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
-        : []),
-    ],
-    summary: [
-      {
-        id: 'variants',
-        label: _('product_backend.summary.variants'),
-        value: management.variants.length,
-        href: tabHref('variants'),
-      },
-      {
-        id: 'media',
-        label: _('product_backend.summary.images'),
-        value: images.length,
-        href: tabHref('media'),
-      },
-      ...(management.stockEnabled
-        ? [
-            {
-              id: 'tracking',
-              label: _('product_backend.summary.tracking'),
-              value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
-            },
-          ]
-        : []),
-    ],
-    navigation: tabs({
-      label: _('product_backend.tabs.label'),
-      items: [
-        {
-          id: 'general',
-          label: _('product_backend.tabs.general'),
-          href: tabHref('general'),
-          active: activeTab === 'general',
-        },
+  const workspace = (
+    <RecordWorkspace
+      kicker={_('product_backend.detail.kicker')}
+      title={row.name}
+      subtitle={subtitle}
+      image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
+      imageFallback={icon('package')}
+      badges={[
+        productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
+        productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
+        ...(management.stockEnabled
+          ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
+          : []),
+      ]}
+      summary={[
         {
           id: 'variants',
-          label: _('product_backend.tabs.variants'),
+          label: _('product_backend.summary.variants'),
+          value: management.variants.length,
           href: tabHref('variants'),
-          active: activeTab === 'variants',
-          count: management.variants.length,
         },
         {
           id: 'media',
-          label: _('product_backend.tabs.media'),
+          label: _('product_backend.summary.images'),
+          value: images.length,
           href: tabHref('media'),
-          active: activeTab === 'media',
-          count: images.length,
         },
-      ],
-    }),
-    controller: management.editor,
-    body: activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general,
-    aside: collaboration,
-    asideLabel: _('product_backend.collaboration.label'),
-    slots: {
-      header: 'product.record-header',
-      body: 'product.record-body',
-      ...(partial ? { fragmentTitle: row.name } : {}),
-    },
-  })
-  return partial
-    ? workspace
-    : framed(_, frame.navigation ? row.name : _('product_backend.detail.kicker'), frame, workspace)
+        ...(management.stockEnabled
+          ? [
+              {
+                id: 'tracking',
+                label: _('product_backend.summary.tracking'),
+                value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
+              },
+            ]
+          : []),
+      ]}
+      navigation={tabs({
+        label: _('product_backend.tabs.label'),
+        items: [
+          {
+            id: 'general',
+            label: _('product_backend.tabs.general'),
+            href: tabHref('general'),
+            active: activeTab === 'general',
+          },
+          {
+            id: 'variants',
+            label: _('product_backend.tabs.variants'),
+            href: tabHref('variants'),
+            active: activeTab === 'variants',
+            count: management.variants.length,
+          },
+          {
+            id: 'media',
+            label: _('product_backend.tabs.media'),
+            href: tabHref('media'),
+            active: activeTab === 'media',
+            count: images.length,
+          },
+        ],
+      })}
+      controller={management.editor}
+      body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general}
+      aside={collaboration}
+      asideLabel={_('product_backend.collaboration.label')}
+      slots={{
+        header: 'product.record-header',
+        body: 'product.record-body',
+        ...(partial ? { fragmentTitle: row.name } : {}),
+      }}
+    />
+  )
+  return partial ? (
+    workspace
+  ) : (
+    <Framed
+      translator={_}
+      title={frame.navigation ? row.name : _('product_backend.detail.kicker')}
+      frame={frame}
+      body={workspace}
+    />
+  )
 }
 
 export const variantScreen = (
@@ -492,104 +520,110 @@ export const variantScreen = (
   ]
     .filter(Boolean)
     .join(' · ')
-  const general = recordForm({
-    id: 'product-variant-form',
-    action: tabHref('general'),
-    submit: _('product_backend.action.save'),
-    submitVariant: 'primary',
-    scope: 'product-variant',
-    errors,
-    fields: [
-      {
-        name: 'defaultCode',
-        label: _('product_backend.field.defaultCode'),
-        value: String(row.defaultCode ?? ''),
-      },
-      { name: 'barcode', label: _('product_backend.field.barcode'), value: String(row.barcode ?? '') },
-      {
-        name: 'weight',
-        label: _('product_backend.field.weight'),
-        type: 'decimal',
-        value: Number(row.weight ?? 0),
-      },
-      {
-        name: 'volume',
-        label: _('product_backend.field.volume'),
-        type: 'decimal',
-        value: Number(row.volume ?? 0),
-      },
-      {
-        name: 'standardPrice',
-        label: _('product_backend.field.standardPrice'),
-        type: 'decimal',
-        value: Number((row.cost as Record<string, unknown> | null)?.standardPrice ?? 0),
-      },
-      {
-        name: 'uomId',
-        label: _('product_backend.field.uom'),
-        type: 'select',
-        value: productUom?.uomId ? String(productUom.uomId) : '',
-        options: [{ value: '', label: '—' }, ...uoms],
-      },
-      {
-        name: 'uomBarcode',
-        label: _('product_backend.field.uomBarcode'),
-        value: String(productUom?.barcode ?? ''),
-      },
-    ],
-  })
-  const mediaTab = section({
-    title: _('product_backend.media.title'),
-    description: _('product_backend.media.description'),
-    body: mediaPanel({ ...media, labels: mediaLabels(_) }),
-  })
-
-  const workspace = recordWorkspace({
-    kicker: _('product_backend.variant.kicker'),
-    title,
-    subtitle,
-    image: primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null,
-    imageFallback: icon('package'),
-    summary: [
-      {
-        id: 'media',
-        label: _('product_backend.summary.images'),
-        value: images.length,
-        href: tabHref('media'),
-      },
-      {
-        id: 'state',
-        label: _('product_backend.col.state'),
-        value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
-      },
-    ],
-    navigation: tabs({
-      label: _('product_backend.variant.tabs.label'),
-      items: [
+  const general = (
+    <RecordForm
+      id="product-variant-form"
+      action={tabHref('general')}
+      submit={_('product_backend.action.save')}
+      submitVariant="primary"
+      scope="product-variant"
+      errors={errors}
+      fields={[
         {
-          id: 'general',
-          label: _('product_backend.tabs.general'),
-          href: tabHref('general'),
-          active: activeTab === 'general',
+          name: 'defaultCode',
+          label: _('product_backend.field.defaultCode'),
+          value: String(row.defaultCode ?? ''),
         },
+        { name: 'barcode', label: _('product_backend.field.barcode'), value: String(row.barcode ?? '') },
+        {
+          name: 'weight',
+          label: _('product_backend.field.weight'),
+          type: 'decimal',
+          value: Number(row.weight ?? 0),
+        },
+        {
+          name: 'volume',
+          label: _('product_backend.field.volume'),
+          type: 'decimal',
+          value: Number(row.volume ?? 0),
+        },
+        {
+          name: 'standardPrice',
+          label: _('product_backend.field.standardPrice'),
+          type: 'decimal',
+          value: Number((row.cost as Record<string, unknown> | null)?.standardPrice ?? 0),
+        },
+        {
+          name: 'uomId',
+          label: _('product_backend.field.uom'),
+          type: 'select',
+          value: productUom?.uomId ? String(productUom.uomId) : '',
+          options: [{ value: '', label: '—' }, ...uoms],
+        },
+        {
+          name: 'uomBarcode',
+          label: _('product_backend.field.uomBarcode'),
+          value: String(productUom?.barcode ?? ''),
+        },
+      ]}
+    />
+  )
+  const mediaTab = (
+    <Section
+      title={_('product_backend.media.title')}
+      description={_('product_backend.media.description')}
+      body={mediaPanel({ ...media, labels: mediaLabels(_) })}
+    />
+  )
+
+  const workspace = (
+    <RecordWorkspace
+      kicker={_('product_backend.variant.kicker')}
+      title={title}
+      subtitle={subtitle}
+      image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
+      imageFallback={icon('package')}
+      summary={[
         {
           id: 'media',
-          label: _('product_backend.tabs.media'),
+          label: _('product_backend.summary.images'),
+          value: images.length,
           href: tabHref('media'),
-          active: activeTab === 'media',
-          count: images.length,
         },
-      ],
-    }),
-    controller: editor,
-    body: activeTab === 'media' ? mediaTab : general,
-    aside: collaboration,
-    asideLabel: _('product_backend.variant.collaboration.label'),
-    slots: {
-      header: 'product.record-header',
-      body: 'product.record-body',
-      ...(partial ? { fragmentTitle: title } : {}),
-    },
-  })
-  return partial ? workspace : framed(_, title, frame, workspace)
+        {
+          id: 'state',
+          label: _('product_backend.col.state'),
+          value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
+        },
+      ]}
+      navigation={tabs({
+        label: _('product_backend.variant.tabs.label'),
+        items: [
+          {
+            id: 'general',
+            label: _('product_backend.tabs.general'),
+            href: tabHref('general'),
+            active: activeTab === 'general',
+          },
+          {
+            id: 'media',
+            label: _('product_backend.tabs.media'),
+            href: tabHref('media'),
+            active: activeTab === 'media',
+            count: images.length,
+          },
+        ],
+      })}
+      controller={editor}
+      body={activeTab === 'media' ? mediaTab : general}
+      aside={collaboration}
+      asideLabel={_('product_backend.variant.collaboration.label')}
+      slots={{
+        header: 'product.record-header',
+        body: 'product.record-body',
+        ...(partial ? { fragmentTitle: title } : {}),
+      }}
+    />
+  )
+  return partial ? workspace : <Framed translator={_} title={title} frame={frame} body={workspace} />
 }

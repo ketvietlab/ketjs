@@ -1,6 +1,12 @@
 import type { Translator } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
-import { notice, recordForm, section, stack, surface } from '../../ui/index.ts'
+import {
+  notice,
+  recordForm as RecordForm,
+  section as Section,
+  stack,
+  surface as Surface,
+} from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 
 export const websiteLeadScreen = (
@@ -19,17 +25,21 @@ export const websiteLeadScreen = (
           }),
         ]
       : []),
-    section({
-      title: _('crm_website.website.title'),
-      description: _('crm_website.website.hint'),
-      body: surface({
-        body: recordForm({
-          action: '/contact/sales',
-          fields,
-          errors,
-          submit: _('crm_website.website.submit'),
-          submitVariant: 'primary',
-        }),
-      }),
-    }),
+    <Section
+      title={_('crm_website.website.title')}
+      description={_('crm_website.website.hint')}
+      body={
+        <Surface
+          body={
+            <RecordForm
+              action="/contact/sales"
+              fields={fields}
+              errors={errors}
+              submit={_('crm_website.website.submit')}
+              submitVariant="primary"
+            />
+          }
+        />
+      }
+    />,
   ])

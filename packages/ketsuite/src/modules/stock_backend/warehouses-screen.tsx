@@ -5,7 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -126,47 +126,51 @@ export const warehousesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.warehouses'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.warehouse.kicker')}
-      title={_('stock_backend.warehouse.title')}
-      subtitle={_('stock_backend.warehouse.subtitle')}
-      imageFallback={icon('warehouse')}
-      summary={[
-        {
-          id: 'warehouses',
-          label: _('stock_backend.warehouse.summary.total'),
-          value: options.rows.length,
-        },
-        {
-          id: 'receipts',
-          label: _('stock_backend.warehouse.summary.receipts'),
-          value: multiStepReceipts,
-        },
-        {
-          id: 'deliveries',
-          label: _('stock_backend.warehouse.summary.deliveries'),
-          value: multiStepDeliveries,
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.warehouse.create.title')}
-            description={_('stock_backend.warehouse.create.hint')}
-            body={<Surface padding="compact" body={createForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.warehouse.configured.title')}
-            description={_('stock_backend.warehouse.configured.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.warehouses')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.warehouse.kicker')}
+          title={_('stock_backend.warehouse.title')}
+          subtitle={_('stock_backend.warehouse.subtitle')}
+          imageFallback={icon('warehouse')}
+          summary={[
+            {
+              id: 'warehouses',
+              label: _('stock_backend.warehouse.summary.total'),
+              value: options.rows.length,
+            },
+            {
+              id: 'receipts',
+              label: _('stock_backend.warehouse.summary.receipts'),
+              value: multiStepReceipts,
+            },
+            {
+              id: 'deliveries',
+              label: _('stock_backend.warehouse.summary.deliveries'),
+              value: multiStepDeliveries,
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.warehouse.create.title')}
+                description={_('stock_backend.warehouse.create.hint')}
+                body={<Surface padding="compact" body={createForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.warehouse.configured.title')}
+                description={_('stock_backend.warehouse.configured.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

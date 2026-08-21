@@ -4,7 +4,7 @@ import {
   code,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -68,59 +68,63 @@ export const journalsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.journals.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.journal.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.journals.title')}
-      subtitle={_('account_backend.journal.subtitle')}
-      imageFallback={icon('notebook-tabs')}
-      summary={[
-        { id: 'total', label: _('account_backend.journal.summary.total'), value: options.rows.length },
-        {
-          id: 'sale',
-          label: _('account_backend.journal.summary.sale'),
-          value: options.rows.filter((row) => row.type === 'sale').length,
-        },
-        {
-          id: 'purchase',
-          label: _('account_backend.journal.summary.purchase'),
-          value: options.rows.filter((row) => row.type === 'purchase').length,
-        },
-        { id: 'liquidity', label: _('account_backend.journal.summary.liquidity'), value: liquidity },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.journal.create.title')}
-            description={_('account_backend.journal.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.journal.kicker')}
+          title={_('account_backend.journals.title')}
+          subtitle={_('account_backend.journal.subtitle')}
+          imageFallback={icon('notebook-tabs')}
+          summary={[
+            { id: 'total', label: _('account_backend.journal.summary.total'), value: options.rows.length },
+            {
+              id: 'sale',
+              label: _('account_backend.journal.summary.sale'),
+              value: options.rows.filter((row) => row.type === 'sale').length,
+            },
+            {
+              id: 'purchase',
+              label: _('account_backend.journal.summary.purchase'),
+              value: options.rows.filter((row) => row.type === 'purchase').length,
+            },
+            { id: 'liquidity', label: _('account_backend.journal.summary.liquidity'), value: liquidity },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.journal.create.title')}
+                description={_('account_backend.journal.create.hint')}
                 body={
-                  <RecordForm
-                    id="journal-create-form"
-                    scope="account-journal"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="journal-create-form"
+                        scope="account-journal"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.journal.list.title')}
-            description={_('account_backend.journal.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.journal.list.title')}
+                description={_('account_backend.journal.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

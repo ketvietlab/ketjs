@@ -6,15 +6,15 @@ import {
   dataTable,
   definitionList,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordActions,
-  recordForm,
-  recordWorkspace,
-  section,
+  recordForm as RecordForm,
+  recordWorkspace as RecordWorkspace,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
   tabs,
 } from '../../ui/index.ts'
 import type { FormField, Frame, TableGroup } from '../../ui/index.ts'
@@ -35,39 +35,43 @@ const state = (_: Translator, value: unknown) => {
   )
 }
 
-export const pipelineScreen = (_: Translator, frame: Frame, board: JSXChild, fields: FormField[] = []) =>
-  framed(
-    _,
-    _('crm_backend.pipeline.title'),
-    frame,
-    stack([
+export const pipelineScreen = (_: Translator, frame: Frame, board: JSXChild, fields: FormField[] = []) => (
+  <Framed
+    translator={_}
+    title={_('crm_backend.pipeline.title')}
+    frame={frame}
+    body={stack([
       ...(fields.length
         ? [
-            surface({
-              tone: 'subtle',
-              padding: 'compact',
-              body: recordForm({
-                action: '/admin/crm/pipeline',
-                method: 'get',
-                layout: 'inline',
-                fields,
-                submit: _('crm_backend.action.filter'),
-                submitVariant: 'secondary',
-              }),
-            }),
+            <Surface
+              tone="subtle"
+              padding="compact"
+              body={
+                <RecordForm
+                  action="/admin/crm/pipeline"
+                  method="get"
+                  layout="inline"
+                  fields={fields}
+                  submit={_('crm_backend.action.filter')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
           ]
         : []),
       board,
-    ]),
-  )
+    ])}
+  />
+)
 
-export const permissionScreen = (_: Translator, frame: Frame): TemplateResult =>
-  framed(
-    _,
-    _('crm_backend.permission.title'),
-    frame,
-    emptyState(_('crm_backend.permission.title'), _('crm_backend.permission.hint')),
-  )
+export const permissionScreen = (_: Translator, frame: Frame): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('crm_backend.permission.title')}
+    frame={frame}
+    body={emptyState(_('crm_backend.permission.title'), _('crm_backend.permission.hint'))}
+  />
+)
 
 export const casesScreen = (
   _: Translator,
@@ -76,21 +80,23 @@ export const casesScreen = (
   fields: FormField[],
   errors: string[] = [],
   groups: TableGroup<AnyRow>[] = [],
-) =>
-  framed(
-    _,
-    _('crm_backend.cases.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: '/admin/crm/cases',
-          fields,
-          errors,
-          submit: _('crm_backend.action.create'),
-          submitVariant: 'primary',
-        }),
-      }),
+) => (
+  <Framed
+    translator={_}
+    title={_('crm_backend.cases.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/crm/cases"
+            fields={fields}
+            errors={errors}
+            submit={_('crm_backend.action.create')}
+            submitVariant="primary"
+          />
+        }
+      />,
       rows.length || groups.length
         ? dataTable(_, {
             rows,
@@ -133,8 +139,9 @@ export const casesScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const caseDetailScreen = (
   _: Translator,
@@ -185,91 +192,97 @@ export const caseDetailScreen = (
           }),
           ...(row.kind === 'opportunity' && options.warehouses.length
             ? [
-                surface({
-                  body: recordForm({
-                    action: endpoint,
-                    hidden: { action: 'quotation' },
-                    fields: [
-                      {
-                        name: 'warehouseId',
-                        label: _('crm_backend.field.warehouse'),
-                        type: 'select',
-                        required: true,
-                        options: options.warehouses.map((item) => ({
-                          value: String(item.id),
-                          label: String(item.name ?? item.code),
-                        })),
-                      },
-                      { name: 'notes', label: _('crm_backend.field.note'), type: 'textarea', span: 'full' },
-                    ],
-                    submit: _('crm_backend.quotation.create'),
-                    submitVariant: 'primary',
-                  }),
-                }),
+                <Surface
+                  body={
+                    <RecordForm
+                      action={endpoint}
+                      hidden={{ action: 'quotation' }}
+                      fields={[
+                        {
+                          name: 'warehouseId',
+                          label: _('crm_backend.field.warehouse'),
+                          type: 'select',
+                          required: true,
+                          options: options.warehouses.map((item) => ({
+                            value: String(item.id),
+                            label: String(item.name ?? item.code),
+                          })),
+                        },
+                        { name: 'notes', label: _('crm_backend.field.note'), type: 'textarea', span: 'full' },
+                      ]}
+                      submit={_('crm_backend.quotation.create')}
+                      submitVariant="primary"
+                    />
+                  }
+                />,
               ]
             : []),
         ])
       : activeTab === 'activities'
         ? stack([
-            surface({
-              body: recordForm({
-                action: endpoint,
-                hidden: { action: 'scheduleActivity' },
-                fields: [
-                  {
-                    name: 'typeId',
-                    label: _('crm_backend.activity.type'),
-                    type: 'select',
-                    options: options.activityTypes.map((item) => ({
-                      value: String(item.id),
-                      label: String(item.name),
-                    })),
-                  },
-                  {
-                    name: 'assigneeUserId',
-                    label: _('crm_backend.field.assignee'),
-                    type: 'select',
-                    options: options.users.map((item) => ({
-                      value: String(item.id),
-                      label: String(item.name),
-                    })),
-                  },
-                  { name: 'summary', label: _('crm_backend.field.name'), required: true },
-                  { name: 'dueDate', label: _('crm_backend.field.dueAt'), type: 'date', required: true },
-                  { name: 'note', label: _('crm_backend.field.note'), type: 'textarea', span: 'full' },
-                ],
-                submit: _('crm_backend.activity.schedule'),
-                submitVariant: 'secondary',
-              }),
-            }),
+            <Surface
+              body={
+                <RecordForm
+                  action={endpoint}
+                  hidden={{ action: 'scheduleActivity' }}
+                  fields={[
+                    {
+                      name: 'typeId',
+                      label: _('crm_backend.activity.type'),
+                      type: 'select',
+                      options: options.activityTypes.map((item) => ({
+                        value: String(item.id),
+                        label: String(item.name),
+                      })),
+                    },
+                    {
+                      name: 'assigneeUserId',
+                      label: _('crm_backend.field.assignee'),
+                      type: 'select',
+                      options: options.users.map((item) => ({
+                        value: String(item.id),
+                        label: String(item.name),
+                      })),
+                    },
+                    { name: 'summary', label: _('crm_backend.field.name'), required: true },
+                    { name: 'dueDate', label: _('crm_backend.field.dueAt'), type: 'date', required: true },
+                    { name: 'note', label: _('crm_backend.field.note'), type: 'textarea', span: 'full' },
+                  ]}
+                  submit={_('crm_backend.activity.schedule')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
             ...(options.plans.length
               ? [
-                  surface({
-                    body: recordForm({
-                      action: endpoint,
-                      hidden: { action: 'applyPlan' },
-                      fields: [
-                        {
-                          name: 'planId',
-                          label: _('crm_backend.planner.plans'),
-                          type: 'select',
-                          required: true,
-                          options: options.plans.map((item) => ({
-                            value: String(item.id),
-                            label: String(item.name),
-                          })),
-                        },
-                        {
-                          name: 'anchorDate',
-                          label: _('crm_backend.activity.anchorDate'),
-                          type: 'date',
-                          required: true,
-                        },
-                      ],
-                      submit: _('crm_backend.activity.applyPlan'),
-                      submitVariant: 'secondary',
-                    }),
-                  }),
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={endpoint}
+                        hidden={{ action: 'applyPlan' }}
+                        fields={[
+                          {
+                            name: 'planId',
+                            label: _('crm_backend.planner.plans'),
+                            type: 'select',
+                            required: true,
+                            options: options.plans.map((item) => ({
+                              value: String(item.id),
+                              label: String(item.name),
+                            })),
+                          },
+                          {
+                            name: 'anchorDate',
+                            label: _('crm_backend.activity.anchorDate'),
+                            type: 'date',
+                            required: true,
+                          },
+                        ]}
+                        submit={_('crm_backend.activity.applyPlan')}
+                        submitVariant="secondary"
+                      />
+                    }
+                  />,
                 ]
               : []),
           ])
@@ -311,41 +324,45 @@ export const caseDetailScreen = (
                   },
                 ],
               }),
-              surface({
-                body: recordForm({
-                  action: endpoint,
-                  hidden: {
-                    action: 'save',
-                    expectedVersion: String(row.version ?? 0),
-                    kind: String(row.kind),
-                  },
-                  fields: options.fields,
-                  errors: options.errors,
-                  submit: _('crm_backend.action.save'),
-                  submitVariant: 'primary',
-                }),
-              }),
-              surface({
-                body: recordForm({
-                  action: endpoint,
-                  hidden: { action: 'move', expectedVersion: String(row.version ?? 0) },
-                  fields: [
-                    {
-                      name: 'stageId',
-                      label: _('crm_backend.field.stage'),
-                      type: 'select',
-                      value: String(row.stageId),
-                      required: true,
-                      options: options.stages.map((item) => ({
-                        value: String(item.id),
-                        label: String(item.name),
-                      })),
-                    },
-                  ],
-                  submit: _('crm_backend.action.move'),
-                  submitVariant: 'secondary',
-                }),
-              }),
+              <Surface
+                body={
+                  <RecordForm
+                    action={endpoint}
+                    hidden={{
+                      action: 'save',
+                      expectedVersion: String(row.version ?? 0),
+                      kind: String(row.kind),
+                    }}
+                    fields={options.fields}
+                    errors={options.errors}
+                    submit={_('crm_backend.action.save')}
+                    submitVariant="primary"
+                  />
+                }
+              />,
+              <Surface
+                body={
+                  <RecordForm
+                    action={endpoint}
+                    hidden={{ action: 'move', expectedVersion: String(row.version ?? 0) }}
+                    fields={[
+                      {
+                        name: 'stageId',
+                        label: _('crm_backend.field.stage'),
+                        type: 'select',
+                        value: String(row.stageId),
+                        required: true,
+                        options: options.stages.map((item) => ({
+                          value: String(item.id),
+                          label: String(item.name),
+                        })),
+                      },
+                    ]}
+                    submit={_('crm_backend.action.move')}
+                    submitVariant="secondary"
+                  />
+                }
+              />,
             ])
   const actions = [
     { value: 'refreshScore', label: _('crm_backend.action.refreshScore'), variant: 'secondary' as const },
@@ -359,97 +376,101 @@ export const caseDetailScreen = (
         ]
       : []),
   ]
-  return framed(
-    _,
-    String(row.name),
-    frame,
-    recordWorkspace({
-      kicker: local(_, 'kind', row.kind),
-      title: String(row.name),
-      subtitle: `${String(row.partnerName ?? '—')} · ${String(row.stageName ?? '—')}`,
-      imageFallback: icon('target'),
-      badges: [state(_, row.terminalState)],
-      summary: [
-        { id: 'priority', label: _('crm_backend.field.priority'), value: String(row.priority ?? 0) },
-        { id: 'score', label: _('crm_backend.field.score'), value: String(row.score ?? 0) },
-        { id: 'version', label: _('crm_backend.field.version'), value: String(row.version ?? 0) },
-      ],
-      navigation: tabs({
-        label: _('crm_backend.case.detail'),
-        items: [
-          {
-            id: 'overview',
-            label: _('crm_backend.case.tab.overview'),
-            href: href('overview'),
-            active: activeTab === 'overview',
-          },
-          {
-            id: 'sales',
-            label: _('crm_backend.case.tab.sales'),
-            href: href('sales'),
-            active: activeTab === 'sales',
-          },
-          {
-            id: 'activities',
-            label: _('crm_backend.case.tab.activities'),
-            href: href('activities'),
-            active: activeTab === 'activities',
-          },
-          {
-            id: 'timeline',
-            label: _('crm_backend.case.tab.timeline'),
-            href: href('timeline'),
-            active: activeTab === 'timeline',
-            count: timeline.length + messages.length,
-          },
-        ],
-      }),
-      controller: recordActions({ action: endpoint, actions }),
-      body: main,
-      aside: stack([
-        section({
-          title: _('crm_backend.attachments.title'),
-          body: attachmentPanel({
-            items: attachments.map((item) => ({
-              id: String(item.id),
-              name: String(item.name),
-              href: `/files/${String(item.id)}`,
-              size: Number(item.size ?? 0),
-              mimetype: String(item.mimetype ?? ''),
-            })),
-            uploadAction: `${endpoint}/attachments`,
-            emptyTitle: _('crm_backend.attachments.empty'),
-            emptyHint: _('crm_backend.attachments.emptyHint'),
-            chooseLabel: _('crm_backend.attachments.choose'),
-            uploadLabel: _('crm_backend.attachments.upload'),
-          }),
-        }),
-        section({
-          title: _('crm_backend.messages.title'),
-          body: stack([
-            recordForm({
-              action: endpoint,
-              hidden: { action: 'message' },
-              fields: [
-                {
-                  name: 'body',
-                  label: _('crm_backend.field.message'),
-                  type: 'textarea',
-                  required: true,
-                  span: 'full',
-                },
-              ],
-              submit: _('crm_backend.action.addNote'),
-              submitVariant: 'secondary',
-            }),
-            ...(messages.length
-              ? messages.map((item) => surface({ padding: 'compact', body: String(item.body) }))
-              : [empty(_)]),
-          ]),
-        }),
-      ]),
-      asideLabel: _('crm_backend.messages.title'),
-    }),
+  return (
+    <Framed
+      translator={_}
+      title={String(row.name)}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={local(_, 'kind', row.kind)}
+          title={String(row.name)}
+          subtitle={`${String(row.partnerName ?? '—')} · ${String(row.stageName ?? '—')}`}
+          imageFallback={icon('target')}
+          badges={[state(_, row.terminalState)]}
+          summary={[
+            { id: 'priority', label: _('crm_backend.field.priority'), value: String(row.priority ?? 0) },
+            { id: 'score', label: _('crm_backend.field.score'), value: String(row.score ?? 0) },
+            { id: 'version', label: _('crm_backend.field.version'), value: String(row.version ?? 0) },
+          ]}
+          navigation={tabs({
+            label: _('crm_backend.case.detail'),
+            items: [
+              {
+                id: 'overview',
+                label: _('crm_backend.case.tab.overview'),
+                href: href('overview'),
+                active: activeTab === 'overview',
+              },
+              {
+                id: 'sales',
+                label: _('crm_backend.case.tab.sales'),
+                href: href('sales'),
+                active: activeTab === 'sales',
+              },
+              {
+                id: 'activities',
+                label: _('crm_backend.case.tab.activities'),
+                href: href('activities'),
+                active: activeTab === 'activities',
+              },
+              {
+                id: 'timeline',
+                label: _('crm_backend.case.tab.timeline'),
+                href: href('timeline'),
+                active: activeTab === 'timeline',
+                count: timeline.length + messages.length,
+              },
+            ],
+          })}
+          controller={recordActions({ action: endpoint, actions })}
+          body={main}
+          aside={stack([
+            <Section
+              title={_('crm_backend.attachments.title')}
+              body={attachmentPanel({
+                items: attachments.map((item) => ({
+                  id: String(item.id),
+                  name: String(item.name),
+                  href: `/files/${String(item.id)}`,
+                  size: Number(item.size ?? 0),
+                  mimetype: String(item.mimetype ?? ''),
+                })),
+                uploadAction: `${endpoint}/attachments`,
+                emptyTitle: _('crm_backend.attachments.empty'),
+                emptyHint: _('crm_backend.attachments.emptyHint'),
+                chooseLabel: _('crm_backend.attachments.choose'),
+                uploadLabel: _('crm_backend.attachments.upload'),
+              })}
+            />,
+            <Section
+              title={_('crm_backend.messages.title')}
+              body={stack([
+                <RecordForm
+                  action={endpoint}
+                  hidden={{ action: 'message' }}
+                  fields={[
+                    {
+                      name: 'body',
+                      label: _('crm_backend.field.message'),
+                      type: 'textarea',
+                      required: true,
+                      span: 'full',
+                    },
+                  ]}
+                  submit={_('crm_backend.action.addNote')}
+                  submitVariant="secondary"
+                />,
+                ...(messages.length
+                  ? messages.map((item) => <Surface padding="compact" body={String(item.body)} />)
+                  : [empty(_)]),
+              ])}
+            />,
+          ])}
+          asideLabel={_('crm_backend.messages.title')}
+        />
+      }
+    />
   )
 }
 
@@ -469,90 +490,94 @@ export const plannerScreen = (
 ): TemplateResult => {
   const rows =
     options.tab === 'plans' ? options.plans : options.tab === 'calendar' ? options.events : options.activities
-  return framed(
-    _,
-    _('crm_backend.planner.title'),
-    frame,
-    stack([
-      tabs({
-        label: _('crm_backend.planner.title'),
-        items: ['mine', 'plans', 'calendar'].map((id) => ({
-          id,
-          label: _(`crm_backend.planner.${id}`),
-          href: `/admin/crm/activities?tab=${id}`,
-          active: options.tab === id,
-        })),
-      }),
-      ...(options.tab === 'mine'
-        ? [
-            surface({
-              body: recordForm({
-                action: '/admin/crm/activities?tab=mine',
-                hidden: { action: 'schedule' },
-                fields: [
-                  {
-                    name: 'caseId',
-                    label: _('crm_backend.planner.target'),
-                    type: 'select',
-                    required: true,
-                    options: options.cases.map((item) => ({
-                      value: String(item.id),
-                      label: String(item.name),
-                    })),
-                  },
-                  {
-                    name: 'typeId',
-                    label: _('crm_backend.activity.type'),
-                    type: 'select',
-                    options: options.activityTypes.map((item) => ({
-                      value: String(item.id),
-                      label: String(item.name),
-                    })),
-                  },
-                  {
-                    name: 'assigneeUserId',
-                    label: _('crm_backend.field.assignee'),
-                    type: 'select',
-                    options: options.users.map((item) => ({
-                      value: String(item.id),
-                      label: String(item.name),
-                    })),
-                  },
-                  { name: 'summary', label: _('crm_backend.field.name'), required: true },
-                  { name: 'dueDate', label: _('crm_backend.field.dueAt'), type: 'date', required: true },
-                ],
-                errors: options.errors,
-                submit: _('crm_backend.activity.schedule'),
-                submitVariant: 'primary',
-              }),
-            }),
-          ]
-        : []),
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (item) => String(item.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('crm_backend.field.name'),
-                priority: 'primary',
-                cell: (item) => String(item.name ?? item.summary ?? '—'),
-              },
-              {
-                key: 'date',
-                label: _('crm_backend.field.dueAt'),
-                cell: (item) => String(item.dueDate ?? item.startAt ?? '—'),
-              },
-              {
-                key: 'state',
-                label: _('crm_backend.field.state'),
-                cell: (item) => String(item.state ?? '—'),
-              },
-            ],
-          })
-        : empty(_),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('crm_backend.planner.title')}
+      frame={frame}
+      body={stack([
+        tabs({
+          label: _('crm_backend.planner.title'),
+          items: ['mine', 'plans', 'calendar'].map((id) => ({
+            id,
+            label: _(`crm_backend.planner.${id}`),
+            href: `/admin/crm/activities?tab=${id}`,
+            active: options.tab === id,
+          })),
+        }),
+        ...(options.tab === 'mine'
+          ? [
+              <Surface
+                body={
+                  <RecordForm
+                    action="/admin/crm/activities?tab=mine"
+                    hidden={{ action: 'schedule' }}
+                    fields={[
+                      {
+                        name: 'caseId',
+                        label: _('crm_backend.planner.target'),
+                        type: 'select',
+                        required: true,
+                        options: options.cases.map((item) => ({
+                          value: String(item.id),
+                          label: String(item.name),
+                        })),
+                      },
+                      {
+                        name: 'typeId',
+                        label: _('crm_backend.activity.type'),
+                        type: 'select',
+                        options: options.activityTypes.map((item) => ({
+                          value: String(item.id),
+                          label: String(item.name),
+                        })),
+                      },
+                      {
+                        name: 'assigneeUserId',
+                        label: _('crm_backend.field.assignee'),
+                        type: 'select',
+                        options: options.users.map((item) => ({
+                          value: String(item.id),
+                          label: String(item.name),
+                        })),
+                      },
+                      { name: 'summary', label: _('crm_backend.field.name'), required: true },
+                      { name: 'dueDate', label: _('crm_backend.field.dueAt'), type: 'date', required: true },
+                    ]}
+                    errors={options.errors}
+                    submit={_('crm_backend.activity.schedule')}
+                    submitVariant="primary"
+                  />
+                }
+              />,
+            ]
+          : []),
+        rows.length
+          ? dataTable(_, {
+              rows,
+              id: (item) => String(item.id),
+              columns: [
+                {
+                  key: 'name',
+                  label: _('crm_backend.field.name'),
+                  priority: 'primary',
+                  cell: (item) => String(item.name ?? item.summary ?? '—'),
+                },
+                {
+                  key: 'date',
+                  label: _('crm_backend.field.dueAt'),
+                  cell: (item) => String(item.dueDate ?? item.startAt ?? '—'),
+                },
+                {
+                  key: 'state',
+                  label: _('crm_backend.field.state'),
+                  cell: (item) => String(item.state ?? '—'),
+                },
+              ],
+            })
+          : empty(_),
+      ])}
+    />
   )
 }
 
@@ -563,12 +588,12 @@ export const configurationScreen = (
   rows: AnyRow[],
   fields: FormField[],
   errors: string[] = [],
-): TemplateResult =>
-  framed(
-    _,
-    _('crm_backend.configuration.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('crm_backend.configuration.title')}
+    frame={frame}
+    body={stack([
       tabs({
         label: _('crm_backend.configuration.title'),
         items: ['teams', 'stages', 'assignmentRules', 'scoreRules'].map((id) => ({
@@ -578,15 +603,17 @@ export const configurationScreen = (
           active: tab === id,
         })),
       }),
-      surface({
-        body: recordForm({
-          action: `/admin/crm/configuration?tab=${tab}`,
-          fields,
-          errors,
-          submit: _('crm_backend.action.save'),
-          submitVariant: 'primary',
-        }),
-      }),
+      <Surface
+        body={
+          <RecordForm
+            action={`/admin/crm/configuration?tab=${tab}`}
+            fields={fields}
+            errors={errors}
+            submit={_('crm_backend.action.save')}
+            submitVariant="primary"
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -611,5 +638,6 @@ export const configurationScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)

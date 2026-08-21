@@ -8,15 +8,15 @@ import {
   dataTable,
   definitionList,
   emptyState,
-  framed,
+  framedPage as Framed,
   inline,
   linkButton,
   notice,
   recordActions,
-  recordForm,
-  section,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 
@@ -66,12 +66,12 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
-): TemplateResult =>
-  framed(
-    _,
-    _('oauth_backend.providers.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('oauth_backend.providers.title')}
+    frame={frame}
+    body={stack([
       inline([
         linkButton({
           label: _('oauth_backend.action.create'),
@@ -134,8 +134,9 @@ export const providersScreen = (
               },
             ],
           }),
-    ]),
-  )
+    ])}
+  />
+)
 
 type ProviderOptions = {
   companies: FormOption[]
@@ -255,83 +256,91 @@ export const providerFormScreen = (
   locale = '',
 ): TemplateResult => {
   const existing = Boolean(row.id)
-  return framed(
-    _,
-    existing ? String(row.name) : _('oauth_backend.providers.create'),
-    frame,
-    stack([
-      ...(existing
-        ? [
-            section({
-              title: _('oauth_backend.status.title'),
-              body: surface({
-                body: recordActions({
-                  action: localized(`/admin/oauth/providers/${row.id}/archive`, locale),
-                  actions: [
-                    row.active
-                      ? {
-                          value: 'archive',
-                          label: _('oauth_backend.action.archive'),
-                          variant: 'destructive' as const,
-                        }
-                      : {
-                          value: 'restore',
-                          label: _('oauth_backend.action.restore'),
-                          variant: 'secondary' as const,
-                        },
+  return (
+    <Framed
+      translator={_}
+      title={existing ? String(row.name) : _('oauth_backend.providers.create')}
+      frame={frame}
+      body={stack([
+        ...(existing
+          ? [
+              <Section
+                title={_('oauth_backend.status.title')}
+                body={
+                  <Surface
+                    body={recordActions({
+                      action: localized(`/admin/oauth/providers/${row.id}/archive`, locale),
+                      actions: [
+                        row.active
+                          ? {
+                              value: 'archive',
+                              label: _('oauth_backend.action.archive'),
+                              variant: 'destructive' as const,
+                            }
+                          : {
+                              value: 'restore',
+                              label: _('oauth_backend.action.restore'),
+                              variant: 'secondary' as const,
+                            },
+                      ],
+                    })}
+                  />
+                }
+              />,
+            ]
+          : []),
+        <Section
+          title={_('oauth_backend.configuration.title')}
+          description={_('oauth_backend.configuration.hint')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action={localized(
+                    existing ? `/admin/oauth/providers/${row.id}` : '/admin/oauth/providers/new',
+                    locale,
+                  )}
+                  fields={providerFields(_, row, options)}
+                  submit={_('oauth_backend.action.save')}
+                  submitVariant="primary"
+                  errors={options.errors}
+                  cancelHref={localized('/admin/oauth/providers', locale)}
+                  cancelLabel={_('oauth_backend.action.cancel')}
+                />
+              }
+            />
+          }
+        />,
+        ...(existing
+          ? [
+              <Section
+                title={_('oauth_backend.integration.title')}
+                description={_('oauth_backend.integration.hint')}
+                body={definitionList({
+                  title: _('oauth_backend.integration.values'),
+                  items: [
+                    { key: 'issuer', term: _('oauth_backend.field.issuer'), value: String(row.issuer) },
+                    {
+                      key: 'redirect',
+                      term: _('oauth_backend.field.redirectUri'),
+                      value: String(row.redirectUri),
+                    },
+                    {
+                      key: 'secret',
+                      term: _('oauth_backend.field.clientSecretEnv'),
+                      value: row.clientSecretEnv || _('oauth_backend.clientAuth.none'),
+                    },
                   ],
-                }),
-              }),
-            }),
-          ]
-        : []),
-      section({
-        title: _('oauth_backend.configuration.title'),
-        description: _('oauth_backend.configuration.hint'),
-        body: surface({
-          body: recordForm({
-            action: localized(
-              existing ? `/admin/oauth/providers/${row.id}` : '/admin/oauth/providers/new',
-              locale,
-            ),
-            fields: providerFields(_, row, options),
-            submit: _('oauth_backend.action.save'),
-            submitVariant: 'primary',
-            errors: options.errors,
-            cancelHref: localized('/admin/oauth/providers', locale),
-            cancelLabel: _('oauth_backend.action.cancel'),
-          }),
-        }),
-      }),
-      ...(existing
-        ? [
-            section({
-              title: _('oauth_backend.integration.title'),
-              description: _('oauth_backend.integration.hint'),
-              body: definitionList({
-                title: _('oauth_backend.integration.values'),
-                items: [
-                  { key: 'issuer', term: _('oauth_backend.field.issuer'), value: String(row.issuer) },
-                  {
-                    key: 'redirect',
-                    term: _('oauth_backend.field.redirectUri'),
-                    value: String(row.redirectUri),
-                  },
-                  {
-                    key: 'secret',
-                    term: _('oauth_backend.field.clientSecretEnv'),
-                    value: row.clientSecretEnv || _('oauth_backend.clientAuth.none'),
-                  },
-                ],
-              }),
-              actions: linkButton({
-                label: _('oauth_backend.action.viewIdentities'),
-                href: localized(`/admin/oauth/identities?provider=${row.id}`, locale),
-              }),
-            }),
-          ]
-        : []),
-    ]),
+                })}
+                actions={linkButton({
+                  label: _('oauth_backend.action.viewIdentities'),
+                  href: localized(`/admin/oauth/identities?provider=${row.id}`, locale),
+                })}
+              />,
+            ]
+          : []),
+      ])}
+    />
   )
 }
 
@@ -341,12 +350,12 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
-): TemplateResult =>
-  framed(
-    _,
-    _('oauth_backend.identities.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('oauth_backend.identities.title')}
+    frame={frame}
+    body={stack([
       ...(errors.length
         ? [notice({ tone: 'danger', title: _('oauth_backend.error.title'), message: errors.join(' ') })]
         : []),
@@ -403,8 +412,9 @@ export const identitiesScreen = (
               },
             ],
           }),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const identityFormScreen = (
   _: Translator,
@@ -412,52 +422,68 @@ export const identityFormScreen = (
   options: { providers: FormOption[]; users: FormOption[]; errors?: string[] },
   frame: Frame,
   locale = '',
-): TemplateResult =>
-  framed(
-    _,
-    _('oauth_backend.identities.link'),
-    frame,
-    section({
-      title: _('oauth_backend.identities.verifiedSubject'),
-      description: _('oauth_backend.identities.linkHint'),
-      body: surface({
-        body: recordForm({
-          action: localized('/admin/oauth/identities/new', locale),
-          fields: [
-            {
-              name: 'providerId',
-              label: _('oauth_backend.field.provider'),
-              type: 'select',
-              value: row.providerId,
-              options: options.providers,
-              required: true,
-            },
-            {
-              name: 'userId',
-              label: _('oauth_backend.field.user'),
-              type: 'select',
-              value: row.userId,
-              options: options.users,
-              required: true,
-            },
-            { name: 'subject', label: _('oauth_backend.field.subject'), value: row.subject, required: true },
-            { name: 'email', label: _('oauth_backend.field.email'), value: row.email },
-            { name: 'displayName', label: _('oauth_backend.field.displayName'), value: row.displayName },
-            {
-              name: 'preferredUsername',
-              label: _('oauth_backend.field.preferredUsername'),
-              value: row.preferredUsername,
-            },
-          ],
-          submit: _('oauth_backend.action.link'),
-          submitVariant: 'primary',
-          errors: options.errors,
-          cancelHref: localized('/admin/oauth/identities', locale),
-          cancelLabel: _('oauth_backend.action.cancel'),
-        }),
-      }),
-    }),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('oauth_backend.identities.link')}
+    frame={frame}
+    body={
+      <Section
+        title={_('oauth_backend.identities.verifiedSubject')}
+        description={_('oauth_backend.identities.linkHint')}
+        body={
+          <Surface
+            body={
+              <RecordForm
+                action={localized('/admin/oauth/identities/new', locale)}
+                fields={[
+                  {
+                    name: 'providerId',
+                    label: _('oauth_backend.field.provider'),
+                    type: 'select',
+                    value: row.providerId,
+                    options: options.providers,
+                    required: true,
+                  },
+                  {
+                    name: 'userId',
+                    label: _('oauth_backend.field.user'),
+                    type: 'select',
+                    value: row.userId,
+                    options: options.users,
+                    required: true,
+                  },
+                  {
+                    name: 'subject',
+                    label: _('oauth_backend.field.subject'),
+                    value: row.subject,
+                    required: true,
+                  },
+                  { name: 'email', label: _('oauth_backend.field.email'), value: row.email },
+                  {
+                    name: 'displayName',
+                    label: _('oauth_backend.field.displayName'),
+                    value: row.displayName,
+                  },
+                  {
+                    name: 'preferredUsername',
+                    label: _('oauth_backend.field.preferredUsername'),
+                    value: row.preferredUsername,
+                  },
+                ]}
+                submit={_('oauth_backend.action.link')}
+                submitVariant="primary"
+                errors={options.errors}
+                cancelHref={localized('/admin/oauth/identities', locale)}
+                cancelLabel={_('oauth_backend.action.cancel')}
+              />
+            }
+          />
+        }
+      />
+    }
+  />
+)
 
 export const linkProviderScreen = (
   _: Translator,
@@ -467,38 +493,43 @@ export const linkProviderScreen = (
   locale = '',
 ): TemplateResult => {
   const linked = new Set(identities.map((identity) => identity.providerId))
-  return framed(
-    _,
-    _('oauth_backend.link.title'),
-    frame,
-    section({
-      title: _('oauth_backend.link.choose'),
-      description: _('oauth_backend.link.hint'),
-      body:
-        providers.length === 0
-          ? emptyState(_('oauth_backend.link.empty'), _('oauth_backend.link.emptyHint'))
-          : cardGrid({
-              items: providers,
-              id: (provider) => provider.id,
-              card: (provider) =>
-                contentCard({
-                  title: provider.name,
-                  summary: linked.has(provider.id)
-                    ? _('oauth_backend.link.alreadyLinked')
-                    : _('oauth_backend.link.ready'),
-                  meta: code(provider.code),
-                  actions: linkButton({
-                    label: linked.has(provider.id)
-                      ? _('oauth_backend.link.linkAnother')
-                      : _('oauth_backend.link.action'),
-                    href: localized(
-                      `/auth/oauth/${provider.code}/start?mode=link&next=/admin/profile`,
-                      locale,
-                    ),
-                    variant: 'primary',
-                  }),
-                }),
-            }),
-    }),
+  return (
+    <Framed
+      translator={_}
+      title={_('oauth_backend.link.title')}
+      frame={frame}
+      body={
+        <Section
+          title={_('oauth_backend.link.choose')}
+          description={_('oauth_backend.link.hint')}
+          body={
+            providers.length === 0
+              ? emptyState(_('oauth_backend.link.empty'), _('oauth_backend.link.emptyHint'))
+              : cardGrid({
+                  items: providers,
+                  id: (provider) => provider.id,
+                  card: (provider) =>
+                    contentCard({
+                      title: provider.name,
+                      summary: linked.has(provider.id)
+                        ? _('oauth_backend.link.alreadyLinked')
+                        : _('oauth_backend.link.ready'),
+                      meta: code(provider.code),
+                      actions: linkButton({
+                        label: linked.has(provider.id)
+                          ? _('oauth_backend.link.linkAnother')
+                          : _('oauth_backend.link.action'),
+                        href: localized(
+                          `/auth/oauth/${provider.code}/start?mode=link&next=/admin/profile`,
+                          locale,
+                        ),
+                        variant: 'primary',
+                      }),
+                    }),
+                })
+          }
+        />
+      }
+    />
   )
 }

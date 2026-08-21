@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -88,51 +88,55 @@ export const vendorBillsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.vendorBills.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.vendorBill.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.vendorBills.title')}
-      subtitle={_('account_backend.vendorBill.subtitle')}
-      imageFallback={icon('banknote')}
-      summary={[
-        { id: 'total', label: _('account_backend.vendorBill.summary.total'), value: options.rows.length },
-        { id: 'draft', label: _('account_backend.vendorBill.summary.draft'), value: draft },
-        { id: 'posted', label: _('account_backend.vendorBill.summary.posted'), value: posted },
-        { id: 'unpaid', label: _('account_backend.vendorBill.summary.unpaid'), value: unpaid },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.vendorBill.create.title')}
-            description={_('account_backend.vendorBill.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.vendorBill.kicker')}
+          title={_('account_backend.vendorBills.title')}
+          subtitle={_('account_backend.vendorBill.subtitle')}
+          imageFallback={icon('banknote')}
+          summary={[
+            { id: 'total', label: _('account_backend.vendorBill.summary.total'), value: options.rows.length },
+            { id: 'draft', label: _('account_backend.vendorBill.summary.draft'), value: draft },
+            { id: 'posted', label: _('account_backend.vendorBill.summary.posted'), value: posted },
+            { id: 'unpaid', label: _('account_backend.vendorBill.summary.unpaid'), value: unpaid },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.vendorBill.create.title')}
+                description={_('account_backend.vendorBill.create.hint')}
                 body={
-                  <RecordForm
-                    id="vendor-bill-create-form"
-                    scope="account-vendor-bill"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="vendor-bill-create-form"
+                        scope="account-vendor-bill"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.vendorBill.list.title')}
-            description={_('account_backend.vendorBill.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.vendorBill.list.title')}
+                description={_('account_backend.vendorBill.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

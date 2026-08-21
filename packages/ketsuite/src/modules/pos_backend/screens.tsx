@@ -7,14 +7,14 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   linkButton,
   metric,
   recordActions,
-  recordForm,
-  section,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 
@@ -34,45 +34,47 @@ export const dashboard = (
 ): TemplateResult => {
   const paidOrders = orders.filter((row) => ['paid', 'done'].includes(String(row.state)))
   const sales = paidOrders.reduce((sum, row) => sum + Number(row.amountTotal), 0)
-  return framed(
-    _,
-    _('pos_backend.dashboard.title'),
-    frame,
-    cardGrid({
-      items: [
-        {
-          id: 'open',
-          title: _('pos_backend.dashboard.openSessions'),
-          value: sessions.filter((r) => r.state !== 'closed').length,
-          href: '/admin/pos/sessions',
-        },
-        {
-          id: 'draft',
-          title: _('pos_backend.dashboard.draftOrders'),
-          value: orders.filter((r) => r.state === 'draft').length,
-          href: '/admin/pos/orders?state=draft',
-        },
-        {
-          id: 'paid',
-          title: _('pos_backend.dashboard.paidOrders'),
-          value: paidOrders.length,
-          href: '/admin/pos/orders',
-        },
-        {
-          id: 'sales',
-          title: _('pos_backend.dashboard.sales'),
-          value: formatMoney(_, sales, paidOrders[0]?.currency),
-          href: '/admin/pos/orders',
-        },
-      ],
-      id: (item) => item.id,
-      card: (item) =>
-        contentCard({
-          title: item.title,
-          href: item.href,
-          body: metric({ label: item.title, value: String(item.value) }),
-        }),
-    }),
+  return (
+    <Framed
+      translator={_}
+      title={_('pos_backend.dashboard.title')}
+      frame={frame}
+      body={cardGrid({
+        items: [
+          {
+            id: 'open',
+            title: _('pos_backend.dashboard.openSessions'),
+            value: sessions.filter((r) => r.state !== 'closed').length,
+            href: '/admin/pos/sessions',
+          },
+          {
+            id: 'draft',
+            title: _('pos_backend.dashboard.draftOrders'),
+            value: orders.filter((r) => r.state === 'draft').length,
+            href: '/admin/pos/orders?state=draft',
+          },
+          {
+            id: 'paid',
+            title: _('pos_backend.dashboard.paidOrders'),
+            value: paidOrders.length,
+            href: '/admin/pos/orders',
+          },
+          {
+            id: 'sales',
+            title: _('pos_backend.dashboard.sales'),
+            value: formatMoney(_, sales, paidOrders[0]?.currency),
+            href: '/admin/pos/orders',
+          },
+        ],
+        id: (item) => item.id,
+        card: (item) =>
+          contentCard({
+            title: item.title,
+            href: item.href,
+            body: metric({ label: item.title, value: String(item.value) }),
+          }),
+      })}
+    />
   )
 }
 
@@ -81,20 +83,22 @@ export const configsScreen = (
   frame: Frame,
   rows: AnyRow[],
   fields: FormField[],
-): TemplateResult =>
-  framed(
-    _,
-    _('pos_backend.configs.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: '/admin/pos/configurations',
-          submit: _('pos_backend.action.saveConfig'),
-          submitVariant: 'primary',
-          fields,
-        }),
-      }),
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('pos_backend.configs.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/pos/configurations"
+            submit={_('pos_backend.action.saveConfig')}
+            submitVariant="primary"
+            fields={fields}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -121,8 +125,9 @@ export const configsScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const methodsScreen = (
   _: Translator,
@@ -130,30 +135,34 @@ export const methodsScreen = (
   rows: AnyRow[],
   fields: FormField[],
   linkFields: FormField[],
-): TemplateResult =>
-  framed(
-    _,
-    _('pos_backend.methods.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: '/admin/pos/payment-methods',
-          submit: _('pos_backend.action.saveMethod'),
-          submitVariant: 'secondary',
-          hidden: { action: 'save' },
-          fields,
-        }),
-      }),
-      surface({
-        body: recordForm({
-          action: '/admin/pos/payment-methods',
-          submit: _('pos_backend.action.linkMethod'),
-          submitVariant: 'secondary',
-          hidden: { action: 'link' },
-          fields: linkFields,
-        }),
-      }),
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('pos_backend.methods.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/pos/payment-methods"
+            submit={_('pos_backend.action.saveMethod')}
+            submitVariant="secondary"
+            hidden={{ action: 'save' }}
+            fields={fields}
+          />
+        }
+      />,
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/pos/payment-methods"
+            submit={_('pos_backend.action.linkMethod')}
+            submitVariant="secondary"
+            hidden={{ action: 'link' }}
+            fields={linkFields}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -178,28 +187,31 @@ export const methodsScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const sessionsScreen = (
   _: Translator,
   frame: Frame,
   rows: AnyRow[],
   fields: FormField[],
-): TemplateResult =>
-  framed(
-    _,
-    _('pos_backend.sessions.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: '/admin/pos/sessions',
-          submit: _('pos_backend.action.createSession'),
-          submitVariant: 'primary',
-          fields,
-        }),
-      }),
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('pos_backend.sessions.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/pos/sessions"
+            submit={_('pos_backend.action.createSession')}
+            submitVariant="primary"
+            fields={fields}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -234,8 +246,9 @@ export const sessionsScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const sessionDetail = (
   _: Translator,
@@ -256,58 +269,64 @@ export const sessionDetail = (
     actions.push({ value: 'open', label: _('pos_backend.action.openSession'), variant: 'primary' })
   if (state === 'opened')
     actions.push({ value: 'closing', label: _('pos_backend.action.startClosing'), variant: 'primary' })
-  return framed(
-    _,
-    String(session.name),
-    frame,
-    stack([
-      cardGrid({
-        items: [
-          { id: 'state', title: _('pos_backend.field.state'), value: labelOf(_, 'sessionState', state) },
-          { id: 'orders', title: _('pos_backend.field.orders'), value: String(orders.length) },
-          {
-            id: 'cash',
-            title: _('pos_backend.field.expectedCash'),
-            value: formatMoney(_, session.cashRegisterBalanceEnd, orders[0]?.currency ?? currency),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-      }),
-      ...(actions.length ? [surface({ body: recordActions({ action: actionPath, actions }) })] : []),
-      ...(state === 'opened'
-        ? [
-            surface({
-              body: linkButton({
-                label: _('pos_backend.action.openRegister'),
-                href: `/admin/pos/register/${String(session.id)}`,
-                variant: 'primary',
-              }),
-            }),
-          ]
-        : []),
-      ...(state === 'closing_control'
-        ? [
-            section({
-              title: _('pos_backend.close.title'),
-              body: surface({
-                body: recordForm({
-                  action: actionPath,
-                  submit: _('pos_backend.action.closeSession'),
-                  submitVariant: 'primary',
-                  hidden: { action: 'close' },
-                  fields: closeFields,
-                }),
-              }),
-            }),
-          ]
-        : []),
-      section({
-        title: _('pos_backend.orders.title'),
-        body: orders.length ? orderTable(_, orders) : empty(_),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={String(session.name)}
+      frame={frame}
+      body={stack([
+        cardGrid({
+          items: [
+            { id: 'state', title: _('pos_backend.field.state'), value: labelOf(_, 'sessionState', state) },
+            { id: 'orders', title: _('pos_backend.field.orders'), value: String(orders.length) },
+            {
+              id: 'cash',
+              title: _('pos_backend.field.expectedCash'),
+              value: formatMoney(_, session.cashRegisterBalanceEnd, orders[0]?.currency ?? currency),
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) =>
+            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
+        }),
+        ...(actions.length ? [<Surface body={recordActions({ action: actionPath, actions })} />] : []),
+        ...(state === 'opened'
+          ? [
+              <Surface
+                body={linkButton({
+                  label: _('pos_backend.action.openRegister'),
+                  href: `/admin/pos/register/${String(session.id)}`,
+                  variant: 'primary',
+                })}
+              />,
+            ]
+          : []),
+        ...(state === 'closing_control'
+          ? [
+              <Section
+                title={_('pos_backend.close.title')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={actionPath}
+                        submit={_('pos_backend.action.closeSession')}
+                        submitVariant="primary"
+                        hidden={{ action: 'close' }}
+                        fields={closeFields}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
+        <Section
+          title={_('pos_backend.orders.title')}
+          body={orders.length ? orderTable(_, orders) : empty(_)}
+        />,
+      ])}
+    />
   )
 }
 
@@ -343,8 +362,14 @@ const orderTable = (_: Translator, rows: AnyRow[]) =>
     ],
   })
 
-export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult =>
-  framed(_, _('pos_backend.orders.title'), frame, rows.length ? orderTable(_, rows) : empty(_))
+export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('pos_backend.orders.title')}
+    frame={frame}
+    body={rows.length ? orderTable(_, rows) : empty(_)}
+  />
+)
 
 export const registerScreen = (
   _: Translator,
@@ -353,23 +378,26 @@ export const registerScreen = (
   orders: AnyRow[],
   createFields: FormField[],
   actionPath: string,
-): TemplateResult =>
-  framed(
-    _,
-    _('pos_backend.register.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: actionPath,
-          submit: _('pos_backend.action.newOrder'),
-          submitVariant: 'primary',
-          fields: createFields,
-        }),
-      }),
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('pos_backend.register.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action={actionPath}
+            submit={_('pos_backend.action.newOrder')}
+            submitVariant="primary"
+            fields={createFields}
+          />
+        }
+      />,
       orders.length ? orderTable(_, orders) : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const orderDetail = (
   _: Translator,
@@ -394,122 +422,144 @@ export const orderDetail = (
   }
   if (['paid', 'done'].includes(String(order.state)) && !order.isRefund)
     actions.push({ value: 'refund', label: _('pos_backend.action.refund') })
-  return framed(
-    _,
-    String(order.posReference),
-    frame,
-    stack([
-      cardGrid({
-        items: [
-          { id: 'state', title: _('pos_backend.field.state'), value: labelOf(_, 'orderState', order.state) },
-          { id: 'customer', title: _('pos_backend.field.customer'), value: String(order.partnerName ?? '—') },
-          {
-            id: 'total',
-            title: _('pos_backend.field.total'),
-            value: formatMoney(_, order.amountTotal, order.currency),
-          },
-          {
-            id: 'paid',
-            title: _('pos_backend.field.paid'),
-            value: formatMoney(_, order.amountPaid, order.currency),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-      }),
-      ...(integration === undefined ? [] : [integration]),
-      ...(actions.length ? [surface({ body: recordActions({ action: actionPath, actions }) })] : []),
-      section({
-        title: _('pos_backend.lines.title'),
-        body: lines.length
-          ? dataTable(_, {
-              rows: lines,
-              id: (r) => String(r.id),
-              columns: [
-                {
-                  key: 'product',
-                  label: _('pos_backend.field.product'),
-                  cell: (r) => String(r.name),
-                  priority: 'primary',
-                },
-                { key: 'qty', label: _('pos_backend.field.qty'), cell: (r) => String(r.qty) },
-                {
-                  key: 'price',
-                  label: _('pos_backend.field.priceUnit'),
-                  cell: (r) => formatMoney(_, r.priceUnit, order.currency),
-                  align: 'end',
-                  kind: 'currency',
-                },
-                { key: 'discount', label: _('pos_backend.field.discount'), cell: (r) => String(r.discount) },
-                {
-                  key: 'subtotal',
-                  label: _('pos_backend.field.subtotal'),
-                  cell: (r) => formatMoney(_, r.priceSubtotalIncl, order.currency),
-                  align: 'end',
-                  kind: 'currency',
-                },
-              ],
-            })
-          : empty(_),
-      }),
-      ...(draft && !order.isRefund
-        ? [
-            section({
-              title: _('pos_backend.lines.add'),
-              body: surface({
-                body: recordForm({
-                  action: actionPath,
-                  submit: _('pos_backend.action.addProduct'),
-                  submitVariant: 'secondary',
-                  hidden: { action: 'line' },
-                  fields: lineFields,
-                }),
-              }),
-            }),
-          ]
-        : []),
-      ...(draft
-        ? [
-            section({
-              title: _('pos_backend.payments.title'),
-              body: stack([
-                ...(payments.length
-                  ? [
-                      dataTable(_, {
-                        rows: payments,
-                        id: (r) => String(r.id),
-                        columns: [
-                          {
-                            key: 'method',
-                            label: _('pos_backend.field.paymentMethod'),
-                            cell: (r) => String(r.methodName ?? r.paymentMethodId),
-                            priority: 'primary',
-                          },
-                          {
-                            key: 'amount',
-                            label: _('pos_backend.field.amount'),
-                            cell: (r) => formatMoney(_, r.amount, order.currency),
-                            align: 'end',
-                            kind: 'currency',
-                          },
-                        ],
-                      }),
-                    ]
-                  : []),
-                surface({
-                  body: recordForm({
-                    action: actionPath,
-                    submit: _('pos_backend.action.addPayment'),
-                    submitVariant: 'secondary',
-                    hidden: { action: 'payment' },
-                    fields: paymentFields,
-                  }),
-                }),
-              ]),
-            }),
-          ]
-        : []),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={String(order.posReference)}
+      frame={frame}
+      body={stack([
+        cardGrid({
+          items: [
+            {
+              id: 'state',
+              title: _('pos_backend.field.state'),
+              value: labelOf(_, 'orderState', order.state),
+            },
+            {
+              id: 'customer',
+              title: _('pos_backend.field.customer'),
+              value: String(order.partnerName ?? '—'),
+            },
+            {
+              id: 'total',
+              title: _('pos_backend.field.total'),
+              value: formatMoney(_, order.amountTotal, order.currency),
+            },
+            {
+              id: 'paid',
+              title: _('pos_backend.field.paid'),
+              value: formatMoney(_, order.amountPaid, order.currency),
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) =>
+            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
+        }),
+        ...(integration === undefined ? [] : [integration]),
+        ...(actions.length ? [<Surface body={recordActions({ action: actionPath, actions })} />] : []),
+        <Section
+          title={_('pos_backend.lines.title')}
+          body={
+            lines.length
+              ? dataTable(_, {
+                  rows: lines,
+                  id: (r) => String(r.id),
+                  columns: [
+                    {
+                      key: 'product',
+                      label: _('pos_backend.field.product'),
+                      cell: (r) => String(r.name),
+                      priority: 'primary',
+                    },
+                    { key: 'qty', label: _('pos_backend.field.qty'), cell: (r) => String(r.qty) },
+                    {
+                      key: 'price',
+                      label: _('pos_backend.field.priceUnit'),
+                      cell: (r) => formatMoney(_, r.priceUnit, order.currency),
+                      align: 'end',
+                      kind: 'currency',
+                    },
+                    {
+                      key: 'discount',
+                      label: _('pos_backend.field.discount'),
+                      cell: (r) => String(r.discount),
+                    },
+                    {
+                      key: 'subtotal',
+                      label: _('pos_backend.field.subtotal'),
+                      cell: (r) => formatMoney(_, r.priceSubtotalIncl, order.currency),
+                      align: 'end',
+                      kind: 'currency',
+                    },
+                  ],
+                })
+              : empty(_)
+          }
+        />,
+        ...(draft && !order.isRefund
+          ? [
+              <Section
+                title={_('pos_backend.lines.add')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={actionPath}
+                        submit={_('pos_backend.action.addProduct')}
+                        submitVariant="secondary"
+                        hidden={{ action: 'line' }}
+                        fields={lineFields}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
+        ...(draft
+          ? [
+              <Section
+                title={_('pos_backend.payments.title')}
+                body={stack([
+                  ...(payments.length
+                    ? [
+                        dataTable(_, {
+                          rows: payments,
+                          id: (r) => String(r.id),
+                          columns: [
+                            {
+                              key: 'method',
+                              label: _('pos_backend.field.paymentMethod'),
+                              cell: (r) => String(r.methodName ?? r.paymentMethodId),
+                              priority: 'primary',
+                            },
+                            {
+                              key: 'amount',
+                              label: _('pos_backend.field.amount'),
+                              cell: (r) => formatMoney(_, r.amount, order.currency),
+                              align: 'end',
+                              kind: 'currency',
+                            },
+                          ],
+                        }),
+                      ]
+                    : []),
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={actionPath}
+                        submit={_('pos_backend.action.addPayment')}
+                        submitVariant="secondary"
+                        hidden={{ action: 'payment' }}
+                        fields={paymentFields}
+                      />
+                    }
+                  />,
+                ])}
+              />,
+            ]
+          : []),
+      ])}
+    />
   )
 }

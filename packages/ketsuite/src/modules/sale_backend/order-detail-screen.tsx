@@ -7,7 +7,7 @@ import {
   emptyState,
   formatMoney,
   formCluster as FormCluster,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -387,5 +387,9 @@ export const orderDetailScreen = (
       }}
     />
   )
-  return partial ? workspace : framed(_, _('sale_backend.detail.title'), frame, workspace)
+  return partial ? (
+    workspace
+  ) : (
+    <Framed translator={_} title={_('sale_backend.detail.title')} frame={frame} body={workspace} />
+  )
 }

@@ -8,9 +8,9 @@ import {
   datePicker,
   definitionList,
   emptyState,
-  formCluster,
+  formCluster as FormCluster,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   metric,
@@ -18,12 +18,12 @@ import {
   notice,
   recordActions,
   person,
-  recordForm,
-  recordWorkspace,
+  recordForm as RecordForm,
+  recordWorkspace as RecordWorkspace,
   scheduleBoard,
-  section,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
@@ -1170,16 +1170,17 @@ const propertyForm = (
   action: string,
   submit: string,
   cancelHref: string,
-): TemplateResult =>
-  recordForm({
-    action,
-    fields: propertyFormFields(_, values, policies),
-    hidden: { id: values.id, lang: locale },
-    submit,
-    submitVariant: 'primary',
-    cancelHref,
-    cancelLabel: _('hospitality_core.action.cancel'),
-  })
+): TemplateResult => (
+  <RecordForm
+    action={action}
+    fields={propertyFormFields(_, values, policies)}
+    hidden={{ id: values.id, lang: locale }}
+    submit={submit}
+    submitVariant="primary"
+    cancelHref={cancelHref}
+    cancelLabel={_('hospitality_core.action.cancel')}
+  />
+)
 
 export const propertiesScreen = (
   _: Translator,
@@ -1187,12 +1188,12 @@ export const propertiesScreen = (
   totals: { rooms: number; available: number; attention: number },
   locale: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.properties.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.properties.title')}
+    frame={frame}
+    body={stack([
       linkButton({
         label: _('hospitality_core.property.action.create'),
         href: `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
@@ -1220,8 +1221,9 @@ export const propertiesScreen = (
             _('hospitality_core.screen.properties.empty'),
             _('hospitality_core.screen.properties.emptyHint'),
           ),
-    ]),
-  )
+    ])}
+  />
+)
 
 const propertyFeedback = (
   _: Translator,
@@ -1250,17 +1252,17 @@ export const newPropertyScreen = (
   locale: string,
   frame: Frame,
   errors: readonly string[] = [],
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.property.create.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.property.create.title')}
+    frame={frame}
+    body={stack([
       propertyFeedback(_, null, errors),
-      section({
-        title: _('hospitality_core.property.create.title'),
-        description: _('hospitality_core.property.create.hint'),
-        body: propertyForm(
+      <Section
+        title={_('hospitality_core.property.create.title')}
+        description={_('hospitality_core.property.create.hint')}
+        body={propertyForm(
           _,
           values,
           policies,
@@ -1268,10 +1270,11 @@ export const newPropertyScreen = (
           `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
           _('hospitality_core.property.action.create'),
           `/admin/hospitality/properties?lang=${encodeURIComponent(locale)}`,
-        ),
-      }),
-    ]),
-  )
+        )}
+      />,
+    ])}
+  />
+)
 
 export const propertyDetailScreen = (
   _: Translator,
@@ -1286,132 +1289,134 @@ export const propertyDetailScreen = (
   const query = `lang=${encodeURIComponent(locale)}`
   const values = attempted ?? property
   const rooms = property.rooms ?? []
-  return framed(
-    _,
-    property.name,
-    frame,
-    stack([
-      propertyFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.property.detail.kicker'),
-        title: property.name,
-        subtitle: `${property.code} · ${property.publicName || property.name}`,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(_(`hospitality_core.accommodation.${property.accommodationType}`), 'info'),
-          badge(
-            _(property.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
-            property.active ? 'positive' : 'neutral',
-          ),
-        ],
-        summary: [
-          {
-            id: 'rooms',
-            label: _('hospitality_core.metric.rooms'),
-            value: rooms.length,
-            href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
-          },
-          {
-            id: 'room-types',
-            label: _('hospitality_core.menu.roomTypes'),
-            value: property.roomTypes?.length ?? 0,
-            href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
-          },
-          {
-            id: 'buildings',
-            label: _('hospitality_core.property.metric.buildings'),
-            value: property.buildings?.length ?? 0,
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.property.action.back'),
-          href: `/admin/hospitality/properties?${query}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.property.section.information'),
-            description: _('hospitality_core.property.section.informationHint'),
-            body: definitionList({
-              title: property.publicName || property.name,
-              items: [
-                {
-                  key: 'address',
-                  term: _('hospitality_core.property.field.address'),
-                  value: property.addressLine || '—',
-                },
-                {
-                  key: 'timezone',
-                  term: _('hospitality_core.property.field.timezone'),
-                  value: property.timezone,
-                },
-                {
-                  key: 'check-in',
-                  term: _('hospitality_core.property.field.defaultCheckIn'),
-                  value: property.defaultCheckIn,
-                },
-                {
-                  key: 'check-out',
-                  term: _('hospitality_core.property.field.defaultCheckOut'),
-                  value: property.defaultCheckOut,
-                },
-                {
-                  key: 'policy',
-                  term: _('hospitality_core.property.field.defaultCancellationPolicy'),
-                  value:
-                    property.defaultCancellationPolicy?.name ??
-                    property.defaultCancellationPolicy?.code ??
-                    _('hospitality_core.property.value.noDefaultPolicy'),
-                },
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.property.section.settings'),
-            description: _('hospitality_core.property.section.settingsHint'),
-            body: propertyForm(
-              _,
-              values,
-              policies,
-              locale,
-              `/admin/hospitality/properties/${encodeURIComponent(property.id)}?${query}`,
-              _('hospitality_core.property.action.save'),
-              `/admin/hospitality/properties?${query}`,
+  return (
+    <Framed
+      translator={_}
+      title={property.name}
+      frame={frame}
+      body={stack([
+        propertyFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.property.detail.kicker')}
+          title={property.name}
+          subtitle={`${property.code} · ${property.publicName || property.name}`}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(_(`hospitality_core.accommodation.${property.accommodationType}`), 'info'),
+            badge(
+              _(property.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+              property.active ? 'positive' : 'neutral',
             ),
-          }),
-          section({
-            title: _('hospitality_core.property.section.next'),
-            description: _('hospitality_core.property.section.nextHint'),
-            body: stack(
-              [
-                linkButton({
-                  label: _('hospitality_core.menu.roomTypes'),
-                  href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.rooms'),
-                  href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.inventory'),
-                  href: `/admin/hospitality/inventory?property=${encodeURIComponent(property.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.content'),
-                  href: `/admin/hospitality/content?property=${encodeURIComponent(property.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-              ],
-              'compact',
-            ),
-          }),
-        ]),
-      }),
-    ]),
+          ]}
+          summary={[
+            {
+              id: 'rooms',
+              label: _('hospitality_core.metric.rooms'),
+              value: rooms.length,
+              href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
+            },
+            {
+              id: 'room-types',
+              label: _('hospitality_core.menu.roomTypes'),
+              value: property.roomTypes?.length ?? 0,
+              href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
+            },
+            {
+              id: 'buildings',
+              label: _('hospitality_core.property.metric.buildings'),
+              value: property.buildings?.length ?? 0,
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.property.action.back'),
+            href: `/admin/hospitality/properties?${query}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.property.section.information')}
+              description={_('hospitality_core.property.section.informationHint')}
+              body={definitionList({
+                title: property.publicName || property.name,
+                items: [
+                  {
+                    key: 'address',
+                    term: _('hospitality_core.property.field.address'),
+                    value: property.addressLine || '—',
+                  },
+                  {
+                    key: 'timezone',
+                    term: _('hospitality_core.property.field.timezone'),
+                    value: property.timezone,
+                  },
+                  {
+                    key: 'check-in',
+                    term: _('hospitality_core.property.field.defaultCheckIn'),
+                    value: property.defaultCheckIn,
+                  },
+                  {
+                    key: 'check-out',
+                    term: _('hospitality_core.property.field.defaultCheckOut'),
+                    value: property.defaultCheckOut,
+                  },
+                  {
+                    key: 'policy',
+                    term: _('hospitality_core.property.field.defaultCancellationPolicy'),
+                    value:
+                      property.defaultCancellationPolicy?.name ??
+                      property.defaultCancellationPolicy?.code ??
+                      _('hospitality_core.property.value.noDefaultPolicy'),
+                  },
+                ],
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.property.section.settings')}
+              description={_('hospitality_core.property.section.settingsHint')}
+              body={propertyForm(
+                _,
+                values,
+                policies,
+                locale,
+                `/admin/hospitality/properties/${encodeURIComponent(property.id)}?${query}`,
+                _('hospitality_core.property.action.save'),
+                `/admin/hospitality/properties?${query}`,
+              )}
+            />,
+            <Section
+              title={_('hospitality_core.property.section.next')}
+              description={_('hospitality_core.property.section.nextHint')}
+              body={stack(
+                [
+                  linkButton({
+                    label: _('hospitality_core.menu.roomTypes'),
+                    href: `/admin/hospitality/room-types?property=${encodeURIComponent(property.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                  linkButton({
+                    label: _('hospitality_core.menu.rooms'),
+                    href: `/admin/hospitality/rooms?property=${encodeURIComponent(property.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                  linkButton({
+                    label: _('hospitality_core.menu.inventory'),
+                    href: `/admin/hospitality/inventory?property=${encodeURIComponent(property.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                  linkButton({
+                    label: _('hospitality_core.menu.content'),
+                    href: `/admin/hospitality/content?property=${encodeURIComponent(property.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                ],
+                'compact',
+              )}
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -1526,19 +1531,20 @@ const roomForm = (
   action: string,
   submit: string,
   cancelHref: string,
-): TemplateResult =>
-  recordForm({
-    action,
-    fields: roomFormFields(_, values, properties, roomTypes, buildings, floors),
-    hidden: {
+): TemplateResult => (
+  <RecordForm
+    action={action}
+    fields={roomFormFields(_, values, properties, roomTypes, buildings, floors)}
+    hidden={{
       lang: locale,
       propertyId: values.propertyId,
-    },
-    submit,
-    submitVariant: 'primary',
-    cancelHref,
-    cancelLabel: _('hospitality_core.action.cancel'),
-  })
+    }}
+    submit={submit}
+    submitVariant="primary"
+    cancelHref={cancelHref}
+    cancelLabel={_('hospitality_core.action.cancel')}
+  />
+)
 
 export const roomsScreen = (
   _: Translator,
@@ -1561,181 +1567,199 @@ export const roomsScreen = (
   const activeBuildings = data.buildings.filter((row) => row.active)
   const activeFloors = data.floors.filter((row) => row.active)
   const canCreateRoom = Boolean(data.propertyId && data.roomTypes.length)
-  return framed(
-    _,
-    _('hospitality_core.screen.rooms.title'),
-    frame,
-    stack([
-      roomFeedback(_, status, errors),
-      recordForm({
-        action: '/admin/hospitality/rooms',
-        method: 'get',
-        layout: 'inline',
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.room.field.property'),
-            type: 'select',
-            value: data.propertyId,
-            options: choices(data.properties),
-          },
-        ],
-        hidden: { lang: locale },
-        submit: _('hospitality_core.action.apply'),
-        submitVariant: 'secondary',
-      }),
-      canCreateRoom
-        ? linkButton({
-            label: _('hospitality_core.room.action.create'),
-            href: `/admin/hospitality/rooms/new?${query.toString()}`,
-            variant: 'primary',
-          })
-        : notice({
-            title: _('hospitality_core.room.empty.prerequisite'),
-            message: _('hospitality_core.room.empty.prerequisiteHint'),
-            tone: 'warning',
-          }),
-      cardGrid({
-        items: [
-          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: data.rows.length },
-          {
-            id: 'buildings',
-            label: _('hospitality_core.property.metric.buildings'),
-            value: activeBuildings.length,
-          },
-          { id: 'floors', label: _('hospitality_core.room.metric.floors'), value: activeFloors.length },
-          {
-            id: 'available',
-            label: _('hospitality_core.metric.available'),
-            value: data.rows.filter((row) => row.status === 'available').length,
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
-      ...(data.propertyId
-        ? [
-            section({
-              title: _('hospitality_core.room.section.locationSetup'),
-              description: _('hospitality_core.room.section.locationSetupHint'),
-              body: formCluster({
-                label: _('hospitality_core.room.section.locationSetup'),
-                forms: [
-                  recordForm({
-                    action,
-                    hidden: { id: 'new-building', operation: 'save-building', propertyId: data.propertyId },
-                    submit: _('hospitality_core.room.action.createBuilding'),
-                    submitVariant: 'secondary',
-                    fields: [
-                      {
-                        name: 'code',
-                        label: _('hospitality_core.room.field.buildingCode'),
-                        required: true,
-                      },
-                      {
-                        name: 'name',
-                        label: _('hospitality_core.room.field.buildingName'),
-                        required: true,
-                      },
-                      {
-                        name: 'sequence',
-                        label: _('hospitality_core.room.field.sequence'),
-                        type: 'number',
-                        value: 10,
-                        step: '1',
-                      },
-                    ],
-                  }),
-                  ...(activeBuildings.length
-                    ? [
-                        recordForm({
-                          action,
-                          hidden: { id: 'new-floor', operation: 'save-floor', propertyId: data.propertyId },
-                          submit: _('hospitality_core.room.action.createFloor'),
-                          submitVariant: 'secondary' as const,
-                          fields: [
-                            {
-                              name: 'buildingId',
-                              label: _('hospitality_core.room.field.building'),
-                              type: 'select' as const,
-                              options: choices(activeBuildings),
-                              required: true,
-                            },
-                            {
-                              name: 'code',
-                              label: _('hospitality_core.room.field.floorCode'),
-                              required: true,
-                            },
-                            {
-                              name: 'name',
-                              label: _('hospitality_core.room.field.floorName'),
-                              required: true,
-                            },
-                            {
-                              name: 'sequence',
-                              label: _('hospitality_core.room.field.sequence'),
-                              type: 'number' as const,
-                              value: 10,
-                              step: '1',
-                            },
-                          ],
-                        }),
-                      ]
-                    : []),
-                ],
-              }),
-            }),
-            section({
-              title: _('hospitality_core.room.section.buildings'),
-              description: _('hospitality_core.room.section.buildingsHint'),
-              body: data.buildings.length
-                ? dataTable(_, {
-                    columns: buildingColumns(_),
-                    rows: data.buildings,
-                    id: (row) => row.id,
-                    rowHref: (row) =>
-                      `/admin/hospitality/buildings/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                  })
-                : emptyState(
-                    _('hospitality_core.room.empty.buildings'),
-                    _('hospitality_core.room.empty.buildingsHint'),
-                  ),
-            }),
-            section({
-              title: _('hospitality_core.room.section.floors'),
-              description: _('hospitality_core.room.section.floorsHint'),
-              body: data.floors.length
-                ? dataTable(_, {
-                    columns: floorColumns(_),
-                    rows: data.floors,
-                    id: (row) => row.id,
-                    rowHref: (row) =>
-                      `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                  })
-                : emptyState(
-                    _('hospitality_core.room.empty.floors'),
-                    _('hospitality_core.room.empty.floorsHint'),
-                  ),
-            }),
-          ]
-        : []),
-      section({
-        title: _('hospitality_core.room.section.rooms'),
-        description: _('hospitality_core.room.section.roomsHint'),
-        body: data.rows.length
-          ? dataTable(_, {
-              columns: roomColumns(_),
-              rows: data.rows,
-              id: (row) => row.id,
-              rowHref: (row) =>
-                `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.rooms.title')}
+      frame={frame}
+      body={stack([
+        roomFeedback(_, status, errors),
+        <RecordForm
+          action="/admin/hospitality/rooms"
+          method="get"
+          layout="inline"
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.room.field.property'),
+              type: 'select',
+              value: data.propertyId,
+              options: choices(data.properties),
+            },
+          ]}
+          hidden={{ lang: locale }}
+          submit={_('hospitality_core.action.apply')}
+          submitVariant="secondary"
+        />,
+        canCreateRoom
+          ? linkButton({
+              label: _('hospitality_core.room.action.create'),
+              href: `/admin/hospitality/rooms/new?${query.toString()}`,
+              variant: 'primary',
             })
-          : emptyState(
-              _('hospitality_core.screen.rooms.empty'),
-              _('hospitality_core.screen.rooms.emptyHint'),
-            ),
-      }),
-    ]),
+          : notice({
+              title: _('hospitality_core.room.empty.prerequisite'),
+              message: _('hospitality_core.room.empty.prerequisiteHint'),
+              tone: 'warning',
+            }),
+        cardGrid({
+          items: [
+            { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: data.rows.length },
+            {
+              id: 'buildings',
+              label: _('hospitality_core.property.metric.buildings'),
+              value: activeBuildings.length,
+            },
+            { id: 'floors', label: _('hospitality_core.room.metric.floors'), value: activeFloors.length },
+            {
+              id: 'available',
+              label: _('hospitality_core.metric.available'),
+              value: data.rows.filter((row) => row.status === 'available').length,
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+        }),
+        ...(data.propertyId
+          ? [
+              <Section
+                title={_('hospitality_core.room.section.locationSetup')}
+                description={_('hospitality_core.room.section.locationSetupHint')}
+                body={
+                  <FormCluster
+                    label={_('hospitality_core.room.section.locationSetup')}
+                    forms={[
+                      <RecordForm
+                        action={action}
+                        hidden={{
+                          id: 'new-building',
+                          operation: 'save-building',
+                          propertyId: data.propertyId,
+                        }}
+                        submit={_('hospitality_core.room.action.createBuilding')}
+                        submitVariant="secondary"
+                        fields={[
+                          {
+                            name: 'code',
+                            label: _('hospitality_core.room.field.buildingCode'),
+                            required: true,
+                          },
+                          {
+                            name: 'name',
+                            label: _('hospitality_core.room.field.buildingName'),
+                            required: true,
+                          },
+                          {
+                            name: 'sequence',
+                            label: _('hospitality_core.room.field.sequence'),
+                            type: 'number',
+                            value: 10,
+                            step: '1',
+                          },
+                        ]}
+                      />,
+                      ...(activeBuildings.length
+                        ? [
+                            <RecordForm
+                              action={action}
+                              hidden={{
+                                id: 'new-floor',
+                                operation: 'save-floor',
+                                propertyId: data.propertyId,
+                              }}
+                              submit={_('hospitality_core.room.action.createFloor')}
+                              submitVariant="secondary"
+                              fields={[
+                                {
+                                  name: 'buildingId',
+                                  label: _('hospitality_core.room.field.building'),
+                                  type: 'select' as const,
+                                  options: choices(activeBuildings),
+                                  required: true,
+                                },
+                                {
+                                  name: 'code',
+                                  label: _('hospitality_core.room.field.floorCode'),
+                                  required: true,
+                                },
+                                {
+                                  name: 'name',
+                                  label: _('hospitality_core.room.field.floorName'),
+                                  required: true,
+                                },
+                                {
+                                  name: 'sequence',
+                                  label: _('hospitality_core.room.field.sequence'),
+                                  type: 'number' as const,
+                                  value: 10,
+                                  step: '1',
+                                },
+                              ]}
+                            />,
+                          ]
+                        : []),
+                    ]}
+                  />
+                }
+              />,
+              <Section
+                title={_('hospitality_core.room.section.buildings')}
+                description={_('hospitality_core.room.section.buildingsHint')}
+                body={
+                  data.buildings.length
+                    ? dataTable(_, {
+                        columns: buildingColumns(_),
+                        rows: data.buildings,
+                        id: (row) => row.id,
+                        rowHref: (row) =>
+                          `/admin/hospitality/buildings/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                      })
+                    : emptyState(
+                        _('hospitality_core.room.empty.buildings'),
+                        _('hospitality_core.room.empty.buildingsHint'),
+                      )
+                }
+              />,
+              <Section
+                title={_('hospitality_core.room.section.floors')}
+                description={_('hospitality_core.room.section.floorsHint')}
+                body={
+                  data.floors.length
+                    ? dataTable(_, {
+                        columns: floorColumns(_),
+                        rows: data.floors,
+                        id: (row) => row.id,
+                        rowHref: (row) =>
+                          `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                      })
+                    : emptyState(
+                        _('hospitality_core.room.empty.floors'),
+                        _('hospitality_core.room.empty.floorsHint'),
+                      )
+                }
+              />,
+            ]
+          : []),
+        <Section
+          title={_('hospitality_core.room.section.rooms')}
+          description={_('hospitality_core.room.section.roomsHint')}
+          body={
+            data.rows.length
+              ? dataTable(_, {
+                  columns: roomColumns(_),
+                  rows: data.rows,
+                  id: (row) => row.id,
+                  rowHref: (row) =>
+                    `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                })
+              : emptyState(
+                  _('hospitality_core.screen.rooms.empty'),
+                  _('hospitality_core.screen.rooms.emptyHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -1760,13 +1784,13 @@ const locationFeedback = (
   return null
 }
 
-const buildingForm = (_: Translator, values: BuildingFormValues, locale: string): TemplateResult =>
-  recordForm({
-    action: `/admin/hospitality/buildings/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`,
-    hidden: { propertyId: values.propertyId },
-    submit: _('hospitality_core.building.action.save'),
-    submitVariant: 'primary',
-    fields: [
+const buildingForm = (_: Translator, values: BuildingFormValues, locale: string): TemplateResult => (
+  <RecordForm
+    action={`/admin/hospitality/buildings/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`}
+    hidden={{ propertyId: values.propertyId }}
+    submit={_('hospitality_core.building.action.save')}
+    submitVariant="primary"
+    fields={[
       {
         name: 'code',
         label: _('hospitality_core.building.field.code'),
@@ -1786,8 +1810,9 @@ const buildingForm = (_: Translator, values: BuildingFormValues, locale: string)
         value: values.sequence,
         step: '1',
       },
-    ],
-  })
+    ]}
+  />
+)
 
 export const buildingDetailScreen = (
   _: Translator,
@@ -1802,121 +1827,127 @@ export const buildingDetailScreen = (
   const propertyName = building.property?.name ?? building.property?.code ?? building.propertyId
   const activeFloors = building.floors.filter((row) => row.active)
   const activeRooms = building.rooms.filter((row) => row.active)
-  return framed(
-    _,
-    building.name,
-    frame,
-    stack([
-      locationFeedback(_, 'building', status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.building.detail.kicker'),
-        title: building.name,
-        subtitle: `${building.code} · ${propertyName}`,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(
-            _(building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
-            building.active ? 'positive' : 'neutral',
-          ),
-        ],
-        summary: [
-          {
-            id: 'floors',
-            label: _('hospitality_core.room.metric.floors'),
-            value: activeFloors.length,
-          },
-          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
-          {
-            id: 'sequence',
-            label: _('hospitality_core.building.field.sequence'),
-            value: building.sequence,
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.building.action.back'),
-          href: `/admin/hospitality/rooms?property=${encodeURIComponent(building.propertyId)}&${query}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.building.section.information'),
-            description: _('hospitality_core.building.section.informationHint'),
-            body: definitionList({
-              title: building.name,
-              items: [
-                {
-                  key: 'property',
-                  term: _('hospitality_core.building.field.property'),
-                  value: propertyName,
-                },
-                { key: 'code', term: _('hospitality_core.building.field.code'), value: building.code },
-                {
-                  key: 'status',
-                  term: _('hospitality_core.col.status'),
-                  value: _(
-                    building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
-                  ),
-                },
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.building.section.settings'),
-            description: _('hospitality_core.building.section.settingsHint'),
-            body: buildingForm(_, values, locale),
-          }),
-          section({
-            title: _('hospitality_core.building.section.floors'),
-            description: _('hospitality_core.building.section.floorsHint'),
-            body: building.floors.length
-              ? dataTable(_, {
-                  columns: floorColumns(_),
-                  rows: building.floors,
-                  id: (row) => row.id,
-                  rowHref: (row) =>
-                    `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                })
-              : emptyState(
-                  _('hospitality_core.building.empty.floors'),
-                  _('hospitality_core.building.empty.floorsHint'),
-                ),
-          }),
-          section({
-            title: _('hospitality_core.building.section.lifecycle'),
-            description: _('hospitality_core.building.section.lifecycleHint'),
-            body: surface({
-              body: recordActions({
-                action: `/admin/hospitality/buildings/${encodeURIComponent(building.id)}/archive?${query}`,
-                actions: [
-                  building.active
-                    ? {
-                        value: 'archive',
-                        label: _('hospitality_core.building.action.archive'),
-                        variant: 'destructive',
-                      }
-                    : {
-                        value: 'restore',
-                        label: _('hospitality_core.building.action.restore'),
-                        variant: 'secondary',
-                      },
+  return (
+    <Framed
+      translator={_}
+      title={building.name}
+      frame={frame}
+      body={stack([
+        locationFeedback(_, 'building', status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.building.detail.kicker')}
+          title={building.name}
+          subtitle={`${building.code} · ${propertyName}`}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(
+              _(building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+              building.active ? 'positive' : 'neutral',
+            ),
+          ]}
+          summary={[
+            {
+              id: 'floors',
+              label: _('hospitality_core.room.metric.floors'),
+              value: activeFloors.length,
+            },
+            { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
+            {
+              id: 'sequence',
+              label: _('hospitality_core.building.field.sequence'),
+              value: building.sequence,
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.building.action.back'),
+            href: `/admin/hospitality/rooms?property=${encodeURIComponent(building.propertyId)}&${query}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.building.section.information')}
+              description={_('hospitality_core.building.section.informationHint')}
+              body={definitionList({
+                title: building.name,
+                items: [
+                  {
+                    key: 'property',
+                    term: _('hospitality_core.building.field.property'),
+                    value: propertyName,
+                  },
+                  { key: 'code', term: _('hospitality_core.building.field.code'), value: building.code },
+                  {
+                    key: 'status',
+                    term: _('hospitality_core.col.status'),
+                    value: _(
+                      building.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                    ),
+                  },
                 ],
-              }),
-            }),
-          }),
-        ]),
-      }),
-    ]),
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.building.section.settings')}
+              description={_('hospitality_core.building.section.settingsHint')}
+              body={buildingForm(_, values, locale)}
+            />,
+            <Section
+              title={_('hospitality_core.building.section.floors')}
+              description={_('hospitality_core.building.section.floorsHint')}
+              body={
+                building.floors.length
+                  ? dataTable(_, {
+                      columns: floorColumns(_),
+                      rows: building.floors,
+                      id: (row) => row.id,
+                      rowHref: (row) =>
+                        `/admin/hospitality/levels/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                    })
+                  : emptyState(
+                      _('hospitality_core.building.empty.floors'),
+                      _('hospitality_core.building.empty.floorsHint'),
+                    )
+              }
+            />,
+            <Section
+              title={_('hospitality_core.building.section.lifecycle')}
+              description={_('hospitality_core.building.section.lifecycleHint')}
+              body={
+                <Surface
+                  body={recordActions({
+                    action: `/admin/hospitality/buildings/${encodeURIComponent(building.id)}/archive?${query}`,
+                    actions: [
+                      building.active
+                        ? {
+                            value: 'archive',
+                            label: _('hospitality_core.building.action.archive'),
+                            variant: 'destructive',
+                          }
+                        : {
+                            value: 'restore',
+                            label: _('hospitality_core.building.action.restore'),
+                            variant: 'secondary',
+                          },
+                    ],
+                  })}
+                />
+              }
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
-const floorForm = (_: Translator, values: FloorFormValues, locale: string): TemplateResult =>
-  recordForm({
-    action: `/admin/hospitality/levels/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`,
-    hidden: { propertyId: values.propertyId, buildingId: values.buildingId },
-    submit: _('hospitality_core.floor.action.save'),
-    submitVariant: 'primary',
-    fields: [
+const floorForm = (_: Translator, values: FloorFormValues, locale: string): TemplateResult => (
+  <RecordForm
+    action={`/admin/hospitality/levels/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`}
+    hidden={{ propertyId: values.propertyId, buildingId: values.buildingId }}
+    submit={_('hospitality_core.floor.action.save')}
+    submitVariant="primary"
+    fields={[
       {
         name: 'code',
         label: _('hospitality_core.floor.field.code'),
@@ -1936,8 +1967,9 @@ const floorForm = (_: Translator, values: FloorFormValues, locale: string): Temp
         value: values.sequence,
         step: '1',
       },
-    ],
-  })
+    ]}
+  />
+)
 
 export const floorDetailScreen = (
   _: Translator,
@@ -1952,108 +1984,114 @@ export const floorDetailScreen = (
   const propertyName = floor.property?.name ?? floor.property?.code ?? floor.propertyId
   const buildingName = floor.building?.name ?? floor.building?.code ?? floor.buildingId
   const activeRooms = floor.rooms.filter((row) => row.active)
-  return framed(
-    _,
-    floor.name,
-    frame,
-    stack([
-      locationFeedback(_, 'floor', status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.floor.detail.kicker'),
-        title: floor.name,
-        subtitle: `${floor.code} · ${buildingName}`,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(
-            _(floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
-            floor.active ? 'positive' : 'neutral',
-          ),
-        ],
-        summary: [
-          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
-          {
-            id: 'building',
-            label: _('hospitality_core.floor.field.building'),
-            value: buildingName,
-          },
-          {
-            id: 'sequence',
-            label: _('hospitality_core.floor.field.sequence'),
-            value: floor.sequence,
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.floor.action.back'),
-          href: `/admin/hospitality/buildings/${encodeURIComponent(floor.buildingId)}?${query}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.floor.section.information'),
-            description: _('hospitality_core.floor.section.informationHint'),
-            body: definitionList({
-              title: floor.name,
-              items: [
-                { key: 'property', term: _('hospitality_core.floor.field.property'), value: propertyName },
-                { key: 'building', term: _('hospitality_core.floor.field.building'), value: buildingName },
-                { key: 'code', term: _('hospitality_core.floor.field.code'), value: floor.code },
-                {
-                  key: 'status',
-                  term: _('hospitality_core.col.status'),
-                  value: _(
-                    floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
-                  ),
-                },
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.floor.section.settings'),
-            description: _('hospitality_core.floor.section.settingsHint'),
-            body: floorForm(_, values, locale),
-          }),
-          section({
-            title: _('hospitality_core.floor.section.rooms'),
-            description: _('hospitality_core.floor.section.roomsHint'),
-            body: floor.rooms.length
-              ? dataTable(_, {
-                  columns: roomColumns(_),
-                  rows: floor.rooms,
-                  id: (row) => row.id,
-                  rowHref: (row) =>
-                    `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                })
-              : emptyState(
-                  _('hospitality_core.floor.empty.rooms'),
-                  _('hospitality_core.floor.empty.roomsHint'),
-                ),
-          }),
-          section({
-            title: _('hospitality_core.floor.section.lifecycle'),
-            description: _('hospitality_core.floor.section.lifecycleHint'),
-            body: surface({
-              body: recordActions({
-                action: `/admin/hospitality/levels/${encodeURIComponent(floor.id)}/archive?${query}`,
-                actions: [
-                  floor.active
-                    ? {
-                        value: 'archive',
-                        label: _('hospitality_core.floor.action.archive'),
-                        variant: 'destructive',
-                      }
-                    : {
-                        value: 'restore',
-                        label: _('hospitality_core.floor.action.restore'),
-                        variant: 'secondary',
-                      },
+  return (
+    <Framed
+      translator={_}
+      title={floor.name}
+      frame={frame}
+      body={stack([
+        locationFeedback(_, 'floor', status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.floor.detail.kicker')}
+          title={floor.name}
+          subtitle={`${floor.code} · ${buildingName}`}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(
+              _(floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+              floor.active ? 'positive' : 'neutral',
+            ),
+          ]}
+          summary={[
+            { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: activeRooms.length },
+            {
+              id: 'building',
+              label: _('hospitality_core.floor.field.building'),
+              value: buildingName,
+            },
+            {
+              id: 'sequence',
+              label: _('hospitality_core.floor.field.sequence'),
+              value: floor.sequence,
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.floor.action.back'),
+            href: `/admin/hospitality/buildings/${encodeURIComponent(floor.buildingId)}?${query}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.floor.section.information')}
+              description={_('hospitality_core.floor.section.informationHint')}
+              body={definitionList({
+                title: floor.name,
+                items: [
+                  { key: 'property', term: _('hospitality_core.floor.field.property'), value: propertyName },
+                  { key: 'building', term: _('hospitality_core.floor.field.building'), value: buildingName },
+                  { key: 'code', term: _('hospitality_core.floor.field.code'), value: floor.code },
+                  {
+                    key: 'status',
+                    term: _('hospitality_core.col.status'),
+                    value: _(
+                      floor.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive',
+                    ),
+                  },
                 ],
-              }),
-            }),
-          }),
-        ]),
-      }),
-    ]),
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.floor.section.settings')}
+              description={_('hospitality_core.floor.section.settingsHint')}
+              body={floorForm(_, values, locale)}
+            />,
+            <Section
+              title={_('hospitality_core.floor.section.rooms')}
+              description={_('hospitality_core.floor.section.roomsHint')}
+              body={
+                floor.rooms.length
+                  ? dataTable(_, {
+                      columns: roomColumns(_),
+                      rows: floor.rooms,
+                      id: (row) => row.id,
+                      rowHref: (row) =>
+                        `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                    })
+                  : emptyState(
+                      _('hospitality_core.floor.empty.rooms'),
+                      _('hospitality_core.floor.empty.roomsHint'),
+                    )
+              }
+            />,
+            <Section
+              title={_('hospitality_core.floor.section.lifecycle')}
+              description={_('hospitality_core.floor.section.lifecycleHint')}
+              body={
+                <Surface
+                  body={recordActions({
+                    action: `/admin/hospitality/levels/${encodeURIComponent(floor.id)}/archive?${query}`,
+                    actions: [
+                      floor.active
+                        ? {
+                            value: 'archive',
+                            label: _('hospitality_core.floor.action.archive'),
+                            variant: 'destructive',
+                          }
+                        : {
+                            value: 'restore',
+                            label: _('hospitality_core.floor.action.restore'),
+                            variant: 'secondary',
+                          },
+                    ],
+                  })}
+                />
+              }
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -2067,17 +2105,17 @@ export const newRoomScreen = (
   locale: string,
   frame: Frame,
   errors: readonly string[] = [],
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.room.create.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.room.create.title')}
+    frame={frame}
+    body={stack([
       roomFeedback(_, null, errors),
-      section({
-        title: _('hospitality_core.room.create.title'),
-        description: _('hospitality_core.room.create.hint'),
-        body: roomForm(
+      <Section
+        title={_('hospitality_core.room.create.title')}
+        description={_('hospitality_core.room.create.hint')}
+        body={roomForm(
           _,
           values,
           properties,
@@ -2088,10 +2126,11 @@ export const newRoomScreen = (
           `/admin/hospitality/rooms/new?lang=${encodeURIComponent(locale)}`,
           _('hospitality_core.room.action.create'),
           `/admin/hospitality/rooms?property=${encodeURIComponent(values.propertyId)}&lang=${encodeURIComponent(locale)}`,
-        ),
-      }),
-    ]),
-  )
+        )}
+      />,
+    ])}
+  />
+)
 
 export const roomDetailScreen = (
   _: Translator,
@@ -2111,117 +2150,119 @@ export const roomDetailScreen = (
   const location = [room.building?.name ?? room.building?.code, room.floor?.name ?? room.floor?.code]
     .filter(Boolean)
     .join(' · ')
-  return framed(
-    _,
-    room.name,
-    frame,
-    stack([
-      roomFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.room.detail.kicker'),
-        title: room.name,
-        subtitle: `${room.code} · ${propertyName}`,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(_(`hospitality_core.roomStatus.${room.status}`), statusTone(room.status), room.status),
-          badge(
-            _(room.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
-            room.active ? 'positive' : 'neutral',
-          ),
-        ],
-        summary: [
-          { id: 'capacity', label: _('hospitality_core.col.capacity'), value: room.capacity },
-          {
-            id: 'roomType',
-            label: _('hospitality_core.col.roomType'),
-            value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
-          },
-          {
-            id: 'location',
-            label: _('hospitality_core.col.location'),
-            value: location || _('hospitality_core.room.value.unassignedLocation'),
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.room.action.back'),
-          href: `/admin/hospitality/rooms?property=${encodeURIComponent(room.propertyId)}&${query}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.room.section.information'),
-            description: _('hospitality_core.room.section.informationHint'),
-            body: definitionList({
-              title: room.name,
-              items: [
-                { key: 'property', term: _('hospitality_core.room.field.property'), value: propertyName },
-                {
-                  key: 'type',
-                  term: _('hospitality_core.room.field.roomType'),
-                  value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
-                },
-                {
-                  key: 'location',
-                  term: _('hospitality_core.col.location'),
-                  value: location || _('hospitality_core.room.value.unassignedLocation'),
-                },
-                {
-                  key: 'status',
-                  term: _('hospitality_core.col.status'),
-                  value: _(`hospitality_core.roomStatus.${room.status}`),
-                },
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.room.section.settings'),
-            description: _('hospitality_core.room.section.settingsHint'),
-            body: roomForm(
-              _,
-              values,
-              properties,
-              roomTypes,
-              buildings,
-              floors,
-              locale,
-              `/admin/hospitality/rooms/${encodeURIComponent(room.id)}?${query}`,
-              _('hospitality_core.room.action.save'),
-              `/admin/hospitality/rooms?property=${encodeURIComponent(room.propertyId)}&${query}`,
+  return (
+    <Framed
+      translator={_}
+      title={room.name}
+      frame={frame}
+      body={stack([
+        roomFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.room.detail.kicker')}
+          title={room.name}
+          subtitle={`${room.code} · ${propertyName}`}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(_(`hospitality_core.roomStatus.${room.status}`), statusTone(room.status), room.status),
+            badge(
+              _(room.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+              room.active ? 'positive' : 'neutral',
             ),
-          }),
-          section({
-            title: _('hospitality_core.room.section.lifecycle'),
-            description: _('hospitality_core.room.section.lifecycleHint'),
-            body: stack([
-              linkButton({
-                label: _('hospitality_core.room.action.openHousekeeping'),
-                href: `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(room.id)}?${query}`,
-                variant: 'secondary',
-              }),
-              surface({
-                body: recordActions({
-                  action: `/admin/hospitality/rooms/${encodeURIComponent(room.id)}/archive?${query}`,
-                  actions: [
-                    room.active
-                      ? {
-                          value: 'archive',
-                          label: _('hospitality_core.room.action.archive'),
-                          variant: 'destructive',
-                        }
-                      : {
-                          value: 'restore',
-                          label: _('hospitality_core.room.action.restore'),
-                          variant: 'secondary',
-                        },
-                  ],
+          ]}
+          summary={[
+            { id: 'capacity', label: _('hospitality_core.col.capacity'), value: room.capacity },
+            {
+              id: 'roomType',
+              label: _('hospitality_core.col.roomType'),
+              value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
+            },
+            {
+              id: 'location',
+              label: _('hospitality_core.col.location'),
+              value: location || _('hospitality_core.room.value.unassignedLocation'),
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.room.action.back'),
+            href: `/admin/hospitality/rooms?property=${encodeURIComponent(room.propertyId)}&${query}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.room.section.information')}
+              description={_('hospitality_core.room.section.informationHint')}
+              body={definitionList({
+                title: room.name,
+                items: [
+                  { key: 'property', term: _('hospitality_core.room.field.property'), value: propertyName },
+                  {
+                    key: 'type',
+                    term: _('hospitality_core.room.field.roomType'),
+                    value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
+                  },
+                  {
+                    key: 'location',
+                    term: _('hospitality_core.col.location'),
+                    value: location || _('hospitality_core.room.value.unassignedLocation'),
+                  },
+                  {
+                    key: 'status',
+                    term: _('hospitality_core.col.status'),
+                    value: _(`hospitality_core.roomStatus.${room.status}`),
+                  },
+                ],
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.room.section.settings')}
+              description={_('hospitality_core.room.section.settingsHint')}
+              body={roomForm(
+                _,
+                values,
+                properties,
+                roomTypes,
+                buildings,
+                floors,
+                locale,
+                `/admin/hospitality/rooms/${encodeURIComponent(room.id)}?${query}`,
+                _('hospitality_core.room.action.save'),
+                `/admin/hospitality/rooms?property=${encodeURIComponent(room.propertyId)}&${query}`,
+              )}
+            />,
+            <Section
+              title={_('hospitality_core.room.section.lifecycle')}
+              description={_('hospitality_core.room.section.lifecycleHint')}
+              body={stack([
+                linkButton({
+                  label: _('hospitality_core.room.action.openHousekeeping'),
+                  href: `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(room.id)}?${query}`,
+                  variant: 'secondary',
                 }),
-              }),
-            ]),
-          }),
-        ]),
-      }),
-    ]),
+                <Surface
+                  body={recordActions({
+                    action: `/admin/hospitality/rooms/${encodeURIComponent(room.id)}/archive?${query}`,
+                    actions: [
+                      room.active
+                        ? {
+                            value: 'archive',
+                            label: _('hospitality_core.room.action.archive'),
+                            variant: 'destructive',
+                          }
+                        : {
+                            value: 'restore',
+                            label: _('hospitality_core.room.action.restore'),
+                            variant: 'secondary',
+                          },
+                    ],
+                  })}
+                />,
+              ])}
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -2263,144 +2304,152 @@ export const cleaningTasksScreen = (
           })
         : null
 
-  return framed(
-    _,
-    _('hospitality_core.screen.cleaningTasks.title'),
-    frame,
-    stack([
-      feedback,
-      recordForm({
-        action: '/admin/hospitality/housekeeping',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        hidden: { lang: locale },
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.menu.properties'),
-            type: 'select',
-            value: data.propertyId,
-            required: true,
-            options: choices(data.properties),
-          },
-          {
-            name: 'state',
-            label: _('hospitality_core.col.status'),
-            type: 'select',
-            value: data.state,
-            options: ['all', 'todo', 'in_progress', 'done', 'cancelled'].map((value) => ({
-              value,
-              label: _(`hospitality_core.cleaningState.${value}`),
-            })),
-          },
-        ],
-      }),
-      cardGrid({
-        items: ['todo', 'in_progress', 'done'].map((state) => ({
-          state,
-          count:
-            state === 'todo'
-              ? data.summary.todo
-              : state === 'in_progress'
-                ? data.summary.inProgress
-                : data.summary.done,
-        })),
-        id: (item) => item.state,
-        card: (item) =>
-          metric({
-            label: _(`hospitality_core.cleaningState.${item.state}`),
-            value: String(item.count),
-            tone: item.state,
-          }),
-      }),
-      section({
-        title: _('hospitality_core.housekeeping.section.create'),
-        description: _('hospitality_core.housekeeping.section.createHint'),
-        body: data.rooms.length
-          ? recordForm({
-              action,
-              method: 'post',
-              submit: _('hospitality_core.housekeeping.action.create'),
-              submitVariant: 'secondary',
-              hidden: {
-                operation: 'create',
-                lang: locale,
-                id: data.id,
-                code: data.code,
-                propertyId: data.propertyId ?? '',
-                state: data.state,
-              },
-              fields: [
-                {
-                  name: 'roomId',
-                  label: _('hospitality_core.col.room'),
-                  type: 'select',
-                  value: data.selectedRoomId,
-                  required: true,
-                  options: data.rooms.map((room) => ({
-                    value: room.id,
-                    label: `${room.code} · ${room.name} · ${_(`hospitality_core.roomStatus.${room.status}`)}`,
-                  })),
-                },
-                {
-                  name: 'taskType',
-                  label: _('hospitality_core.col.type'),
-                  type: 'select',
-                  value: 'daily_clean',
-                  required: true,
-                  options: ['checkout_clean', 'daily_clean', 'maintenance', 'inspection'].map((value) => ({
-                    value,
-                    label: _(`hospitality_core.cleaningType.${value}`),
-                  })),
-                },
-                {
-                  name: 'priority',
-                  label: _('hospitality_core.col.priority'),
-                  type: 'select',
-                  value: 'normal',
-                  required: true,
-                  options: ['normal', 'urgent'].map((value) => ({
-                    value,
-                    label: _(`hospitality_core.cleaningPriority.${value}`),
-                  })),
-                },
-                {
-                  name: 'assigneeId',
-                  label: _('hospitality_core.col.assignee'),
-                  help: _('hospitality_core.housekeeping.field.assigneeHint'),
-                },
-                {
-                  name: 'notes',
-                  label: _('hospitality_core.housekeeping.field.notes'),
-                  type: 'textarea',
-                  span: 'full',
-                },
-              ],
-            })
-          : emptyState(
-              _('hospitality_core.housekeeping.empty.rooms'),
-              _('hospitality_core.housekeeping.empty.roomsHint'),
-            ),
-      }),
-      section({
-        title: _('hospitality_core.housekeeping.section.queue'),
-        description: _('hospitality_core.housekeeping.section.queueHint'),
-        body: visibleRows.length
-          ? dataTable(_, {
-              columns: cleaningTaskColumns(_, locale, timezone),
-              rows: visibleRows,
-              id: (row) => row.id,
-              rowHref: (row) =>
-                `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-            })
-          : emptyState(
-              _('hospitality_core.screen.cleaningTasks.empty'),
-              _('hospitality_core.screen.cleaningTasks.emptyHint'),
-            ),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.cleaningTasks.title')}
+      frame={frame}
+      body={stack([
+        feedback,
+        <RecordForm
+          action="/admin/hospitality/housekeeping"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          hidden={{ lang: locale }}
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.menu.properties'),
+              type: 'select',
+              value: data.propertyId,
+              required: true,
+              options: choices(data.properties),
+            },
+            {
+              name: 'state',
+              label: _('hospitality_core.col.status'),
+              type: 'select',
+              value: data.state,
+              options: ['all', 'todo', 'in_progress', 'done', 'cancelled'].map((value) => ({
+                value,
+                label: _(`hospitality_core.cleaningState.${value}`),
+              })),
+            },
+          ]}
+        />,
+        cardGrid({
+          items: ['todo', 'in_progress', 'done'].map((state) => ({
+            state,
+            count:
+              state === 'todo'
+                ? data.summary.todo
+                : state === 'in_progress'
+                  ? data.summary.inProgress
+                  : data.summary.done,
+          })),
+          id: (item) => item.state,
+          card: (item) =>
+            metric({
+              label: _(`hospitality_core.cleaningState.${item.state}`),
+              value: String(item.count),
+              tone: item.state,
+            }),
+        }),
+        <Section
+          title={_('hospitality_core.housekeeping.section.create')}
+          description={_('hospitality_core.housekeeping.section.createHint')}
+          body={
+            data.rooms.length ? (
+              <RecordForm
+                action={action}
+                method="post"
+                submit={_('hospitality_core.housekeeping.action.create')}
+                submitVariant="secondary"
+                hidden={{
+                  operation: 'create',
+                  lang: locale,
+                  id: data.id,
+                  code: data.code,
+                  propertyId: data.propertyId ?? '',
+                  state: data.state,
+                }}
+                fields={[
+                  {
+                    name: 'roomId',
+                    label: _('hospitality_core.col.room'),
+                    type: 'select',
+                    value: data.selectedRoomId,
+                    required: true,
+                    options: data.rooms.map((room) => ({
+                      value: room.id,
+                      label: `${room.code} · ${room.name} · ${_(`hospitality_core.roomStatus.${room.status}`)}`,
+                    })),
+                  },
+                  {
+                    name: 'taskType',
+                    label: _('hospitality_core.col.type'),
+                    type: 'select',
+                    value: 'daily_clean',
+                    required: true,
+                    options: ['checkout_clean', 'daily_clean', 'maintenance', 'inspection'].map((value) => ({
+                      value,
+                      label: _(`hospitality_core.cleaningType.${value}`),
+                    })),
+                  },
+                  {
+                    name: 'priority',
+                    label: _('hospitality_core.col.priority'),
+                    type: 'select',
+                    value: 'normal',
+                    required: true,
+                    options: ['normal', 'urgent'].map((value) => ({
+                      value,
+                      label: _(`hospitality_core.cleaningPriority.${value}`),
+                    })),
+                  },
+                  {
+                    name: 'assigneeId',
+                    label: _('hospitality_core.col.assignee'),
+                    help: _('hospitality_core.housekeeping.field.assigneeHint'),
+                  },
+                  {
+                    name: 'notes',
+                    label: _('hospitality_core.housekeeping.field.notes'),
+                    type: 'textarea',
+                    span: 'full',
+                  },
+                ]}
+              />
+            ) : (
+              emptyState(
+                _('hospitality_core.housekeeping.empty.rooms'),
+                _('hospitality_core.housekeeping.empty.roomsHint'),
+              )
+            )
+          }
+        />,
+        <Section
+          title={_('hospitality_core.housekeeping.section.queue')}
+          description={_('hospitality_core.housekeeping.section.queueHint')}
+          body={
+            visibleRows.length
+              ? dataTable(_, {
+                  columns: cleaningTaskColumns(_, locale, timezone),
+                  rows: visibleRows,
+                  id: (row) => row.id,
+                  rowHref: (row) =>
+                    `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                })
+              : emptyState(
+                  _('hospitality_core.screen.cleaningTasks.empty'),
+                  _('hospitality_core.screen.cleaningTasks.emptyHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -2439,165 +2488,173 @@ export const cleaningTaskDetailScreen = (
 
   if (task.state === 'todo')
     actions.push(
-      section({
-        title: _('hospitality_core.housekeeping.action.start'),
-        description: _('hospitality_core.housekeeping.action.startHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.housekeeping.action.start'),
-          submitVariant: 'primary',
-          hidden: { operation: 'start', lang: locale },
-          fields: [
-            {
-              name: 'assigneeId',
-              label: _('hospitality_core.col.assignee'),
-              value: task.assigneeId,
-              help: _('hospitality_core.housekeeping.field.assigneeHint'),
-            },
-          ],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.housekeeping.action.start')}
+        description={_('hospitality_core.housekeeping.action.startHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.housekeeping.action.start')}
+            submitVariant="primary"
+            hidden={{ operation: 'start', lang: locale }}
+            fields={[
+              {
+                name: 'assigneeId',
+                label: _('hospitality_core.col.assignee'),
+                value: task.assigneeId,
+                help: _('hospitality_core.housekeeping.field.assigneeHint'),
+              },
+            ]}
+          />
+        }
+      />,
     )
 
   if (task.state === 'in_progress')
     actions.push(
-      section({
-        title: _('hospitality_core.housekeeping.action.complete'),
-        description: _('hospitality_core.housekeeping.action.completeHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.housekeeping.action.complete'),
-          submitVariant: 'primary',
-          hidden: { operation: 'complete', lang: locale },
-          fields: [],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.housekeeping.action.complete')}
+        description={_('hospitality_core.housekeeping.action.completeHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.housekeeping.action.complete')}
+            submitVariant="primary"
+            hidden={{ operation: 'complete', lang: locale }}
+            fields={[]}
+          />
+        }
+      />,
     )
 
   if (task.state === 'todo' || task.state === 'in_progress')
     actions.push(
-      section({
-        title: _('hospitality_core.housekeeping.action.cancel'),
-        description: _('hospitality_core.housekeeping.action.cancelHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.housekeeping.action.cancel'),
-          submitVariant: 'destructive',
-          hidden: { operation: 'cancel', lang: locale },
-          fields: [],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.housekeeping.action.cancel')}
+        description={_('hospitality_core.housekeeping.action.cancelHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.housekeeping.action.cancel')}
+            submitVariant="destructive"
+            hidden={{ operation: 'cancel', lang: locale }}
+            fields={[]}
+          />
+        }
+      />,
     )
 
-  return framed(
-    _,
-    _('hospitality_core.housekeeping.detail.title', { code: task.code }),
-    frame,
-    stack([
-      cleaningTaskFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.housekeeping.detail.kicker'),
-        title: task.code,
-        subtitle: room,
-        imageFallback: icon('check-circle'),
-        badges: [
-          badge(_(`hospitality_core.cleaningState.${task.state}`), cleaningTone(task.state), task.state),
-          badge(
-            _(`hospitality_core.cleaningPriority.${task.priority}`),
-            task.priority === 'urgent' ? 'danger' : 'neutral',
-          ),
-        ],
-        summary: [
-          {
-            id: 'room',
-            label: _('hospitality_core.col.room'),
-            value: room,
-          },
-          {
-            id: 'type',
-            label: _('hospitality_core.col.type'),
-            value: _(`hospitality_core.cleaningType.${task.taskType}`),
-          },
-          {
-            id: 'assignee',
-            label: _('hospitality_core.col.assignee'),
-            value: task.assigneeId || '—',
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.housekeeping.action.back'),
-          href: `/admin/hospitality/housekeeping?property=${encodeURIComponent(task.propertyId)}&lang=${encodeURIComponent(locale)}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.housekeeping.section.information'),
-            description: _('hospitality_core.housekeeping.section.informationHint'),
-            body: definitionList({
-              title: task.code,
-              items: [
-                {
-                  key: 'property',
-                  term: _('hospitality_core.menu.properties'),
-                  value: task.property?.name ?? task.property?.code ?? task.propertyId,
-                },
-                {
-                  key: 'room',
-                  term: _('hospitality_core.col.room'),
-                  value: room,
-                },
-                {
-                  key: 'requested',
-                  term: _('hospitality_core.col.requestedAt'),
-                  value: dateTime(task.requestedAt, locale, timezone),
-                },
-                ...(task.startedAt
-                  ? [
-                      {
-                        key: 'started',
-                        term: _('hospitality_core.housekeeping.field.startedAt'),
-                        value: dateTime(task.startedAt, locale, timezone),
-                      },
-                    ]
-                  : []),
-                ...(task.doneAt
-                  ? [
-                      {
-                        key: 'done',
-                        term: _('hospitality_core.housekeeping.field.doneAt'),
-                        value: dateTime(task.doneAt, locale, timezone),
-                      },
-                    ]
-                  : []),
-                ...(task.stayId
-                  ? [
-                      {
-                        key: 'stay',
-                        term: _('hospitality_core.menu.stays'),
-                        value: task.stay?.code ?? task.stayId,
-                      },
-                    ]
-                  : []),
-                ...(task.notes
-                  ? [
-                      {
-                        key: 'notes',
-                        term: _('hospitality_core.housekeeping.field.notes'),
-                        value: task.notes,
-                      },
-                    ]
-                  : []),
-              ],
-            }),
-          }),
-          ...actions,
-        ]),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.housekeeping.detail.title', { code: task.code })}
+      frame={frame}
+      body={stack([
+        cleaningTaskFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.housekeeping.detail.kicker')}
+          title={task.code}
+          subtitle={room}
+          imageFallback={icon('check-circle')}
+          badges={[
+            badge(_(`hospitality_core.cleaningState.${task.state}`), cleaningTone(task.state), task.state),
+            badge(
+              _(`hospitality_core.cleaningPriority.${task.priority}`),
+              task.priority === 'urgent' ? 'danger' : 'neutral',
+            ),
+          ]}
+          summary={[
+            {
+              id: 'room',
+              label: _('hospitality_core.col.room'),
+              value: room,
+            },
+            {
+              id: 'type',
+              label: _('hospitality_core.col.type'),
+              value: _(`hospitality_core.cleaningType.${task.taskType}`),
+            },
+            {
+              id: 'assignee',
+              label: _('hospitality_core.col.assignee'),
+              value: task.assigneeId || '—',
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.housekeeping.action.back'),
+            href: `/admin/hospitality/housekeeping?property=${encodeURIComponent(task.propertyId)}&lang=${encodeURIComponent(locale)}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.housekeeping.section.information')}
+              description={_('hospitality_core.housekeeping.section.informationHint')}
+              body={definitionList({
+                title: task.code,
+                items: [
+                  {
+                    key: 'property',
+                    term: _('hospitality_core.menu.properties'),
+                    value: task.property?.name ?? task.property?.code ?? task.propertyId,
+                  },
+                  {
+                    key: 'room',
+                    term: _('hospitality_core.col.room'),
+                    value: room,
+                  },
+                  {
+                    key: 'requested',
+                    term: _('hospitality_core.col.requestedAt'),
+                    value: dateTime(task.requestedAt, locale, timezone),
+                  },
+                  ...(task.startedAt
+                    ? [
+                        {
+                          key: 'started',
+                          term: _('hospitality_core.housekeeping.field.startedAt'),
+                          value: dateTime(task.startedAt, locale, timezone),
+                        },
+                      ]
+                    : []),
+                  ...(task.doneAt
+                    ? [
+                        {
+                          key: 'done',
+                          term: _('hospitality_core.housekeeping.field.doneAt'),
+                          value: dateTime(task.doneAt, locale, timezone),
+                        },
+                      ]
+                    : []),
+                  ...(task.stayId
+                    ? [
+                        {
+                          key: 'stay',
+                          term: _('hospitality_core.menu.stays'),
+                          value: task.stay?.code ?? task.stayId,
+                        },
+                      ]
+                    : []),
+                  ...(task.notes
+                    ? [
+                        {
+                          key: 'notes',
+                          term: _('hospitality_core.housekeeping.field.notes'),
+                          value: task.notes,
+                        },
+                      ]
+                    : []),
+                ],
+              })}
+            />,
+            ...actions,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -2659,66 +2716,70 @@ export const housekeepingRoomsScreen = (
     { id: 'attention', value: attention },
   ]
 
-  return framed(
-    _,
-    _('hospitality_core.screen.housekeepingRooms.title'),
-    frame,
-    stack([
-      recordForm({
-        action: '/admin/hospitality/housekeeping/rooms',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        hidden: { lang: locale },
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.menu.properties'),
-            type: 'select',
-            value: data.propertyId,
-            required: true,
-            options: choices(data.properties),
-          },
-          {
-            name: 'state',
-            label: _('hospitality_core.col.status'),
-            type: 'select',
-            value: data.state,
-            options: ['all', ...ROOM_STATUSES].map((value) => ({
-              value,
-              label: _(`hospitality_core.roomStatus.${value}`),
-            })),
-          },
-        ],
-      }),
-      cardGrid({
-        items: metrics,
-        id: (item) => item.id,
-        card: (item) =>
-          metric({
-            label: _(`hospitality_core.metric.${item.id}`),
-            value: String(item.value),
-            tone: item.id,
-          }),
-      }),
-      section({
-        title: _('hospitality_core.housekeeping.rooms.section.board'),
-        description: _('hospitality_core.housekeeping.rooms.section.boardHint'),
-        body: data.rows.length
-          ? dataTable(_, {
-              columns: housekeepingRoomColumns(_),
-              rows: data.rows,
-              id: (row) => row.id,
-              rowHref: (row) =>
-                `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-            })
-          : emptyState(
-              _('hospitality_core.screen.housekeepingRooms.empty'),
-              _('hospitality_core.screen.housekeepingRooms.emptyHint'),
-            ),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.housekeepingRooms.title')}
+      frame={frame}
+      body={stack([
+        <RecordForm
+          action="/admin/hospitality/housekeeping/rooms"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          hidden={{ lang: locale }}
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.menu.properties'),
+              type: 'select',
+              value: data.propertyId,
+              required: true,
+              options: choices(data.properties),
+            },
+            {
+              name: 'state',
+              label: _('hospitality_core.col.status'),
+              type: 'select',
+              value: data.state,
+              options: ['all', ...ROOM_STATUSES].map((value) => ({
+                value,
+                label: _(`hospitality_core.roomStatus.${value}`),
+              })),
+            },
+          ]}
+        />,
+        cardGrid({
+          items: metrics,
+          id: (item) => item.id,
+          card: (item) =>
+            metric({
+              label: _(`hospitality_core.metric.${item.id}`),
+              value: String(item.value),
+              tone: item.id,
+            }),
+        }),
+        <Section
+          title={_('hospitality_core.housekeeping.rooms.section.board')}
+          description={_('hospitality_core.housekeeping.rooms.section.boardHint')}
+          body={
+            data.rows.length
+              ? dataTable(_, {
+                  columns: housekeepingRoomColumns(_),
+                  rows: data.rows,
+                  id: (row) => row.id,
+                  rowHref: (row) =>
+                    `/admin/hospitality/housekeeping/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+                })
+              : emptyState(
+                  _('hospitality_core.screen.housekeepingRooms.empty'),
+                  _('hospitality_core.screen.housekeepingRooms.emptyHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -2761,171 +2822,177 @@ export const housekeepingRoomDetailScreen = (
 
   if (room.status === 'available' || room.status === 'dirty')
     actions.push(
-      section({
-        title: _('hospitality_core.housekeeping.rooms.section.service'),
-        description: _('hospitality_core.housekeeping.rooms.section.serviceHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.housekeeping.rooms.action.takeOut'),
-          submitVariant: 'destructive',
-          hidden: { operation: 'set-status', expectedStatus: room.status, lang: locale },
-          fields: [
-            {
-              name: 'status',
-              label: _('hospitality_core.housekeeping.rooms.field.targetStatus'),
-              type: 'select',
-              value: 'maintenance',
-              required: true,
-              options: ['maintenance', 'out_of_order'].map((value) => ({
-                value,
-                label: _(`hospitality_core.roomStatus.${value}`),
-              })),
-            },
-            {
-              name: 'note',
-              label: _('hospitality_core.housekeeping.rooms.field.reason'),
-              type: 'textarea',
-              required: true,
-              span: 'full',
-            },
-          ],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.housekeeping.rooms.section.service')}
+        description={_('hospitality_core.housekeeping.rooms.section.serviceHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.housekeeping.rooms.action.takeOut')}
+            submitVariant="destructive"
+            hidden={{ operation: 'set-status', expectedStatus: room.status, lang: locale }}
+            fields={[
+              {
+                name: 'status',
+                label: _('hospitality_core.housekeeping.rooms.field.targetStatus'),
+                type: 'select',
+                value: 'maintenance',
+                required: true,
+                options: ['maintenance', 'out_of_order'].map((value) => ({
+                  value,
+                  label: _(`hospitality_core.roomStatus.${value}`),
+                })),
+              },
+              {
+                name: 'note',
+                label: _('hospitality_core.housekeeping.rooms.field.reason'),
+                type: 'textarea',
+                required: true,
+                span: 'full',
+              },
+            ]}
+          />
+        }
+      />,
     )
 
   if (room.status === 'maintenance' || room.status === 'out_of_order')
     actions.push(
-      section({
-        title: _('hospitality_core.housekeeping.rooms.section.release'),
-        description: _('hospitality_core.housekeeping.rooms.section.releaseHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.housekeeping.rooms.action.release'),
-          submitVariant: 'primary',
-          hidden: {
-            operation: 'set-status',
-            expectedStatus: room.status,
-            status: 'dirty',
-            lang: locale,
-          },
-          fields: [],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.housekeeping.rooms.section.release')}
+        description={_('hospitality_core.housekeeping.rooms.section.releaseHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.housekeeping.rooms.action.release')}
+            submitVariant="primary"
+            hidden={{
+              operation: 'set-status',
+              expectedStatus: room.status,
+              status: 'dirty',
+              lang: locale,
+            }}
+            fields={[]}
+          />
+        }
+      />,
     )
 
   const currentStay = room.currentStay
   const guest = currentStay?.partner?.name
 
-  return framed(
-    _,
-    _('hospitality_core.housekeeping.rooms.detail.title', { code: room.code }),
-    frame,
-    stack([
-      housekeepingRoomFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.housekeeping.rooms.detail.kicker'),
-        title: room.code,
-        subtitle: room.name,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(_(`hospitality_core.roomStatus.${room.status}`), statusTone(room.status), room.status),
-        ],
-        summary: [
-          {
-            id: 'room-type',
-            label: _('hospitality_core.col.roomType'),
-            value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
-          },
-          {
-            id: 'capacity',
-            label: _('hospitality_core.col.capacity'),
-            value: room.capacity,
-          },
-          {
-            id: 'tasks',
-            label: _('hospitality_core.housekeeping.rooms.metric.openTasks'),
-            value: tasks.filter((task) => task.state === 'todo' || task.state === 'in_progress').length,
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.housekeeping.rooms.action.back'),
-          href: `/admin/hospitality/housekeeping/rooms?property=${encodeURIComponent(room.propertyId)}&lang=${encodeURIComponent(locale)}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.housekeeping.rooms.section.information'),
-            description: _('hospitality_core.housekeeping.rooms.section.informationHint'),
-            body: stack([
-              definitionList({
-                title: room.name,
-                items: [
-                  {
-                    key: 'property',
-                    term: _('hospitality_core.menu.properties'),
-                    value: room.property?.name ?? room.property?.code ?? room.propertyId,
-                  },
-                  {
-                    key: 'room-type',
-                    term: _('hospitality_core.col.roomType'),
-                    value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
-                  },
-                  {
-                    key: 'location',
-                    term: _('hospitality_core.col.location'),
-                    value: location || '—',
-                  },
-                  {
-                    key: 'guest',
-                    term: _('hospitality_core.reservation.field.guest'),
-                    value: guest ?? '—',
-                  },
-                  {
-                    key: 'note',
-                    term: _('hospitality_core.housekeeping.field.notes'),
-                    value: room.note || '—',
-                  },
-                ],
-              }),
-              currentStay?.id
-                ? linkButton({
-                    label: _('hospitality_core.housekeeping.rooms.action.openStay'),
-                    href: `/admin/hospitality/stays/${encodeURIComponent(currentStay.id)}?lang=${encodeURIComponent(locale)}`,
-                    variant: 'secondary',
-                  })
-                : null,
-            ]),
-          }),
-          section({
-            title: _('hospitality_core.housekeeping.rooms.section.tasks'),
-            description: _('hospitality_core.housekeeping.rooms.section.tasksHint'),
-            body: stack([
-              tasks.length
-                ? dataTable(_, {
-                    columns: cleaningTaskColumns(_, locale, timezone),
-                    rows: tasks,
-                    id: (task) => task.id,
-                    rowHref: (task) =>
-                      `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(task.id)}?lang=${encodeURIComponent(locale)}`,
-                  })
-                : emptyState(
-                    _('hospitality_core.housekeeping.rooms.empty.tasks'),
-                    _('hospitality_core.housekeeping.rooms.empty.tasksHint'),
-                  ),
-              linkButton({
-                label: _('hospitality_core.housekeeping.action.create'),
-                href: taskQueue,
-                variant: 'secondary',
-              }),
-            ]),
-          }),
-          ...actions,
-        ]),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.housekeeping.rooms.detail.title', { code: room.code })}
+      frame={frame}
+      body={stack([
+        housekeepingRoomFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.housekeeping.rooms.detail.kicker')}
+          title={room.code}
+          subtitle={room.name}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(_(`hospitality_core.roomStatus.${room.status}`), statusTone(room.status), room.status),
+          ]}
+          summary={[
+            {
+              id: 'room-type',
+              label: _('hospitality_core.col.roomType'),
+              value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
+            },
+            {
+              id: 'capacity',
+              label: _('hospitality_core.col.capacity'),
+              value: room.capacity,
+            },
+            {
+              id: 'tasks',
+              label: _('hospitality_core.housekeeping.rooms.metric.openTasks'),
+              value: tasks.filter((task) => task.state === 'todo' || task.state === 'in_progress').length,
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.housekeeping.rooms.action.back'),
+            href: `/admin/hospitality/housekeeping/rooms?property=${encodeURIComponent(room.propertyId)}&lang=${encodeURIComponent(locale)}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.housekeeping.rooms.section.information')}
+              description={_('hospitality_core.housekeeping.rooms.section.informationHint')}
+              body={stack([
+                definitionList({
+                  title: room.name,
+                  items: [
+                    {
+                      key: 'property',
+                      term: _('hospitality_core.menu.properties'),
+                      value: room.property?.name ?? room.property?.code ?? room.propertyId,
+                    },
+                    {
+                      key: 'room-type',
+                      term: _('hospitality_core.col.roomType'),
+                      value: room.roomType?.name ?? room.roomType?.code ?? room.roomTypeId,
+                    },
+                    {
+                      key: 'location',
+                      term: _('hospitality_core.col.location'),
+                      value: location || '—',
+                    },
+                    {
+                      key: 'guest',
+                      term: _('hospitality_core.reservation.field.guest'),
+                      value: guest ?? '—',
+                    },
+                    {
+                      key: 'note',
+                      term: _('hospitality_core.housekeeping.field.notes'),
+                      value: room.note || '—',
+                    },
+                  ],
+                }),
+                currentStay?.id
+                  ? linkButton({
+                      label: _('hospitality_core.housekeeping.rooms.action.openStay'),
+                      href: `/admin/hospitality/stays/${encodeURIComponent(currentStay.id)}?lang=${encodeURIComponent(locale)}`,
+                      variant: 'secondary',
+                    })
+                  : null,
+              ])}
+            />,
+            <Section
+              title={_('hospitality_core.housekeeping.rooms.section.tasks')}
+              description={_('hospitality_core.housekeeping.rooms.section.tasksHint')}
+              body={stack([
+                tasks.length
+                  ? dataTable(_, {
+                      columns: cleaningTaskColumns(_, locale, timezone),
+                      rows: tasks,
+                      id: (task) => task.id,
+                      rowHref: (task) =>
+                        `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(task.id)}?lang=${encodeURIComponent(locale)}`,
+                    })
+                  : emptyState(
+                      _('hospitality_core.housekeeping.rooms.empty.tasks'),
+                      _('hospitality_core.housekeeping.rooms.empty.tasksHint'),
+                    ),
+                linkButton({
+                  label: _('hospitality_core.housekeeping.action.create'),
+                  href: taskQueue,
+                  variant: 'secondary',
+                }),
+              ])}
+            />,
+            ...actions,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -3075,19 +3142,20 @@ const roomTypeForm = (
   submit: string,
   cancelHref: string,
   creating: boolean,
-): TemplateResult =>
-  recordForm({
-    action,
-    fields: roomTypeFormFields(_, values, properties, policies, creating),
-    hidden: {
+): TemplateResult => (
+  <RecordForm
+    action={action}
+    fields={roomTypeFormFields(_, values, properties, policies, creating)}
+    hidden={{
       lang: locale,
       ...(!creating ? { propertyId: values.propertyId } : {}),
-    },
-    submit,
-    submitVariant: 'primary',
-    cancelHref,
-    cancelLabel: _('hospitality_core.action.cancel'),
-  })
+    }}
+    submit={submit}
+    submitVariant="primary"
+    cancelHref={cancelHref}
+    cancelLabel={_('hospitality_core.action.cancel')}
+  />
+)
 
 const roomTypeFeedback = (
   _: Translator,
@@ -3118,69 +3186,71 @@ export const roomTypesScreen = (
   frame: Frame,
 ): TemplateResult => {
   const propertyQuery = propertyId ? `&property=${encodeURIComponent(propertyId)}` : ''
-  return framed(
-    _,
-    _('hospitality_core.screen.roomTypes.title'),
-    frame,
-    stack([
-      recordForm({
-        action: '/admin/hospitality/room-types',
-        method: 'get',
-        layout: 'inline',
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.roomType.field.property'),
-            type: 'select',
-            value: propertyId,
-            options: choices(properties),
-          },
-        ],
-        hidden: { lang: locale },
-        submit: _('hospitality_core.action.apply'),
-        submitVariant: 'secondary',
-      }),
-      properties.length
-        ? linkButton({
-            label: _('hospitality_core.roomType.action.create'),
-            href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
-            variant: 'primary',
-          })
-        : notice({
-            title: _('hospitality_core.roomType.empty.noProperty'),
-            message: _('hospitality_core.roomType.empty.noPropertyHint'),
-            tone: 'warning',
-          }),
-      cardGrid({
-        items: [
-          { id: 'types', label: _('hospitality_core.roomType.metric.types'), value: rows.length },
-          {
-            id: 'published',
-            label: _('hospitality_core.roomType.metric.published'),
-            value: rows.filter((row) => row.published).length,
-          },
-          {
-            id: 'rooms',
-            label: _('hospitality_core.metric.rooms'),
-            value: rows.reduce((sum, row) => sum + (row.rooms?.length ?? 0), 0),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
-      rows.length
-        ? dataTable(_, {
-            columns: roomTypeColumns(_),
-            rows,
-            id: (row) => row.id,
-            rowHref: (row) =>
-              `/admin/hospitality/room-types/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-          })
-        : emptyState(
-            _('hospitality_core.screen.roomTypes.empty'),
-            _('hospitality_core.screen.roomTypes.emptyHint'),
-          ),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.roomTypes.title')}
+      frame={frame}
+      body={stack([
+        <RecordForm
+          action="/admin/hospitality/room-types"
+          method="get"
+          layout="inline"
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.roomType.field.property'),
+              type: 'select',
+              value: propertyId,
+              options: choices(properties),
+            },
+          ]}
+          hidden={{ lang: locale }}
+          submit={_('hospitality_core.action.apply')}
+          submitVariant="secondary"
+        />,
+        properties.length
+          ? linkButton({
+              label: _('hospitality_core.roomType.action.create'),
+              href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
+              variant: 'primary',
+            })
+          : notice({
+              title: _('hospitality_core.roomType.empty.noProperty'),
+              message: _('hospitality_core.roomType.empty.noPropertyHint'),
+              tone: 'warning',
+            }),
+        cardGrid({
+          items: [
+            { id: 'types', label: _('hospitality_core.roomType.metric.types'), value: rows.length },
+            {
+              id: 'published',
+              label: _('hospitality_core.roomType.metric.published'),
+              value: rows.filter((row) => row.published).length,
+            },
+            {
+              id: 'rooms',
+              label: _('hospitality_core.metric.rooms'),
+              value: rows.reduce((sum, row) => sum + (row.rooms?.length ?? 0), 0),
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+        }),
+        rows.length
+          ? dataTable(_, {
+              columns: roomTypeColumns(_),
+              rows,
+              id: (row) => row.id,
+              rowHref: (row) =>
+                `/admin/hospitality/room-types/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+            })
+          : emptyState(
+              _('hospitality_core.screen.roomTypes.empty'),
+              _('hospitality_core.screen.roomTypes.emptyHint'),
+            ),
+      ])}
+    />
   )
 }
 
@@ -3192,17 +3262,17 @@ export const newRoomTypeScreen = (
   locale: string,
   frame: Frame,
   errors: readonly string[] = [],
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.roomType.create.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.roomType.create.title')}
+    frame={frame}
+    body={stack([
       roomTypeFeedback(_, null, errors),
-      section({
-        title: _('hospitality_core.roomType.create.title'),
-        description: _('hospitality_core.roomType.create.hint'),
-        body: roomTypeForm(
+      <Section
+        title={_('hospitality_core.roomType.create.title')}
+        description={_('hospitality_core.roomType.create.hint')}
+        body={roomTypeForm(
           _,
           values,
           properties,
@@ -3212,10 +3282,11 @@ export const newRoomTypeScreen = (
           _('hospitality_core.roomType.action.create'),
           `/admin/hospitality/room-types?property=${encodeURIComponent(values.propertyId)}&lang=${encodeURIComponent(locale)}`,
           true,
-        ),
-      }),
-    ]),
-  )
+        )}
+      />,
+    ])}
+  />
+)
 
 export const roomTypeDetailScreen = (
   _: Translator,
@@ -3231,164 +3302,172 @@ export const roomTypeDetailScreen = (
   const query = `lang=${encodeURIComponent(locale)}`
   const values = attempted ?? roomType
   const propertyName = roomType.property?.name ?? roomType.property?.code ?? roomType.propertyId
-  return framed(
-    _,
-    roomType.name,
-    frame,
-    stack([
-      roomTypeFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.roomType.detail.kicker'),
-        title: roomType.name,
-        subtitle: `${roomType.code} · ${propertyName}`,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(
-            _(roomType.published ? 'hospitality_core.value.published' : 'hospitality_core.value.draft'),
-            roomType.published ? 'positive' : 'neutral',
-          ),
-          badge(
-            _(roomType.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
-            roomType.active ? 'positive' : 'neutral',
-          ),
-        ],
-        summary: [
-          {
-            id: 'rooms',
-            label: _('hospitality_core.metric.rooms'),
-            value: roomType.rooms?.length ?? 0,
-            href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-          },
-          {
-            id: 'rates',
-            label: _('hospitality_core.menu.ratePlans'),
-            value: roomType.ratePlans?.length ?? 0,
-            href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-          },
-          {
-            id: 'beds',
-            label: _('hospitality_core.roomType.metric.beds'),
-            value: (roomType.beds ?? []).reduce((sum, bed) => sum + Number(bed.quantity ?? 0), 0),
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.roomType.action.back'),
-          href: `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.roomType.section.information'),
-            description: _('hospitality_core.roomType.section.informationHint'),
-            body: definitionList({
-              title: roomType.publicName || roomType.name,
-              items: [
-                {
-                  key: 'property',
-                  term: _('hospitality_core.roomType.field.property'),
-                  value: propertyName,
-                },
-                {
-                  key: 'capacity',
-                  term: _('hospitality_core.roomType.field.defaultCapacity'),
-                  value: _('hospitality_core.roomType.value.capacity', {
-                    default: roomType.defaultCapacity,
-                    adults: roomType.maxAdults,
-                    children: roomType.maxChildren,
+  return (
+    <Framed
+      translator={_}
+      title={roomType.name}
+      frame={frame}
+      body={stack([
+        roomTypeFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.roomType.detail.kicker')}
+          title={roomType.name}
+          subtitle={`${roomType.code} · ${propertyName}`}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(
+              _(roomType.published ? 'hospitality_core.value.published' : 'hospitality_core.value.draft'),
+              roomType.published ? 'positive' : 'neutral',
+            ),
+            badge(
+              _(roomType.active ? 'hospitality_core.value.active' : 'hospitality_core.value.inactive'),
+              roomType.active ? 'positive' : 'neutral',
+            ),
+          ]}
+          summary={[
+            {
+              id: 'rooms',
+              label: _('hospitality_core.metric.rooms'),
+              value: roomType.rooms?.length ?? 0,
+              href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+            },
+            {
+              id: 'rates',
+              label: _('hospitality_core.menu.ratePlans'),
+              value: roomType.ratePlans?.length ?? 0,
+              href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+            },
+            {
+              id: 'beds',
+              label: _('hospitality_core.roomType.metric.beds'),
+              value: (roomType.beds ?? []).reduce((sum, bed) => sum + Number(bed.quantity ?? 0), 0),
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.roomType.action.back'),
+            href: `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.roomType.section.information')}
+              description={_('hospitality_core.roomType.section.informationHint')}
+              body={definitionList({
+                title: roomType.publicName || roomType.name,
+                items: [
+                  {
+                    key: 'property',
+                    term: _('hospitality_core.roomType.field.property'),
+                    value: propertyName,
+                  },
+                  {
+                    key: 'capacity',
+                    term: _('hospitality_core.roomType.field.defaultCapacity'),
+                    value: _('hospitality_core.roomType.value.capacity', {
+                      default: roomType.defaultCapacity,
+                      adults: roomType.maxAdults,
+                      children: roomType.maxChildren,
+                    }),
+                  },
+                  {
+                    key: 'rate',
+                    term: _('hospitality_core.roomType.field.baseRate'),
+                    value: formatMoney(_, roomType.baseRate),
+                  },
+                  {
+                    key: 'policy',
+                    term: _('hospitality_core.roomType.field.cancellationPolicy'),
+                    value:
+                      roomType.cancellationPolicy?.name ??
+                      roomType.cancellationPolicy?.code ??
+                      _('hospitality_core.roomType.value.inheritPolicy'),
+                  },
+                ],
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.roomType.section.settings')}
+              description={_('hospitality_core.roomType.section.settingsHint')}
+              body={roomTypeForm(
+                _,
+                values,
+                properties,
+                policies,
+                locale,
+                `/admin/hospitality/room-types/${encodeURIComponent(roomType.id)}?${query}`,
+                _('hospitality_core.roomType.action.save'),
+                `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+                false,
+              )}
+            />,
+            <Section
+              title={_('hospitality_core.roomType.section.next')}
+              description={_('hospitality_core.roomType.section.nextHint')}
+              body={stack(
+                [
+                  linkButton({
+                    label: _('hospitality_core.menu.rooms'),
+                    href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+                    variant: 'secondary',
                   }),
-                },
-                {
-                  key: 'rate',
-                  term: _('hospitality_core.roomType.field.baseRate'),
-                  value: formatMoney(_, roomType.baseRate),
-                },
-                {
-                  key: 'policy',
-                  term: _('hospitality_core.roomType.field.cancellationPolicy'),
-                  value:
-                    roomType.cancellationPolicy?.name ??
-                    roomType.cancellationPolicy?.code ??
-                    _('hospitality_core.roomType.value.inheritPolicy'),
-                },
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.roomType.section.settings'),
-            description: _('hospitality_core.roomType.section.settingsHint'),
-            body: roomTypeForm(
-              _,
-              values,
-              properties,
-              policies,
-              locale,
-              `/admin/hospitality/room-types/${encodeURIComponent(roomType.id)}?${query}`,
-              _('hospitality_core.roomType.action.save'),
-              `/admin/hospitality/room-types?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-              false,
-            ),
-          }),
-          section({
-            title: _('hospitality_core.roomType.section.next'),
-            description: _('hospitality_core.roomType.section.nextHint'),
-            body: stack(
-              [
-                linkButton({
-                  label: _('hospitality_core.menu.rooms'),
-                  href: `/admin/hospitality/rooms?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.ratePlans'),
-                  href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.inventory'),
-                  href: `/admin/hospitality/inventory?property=${encodeURIComponent(roomType.propertyId)}&roomType=${encodeURIComponent(roomType.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-                linkButton({
-                  label: _('hospitality_core.menu.content'),
-                  href: `/admin/hospitality/content?property=${encodeURIComponent(roomType.propertyId)}&target=room_type%3A${encodeURIComponent(roomType.id)}&${query}`,
-                  variant: 'secondary',
-                }),
-              ],
-              'compact',
-            ),
-          }),
-        ]),
-      }),
-    ]),
+                  linkButton({
+                    label: _('hospitality_core.menu.ratePlans'),
+                    href: `/admin/hospitality/rate-plans?property=${encodeURIComponent(roomType.propertyId)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                  linkButton({
+                    label: _('hospitality_core.menu.inventory'),
+                    href: `/admin/hospitality/inventory?property=${encodeURIComponent(roomType.propertyId)}&roomType=${encodeURIComponent(roomType.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                  linkButton({
+                    label: _('hospitality_core.menu.content'),
+                    href: `/admin/hospitality/content?property=${encodeURIComponent(roomType.propertyId)}&target=room_type%3A${encodeURIComponent(roomType.id)}&${query}`,
+                    variant: 'secondary',
+                  }),
+                ],
+                'compact',
+              )}
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
-export const amenitiesScreen = (_: Translator, rows: AmenityRow[], frame: Frame): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.amenities.title'),
-    frame,
-    rows.length
-      ? dataTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
-      : emptyState(
-          _('hospitality_core.screen.amenities.empty'),
-          _('hospitality_core.screen.amenities.emptyHint'),
-        ),
-  )
+export const amenitiesScreen = (_: Translator, rows: AmenityRow[], frame: Frame): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.amenities.title')}
+    frame={frame}
+    body={
+      rows.length
+        ? dataTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
+        : emptyState(
+            _('hospitality_core.screen.amenities.empty'),
+            _('hospitality_core.screen.amenities.emptyHint'),
+          )
+    }
+  />
+)
 
-export const policiesScreen = (_: Translator, rows: PolicyRow[], frame: Frame): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.policies.title'),
-    frame,
-    rows.length
-      ? dataTable(_, { columns: policyColumns(_), rows, id: (row) => row.id })
-      : emptyState(
-          _('hospitality_core.screen.policies.empty'),
-          _('hospitality_core.screen.policies.emptyHint'),
-        ),
-  )
+export const policiesScreen = (_: Translator, rows: PolicyRow[], frame: Frame): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.policies.title')}
+    frame={frame}
+    body={
+      rows.length
+        ? dataTable(_, { columns: policyColumns(_), rows, id: (row) => row.id })
+        : emptyState(
+            _('hospitality_core.screen.policies.empty'),
+            _('hospitality_core.screen.policies.emptyHint'),
+          )
+    }
+  />
+)
 
 const contentFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
@@ -3437,120 +3516,125 @@ export const contentScreen = (
     : []
   const suffix = query ? `?${query}` : ''
 
-  return framed(
-    _,
-    _('hospitality_core.screen.content.title'),
-    frame,
-    stack([
-      contentFeedback(_, status),
-      properties.length
-        ? section({
-            title: _('hospitality_core.screen.content.selection'),
-            description: _('hospitality_core.screen.content.selectionHint'),
-            body: recordForm({
-              action: '/admin/hospitality/content',
-              method: 'get',
-              layout: 'inline',
-              fields: [
-                {
-                  name: 'property',
-                  label: _('hospitality_core.content.field.property'),
-                  type: 'select',
-                  value: propertyId,
-                  options: choices(properties),
-                  required: true,
-                },
-                {
-                  name: 'target',
-                  label: _('hospitality_core.content.field.target'),
-                  type: 'select',
-                  value: target,
-                  options: targetOptions,
-                  required: true,
-                },
-              ],
-              hidden: { lang: locale },
-              submit: _('hospitality_core.action.select'),
-              submitVariant: 'secondary',
-            }),
-          })
-        : emptyState(
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.content.title')}
+      frame={frame}
+      body={stack([
+        contentFeedback(_, status),
+        properties.length ? (
+          <Section
+            title={_('hospitality_core.screen.content.selection')}
+            description={_('hospitality_core.screen.content.selectionHint')}
+            body={
+              <RecordForm
+                action="/admin/hospitality/content"
+                method="get"
+                layout="inline"
+                fields={[
+                  {
+                    name: 'property',
+                    label: _('hospitality_core.content.field.property'),
+                    type: 'select',
+                    value: propertyId,
+                    options: choices(properties),
+                    required: true,
+                  },
+                  {
+                    name: 'target',
+                    label: _('hospitality_core.content.field.target'),
+                    type: 'select',
+                    value: target,
+                    options: targetOptions,
+                    required: true,
+                  },
+                ]}
+                hidden={{ lang: locale }}
+                submit={_('hospitality_core.action.select')}
+                submitVariant="secondary"
+              />
+            }
+          />
+        ) : (
+          emptyState(
             _('hospitality_core.screen.content.noProperty'),
             _('hospitality_core.screen.content.noPropertyHint'),
-          ),
-      ...(property
-        ? [
-            cardGrid({
-              items: [
-                {
-                  id: 'target',
-                  label: _('hospitality_core.content.metric.target'),
-                  value: selectedLabel,
-                },
-                {
-                  id: 'images',
-                  label: _('hospitality_core.content.metric.images'),
-                  value: String(images.length),
-                },
-                {
-                  id: 'complete',
-                  label: _('hospitality_core.content.metric.completeness'),
-                  value: `${completeness.percent}%`,
-                  detail: _(`hospitality_core.content.metric.fields`, {
-                    completed: completeness.completed,
-                    total: completeness.total,
-                  }),
-                },
-              ],
-              id: (item) => item.id,
-              card: (item) =>
-                metric({
-                  label: item.label,
-                  value: item.value,
-                  detail: 'detail' in item ? item.detail : null,
-                  tone: item.id,
-                }),
-            }),
-            section({
-              title: _('hospitality_core.screen.content.library'),
-              description: _('hospitality_core.screen.content.libraryHint'),
-              body: mediaPanel({
-                status: 'ready',
-                images: images.map((image, index) => ({
-                  id: image.id,
-                  src: `/files/${image.attachmentId}`,
-                  alt: image.caption || image.attachment?.name || selectedLabel,
-                  primary: image.primary,
-                  actions: {
-                    primary: `/admin/hospitality/content/images/${image.id}/primary${suffix}`,
-                    remove: `/admin/hospitality/content/images/${image.id}/remove${suffix}`,
-                    ...(index > 0
-                      ? { moveUp: `/admin/hospitality/content/images/${image.id}/move-up${suffix}` }
-                      : {}),
-                    ...(index < images.length - 1
-                      ? { moveDown: `/admin/hospitality/content/images/${image.id}/move-down${suffix}` }
-                      : {}),
+          )
+        ),
+        ...(property
+          ? [
+              cardGrid({
+                items: [
+                  {
+                    id: 'target',
+                    label: _('hospitality_core.content.metric.target'),
+                    value: selectedLabel,
                   },
-                })),
-                uploadAction: `/admin/hospitality/content/upload${suffix}`,
-                labels: {
-                  empty: _('hospitality_core.content.media.empty'),
-                  primary: _('hospitality_core.content.media.primary'),
-                  makePrimary: _('hospitality_core.content.media.makePrimary'),
-                  moveUp: _('hospitality_core.content.media.moveUp'),
-                  moveDown: _('hospitality_core.content.media.moveDown'),
-                  remove: _('hospitality_core.content.media.remove'),
-                  choose: _('hospitality_core.content.media.choose'),
-                  add: _('hospitality_core.content.media.add'),
-                },
-                extension: images.length
-                  ? formCluster({
-                      label: _('hospitality_core.content.metadata.group'),
-                      forms: images.map((image) =>
-                        recordForm({
-                          action: `/admin/hospitality/content/images/${image.id}/metadata${suffix}`,
-                          layout: 'inline',
-                          fields: [
+                  {
+                    id: 'images',
+                    label: _('hospitality_core.content.metric.images'),
+                    value: String(images.length),
+                  },
+                  {
+                    id: 'complete',
+                    label: _('hospitality_core.content.metric.completeness'),
+                    value: `${completeness.percent}%`,
+                    detail: _(`hospitality_core.content.metric.fields`, {
+                      completed: completeness.completed,
+                      total: completeness.total,
+                    }),
+                  },
+                ],
+                id: (item) => item.id,
+                card: (item) =>
+                  metric({
+                    label: item.label,
+                    value: item.value,
+                    detail: 'detail' in item ? item.detail : null,
+                    tone: item.id,
+                  }),
+              }),
+              <Section
+                title={_('hospitality_core.screen.content.library')}
+                description={_('hospitality_core.screen.content.libraryHint')}
+                body={mediaPanel({
+                  status: 'ready',
+                  images: images.map((image, index) => ({
+                    id: image.id,
+                    src: `/files/${image.attachmentId}`,
+                    alt: image.caption || image.attachment?.name || selectedLabel,
+                    primary: image.primary,
+                    actions: {
+                      primary: `/admin/hospitality/content/images/${image.id}/primary${suffix}`,
+                      remove: `/admin/hospitality/content/images/${image.id}/remove${suffix}`,
+                      ...(index > 0
+                        ? { moveUp: `/admin/hospitality/content/images/${image.id}/move-up${suffix}` }
+                        : {}),
+                      ...(index < images.length - 1
+                        ? { moveDown: `/admin/hospitality/content/images/${image.id}/move-down${suffix}` }
+                        : {}),
+                    },
+                  })),
+                  uploadAction: `/admin/hospitality/content/upload${suffix}`,
+                  labels: {
+                    empty: _('hospitality_core.content.media.empty'),
+                    primary: _('hospitality_core.content.media.primary'),
+                    makePrimary: _('hospitality_core.content.media.makePrimary'),
+                    moveUp: _('hospitality_core.content.media.moveUp'),
+                    moveDown: _('hospitality_core.content.media.moveDown'),
+                    remove: _('hospitality_core.content.media.remove'),
+                    choose: _('hospitality_core.content.media.choose'),
+                    add: _('hospitality_core.content.media.add'),
+                  },
+                  extension: images.length ? (
+                    <FormCluster
+                      label={_('hospitality_core.content.metadata.group')}
+                      forms={images.map((image) => (
+                        <RecordForm
+                          action={`/admin/hospitality/content/images/${image.id}/metadata${suffix}`}
+                          layout="inline"
+                          fields={[
                             {
                               name: 'category',
                               label: _('hospitality_core.content.field.category'),
@@ -3565,20 +3649,21 @@ export const contentScreen = (
                               value: image.caption,
                               placeholder: image.attachment?.name ?? null,
                             },
-                          ],
-                          hidden: { id: image.id },
-                          submit: _('hospitality_core.content.action.saveMetadata'),
-                          submitVariant: 'secondary',
-                          submitSize: 'compact',
-                        }),
-                      ),
-                    })
-                  : undefined,
-              }),
-            }),
-          ]
-        : []),
-    ]),
+                          ]}
+                          hidden={{ id: image.id }}
+                          submit={_('hospitality_core.content.action.saveMetadata')}
+                          submitVariant="secondary"
+                          submitSize="compact"
+                        />
+                      ))}
+                    />
+                  ) : undefined,
+                })}
+              />,
+            ]
+          : []),
+      ])}
+    />
   )
 }
 
@@ -3701,116 +3786,124 @@ export const nightAuditScreen = (
   state?: string | null,
 ): TemplateResult => {
   if (!data.propertyId)
-    return framed(
-      _,
-      _('hospitality_core.screen.nightAudit.title'),
-      frame,
-      emptyState(
-        _('hospitality_core.nightAudit.empty.property'),
-        _('hospitality_core.nightAudit.empty.propertyHint'),
-      ),
+    return (
+      <Framed
+        translator={_}
+        title={_('hospitality_core.screen.nightAudit.title')}
+        frame={frame}
+        body={emptyState(
+          _('hospitality_core.nightAudit.empty.property'),
+          _('hospitality_core.nightAudit.empty.propertyHint'),
+        )}
+      />
     )
   const lang: Record<string, string> = { lang: locale }
-  return framed(
-    _,
-    _('hospitality_core.screen.nightAudit.title'),
-    frame,
-    stack([
-      nightAuditFeedback(_, state),
-      formCluster({
-        label: _('hospitality_core.nightAudit.section.selection'),
-        forms: [
-          recordForm({
-            action: '/admin/hospitality/night-audit',
-            method: 'get',
-            layout: 'inline',
-            submit: _('hospitality_core.action.select'),
-            submitVariant: 'secondary',
-            hidden: { ...lang, auditDate: data.auditDate },
-            fields: [
-              {
-                name: 'property',
-                label: _('hospitality_core.menu.properties'),
-                type: 'select',
-                value: data.propertyId,
-                options: choices(data.properties),
-                required: true,
-              },
-            ],
-          }),
-          datePicker({
-            action: '/admin/hospitality/night-audit',
-            label: _('hospitality_core.nightAudit.field.auditDate'),
-            fields: [
-              {
-                name: 'auditDate',
-                label: _('hospitality_core.nightAudit.field.auditDate'),
-                value: data.auditDate,
-                max: data.today,
-                required: true,
-              },
-            ],
-            hidden: { ...lang, property: data.propertyId },
-            submit: _('hospitality_core.nightAudit.action.preview'),
-          }),
-        ],
-      }),
-      data.preview
-        ? cardGrid({
-            items: [
-              {
-                id: 'in-house',
-                label: _('hospitality_core.nightAudit.metric.inHouse'),
-                value: data.preview.inHouseCount,
-              },
-              {
-                id: 'services',
-                label: _('hospitality_core.nightAudit.metric.servicesDue'),
-                value: data.preview.serviceDue,
-              },
-              {
-                id: 'rent',
-                label: _('hospitality_core.nightAudit.metric.rentDue'),
-                value: data.preview.rentDue,
-              },
-              {
-                id: 'night-audit-amount',
-                label: _('hospitality_core.nightAudit.metric.estimated'),
-                value: formatMoney(_, data.preview.estimatedAmount),
-              },
-            ],
-            id: (item) => item.id,
-            card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-          })
-        : null,
-      section({
-        title: _('hospitality_core.nightAudit.section.run'),
-        description: _('hospitality_core.nightAudit.section.runHint'),
-        body: recordForm({
-          action: '/admin/hospitality/night-audit',
-          method: 'post',
-          submit: _('hospitality_core.nightAudit.action.run'),
-          submitVariant: 'primary',
-          hidden: {
-            ...lang,
-            operation: 'request-night-audit',
-            propertyId: data.propertyId,
-            auditDate: data.auditDate,
-          },
-          fields: [],
-        }),
-      }),
-      section({
-        title: _('hospitality_core.nightAudit.section.history'),
-        description: _('hospitality_core.nightAudit.section.historyHint'),
-        body: data.runs.length
-          ? dataTable(_, { columns: nightAuditColumns(_, locale), rows: data.runs, id: (row) => row.id })
-          : emptyState(
-              _('hospitality_core.nightAudit.empty.runs'),
-              _('hospitality_core.nightAudit.empty.runsHint'),
-            ),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.nightAudit.title')}
+      frame={frame}
+      body={stack([
+        nightAuditFeedback(_, state),
+        <FormCluster
+          label={_('hospitality_core.nightAudit.section.selection')}
+          forms={[
+            <RecordForm
+              action="/admin/hospitality/night-audit"
+              method="get"
+              layout="inline"
+              submit={_('hospitality_core.action.select')}
+              submitVariant="secondary"
+              hidden={{ ...lang, auditDate: data.auditDate }}
+              fields={[
+                {
+                  name: 'property',
+                  label: _('hospitality_core.menu.properties'),
+                  type: 'select',
+                  value: data.propertyId,
+                  options: choices(data.properties),
+                  required: true,
+                },
+              ]}
+            />,
+            datePicker({
+              action: '/admin/hospitality/night-audit',
+              label: _('hospitality_core.nightAudit.field.auditDate'),
+              fields: [
+                {
+                  name: 'auditDate',
+                  label: _('hospitality_core.nightAudit.field.auditDate'),
+                  value: data.auditDate,
+                  max: data.today,
+                  required: true,
+                },
+              ],
+              hidden: { ...lang, property: data.propertyId },
+              submit: _('hospitality_core.nightAudit.action.preview'),
+            }),
+          ]}
+        />,
+        data.preview
+          ? cardGrid({
+              items: [
+                {
+                  id: 'in-house',
+                  label: _('hospitality_core.nightAudit.metric.inHouse'),
+                  value: data.preview.inHouseCount,
+                },
+                {
+                  id: 'services',
+                  label: _('hospitality_core.nightAudit.metric.servicesDue'),
+                  value: data.preview.serviceDue,
+                },
+                {
+                  id: 'rent',
+                  label: _('hospitality_core.nightAudit.metric.rentDue'),
+                  value: data.preview.rentDue,
+                },
+                {
+                  id: 'night-audit-amount',
+                  label: _('hospitality_core.nightAudit.metric.estimated'),
+                  value: formatMoney(_, data.preview.estimatedAmount),
+                },
+              ],
+              id: (item) => item.id,
+              card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+            })
+          : null,
+        <Section
+          title={_('hospitality_core.nightAudit.section.run')}
+          description={_('hospitality_core.nightAudit.section.runHint')}
+          body={
+            <RecordForm
+              action="/admin/hospitality/night-audit"
+              method="post"
+              submit={_('hospitality_core.nightAudit.action.run')}
+              submitVariant="primary"
+              hidden={{
+                ...lang,
+                operation: 'request-night-audit',
+                propertyId: data.propertyId,
+                auditDate: data.auditDate,
+              }}
+              fields={[]}
+            />
+          }
+        />,
+        <Section
+          title={_('hospitality_core.nightAudit.section.history')}
+          description={_('hospitality_core.nightAudit.section.historyHint')}
+          body={
+            data.runs.length
+              ? dataTable(_, { columns: nightAuditColumns(_, locale), rows: data.runs, id: (row) => row.id })
+              : emptyState(
+                  _('hospitality_core.nightAudit.empty.runs'),
+                  _('hospitality_core.nightAudit.empty.runsHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -3910,70 +4003,76 @@ const stayNoticeAction = (
     state,
   }
   if (selected.state === 'attention')
-    return recordForm({
-      action: '/admin/hospitality/stay-notices',
-      method: 'post',
-      submit: _('hospitality_core.stayNotice.action.refresh'),
-      submitVariant: 'secondary',
-      hidden: { ...hidden, operation: 'refresh' },
-      fields: [],
-    })
+    return (
+      <RecordForm
+        action="/admin/hospitality/stay-notices"
+        method="post"
+        submit={_('hospitality_core.stayNotice.action.refresh')}
+        submitVariant="secondary"
+        hidden={{ ...hidden, operation: 'refresh' }}
+        fields={[]}
+      />
+    )
   if (selected.state === 'ready')
-    return recordForm({
-      action: '/admin/hospitality/stay-notices',
-      method: 'post',
-      submit: _('hospitality_core.stayNotice.action.recordSubmission'),
-      submitVariant: 'primary',
-      hidden: { ...hidden, operation: 'record-submission' },
-      fields: [
-        {
-          name: 'reason',
-          label: _('hospitality_core.stayNotice.field.reason'),
-          type: 'select',
-          value: selected.reason,
-          required: true,
-          options: [
-            { value: '', label: _('hospitality_core.stayNotice.reason.select') },
-            ...['tourism', 'business', 'family', 'other'].map((value) => ({
+    return (
+      <RecordForm
+        action="/admin/hospitality/stay-notices"
+        method="post"
+        submit={_('hospitality_core.stayNotice.action.recordSubmission')}
+        submitVariant="primary"
+        hidden={{ ...hidden, operation: 'record-submission' }}
+        fields={[
+          {
+            name: 'reason',
+            label: _('hospitality_core.stayNotice.field.reason'),
+            type: 'select',
+            value: selected.reason,
+            required: true,
+            options: [
+              { value: '', label: _('hospitality_core.stayNotice.reason.select') },
+              ...['tourism', 'business', 'family', 'other'].map((value) => ({
+                value,
+                label: _(`hospitality_core.stayNotice.reason.${value}`),
+              })),
+            ],
+          },
+          {
+            name: 'channel',
+            label: _('hospitality_core.stayNotice.field.channel'),
+            type: 'select',
+            required: true,
+            options: ['online', 'vneid', 'email', 'phone', 'software'].map((value) => ({
               value,
-              label: _(`hospitality_core.stayNotice.reason.${value}`),
+              label: _(`hospitality_core.stayNotice.channel.${value}`),
             })),
-          ],
-        },
-        {
-          name: 'channel',
-          label: _('hospitality_core.stayNotice.field.channel'),
-          type: 'select',
-          required: true,
-          options: ['online', 'vneid', 'email', 'phone', 'software'].map((value) => ({
-            value,
-            label: _(`hospitality_core.stayNotice.channel.${value}`),
-          })),
-        },
-        {
-          name: 'evidenceRef',
-          label: _('hospitality_core.stayNotice.field.evidenceRef'),
-          help: _('hospitality_core.stayNotice.field.evidenceRefHint'),
-          required: true,
-        },
-      ],
-    })
+          },
+          {
+            name: 'evidenceRef',
+            label: _('hospitality_core.stayNotice.field.evidenceRef'),
+            help: _('hospitality_core.stayNotice.field.evidenceRefHint'),
+            required: true,
+          },
+        ]}
+      />
+    )
   if (selected.state === 'submitted')
-    return recordForm({
-      action: '/admin/hospitality/stay-notices',
-      method: 'post',
-      submit: _('hospitality_core.stayNotice.action.confirm'),
-      submitVariant: 'primary',
-      hidden: { ...hidden, operation: 'confirm' },
-      fields: [
-        {
-          name: 'receiptRef',
-          label: _('hospitality_core.stayNotice.field.receiptRef'),
-          value: selected.receiptRef,
-          required: true,
-        },
-      ],
-    })
+    return (
+      <RecordForm
+        action="/admin/hospitality/stay-notices"
+        method="post"
+        submit={_('hospitality_core.stayNotice.action.confirm')}
+        submitVariant="primary"
+        hidden={{ ...hidden, operation: 'confirm' }}
+        fields={[
+          {
+            name: 'receiptRef',
+            label: _('hospitality_core.stayNotice.field.receiptRef'),
+            value: selected.receiptRef,
+            required: true,
+          },
+        ]}
+      />
+    )
   return null
 }
 
@@ -3992,14 +4091,16 @@ export const stayNoticesScreen = (
   feedbackState?: string | null,
 ): TemplateResult => {
   if (!data.propertyId)
-    return framed(
-      _,
-      _('hospitality_core.screen.stayNotices.title'),
-      frame,
-      emptyState(
-        _('hospitality_core.stayNotice.empty.property'),
-        _('hospitality_core.stayNotice.empty.propertyHint'),
-      ),
+    return (
+      <Framed
+        translator={_}
+        title={_('hospitality_core.screen.stayNotices.title')}
+        frame={frame}
+        body={emptyState(
+          _('hospitality_core.stayNotice.empty.property'),
+          _('hospitality_core.stayNotice.empty.propertyHint'),
+        )}
+      />
     )
   const counts = Object.fromEntries(
     ['attention', 'ready', 'submitted', 'confirmed'].map((state) => [
@@ -4011,117 +4112,121 @@ export const stayNoticesScreen = (
   const action = data.selected
     ? stayNoticeAction(_, data.selected, locale, data.propertyId, data.state)
     : null
-  return framed(
-    _,
-    _('hospitality_core.screen.stayNotices.title'),
-    frame,
-    stack([
-      stayNoticeFeedback(_, feedbackState),
-      notice({
-        tone: 'info',
-        title: _('hospitality_core.stayNotice.privacy.title'),
-        message: _('hospitality_core.stayNotice.privacy.hint'),
-      }),
-      recordForm({
-        action: '/admin/hospitality/stay-notices',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        hidden: { lang: locale },
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.menu.properties'),
-            type: 'select',
-            value: data.propertyId,
-            options: choices(data.properties),
-            required: true,
-          },
-          {
-            name: 'state',
-            label: _('hospitality_core.col.status'),
-            type: 'select',
-            value: data.state,
-            options: ['all', 'attention', 'ready', 'submitted', 'confirmed'].map((value) => ({
-              value,
-              label: _(`hospitality_core.stayNotice.state.${value}`),
-            })),
-          },
-        ],
-      }),
-      cardGrid({
-        items: ['attention', 'ready', 'submitted', 'confirmed'].map((state) => ({
-          state,
-          count: Number(counts[state] ?? 0),
-        })),
-        id: (item) => item.state,
-        card: (item) =>
-          metric({
-            label: _(`hospitality_core.stayNotice.state.${item.state}`),
-            value: String(item.count),
-            tone: item.state,
-          }),
-      }),
-      ...(data.selected
-        ? [
-            section({
-              title: _('hospitality_core.stayNotice.section.selected'),
-              description: _('hospitality_core.stayNotice.section.selectedHint'),
-              body: stack([
-                definitionList({
-                  title: data.selected.guestName,
-                  items: [
-                    {
-                      key: 'state',
-                      term: _('hospitality_core.col.status'),
-                      value: _(`hospitality_core.stayNotice.state.${data.selected.state}`),
-                    },
-                    {
-                      key: 'document',
-                      term: _('hospitality_core.stayNotice.col.document'),
-                      value: stayNoticeDocument(_, data.selected),
-                    },
-                    {
-                      key: 'reason',
-                      term: _('hospitality_core.stayNotice.field.reason'),
-                      value: data.selected.reason
-                        ? _(`hospitality_core.stayNotice.reason.${data.selected.reason}`)
-                        : _('hospitality_core.stayNotice.value.missing'),
-                    },
-                    {
-                      key: 'readiness',
-                      term: _('hospitality_core.stayNotice.col.readiness'),
-                      value: stayNoticeIssues(_, data.selected),
-                    },
-                    {
-                      key: 'evidence',
-                      term: _('hospitality_core.stayNotice.field.evidenceRef'),
-                      value: data.selected.receiptRef || _('hospitality_core.stayNotice.value.missing'),
-                    },
-                  ],
-                }),
-                action,
-              ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.stayNotices.title')}
+      frame={frame}
+      body={stack([
+        stayNoticeFeedback(_, feedbackState),
+        notice({
+          tone: 'info',
+          title: _('hospitality_core.stayNotice.privacy.title'),
+          message: _('hospitality_core.stayNotice.privacy.hint'),
+        }),
+        <RecordForm
+          action="/admin/hospitality/stay-notices"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          hidden={{ lang: locale }}
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.menu.properties'),
+              type: 'select',
+              value: data.propertyId,
+              options: choices(data.properties),
+              required: true,
+            },
+            {
+              name: 'state',
+              label: _('hospitality_core.col.status'),
+              type: 'select',
+              value: data.state,
+              options: ['all', 'attention', 'ready', 'submitted', 'confirmed'].map((value) => ({
+                value,
+                label: _(`hospitality_core.stayNotice.state.${value}`),
+              })),
+            },
+          ]}
+        />,
+        cardGrid({
+          items: ['attention', 'ready', 'submitted', 'confirmed'].map((state) => ({
+            state,
+            count: Number(counts[state] ?? 0),
+          })),
+          id: (item) => item.state,
+          card: (item) =>
+            metric({
+              label: _(`hospitality_core.stayNotice.state.${item.state}`),
+              value: String(item.count),
+              tone: item.state,
             }),
-          ]
-        : []),
-      section({
-        title: _('hospitality_core.stayNotice.section.queue'),
-        description: _('hospitality_core.stayNotice.section.queueHint'),
-        body: visibleRows.length
-          ? dataTable(_, {
-              columns: stayNoticeColumns(_, locale, timezone),
-              rows: visibleRows,
-              id: (row) => row.id,
-              rowHref: (row) => stayNoticeHref(locale, data.propertyId!, data.state, row.id),
-            })
-          : emptyState(
-              _('hospitality_core.stayNotice.empty.rows'),
-              _('hospitality_core.stayNotice.empty.rowsHint'),
-            ),
-      }),
-    ]),
+        }),
+        ...(data.selected
+          ? [
+              <Section
+                title={_('hospitality_core.stayNotice.section.selected')}
+                description={_('hospitality_core.stayNotice.section.selectedHint')}
+                body={stack([
+                  definitionList({
+                    title: data.selected.guestName,
+                    items: [
+                      {
+                        key: 'state',
+                        term: _('hospitality_core.col.status'),
+                        value: _(`hospitality_core.stayNotice.state.${data.selected.state}`),
+                      },
+                      {
+                        key: 'document',
+                        term: _('hospitality_core.stayNotice.col.document'),
+                        value: stayNoticeDocument(_, data.selected),
+                      },
+                      {
+                        key: 'reason',
+                        term: _('hospitality_core.stayNotice.field.reason'),
+                        value: data.selected.reason
+                          ? _(`hospitality_core.stayNotice.reason.${data.selected.reason}`)
+                          : _('hospitality_core.stayNotice.value.missing'),
+                      },
+                      {
+                        key: 'readiness',
+                        term: _('hospitality_core.stayNotice.col.readiness'),
+                        value: stayNoticeIssues(_, data.selected),
+                      },
+                      {
+                        key: 'evidence',
+                        term: _('hospitality_core.stayNotice.field.evidenceRef'),
+                        value: data.selected.receiptRef || _('hospitality_core.stayNotice.value.missing'),
+                      },
+                    ],
+                  }),
+                  action,
+                ])}
+              />,
+            ]
+          : []),
+        <Section
+          title={_('hospitality_core.stayNotice.section.queue')}
+          description={_('hospitality_core.stayNotice.section.queueHint')}
+          body={
+            visibleRows.length
+              ? dataTable(_, {
+                  columns: stayNoticeColumns(_, locale, timezone),
+                  rows: visibleRows,
+                  id: (row) => row.id,
+                  rowHref: (row) => stayNoticeHref(locale, data.propertyId!, data.state, row.id),
+                })
+              : emptyState(
+                  _('hospitality_core.stayNotice.empty.rows'),
+                  _('hospitality_core.stayNotice.empty.rowsHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -4278,115 +4383,136 @@ export const servicesScreen = (
       label: `${row.description} · ${_(`hospitality_core.extraRecurrence.${row.recurrence}`)}`,
     }))
 
-  return framed(
-    _,
-    _('hospitality_core.screen.services.title'),
-    frame,
-    stack([
-      feedback(_, state),
-      recordForm({
-        action: '/admin/hospitality/services',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        hidden: { lang: locale },
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.menu.properties'),
-            type: 'select',
-            value: data.propertyId,
-            options: choices(data.properties),
-            required: true,
-          },
-        ],
-      }),
-      cardGrid({
-        items: [
-          {
-            id: 'fees',
-            label: _('hospitality_core.services.metric.fees'),
-            value: data.propertyCharges.length,
-          },
-          {
-            id: 'extras',
-            label: _('hospitality_core.services.metric.extras'),
-            value: data.extraLines.length,
-          },
-          { id: 'posted', label: _('hospitality_core.services.metric.posted'), value: activeCharges.length },
-          {
-            id: 'value',
-            label: _('hospitality_core.services.metric.postedValue'),
-            value: formatMoney(_, totalPosted),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
-      section({
-        title: _('hospitality_core.services.section.fees'),
-        description: _('hospitality_core.services.section.feesHint'),
-        body: formCluster({
-          label: _('hospitality_core.services.form.fee'),
-          forms: [
-            recordForm({
-              action: `/admin/hospitality/services${baseQuery}`,
-              submit: _('hospitality_core.services.action.saveFee'),
-              submitVariant: 'secondary',
-              hidden: {
-                operation: 'save-property-charge',
-                id: data.ids.propertyCharge,
-                propertyId: data.propertyId ?? '',
-              },
-              fields: [
-                {
-                  name: 'chargeType',
-                  label: _('hospitality_core.col.type'),
-                  type: 'select',
-                  options: ['parking', 'city_tax', 'internet', 'resort_fee', 'other'].map((value) => ({
-                    value,
-                    label: _(`hospitality_core.propertyCharge.${value}`),
-                  })),
-                  required: true,
-                },
-                { name: 'name', label: _('hospitality_core.col.name'), required: true },
-                { name: 'amount', label: _('hospitality_core.col.amount'), type: 'decimal', required: true },
-                {
-                  name: 'description',
-                  label: _('hospitality_core.services.field.description'),
-                  type: 'textarea',
-                  span: 'full',
-                },
-                { name: 'active', label: _('hospitality_core.field.active'), type: 'checkbox', value: true },
-              ],
-            }),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.services.title')}
+      frame={frame}
+      body={stack([
+        feedback(_, state),
+        <RecordForm
+          action="/admin/hospitality/services"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          hidden={{ lang: locale }}
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.menu.properties'),
+              type: 'select',
+              value: data.propertyId,
+              options: choices(data.properties),
+              required: true,
+            },
+          ]}
+        />,
+        cardGrid({
+          items: [
+            {
+              id: 'fees',
+              label: _('hospitality_core.services.metric.fees'),
+              value: data.propertyCharges.length,
+            },
+            {
+              id: 'extras',
+              label: _('hospitality_core.services.metric.extras'),
+              value: data.extraLines.length,
+            },
+            {
+              id: 'posted',
+              label: _('hospitality_core.services.metric.posted'),
+              value: activeCharges.length,
+            },
+            {
+              id: 'value',
+              label: _('hospitality_core.services.metric.postedValue'),
+              value: formatMoney(_, totalPosted),
+            },
           ],
+          id: (item) => item.id,
+          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
         }),
-      }),
-      data.propertyCharges.length
-        ? dataTable(_, { columns: propertyChargeColumns(_), rows: data.propertyCharges, id: (row) => row.id })
-        : emptyState(
-            _('hospitality_core.services.empty.fees'),
-            _('hospitality_core.services.empty.feesHint'),
-          ),
-      section({
-        title: _('hospitality_core.services.section.intentions'),
-        description: _('hospitality_core.services.section.intentionsHint'),
-        body:
-          data.targets.length && data.products.length
-            ? formCluster({
-                label: _('hospitality_core.services.form.intention'),
-                forms: [
-                  recordForm({
-                    action: `/admin/hospitality/services${baseQuery}`,
-                    submit: _('hospitality_core.services.action.addIntention'),
-                    submitVariant: 'primary',
-                    hidden: {
+        <Section
+          title={_('hospitality_core.services.section.fees')}
+          description={_('hospitality_core.services.section.feesHint')}
+          body={
+            <FormCluster
+              label={_('hospitality_core.services.form.fee')}
+              forms={[
+                <RecordForm
+                  action={`/admin/hospitality/services${baseQuery}`}
+                  submit={_('hospitality_core.services.action.saveFee')}
+                  submitVariant="secondary"
+                  hidden={{
+                    operation: 'save-property-charge',
+                    id: data.ids.propertyCharge,
+                    propertyId: data.propertyId ?? '',
+                  }}
+                  fields={[
+                    {
+                      name: 'chargeType',
+                      label: _('hospitality_core.col.type'),
+                      type: 'select',
+                      options: ['parking', 'city_tax', 'internet', 'resort_fee', 'other'].map((value) => ({
+                        value,
+                        label: _(`hospitality_core.propertyCharge.${value}`),
+                      })),
+                      required: true,
+                    },
+                    { name: 'name', label: _('hospitality_core.col.name'), required: true },
+                    {
+                      name: 'amount',
+                      label: _('hospitality_core.col.amount'),
+                      type: 'decimal',
+                      required: true,
+                    },
+                    {
+                      name: 'description',
+                      label: _('hospitality_core.services.field.description'),
+                      type: 'textarea',
+                      span: 'full',
+                    },
+                    {
+                      name: 'active',
+                      label: _('hospitality_core.field.active'),
+                      type: 'checkbox',
+                      value: true,
+                    },
+                  ]}
+                />,
+              ]}
+            />
+          }
+        />,
+        data.propertyCharges.length
+          ? dataTable(_, {
+              columns: propertyChargeColumns(_),
+              rows: data.propertyCharges,
+              id: (row) => row.id,
+            })
+          : emptyState(
+              _('hospitality_core.services.empty.fees'),
+              _('hospitality_core.services.empty.feesHint'),
+            ),
+        <Section
+          title={_('hospitality_core.services.section.intentions')}
+          description={_('hospitality_core.services.section.intentionsHint')}
+          body={
+            data.targets.length && data.products.length ? (
+              <FormCluster
+                label={_('hospitality_core.services.form.intention')}
+                forms={[
+                  <RecordForm
+                    action={`/admin/hospitality/services${baseQuery}`}
+                    submit={_('hospitality_core.services.action.addIntention')}
+                    submitVariant="primary"
+                    hidden={{
                       operation: 'save-extra-line',
                       id: data.ids.extraLine,
-                    },
-                    fields: [
+                    }}
+                    fields={[
                       {
                         name: 'target',
                         label: _('hospitality_core.services.field.target'),
@@ -4435,72 +4561,82 @@ export const servicesScreen = (
                         type: 'checkbox',
                         value: true,
                       },
-                    ],
-                  }),
-                ],
-              })
-            : emptyState(
+                    ]}
+                  />,
+                ]}
+              />
+            ) : (
+              emptyState(
                 _('hospitality_core.services.empty.catalogue'),
                 _('hospitality_core.services.empty.catalogueHint'),
-              ),
-      }),
-      data.extraLines.length
-        ? dataTable(_, { columns: extraLineColumns(_), rows: data.extraLines, id: (row) => row.id })
-        : emptyState(
-            _('hospitality_core.services.empty.intentions'),
-            _('hospitality_core.services.empty.intentionsHint'),
-          ),
-      section({
-        title: _('hospitality_core.services.section.post'),
-        description: _('hospitality_core.services.section.postHint'),
-        body: extraOptions.length
-          ? recordForm({
-              action: `/admin/hospitality/services${baseQuery}`,
-              submit: _('hospitality_core.services.action.post'),
-              submitVariant: 'primary',
-              hidden: { operation: 'materialize-extra', requestKey: data.ids.requestKey },
-              fields: [
-                {
-                  name: 'id',
-                  label: _('hospitality_core.services.field.intention'),
-                  type: 'select',
-                  options: extraOptions,
-                  required: true,
-                },
-                {
-                  name: 'serviceDate',
-                  label: _('hospitality_core.services.field.serviceDate'),
-                  type: 'date',
-                  help: _('hospitality_core.services.field.serviceDateHint'),
-                },
-                {
-                  name: 'quantity',
-                  label: _('hospitality_core.col.quantity'),
-                  type: 'decimal',
-                  help: _('hospitality_core.services.field.postQuantityHint'),
-                },
-              ],
-            })
+              )
+            )
+          }
+        />,
+        data.extraLines.length
+          ? dataTable(_, { columns: extraLineColumns(_), rows: data.extraLines, id: (row) => row.id })
           : emptyState(
-              _('hospitality_core.services.empty.post'),
-              _('hospitality_core.services.empty.postHint'),
+              _('hospitality_core.services.empty.intentions'),
+              _('hospitality_core.services.empty.intentionsHint'),
             ),
-      }),
-      section({
-        title: _('hospitality_core.services.section.ledger'),
-        description: _('hospitality_core.services.section.ledgerHint'),
-        body: data.charges.length
-          ? dataTable(_, {
-              columns: serviceChargeColumns(_, locale, timezone),
-              rows: data.charges,
-              id: (row) => row.id,
-            })
-          : emptyState(
-              _('hospitality_core.services.empty.ledger'),
-              _('hospitality_core.services.empty.ledgerHint'),
-            ),
-      }),
-    ]),
+        <Section
+          title={_('hospitality_core.services.section.post')}
+          description={_('hospitality_core.services.section.postHint')}
+          body={
+            extraOptions.length ? (
+              <RecordForm
+                action={`/admin/hospitality/services${baseQuery}`}
+                submit={_('hospitality_core.services.action.post')}
+                submitVariant="primary"
+                hidden={{ operation: 'materialize-extra', requestKey: data.ids.requestKey }}
+                fields={[
+                  {
+                    name: 'id',
+                    label: _('hospitality_core.services.field.intention'),
+                    type: 'select',
+                    options: extraOptions,
+                    required: true,
+                  },
+                  {
+                    name: 'serviceDate',
+                    label: _('hospitality_core.services.field.serviceDate'),
+                    type: 'date',
+                    help: _('hospitality_core.services.field.serviceDateHint'),
+                  },
+                  {
+                    name: 'quantity',
+                    label: _('hospitality_core.col.quantity'),
+                    type: 'decimal',
+                    help: _('hospitality_core.services.field.postQuantityHint'),
+                  },
+                ]}
+              />
+            ) : (
+              emptyState(
+                _('hospitality_core.services.empty.post'),
+                _('hospitality_core.services.empty.postHint'),
+              )
+            )
+          }
+        />,
+        <Section
+          title={_('hospitality_core.services.section.ledger')}
+          description={_('hospitality_core.services.section.ledgerHint')}
+          body={
+            data.charges.length
+              ? dataTable(_, {
+                  columns: serviceChargeColumns(_, locale, timezone),
+                  rows: data.charges,
+                  id: (row) => row.id,
+                })
+              : emptyState(
+                  _('hospitality_core.services.empty.ledger'),
+                  _('hospitality_core.services.empty.ledgerHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -4512,20 +4648,20 @@ export const ratePlansScreen = (
   propertyId: string | undefined,
   frame: Frame,
   state?: string | null,
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.ratePlans.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.ratePlans.title')}
+    frame={frame}
+    body={stack([
       feedback(_, state),
-      recordForm({
-        action: '/admin/hospitality/rate-plans',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        fields: [
+      <RecordForm
+        action="/admin/hospitality/rate-plans"
+        method="get"
+        layout="inline"
+        submit={_('hospitality_core.action.select')}
+        submitVariant="secondary"
+        fields={[
           {
             name: 'property',
             label: _('hospitality_core.menu.properties'),
@@ -4534,19 +4670,20 @@ export const ratePlansScreen = (
             options: choices(properties),
             required: true,
           },
-        ],
-      }),
-      section({
-        title: _('hospitality_core.screen.ratePlans.create'),
-        description: _('hospitality_core.screen.ratePlans.createHint'),
-        body: roomTypes.length
-          ? recordForm({
-              action: `/admin/hospitality/rate-plans${propertyId ? `?property=${encodeURIComponent(propertyId)}` : ''}`,
-              method: 'post',
-              submit: _('hospitality_core.action.saveRatePlan'),
-              submitVariant: 'primary',
-              hidden: { operation: 'save-rate-plan', propertyId: propertyId ?? '' },
-              fields: [
+        ]}
+      />,
+      <Section
+        title={_('hospitality_core.screen.ratePlans.create')}
+        description={_('hospitality_core.screen.ratePlans.createHint')}
+        body={
+          roomTypes.length ? (
+            <RecordForm
+              action={`/admin/hospitality/rate-plans${propertyId ? `?property=${encodeURIComponent(propertyId)}` : ''}`}
+              method="post"
+              submit={_('hospitality_core.action.saveRatePlan')}
+              submitVariant="primary"
+              hidden={{ operation: 'save-rate-plan', propertyId: propertyId ?? '' }}
+              fields={[
                 {
                   name: 'roomTypeId',
                   label: _('hospitality_core.col.roomType'),
@@ -4589,24 +4726,30 @@ export const ratePlansScreen = (
                   help: _('hospitality_core.field.isDefaultHint'),
                 },
                 { name: 'active', label: _('hospitality_core.field.active'), type: 'checkbox', value: true },
-              ],
-            })
-          : emptyState(
+              ]}
+            />
+          ) : (
+            emptyState(
               _('hospitality_core.screen.ratePlans.noRoomTypes'),
               _('hospitality_core.screen.ratePlans.noRoomTypesHint'),
-            ),
-      }),
-      section({
-        title: _('hospitality_core.screen.ratePlans.list'),
-        body: rows.length
-          ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
-          : emptyState(
-              _('hospitality_core.screen.ratePlans.empty'),
-              _('hospitality_core.screen.ratePlans.emptyHint'),
-            ),
-      }),
-    ]),
-  )
+            )
+          )
+        }
+      />,
+      <Section
+        title={_('hospitality_core.screen.ratePlans.list')}
+        body={
+          rows.length
+            ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
+            : emptyState(
+                _('hospitality_core.screen.ratePlans.empty'),
+                _('hospitality_core.screen.ratePlans.emptyHint'),
+              )
+        }
+      />,
+    ])}
+  />
+)
 
 export const inventoryScreen = (
   _: Translator,
@@ -4622,153 +4765,170 @@ export const inventoryScreen = (
     propertyId: selected.propertyId ?? '',
     roomTypeId: selected.roomTypeId ?? '',
   }
-  return framed(
-    _,
-    _('hospitality_core.screen.inventory.title'),
-    frame,
-    stack([
-      feedback(_, state),
-      formCluster({
-        label: _('hospitality_core.screen.inventory.filters'),
-        forms: [
-          recordForm({
-            action: '/admin/hospitality/inventory',
-            method: 'get',
-            layout: 'inline',
-            submit: _('hospitality_core.action.select'),
-            submitVariant: 'secondary',
-            hidden: { from: selected.from, to: selected.to },
-            fields: [
-              {
-                name: 'property',
-                label: _('hospitality_core.menu.properties'),
-                type: 'select',
-                value: selected.propertyId,
-                options: choices(properties),
-                required: true,
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.inventory.title')}
+      frame={frame}
+      body={stack([
+        feedback(_, state),
+        <FormCluster
+          label={_('hospitality_core.screen.inventory.filters')}
+          forms={[
+            <RecordForm
+              action="/admin/hospitality/inventory"
+              method="get"
+              layout="inline"
+              submit={_('hospitality_core.action.select')}
+              submitVariant="secondary"
+              hidden={{ from: selected.from, to: selected.to }}
+              fields={[
+                {
+                  name: 'property',
+                  label: _('hospitality_core.menu.properties'),
+                  type: 'select',
+                  value: selected.propertyId,
+                  options: choices(properties),
+                  required: true,
+                },
+                {
+                  name: 'roomType',
+                  label: _('hospitality_core.col.roomType'),
+                  type: 'select',
+                  value: selected.roomTypeId,
+                  options: choices(selectedRoomTypes),
+                  required: true,
+                },
+              ]}
+            />,
+            datePicker({
+              action: '/admin/hospitality/inventory',
+              label: _('hospitality_core.screen.inventory.dateRange'),
+              fields: [
+                {
+                  name: 'from',
+                  label: _('hospitality_core.field.from'),
+                  value: selected.from,
+                  required: true,
+                },
+                { name: 'to', label: _('hospitality_core.field.to'), value: selected.to, required: true },
+              ],
+              hidden: {
+                property: selected.propertyId ?? '',
+                roomType: selected.roomTypeId ?? '',
               },
-              {
-                name: 'roomType',
-                label: _('hospitality_core.col.roomType'),
-                type: 'select',
-                value: selected.roomTypeId,
-                options: choices(selectedRoomTypes),
-                required: true,
-              },
-            ],
-          }),
-          datePicker({
-            action: '/admin/hospitality/inventory',
-            label: _('hospitality_core.screen.inventory.dateRange'),
-            fields: [
-              { name: 'from', label: _('hospitality_core.field.from'), value: selected.from, required: true },
-              { name: 'to', label: _('hospitality_core.field.to'), value: selected.to, required: true },
-            ],
-            hidden: {
-              property: selected.propertyId ?? '',
-              roomType: selected.roomTypeId ?? '',
+              submit: _('hospitality_core.action.apply'),
+            }),
+          ]}
+        />,
+        cardGrid({
+          items: [
+            { id: 'days', label: _('hospitality_core.metric.inventoryDays'), value: rows.length },
+            {
+              id: 'available',
+              label: _('hospitality_core.metric.minimumAvailable'),
+              value: rows.length ? Math.min(...rows.map((row) => row.available)) : 0,
             },
-            submit: _('hospitality_core.action.apply'),
-          }),
-        ],
-      }),
-      cardGrid({
-        items: [
-          { id: 'days', label: _('hospitality_core.metric.inventoryDays'), value: rows.length },
-          {
-            id: 'available',
-            label: _('hospitality_core.metric.minimumAvailable'),
-            value: rows.length ? Math.min(...rows.map((row) => row.available)) : 0,
-          },
-          {
-            id: 'sold',
-            label: _('hospitality_core.metric.sold'),
-            value: rows.reduce((sum, row) => sum + row.sold, 0),
-          },
-          {
-            id: 'blocked',
-            label: _('hospitality_core.metric.blocked'),
-            value: rows.reduce((sum, row) => sum + row.blocked, 0),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
-      }),
-      section({
-        title: _('hospitality_core.screen.inventory.allotment'),
-        description: _('hospitality_core.screen.inventory.allotmentHint'),
-        body: selected.roomTypeId
-          ? recordForm({
-              action: '/admin/hospitality/inventory',
-              method: 'post',
-              submit: _('hospitality_core.action.updateAllotment'),
-              submitVariant: 'primary',
-              hidden: { ...hidden, operation: 'set-inventory' },
-              fields: [
-                {
-                  name: 'from',
-                  label: _('hospitality_core.field.from'),
-                  type: 'date',
-                  value: selected.from,
-                  required: true,
-                },
-                {
-                  name: 'to',
-                  label: _('hospitality_core.field.to'),
-                  type: 'date',
-                  value: selected.to,
-                  required: true,
-                },
-                { name: 'total', label: _('hospitality_core.col.total'), type: 'number', required: true },
-                { name: 'blocked', label: _('hospitality_core.col.blocked'), type: 'number' },
-              ],
-            })
+            {
+              id: 'sold',
+              label: _('hospitality_core.metric.sold'),
+              value: rows.reduce((sum, row) => sum + row.sold, 0),
+            },
+            {
+              id: 'blocked',
+              label: _('hospitality_core.metric.blocked'),
+              value: rows.reduce((sum, row) => sum + row.blocked, 0),
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
+        }),
+        <Section
+          title={_('hospitality_core.screen.inventory.allotment')}
+          description={_('hospitality_core.screen.inventory.allotmentHint')}
+          body={
+            selected.roomTypeId ? (
+              <RecordForm
+                action="/admin/hospitality/inventory"
+                method="post"
+                submit={_('hospitality_core.action.updateAllotment')}
+                submitVariant="primary"
+                hidden={{ ...hidden, operation: 'set-inventory' }}
+                fields={[
+                  {
+                    name: 'from',
+                    label: _('hospitality_core.field.from'),
+                    type: 'date',
+                    value: selected.from,
+                    required: true,
+                  },
+                  {
+                    name: 'to',
+                    label: _('hospitality_core.field.to'),
+                    type: 'date',
+                    value: selected.to,
+                    required: true,
+                  },
+                  { name: 'total', label: _('hospitality_core.col.total'), type: 'number', required: true },
+                  { name: 'blocked', label: _('hospitality_core.col.blocked'), type: 'number' },
+                ]}
+              />
+            ) : (
+              emptyState(
+                _('hospitality_core.screen.inventory.noRoomType'),
+                _('hospitality_core.screen.inventory.noRoomTypeHint'),
+              )
+            )
+          }
+        />,
+        <Section
+          title={_('hospitality_core.screen.inventory.restrictions')}
+          description={_('hospitality_core.screen.inventory.restrictionsHint')}
+          body={
+            selected.roomTypeId ? (
+              <RecordForm
+                action="/admin/hospitality/inventory"
+                method="post"
+                submit={_('hospitality_core.action.updateRestrictions')}
+                submitVariant="secondary"
+                hidden={{ ...hidden, operation: 'set-restrictions' }}
+                fields={[
+                  {
+                    name: 'from',
+                    label: _('hospitality_core.field.from'),
+                    type: 'date',
+                    value: selected.from,
+                    required: true,
+                  },
+                  {
+                    name: 'to',
+                    label: _('hospitality_core.field.to'),
+                    type: 'date',
+                    value: selected.to,
+                    required: true,
+                  },
+                  { name: 'minLos', label: _('hospitality_core.field.minLos'), type: 'number', value: 0 },
+                  { name: 'maxLos', label: _('hospitality_core.field.maxLos'), type: 'number', value: 0 },
+                  { name: 'stopSell', label: _('hospitality_core.restriction.stopSell'), type: 'checkbox' },
+                  { name: 'closedToArrival', label: _('hospitality_core.restriction.cta'), type: 'checkbox' },
+                  {
+                    name: 'closedToDeparture',
+                    label: _('hospitality_core.restriction.ctd'),
+                    type: 'checkbox',
+                  },
+                ]}
+              />
+            ) : null
+          }
+        />,
+        rows.length
+          ? dataTable(_, { columns: inventoryColumns(_), rows, id: (row) => row.id })
           : emptyState(
-              _('hospitality_core.screen.inventory.noRoomType'),
-              _('hospitality_core.screen.inventory.noRoomTypeHint'),
+              _('hospitality_core.screen.inventory.empty'),
+              _('hospitality_core.screen.inventory.emptyHint'),
             ),
-      }),
-      section({
-        title: _('hospitality_core.screen.inventory.restrictions'),
-        description: _('hospitality_core.screen.inventory.restrictionsHint'),
-        body: selected.roomTypeId
-          ? recordForm({
-              action: '/admin/hospitality/inventory',
-              method: 'post',
-              submit: _('hospitality_core.action.updateRestrictions'),
-              submitVariant: 'secondary',
-              hidden: { ...hidden, operation: 'set-restrictions' },
-              fields: [
-                {
-                  name: 'from',
-                  label: _('hospitality_core.field.from'),
-                  type: 'date',
-                  value: selected.from,
-                  required: true,
-                },
-                {
-                  name: 'to',
-                  label: _('hospitality_core.field.to'),
-                  type: 'date',
-                  value: selected.to,
-                  required: true,
-                },
-                { name: 'minLos', label: _('hospitality_core.field.minLos'), type: 'number', value: 0 },
-                { name: 'maxLos', label: _('hospitality_core.field.maxLos'), type: 'number', value: 0 },
-                { name: 'stopSell', label: _('hospitality_core.restriction.stopSell'), type: 'checkbox' },
-                { name: 'closedToArrival', label: _('hospitality_core.restriction.cta'), type: 'checkbox' },
-                { name: 'closedToDeparture', label: _('hospitality_core.restriction.ctd'), type: 'checkbox' },
-              ],
-            })
-          : null,
-      }),
-      rows.length
-        ? dataTable(_, { columns: inventoryColumns(_), rows, id: (row) => row.id })
-        : emptyState(
-            _('hospitality_core.screen.inventory.empty'),
-            _('hospitality_core.screen.inventory.emptyHint'),
-          ),
-    ]),
+      ])}
+    />
   )
 }
 
@@ -5051,12 +5211,12 @@ export const frontDeskScreen = (
   locale: string,
   timezone: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.frontDesk.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.frontDesk.title')}
+    frame={frame}
+    body={stack([
       cardGrid({
         items: [
           { id: 'arrivals', label: _('hospitality_core.metric.arrivals'), value: totals.arrivals },
@@ -5068,27 +5228,28 @@ export const frontDeskScreen = (
         id: (item) => item.id,
         card: (item) => metric({ label: item.label, value: String(item.value), tone: item.id }),
       }),
-      overdueRows.length
-        ? section({
-            title: _('hospitality_core.screen.frontDesk.overdue'),
-            description: _('hospitality_core.screen.frontDesk.overdueHint', {
-              count: overdueRows.length,
-            }),
-            body: dataTable(_, {
-              columns: stayColumns(_, locale, timezone),
-              rows: overdueRows,
-              id: (row) => row.id,
-            }),
-          })
-        : null,
+      overdueRows.length ? (
+        <Section
+          title={_('hospitality_core.screen.frontDesk.overdue')}
+          description={_('hospitality_core.screen.frontDesk.overdueHint', {
+            count: overdueRows.length,
+          })}
+          body={dataTable(_, {
+            columns: stayColumns(_, locale, timezone),
+            rows: overdueRows,
+            id: (row) => row.id,
+          })}
+        />
+      ) : null,
       rows.length
         ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
         : emptyState(
             _('hospitality_core.screen.frontDesk.empty'),
             _('hospitality_core.screen.frontDesk.emptyHint'),
           ),
-    ]),
-  )
+    ])}
+  />
+)
 
 const reservationFeedback = (_: Translator, status?: string | null): TemplateResult | null => {
   if (status === 'saved')
@@ -5131,48 +5292,49 @@ export const reservationsScreen = (
     error.messageKey ? _(error.messageKey, error.params) : _('hospitality_core.feedback.invalid'),
   )
   const quote = data.quote?.ok ? data.quote : null
-  return framed(
-    _,
-    _('hospitality_core.screen.reservations.title'),
-    frame,
-    stack([
-      reservationFeedback(_, status),
-      recordForm({
-        action: '/admin/hospitality/reservations',
-        method: 'get',
-        layout: 'inline',
-        submit: _('hospitality_core.action.select'),
-        submitVariant: 'secondary',
-        hidden: { lang: locale },
-        fields: [
-          {
-            name: 'property',
-            label: _('hospitality_core.reservation.field.property'),
-            type: 'select',
-            value: data.values.propertyId,
-            options: choices(data.properties),
-            required: true,
-          },
-        ],
-      }),
-      section({
-        title: _('hospitality_core.reservation.section.intake'),
-        description: _('hospitality_core.reservation.section.intakeHint'),
-        body:
-          data.roomTypes.length && data.partners.length
-            ? recordForm({
-                action: '/admin/hospitality/reservations',
-                method: 'post',
-                submit: _('hospitality_core.reservation.action.quote'),
-                submitVariant: 'primary',
-                errors,
-                hidden: {
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.reservations.title')}
+      frame={frame}
+      body={stack([
+        reservationFeedback(_, status),
+        <RecordForm
+          action="/admin/hospitality/reservations"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          hidden={{ lang: locale }}
+          fields={[
+            {
+              name: 'property',
+              label: _('hospitality_core.reservation.field.property'),
+              type: 'select',
+              value: data.values.propertyId,
+              options: choices(data.properties),
+              required: true,
+            },
+          ]}
+        />,
+        <Section
+          title={_('hospitality_core.reservation.section.intake')}
+          description={_('hospitality_core.reservation.section.intakeHint')}
+          body={
+            data.roomTypes.length && data.partners.length ? (
+              <RecordForm
+                action="/admin/hospitality/reservations"
+                method="post"
+                submit={_('hospitality_core.reservation.action.quote')}
+                submitVariant="primary"
+                errors={errors}
+                hidden={{
                   operation: 'quote',
                   lang: locale,
                   property: data.values.propertyId,
                   id: data.values.id,
-                },
-                fields: [
+                }}
+                fields={[
                   {
                     name: 'code',
                     label: _('hospitality_core.reservation.field.code'),
@@ -5246,90 +5408,96 @@ export const reservationsScreen = (
                     value: data.values.rate,
                     help: _('hospitality_core.reservation.field.rateHint'),
                   },
-                ],
-              })
-            : emptyState(
+                ]}
+              />
+            ) : (
+              emptyState(
                 data.roomTypes.length
                   ? _('hospitality_core.reservation.empty.partners')
                   : _('hospitality_core.reservation.empty.roomTypes'),
                 data.roomTypes.length
                   ? _('hospitality_core.reservation.empty.partnersHint')
                   : _('hospitality_core.reservation.empty.roomTypesHint'),
-              ),
-      }),
-      ...(quote
-        ? [
-            section({
-              title: _('hospitality_core.reservation.section.quote'),
-              description: _('hospitality_core.reservation.section.quoteHint'),
-              body: stack([
-                cardGrid({
-                  items: [
-                    {
-                      id: 'rate',
-                      label: _('hospitality_core.reservation.quote.rate'),
-                      value: formatMoney(_, quote.rate ?? 0),
-                    },
-                    {
-                      id: 'quantity',
-                      label: _('hospitality_core.reservation.quote.quantity'),
-                      value: String(quote.quantity ?? 0),
-                    },
-                    {
-                      id: 'availability',
-                      label: _('hospitality_core.reservation.quote.availability'),
-                      value: String(quote.minimumAvailable ?? 0),
-                    },
-                    {
-                      id: 'total',
-                      label: _('hospitality_core.reservation.quote.total'),
-                      value: formatMoney(_, quote.amountTotal ?? 0),
-                    },
-                  ],
-                  id: (item) => item.id,
-                  card: (item) => metric({ label: item.label, value: item.value, tone: item.id }),
-                }),
-                recordForm({
-                  action: '/admin/hospitality/reservations',
-                  method: 'post',
-                  submit: _('hospitality_core.reservation.action.create'),
-                  submitVariant: 'primary',
-                  hidden: {
-                    operation: 'create',
-                    lang: locale,
-                    property: data.values.propertyId,
-                    id: data.values.id,
-                    code: data.values.code,
-                    partnerId: data.values.partnerId,
-                    roomTypeId: data.values.roomTypeId,
-                    bookingType: data.values.bookingType,
-                    checkIn: data.values.checkIn,
-                    checkOut: data.values.checkOut,
-                    adults: String(data.values.adults),
-                    children: String(data.values.children),
-                    rate: String(quote.rate ?? ''),
-                  },
-                  fields: [],
-                }),
-              ]),
-            }),
-          ]
-        : []),
-      section({
-        title: _('hospitality_core.reservation.section.list'),
-        description: _('hospitality_core.reservation.section.listHint'),
-        body: data.rows.length
-          ? dataTable(_, {
-              columns: reservationColumns(_, locale, timezone),
-              rows: data.rows,
-              id: (row) => row.id,
-            })
-          : emptyState(
-              _('hospitality_core.screen.reservations.empty'),
-              _('hospitality_core.screen.reservations.emptyHint'),
-            ),
-      }),
-    ]),
+              )
+            )
+          }
+        />,
+        ...(quote
+          ? [
+              <Section
+                title={_('hospitality_core.reservation.section.quote')}
+                description={_('hospitality_core.reservation.section.quoteHint')}
+                body={stack([
+                  cardGrid({
+                    items: [
+                      {
+                        id: 'rate',
+                        label: _('hospitality_core.reservation.quote.rate'),
+                        value: formatMoney(_, quote.rate ?? 0),
+                      },
+                      {
+                        id: 'quantity',
+                        label: _('hospitality_core.reservation.quote.quantity'),
+                        value: String(quote.quantity ?? 0),
+                      },
+                      {
+                        id: 'availability',
+                        label: _('hospitality_core.reservation.quote.availability'),
+                        value: String(quote.minimumAvailable ?? 0),
+                      },
+                      {
+                        id: 'total',
+                        label: _('hospitality_core.reservation.quote.total'),
+                        value: formatMoney(_, quote.amountTotal ?? 0),
+                      },
+                    ],
+                    id: (item) => item.id,
+                    card: (item) => metric({ label: item.label, value: item.value, tone: item.id }),
+                  }),
+                  <RecordForm
+                    action="/admin/hospitality/reservations"
+                    method="post"
+                    submit={_('hospitality_core.reservation.action.create')}
+                    submitVariant="primary"
+                    hidden={{
+                      operation: 'create',
+                      lang: locale,
+                      property: data.values.propertyId,
+                      id: data.values.id,
+                      code: data.values.code,
+                      partnerId: data.values.partnerId,
+                      roomTypeId: data.values.roomTypeId,
+                      bookingType: data.values.bookingType,
+                      checkIn: data.values.checkIn,
+                      checkOut: data.values.checkOut,
+                      adults: String(data.values.adults),
+                      children: String(data.values.children),
+                      rate: String(quote.rate ?? ''),
+                    }}
+                    fields={[]}
+                  />,
+                ])}
+              />,
+            ]
+          : []),
+        <Section
+          title={_('hospitality_core.reservation.section.list')}
+          description={_('hospitality_core.reservation.section.listHint')}
+          body={
+            data.rows.length
+              ? dataTable(_, {
+                  columns: reservationColumns(_, locale, timezone),
+                  rows: data.rows,
+                  id: (row) => row.id,
+                })
+              : emptyState(
+                  _('hospitality_core.screen.reservations.empty'),
+                  _('hospitality_core.screen.reservations.emptyHint'),
+                )
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -5411,88 +5579,91 @@ export const reservationDetailScreen = (
 
   if (reservation.state === 'confirmed' && reservation.provider === 'direct') {
     actions.push(
-      section({
-        title: _('hospitality_core.reservation.action.amend'),
-        description: _('hospitality_core.reservation.action.amendHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.reservation.action.amend'),
-          submitVariant: 'secondary',
-          hidden: { operation: 'amend', lang: locale },
-          fields: [
-            {
-              name: 'partnerId',
-              label: _('hospitality_core.reservation.field.guest'),
-              type: 'select',
-              value: amendment.partnerId,
-              options: choices(partners),
-              required: true,
-            },
-            {
-              name: 'roomTypeId',
-              label: _('hospitality_core.reservation.field.roomType'),
-              type: 'select',
-              value: amendment.roomTypeId,
-              options: choices(roomTypes),
-              required: true,
-            },
-            {
-              name: 'checkIn',
-              label: _('hospitality_core.col.checkIn'),
-              type: 'datetime-local',
-              value: amendment.checkIn,
-              required: true,
-            },
-            {
-              name: 'checkOut',
-              label: _('hospitality_core.col.checkOut'),
-              type: 'datetime-local',
-              value: amendment.checkOut,
-              required: true,
-            },
-            {
-              name: 'adults',
-              label: _('hospitality_core.reservation.field.adults'),
-              type: 'number',
-              value: amendment.adults,
-              step: '1',
-              required: true,
-            },
-            {
-              name: 'children',
-              label: _('hospitality_core.reservation.field.children'),
-              type: 'number',
-              value: amendment.children,
-              step: '1',
-              required: true,
-            },
-            {
-              name: 'rate',
-              label: _('hospitality_core.reservation.field.rate'),
-              type: 'decimal',
-              value: amendment.rate,
-              required: true,
-            },
-          ],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.reservation.action.amend')}
+        description={_('hospitality_core.reservation.action.amendHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.reservation.action.amend')}
+            submitVariant="secondary"
+            hidden={{ operation: 'amend', lang: locale }}
+            fields={[
+              {
+                name: 'partnerId',
+                label: _('hospitality_core.reservation.field.guest'),
+                type: 'select',
+                value: amendment.partnerId,
+                options: choices(partners),
+                required: true,
+              },
+              {
+                name: 'roomTypeId',
+                label: _('hospitality_core.reservation.field.roomType'),
+                type: 'select',
+                value: amendment.roomTypeId,
+                options: choices(roomTypes),
+                required: true,
+              },
+              {
+                name: 'checkIn',
+                label: _('hospitality_core.col.checkIn'),
+                type: 'datetime-local',
+                value: amendment.checkIn,
+                required: true,
+              },
+              {
+                name: 'checkOut',
+                label: _('hospitality_core.col.checkOut'),
+                type: 'datetime-local',
+                value: amendment.checkOut,
+                required: true,
+              },
+              {
+                name: 'adults',
+                label: _('hospitality_core.reservation.field.adults'),
+                type: 'number',
+                value: amendment.adults,
+                step: '1',
+                required: true,
+              },
+              {
+                name: 'children',
+                label: _('hospitality_core.reservation.field.children'),
+                type: 'number',
+                value: amendment.children,
+                step: '1',
+                required: true,
+              },
+              {
+                name: 'rate',
+                label: _('hospitality_core.reservation.field.rate'),
+                type: 'decimal',
+                value: amendment.rate,
+                required: true,
+              },
+            ]}
+          />
+        }
+      />,
     )
   }
 
   if (reservation.state === 'confirmed' && reservation.stayId) {
     actions.push(
-      section({
-        title: _('hospitality_core.reservation.action.checkIn'),
-        description: _('hospitality_core.reservation.action.checkInHint'),
-        body: rooms.length
-          ? recordForm({
-              action,
-              method: 'post',
-              submit: _('hospitality_core.reservation.action.checkIn'),
-              submitVariant: 'primary',
-              hidden: { operation: 'check-in', lang: locale },
-              fields: [
+      <Section
+        title={_('hospitality_core.reservation.action.checkIn')}
+        description={_('hospitality_core.reservation.action.checkInHint')}
+        body={
+          rooms.length ? (
+            <RecordForm
+              action={action}
+              method="post"
+              submit={_('hospitality_core.reservation.action.checkIn')}
+              submitVariant="primary"
+              hidden={{ operation: 'check-in', lang: locale }}
+              fields={[
                 {
                   name: 'roomId',
                   label: _('hospitality_core.reservation.field.room'),
@@ -5503,210 +5674,223 @@ export const reservationDetailScreen = (
                     label: `${candidate.code} · ${candidate.name}`,
                   })),
                 },
-              ],
-            })
-          : emptyState(
+              ]}
+            />
+          ) : (
+            emptyState(
               _('hospitality_core.reservation.empty.availableRooms'),
               _('hospitality_core.reservation.empty.availableRoomsHint'),
-            ),
-      }),
+            )
+          )
+        }
+      />,
     )
   }
 
   if (reservation.state === 'checked_in' && reservation.stayId) {
     actions.push(
-      section({
-        title: _('hospitality_core.reservation.action.adjustDeparture'),
-        description: _('hospitality_core.reservation.action.adjustDepartureHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.reservation.action.adjustDeparture'),
-          submitVariant: 'secondary',
-          hidden: { operation: 'adjust-departure', lang: locale },
-          fields: [
-            {
-              name: 'checkOut',
-              label: _('hospitality_core.col.checkOut'),
-              type: 'datetime-local',
-              value: departure,
-              required: true,
-            },
-          ],
-        }),
-      }),
-      section({
-        title: _('hospitality_core.reservation.action.checkOut'),
-        description: _('hospitality_core.reservation.action.checkOutHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.reservation.action.checkOut'),
-          submitVariant: 'primary',
-          hidden: { operation: 'check-out', lang: locale },
-          fields: [],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.reservation.action.adjustDeparture')}
+        description={_('hospitality_core.reservation.action.adjustDepartureHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.reservation.action.adjustDeparture')}
+            submitVariant="secondary"
+            hidden={{ operation: 'adjust-departure', lang: locale }}
+            fields={[
+              {
+                name: 'checkOut',
+                label: _('hospitality_core.col.checkOut'),
+                type: 'datetime-local',
+                value: departure,
+                required: true,
+              },
+            ]}
+          />
+        }
+      />,
+      <Section
+        title={_('hospitality_core.reservation.action.checkOut')}
+        description={_('hospitality_core.reservation.action.checkOutHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.reservation.action.checkOut')}
+            submitVariant="primary"
+            hidden={{ operation: 'check-out', lang: locale }}
+            fields={[]}
+          />
+        }
+      />,
     )
   }
 
   if (reservation.state === 'draft' || reservation.state === 'confirmed') {
     if (reservation.state === 'confirmed')
       actions.push(
-        section({
-          title: _('hospitality_core.reservation.action.noShow'),
-          description: _('hospitality_core.reservation.action.noShowHint'),
-          body: recordForm({
-            action,
-            method: 'post',
-            submit: _('hospitality_core.reservation.action.noShow'),
-            submitVariant: 'destructive',
-            hidden: { operation: 'no-show', lang: locale },
-            fields: [
-              {
-                name: 'reason',
-                label: _('hospitality_core.reservation.field.noShowReason'),
-                type: 'textarea',
-                help: _('hospitality_core.reservation.field.noShowReasonHint'),
-                required: true,
-              },
-            ],
-          }),
-        }),
+        <Section
+          title={_('hospitality_core.reservation.action.noShow')}
+          description={_('hospitality_core.reservation.action.noShowHint')}
+          body={
+            <RecordForm
+              action={action}
+              method="post"
+              submit={_('hospitality_core.reservation.action.noShow')}
+              submitVariant="destructive"
+              hidden={{ operation: 'no-show', lang: locale }}
+              fields={[
+                {
+                  name: 'reason',
+                  label: _('hospitality_core.reservation.field.noShowReason'),
+                  type: 'textarea',
+                  help: _('hospitality_core.reservation.field.noShowReasonHint'),
+                  required: true,
+                },
+              ]}
+            />
+          }
+        />,
       )
     actions.push(
-      section({
-        title: _('hospitality_core.reservation.action.cancel'),
-        description: _('hospitality_core.reservation.action.cancelHint'),
-        body: recordForm({
-          action,
-          method: 'post',
-          submit: _('hospitality_core.reservation.action.cancel'),
-          submitVariant: 'destructive',
-          hidden: { operation: 'cancel', lang: locale },
-          fields: [
-            {
-              name: 'reason',
-              label: _('hospitality_core.reservation.field.cancelReason'),
-              type: 'textarea',
-              help: _('hospitality_core.reservation.field.cancelReasonHint'),
-            },
-          ],
-        }),
-      }),
+      <Section
+        title={_('hospitality_core.reservation.action.cancel')}
+        description={_('hospitality_core.reservation.action.cancelHint')}
+        body={
+          <RecordForm
+            action={action}
+            method="post"
+            submit={_('hospitality_core.reservation.action.cancel')}
+            submitVariant="destructive"
+            hidden={{ operation: 'cancel', lang: locale }}
+            fields={[
+              {
+                name: 'reason',
+                label: _('hospitality_core.reservation.field.cancelReason'),
+                type: 'textarea',
+                help: _('hospitality_core.reservation.field.cancelReasonHint'),
+              },
+            ]}
+          />
+        }
+      />,
     )
   }
 
-  return framed(
-    _,
-    _('hospitality_core.reservation.detail.title', { code: reservation.code }),
-    frame,
-    stack([
-      reservationDetailFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.reservation.detail.kicker'),
-        title: reservation.code,
-        subtitle: guest,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(
-            _(`hospitality_core.reservationState.${reservation.state}`),
-            workflowTone(reservation.state),
-            reservation.state,
-          ),
-          badge(providerName(_, reservation.provider), 'neutral'),
-        ],
-        summary: [
-          {
-            id: 'room-type',
-            label: _('hospitality_core.col.roomType'),
-            value: reservation.roomType?.name ?? reservation.roomTypeId,
-          },
-          {
-            id: 'guests',
-            label: _('hospitality_core.col.guests'),
-            value: reservation.adults + reservation.children,
-          },
-          {
-            id: 'total',
-            label: _('hospitality_core.col.amount'),
-            value: formatMoney(_, reservation.amountTotal),
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.reservation.action.back'),
-          href: backHref,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.reservation.detail.stay'),
-            description: _('hospitality_core.reservation.detail.stayHint'),
-            body: definitionList({
-              title: reservation.code,
-              items: [
-                {
-                  key: 'guest',
-                  term: _('hospitality_core.reservation.field.guest'),
-                  value: guest,
-                },
-                {
-                  key: 'room',
-                  term: _('hospitality_core.reservation.field.room'),
-                  value: room?.name ?? room?.code ?? _('hospitality_core.reservation.value.unassigned'),
-                },
-                {
-                  key: 'check-in',
-                  term: _('hospitality_core.col.checkIn'),
-                  value: dateTime(reservation.checkIn, locale, timezone),
-                },
-                {
-                  key: 'check-out',
-                  term: _('hospitality_core.col.checkOut'),
-                  value: dateTime(reservation.checkOut, locale, timezone),
-                },
-                {
-                  key: 'booking-type',
-                  term: _('hospitality_core.reservation.field.bookingType'),
-                  value: _(`hospitality_core.bookingType.${reservation.bookingType}`),
-                },
-                {
-                  key: 'billing',
-                  term: _('hospitality_core.reservation.field.billingMode'),
-                  value: _(`hospitality_core.billing.${reservation.billingMode}`),
-                },
-                {
-                  key: 'rate',
-                  term: _('hospitality_core.reservation.field.rate'),
-                  value: formatMoney(_, reservation.rate),
-                },
-                {
-                  key: 'quantity',
-                  term: _('hospitality_core.reservation.quote.quantity'),
-                  value: String(reservation.quantity),
-                },
-                {
-                  key: 'folio',
-                  term: _('hospitality_core.reservation.field.folio'),
-                  value: reservation.folio?.code ?? reservation.folioId,
-                },
-                ...(reservation.cancelReason
-                  ? [
-                      {
-                        key: 'cancel-reason',
-                        term: _('hospitality_core.reservation.field.cancelReason'),
-                        value: reservation.cancelReason,
-                      },
-                    ]
-                  : []),
-              ],
-            }),
-          }),
-          ...actions,
-        ]),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.reservation.detail.title', { code: reservation.code })}
+      frame={frame}
+      body={stack([
+        reservationDetailFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.reservation.detail.kicker')}
+          title={reservation.code}
+          subtitle={guest}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(
+              _(`hospitality_core.reservationState.${reservation.state}`),
+              workflowTone(reservation.state),
+              reservation.state,
+            ),
+            badge(providerName(_, reservation.provider), 'neutral'),
+          ]}
+          summary={[
+            {
+              id: 'room-type',
+              label: _('hospitality_core.col.roomType'),
+              value: reservation.roomType?.name ?? reservation.roomTypeId,
+            },
+            {
+              id: 'guests',
+              label: _('hospitality_core.col.guests'),
+              value: reservation.adults + reservation.children,
+            },
+            {
+              id: 'total',
+              label: _('hospitality_core.col.amount'),
+              value: formatMoney(_, reservation.amountTotal),
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.reservation.action.back'),
+            href: backHref,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.reservation.detail.stay')}
+              description={_('hospitality_core.reservation.detail.stayHint')}
+              body={definitionList({
+                title: reservation.code,
+                items: [
+                  {
+                    key: 'guest',
+                    term: _('hospitality_core.reservation.field.guest'),
+                    value: guest,
+                  },
+                  {
+                    key: 'room',
+                    term: _('hospitality_core.reservation.field.room'),
+                    value: room?.name ?? room?.code ?? _('hospitality_core.reservation.value.unassigned'),
+                  },
+                  {
+                    key: 'check-in',
+                    term: _('hospitality_core.col.checkIn'),
+                    value: dateTime(reservation.checkIn, locale, timezone),
+                  },
+                  {
+                    key: 'check-out',
+                    term: _('hospitality_core.col.checkOut'),
+                    value: dateTime(reservation.checkOut, locale, timezone),
+                  },
+                  {
+                    key: 'booking-type',
+                    term: _('hospitality_core.reservation.field.bookingType'),
+                    value: _(`hospitality_core.bookingType.${reservation.bookingType}`),
+                  },
+                  {
+                    key: 'billing',
+                    term: _('hospitality_core.reservation.field.billingMode'),
+                    value: _(`hospitality_core.billing.${reservation.billingMode}`),
+                  },
+                  {
+                    key: 'rate',
+                    term: _('hospitality_core.reservation.field.rate'),
+                    value: formatMoney(_, reservation.rate),
+                  },
+                  {
+                    key: 'quantity',
+                    term: _('hospitality_core.reservation.quote.quantity'),
+                    value: String(reservation.quantity),
+                  },
+                  {
+                    key: 'folio',
+                    term: _('hospitality_core.reservation.field.folio'),
+                    value: reservation.folio?.code ?? reservation.folioId,
+                  },
+                  ...(reservation.cancelReason
+                    ? [
+                        {
+                          key: 'cancel-reason',
+                          term: _('hospitality_core.reservation.field.cancelReason'),
+                          value: reservation.cancelReason,
+                        },
+                      ]
+                    : []),
+                ],
+              })}
+            />,
+            ...actions,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -5864,128 +6048,129 @@ export const stayDetailScreen = (
     (room) => room.active && room.status === 'available' && room.id !== stay.currentRoomId,
   )
 
-  return framed(
-    _,
-    _('hospitality_core.stay.detail.title', { code: stay.code }),
-    frame,
-    stack([
-      stayDetailFeedback(_, status, errors),
-      recordWorkspace({
-        kicker: _('hospitality_core.stay.detail.kicker'),
-        title: stay.code,
-        subtitle: guest,
-        imageFallback: icon('hotel'),
-        badges: [
-          badge(_(`hospitality_core.stayState.${stay.state}`), workflowTone(stay.state), stay.state),
-          badge(_(`hospitality_core.bookingType.${stay.bookingType}`), 'neutral'),
-        ],
-        summary: [
-          {
-            id: 'room',
-            label: _('hospitality_core.stay.field.room'),
-            value:
-              stay.currentRoom?.name ??
-              stay.currentRoom?.code ??
-              _('hospitality_core.reservation.value.unassigned'),
-          },
-          {
-            id: 'guests',
-            label: _('hospitality_core.col.guests'),
-            value: guests.length,
-          },
-          {
-            id: 'rate',
-            label: _('hospitality_core.reservation.field.rate'),
-            value: formatMoney(_, stay.rate),
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.stay.action.back'),
-          href: `/admin/hospitality/stays?property=${encodeURIComponent(stay.propertyId)}&lang=${encodeURIComponent(locale)}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
-        }),
-        body: stack([
-          section({
-            title: _('hospitality_core.stay.section.information'),
-            description: _('hospitality_core.stay.section.informationHint'),
-            body: definitionList({
-              title: stay.code,
-              items: [
-                {
-                  key: 'guest',
-                  term: _('hospitality_core.reservation.field.guest'),
-                  value: guest,
-                },
-                {
-                  key: 'room-type',
-                  term: _('hospitality_core.col.roomType'),
-                  value: stay.roomType?.name ?? stay.roomTypeId,
-                },
-                {
-                  key: 'check-in',
-                  term: _('hospitality_core.col.checkIn'),
-                  value: dateTime(stay.checkIn, locale, timezone),
-                },
-                {
-                  key: 'check-out',
-                  term: _('hospitality_core.col.checkOut'),
-                  value: dateTime(stay.checkOut, locale, timezone),
-                },
-                {
-                  key: 'billing',
-                  term: _('hospitality_core.reservation.field.billingMode'),
-                  value: _(`hospitality_core.billing.${stay.billingMode}`),
-                },
-                ...(stay.nextBillDate
-                  ? [
-                      {
-                        key: 'next-bill',
-                        term: _('hospitality_core.stay.field.nextBillDate'),
-                        value: stay.nextBillDate,
-                      },
-                    ]
-                  : []),
-                {
-                  key: 'folio',
-                  term: _('hospitality_core.reservation.field.folio'),
-                  value: stay.folioId,
-                },
-                ...(stay.reservationId
-                  ? [
-                      {
-                        key: 'reservation',
-                        term: _('hospitality_core.stay.field.reservation'),
-                        value: stay.reservation?.code ?? stay.reservationId,
-                      },
-                    ]
-                  : []),
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.stay.section.assignments'),
-            description: _('hospitality_core.stay.section.assignmentsHint'),
-            body: stack([
-              assignments.length
-                ? dataTable(_, {
-                    columns: stayAssignmentColumns(_, locale, timezone),
-                    rows: assignments,
-                    id: (assignment) => assignment.id,
-                  })
-                : emptyState(
-                    _('hospitality_core.stay.empty.assignments'),
-                    _('hospitality_core.stay.empty.assignmentsHint'),
-                  ),
-              stay.state === 'checked_in'
-                ? availableRooms.length
-                  ? recordForm({
-                      action,
-                      method: 'post',
-                      submit: _('hospitality_core.stay.action.moveRoom'),
-                      submitVariant: 'secondary',
-                      hidden: { operation: 'move-room', lang: locale },
-                      fields: [
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.stay.detail.title', { code: stay.code })}
+      frame={frame}
+      body={stack([
+        stayDetailFeedback(_, status, errors),
+        <RecordWorkspace
+          kicker={_('hospitality_core.stay.detail.kicker')}
+          title={stay.code}
+          subtitle={guest}
+          imageFallback={icon('hotel')}
+          badges={[
+            badge(_(`hospitality_core.stayState.${stay.state}`), workflowTone(stay.state), stay.state),
+            badge(_(`hospitality_core.bookingType.${stay.bookingType}`), 'neutral'),
+          ]}
+          summary={[
+            {
+              id: 'room',
+              label: _('hospitality_core.stay.field.room'),
+              value:
+                stay.currentRoom?.name ??
+                stay.currentRoom?.code ??
+                _('hospitality_core.reservation.value.unassigned'),
+            },
+            {
+              id: 'guests',
+              label: _('hospitality_core.col.guests'),
+              value: guests.length,
+            },
+            {
+              id: 'rate',
+              label: _('hospitality_core.reservation.field.rate'),
+              value: formatMoney(_, stay.rate),
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.stay.action.back'),
+            href: `/admin/hospitality/stays?property=${encodeURIComponent(stay.propertyId)}&lang=${encodeURIComponent(locale)}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.stay.section.information')}
+              description={_('hospitality_core.stay.section.informationHint')}
+              body={definitionList({
+                title: stay.code,
+                items: [
+                  {
+                    key: 'guest',
+                    term: _('hospitality_core.reservation.field.guest'),
+                    value: guest,
+                  },
+                  {
+                    key: 'room-type',
+                    term: _('hospitality_core.col.roomType'),
+                    value: stay.roomType?.name ?? stay.roomTypeId,
+                  },
+                  {
+                    key: 'check-in',
+                    term: _('hospitality_core.col.checkIn'),
+                    value: dateTime(stay.checkIn, locale, timezone),
+                  },
+                  {
+                    key: 'check-out',
+                    term: _('hospitality_core.col.checkOut'),
+                    value: dateTime(stay.checkOut, locale, timezone),
+                  },
+                  {
+                    key: 'billing',
+                    term: _('hospitality_core.reservation.field.billingMode'),
+                    value: _(`hospitality_core.billing.${stay.billingMode}`),
+                  },
+                  ...(stay.nextBillDate
+                    ? [
+                        {
+                          key: 'next-bill',
+                          term: _('hospitality_core.stay.field.nextBillDate'),
+                          value: stay.nextBillDate,
+                        },
+                      ]
+                    : []),
+                  {
+                    key: 'folio',
+                    term: _('hospitality_core.reservation.field.folio'),
+                    value: stay.folioId,
+                  },
+                  ...(stay.reservationId
+                    ? [
+                        {
+                          key: 'reservation',
+                          term: _('hospitality_core.stay.field.reservation'),
+                          value: stay.reservation?.code ?? stay.reservationId,
+                        },
+                      ]
+                    : []),
+                ],
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.stay.section.assignments')}
+              description={_('hospitality_core.stay.section.assignmentsHint')}
+              body={stack([
+                assignments.length
+                  ? dataTable(_, {
+                      columns: stayAssignmentColumns(_, locale, timezone),
+                      rows: assignments,
+                      id: (assignment) => assignment.id,
+                    })
+                  : emptyState(
+                      _('hospitality_core.stay.empty.assignments'),
+                      _('hospitality_core.stay.empty.assignmentsHint'),
+                    ),
+                stay.state === 'checked_in' ? (
+                  availableRooms.length ? (
+                    <RecordForm
+                      action={action}
+                      method="post"
+                      submit={_('hospitality_core.stay.action.moveRoom')}
+                      submitVariant="secondary"
+                      hidden={{ operation: 'move-room', lang: locale }}
+                      fields={[
                         {
                           name: 'roomId',
                           label: _('hospitality_core.stay.field.newRoom'),
@@ -6003,34 +6188,36 @@ export const stayDetailScreen = (
                           required: true,
                           help: _('hospitality_core.stay.field.moveReasonHint'),
                         },
-                      ],
-                    })
-                  : notice({
+                      ]}
+                    />
+                  ) : (
+                    notice({
                       title: _('hospitality_core.stay.empty.availableRooms'),
                       message: _('hospitality_core.stay.empty.availableRoomsHint'),
                       tone: 'warning',
                     })
-                : null,
-            ]),
-          }),
-          section({
-            title: _('hospitality_core.stay.section.guests'),
-            description: _('hospitality_core.stay.section.guestsHint'),
-            body: stack([
-              guests.length
-                ? dataTable(_, { columns: stayGuestColumns(_), rows: guests, id: (row) => row.id })
-                : emptyState(
-                    _('hospitality_core.stay.empty.guests'),
-                    _('hospitality_core.stay.empty.guestsHint'),
-                  ),
-              stay.state === 'draft' || stay.state === 'checked_in'
-                ? recordForm({
-                    action,
-                    method: 'post',
-                    submit: _('hospitality_core.stay.action.addGuest'),
-                    submitVariant: 'secondary',
-                    hidden: { operation: 'add-guest', lang: locale },
-                    fields: [
+                  )
+                ) : null,
+              ])}
+            />,
+            <Section
+              title={_('hospitality_core.stay.section.guests')}
+              description={_('hospitality_core.stay.section.guestsHint')}
+              body={stack([
+                guests.length
+                  ? dataTable(_, { columns: stayGuestColumns(_), rows: guests, id: (row) => row.id })
+                  : emptyState(
+                      _('hospitality_core.stay.empty.guests'),
+                      _('hospitality_core.stay.empty.guestsHint'),
+                    ),
+                stay.state === 'draft' || stay.state === 'checked_in' ? (
+                  <RecordForm
+                    action={action}
+                    method="post"
+                    submit={_('hospitality_core.stay.action.addGuest')}
+                    submitVariant="secondary"
+                    hidden={{ operation: 'add-guest', lang: locale }}
+                    fields={[
                       {
                         name: 'displayName',
                         label: _('hospitality_core.stay.field.guestName'),
@@ -6046,38 +6233,38 @@ export const stayDetailScreen = (
                         ],
                         help: _('hospitality_core.stay.field.linkedPartnerHint'),
                       },
-                    ],
-                  })
-                : null,
-            ]),
-          }),
-          section({
-            title: _('hospitality_core.stay.section.documents'),
-            description: _('hospitality_core.stay.section.documentsHint'),
-            body: stack([
-              documents.length
-                ? dataTable(_, {
-                    columns: guestDocumentColumns(_),
-                    rows: documents,
-                    id: (row) => row.id,
-                  })
-                : emptyState(
-                    _('hospitality_core.stay.empty.documents'),
-                    _('hospitality_core.stay.empty.documentsHint'),
-                  ),
-              stay.state !== 'cancelled'
-                ? registeredGuests.length
-                  ? recordForm({
-                      action,
-                      method: 'post',
-                      submit: _('hospitality_core.stay.action.saveDocument'),
-                      submitVariant: 'secondary',
-                      hidden: {
+                    ]}
+                  />
+                ) : null,
+              ])}
+            />,
+            <Section
+              title={_('hospitality_core.stay.section.documents')}
+              description={_('hospitality_core.stay.section.documentsHint')}
+              body={stack([
+                documents.length
+                  ? dataTable(_, {
+                      columns: guestDocumentColumns(_),
+                      rows: documents,
+                      id: (row) => row.id,
+                    })
+                  : emptyState(
+                      _('hospitality_core.stay.empty.documents'),
+                      _('hospitality_core.stay.empty.documentsHint'),
+                    ),
+                stay.state !== 'cancelled' ? (
+                  registeredGuests.length ? (
+                    <RecordForm
+                      action={action}
+                      method="post"
+                      submit={_('hospitality_core.stay.action.saveDocument')}
+                      submitVariant="secondary"
+                      hidden={{
                         operation: 'save-document',
                         documentId,
                         lang: locale,
-                      },
-                      fields: [
+                      }}
+                      fields={[
                         {
                           name: 'partnerId',
                           label: _('hospitality_core.stay.document.guest'),
@@ -6149,19 +6336,22 @@ export const stayDetailScreen = (
                           name: 'issuePlace',
                           label: _('hospitality_core.stay.document.issuePlace'),
                         },
-                      ],
-                    })
-                  : notice({
+                      ]}
+                    />
+                  ) : (
+                    notice({
                       title: _('hospitality_core.stay.empty.documentGuests'),
                       message: _('hospitality_core.stay.empty.documentGuestsHint'),
                       tone: 'warning',
                     })
-                : null,
-            ]),
-          }),
-        ]),
-      }),
-    ]),
+                  )
+                ) : null,
+              ])}
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -6171,15 +6361,18 @@ export const staysScreen = (
   locale: string,
   timezone: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.stays.title'),
-    frame,
-    rows.length
-      ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
-      : emptyState(_('hospitality_core.screen.stays.empty'), _('hospitality_core.screen.stays.emptyHint')),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.stays.title')}
+    frame={frame}
+    body={
+      rows.length
+        ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
+        : emptyState(_('hospitality_core.screen.stays.empty'), _('hospitality_core.screen.stays.emptyHint'))
+    }
+  />
+)
 
 const folioDetailFeedback = (
   _: Translator,
@@ -6224,99 +6417,100 @@ export const folioDetailScreen = (
   const guest = folio.partner?.name ?? folio.partnerId
   const action = `/admin/hospitality/folios/${encodeURIComponent(folio.id)}?lang=${encodeURIComponent(locale)}`
 
-  return framed(
-    _,
-    _('hospitality_core.folio.detail.title', { code: folio.code }),
-    frame,
-    stack([
-      folioDetailFeedback(_, status, errors),
-      notice({
-        title: _('hospitality_core.folio.notice.operational'),
-        message: _('hospitality_core.folio.notice.operationalHint'),
-        tone: 'info',
-      }),
-      recordWorkspace({
-        kicker: _('hospitality_core.folio.detail.kicker'),
-        title: folio.code,
-        subtitle: guest,
-        imageFallback: icon('receipt-text'),
-        badges: [
-          badge(_(`hospitality_core.folioState.${folio.state}`), workflowTone(folio.state), folio.state),
-        ],
-        summary: [
-          {
-            id: 'amount',
-            label: _('hospitality_core.folio.metric.activeTotal'),
-            value: formatMoney(_, folio.amountTotal),
-          },
-          {
-            id: 'charges',
-            label: _('hospitality_core.folio.metric.activeCharges'),
-            value: activeCharges.length,
-          },
-          {
-            id: 'stays',
-            label: _('hospitality_core.col.stays'),
-            value: stays.length,
-          },
-        ],
-        navigation: linkButton({
-          label: _('hospitality_core.folio.action.back'),
-          href: `/admin/hospitality/folios?property=${encodeURIComponent(folio.propertyId)}&lang=${encodeURIComponent(locale)}`,
-          variant: 'tertiary',
-          icon: 'chevron-left',
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.folio.detail.title', { code: folio.code })}
+      frame={frame}
+      body={stack([
+        folioDetailFeedback(_, status, errors),
+        notice({
+          title: _('hospitality_core.folio.notice.operational'),
+          message: _('hospitality_core.folio.notice.operationalHint'),
+          tone: 'info',
         }),
-        body: stack([
-          section({
-            title: _('hospitality_core.folio.section.information'),
-            description: _('hospitality_core.folio.section.informationHint'),
-            body: definitionList({
-              title: folio.code,
-              items: [
-                {
-                  key: 'guest',
-                  term: _('hospitality_core.col.guest'),
-                  value: guest,
-                },
-                {
-                  key: 'opened',
-                  term: _('hospitality_core.folio.field.openedAt'),
-                  value: dateTime(folio.openedAt, locale, timezone),
-                },
-                ...(folio.closedAt
-                  ? [
-                      {
-                        key: 'closed',
-                        term: _('hospitality_core.folio.field.closedAt'),
-                        value: dateTime(folio.closedAt, locale, timezone),
-                      },
-                    ]
-                  : []),
-              ],
-            }),
-          }),
-          section({
-            title: _('hospitality_core.folio.section.charges'),
-            description: _('hospitality_core.folio.section.chargesHint'),
-            body: stack([
-              charges.length
-                ? dataTable(_, {
-                    columns: folioChargeColumns(_, locale, timezone, staysById),
-                    rows: charges,
-                    id: (charge) => charge.id,
-                  })
-                : emptyState(
-                    _('hospitality_core.folio.empty.charges'),
-                    _('hospitality_core.folio.empty.chargesHint'),
-                  ),
-              folio.state === 'open'
-                ? recordForm({
-                    action,
-                    method: 'post',
-                    submit: _('hospitality_core.folio.action.postCharge'),
-                    submitVariant: 'secondary',
-                    hidden: { operation: 'post-charge', id: chargeId, lang: locale },
-                    fields: [
+        <RecordWorkspace
+          kicker={_('hospitality_core.folio.detail.kicker')}
+          title={folio.code}
+          subtitle={guest}
+          imageFallback={icon('receipt-text')}
+          badges={[
+            badge(_(`hospitality_core.folioState.${folio.state}`), workflowTone(folio.state), folio.state),
+          ]}
+          summary={[
+            {
+              id: 'amount',
+              label: _('hospitality_core.folio.metric.activeTotal'),
+              value: formatMoney(_, folio.amountTotal),
+            },
+            {
+              id: 'charges',
+              label: _('hospitality_core.folio.metric.activeCharges'),
+              value: activeCharges.length,
+            },
+            {
+              id: 'stays',
+              label: _('hospitality_core.col.stays'),
+              value: stays.length,
+            },
+          ]}
+          navigation={linkButton({
+            label: _('hospitality_core.folio.action.back'),
+            href: `/admin/hospitality/folios?property=${encodeURIComponent(folio.propertyId)}&lang=${encodeURIComponent(locale)}`,
+            variant: 'tertiary',
+            icon: 'chevron-left',
+          })}
+          body={stack([
+            <Section
+              title={_('hospitality_core.folio.section.information')}
+              description={_('hospitality_core.folio.section.informationHint')}
+              body={definitionList({
+                title: folio.code,
+                items: [
+                  {
+                    key: 'guest',
+                    term: _('hospitality_core.col.guest'),
+                    value: guest,
+                  },
+                  {
+                    key: 'opened',
+                    term: _('hospitality_core.folio.field.openedAt'),
+                    value: dateTime(folio.openedAt, locale, timezone),
+                  },
+                  ...(folio.closedAt
+                    ? [
+                        {
+                          key: 'closed',
+                          term: _('hospitality_core.folio.field.closedAt'),
+                          value: dateTime(folio.closedAt, locale, timezone),
+                        },
+                      ]
+                    : []),
+                ],
+              })}
+            />,
+            <Section
+              title={_('hospitality_core.folio.section.charges')}
+              description={_('hospitality_core.folio.section.chargesHint')}
+              body={stack([
+                charges.length
+                  ? dataTable(_, {
+                      columns: folioChargeColumns(_, locale, timezone, staysById),
+                      rows: charges,
+                      id: (charge) => charge.id,
+                    })
+                  : emptyState(
+                      _('hospitality_core.folio.empty.charges'),
+                      _('hospitality_core.folio.empty.chargesHint'),
+                    ),
+                folio.state === 'open' ? (
+                  <RecordForm
+                    action={action}
+                    method="post"
+                    submit={_('hospitality_core.folio.action.postCharge')}
+                    submitVariant="secondary"
+                    hidden={{ operation: 'post-charge', id: chargeId, lang: locale }}
+                    fields={[
                       {
                         name: 'stayId',
                         label: _('hospitality_core.folio.charge.stay'),
@@ -6357,64 +6551,69 @@ export const folioDetailScreen = (
                         step: '0.01',
                         required: true,
                       },
-                    ],
-                  })
-                : null,
-            ]),
-          }),
-          activeCharges.length && folio.state === 'open'
-            ? section({
-                title: _('hospitality_core.folio.section.correction'),
-                description: _('hospitality_core.folio.section.correctionHint'),
-                body: recordForm({
-                  action,
-                  method: 'post',
-                  submit: _('hospitality_core.folio.action.voidCharge'),
-                  submitVariant: 'destructive',
-                  hidden: { operation: 'void-charge', lang: locale },
-                  fields: [
-                    {
-                      name: 'chargeId',
-                      label: _('hospitality_core.folio.field.charge'),
-                      type: 'select',
-                      required: true,
-                      options: activeCharges.map((charge) => ({
-                        value: charge.id,
-                        label: `${
-                          charge.type === 'room' && charge.description.startsWith('room:')
-                            ? _('hospitality_core.folio.charge.roomDescription')
-                            : charge.description
-                        } · ${formatMoney(_, charge.amount)}`,
-                      })),
-                    },
-                    {
-                      name: 'reason',
-                      label: _('hospitality_core.folio.field.voidReason'),
-                      type: 'textarea',
-                      required: true,
-                      help: _('hospitality_core.folio.field.voidReasonHint'),
-                    },
-                  ],
-                }),
-              })
-            : null,
-          section({
-            title: _('hospitality_core.folio.section.stays'),
-            description: _('hospitality_core.folio.section.staysHint'),
-            body: stays.length
-              ? dataTable(_, {
-                  columns: folioStayColumns(_, locale, timezone),
-                  rows: stays,
-                  id: (stay) => stay.id,
-                })
-              : emptyState(
-                  _('hospitality_core.folio.empty.stays'),
-                  _('hospitality_core.folio.empty.staysHint'),
-                ),
-          }),
-        ]),
-      }),
-    ]),
+                    ]}
+                  />
+                ) : null,
+              ])}
+            />,
+            activeCharges.length && folio.state === 'open' ? (
+              <Section
+                title={_('hospitality_core.folio.section.correction')}
+                description={_('hospitality_core.folio.section.correctionHint')}
+                body={
+                  <RecordForm
+                    action={action}
+                    method="post"
+                    submit={_('hospitality_core.folio.action.voidCharge')}
+                    submitVariant="destructive"
+                    hidden={{ operation: 'void-charge', lang: locale }}
+                    fields={[
+                      {
+                        name: 'chargeId',
+                        label: _('hospitality_core.folio.field.charge'),
+                        type: 'select',
+                        required: true,
+                        options: activeCharges.map((charge) => ({
+                          value: charge.id,
+                          label: `${
+                            charge.type === 'room' && charge.description.startsWith('room:')
+                              ? _('hospitality_core.folio.charge.roomDescription')
+                              : charge.description
+                          } · ${formatMoney(_, charge.amount)}`,
+                        })),
+                      },
+                      {
+                        name: 'reason',
+                        label: _('hospitality_core.folio.field.voidReason'),
+                        type: 'textarea',
+                        required: true,
+                        help: _('hospitality_core.folio.field.voidReasonHint'),
+                      },
+                    ]}
+                  />
+                }
+              />
+            ) : null,
+            <Section
+              title={_('hospitality_core.folio.section.stays')}
+              description={_('hospitality_core.folio.section.staysHint')}
+              body={
+                stays.length
+                  ? dataTable(_, {
+                      columns: folioStayColumns(_, locale, timezone),
+                      rows: stays,
+                      id: (stay) => stay.id,
+                    })
+                  : emptyState(
+                      _('hospitality_core.folio.empty.stays'),
+                      _('hospitality_core.folio.empty.staysHint'),
+                    )
+              }
+            />,
+          ])}
+        />,
+      ])}
+    />
   )
 }
 
@@ -6424,15 +6623,18 @@ export const foliosScreen = (
   locale: string,
   timezone: string,
   frame: Frame,
-): TemplateResult =>
-  framed(
-    _,
-    _('hospitality_core.screen.folios.title'),
-    frame,
-    rows.length
-      ? dataTable(_, { columns: folioColumns(_, locale, timezone), rows, id: (row) => row.id })
-      : emptyState(_('hospitality_core.screen.folios.empty'), _('hospitality_core.screen.folios.emptyHint')),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('hospitality_core.screen.folios.title')}
+    frame={frame}
+    body={
+      rows.length
+        ? dataTable(_, { columns: folioColumns(_, locale, timezone), rows, id: (row) => row.id })
+        : emptyState(_('hospitality_core.screen.folios.empty'), _('hospitality_core.screen.folios.emptyHint'))
+    }
+  />
+)
 
 export const tapeChartScreen = (
   _: Translator,
@@ -6500,19 +6702,21 @@ export const tapeChartScreen = (
       tone: workflowTone(event.state),
     }
   })
-  return framed(
-    _,
-    _('hospitality_core.screen.tapeChart.title'),
-    frame,
-    scheduleBoard({
-      corner: _('hospitality_core.screen.tapeChart.corner'),
-      days,
-      rows,
-      events,
-      empty: emptyState(
-        _('hospitality_core.screen.tapeChart.empty'),
-        _('hospitality_core.screen.tapeChart.emptyHint'),
-      ),
-    }),
+  return (
+    <Framed
+      translator={_}
+      title={_('hospitality_core.screen.tapeChart.title')}
+      frame={frame}
+      body={scheduleBoard({
+        corner: _('hospitality_core.screen.tapeChart.corner'),
+        days,
+        rows,
+        events,
+        empty: emptyState(
+          _('hospitality_core.screen.tapeChart.empty'),
+          _('hospitality_core.screen.tapeChart.emptyHint'),
+        ),
+      })}
+    />
   )
 }

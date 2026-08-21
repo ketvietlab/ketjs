@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -92,55 +92,59 @@ export const customerInvoicesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.customerInvoices.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.customerInvoice.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.customerInvoices.title')}
-      subtitle={_('account_backend.customerInvoice.subtitle')}
-      imageFallback={icon('banknote')}
-      summary={[
-        {
-          id: 'total',
-          label: _('account_backend.customerInvoice.summary.total'),
-          value: options.rows.length,
-        },
-        { id: 'draft', label: _('account_backend.customerInvoice.summary.draft'), value: draft },
-        { id: 'posted', label: _('account_backend.customerInvoice.summary.posted'), value: posted },
-        { id: 'unpaid', label: _('account_backend.customerInvoice.summary.unpaid'), value: unpaid },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.customerInvoice.create.title')}
-            description={_('account_backend.customerInvoice.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.customerInvoice.kicker')}
+          title={_('account_backend.customerInvoices.title')}
+          subtitle={_('account_backend.customerInvoice.subtitle')}
+          imageFallback={icon('banknote')}
+          summary={[
+            {
+              id: 'total',
+              label: _('account_backend.customerInvoice.summary.total'),
+              value: options.rows.length,
+            },
+            { id: 'draft', label: _('account_backend.customerInvoice.summary.draft'), value: draft },
+            { id: 'posted', label: _('account_backend.customerInvoice.summary.posted'), value: posted },
+            { id: 'unpaid', label: _('account_backend.customerInvoice.summary.unpaid'), value: unpaid },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.customerInvoice.create.title')}
+                description={_('account_backend.customerInvoice.create.hint')}
                 body={
-                  <RecordForm
-                    id="customer-invoice-create-form"
-                    scope="account-customer-invoice"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="customer-invoice-create-form"
+                        scope="account-customer-invoice"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.customerInvoice.list.title')}
-            description={_('account_backend.customerInvoice.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.customerInvoice.list.title')}
+                description={_('account_backend.customerInvoice.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

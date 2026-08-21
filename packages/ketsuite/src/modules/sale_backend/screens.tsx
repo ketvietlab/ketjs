@@ -7,15 +7,15 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   inline,
   linkButton,
   metric,
   recordActions,
-  recordForm,
-  section,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 
@@ -33,12 +33,12 @@ const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_bac
 const localized = (path: string, localeSuffix: string): string =>
   localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuffix = ''): TemplateResult =>
-  framed(
-    _,
-    _('sale_backend.dashboard.title'),
-    frame,
-    stack([
+export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuffix = ''): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('sale_backend.dashboard.title')}
+    frame={frame}
+    body={stack([
       inline([
         linkButton({
           label: _('sale_backend.action.create'),
@@ -81,28 +81,31 @@ export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuf
             body: metric({ label: _('sale_backend.dashboard.records'), value: String(item.value) }),
           }),
       }),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const ordersScreen = (
   _: Translator,
   o: { title: string; frame: Frame; rows: AnyRow[]; fields?: FormField[] },
-): TemplateResult =>
-  framed(
-    _,
-    o.title,
-    o.frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={o.title}
+    frame={o.frame}
+    body={stack([
       ...(o.fields
         ? [
-            surface({
-              body: recordForm({
-                action: '/admin/sales/quotations',
-                submit: _('sale_backend.action.create'),
-                submitVariant: 'primary',
-                fields: o.fields,
-              }),
-            }),
+            <Surface
+              body={
+                <RecordForm
+                  action="/admin/sales/quotations"
+                  submit={_('sale_backend.action.create')}
+                  submitVariant="primary"
+                  fields={o.fields}
+                />
+              }
+            />,
           ]
         : []),
       o.rows.length
@@ -146,28 +149,31 @@ export const ordersScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const policyScreen = (
   _: Translator,
   frame: Frame,
   fields: FormField[],
   rows: AnyRow[],
-): TemplateResult =>
-  framed(
-    _,
-    _('sale_backend.policies.title'),
-    frame,
-    stack([
-      surface({
-        body: recordForm({
-          action: '/admin/sales/invoicing-policies',
-          submit: _('sale_backend.action.savePolicy'),
-          submitVariant: 'primary',
-          fields,
-        }),
-      }),
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('sale_backend.policies.title')}
+    frame={frame}
+    body={stack([
+      <Surface
+        body={
+          <RecordForm
+            action="/admin/sales/invoicing-policies"
+            submit={_('sale_backend.action.savePolicy')}
+            submitVariant="primary"
+            fields={fields}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, {
             rows,
@@ -187,8 +193,9 @@ export const policyScreen = (
             ],
           })
         : empty(_),
-    ]),
-  )
+    ])}
+  />
+)
 
 export const orderDetail = (
   _: Translator,
@@ -222,176 +229,188 @@ export const orderDetail = (
   }
   if (state !== 'cancel')
     actions.push({ value: 'cancel', label: _('sale_backend.action.cancel'), variant: 'destructive' })
-  return framed(
-    _,
-    String(o.order.name),
-    o.frame,
-    stack([
-      cardGrid({
-        items: [
-          { id: 'state', label: _('sale_backend.field.state'), value: labelOf(_, 'state', o.order.state) },
-          {
-            id: 'customer',
-            label: _('sale_backend.field.customer'),
-            value: String(o.order.partnerName ?? o.order.partnerId),
-          },
-          {
-            id: 'invoice',
-            label: _('sale_backend.field.invoiceStatus'),
-            value: labelOf(_, 'invoiceStatus', o.order.invoiceStatus),
-          },
-          {
-            id: 'total',
-            label: _('sale_backend.field.amountTotal'),
-            value: formatMoney(_, o.order.amountTotal, o.order.currency),
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
-      }),
-      ...(o.integration === undefined ? [] : [o.integration]),
-      ...(actions.length ? [surface({ body: recordActions({ action: o.actionPath, actions }) })] : []),
-      section({
-        title: _('sale_backend.lines.title'),
-        body: lines.length
-          ? dataTable(_, {
-              rows: lines,
-              id: (r) => String(r.id),
-              columns: [
-                {
-                  key: 'product',
-                  label: _('sale_backend.field.product'),
-                  cell: (r) => String(r.name),
-                  priority: 'primary',
-                },
-                {
-                  key: 'ordered',
-                  label: _('sale_backend.field.quantity'),
-                  cell: (r) => String(r.productUomQty),
-                },
-                {
-                  key: 'delivered',
-                  label: _('sale_backend.field.delivered'),
-                  cell: (r) => String(r.qtyDelivered),
-                },
-                {
-                  key: 'invoiced',
-                  label: _('sale_backend.field.invoiced'),
-                  cell: (r) => String(r.qtyInvoiced),
-                },
-                {
-                  key: 'price',
-                  label: _('sale_backend.field.priceUnit'),
-                  cell: (r) => formatMoney(_, r.priceUnit, o.order.currency),
-                  align: 'end',
-                  kind: 'currency',
-                },
-                {
-                  key: 'subtotal',
-                  label: _('sale_backend.field.subtotal'),
-                  cell: (r) => formatMoney(_, r.priceSubtotal, o.order.currency),
-                  align: 'end',
-                  kind: 'currency',
-                },
-              ],
-            })
-          : empty(_),
-      }),
-      ...(['draft', 'sent'].includes(state) && !o.order.locked
-        ? [
-            section({
-              title: _('sale_backend.lines.add'),
-              body: surface({
-                body: recordForm({
-                  action: o.actionPath,
-                  submit: _('sale_backend.action.addLine'),
-                  submitVariant: 'secondary',
-                  hidden: { action: 'add-line' },
-                  fields: o.lineFields,
-                }),
-              }),
-            }),
-          ]
-        : []),
-      ...(state === 'sale' && o.order.invoiceStatus === 'to invoice'
-        ? [
-            section({
-              title: _('sale_backend.invoice.title'),
-              body: surface({
-                body: recordForm({
-                  action: o.actionPath,
-                  submit: _('sale_backend.action.createInvoice'),
-                  submitVariant: 'primary',
-                  hidden: { action: 'invoice' },
-                  fields: o.invoiceFields,
-                }),
-              }),
-            }),
-          ]
-        : []),
-      ...(moves.length
-        ? [
-            section({
-              title: _('sale_backend.deliveries.title'),
-              body: dataTable(_, {
-                rows: moves,
-                id: (r) => String(r.id),
-                columns: [
-                  {
-                    key: 'name',
-                    label: _('sale_backend.field.name'),
-                    cell: (r) =>
-                      linkButton({
-                        label: String(r.origin ?? r.id),
-                        href: `/admin/transfers/${String(r.pickingId)}`,
-                        variant: 'tertiary',
-                      }),
-                    priority: 'primary',
-                  },
-                  { key: 'state', label: _('sale_backend.field.state'), cell: (r) => String(r.state) },
-                  {
-                    key: 'quantity',
-                    label: _('sale_backend.field.delivered'),
-                    cell: (r) => String(r.quantity),
-                  },
-                ],
-              }),
-            }),
-          ]
-        : []),
-      ...(invoices.length
-        ? [
-            section({
-              title: _('sale_backend.invoices.title'),
-              body: dataTable(_, {
-                rows: invoices,
-                id: (r) => String(r.id),
-                columns: [
-                  {
-                    key: 'name',
-                    label: _('sale_backend.field.name'),
-                    cell: (r) =>
-                      linkButton({
-                        label: String(r.name),
-                        href: `/admin/customer-invoices/${String(r.id)}`,
-                        variant: 'tertiary',
-                      }),
-                    priority: 'primary',
-                  },
-                  { key: 'state', label: _('sale_backend.field.state'), cell: (r) => String(r.state) },
-                  {
-                    key: 'total',
-                    label: _('sale_backend.field.amountTotal'),
-                    cell: (r) => formatMoney(_, r.amountTotal, r.currency ?? o.order.currency),
-                    align: 'end',
-                    kind: 'currency',
-                  },
-                ],
-              }),
-            }),
-          ]
-        : []),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={String(o.order.name)}
+      frame={o.frame}
+      body={stack([
+        cardGrid({
+          items: [
+            { id: 'state', label: _('sale_backend.field.state'), value: labelOf(_, 'state', o.order.state) },
+            {
+              id: 'customer',
+              label: _('sale_backend.field.customer'),
+              value: String(o.order.partnerName ?? o.order.partnerId),
+            },
+            {
+              id: 'invoice',
+              label: _('sale_backend.field.invoiceStatus'),
+              value: labelOf(_, 'invoiceStatus', o.order.invoiceStatus),
+            },
+            {
+              id: 'total',
+              label: _('sale_backend.field.amountTotal'),
+              value: formatMoney(_, o.order.amountTotal, o.order.currency),
+            },
+          ],
+          id: (item) => item.id,
+          card: (item) =>
+            contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
+        }),
+        ...(o.integration === undefined ? [] : [o.integration]),
+        ...(actions.length ? [<Surface body={recordActions({ action: o.actionPath, actions })} />] : []),
+        <Section
+          title={_('sale_backend.lines.title')}
+          body={
+            lines.length
+              ? dataTable(_, {
+                  rows: lines,
+                  id: (r) => String(r.id),
+                  columns: [
+                    {
+                      key: 'product',
+                      label: _('sale_backend.field.product'),
+                      cell: (r) => String(r.name),
+                      priority: 'primary',
+                    },
+                    {
+                      key: 'ordered',
+                      label: _('sale_backend.field.quantity'),
+                      cell: (r) => String(r.productUomQty),
+                    },
+                    {
+                      key: 'delivered',
+                      label: _('sale_backend.field.delivered'),
+                      cell: (r) => String(r.qtyDelivered),
+                    },
+                    {
+                      key: 'invoiced',
+                      label: _('sale_backend.field.invoiced'),
+                      cell: (r) => String(r.qtyInvoiced),
+                    },
+                    {
+                      key: 'price',
+                      label: _('sale_backend.field.priceUnit'),
+                      cell: (r) => formatMoney(_, r.priceUnit, o.order.currency),
+                      align: 'end',
+                      kind: 'currency',
+                    },
+                    {
+                      key: 'subtotal',
+                      label: _('sale_backend.field.subtotal'),
+                      cell: (r) => formatMoney(_, r.priceSubtotal, o.order.currency),
+                      align: 'end',
+                      kind: 'currency',
+                    },
+                  ],
+                })
+              : empty(_)
+          }
+        />,
+        ...(['draft', 'sent'].includes(state) && !o.order.locked
+          ? [
+              <Section
+                title={_('sale_backend.lines.add')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={o.actionPath}
+                        submit={_('sale_backend.action.addLine')}
+                        submitVariant="secondary"
+                        hidden={{ action: 'add-line' }}
+                        fields={o.lineFields}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
+        ...(state === 'sale' && o.order.invoiceStatus === 'to invoice'
+          ? [
+              <Section
+                title={_('sale_backend.invoice.title')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={o.actionPath}
+                        submit={_('sale_backend.action.createInvoice')}
+                        submitVariant="primary"
+                        hidden={{ action: 'invoice' }}
+                        fields={o.invoiceFields}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
+        ...(moves.length
+          ? [
+              <Section
+                title={_('sale_backend.deliveries.title')}
+                body={dataTable(_, {
+                  rows: moves,
+                  id: (r) => String(r.id),
+                  columns: [
+                    {
+                      key: 'name',
+                      label: _('sale_backend.field.name'),
+                      cell: (r) =>
+                        linkButton({
+                          label: String(r.origin ?? r.id),
+                          href: `/admin/transfers/${String(r.pickingId)}`,
+                          variant: 'tertiary',
+                        }),
+                      priority: 'primary',
+                    },
+                    { key: 'state', label: _('sale_backend.field.state'), cell: (r) => String(r.state) },
+                    {
+                      key: 'quantity',
+                      label: _('sale_backend.field.delivered'),
+                      cell: (r) => String(r.quantity),
+                    },
+                  ],
+                })}
+              />,
+            ]
+          : []),
+        ...(invoices.length
+          ? [
+              <Section
+                title={_('sale_backend.invoices.title')}
+                body={dataTable(_, {
+                  rows: invoices,
+                  id: (r) => String(r.id),
+                  columns: [
+                    {
+                      key: 'name',
+                      label: _('sale_backend.field.name'),
+                      cell: (r) =>
+                        linkButton({
+                          label: String(r.name),
+                          href: `/admin/customer-invoices/${String(r.id)}`,
+                          variant: 'tertiary',
+                        }),
+                      priority: 'primary',
+                    },
+                    { key: 'state', label: _('sale_backend.field.state'), cell: (r) => String(r.state) },
+                    {
+                      key: 'total',
+                      label: _('sale_backend.field.amountTotal'),
+                      cell: (r) => formatMoney(_, r.amountTotal, r.currency ?? o.order.currency),
+                      align: 'end',
+                      kind: 'currency',
+                    },
+                  ],
+                })}
+              />,
+            ]
+          : []),
+      ])}
+    />
   )
 }

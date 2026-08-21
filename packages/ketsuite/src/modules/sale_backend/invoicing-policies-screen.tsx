@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -64,50 +64,54 @@ export const invoicingPoliciesScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('sale_backend.policies.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('sale_backend.policy.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('sale_backend.policies.title')}
-      subtitle={_('sale_backend.policy.subtitle')}
-      imageFallback={icon('shopping-bag')}
-      summary={[
-        { id: 'total', label: _('sale_backend.policy.summary.total'), value: options.rows.length },
-        { id: 'ordered', label: _('sale_backend.policy.summary.order'), value: ordered },
-        { id: 'delivered', label: _('sale_backend.policy.summary.delivery'), value: delivered },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('sale_backend.policy.edit.title')}
-            description={_('sale_backend.policy.edit.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('sale_backend.policy.kicker')}
+          title={_('sale_backend.policies.title')}
+          subtitle={_('sale_backend.policy.subtitle')}
+          imageFallback={icon('shopping-bag')}
+          summary={[
+            { id: 'total', label: _('sale_backend.policy.summary.total'), value: options.rows.length },
+            { id: 'ordered', label: _('sale_backend.policy.summary.order'), value: ordered },
+            { id: 'delivered', label: _('sale_backend.policy.summary.delivery'), value: delivered },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('sale_backend.policy.edit.title')}
+                description={_('sale_backend.policy.edit.hint')}
                 body={
-                  <RecordForm
-                    id="invoicing-policy-form"
-                    scope="sales-invoicing-policy"
-                    action={options.action}
-                    submit={_('sale_backend.action.savePolicy')}
-                    submitVariant="primary"
-                    errors={options.errors}
-                    fields={options.fields}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="invoicing-policy-form"
+                        scope="sales-invoicing-policy"
+                        action={options.action}
+                        submit={_('sale_backend.action.savePolicy')}
+                        submitVariant="primary"
+                        errors={options.errors}
+                        fields={options.fields}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('sale_backend.policy.products.title')}
-            description={_('sale_backend.policy.products.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('sale_backend.policy.products.title')}
+                description={_('sale_backend.policy.products.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

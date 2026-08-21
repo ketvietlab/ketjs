@@ -156,6 +156,14 @@ export const framed = (_: Translator, title: string, frame: Frame, body: Templat
     frame,
   )
 
+/** JSX entry point for backend screens; `framed` remains for extension compatibility. */
+export const framedPage = (options: {
+  translator: Translator
+  title: string
+  frame: Frame
+  body: TemplateResult
+}): TemplateResult => framed(options.translator, options.title, options.frame, options.body)
+
 export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
 
 export const appCard = (options: {

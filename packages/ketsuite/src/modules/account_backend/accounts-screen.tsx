@@ -5,7 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -68,59 +68,63 @@ export const accountsScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('account_backend.accounts.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('account_backend.account.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={_('account_backend.accounts.title')}
-      subtitle={_('account_backend.account.subtitle')}
-      imageFallback={icon('notebook-tabs')}
-      summary={[
-        { id: 'total', label: _('account_backend.account.summary.total'), value: options.rows.length },
-        { id: 'asset', label: _('account_backend.account.summary.asset'), value: count(['asset']) },
-        {
-          id: 'liability',
-          label: _('account_backend.account.summary.liability'),
-          value: count(['liability', 'equity']),
-        },
-        {
-          id: 'profit',
-          label: _('account_backend.account.summary.profit'),
-          value: count(['income', 'expense']),
-        },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.account.create.title')}
-            description={_('account_backend.account.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.account.kicker')}
+          title={_('account_backend.accounts.title')}
+          subtitle={_('account_backend.account.subtitle')}
+          imageFallback={icon('notebook-tabs')}
+          summary={[
+            { id: 'total', label: _('account_backend.account.summary.total'), value: options.rows.length },
+            { id: 'asset', label: _('account_backend.account.summary.asset'), value: count(['asset']) },
+            {
+              id: 'liability',
+              label: _('account_backend.account.summary.liability'),
+              value: count(['liability', 'equity']),
+            },
+            {
+              id: 'profit',
+              label: _('account_backend.account.summary.profit'),
+              value: count(['income', 'expense']),
+            },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('account_backend.account.create.title')}
+                description={_('account_backend.account.create.hint')}
                 body={
-                  <RecordForm
-                    id="account-create-form"
-                    scope="account-chart"
-                    action={options.action}
-                    submit={_('account_backend.action.create')}
-                    submitVariant="primary"
-                    fields={options.fields}
-                    errors={options.errors}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="account-create-form"
+                        scope="account-chart"
+                        action={options.action}
+                        submit={_('account_backend.action.create')}
+                        submitVariant="primary"
+                        fields={options.fields}
+                        errors={options.errors}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('account_backend.account.list.title')}
-            description={_('account_backend.account.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('account_backend.account.list.title')}
+                description={_('account_backend.account.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

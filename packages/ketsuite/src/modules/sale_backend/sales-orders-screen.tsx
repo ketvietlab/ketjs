@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordWorkspace as RecordWorkspace,
@@ -97,31 +97,35 @@ export const salesOrdersScreen = (_: Translator, options: SalesOrdersScreenOptio
     />
   )
 
-  return framed(
-    _,
-    _('sale_backend.orders.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('sale_backend.orderList.kicker')}
-      title={_('sale_backend.orderList.title')}
-      subtitle={_('sale_backend.orderList.subtitle')}
-      imageFallback={icon('shopping-bag')}
-      summary={[
-        { id: 'total', label: _('sale_backend.orderList.summary.total'), value: options.rows.length },
-        { id: 'to-invoice', label: _('sale_backend.orderList.summary.toInvoice'), value: toInvoice },
-        { id: 'invoiced', label: _('sale_backend.orderList.summary.invoiced'), value: invoiced },
-        { id: 'locked', label: _('sale_backend.orderList.summary.locked'), value: locked },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('sale_backend.orderList.records.title')}
-            description={_('sale_backend.orderList.records.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('sale_backend.orders.title')}
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('sale_backend.orderList.kicker')}
+          title={_('sale_backend.orderList.title')}
+          subtitle={_('sale_backend.orderList.subtitle')}
+          imageFallback={icon('shopping-bag')}
+          summary={[
+            { id: 'total', label: _('sale_backend.orderList.summary.total'), value: options.rows.length },
+            { id: 'to-invoice', label: _('sale_backend.orderList.summary.toInvoice'), value: toInvoice },
+            { id: 'invoiced', label: _('sale_backend.orderList.summary.invoiced'), value: invoiced },
+            { id: 'locked', label: _('sale_backend.orderList.summary.locked'), value: locked },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('sale_backend.orderList.records.title')}
+                description={_('sale_backend.orderList.records.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

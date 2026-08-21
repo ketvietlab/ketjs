@@ -6,15 +6,15 @@ import {
   code,
   dataTable,
   emptyState,
-  formCluster,
-  framed,
+  formCluster as FormCluster,
+  framedPage as Framed,
   inline,
   linkButton,
   recordActions,
-  recordForm,
-  section,
+  recordForm as RecordForm,
+  section as Section,
   stack,
-  surface,
+  surface as Surface,
 } from '../../ui/index.ts'
 import type { DataTable, FormOption, Frame } from '../../ui/index.ts'
 
@@ -38,12 +38,12 @@ export const partnersScreen = (
   table: Partial<DataTable<PartnerListRow>> = {},
   locale = '',
   includeArchived = false,
-): TemplateResult =>
-  framed(
-    _,
-    _('partner_backend.screen.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('partner_backend.screen.title')}
+    frame={frame}
+    body={stack([
       inline([
         linkButton({
           label: _('partner_backend.action.create'),
@@ -112,8 +112,9 @@ export const partnersScreen = (
             ],
             ...table,
           }),
-    ]),
-  )
+    ])}
+  />
+)
 
 type AddressRow = {
   id: string
@@ -143,146 +144,164 @@ export const partnerDetailScreen = (
   row: PartnerDetail,
   options: {
     parents: FormOption[]
+    parentControl?: JSXChild
     terms?: { creditLimit?: string | number | null; note?: string | null } | null
     errors?: string[]
     integration?: JSXChild
-    parentControl?: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
   },
   frame: Frame,
   locale = '',
 ): TemplateResult => {
   const heldRoles = new Set(row.roles.map((role) => role.role))
-  return framed(
-    _,
-    row.name,
-    frame,
-    stack([
-      section({
-        title: _('partner_backend.state.title'),
-        body: surface({
-          body: formCluster({
-            label: _('partner_backend.state.title'),
-            forms: [
-              button({
-                label: _('partner_backend.action.save'),
-                type: 'submit',
-                form: 'partner-identity-form',
-                variant: 'primary',
-              }),
-              options.integration ?? '',
-              recordActions({
-                action: localized(`/admin/partners/${row.id}/archive`, locale),
-                actions: [
-                  row.active
-                    ? {
-                        value: 'archive',
-                        label: _('partner_backend.action.archive'),
-                        variant: 'destructive',
-                      }
-                    : {
-                        value: 'restore',
-                        label: _('partner_backend.action.restore'),
-                        variant: 'secondary',
-                      },
-                ],
-              }),
-            ],
-          }),
-        }),
-      }),
-      section({
-        title: _('partner_backend.detail.identity'),
-        body: surface({
-          body: recordForm({
-            id: 'partner-identity-form',
-            action: localized(`/admin/partners/${row.id}`, locale),
-            submit: _('partner_backend.action.save'),
-            submitVariant: 'primary',
-            submitPlacement: 'external',
-            errors: options.errors,
-            fields: [
-              { name: 'name', label: _('partner_backend.field.name'), value: row.name, required: true },
-              {
-                name: 'kind',
-                label: _('partner_backend.field.kind'),
-                type: 'select',
-                value: row.kind,
-                options: ['person', 'company'].map((value) => ({ value, label: _(`partner.kind.${value}`) })),
-              },
-              {
-                name: 'parentId',
-                label: _('partner_backend.field.parent'),
-                type: 'select',
-                control: options.parentControl,
-                value: row.parentId,
-                options: [{ value: '', label: '—' }, ...options.parents],
-              },
-              { name: 'ref', label: _('partner_backend.field.ref'), value: row.ref },
-              { name: 'vat', label: _('partner_backend.field.vat'), value: row.vat },
-              { name: 'email', label: _('partner_backend.field.email'), value: row.email },
-              { name: 'phone', label: _('partner_backend.field.phone'), value: row.phone },
-              { name: 'lang', label: _('partner_backend.field.lang'), value: row.lang },
-            ],
-          }),
-        }),
-      }),
-      section({
-        title: _('partner_backend.roles.title'),
-        description: _('partner_backend.roles.hint'),
-        body: surface({
-          body: recordForm({
-            action: localized(`/admin/partners/${row.id}/roles`, locale),
-            submit: _('partner_backend.action.saveRoles'),
-            submitVariant: 'secondary',
-            fields: ['customer', 'supplier', 'employee'].map((role) => ({
-              name: role,
-              label: _(`partner.role.${role}`),
-              type: 'checkbox' as const,
-              value: heldRoles.has(role),
-            })),
-          }),
-        }),
-      }),
-      section({
-        title: _('partner_backend.addresses.title'),
-        description: _('partner_backend.addresses.hint'),
-        body: stack([
-          ...options.addressForms.map((address) =>
-            section({
-              title: address.title,
-              body: surface({ body: address.body }),
-            }),
-          ),
-        ]),
-      }),
-      section({
-        title: _('partner_backend.terms.title'),
-        description: _('partner_backend.terms.hint'),
-        body: surface({
-          body: recordForm({
-            action: localized(`/admin/partners/${row.id}/terms`, locale),
-            submit: _('partner_backend.action.saveTerms'),
-            submitVariant: 'secondary',
-            fields: [
-              {
-                name: 'creditLimit',
-                label: _('partner_backend.terms.creditLimit'),
-                type: 'decimal',
-                value: options.terms?.creditLimit,
-              },
-              {
-                name: 'note',
-                label: _('partner_backend.terms.note'),
-                type: 'textarea',
-                value: options.terms?.note,
-                span: 'full',
-              },
-            ],
-          }),
-        }),
-      }),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={row.name}
+      frame={frame}
+      body={stack([
+        <Section
+          title={_('partner_backend.state.title')}
+          body={
+            <Surface
+              body={
+                <FormCluster
+                  label={_('partner_backend.state.title')}
+                  forms={[
+                    button({
+                      label: _('partner_backend.action.save'),
+                      type: 'submit',
+                      form: 'partner-identity-form',
+                      variant: 'primary',
+                    }),
+                    options.integration ?? '',
+                    recordActions({
+                      action: localized(`/admin/partners/${row.id}/archive`, locale),
+                      actions: [
+                        row.active
+                          ? {
+                              value: 'archive',
+                              label: _('partner_backend.action.archive'),
+                              variant: 'destructive',
+                            }
+                          : {
+                              value: 'restore',
+                              label: _('partner_backend.action.restore'),
+                              variant: 'secondary',
+                            },
+                      ],
+                    }),
+                  ]}
+                />
+              }
+            />
+          }
+        />,
+        <Section
+          title={_('partner_backend.detail.identity')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  id="partner-identity-form"
+                  action={localized(`/admin/partners/${row.id}`, locale)}
+                  submit={_('partner_backend.action.save')}
+                  submitVariant="primary"
+                  submitPlacement="external"
+                  errors={options.errors}
+                  fields={[
+                    { name: 'name', label: _('partner_backend.field.name'), value: row.name, required: true },
+                    {
+                      name: 'kind',
+                      label: _('partner_backend.field.kind'),
+                      type: 'select',
+                      value: row.kind,
+                      options: ['person', 'company'].map((value) => ({
+                        value,
+                        label: _(`partner.kind.${value}`),
+                      })),
+                    },
+                    {
+                      name: 'parentId',
+                      label: _('partner_backend.field.parent'),
+                      type: 'select',
+                      control: options.parentControl,
+                      value: row.parentId,
+                      options: [{ value: '', label: '—' }, ...options.parents],
+                    },
+                    { name: 'ref', label: _('partner_backend.field.ref'), value: row.ref },
+                    { name: 'vat', label: _('partner_backend.field.vat'), value: row.vat },
+                    { name: 'email', label: _('partner_backend.field.email'), value: row.email },
+                    { name: 'phone', label: _('partner_backend.field.phone'), value: row.phone },
+                    { name: 'lang', label: _('partner_backend.field.lang'), value: row.lang },
+                  ]}
+                />
+              }
+            />
+          }
+        />,
+        <Section
+          title={_('partner_backend.roles.title')}
+          description={_('partner_backend.roles.hint')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action={localized(`/admin/partners/${row.id}/roles`, locale)}
+                  submit={_('partner_backend.action.saveRoles')}
+                  submitVariant="secondary"
+                  fields={['customer', 'supplier', 'employee'].map((role) => ({
+                    name: role,
+                    label: _(`partner.role.${role}`),
+                    type: 'checkbox' as const,
+                    value: heldRoles.has(role),
+                  }))}
+                />
+              }
+            />
+          }
+        />,
+        <Section
+          title={_('partner_backend.addresses.title')}
+          description={_('partner_backend.addresses.hint')}
+          body={stack([
+            ...options.addressForms.map((address) => (
+              <Section title={address.title} body={<Surface body={address.body} />} />
+            )),
+          ])}
+        />,
+        <Section
+          title={_('partner_backend.terms.title')}
+          description={_('partner_backend.terms.hint')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action={localized(`/admin/partners/${row.id}/terms`, locale)}
+                  submit={_('partner_backend.action.saveTerms')}
+                  submitVariant="secondary"
+                  fields={[
+                    {
+                      name: 'creditLimit',
+                      label: _('partner_backend.terms.creditLimit'),
+                      type: 'decimal',
+                      value: options.terms?.creditLimit,
+                    },
+                    {
+                      name: 'note',
+                      label: _('partner_backend.terms.note'),
+                      type: 'textarea',
+                      value: options.terms?.note,
+                      span: 'full',
+                    },
+                  ]}
+                />
+              }
+            />
+          }
+        />,
+      ])}
+    />
   )
 }
 
@@ -293,40 +312,45 @@ export const newPartnerScreen = (
   errors?: string[],
   locale = '',
   parentControl?: JSXChild,
-): TemplateResult =>
-  framed(
-    _,
-    _('partner_backend.create.title'),
-    frame,
-    surface({
-      body: recordForm({
-        action: localized('/admin/partners/new', locale),
-        submit: _('partner_backend.action.create'),
-        submitVariant: 'primary',
-        cancelHref: localized('/admin/partners', locale),
-        cancelLabel: _('partner_backend.action.cancel'),
-        errors,
-        fields: [
-          { name: 'name', label: _('partner_backend.field.name'), required: true },
-          {
-            name: 'kind',
-            label: _('partner_backend.field.kind'),
-            type: 'select',
-            value: 'company',
-            options: ['company', 'person'].map((value) => ({ value, label: _(`partner.kind.${value}`) })),
-          },
-          {
-            name: 'parentId',
-            label: _('partner_backend.field.parent'),
-            type: 'select',
-            control: parentControl,
-            options: [{ value: '', label: '—' }, ...parents],
-          },
-          { name: 'ref', label: _('partner_backend.field.ref') },
-          { name: 'vat', label: _('partner_backend.field.vat') },
-          { name: 'email', label: _('partner_backend.field.email') },
-          { name: 'phone', label: _('partner_backend.field.phone') },
-        ],
-      }),
-    }),
-  )
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('partner_backend.create.title')}
+    frame={frame}
+    body={
+      <Surface
+        body={
+          <RecordForm
+            action={localized('/admin/partners/new', locale)}
+            submit={_('partner_backend.action.create')}
+            submitVariant="primary"
+            cancelHref={localized('/admin/partners', locale)}
+            cancelLabel={_('partner_backend.action.cancel')}
+            errors={errors}
+            fields={[
+              { name: 'name', label: _('partner_backend.field.name'), required: true },
+              {
+                name: 'kind',
+                label: _('partner_backend.field.kind'),
+                type: 'select',
+                value: 'company',
+                options: ['company', 'person'].map((value) => ({ value, label: _(`partner.kind.${value}`) })),
+              },
+              {
+                name: 'parentId',
+                label: _('partner_backend.field.parent'),
+                type: 'select',
+                control: parentControl,
+                options: [{ value: '', label: '—' }, ...parents],
+              },
+              { name: 'ref', label: _('partner_backend.field.ref') },
+              { name: 'vat', label: _('partner_backend.field.vat') },
+              { name: 'email', label: _('partner_backend.field.email') },
+              { name: 'phone', label: _('partner_backend.field.phone') },
+            ]}
+          />
+        }
+      />
+    }
+  />
+)
