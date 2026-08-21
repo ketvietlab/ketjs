@@ -9,6 +9,7 @@ import {
   canManageStructure,
   canPublishEntry,
 } from './access.ts'
+import { ensureCustomerRealm } from './customer.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
 const MAX_JSON_BYTES = 512 * 1024
@@ -188,6 +189,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
       'read:website.SiteMember',
       'write:website.Site',
       'write:website.SiteMember',
+      'read:website.CustomerRealm',
+      'write:website.CustomerRealm',
+      'read:website.CustomerRealmSite',
+      'write:website.CustomerRealmSite',
     ],
     idempotent: true,
     agent: true,
@@ -216,6 +221,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.tx(async (tx) => {
         await tx.db.commit(cs, existing ? { id: args.id } : undefined)
+        await ensureCustomerRealm(tx, String(args.id), title)
         if (!existing && ctx.actor)
           await tx.db.insertIfAbsent('website.SiteMember', {
             id: randomUUID(),

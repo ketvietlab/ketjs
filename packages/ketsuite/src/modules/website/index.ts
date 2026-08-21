@@ -11,6 +11,8 @@ import { functions } from './functions.ts'
 import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
 import { cmsFunctions } from './cms.ts'
+import { customerFunctions } from './customer.ts'
+import { customerRoutes } from './customer-routes.ts'
 import { jobs } from './jobs.ts'
 
 export default defineModule({
@@ -65,6 +67,17 @@ export default defineModule({
       'error.invalidRedirect': 'Hai đường dẫn redirect phải khác nhau và là đường dẫn nội bộ.',
       'error.redirectCycle': 'Redirect tạo thành vòng lặp.',
       'error.lastAdministrator': 'Website phải luôn còn ít nhất một quản trị viên.',
+      'customer.error.realmUnavailable': 'Website chưa sẵn sàng cho tài khoản khách hàng.',
+      'customer.error.invalidName': 'Tên khách hàng không hợp lệ hoặc quá dài.',
+      'customer.error.invalidEmail': 'Địa chỉ email không hợp lệ.',
+      'customer.error.invalidPassword': 'Mật khẩu phải có từ 10 đến 128 ký tự.',
+      'customer.error.rateLimit': 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
+      'customer.error.emailInUse': 'Địa chỉ email này đã được sử dụng.',
+      'customer.error.invalidCredentials': 'Email hoặc mật khẩu không đúng.',
+      'customer.error.sessionExpired': 'Phiên đăng nhập đã hết hạn.',
+      'customer.error.csrf': 'Yêu cầu bảo mật không hợp lệ. Vui lòng tải lại trang.',
+      'customer.error.originMismatch': 'Nguồn gửi yêu cầu không được phép.',
+      'customer.error.invalidRequest': 'Yêu cầu không hợp lệ.',
     },
     en: {
       'app.title': 'Website',
@@ -110,16 +123,29 @@ export default defineModule({
       'error.invalidRedirect': 'Redirect paths must be distinct local paths.',
       'error.redirectCycle': 'The redirect creates a cycle.',
       'error.lastAdministrator': 'A site must always retain at least one administrator.',
+      'customer.error.realmUnavailable': 'Customer accounts are not ready for this site.',
+      'customer.error.invalidName': 'The customer name is invalid or too long.',
+      'customer.error.invalidEmail': 'The email address is invalid.',
+      'customer.error.invalidPassword': 'The password must contain 10 to 128 characters.',
+      'customer.error.rateLimit': 'Too many attempts. Please try again later.',
+      'customer.error.emailInUse': 'This email address is already in use.',
+      'customer.error.invalidCredentials': 'The email or password is incorrect.',
+      'customer.error.sessionExpired': 'The customer session has expired.',
+      'customer.error.csrf': 'The security token is invalid. Reload the page and try again.',
+      'customer.error.originMismatch': 'The request origin is not allowed.',
+      'customer.error.invalidRequest': 'The request is invalid.',
     },
   },
   requires: ['layout', 'website.page'],
+  depends: ['partner'],
   models,
   contentTypes,
   taxonomies,
   joints,
   sections,
   views,
-  functions: { ...functions, ...cmsFunctions },
+  functions: { ...functions, ...cmsFunctions, ...customerFunctions },
+  routes: customerRoutes,
   jobs,
   tokens,
 })

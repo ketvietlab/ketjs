@@ -13,12 +13,12 @@ import {
   validateLayout,
 } from 'ketjs'
 import type { Adapter } from 'ketjs'
-import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
+import { address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
 
-const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
+const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
 const manifest = compose(mods)
 
 async function boot(): Promise<{ db: Adapter; apps: Awaited<ReturnType<typeof createAppRegistry>> }> {
@@ -34,6 +34,8 @@ test('apps: the list shows what this deployment ships, and what is on', async ()
   const { db, apps } = await boot()
   const list = await apps.list()
   assert.deepEqual(list.map((a) => a.name).sort(), [
+    'address',
+    'partner',
     'theme_paper',
     'website',
     'website_menu',
@@ -168,6 +170,8 @@ test('restrict: models are never filtered, because rows outlive an install', asy
   assert.ok('website_menu.MenuItem' in restricted.models, 'the table exists whatever the app state')
   assert.ok('metaDescription' in restricted.models['website.Page']!.fields, 'and so does every column')
   assert.deepEqual(restricted.disabledModules!.sort(), [
+    'address',
+    'partner',
     'theme_paper',
     'website_menu',
     'website_search',
@@ -217,7 +221,10 @@ test('theme: a typo in a template is still a build error against the full manife
   const bad = { ...paperTheme, templates: { ...paperTheme.templates, p: '{% island "website.ghost" %}' } }
   assert.throws(
     () =>
-      createTheme(compose([website, websiteSearch, bad as never]), [website, websiteSearch, bad as never]),
+      createTheme(
+        compose([address, partner, website, websiteSearch, bad as never]),
+        [address, partner, website, websiteSearch, bad as never],
+      ),
     /places island "website.ghost", which no installed module provides/,
   )
 })
@@ -299,7 +306,7 @@ test('edge: a switched-off section is skipped, an unknown one is marked', async 
 test('edge: a record for an app the deployment stopped shipping is reported', async () => {
   const { db, apps } = await boot()
   await apps.install('website_menu')
-  const shrunk = await createAppRegistry(compose([website, websiteSeo, paperTheme]), db)
+  const shrunk = await createAppRegistry(compose([address, partner, website, websiteSeo, paperTheme]), db)
   assert.deepEqual(await shrunk.orphans(), ['website_menu'])
   assert.ok(!(await shrunk.list()).some((a) => a.name === 'website_menu'))
   await db.close()
