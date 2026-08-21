@@ -40,6 +40,7 @@ export type HttpRouteContract = {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   operationId: string
   summary?: string
+  auth?: 'public' | 'optional-customer' | 'customer'
   capability?: { key: string; action: string }
   request?: {
     params?: JsonSchema

@@ -42,6 +42,7 @@ export type ChannelRouteSpec = {
   path: string
   operationId: string
   summary?: string
+  auth?: 'public' | 'optional-customer' | 'customer'
   capability?: { key: string; action: string }
   request?: HttpRouteContract['request']
   responses: Record<string, JsonSchema>
@@ -106,6 +107,7 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
     method: spec.method,
     operationId: spec.operationId,
     ...(spec.summary ? { summary: spec.summary } : {}),
+    auth: spec.auth ?? 'public',
     ...(spec.capability ? { capability: spec.capability } : {}),
     ...(spec.request ? { request: spec.request } : {}),
     responses: spec.responses,

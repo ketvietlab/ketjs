@@ -7,6 +7,10 @@ A module is KetJS's unit of ownership and composition. It declares a capability'
 presentation contracts, background work, assets, and messages in one object. `defineModule()` has no
 side effects; composition is explicit and deterministic.
 
+Modules may reserve a static server prefix with `reserves`. Extensions contributing routes inside that
+prefix must depend on its owner, use the owner's published route factory, and declare `compatible` when the
+owner exposes a versioned contract. This makes API ownership and version skew enforceable at composition time.
+
 ## Define a module
 
 ```ts
