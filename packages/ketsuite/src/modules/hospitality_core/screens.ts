@@ -5335,6 +5335,12 @@ const reservationDetailFeedback = (
       message: _('hospitality_core.reservation.feedback.checkedOutHint'),
       tone: 'positive',
     })
+  if (status === 'checked-out-early')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.checkedOutEarly'),
+      message: _('hospitality_core.reservation.feedback.checkedOutEarlyHint'),
+      tone: 'warning',
+    })
   if (status === 'cancelled')
     return notice({
       title: _('hospitality_core.reservation.feedback.cancelled'),

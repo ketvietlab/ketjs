@@ -1147,10 +1147,11 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(checkedOut.status, 303, await checkedOut.clone().text())
-  assert.match(checkedOut.headers.get('location') ?? '', /status=checked-out/)
+  assert.match(checkedOut.headers.get('location') ?? '', /status=checked-out-early/)
   const checkedOutPage = await e2e.client.get(checkedOut.headers.get('location')!)
   const checkedOutHtml = await checkedOutPage.text()
-  assert.match(checkedOutHtml, /Đã trả phòng/)
+  assert.match(checkedOutHtml, /Đã trả phòng sớm/)
+  assert.match(checkedOutHtml, /Tồn phòng các đêm còn lại đã được hoàn/)
   assert.doesNotMatch(checkedOutHtml, /hospitality_core\./)
 
   const taskPath = '/admin/hospitality/housekeeping/tasks/checkout%3Abooking-1%3Astay'
