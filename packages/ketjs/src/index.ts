@@ -191,17 +191,66 @@ export {
   DestructiveMigrationError,
 } from './data/migrate.ts'
 
-// Re-exported for convenience; the view layer is its own package and can be
-// installed alone by a client that never touches the server half.
+// Re-exported whole; the view layer is its own package and can be installed alone
+// by a client that never touches the server half, but an app that has both should
+// not have to know which half a name lives in.
+//
+// It used to be eight names picked by hand, and the set was not usable on its own:
+// `mount` was there while `domHost` — the host every call to it needs — was not, so
+// "convenience" meant importing from both packages anyway and guessing which.
 export {
-  renderToString,
+  signal,
+  computed,
+  effect,
+  batch,
+  html,
+  each,
+  when,
+  isResult,
+  isEach,
+  createRoot,
   hydrateRoot,
+  EVENT_PREFIX,
   mount,
   mountHydrated,
+  countingHost,
+  domHost,
+  escapeHtml,
+  renderToString,
+  HydrationMismatch,
+  HOLE_MARKER,
+  HOLE_OPEN,
+  trustedMarkup,
+  isMarkup,
   renderIsland,
   hydrateIslands,
   createIslandManager,
+  IslandError,
   ISLAND_TAG,
+} from '@ketvietlab/ketjs-view'
+export type {
+  Signal,
+  Computed,
+  TemplateResult,
+  EachResult,
+  Renderable,
+  Root,
+  Mounted,
+  Host,
+  HostNode,
+  Markup,
+  IslandView,
+  IslandController,
+  IslandFactory,
+  IslandDefinition,
+  IslandRegistry,
+  IslandProps,
+  HydratedIsland,
+  IslandElement,
+  IslandManager,
+  JSXChild,
+  JSXComponent,
+  IntrinsicProps,
 } from '@ketvietlab/ketjs-view'
 export { createTheme } from './theme/render.ts'
 export { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
@@ -211,7 +260,8 @@ export { loadTemplates } from './theme/templates.ts'
 export { createJoints } from './theme/joints.ts'
 export type { Joints } from './theme/joints.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
-export { tokensToCss, scopedCss } from './theme/tokens.ts'
+export type { Drop } from './theme/viewmodel.ts'
+export { tokensToCss, scopedCss, LAYER_ORDER } from './theme/tokens.ts'
 
 export { agentTools, agentDescriptor, compositionSchema } from './agent/capabilities.ts'
 export { generateDts } from './codegen/dts.ts'
