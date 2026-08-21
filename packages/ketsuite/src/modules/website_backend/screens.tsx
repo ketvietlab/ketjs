@@ -43,6 +43,40 @@ export type EntryDetail = {
   revision?: { id: string; title: string; excerpt?: string | null; layout: unknown; fields: unknown } | null
 }
 
+export type EntryKind = {
+  basePath: '/admin/website/pages' | '/admin/website/posts'
+  titleKey: 'pages' | 'posts'
+}
+
+export type TaxonomyRow = {
+  id: string
+  siteId: string
+  taxonomy: string
+  name: string
+  slug: string
+  description?: string | null
+  parentId?: string | null
+}
+
+export type MediaRow = {
+  id: string
+  siteId: string
+  attachmentId: string
+  alt?: string | null
+  caption?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+export type MenuRow = {
+  id: string
+  siteId: string
+  label: string
+  href: string
+  position: number
+  parentId?: string | null
+}
+
 const statusTone = (status: string): 'positive' | 'info' | 'warning' | 'neutral' =>
   status === 'published'
     ? 'positive'
@@ -65,8 +99,8 @@ export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale
           variant: 'primary',
         }),
         linkButton({
-          label: _('website_backend.action.content'),
-          href: `/admin/content${locale}`,
+          label: _('website_backend.action.pages'),
+          href: `/admin/website/pages${locale}`,
           variant: 'secondary',
         }),
       ]),
@@ -179,16 +213,17 @@ export const contentScreen = (
   siteId: string | null,
   frame: Frame,
   locale = '',
+  kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
 ): TemplateResult =>
   framed(
     _,
-    _('website_backend.content.title'),
+    _(`website_backend.${kind.titleKey}.title`),
     frame,
     stack([
       surface({
         padding: 'compact',
         body: recordForm({
-          action: `/admin/content${locale}`,
+          action: `${kind.basePath}${locale}`,
           method: 'get',
           layout: 'inline',
           fields: [
@@ -206,8 +241,8 @@ export const contentScreen = (
       }),
       inline([
         linkButton({
-          label: _('website_backend.action.newEntry'),
-          href: `/admin/content/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          label: _(`website_backend.action.new${kind.titleKey === 'pages' ? 'Page' : 'Post'}`),
+          href: `${kind.basePath}/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
           variant: 'primary',
         }),
         linkButton({
@@ -222,7 +257,7 @@ export const contentScreen = (
           : dataTable(_, {
               rows,
               id: (row) => row.id,
-              rowHref: (row) => `/admin/content/${row.id}${locale}`,
+              rowHref: (row) => `${kind.basePath}/${row.id}${locale}`,
               columns: [
                 {
                   key: 'title',
@@ -236,7 +271,6 @@ export const contentScreen = (
                   kind: 'identifier',
                   cell: (row) => code(row.path),
                 },
-                { key: 'type', label: _('website_backend.field.type'), cell: (row) => code(row.type) },
                 {
                   key: 'status',
                   label: _('website_backend.field.status'),
@@ -252,7 +286,7 @@ export const entryFormScreen = (
   _: Translator,
   detail: EntryDetail | null,
   siteId: string,
-  types: FormOption[],
+  kind: EntryKind,
   frame: Frame,
   options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
 ): TemplateResult => {
@@ -261,15 +295,15 @@ export const entryFormScreen = (
   const values = options.values ?? {}
   const existing = !!entry
   const action = existing
-    ? `/admin/content/${entry.id}${options.locale ?? ''}`
-    : `/admin/content/new${options.locale ?? ''}`
+    ? `${kind.basePath}/${entry.id}${options.locale ?? ''}`
+    : `${kind.basePath}/new${options.locale ?? ''}`
   const layout =
     values.layout ??
     JSON.stringify(revision?.layout ?? [{ type: 'website.rich_text', settings: { body: '' } }], null, 2)
   const fields = values.fields ?? JSON.stringify(revision?.fields ?? {}, null, 2)
   return framed(
     _,
-    existing ? String(entry.title) : _('website_backend.content.newTitle'),
+    existing ? String(entry.title) : _(`website_backend.${kind.titleKey}.newTitle`),
     frame,
     stack([
       ...(existing
@@ -278,19 +312,19 @@ export const entryFormScreen = (
               badge(_(`website_backend.state.${entry.status}`), statusTone(entry.status)),
               linkButton({
                 label: _('website_backend.action.revisions'),
-                href: `/admin/content/${entry.id}/revisions${options.locale ?? ''}`,
+                href: `${kind.basePath}/${entry.id}/revisions${options.locale ?? ''}`,
               }),
               linkButton({
                 label: _('website_backend.action.preview'),
-                href: `/admin/content/${entry.id}/preview${options.locale ?? ''}`,
+                href: `${kind.basePath}/${entry.id}/preview${options.locale ?? ''}`,
               }),
             ]),
           ]
         : []),
       section({
         eyebrow: _('website_backend.content.eyebrow'),
-        title: existing ? String(entry.title) : _('website_backend.content.newTitle'),
-        description: _('website_backend.content.formHint'),
+        title: existing ? String(entry.title) : _(`website_backend.${kind.titleKey}.newTitle`),
+        description: _(`website_backend.${kind.titleKey}.formHint`),
         body: surface({
           body: recordForm({
             action,
@@ -316,14 +350,6 @@ export const entryFormScreen = (
                 name: 'path',
                 label: _('website_backend.field.path'),
                 value: values.path ?? entry?.path,
-                required: true,
-              },
-              {
-                name: 'type',
-                label: _('website_backend.field.type'),
-                type: 'select',
-                value: values.type ?? entry?.type ?? types[0]?.value,
-                options: types,
                 required: true,
               },
               {
@@ -354,7 +380,7 @@ export const entryFormScreen = (
             submit: _('website_backend.action.saveDraft'),
             submitVariant: 'primary',
             errors: options.errors,
-            cancelHref: `/admin/content?site=${encodeURIComponent(siteId)}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+            cancelHref: `${kind.basePath}?site=${encodeURIComponent(siteId)}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
             cancelLabel: _('website_backend.action.cancel'),
           }),
         }),
@@ -366,7 +392,7 @@ export const entryFormScreen = (
               description: _('website_backend.publish.hint'),
               body: surface({
                 body: recordActions({
-                  action: `/admin/content/${entry.id}/publish${options.locale ?? ''}`,
+                  action: `${kind.basePath}/${entry.id}/publish${options.locale ?? ''}`,
                   hidden: revision?.id ? { expectedRevisionId: revision.id } : undefined,
                   actions: [
                     { value: 'publish', label: _('website_backend.action.publish'), variant: 'primary' },
@@ -386,6 +412,7 @@ export const revisionsScreen = (
   rows: Array<{ id: string; version: number; kind: string; authorId?: string | null; createdAt: string }>,
   frame: Frame,
   locale = '',
+  basePath = '/admin/website/pages',
 ): TemplateResult =>
   framed(
     _,
@@ -395,7 +422,7 @@ export const revisionsScreen = (
       inline([
         linkButton({
           label: _('website_backend.action.backToEntry'),
-          href: `/admin/content/${entry.id}${locale}`,
+          href: `${basePath}/${entry.id}${locale}`,
         }),
       ]),
       rows.length === 0
@@ -433,6 +460,7 @@ export const previewScreen = (
   token: string,
   expiresAt: string,
   frame: Frame,
+  basePath = '/admin/website/pages',
 ): TemplateResult =>
   framed(
     _,
@@ -442,7 +470,7 @@ export const previewScreen = (
       notice({ tone: 'info', title: entry.title, message: _('website_backend.preview.hint') }),
       surface({
         body: recordForm({
-          action: '/admin/content',
+          action: basePath,
           method: 'get',
           fields: [
             {
@@ -467,106 +495,377 @@ export const previewScreen = (
     ]),
   )
 
+const siteSwitcher = (
+  _: Translator,
+  action: string,
+  sites: FormOption[],
+  siteId: string | null,
+  locale: string,
+): TemplateResult =>
+  surface({
+    padding: 'compact',
+    body: recordForm({
+      action: `${action}${locale}`,
+      method: 'get',
+      layout: 'inline',
+      fields: [
+        {
+          name: 'site',
+          label: _('website_backend.field.site'),
+          type: 'select',
+          value: siteId,
+          options: sites,
+        },
+      ],
+      submit: _('website_backend.action.switchSite'),
+      submitVariant: 'secondary',
+    }),
+  })
+
 export const taxonomyScreen = (
   _: Translator,
-  rows: Array<{ id: string; taxonomy: string; name: string; slug: string; parentId?: string | null }>,
+  rows: TaxonomyRow[],
+  sites: FormOption[],
+  siteId: string | null,
   frame: Frame,
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
     _('website_backend.taxonomies.title'),
     frame,
-    rows.length === 0
-      ? emptyState(_('website_backend.taxonomies.empty'), _('website_backend.taxonomies.emptyHint'))
-      : dataTable(_, {
-          rows,
-          id: (row) => row.id,
-          columns: [
-            {
-              key: 'name',
-              label: _('website_backend.field.name'),
-              priority: 'primary',
-              cell: (row) => row.name,
-            },
-            {
-              key: 'taxonomy',
-              label: _('website_backend.field.taxonomy'),
-              cell: (row) => code(row.taxonomy),
-            },
-            { key: 'slug', label: _('website_backend.field.slug'), cell: (row) => code(row.slug) },
-            { key: 'parent', label: _('website_backend.field.parent'), cell: (row) => row.parentId ?? '—' },
-          ],
+    stack([
+      siteSwitcher(_, '/admin/taxonomies', sites, siteId, locale),
+      inline([
+        linkButton({
+          label: _('website_backend.action.newTerm'),
+          href: `/admin/taxonomies/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          variant: 'primary',
         }),
+      ]),
+      rows.length === 0
+        ? emptyState(_('website_backend.taxonomies.empty'), _('website_backend.taxonomies.emptyHint'))
+        : dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            rowHref: (row) => `/admin/taxonomies/${row.id}${locale}`,
+            columns: [
+              {
+                key: 'name',
+                label: _('website_backend.field.name'),
+                priority: 'primary',
+                cell: (row) => row.name,
+              },
+              {
+                key: 'taxonomy',
+                label: _('website_backend.field.taxonomy'),
+                cell: (row) => code(row.taxonomy),
+              },
+              { key: 'slug', label: _('website_backend.field.slug'), cell: (row) => code(row.slug) },
+              { key: 'parent', label: _('website_backend.field.parent'), cell: (row) => row.parentId ?? '—' },
+            ],
+          }),
+    ]),
   )
+
+export const taxonomyFormScreen = (
+  _: Translator,
+  row: Partial<TaxonomyRow>,
+  taxonomies: FormOption[],
+  parents: FormOption[],
+  frame: Frame,
+  options: { errors?: string[]; locale?: string } = {},
+): TemplateResult => {
+  const existing = !!row.id
+  return framed(
+    _,
+    existing ? String(row.name) : _('website_backend.taxonomies.newTitle'),
+    frame,
+    stack([
+      section({
+        title: existing ? String(row.name) : _('website_backend.taxonomies.newTitle'),
+        description: _('website_backend.taxonomies.formHint'),
+        body: surface({
+          body: recordForm({
+            action: existing
+              ? `/admin/taxonomies/${row.id}${options.locale ?? ''}`
+              : `/admin/taxonomies/new${options.locale ?? ''}`,
+            hidden: { siteId: String(row.siteId ?? '') },
+            fields: [
+              { name: 'name', label: _('website_backend.field.name'), value: row.name, required: true },
+              { name: 'slug', label: _('website_backend.field.slug'), value: row.slug, required: true },
+              {
+                name: 'taxonomy',
+                label: _('website_backend.field.taxonomy'),
+                type: 'select',
+                value: row.taxonomy ?? taxonomies[0]?.value,
+                options: taxonomies,
+                required: true,
+                disabled: existing,
+              },
+              {
+                name: 'parentId',
+                label: _('website_backend.field.parent'),
+                type: 'select',
+                value: row.parentId ?? '',
+                options: [{ value: '', label: '—' }, ...parents],
+              },
+              {
+                name: 'description',
+                label: _('website_backend.field.description'),
+                type: 'textarea',
+                value: row.description,
+                span: 'full',
+              },
+            ],
+            submit: _('website_backend.action.save'),
+            submitVariant: 'primary',
+            errors: options.errors,
+            cancelHref: `/admin/taxonomies?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+            cancelLabel: _('website_backend.action.cancel'),
+          }),
+        }),
+      }),
+      ...(existing
+        ? [
+            surface({
+              body: recordActions({
+                action: `/admin/taxonomies/${row.id}/delete${options.locale ?? ''}`,
+                actions: [
+                  { value: 'delete', label: _('website_backend.action.deleteTerm'), variant: 'destructive' },
+                ],
+              }),
+            }),
+          ]
+        : []),
+    ]),
+  )
+}
 
 export const mediaScreen = (
   _: Translator,
-  rows: Array<{
-    id: string
-    attachmentId: string
-    alt?: string | null
-    width?: number | null
-    height?: number | null
-  }>,
+  rows: MediaRow[],
+  sites: FormOption[],
+  siteId: string | null,
   frame: Frame,
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
     _('website_backend.media.title'),
     frame,
-    rows.length === 0
-      ? emptyState(_('website_backend.media.empty'), _('website_backend.media.emptyHint'))
-      : dataTable(_, {
-          rows,
-          id: (row) => row.id,
-          columns: [
-            {
-              key: 'attachment',
-              label: _('website_backend.field.attachment'),
-              priority: 'primary',
-              cell: (row) => code(row.attachmentId),
-            },
-            { key: 'alt', label: _('website_backend.field.alt'), cell: (row) => row.alt ?? '—' },
-            {
-              key: 'size',
-              label: _('website_backend.field.size'),
-              cell: (row) => (row.width && row.height ? `${row.width} × ${row.height}` : '—'),
-            },
-          ],
+    stack([
+      siteSwitcher(_, '/admin/media', sites, siteId, locale),
+      inline([
+        linkButton({
+          label: _('website_backend.action.newMedia'),
+          href: `/admin/media/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          variant: 'primary',
         }),
+      ]),
+      rows.length === 0
+        ? emptyState(_('website_backend.media.empty'), _('website_backend.media.emptyHint'))
+        : dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            rowHref: (row) => `/admin/media/${row.id}${locale}`,
+            columns: [
+              {
+                key: 'attachment',
+                label: _('website_backend.field.attachment'),
+                priority: 'primary',
+                cell: (row) => code(row.attachmentId),
+              },
+              { key: 'alt', label: _('website_backend.field.alt'), cell: (row) => row.alt ?? '—' },
+              {
+                key: 'size',
+                label: _('website_backend.field.size'),
+                cell: (row) => (row.width && row.height ? `${row.width} × ${row.height}` : '—'),
+              },
+            ],
+          }),
+    ]),
   )
+
+export const mediaFormScreen = (
+  _: Translator,
+  row: Partial<MediaRow>,
+  frame: Frame,
+  options: { errors?: string[]; locale?: string } = {},
+): TemplateResult => {
+  const existing = !!row.id
+  return framed(
+    _,
+    existing ? String(row.attachmentId) : _('website_backend.media.newTitle'),
+    frame,
+    stack([
+      section({
+        title: existing ? String(row.attachmentId) : _('website_backend.media.newTitle'),
+        description: _('website_backend.media.formHint'),
+        body: surface({
+          body: recordForm({
+            action: existing
+              ? `/admin/media/${row.id}${options.locale ?? ''}`
+              : `/admin/media/new${options.locale ?? ''}`,
+            hidden: { siteId: String(row.siteId ?? '') },
+            fields: [
+              {
+                name: 'attachmentId',
+                label: _('website_backend.field.attachment'),
+                value: row.attachmentId,
+                required: true,
+                span: 'full',
+              },
+              { name: 'alt', label: _('website_backend.field.alt'), value: row.alt, span: 'full' },
+              {
+                name: 'caption',
+                label: _('website_backend.field.caption'),
+                type: 'textarea',
+                value: row.caption,
+                span: 'full',
+              },
+              { name: 'width', label: _('website_backend.field.width'), type: 'number', value: row.width },
+              { name: 'height', label: _('website_backend.field.height'), type: 'number', value: row.height },
+            ],
+            submit: _('website_backend.action.save'),
+            submitVariant: 'primary',
+            errors: options.errors,
+            cancelHref: `/admin/media?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+            cancelLabel: _('website_backend.action.cancel'),
+          }),
+        }),
+      }),
+      ...(existing
+        ? [
+            surface({
+              body: recordActions({
+                action: `/admin/media/${row.id}/delete${options.locale ?? ''}`,
+                actions: [
+                  { value: 'delete', label: _('website_backend.action.deleteMedia'), variant: 'destructive' },
+                ],
+              }),
+            }),
+          ]
+        : []),
+    ]),
+  )
+}
 
 export const menusScreen = (
   _: Translator,
-  rows: Array<{ id: string; label: string; href: string; position: number; parentId?: string | null }>,
+  rows: MenuRow[],
+  sites: FormOption[],
+  siteId: string | null,
   frame: Frame,
+  locale = '',
 ): TemplateResult =>
   framed(
     _,
     _('website_backend.menus.title'),
     frame,
-    rows.length === 0
-      ? emptyState(_('website_backend.menus.empty'), _('website_backend.menus.emptyHint'))
-      : dataTable(_, {
-          rows,
-          id: (row) => row.id,
-          columns: [
-            {
-              key: 'label',
-              label: _('website_backend.field.label'),
-              priority: 'primary',
-              cell: (row) => row.label,
-            },
-            { key: 'href', label: _('website_backend.field.href'), cell: (row) => code(row.href) },
-            {
-              key: 'position',
-              label: _('website_backend.field.position'),
-              kind: 'number',
-              cell: (row) => String(row.position),
-            },
-          ],
+    stack([
+      siteSwitcher(_, '/admin/menus', sites, siteId, locale),
+      inline([
+        linkButton({
+          label: _('website_backend.action.newMenuItem'),
+          href: `/admin/menus/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+          variant: 'primary',
         }),
+      ]),
+      rows.length === 0
+        ? emptyState(_('website_backend.menus.empty'), _('website_backend.menus.emptyHint'))
+        : dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            rowHref: (row) =>
+              `/admin/menus/${row.id}?site=${encodeURIComponent(row.siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
+            columns: [
+              {
+                key: 'label',
+                label: _('website_backend.field.label'),
+                priority: 'primary',
+                cell: (row) => row.label,
+              },
+              { key: 'href', label: _('website_backend.field.href'), cell: (row) => code(row.href) },
+              {
+                key: 'position',
+                label: _('website_backend.field.position'),
+                kind: 'number',
+                cell: (row) => String(row.position),
+              },
+            ],
+          }),
+    ]),
   )
+
+export const menuFormScreen = (
+  _: Translator,
+  row: Partial<MenuRow>,
+  parents: FormOption[],
+  frame: Frame,
+  options: { errors?: string[]; locale?: string } = {},
+): TemplateResult => {
+  const existing = !!row.id
+  return framed(
+    _,
+    existing ? String(row.label) : _('website_backend.menus.newTitle'),
+    frame,
+    stack([
+      section({
+        title: existing ? String(row.label) : _('website_backend.menus.newTitle'),
+        description: _('website_backend.menus.formHint'),
+        body: surface({
+          body: recordForm({
+            action: existing
+              ? `/admin/menus/${row.id}${options.locale ?? ''}`
+              : `/admin/menus/new${options.locale ?? ''}`,
+            hidden: { siteId: String(row.siteId ?? '') },
+            fields: [
+              { name: 'label', label: _('website_backend.field.label'), value: row.label, required: true },
+              { name: 'href', label: _('website_backend.field.href'), value: row.href, required: true },
+              {
+                name: 'position',
+                label: _('website_backend.field.position'),
+                type: 'number',
+                value: row.position ?? 0,
+                required: true,
+              },
+              {
+                name: 'parentId',
+                label: _('website_backend.field.parent'),
+                type: 'select',
+                value: row.parentId ?? '',
+                options: [{ value: '', label: '—' }, ...parents],
+              },
+            ],
+            submit: _('website_backend.action.save'),
+            submitVariant: 'primary',
+            errors: options.errors,
+            cancelHref: `/admin/menus?site=${encodeURIComponent(String(row.siteId ?? ''))}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+            cancelLabel: _('website_backend.action.cancel'),
+          }),
+        }),
+      }),
+      ...(existing
+        ? [
+            surface({
+              body: recordActions({
+                action: `/admin/menus/${row.id}/delete${options.locale ?? ''}`,
+                hidden: { siteId: String(row.siteId ?? '') },
+                actions: [
+                  {
+                    value: 'delete',
+                    label: _('website_backend.action.deleteMenuItem'),
+                    variant: 'destructive',
+                  },
+                ],
+              }),
+            }),
+          ]
+        : []),
+    ]),
+  )
+}
 
 export const formsScreen = (
   _: Translator,
