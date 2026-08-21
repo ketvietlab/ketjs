@@ -12,6 +12,7 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
     name: 'ketsuite',
     modules: [
       suite.website,
+      suite.channelApi,
       suite.websiteMenu,
       suite.websiteSeo,
       suite.websiteSearch,
@@ -106,6 +107,7 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
       },
       bootstrap: [
         'website',
+        'channel_api',
         'website_menu',
         'website_form',
         'website_backend',
@@ -148,6 +150,13 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
       ],
       sessions: { anonymous: { company: 'default' } },
       resolveSession: suite.resolveUserSession,
+      resolveAudience: (_url, req) => {
+        const authorization = String(req.headers.authorization ?? '')
+        const cookies = String(req.headers.cookie ?? '')
+        return /^Bearer\s+/i.test(authorization) || /(?:^|;\s*)ket_customer_session=/.test(cookies)
+          ? 'customer'
+          : 'anonymous'
+      },
       permissions: (ctx, userId) =>
         ctx
           .callUnchecked('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)

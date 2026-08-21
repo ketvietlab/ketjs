@@ -4,12 +4,14 @@ import { functions } from './functions.ts'
 import { models } from './models.ts'
 import { sections } from './sections.ts'
 import { routes } from './routes.ts'
+import { channelRoutes } from './channel-routes.ts'
 
 export default defineModule({
   name: 'website_hospitality',
   version: '0.1.0',
   app: true,
-  depends: ['website', 'hospitality_core'],
+  depends: ['website', 'hospitality_core', 'channel_api'],
+  compatible: { channel_api: '^1' },
   title: 'Website Hospitality',
   summary: 'Nội dung hạng phòng và luồng yêu cầu đặt phòng cho website lưu trú.',
   category: 'Website',
@@ -63,5 +65,5 @@ export default defineModule({
   functions,
   contentTypes,
   sections,
-  routes,
+  routes: { ...routes, ...channelRoutes },
 })

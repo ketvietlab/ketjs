@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => login(page))
 test('keeps pages and posts separate while creating, revising and publishing', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Website', exact: true }).first()).toBeVisible()
   await page.goto('/admin/website/pages/new?site=hospitality-site&lang=vi')
-  await expect(page.getByRole('heading', { name: 'Trang mới', level: 1 })).toBeVisible()
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Trang mới' })).toBeVisible()
   await expect(page.locator('select[name="type"]')).toHaveCount(0)
   await page.locator('input[name="title"]').fill('Câu chuyện của Mây')
   await page.locator('input[name="slug"]').fill('cau-chuyen')
@@ -41,11 +41,11 @@ test('keeps pages and posts separate while creating, revising and publishing', a
   await page.getByRole('button', { name: 'Xuất bản ngay' }).click()
   await expect(page.getByText('Đã xuất bản', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Revision' }).click()
-  await expect(page.getByRole('heading', { name: 'Lịch sử phiên bản' })).toBeVisible()
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Lịch sử phiên bản' })).toBeVisible()
   await expect(page.locator('[data-ui="row"]')).toHaveCount(1)
 
   await page.goto('/admin/website/posts/new?site=hospitality-site&lang=vi')
-  await expect(page.getByRole('heading', { name: 'Bài viết mới', level: 1 })).toBeVisible()
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Bài viết mới' })).toBeVisible()
   await page.locator('input[name="title"]').fill('Tin mới từ Mây')
   await page.locator('input[name="slug"]').fill('tin-moi')
   await page.locator('input[name="path"]').fill('/tin-moi')
@@ -114,7 +114,7 @@ test('creates a schema-backed form and keeps the English backend translated', as
   await expect(page.getByText('Đăng ký nhận tin')).toBeVisible()
 
   await page.goto('/admin/sites?lang=en')
-  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create site' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText('website_backend.')
 })
@@ -168,10 +168,16 @@ test('hardens the public form boundary and unknown hosts', async ({ page }) => {
   expect(unknownHost.status()).toBe(404)
 })
 
-test('customer authentication is a separate, headless-ready browser session', async ({ page }) => {
+test('customer Channel API supports isolated browser and bearer sessions', async ({ page }) => {
   const origin = 'http://127.0.0.1:4173'
   const email = 'customer.e2e@example.test'
-  const registered = await page.request.post('/api/website/v1/customer/auth/register', {
+  const unsupportedBody = await page.request.post('/api/customer/v1/auth/token', {
+    headers: { 'Content-Type': 'text/plain' },
+    data: 'not-json',
+  })
+  expect(unsupportedBody.status()).toBe(415)
+  expect((await unsupportedBody.json()).error.code).toBe('channel_api.unsupportedMediaType')
+  const registered = await page.request.post('/api/customer/v1/auth/session/register', {
     headers: { Origin: origin },
     data: {
       displayName: 'Lan Anh',
@@ -181,68 +187,80 @@ test('customer authentication is a separate, headless-ready browser session', as
   })
   expect(registered.status()).toBe(201)
   const registration = (await registered.json()) as {
-    customer: { displayName: string; email: string }
-    csrfToken: string
+    data: { customer: { displayName: string; email: string }; csrfToken: string }
+    error: null
+    meta: { requestId: string }
   }
-  expect(registration.customer).toEqual({
+  expect(registration.data.customer).toEqual({
     id: expect.any(String),
     displayName: 'Lan Anh',
     email,
   })
-  expect(registration.csrfToken).toHaveLength(64)
+  expect(registration.data.csrfToken).toHaveLength(64)
+  expect(registration.meta.requestId).toMatch(/^req_/)
 
-  const session = await page.request.get('/api/website/v1/customer/session')
+  const session = await page.request.get('/api/customer/v1/me')
   expect(session.status()).toBe(200)
-  expect((await session.json()).authenticated).toBe(true)
+  expect((await session.json()).data.customer.email).toBe(email)
 
-  const noCsrf = await page.request.patch('/api/website/v1/customer/profile', {
-    headers: { Origin: origin },
-    data: { displayName: 'Lan Anh Updated' },
-  })
-  expect(noCsrf.status()).toBe(403)
-  const profile = await page.request.patch('/api/website/v1/customer/profile', {
-    headers: { Origin: origin, 'X-CSRF-Token': registration.csrfToken },
-    data: { displayName: 'Lan Anh Updated' },
-  })
-  expect(profile.status()).toBe(200)
-  expect((await profile.json()).customer.displayName).toBe('Lan Anh Updated')
-
-  const crossOrigin = await page.request.post('/api/website/v1/customer/auth/logout', {
-    headers: { Origin: 'https://evil.example', 'X-CSRF-Token': registration.csrfToken },
+  const crossOrigin = await page.request.post('/api/customer/v1/auth/logout', {
+    headers: { Origin: 'https://evil.example', 'X-CSRF-Token': registration.data.csrfToken },
   })
   expect(crossOrigin.status()).toBe(403)
-  const changed = await page.request.post('/api/website/v1/customer/password/change', {
-    headers: { Origin: origin, 'X-CSRF-Token': registration.csrfToken },
-    data: {
-      currentPassword: 'customer-password-old',
-      newPassword: 'customer-password-new',
-    },
+  const loggedOut = await page.request.post('/api/customer/v1/auth/logout', {
+    headers: { Origin: origin, 'X-CSRF-Token': registration.data.csrfToken },
   })
-  expect(changed.status()).toBe(200)
-  const rotated = (await changed.json()) as { csrfToken: string }
-  expect(rotated.csrfToken).not.toBe(registration.csrfToken)
+  expect(loggedOut.status()).toBe(200)
+  expect((await page.request.get('/api/customer/v1/me')).status()).toBe(401)
 
-  const loggedOut = await page.request.post('/api/website/v1/customer/auth/logout', {
-    headers: { Origin: origin, 'X-CSRF-Token': rotated.csrfToken },
-  })
-  expect(loggedOut.status()).toBe(204)
-  expect((await (await page.request.get('/api/website/v1/customer/session')).json()).authenticated).toBe(
-    false,
-  )
-  const oldPassword = await page.request.post('/api/website/v1/customer/auth/login', {
+  const browserLogin = await page.request.post('/api/customer/v1/auth/session/login', {
     headers: { Origin: origin },
     data: { email, password: 'customer-password-old' },
   })
-  expect(oldPassword.status()).toBe(401)
-  const newPassword = await page.request.post('/api/website/v1/customer/auth/login', {
-    headers: { Origin: origin },
-    data: { email, password: 'customer-password-new' },
+  expect(browserLogin.status()).toBe(200)
+
+  const tokenLogin = await page.request.post('/api/customer/v1/auth/token', {
+    headers: { 'X-Channel-Realm': 'site:default:hospitality-site' },
+    data: { email, password: 'customer-password-old' },
   })
-  expect(newPassword.status()).toBe(200)
+  expect(tokenLogin.status()).toBe(200)
+  const token = (await tokenLogin.json()).data as { accessToken: string; refreshToken: string }
+  const bearerMe = await page.request.get('/api/customer/v1/me', {
+    headers: { Authorization: `Bearer ${token.accessToken}` },
+  })
+  expect(bearerMe.status()).toBe(200)
+  expect((await bearerMe.json()).data.customer.email).toBe(email)
+  const genericTransport = await page.request.post('/_ket/fn/website.resolveSite', {
+    headers: { Authorization: `Bearer ${token.accessToken}` },
+    data: { host: '127.0.0.1' },
+  })
+  expect(genericTransport.status()).toBe(400)
+  expect((await genericTransport.json()).code).toBe('E_FN_NOT_PERMITTED')
+
+  const refreshed = await page.request.post('/api/customer/v1/auth/token/refresh', {
+    headers: { 'Idempotency-Key': 'customer-e2e-refresh-1' },
+    data: { refreshToken: token.refreshToken },
+  })
+  expect(refreshed.status()).toBe(200)
+  const refreshData = (await refreshed.json()).data as { accessToken: string; refreshToken: string }
+  expect(refreshData.accessToken).not.toBe(token.accessToken)
+  const replayed = await page.request.post('/api/customer/v1/auth/token/refresh', {
+    headers: { 'Idempotency-Key': 'customer-e2e-refresh-1' },
+    data: { refreshToken: token.refreshToken },
+  })
+  expect(replayed.status()).toBe(200)
+  expect((await replayed.json()).data).toEqual(refreshData)
+
+  const bootstrap = await page.request.get('/api/customer/v1/bootstrap')
+  expect(bootstrap.status()).toBe(200)
+  expect((await bootstrap.json()).data.capabilityRevision).toHaveLength(64)
+  const properties = await page.request.get('/api/customer/v1/hospitality/properties')
+  expect(properties.status()).toBe(200)
+  expect((await properties.json()).data).toEqual([])
 
   // The customer cookie coexists with, but never replaces, the backend admin session.
   await page.goto('/admin/sites?lang=en')
-  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
 })
 
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {

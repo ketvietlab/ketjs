@@ -87,7 +87,17 @@ export type ServeContext = {
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
   /** A function call carrying this request's tenant, live manifest and scope. */
-  call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
+  call: (
+    name: string,
+    input: Record<string, unknown>,
+    url: URL,
+    req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+    },
+  ) => Promise<unknown>
   /**
    * The same call with the permission check off.
    *
@@ -101,6 +111,11 @@ export type ServeContext = {
     input: Record<string, unknown>,
     url: URL,
     req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+    },
   ) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
@@ -182,6 +197,8 @@ export type ServeSpec = {
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
   /** Revalidate live account state and memberships before scope and permissions. */
   resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
+  /** Classify non-staff credentials so the generic function transport can fail closed. */
+  resolveAudience?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
   /**
    * Serve several tenants, one database each — the domain contract's model, and the one that
    * makes per-tenant module sets work. Absent, the app has a single datastore.
@@ -520,7 +537,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
-    callUnchecked: async (name, input, url, req) => {
+    callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
       return tenants.ofRequest(
@@ -533,12 +550,15 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               manifest: t.live,
               scope,
               actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
               queueNotify: config.queueNotify,
             })
           ).value,
       )
     },
-    call: async (name, input, url, req) => {
+    call: async (name, input, url, req, options) => {
       // One lease for the whole call: the scope and the allow-list are resolved
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
@@ -555,6 +575,9 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               scope,
               allow,
               actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
               queueNotify: config.queueNotify,
             })
           ).value,
@@ -632,8 +655,12 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
     if (!makeSessions) return null // no login exists yet; the shim is the identity
+    const audience = await serve.resolveAudience?.(url, req)
+    if (audience && audience !== 'anonymous' && audience !== 'staff') return []
     const record = await sessionRecordOf(url, req)
-    if (!record) return anonymousFns // a stranger, not an administrator
+    if (!record) {
+      return anonymousFns // a stranger, not an administrator
+    }
     if (!serve.permissions) return null
     const granted = await serve.permissions(ctx, record.userId)
     return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
@@ -699,6 +726,15 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
         module: spec.name,
         message: `app "${spec.name}" claims "${path}", which is reserved`,
         hint: '/_ket/ belongs to the framework: health, the agent descriptor, streams and assets',
+      })
+    }
+    const reservation = Object.entries(manifest.routePrefixes).find(([prefix]) => path.startsWith(prefix))
+    if (reservation) {
+      throw new KetError({
+        code: 'E_ROUTE_RESERVED',
+        module: spec.name,
+        message: `app "${spec.name}" claims "${path}", inside the prefix reserved by "${reservation[1]}"`,
+        hint: 'reserved API routes must be declared by modules through the published route factory',
       })
     }
     const owner = manifest.routes[path]?.by

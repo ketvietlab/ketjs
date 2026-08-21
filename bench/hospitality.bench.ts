@@ -1453,8 +1453,8 @@ try {
   await call(collisionKey, 'hospitality_core.setInventoryRange', {
     propertyId: 'property',
     roomTypeId: 'type:0',
-    from: '2027-01-10',
-    to: '2027-01-10',
+    from: onlineContentionCheckIn,
+    to: onlineContentionCheckIn,
     total: 1,
   })
   const reserveScarceInventory = (adapter: Adapter, suffix: string) =>

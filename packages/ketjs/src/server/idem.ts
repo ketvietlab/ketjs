@@ -10,19 +10,22 @@ CREATE TABLE IF NOT EXISTS ket_idem (
   fn         TEXT NOT NULL,
   state      TEXT NOT NULL,
   result     TEXT,
+  digest     TEXT,
   created_at TEXT NOT NULL
 );
 `
 
 export const IDEM_DDL_PG = IDEM_DDL.replace('created_at TEXT NOT NULL', 'created_at TIMESTAMPTZ NOT NULL')
 
-export type IdemRecord = { state: 'pending' | 'done'; result: unknown }
+export type IdemRecord = { state: 'pending' | 'done'; result: unknown; digest: string | null }
 
 export async function createIdempotency(adapter: Adapter, o: { now?: () => string } = {}) {
   const now = o.now ?? (() => new Date().toISOString())
   const pg = adapter.name === 'postgres'
   const p = (n: number) => (pg ? `$${n}` : '?')
   await adapter.exec(pg ? IDEM_DDL_PG : IDEM_DDL)
+  const table = (await adapter.introspect()).ket_idem ?? {}
+  if (!('digest' in table)) await adapter.exec('ALTER TABLE ket_idem ADD COLUMN digest TEXT')
 
   return {
     /**
@@ -33,27 +36,35 @@ export async function createIdempotency(adapter: Adapter, o: { now?: () => strin
      * taken over. This is a liveness/safety trade made explicit: too short and a
      * slow call gets run twice, too long and a stuck key blocks retries.
      */
-    async claim(key: string, fn: string, staleMs = 5 * 60_000): Promise<boolean> {
+    async claim(
+      key: string,
+      fn: string,
+      staleMs = 5 * 60_000,
+      digest: string | null = null,
+    ): Promise<boolean> {
       const r = await adapter.run(
-        `INSERT INTO ket_idem (key, fn, state, created_at) VALUES (${p(1)}, ${p(2)}, 'pending', ${p(3)}) ON CONFLICT DO NOTHING`,
-        [key, fn, now()],
+        `INSERT INTO ket_idem (key, fn, state, digest, created_at) VALUES (${p(1)}, ${p(2)}, 'pending', ${p(3)}, ${p(4)}) ON CONFLICT DO NOTHING`,
+        [key, fn, digest, now()],
       )
       if (r.changes === 1) return true
 
+      const existing = await adapter.all(`SELECT digest FROM ket_idem WHERE key = ${p(1)}`, [key])
+      if (digest && existing[0]?.digest && String(existing[0].digest) !== digest) return false
       const cutoff = new Date(Date.parse(now()) - staleMs).toISOString()
       const taken = await adapter.run(
-        `UPDATE ket_idem SET created_at = ${p(1)} WHERE key = ${p(2)} AND state = 'pending' AND created_at < ${p(3)}`,
-        [now(), key, cutoff],
+        `UPDATE ket_idem SET created_at = ${p(1)}, digest = ${p(2)} WHERE key = ${p(3)} AND state = 'pending' AND created_at < ${p(4)}`,
+        [now(), digest, key, cutoff],
       )
       return taken.changes === 1
     },
     async read(key: string): Promise<IdemRecord | null> {
-      const rows = await adapter.all(`SELECT state, result FROM ket_idem WHERE key = ${p(1)}`, [key])
+      const rows = await adapter.all(`SELECT state, result, digest FROM ket_idem WHERE key = ${p(1)}`, [key])
       const r = rows[0]
       if (!r) return null
       return {
         state: String(r.state) as IdemRecord['state'],
         result: r.result == null ? null : JSON.parse(String(r.result)),
+        digest: r.digest == null ? null : String(r.digest),
       }
     },
     async complete(key: string, result: unknown): Promise<void> {
