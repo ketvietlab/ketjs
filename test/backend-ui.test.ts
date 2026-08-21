@@ -579,6 +579,7 @@ test('form: required, help and error states are visible and semantically connect
         },
         { name: 'active', label: 'Active', type: 'checkbox', value: true },
         { name: 'checkIn', label: 'Check-in', type: 'time', value: '14:00', step: '60' },
+        { name: 'identityColor', label: 'Colour', type: 'color', value: '#2563eb' },
       ],
     }),
   )
@@ -591,6 +592,7 @@ test('form: required, help and error states are visible and semantically connect
   assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
   assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
   assert.match(html, /data-kind="time"[\s\S]*type="time"[\s\S]*value="14:00"[\s\S]*step="60"/)
+  assert.match(html, /data-kind="color"[\s\S]*type="color"[\s\S]*value="#2563eb"/)
 })
 
 test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {

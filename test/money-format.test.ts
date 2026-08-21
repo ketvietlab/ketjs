@@ -92,13 +92,30 @@ test('money format: every money-bearing backend module renders formatted list va
       [
         {
           id: 'room-type-1',
+          propertyId: 'property-1',
           code: 'DLX',
           name: 'Deluxe',
           defaultCapacity: 2,
           baseRate: 1234567,
           published: true,
+          active: true,
         },
       ],
+      [
+        {
+          id: 'property-1',
+          code: 'PROP',
+          name: 'Property',
+          accommodationType: 'hotel',
+          starRating: 0,
+          active: true,
+          rooms: 0,
+          availableRooms: 0,
+          attentionRooms: 0,
+        },
+      ],
+      'property-1',
+      'vi',
       {},
     ),
   ]
