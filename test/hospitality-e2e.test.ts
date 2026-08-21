@@ -347,6 +347,102 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(updatedRoomTypeHtml, /value="1950000"/)
   assert.doesNotMatch(updatedRoomTypeHtml, /hospitality_core\./)
 
+  const buildingCreated = await e2e.client.post(
+    `/admin/hospitality/rooms?property=${encodeURIComponent(createdPropertyId)}&lang=en`,
+    new URLSearchParams({
+      operation: 'save-building',
+      propertyId: createdPropertyId,
+      code: 'RIVER',
+      name: 'River Tower',
+      sequence: '10',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(buildingCreated.status, 303, await buildingCreated.clone().text())
+  const buildingPage = await e2e.client.get(buildingCreated.headers.get('location')!)
+  const buildingHtml = await buildingPage.text()
+  assert.match(buildingHtml, /Building added/)
+  assert.match(buildingHtml, /River Tower/)
+  const buildingId = buildingHtml.match(
+    /<select[^>]*name="buildingId"[^>]*>[\s\S]*?<option value="([^"]+)"/,
+  )?.[1]
+  assert.ok(buildingId)
+
+  const floorCreated = await e2e.client.post(
+    `/admin/hospitality/rooms?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
+    new URLSearchParams({
+      operation: 'save-floor',
+      propertyId: createdPropertyId,
+      buildingId,
+      code: '01',
+      name: 'Tầng sông',
+      sequence: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(floorCreated.status, 303, await floorCreated.clone().text())
+  const floorPage = await e2e.client.get(floorCreated.headers.get('location')!)
+  const floorHtml = await floorPage.text()
+  assert.match(floorHtml, /Đã thêm tầng/)
+  assert.match(floorHtml, /Tầng sông/)
+
+  const newRoom = await e2e.client.get(
+    `/admin/hospitality/rooms/new?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
+  )
+  const newRoomHtml = await newRoom.text()
+  assert.equal(newRoom.status, 200, newRoomHtml)
+  assert.match(newRoomHtml, /Tạo phòng vật lý/)
+  assert.doesNotMatch(newRoomHtml, /name="status"/)
+  const floorId = newRoomHtml.match(/<select[^>]*name="floorId"[^>]*>[\s\S]*?<option value="([^"]+)"/)?.[1]
+  assert.ok(floorId)
+
+  const createdRoomTypeId = roomTypeDetailPath.split('/').at(-1)!
+  const physicalRoomCreated = await e2e.client.post(
+    `/admin/hospitality/rooms/new?property=${encodeURIComponent(createdPropertyId)}&lang=vi`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      roomTypeId: createdRoomTypeId,
+      buildingId,
+      floorId,
+      code: 'R101',
+      name: 'Phòng ven sông 101',
+      capacity: '3',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(physicalRoomCreated.status, 303, await physicalRoomCreated.clone().text())
+  const roomLocation = physicalRoomCreated.headers.get('location') ?? ''
+  assert.match(roomLocation, /^\/admin\/hospitality\/rooms\/[^?]+\?status=created&lang=vi$/)
+  const roomDetailPath = roomLocation.split('?')[0]!
+  const physicalRoomPage = await e2e.client.get(roomLocation)
+  const physicalRoomHtml = await physicalRoomPage.text()
+  assert.match(physicalRoomHtml, /Đã tạo phòng vật lý/)
+  assert.match(physicalRoomHtml, /Phòng ven sông 101/)
+  assert.match(physicalRoomHtml, /River Tower · Tầng sông/)
+  assert.doesNotMatch(physicalRoomHtml, /name="status"/)
+  assert.doesNotMatch(physicalRoomHtml, /hospitality_core\./)
+
+  const physicalRoomUpdated = await e2e.client.post(
+    `${roomDetailPath}?lang=en`,
+    new URLSearchParams({
+      propertyId: createdPropertyId,
+      roomTypeId: createdRoomTypeId,
+      buildingId,
+      floorId,
+      code: 'R101',
+      name: 'River Room 101',
+      capacity: '4',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(physicalRoomUpdated.status, 303, await physicalRoomUpdated.clone().text())
+  const physicalRoomUpdatedPage = await e2e.client.get(physicalRoomUpdated.headers.get('location')!)
+  const physicalRoomUpdatedHtml = await physicalRoomUpdatedPage.text()
+  assert.match(physicalRoomUpdatedHtml, /Room settings saved/)
+  assert.match(physicalRoomUpdatedHtml, /River Room 101/)
+  assert.match(physicalRoomUpdatedHtml, /value="4"/)
+  assert.doesNotMatch(physicalRoomUpdatedHtml, /hospitality_core\./)
+
   const directQuote = await e2e.client.post(
     '/admin/hospitality/reservations',
     new URLSearchParams({
