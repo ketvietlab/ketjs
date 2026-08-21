@@ -8,10 +8,24 @@ functions, routes, jobs, themes, and agent capabilities into one checked manifes
 on this framework, but every KetJS primitive can also be used to build an independent application.
 
 :::caution[Development status]
-KetJS is currently version `0.0.0` and has not reached a stable release. APIs, data formats, CLI
+KetJS is currently in the `0.1.x` preview line and has not reached a stable release. APIs, data formats, CLI
 behavior, and deployment assumptions may change without notice. Do not treat the current version as
 production-ready.
 :::
+
+## Install
+
+Create a new SQLite-backed application directly from npm:
+
+```bash
+npx -y @ketvietlab/ketjs new my_app --dir ./my-app
+cd my-app
+npm install
+npm run dev
+```
+
+For an existing project, install the framework with `npm install @ketvietlab/ketjs`. Add
+`@ketvietlab/ketjs-postgres` and its `postgres` peer only when the application uses PostgreSQL.
 
 ## Design goals
 
