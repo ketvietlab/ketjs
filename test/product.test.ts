@@ -377,3 +377,94 @@ test('product: a search term is matched literally, wildcards included', async ()
   )
   await db.close()
 })
+
+test('product: relation pickers get the search and limit they always send', async () => {
+  const db = await boot()
+  for (const [id, name] of [
+    ['cat-root', 'Trang phục'],
+    ['cat-shirt', 'Áo sơ mi'],
+  ] as const)
+    await call(
+      'product.saveCategory',
+      { id, name, ...(id === 'cat-shirt' ? { parentId: 'cat-root' } : {}) },
+      db,
+    )
+  await call('product.saveAttribute', { id: 'size', name: 'Kích cỡ' }, db)
+  await call('product.saveAttributeValue', { id: 'size-m', attributeId: 'size', name: 'M' }, db)
+  await call('product.saveAttributeValue', { id: 'size-l', attributeId: 'size', name: 'L' }, db)
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+
+  // The picker sends both on every keystroke; an unknown input is a hard error,
+  // so accepting them is what makes these functions usable as a listFunction.
+  for (const [fn, args] of [
+    ['product.listCategories', { search: '', limit: 80 }],
+    ['product.listAttributes', { search: '', limit: 80 }],
+    ['product.listAttributeValues', { search: '', limit: 80 }],
+    ['uom.listUnits', { search: '', limit: 80 }],
+  ] as const) {
+    const rows = (await call(fn, args, db)).value as Row[]
+    assert.ok(Array.isArray(rows), `${fn} should accept search and limit`)
+  }
+
+  const narrowed = (await call('product.listCategories', { search: 'sơ mi' }, db)).value as Row[]
+  assert.deepEqual(
+    narrowed.map((row) => row.id),
+    ['cat-shirt'],
+  )
+  const capped = (await call('product.listAttributeValues', { limit: 1 }, db)).value as Row[]
+  assert.equal(capped.length, 1)
+  const scoped = (await call('product.listAttributeValues', { attributeId: 'size' }, db)).value as Row[]
+  assert.deepEqual(scoped.map((row) => row.id).sort(), ['size-l', 'size-m'])
+  await db.close()
+})
+
+test('product: a category carries its ancestry so a flat picker stays unambiguous', async () => {
+  const db = await boot()
+  await call('product.saveCategory', { id: 'top', name: 'Trang phục' }, db)
+  await call('product.saveCategory', { id: 'mid', name: 'Áo', parentId: 'top' }, db)
+  await call('product.saveCategory', { id: 'leaf', name: 'Sơ mi', parentId: 'mid' }, db)
+  const rows = (await call('product.listCategories', {}, db)).value as Row[]
+  const paths = new Map(rows.map((row) => [String(row.id), String(row.path)]))
+  assert.equal(paths.get('leaf'), 'Trang phục / Áo / Sơ mi')
+  assert.equal(paths.get('top'), 'Trang phục')
+  // Searching matches the ancestry too, so typing a parent finds its children.
+  const byParent = (await call('product.listCategories', { search: 'Trang phục' }, db)).value as Row[]
+  assert.equal(byParent.length, 3)
+  await db.close()
+})
+
+test('product: the unit picker can be held to one tree', async () => {
+  const db = await boot()
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+  await call('uom.saveUnit', { id: 'kg', name: 'Kilogram', relativeFactor: '1' }, db)
+  const tree = (await call('uom.listUnits', { rootId: 'ea', search: '', limit: 80 }, db)).value as Row[]
+  assert.deepEqual(
+    tree.map((row) => row.id).sort(),
+    ['box', 'ea'],
+    'a unit from another tree would be refused by setProductUom, so it is not offered',
+  )
+  await db.close()
+})
+
+test('product: a variant keeps its unit barcode when the unit itself changes', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+  await call('product.setProductUom', { productId: 'var', uomId: 'ea', barcode: 'SKU-1' }, db)
+
+  // The row holding SKU-1 is the one this call replaces, so it must not be read
+  // as a collision with itself.
+  const moved = await call('product.setProductUom', { productId: 'var', uomId: 'box', barcode: 'SKU-1' }, db)
+  assert.equal((moved.value as { ok: boolean; errors?: unknown }).ok, true, JSON.stringify(moved.value))
+  const after = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.equal(after.uoms.length, 1)
+  assert.equal(after.uoms[0]!.uomId, 'box')
+  assert.equal(after.uoms[0]!.barcode, 'SKU-1')
+
+  // A barcode held by a different variant is still a genuine collision.
+  await call('product.saveVariant', { id: 'var2', templateId: 'tpl' }, db)
+  const clash = await call('product.setProductUom', { productId: 'var2', uomId: 'ea', barcode: 'SKU-1' }, db)
+  assert.equal((clash.value as { ok: boolean }).ok, false)
+  await db.close()
+})

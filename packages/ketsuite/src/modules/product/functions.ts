@@ -22,6 +22,30 @@ import { emptyProductListState, productListSearch } from './search.ts'
 const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 /**
+ * The `search` and `limit` a relation picker sends, applied in memory.
+ *
+ * These lists are small and already fully loaded by their handler, so narrowing
+ * here costs nothing and keeps the picker's contract — a `search` term and a
+ * `limit` on every call — satisfiable without a second query path.
+ */
+const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields: string[]): Row[] => {
+  const needle = String(args.search ?? '')
+    .trim()
+    .toLocaleLowerCase()
+  const matched = needle
+    ? rows.filter((row) =>
+        fields.some((field) =>
+          String(row[field] ?? '')
+            .toLocaleLowerCase()
+            .includes(needle),
+        ),
+      )
+    : rows
+  const limit = Number(args.limit)
+  return Number.isInteger(limit) && limit > 0 ? matched.slice(0, limit) : matched
+}
+
+/**
  * A caller's list state is JSON, so it may be partial or the wrong shape entirely.
  * Filling every field from the empty state keeps `compileListFilter` and the group
  * walk working on the arrays they are typed to expect: `{ state: {} }` is a
@@ -145,15 +169,30 @@ const productUomTarget = async (
   }
 }
 
-/** The barcode index is `(companyId, barcode)`, so the check has to be too. */
+/**
+ * Whether a barcode is held by a row that will still exist after this write.
+ *
+ * The index is `(companyId, barcode)`, so the check is scoped to the company —
+ * and `ignoreIds` names the rows the caller is about to overwrite or delete.
+ * Without it, replacing a variant's unit while keeping its barcode collides with
+ * the very row the replacement removes.
+ */
 const productUomBarcodeTaken = async (
   ctx: Ctx,
   company: string,
   barcode: unknown,
-  id: string,
+  ignoreIds: Set<string>,
 ): Promise<boolean> =>
   (await ctx.db.select('product.ProductUom', { barcode })).some(
-    (row) => String(row.companyId) === company && String(row.id) !== id,
+    (row) => String(row.companyId) === company && !ignoreIds.has(String(row.id)),
+  )
+
+/** The ids this company holds for a variant — every row a replace will drop. */
+const productUomIds = async (ctx: Ctx, company: string, productId: unknown): Promise<Set<string>> =>
+  new Set(
+    (await ctx.db.select('product.ProductUom', { productId }))
+      .filter((row) => String(row.companyId) === company)
+      .map((row) => String(row.id)),
   )
 
 const writeProductUom = async (ctx: Ctx, target: UomTarget, args: Record<string, unknown>): Promise<void> => {
@@ -217,12 +256,35 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listAttributes: defineFn({
-    input: {},
+    input: { search: 'text?', limit: 'int?' },
     effects: ['read:product.Attribute', 'read:product.AttributeValue'],
     agent: true,
-    handler: (ctx) => {
+    handler: async (ctx, args) => {
       const A = ctx.table('product.Attribute')
-      return ctx.db.all(from(A).orderBy(asc(A.sequence), asc(A.name)).preload('values'))
+      const rows = await ctx.db.all(from(A).orderBy(asc(A.sequence), asc(A.name)).preload('values'))
+      return narrow(rows, args, ['name'])
+    },
+  }),
+
+  /**
+   * Attribute values on their own, rather than nested inside their attribute.
+   *
+   * A picker asks for the values of one attribute and narrows them as the user
+   * types; reaching them through `listAttributes` would mean shipping every
+   * attribute's values to filter one attribute's worth in the browser.
+   */
+  listAttributeValues: defineFn({
+    input: { attributeId: 'id?', search: 'text?', limit: 'int?' },
+    output: { id: 'id', attributeId: 'id', name: 'text', sequence: 'int' },
+    effects: ['read:product.AttributeValue'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const V = ctx.table('product.AttributeValue')
+      const base = from(V).orderBy(asc(V.sequence), asc(V.name))
+      const rows = await ctx.db.all(
+        args.attributeId == null ? base : base.where(eq(V.attributeId, args.attributeId)),
+      )
+      return narrow(rows, args, ['name'])
     },
   }),
 
@@ -710,7 +772,12 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const target = await productUomTarget(ctx, args)
       if (!target.ok) return target
-      if (args.barcode && (await productUomBarcodeTaken(ctx, target.company, args.barcode, target.id)))
+      // Only this row is overwritten; another unit of the same variant keeping
+      // the barcode is a genuine collision.
+      if (
+        args.barcode &&
+        (await productUomBarcodeTaken(ctx, target.company, args.barcode, new Set([target.id])))
+      )
         return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng trong company' }] }
       await writeProductUom(ctx, target, args)
       return { ok: true, id: target.id }
@@ -751,7 +818,12 @@ export const functions: Record<string, FnSpec> = {
       }
       const target = await productUomTarget(ctx, args)
       if (!target.ok) return target
-      if (args.barcode && (await productUomBarcodeTaken(ctx, company, args.barcode, target.id)))
+      // Every unit this variant currently holds is about to be dropped, so none
+      // of them can collide — including the one whose barcode is being carried
+      // over to the unit replacing it.
+      const replaced = await productUomIds(ctx, company, args.productId)
+      replaced.add(target.id)
+      if (args.barcode && (await productUomBarcodeTaken(ctx, company, args.barcode, replaced)))
         return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng trong company' }] }
       await ctx.tx(async (tx) => {
         await dropProductUoms(tx, company, args.productId, target.id)
@@ -774,16 +846,34 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listCategories: defineFn({
-    input: {},
-    output: { id: 'id', name: 'text', parentId: 'id?', children: 'json?' },
+    input: { search: 'text?', limit: 'int?' },
+    output: { id: 'id', name: 'text', parentId: 'id?', path: 'text?', children: 'json?' },
     effects: ['read:product.Category'],
     agent: true,
-    handler: (ctx) =>
-      ctx.db.all(
-        from(ctx.table('product.Category'))
-          .orderBy(asc(ctx.table('product.Category').name))
-          .preload('children'),
-      ),
+    handler: async (ctx, args) => {
+      const C = ctx.table('product.Category')
+      const rows = await ctx.db.all(from(C).orderBy(asc(C.name)).preload('children'))
+      // A category is a node in a tree, and two branches may well hold a "Shirts".
+      // `path` spells the ancestry out so a flat picker list stays unambiguous;
+      // it is derived here rather than stored, and searching matches on it too.
+      const byId = new Map(rows.map((row) => [String(row.id), row]))
+      const pathOf = (row: Row): string => {
+        const parts: string[] = []
+        const seen = new Set<string>()
+        let cursor: Row | undefined = row
+        while (cursor && !seen.has(String(cursor.id))) {
+          seen.add(String(cursor.id))
+          parts.unshift(String(cursor.name))
+          cursor = cursor.parentId == null ? undefined : byId.get(String(cursor.parentId))
+        }
+        return parts.join(' / ')
+      }
+      return narrow(
+        rows.map((row) => ({ ...row, path: pathOf(row) })),
+        args,
+        ['name', 'path'],
+      )
+    },
   }),
 
   saveCategory: defineFn({

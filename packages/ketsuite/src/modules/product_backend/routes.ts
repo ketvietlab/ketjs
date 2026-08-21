@@ -29,6 +29,7 @@ import {
 } from './screens.tsx'
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
+import { attributeControl, attributeValuesControl, categoryControl, uomControl } from './relation-control.ts'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup } from '../../ui/index.ts'
@@ -110,10 +111,42 @@ const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]
     ctx.call('product.listAttributes', {}, url, req),
   ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, Array<Record<string, unknown>>]
   return {
+    // Kept raw alongside the options so a caller can reach `parentPath` and work
+    // out which unit tree a template sits in.
+    unitRows: units,
     uoms: units.map((row) => ({ value: String(row.id), label: String(row.name) })),
-    categories: categories.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    categories: categories.map((row) => ({
+      value: String(row.id),
+      label: String(row.name),
+      // The ancestry, so two "Shirts" under different parents stay distinguishable.
+      description: row.path == null ? null : String(row.path),
+    })),
     attributes: attributes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    // Values come nested inside their attribute here, and carry the attribute's
+    // name as their description — the value picker spans every attribute, so
+    // "Đỏ" on its own would not say which attribute it belongs to.
+    attributeValues: attributes.flatMap((attribute) =>
+      (Array.isArray(attribute.values) ? (attribute.values as Array<Record<string, unknown>>) : []).map(
+        (value) => ({
+          value: String(value.id),
+          label: String(value.name),
+          description: String(attribute.name),
+        }),
+      ),
+    ),
   }
+}
+
+/**
+ * The root of the unit tree a template's default unit belongs to.
+ *
+ * A variant's unit is refused unless it shares this root, so the picker is given
+ * the root and offers nothing that would be rejected.
+ */
+const unitRootOf = (units: Array<Record<string, unknown>>, uomId: unknown): string | null => {
+  if (uomId == null) return null
+  const unit = units.find((row) => String(row.id) === String(uomId))
+  return unit ? (String(unit.parentPath).split('/').filter(Boolean)[0] ?? null) : null
 }
 
 const invalidErrors = (url: URL, _: ReturnType<ServeContext['translate']>) =>
@@ -735,12 +768,19 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
+      const controls = {
+        uom: await uomControl(ctx, url, req, _, { id: 'product-create-uom', units: options.uoms }),
+        category: await categoryControl(ctx, url, req, _, {
+          id: 'product-create-category',
+          categories: options.categories,
+        }),
+      }
       return adminPage(ctx, url, req, {
         title: 'product_backend.create.title',
         body: (_, frame) =>
           newProductScreen(
             _,
-            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
+            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _), controls },
             frame,
             localeQuery(url),
           ),
@@ -951,6 +991,31 @@ export const routes: Record<string, RouteEntry> = {
           variants,
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
+          controls: {
+            uom: await uomControl(ctx, url, req, _, {
+              id: `product-uom:${row.id}`,
+              value: row.uomId,
+              units: options.uoms,
+            }),
+            category: await categoryControl(ctx, url, req, _, {
+              id: `product-category:${row.id}`,
+              value: row.categoryId,
+              categories: options.categories,
+            }),
+            attribute: await attributeControl(ctx, url, req, _, {
+              id: `product-attribute:${row.id}`,
+              attributes: options.attributes,
+              required: true,
+            }),
+            // The value picker cannot be scoped to an attribute yet — the two are
+            // separate fields and the attribute is only known once chosen — so it
+            // lists every value, each labelled with the attribute it belongs to.
+            attributeValues: await attributeValuesControl(ctx, url, req, _, {
+              id: `product-attribute-values:${row.id}`,
+              choices: options.attributeValues,
+              required: true,
+            }),
+          },
           editor: savedPartial
             ? ''
             : await ctx.joint(url, req, 'product_backend:template.editor', {
@@ -1111,12 +1176,27 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('product.getTemplate', { id: params.id }, url, req) as Promise<{
           id: string
           name: string
+          uomId?: string | null
         } | null>,
         optionsFor(ctx, url, req),
         variantMediaFor(ctx, url, req, params.variantId),
       ])
       if (!current || current.templateId !== params.id || !template)
         return text('Variant not found', { status: 404 })
+      // Both the picker and the plain select behind it are held to the template's
+      // unit tree, so a unit that `setProductUom` would refuse is never offered.
+      const unitRoot = unitRootOf(options.unitRows, template.uomId)
+      const treeUnits = unitRoot
+        ? options.uoms.filter((unit) => unitRootOf(options.unitRows, unit.value) === unitRoot)
+        : options.uoms
+      const variantUom = await uomControl(ctx, url, req, _, {
+        id: `variant-uom:${params.variantId}`,
+        value: Array.isArray(current.uoms)
+          ? ((current.uoms[0] as Record<string, unknown> | undefined)?.uomId as string | undefined)
+          : undefined,
+        units: treeUnits,
+        rootId: unitRoot,
+      })
       const body = variantScreen(
         _,
         params.id,
@@ -1175,7 +1255,7 @@ export const routes: Record<string, RouteEntry> = {
                 productId: params.variantId,
               }),
         },
-        options.uoms,
+        treeUnits,
         template,
         savedPartial
           ? ''
@@ -1196,6 +1276,7 @@ export const routes: Record<string, RouteEntry> = {
             }),
         activeTab,
         savedPartial,
+        variantUom,
       )
       if (savedPartial)
         return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })

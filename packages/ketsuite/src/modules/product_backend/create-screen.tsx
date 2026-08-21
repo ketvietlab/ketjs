@@ -10,6 +10,8 @@ type ProductCreateOptions = {
   categories: FormOption[]
   stockEnabled?: boolean
   errors?: string[]
+  /** Relation pickers from the route; each falls back to the select beside it. */
+  controls?: { uom?: JSXChild; category?: JSXChild }
 }
 
 /** A stable product code in the reader's language; the code itself survives as data. */
@@ -76,12 +78,14 @@ export const newProductScreen = (
           // the browser preselects the first unit and every product is born with
           // a unit nobody chose.
           options: [{ value: '', label: '—' }, ...options.uoms],
+          ...(options.controls?.uom ? { control: options.controls.uom } : {}),
         },
         {
           name: 'categoryId',
           label: _('product_backend.field.category'),
           type: 'select',
           options: [{ value: '', label: '—' }, ...options.categories],
+          ...(options.controls?.category ? { control: options.controls.category } : {}),
         },
         {
           name: 'listPrice',

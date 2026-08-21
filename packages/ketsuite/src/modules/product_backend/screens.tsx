@@ -222,6 +222,17 @@ export const productDetailScreen = (
     stockEnabled?: boolean
     errors?: string[]
     editor?: JSXChild
+    /**
+     * Relation pickers, built by the route because they need a request to reach
+     * their joint. Absent ones fall back to the plain select beside them, so this
+     * screen still renders from a bare options list.
+     */
+    controls?: {
+      uom?: JSXChild
+      category?: JSXChild
+      attribute?: JSXChild
+      attributeValues?: JSXChild
+    }
   },
   collaboration: JSXChild,
   frame: Frame = {},
@@ -278,6 +289,7 @@ export const productDetailScreen = (
           type: 'select',
           value: row.uomId,
           options: [{ value: '', label: '—' }, ...management.uoms],
+          ...(management.controls?.uom ? { control: management.controls.uom } : {}),
         },
         {
           name: 'categoryId',
@@ -285,6 +297,7 @@ export const productDetailScreen = (
           type: 'select',
           value: row.categoryId,
           options: [{ value: '', label: '—' }, ...management.categories],
+          ...(management.controls?.category ? { control: management.controls.category } : {}),
         },
         {
           name: 'listPrice',
@@ -380,12 +393,19 @@ export const productDetailScreen = (
                   type: 'select',
                   options: management.attributes,
                   required: true,
+                  ...(management.controls?.attribute ? { control: management.controls.attribute } : {}),
                 },
                 {
                   name: 'valueIds',
                   label: _('product_backend.attributes.values'),
                   help: _('product_backend.attributes.valuesHint'),
                   required: true,
+                  // Its own row: the chips grow downward, and a half-width
+                  // neighbour would be left centred against a stack of them.
+                  span: 'full' as const,
+                  ...(management.controls?.attributeValues
+                    ? { control: management.controls.attributeValues }
+                    : {}),
                 },
               ]}
             />
@@ -504,6 +524,7 @@ export const variantScreen = (
   editor?: JSXChild,
   activeTab: VariantDetailTab = 'general',
   partial = false,
+  uomControl?: JSXChild,
 ): TemplateResult => {
   const images = media.images ?? []
   const primaryImage = images.find((image) => image.primary) ?? images[0]
@@ -558,6 +579,7 @@ export const variantScreen = (
           type: 'select',
           value: productUom?.uomId ? String(productUom.uomId) : '',
           options: [{ value: '', label: '—' }, ...uoms],
+          ...(uomControl ? { control: uomControl } : {}),
         },
         {
           name: 'uomBarcode',
