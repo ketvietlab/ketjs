@@ -34,6 +34,7 @@ test('development bootstrap creates admin/admin once on an empty SQLite database
   const database = join(dir, 'ketsuite.db')
   const env = {
     ...process.env,
+    DATABASE_URL: undefined,
     KET_SQLITE: database,
     KET_STORAGE_DIR: join(dir, 'storage'),
   }
