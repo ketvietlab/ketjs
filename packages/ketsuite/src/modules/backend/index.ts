@@ -4,7 +4,7 @@
 // written in a restricted language that cannot run (D3, D18). A backend screen is
 // ours: it needs forms, filters and real interaction, so it is written in `html`
 // with islands like any trusted view. Letting a third party replace a backend
-// template is precisely the mechanism that made Odoo's upgrades painful.
+// template is precisely the mechanism that made the domain contract's upgrades painful.
 //
 // What a third party — or a design team — does own here is the stylesheet and the
 // tokens. See design/HANDOFF.md.

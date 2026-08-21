@@ -1,7 +1,7 @@
 // Schema is derived from the manifest, never hand-written; migrations are generated
 // as reviewable operations, never applied silently.
 //
-// The Odoo lesson encoded as a rule: destructive operations are still generated so
+// The the domain contract lesson encoded as a rule: destructive operations are still generated so
 // you can see them, but refused unless explicitly allowed. "Don't drop fields"
 // stops being discipline someone has to remember and becomes something the tool enforces.
 

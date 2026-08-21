@@ -1,5 +1,5 @@
 // Build a deterministic KetSuite address catalog from the JSON maintained by
-// Vidoo's Odoo 19 Vietnam localisation. This is a development tool only: the
+// Vidoo Vietnam Address Core data. This is a development tool only: the
 // resulting bundle ships with KetSuite and production never reads another repo
 // or fetches a remote URL.
 

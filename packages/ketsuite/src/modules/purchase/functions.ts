@@ -75,7 +75,7 @@ async function supplierPrice(
 
 function taxAmounts(tax: Row | null, gross: number, quantity: number) {
   if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported Odoo 19 subset')
+  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported subset')
   const amount = n(tax.amount)
   let untaxed = money(gross)
   let taxAmount = 0
@@ -382,8 +382,7 @@ export const functions: Record<string, FnSpec> = {
         return invalid('partnerId', 'vendor does not exist')
       if (!(await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0])
         return invalid('pickingTypeId', 'receipt operation type does not exist')
-      if (!String(args.partnerRef).trim())
-        return invalid('partnerRef', 'vendor reference is required in Odoo 19')
+      if (!String(args.partnerRef).trim()) return invalid('partnerRef', 'vendor reference is required')
       const dateOrder = String(args.dateOrder ?? now())
       const name = await nextName(ctx)
       await ctx.db.insert('purchase.Order', {

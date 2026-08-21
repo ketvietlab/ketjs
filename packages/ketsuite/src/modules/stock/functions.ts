@@ -58,7 +58,7 @@ async function mutateQuant(
   for (let attempt = 0; attempt < 8; attempt++) {
     const current = (await ctx.db.select('stock.Quant', { id }))[0]
     if (!current) {
-      // Odoo keeps the other side of completed moves on supplier, customer and
+      // the domain contract keeps the other side of completed moves on supplier, customer and
       // inventory locations as well. Those virtual locations legitimately carry
       // negative quantities; only a positive physical balance can be reserved.
       if (args.reserved < 0 || args.reserved > Math.max(args.quantity, 0))
@@ -448,7 +448,7 @@ export const functions: Record<string, FnSpec> = {
 
         // The subset executes route chains backwards from demand, so each leg is
         // represented as a pull rule. The resulting locations and operation types
-        // match Odoo 19's receipt/delivery topology.
+        // match the domain contract's receipt/delivery topology.
         const ruleDefinitions = [
           {
             id: `${warehouseId}:receipt:supplier-stock`,

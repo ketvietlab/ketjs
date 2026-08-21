@@ -33,6 +33,14 @@ if (!Number.isInteger(roomsPerDatabase) || roomsPerDatabase < 1)
 if (!Number.isInteger(readPasses) || readPasses < 1) throw new Error('KET_BENCH_READS must be >= 1')
 if (!Number.isInteger(reservationsPerDatabase) || reservationsPerDatabase < 2)
   throw new Error('KET_BENCH_RESERVATIONS must be >= 2')
+const onlineDate = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+const onlineQuoteCheckIn = onlineDate(10)
+const onlineQuoteCheckOut = onlineDate(12)
+const onlineContentionCheckIn = onlineDate(20)
+const onlineContentionCheckOut = onlineDate(21)
+const onlineBookingCheckIn = onlineDate(30)
+const onlineBookingCheckOut = onlineDate(32)
 
 const keys = Array.from(
   { length: databaseCount },
@@ -737,15 +745,16 @@ try {
   await Promise.all(
     keys.map(async (key) => {
       for (let quote = 0; quote < reservationsPerDatabase; quote++) {
-        const result = await call(key, 'hospitality_core.quoteReservation', {
+        const result = await call(key, 'hospitality_core.quoteAvailability', {
           propertyId: 'property',
           roomTypeId: `type:${quote % 12}`,
-          bookingType: 'nightly',
-          checkIn: '2026-09-01T14:00:00.000Z',
-          checkOut: '2026-09-03T12:00:00.000Z',
+          checkIn: onlineQuoteCheckIn,
+          checkOut: onlineQuoteCheckOut,
+          adults: 1,
         })
-        const value = result.value as { ok: boolean; minimumAvailable?: number }
-        if (!value.ok || Number(value.minimumAvailable) < 1) throw new Error(`${key}: quote failed`)
+        const value = result.value as { ok: boolean; items?: Array<{ availableQuantity: number }> }
+        if (!value.ok || Number(value.items?.[0]?.availableQuantity) < 1)
+          throw new Error(`${key}: online quote failed`)
       }
     }),
   )
@@ -1449,15 +1458,15 @@ try {
     total: 1,
   })
   const reserveScarceInventory = (adapter: Adapter, suffix: string) =>
-    callWith(adapter, collisionKey, 'hospitality_core.createReservation', {
+    callWith(adapter, collisionKey, 'hospitality_core.createOnlineReservation', {
       id: `inventory-collision:${suffix}`,
+      requestKey: `inventory-collision:${suffix}`,
       propertyId: 'property',
       roomTypeId: 'type:0',
       partnerId: 'guest',
-      bookingType: 'nightly',
-      checkIn: '2027-01-10T14:00:00.000Z',
-      checkOut: '2027-01-11T12:00:00.000Z',
-      rate: '1000000',
+      checkIn: onlineContentionCheckIn,
+      checkOut: onlineContentionCheckOut,
+      adults: 1,
     })
   const inventoryCollisionResults =
     contender === null
@@ -1654,6 +1663,31 @@ try {
   if (!noShowsMatch)
     throw new Error(`no-show lifecycle lost state or charges: ${JSON.stringify(noShowResults)}`)
 
+  const catalogStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let pass = 0; pass < readPasses; pass++) {
+        const properties = (
+          await call(key, 'hospitality_core.listPropertyCatalog', {
+            propertyIds: ['property'],
+            limit: 20,
+          })
+        ).value as Array<Record<string, unknown>>
+        const roomTypes = (
+          await call(key, 'hospitality_core.listRoomTypeCatalog', {
+            propertyId: 'property',
+            limit: 20,
+          })
+        ).value as Array<Record<string, unknown>>
+        if (properties.length !== 1 || properties[0]?.companyId !== key || 'rooms' in properties[0]!)
+          throw new Error(`${key}: property catalog projection is not safe or company-owned`)
+        if (roomTypes.length !== 12 || roomTypes.some((row) => row.companyId !== key || 'rooms' in row))
+          throw new Error(`${key}: room catalog projection is not safe or company-owned`)
+      }
+    }),
+  )
+  const catalogMs = performance.now() - catalogStarted
+
   const readStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1844,6 +1878,28 @@ try {
       count === serviceIntentionsPerDatabase + expectedAuditServices + (key === collisionKey ? 1 : 0),
   )
   if (!idempotentServiceCountsMatch) throw new Error('service materialisation created duplicate charges')
+
+  const onlineReservationsPerDatabase = Math.min(reservationsPerDatabase, 24)
+  const onlineBookingStarted = performance.now()
+  await Promise.all(
+    keys.map(async (key) => {
+      for (let booking = 0; booking < onlineReservationsPerDatabase; booking++) {
+        const result = await call(key, 'hospitality_core.createOnlineReservation', {
+          id: `online-benchmark:${booking}`,
+          requestKey: `online-benchmark:${booking}`,
+          propertyId: 'property',
+          roomTypeId: `type:${booking % 12}`,
+          partnerId: 'guest',
+          checkIn: onlineBookingCheckIn,
+          checkOut: onlineBookingCheckOut,
+          adults: 1,
+        })
+        if (!(result.value as { ok: boolean }).ok)
+          throw new Error(`${key}: online reservation benchmark failed`)
+      }
+    }),
+  )
+  const onlineBookingMs = performance.now() - onlineBookingStarted
   console.log(
     JSON.stringify(
       {
@@ -1878,6 +1934,9 @@ try {
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),
+        catalogQueries: totalReads * 2,
+        catalogMs: Number(catalogMs.toFixed(1)),
+        catalogQueriesPerSecond: Math.round((totalReads * 2 * 1_000) / catalogMs),
         ratePlans: databaseCount * 12,
         inventoryDaysConfigured: databaseCount * 12 * 3,
         restrictionDaysConfigured: databaseCount * 7,
@@ -1890,6 +1949,11 @@ try {
         quoteIsReadOnly,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
+        onlineReservations: databaseCount * onlineReservationsPerDatabase,
+        onlineBookingMs: Number(onlineBookingMs.toFixed(1)),
+        onlineBookingsPerSecond: Math.round(
+          (databaseCount * onlineReservationsPerDatabase * 1_000) / onlineBookingMs,
+        ),
         reservationAmendments: databaseCount * amendmentIndexes.length,
         amendmentMs: Number(amendmentMs.toFixed(1)),
         amendmentsPerSecond: amendmentIndexes.length

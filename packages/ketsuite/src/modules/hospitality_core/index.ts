@@ -1,9 +1,11 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
+import { catalog } from './catalog.ts'
 import { housekeeping } from './housekeeping.ts'
 import { content } from './content.ts'
 import { inventory } from './inventory.ts'
 import { nightAuditFunctions, nightAuditJobs } from './night-audit.ts'
+import { onlineBooking } from './online-booking.ts'
 import { operations } from './operations.ts'
 import { services } from './services.ts'
 import { stayNoticeFunctions, stayNoticeJobs } from './stay-notices.ts'
@@ -16,7 +18,7 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'hospitality_core',
   version: '0.1.0',
-  depends: ['backend', 'storage', 'partner', 'address', 'uom', 'product'],
+  depends: ['backend', 'company', 'storage', 'partner', 'address', 'uom', 'product'],
   app: true,
   title: 'Khách sạn',
   summary: 'Cơ sở lưu trú, loại phòng, phòng, tiện nghi và chính sách vận hành.',
@@ -25,7 +27,9 @@ export default defineModule({
   relations,
   functions: {
     ...functions,
+    ...catalog,
     ...inventory,
+    ...onlineBooking,
     ...operations,
     ...housekeeping,
     ...content,

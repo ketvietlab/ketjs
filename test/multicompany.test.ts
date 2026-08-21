@@ -17,7 +17,7 @@ import type { Adapter, Ctx, Manifest, Scope } from '@ketvietlab/ketjs'
 /**
  * Reads span a set of companies, writes go to exactly one.
  *
- * Odoo splits allowed_company_ids from company_id and the split is right: a report
+ * the domain contract splits readable company set from company_id and the split is right: a report
  * may span three legal entities, but an invoice belongs to one. Absent a set, reads
  * see only the company being written to — widening what you can see should take
  * saying so.

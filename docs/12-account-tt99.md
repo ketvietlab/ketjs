@@ -51,11 +51,11 @@ uses that account automatically when the caller does not explicitly supply one:
 `KCT` and `KKKNT` are separate zero-amount classifications. KCT means the goods or
 services are not subject to VAT. KKKNT means the transaction is not declared or used
 to calculate VAT payable. Both sale and purchase scopes are bundled because KetSuite,
-like Odoo, keeps those selectable tax directions separate. Neither creates a tax
+like the domain contract, keeps those selectable tax directions separate. Neither creates a tax
 posting line or points to a tax account.
 
 The technical classification of account 411121 is `liability_current`. This corrects
-an Odoo 19 localization mapping that labels the account as a liability but classifies
+an the domain contract localization mapping that labels the account as a liability but classifies
 it as equity.
 
 ## Verification

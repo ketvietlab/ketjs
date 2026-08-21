@@ -30,6 +30,7 @@ const SQL: Record<FieldBase, string> = {
 export function sqliteAdapter(path = ':memory:'): Adapter {
   let db: DatabaseSync | null = null
   let inTransaction = false
+  let transactionTail: Promise<void> = Promise.resolve()
   const need = (): DatabaseSync => {
     if (!db) throw new Error('adapter is not open()')
     return db
@@ -67,18 +68,27 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
       return { changes: Number(r.changes) }
     },
     async tx(fn) {
-      const d = need()
-      d.exec('BEGIN')
-      inTransaction = true
+      const previous = transactionTail
+      let release!: () => void
+      transactionTail = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      await previous
+      let began = false
       try {
+        const d = need()
+        d.exec('BEGIN')
+        began = true
+        inTransaction = true
         const r = await fn(a)
         d.exec('COMMIT')
         return r
       } catch (e) {
-        d.exec('ROLLBACK')
+        if (began) need().exec('ROLLBACK')
         throw e
       } finally {
         inTransaction = false
+        release()
       }
     },
     quoteIdent(n) {

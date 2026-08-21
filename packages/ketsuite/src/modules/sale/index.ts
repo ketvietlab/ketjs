@@ -10,7 +10,7 @@ export default defineModule({
   depends: ['company', 'partner', 'product', 'uom', 'pricing', 'stock', 'account'],
   app: true,
   title: 'Bán hàng',
-  summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng theo Odoo 19.',
+  summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Bán hàng',
   models,
   extend: {
@@ -24,7 +24,7 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Bán hàng',
-      'app.summary': 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng theo Odoo 19.',
+      'app.summary': 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
       'app.category': 'Bán hàng',
       'report.quotation': 'BÁO GIÁ',
       'report.salesOrder': 'ĐƠN BÁN HÀNG',
@@ -41,7 +41,7 @@ export default defineModule({
     },
     en: {
       'app.title': 'Sales',
-      'app.summary': 'Odoo 19 quotations, sales orders, deliveries, and customer invoices.',
+      'app.summary': 'Quotations, sales orders, deliveries, and customer invoices.',
       'app.category': 'Sales',
       'report.quotation': 'QUOTATION',
       'report.salesOrder': 'SALES ORDER',

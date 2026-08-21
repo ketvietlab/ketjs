@@ -20,7 +20,7 @@ Honest list of what is not settled or not built.
   composition schema but not wired to rendering.
 - **How much may `unsafe_patch` do?** The manifest slot and diff surfacing exist;
   no runtime patching is implemented. Deciding this too generously is the failure
-  mode that produced Odoo's upgrade debt.
+  mode that produced the domain contract's upgrade debt.
 - **Streams poll.** `tail()` polls the log every 10ms. Correct and durable, but a
   notify path (`LISTEN/NOTIFY` on Postgres, an emitter on SQLite) should replace it.
 - **Editor support for KTL.** No language server, so a theme author gets no

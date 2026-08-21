@@ -1,6 +1,6 @@
 // What the admin puts in the sidebar.
 //
-// Data, not rows in a table. Odoo keeps menus in the database, which is why an
+// Data, not rows in a table. the domain contract keeps menus in the database, which is why an
 // upgrade can leave a menu pointing at an action that no longer exists, and why
 // "who put this here" is answered by an XML id rather than by a file. Declared in
 // the module, a menu arrives and leaves with the code that serves it.
