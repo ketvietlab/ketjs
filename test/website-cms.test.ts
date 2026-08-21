@@ -10,7 +10,16 @@ import {
   sqliteAdapter,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
-import { address, paperTheme, partner, website, websiteForm, websiteMenu, websiteSeo } from 'ketsuite'
+import {
+  address,
+  paperTheme,
+  partner,
+  website,
+  websiteBackend,
+  websiteForm,
+  websiteMenu,
+  websiteSeo,
+} from 'ketsuite'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const SCOPE = { company: 'acme', branches: null }
@@ -47,6 +56,18 @@ test('cms: content types and taxonomies compose into a discoverable registry', (
   assert.deepEqual(Object.keys(manifest.contentTypes).sort(), ['website.page', 'website.post'])
   assert.deepEqual(manifest.contentTypes['website.post']?.taxonomies, ['website.category', 'website.tag'])
   assert.deepEqual(manifest.taxonomies['website.category']?.contentTypes, ['website.post'])
+})
+
+test('website backend: owns a primary application menu instead of hiding under administration', () => {
+  assert.deepEqual(websiteBackend.menus?.website, {
+    label: 'menu.app',
+    icon: 'globe',
+    sequence: 18,
+  })
+  assert.equal(websiteBackend.menus?.['website.content']?.parent, 'website')
+  assert.equal(websiteBackend.menus?.['website.configuration']?.parent, 'website')
+  assert.equal(websiteBackend.menus?.['website.sites']?.parent, 'website.configuration')
+  assert.equal('admin.website' in (websiteBackend.menus ?? {}), false)
 })
 
 test('cms: domains resolve isolated sites with their locale and selected KTL theme', async () => {
