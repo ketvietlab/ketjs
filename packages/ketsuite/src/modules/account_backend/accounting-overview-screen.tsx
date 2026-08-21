@@ -49,7 +49,7 @@ const cards = (_: Translator, locale: string, items: OverviewCard[]): TemplateRe
 
 export const accountingOverviewScreen = (
   _: Translator,
-  options: { counts: Counts; frame: Frame; locale: string },
+  options: { counts: Counts; frame: Frame; locale: string; standard: string },
 ): TemplateResult => {
   const { counts } = options
   return framed(
@@ -59,7 +59,7 @@ export const accountingOverviewScreen = (
     <RecordWorkspace
       kicker={_('account_backend.dashboard.kicker')}
       title={_('account_backend.dashboard.title')}
-      subtitle={_('account_backend.dashboard.subtitle')}
+      subtitle={`${_('account_backend.dashboard.subtitle')} · ${options.standard}`}
       imageFallback={icon('banknote')}
       summary={[
         { id: 'draft', label: _('account_backend.dashboard.draft'), value: counts.draft },

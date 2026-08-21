@@ -1934,3 +1934,19 @@ Archiving, check-in, manual status changes and task creation all compare the sam
 `active + status` row version, so only one concurrent operation can win. Restoration
 requires the property, room type, building and floor to be active and returns the room
 to the front-desk candidate set without deleting its assignment, stay or task history.
+
+## D64 — Accounting includes one mandatory Vietnam TT99 data pack
+
+The `account` module owns the data that makes Accounting usable. KetSuite does not
+split country data into an `account_localization` application and does not expose a
+Circular 200/Circular 99 selector. For a Vietnam company, the first Accounting read
+installs the `TT99_2025` chart, Vietnam taxes, journals and payment terms in one
+idempotent transaction, then records the legal basis and source checksum in
+`account.Setup`.
+
+The statutory code is the identity used to preserve existing company accounts: setup
+does not replace a row that already owns a code, and generated journals resolve that
+row as their default. Concurrent requests converge on one setup row and one code per
+company. A company outside Vietnam is refused instead of receiving plausible-looking
+Vietnam accounting data silently. Future country packs remain data inside `account`;
+they do not become hundreds of installable source modules.
