@@ -16,6 +16,7 @@ import {
   housekeepingRoomDetailScreen,
   housekeepingRoomsScreen,
   newPropertyScreen,
+  newRoomTypeScreen,
   policiesScreen,
   propertiesScreen,
   propertyDetailScreen,
@@ -24,6 +25,7 @@ import {
   reservationsScreen,
   inventoryScreen,
   roomsScreen,
+  roomTypeDetailScreen,
   roomTypesScreen,
   stayDetailScreen,
   staysScreen,
@@ -50,6 +52,8 @@ import type {
   ReservationIntakeValues,
   RoomRow,
   RoomStatusSummary,
+  RoomTypeDetail,
+  RoomTypeFormValues,
   RoomTypeRow,
   StayRow,
   TapeChart,
@@ -517,6 +521,99 @@ const renderPropertyDetail = async (
     propertyDetailScreen(
       ctx.translate(lang),
       property,
+      policies,
+      lang,
+      await frame(ctx, url, req),
+      url.searchParams.get('status'),
+      errors,
+      attempted,
+    ),
+  )
+}
+
+const defaultRoomTypeValues = (id: string, propertyId: string): RoomTypeFormValues => ({
+  id,
+  propertyId,
+  code: '',
+  name: '',
+  publicName: null,
+  description: null,
+  defaultCapacity: 2,
+  maxAdults: 2,
+  maxChildren: 0,
+  maxInfants: 0,
+  maxExtraBeds: 0,
+  sizeSqm: null,
+  viewType: null,
+  sharedBathroom: false,
+  baseRate: '0',
+  color: '#2563eb',
+  cancellationPolicyId: null,
+  published: false,
+})
+
+const roomTypeFormValues = (
+  id: string,
+  form: Record<string, string>,
+  current: RoomTypeDetail | null = null,
+): RoomTypeFormValues => ({
+  id,
+  propertyId: form.propertyId?.trim() ?? current?.propertyId ?? '',
+  code: form.code?.trim() ?? current?.code ?? '',
+  name: form.name?.trim() ?? current?.name ?? '',
+  publicName: form.publicName?.trim() || null,
+  description: form.description?.trim() || null,
+  defaultCapacity: integer(form.defaultCapacity, current?.defaultCapacity ?? 2),
+  maxAdults: integer(form.maxAdults, current?.maxAdults ?? 2),
+  maxChildren: integer(form.maxChildren, current?.maxChildren ?? 0),
+  maxInfants: integer(form.maxInfants, current?.maxInfants ?? 0),
+  maxExtraBeds: integer(form.maxExtraBeds, current?.maxExtraBeds ?? 0),
+  sizeSqm: form.sizeSqm?.trim() || null,
+  viewType: form.viewType?.trim() || null,
+  sharedBathroom: form.sharedBathroom === '1',
+  baseRate: form.baseRate?.trim() ?? String(current?.baseRate ?? '0'),
+  color: form.color?.trim() || null,
+  cancellationPolicyId: form.cancellationPolicyId?.trim() || null,
+  published: form.published === '1',
+})
+
+const roomTypeInputErrors = (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  values: RoomTypeFormValues,
+): string[] => {
+  const decimal = (value: unknown) =>
+    /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(String(value ?? '').trim()) && Number.isFinite(Number(value))
+  if (decimal(values.baseRate) && (values.sizeSqm == null || decimal(values.sizeSqm))) return []
+  return [ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.decimal')]
+}
+
+const renderRoomTypeDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  id: string,
+  errors: readonly string[] = [],
+  attempted?: RoomTypeFormValues,
+) => {
+  const [roomType, properties, policies] = (await Promise.all([
+    ctx.call('hospitality_core.getRoomType', { id }, url, req),
+    ctx.call('hospitality_core.listProperties', { includeArchived: true }, url, req),
+    ctx.call('hospitality_core.listCancellationPolicies', { includeArchived: true }, url, req),
+  ])) as [RoomTypeDetail | null, PropertyRow[], PolicyRow[]]
+  if (!roomType) return text('Not found', { status: 404 })
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  return document(
+    ctx,
+    url,
+    req,
+    roomType.name,
+    roomTypeDetailScreen(
+      _,
+      roomType,
+      properties,
       policies,
       lang,
       await frame(ctx, url, req),
@@ -1097,12 +1194,17 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/room-types':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const selected = url.searchParams.get('property') || undefined
+      const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.some((row) => row.id === requestedProperty)
+        ? requestedProperty
+        : properties[0]?.id
       const rows = (await ctx.call(
         'hospitality_core.listRoomTypes',
-        { propertyId: selected },
+        { propertyId },
         url,
         req,
       )) as RoomTypeRow[]
@@ -1111,8 +1213,85 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
         _('hospitality_core.screen.roomTypes.title'),
-        roomTypesScreen(_, rows, await frame(ctx, url, req)),
+        roomTypesScreen(_, rows, properties, propertyId, lang, await frame(ctx, url, req)),
       )
+    },
+
+  '/admin/hospitality/room-types/new':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const [properties, policies] = (await Promise.all([
+        ctx.call('hospitality_core.listProperties', {}, url, req),
+        ctx.call('hospitality_core.listCancellationPolicies', {}, url, req),
+      ])) as [PropertyRow[], PolicyRow[]]
+      const requestedProperty = url.searchParams.get('property')?.trim()
+      const propertyId = properties.find((row) => row.id === requestedProperty)?.id ?? properties[0]?.id ?? ''
+      if (req.method === 'GET') {
+        const values = defaultRoomTypeValues(randomUUID(), propertyId)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.roomType.create.title'),
+          newRoomTypeScreen(_, values, properties, policies, lang, await frame(ctx, url, req)),
+        )
+      }
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const values = roomTypeFormValues(randomUUID(), form)
+      const inputErrors = roomTypeInputErrors(ctx, url, req, values)
+      if (inputErrors.length)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.roomType.create.title'),
+          newRoomTypeScreen(_, values, properties, policies, lang, await frame(ctx, url, req), inputErrors),
+        )
+      const result = (await ctx.call('hospitality_core.saveRoomType', values, url, req)) as OperationResult
+      if (!result.ok)
+        return document(
+          ctx,
+          url,
+          req,
+          _('hospitality_core.roomType.create.title'),
+          newRoomTypeScreen(
+            _,
+            values,
+            properties,
+            policies,
+            lang,
+            await frame(ctx, url, req),
+            operationErrors(ctx, url, req, result),
+          ),
+        )
+      const query = new URLSearchParams({ status: 'created', lang })
+      return seeOther(`/admin/hospitality/room-types/${encodeURIComponent(values.id)}?${query.toString()}`)
+    },
+
+  '/admin/hospitality/room-types/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method === 'GET') return renderRoomTypeDetail(ctx, url, req, params.id)
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const current = (await ctx.call(
+        'hospitality_core.getRoomType',
+        { id: params.id },
+        url,
+        req,
+      )) as RoomTypeDetail | null
+      if (!current) return text('Not found', { status: 404 })
+      const form = await readForm(req)
+      const values = roomTypeFormValues(params.id, form, current)
+      const inputErrors = roomTypeInputErrors(ctx, url, req, values)
+      if (inputErrors.length) return renderRoomTypeDetail(ctx, url, req, params.id, inputErrors, values)
+      const result = (await ctx.call('hospitality_core.saveRoomType', values, url, req)) as OperationResult
+      if (!result.ok)
+        return renderRoomTypeDetail(ctx, url, req, params.id, operationErrors(ctx, url, req, result), values)
+      const query = new URLSearchParams({ status: 'saved', lang: ctx.localeOf(url, req) })
+      return seeOther(`${url.pathname}?${query.toString()}`)
     },
 
   '/admin/hospitality/rate-plans':

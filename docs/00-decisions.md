@@ -1883,3 +1883,20 @@ coordinate values back through the public function; it never replaces them with 
 free-text approximation. A dedicated address-picker slice may edit those references
 later. Property charges remain provider content, and invoices or accounting entries
 remain outside this boundary.
+
+## D62 — Room types are sellable products, while physical rooms remain operational assets
+
+The Room Type workspace owns the public accommodation product: stable code and
+names, guest limits, room size and view, bathroom mode, fallback rate, identity
+colour, cancellation policy, publication state and marketing description. A room
+type belongs to one property for its lifetime; moving an existing record to another
+property is rejected because its rooms, inventory, rates and channel mappings are
+already property-scoped. Operators create a new room type when a product must move.
+
+Every successful create or update appends one `ContentChange` in the same transaction.
+Private OTA connections consume that durable signal independently and rebuild the
+current public record; the open-source module stores no provider credentials or
+provider-specific identifiers. The fallback rate is not an invoice or accounting
+entry and never replaces a matching Rate Plan. Physical location, room lifecycle and
+archive controls belong to the following Room configuration slice so sellable content
+cannot directly bypass operational room transitions.

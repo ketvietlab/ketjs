@@ -30,6 +30,7 @@ export type FormField = {
     | 'number'
     | 'decimal'
     | 'time'
+    | 'color'
     | 'date'
     | 'datetime-local'
     | 'select'

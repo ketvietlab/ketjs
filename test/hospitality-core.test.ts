@@ -217,6 +217,130 @@ test('hospitality core: property settings validate timezone and default cancella
   }
 })
 
+test('hospitality core: room type settings are validated, preloaded and cannot move properties', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveProperty',
+      { id: 'other-hotel', code: 'OTHER', name: 'Other Hotel', accommodationType: 'hotel' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveCancellationPolicy',
+      { id: 'flex', code: 'FLEX', name: 'Flexible', type: 'flexible' },
+      adapter,
+    )
+    const saved = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: ' dlx ',
+        name: 'Deluxe river room',
+        publicName: 'Deluxe River View',
+        defaultCapacity: 3,
+        maxAdults: 2,
+        maxChildren: 1,
+        maxInfants: 1,
+        maxExtraBeds: 1,
+        sizeSqm: '31.5',
+        viewType: 'river',
+        sharedBathroom: false,
+        baseRate: '1850000.50',
+        color: '#0f766e',
+        cancellationPolicyId: 'flex',
+        published: true,
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'room-301',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: '301',
+        name: 'Room 301',
+      },
+      adapter,
+    )
+
+    const detail = (await call('hospitality_core.getRoomType', { id: 'deluxe' }, adapter)).value as Row
+    assert.equal(detail.code, 'DLX')
+    assert.equal(detail.viewType, 'river')
+    assert.equal(detail.color, '#0f766e')
+    assert.equal((detail.property as Row).name, 'Ket Hotel Saigon')
+    assert.equal((detail.cancellationPolicy as Row).name, 'Flexible')
+    assert.deepEqual(
+      (detail.rooms as Row[]).map((room) => room.id),
+      ['room-301'],
+    )
+
+    const moved = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: detail.id,
+        propertyId: 'other-hotel',
+        code: detail.code,
+        name: detail.name,
+        publicName: detail.publicName,
+        description: detail.description,
+        defaultCapacity: detail.defaultCapacity,
+        maxAdults: detail.maxAdults,
+        maxChildren: detail.maxChildren,
+        maxInfants: detail.maxInfants,
+        maxExtraBeds: detail.maxExtraBeds,
+        sizeSqm: String(detail.sizeSqm),
+        viewType: detail.viewType,
+        sharedBathroom: detail.sharedBathroom,
+        baseRate: String(detail.baseRate),
+        color: detail.color,
+        cancellationPolicyId: detail.cancellationPolicyId,
+        published: detail.published,
+      },
+      adapter,
+    )
+    assert.equal((moved.value as Row).ok, false)
+    assert.ok(((moved.value as Row).errors as Row[]).some((error) => error.code === 'property_mismatch'))
+
+    const invalid = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'invalid-room-type',
+        propertyId: 'hotel',
+        code: 'INVALID',
+        name: 'Invalid room type',
+        defaultCapacity: 4,
+        maxAdults: 2,
+        maxChildren: 1,
+        baseRate: '-1',
+        sizeSqm: '0',
+        viewType: 'space',
+        color: 'teal',
+      },
+      adapter,
+    )
+    assert.equal((invalid.value as Row).ok, false)
+    const codes = new Set(((invalid.value as Row).errors as Row[]).map((error) => error.code))
+    assert.deepEqual(
+      ['capacity_total', 'non_negative', 'positive', 'view_type', 'color'].every((code) => codes.has(code)),
+      true,
+    )
+    const changes = await adapter.all(
+      `SELECT "resourceId" FROM hospitality_core_content_change WHERE "resourceType" = ?`,
+      ['room_type'],
+    )
+    assert.deepEqual(
+      changes.map((change) => change.resourceId),
+      ['deluxe'],
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality core: property location uses the active address catalog', async () => {
   const adapter = await boot()
   try {
