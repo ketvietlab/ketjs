@@ -394,7 +394,8 @@ export const services: Record<string, FnSpec> = {
       if (targetCount !== 1) errors.push(issue('reservationId', 'extra_line_target'))
       if (args.reservationId && !reservation) errors.push(issue('reservationId', 'reservation_missing'))
       if (args.stayId && !stay) errors.push(issue('stayId', 'stay_missing'))
-      if (target?.state === 'cancelled') errors.push(issue('reservationId', 'extra_line_target_cancelled'))
+      if (target?.state === 'cancelled' || target?.state === 'no_show')
+        errors.push(issue('reservationId', 'extra_line_target_cancelled'))
       if (!folio) errors.push(issue('folioId', 'folio_missing'))
       else if (folio.state !== 'open') errors.push(issue('folioId', 'folio_not_open'))
       if (!product.product) errors.push(issue('productId', 'product_missing'))
@@ -479,7 +480,12 @@ export const services: Record<string, FnSpec> = {
         : reservation?.stayId
           ? await one(ctx, 'hospitality_core.Stay', reservation.stayId)
           : null
-      if (reservation?.state === 'cancelled' || selectedStay?.state === 'cancelled')
+      if (
+        reservation?.state === 'cancelled' ||
+        reservation?.state === 'no_show' ||
+        selectedStay?.state === 'cancelled' ||
+        selectedStay?.state === 'no_show'
+      )
         return failure(issue('id', 'extra_line_target_cancelled'))
       const property = await one(ctx, 'hospitality_core.Property', line.propertyId)
       const serviceDate = text(args.serviceDate)

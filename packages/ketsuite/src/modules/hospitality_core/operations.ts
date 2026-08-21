@@ -247,6 +247,8 @@ const reservationOutput = {
   amountTotal: 'decimal',
   state: 'text',
   cancelReason: 'text?',
+  noShowAt: 'datetime?',
+  noShowReason: 'text?',
   createdAt: 'datetime',
   updatedAt: 'datetime',
   partner: 'json?',
@@ -275,6 +277,7 @@ const stayOutput = {
   state: 'text',
   checkedInAt: 'datetime?',
   checkedOutAt: 'datetime?',
+  noShowAt: 'datetime?',
   partner: 'json?',
   roomType: 'json?',
   currentRoom: 'json?',
@@ -800,6 +803,7 @@ export const operations: Record<string, FnSpec> = {
       const reservation = await record(ctx, 'hospitality_core.Reservation', args.id)
       if (!reservation) return failure(issue('id', 'reservation_missing'))
       if (reservation.state === 'cancelled') return success(args.id, { state: 'cancelled' })
+      if (reservation.state === 'no_show') return success(args.id, { state: 'no_show' })
       if (reservation.state === 'checked_in' || reservation.state === 'checked_out')
         return failure(issue('state', 'reservation_cannot_cancel'))
       const at = date(args.at)?.toISOString() ?? new Date().toISOString()
@@ -813,7 +817,7 @@ export const operations: Record<string, FnSpec> = {
           const reservationClaim = await tx.db.compareAndSet(
             'hospitality_core.Reservation',
             { id: args.id },
-            { state: reservation.state },
+            { state: reservation.state, updatedAt: reservation.updatedAt },
             { state: 'cancelled', cancelReason: args.reason, updatedAt: at },
           )
           if (!('matched' in reservationClaim) || !reservationClaim.matched)
@@ -852,6 +856,90 @@ export const operations: Record<string, FnSpec> = {
               aggregateId: reservation.id,
             })
           return success(args.id, { state: 'cancelled' })
+        }),
+      )
+    },
+  }),
+
+  markNoShow: defineFn({
+    input: { id: 'id', reason: 'text', at: 'datetime?' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', errors: 'json?' },
+    effects: [
+      'read:hospitality_core.Reservation',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.Reservation',
+      'write:hospitality_core.Stay',
+      'write:hospitality_core.Folio',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const reservation = await record(ctx, 'hospitality_core.Reservation', args.id)
+      if (!reservation) return failure(issue('id', 'reservation_missing'))
+      if (reservation.state === 'no_show') return success(args.id, { state: 'no_show' })
+      if (reservation.state !== 'confirmed') return failure(issue('state', 'reservation_cannot_no_show'))
+      const reason = text(args.reason)
+      if (!reason) return failure(issue('reason', 'required'))
+      const at = date(args.at) ?? new Date()
+      if (at < date(reservation.checkIn)!) return failure(issue('at', 'reservation_no_show_too_early'))
+      const timestamp = at.toISOString()
+      const property = await record(ctx, 'hospitality_core.Property', reservation.propertyId)
+      const inventoryDates =
+        reservation.bookingType === 'hourly'
+          ? []
+          : occupancyDates(reservation.checkIn, reservation.checkOut, String(property?.timezone ?? 'UTC'))
+      return transition(() =>
+        ctx.tx(async (tx) => {
+          const reservationClaim = await tx.db.compareAndSet(
+            'hospitality_core.Reservation',
+            { id: reservation.id },
+            { state: 'confirmed', updatedAt: reservation.updatedAt },
+            {
+              state: 'no_show',
+              noShowAt: timestamp,
+              noShowReason: reason,
+              updatedAt: timestamp,
+            },
+          )
+          if (!('matched' in reservationClaim) || !reservationClaim.matched)
+            throw new TransitionConflict(issue('state', 'transition_conflict'))
+          if (reservation.stayId) {
+            const stayClaim = await tx.db.compareAndSet(
+              'hospitality_core.Stay',
+              { id: reservation.stayId },
+              { state: 'draft' },
+              { state: 'no_show', noShowAt: timestamp },
+            )
+            if (!('matched' in stayClaim) || !stayClaim.matched)
+              throw new TransitionConflict(issue('state', 'transition_conflict'))
+          }
+          const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
+          if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
+          const folioClaim = await tx.db.compareAndSet(
+            'hospitality_core.Folio',
+            { id: folio.id },
+            { state: 'open', version: folio.version },
+            { state: 'closed', closedAt: timestamp, version: Number(folio.version) + 1 },
+          )
+          if (!('matched' in folioClaim) || !folioClaim.matched)
+            throw new TransitionConflict(issue('folioId', 'transition_conflict'))
+          if (inventoryDates.length)
+            await releaseInventory(tx, reservation.propertyId, reservation.roomTypeId, inventoryDates)
+          if (inventoryDates.length)
+            await recordInventoryChange(tx, {
+              propertyId: reservation.propertyId,
+              roomTypeId: reservation.roomTypeId,
+              kind: 'availability',
+              dateFrom: inventoryDates[0]!,
+              dateTo: inventoryDates.at(-1)!,
+              aggregateId: reservation.id,
+            })
+          return success(reservation.id, { state: 'no_show' })
         }),
       )
     },
@@ -1520,7 +1608,12 @@ export const operations: Record<string, FnSpec> = {
       )
       const stays = (
         await ctx.db.all(from(S).where(eq(S.propertyId, args.propertyId)).preload('partner', 'reservation'))
-      ).filter((stay) => stay.state !== 'cancelled' && overlaps(stay.checkIn, stay.checkOut, start, end))
+      ).filter(
+        (stay) =>
+          stay.state !== 'cancelled' &&
+          stay.state !== 'no_show' &&
+          overlaps(stay.checkIn, stay.checkOut, start, end),
+      )
       const stayIds = new Set(stays.map((stay) => stay.id))
       const assignments = (await ctx.db.all(from(A).where(eq(A.propertyId, args.propertyId)))).filter(
         (assignment) =>

@@ -1340,6 +1340,114 @@ test('hospitality reservations: front desk amends a direct booking atomically', 
   }
 })
 
+test('hospitality reservations: no-show releases inventory but retains charges for reconciliation', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '125' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'no-show-booking',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-03T05:00:00.000Z',
+        rate: '125',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+
+    const early = await call(
+      'hospitality_core.markNoShow',
+      {
+        id: 'no-show-booking',
+        reason: 'Guest did not answer',
+        at: '2026-10-01T06:59:59.000Z',
+      },
+      adapter,
+    )
+    assert.equal((early.value as Row).ok, false)
+    assert.equal(((early.value as Row).errors as Row[])[0]?.code, 'reservation_no_show_too_early')
+
+    const marked = await call(
+      'hospitality_core.markNoShow',
+      {
+        id: 'no-show-booking',
+        reason: 'Guest did not answer',
+        at: '2026-10-01T07:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.deepEqual(marked.value, { ok: true, id: 'no-show-booking', state: 'no_show', errors: [] })
+    const reservation = (await call('hospitality_core.getReservation', { id: 'no-show-booking' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'no-show-booking:stay' }, adapter))
+      .value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'no-show-booking:folio' }, adapter))
+      .value as Row
+    assert.deepEqual(
+      {
+        reservationState: reservation.state,
+        stayState: stay.state,
+        folioState: folio.state,
+        amountTotal: Number(folio.amountTotal),
+        noShowReason: reservation.noShowReason,
+        noShowAt: reservation.noShowAt,
+      },
+      {
+        reservationState: 'no_show',
+        stayState: 'no_show',
+        folioState: 'closed',
+        amountTotal: 250,
+        noShowReason: 'Guest did not answer',
+        noShowAt: '2026-10-01T07:00:00.000Z',
+      },
+    )
+    assert.equal((folio.charges as Row[])[0]?.state, 'active', 'no-show does not void the room charge')
+    const ledger = await adapter.all(
+      `SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`,
+    )
+    assert.deepEqual(
+      ledger.map((row) => ({ date: row.date, sold: Number(row.sold) })),
+      [
+        { date: '2026-10-01', sold: 0 },
+        { date: '2026-10-02', sold: 0 },
+      ],
+    )
+    const retried = await call(
+      'hospitality_core.markNoShow',
+      { id: 'no-show-booking', reason: 'Guest did not answer', at: '2026-10-01T08:00:00.000Z' },
+      adapter,
+    )
+    assert.equal((retried.value as Row).state, 'no_show')
+    const cancelled = await call(
+      'hospitality_core.cancelReservation',
+      { id: 'no-show-booking', reason: 'late provider cancellation' },
+      adapter,
+    )
+    assert.equal(
+      (cancelled.value as Row).state,
+      'no_show',
+      'a later cancellation keeps the no-show audit state',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality inventory: restrictions enforce stop-sell, CTA, CTD and LOS', async () => {
   const adapter = await boot()
   try {

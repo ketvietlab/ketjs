@@ -1554,6 +1554,48 @@ try {
       `amendment/check-in race left inconsistent state: ${JSON.stringify(amendmentTransitionState)}`,
     )
 
+  const noShowStart = Math.max(12, serviceIntentionsPerDatabase, transitionCount)
+  const noShowIndexes = Array.from(
+    { length: Math.max(0, Math.min(10, reservationsPerDatabase - noShowStart)) },
+    (_, index) => noShowStart + index,
+  ).filter((index) => index % 3 !== 0)
+  const noShowStarted = performance.now()
+  const noShowResults = await Promise.all(
+    keys.map(async (key) => {
+      for (const index of noShowIndexes) {
+        const result = await call(key, 'hospitality_core.markNoShow', {
+          id: `reservation:${index}`,
+          reason: 'Benchmark arrival cutoff passed',
+          at: '2026-09-03T00:00:00.000Z',
+        })
+        if (!(result.value as { ok: boolean }).ok) return { key, match: false, index, failure: result.value }
+      }
+      if (!noShowIndexes.length) return { key, match: true }
+      const sample = (
+        await call(key, 'hospitality_core.getReservation', {
+          id: `reservation:${noShowIndexes[0]}`,
+        })
+      ).value as Record<string, unknown>
+      const folio = (
+        await call(key, 'hospitality_core.getFolio', {
+          id: `reservation:${noShowIndexes[0]}:folio`,
+        })
+      ).value as Record<string, unknown>
+      return {
+        key,
+        match:
+          sample.state === 'no_show' &&
+          sample.noShowReason === 'Benchmark arrival cutoff passed' &&
+          folio.state === 'closed' &&
+          (folio.charges as Array<Record<string, unknown>>).some((charge) => charge.state === 'active'),
+      }
+    }),
+  )
+  const noShowMs = performance.now() - noShowStarted
+  const noShowsMatch = noShowResults.every((result) => result.match)
+  if (!noShowsMatch)
+    throw new Error(`no-show lifecycle lost state or charges: ${JSON.stringify(noShowResults)}`)
+
   const readStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1616,6 +1658,13 @@ try {
     const stayColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_stay!
     if (stayColumns.nextBillDate !== 'date')
       throw new Error(`PostgreSQL nextBillDate is ${stayColumns.nextBillDate}, expected date`)
+    if (stayColumns.noShowAt !== 'timestamp with time zone')
+      throw new Error(`PostgreSQL noShowAt is ${stayColumns.noShowAt}, expected timestamptz`)
+    const reservationColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_reservation!
+    if (reservationColumns.noShowAt !== 'timestamp with time zone')
+      throw new Error(
+        `PostgreSQL reservation noShowAt is ${reservationColumns.noShowAt}, expected timestamptz`,
+      )
     const auditColumns = (await adapters.get(keys[0]!)!.introspect()).hospitality_core_night_audit_run!
     if (auditColumns.auditDate !== 'date')
       throw new Error(`PostgreSQL auditDate is ${auditColumns.auditDate}, expected date`)
@@ -1789,6 +1838,12 @@ try {
           ? Math.round((databaseCount * amendmentIndexes.length * 1_000) / amendmentMs)
           : 0,
         amendmentsMatch,
+        reservationNoShows: databaseCount * noShowIndexes.length,
+        noShowMs: Number(noShowMs.toFixed(1)),
+        noShowsPerSecond: noShowIndexes.length
+          ? Math.round((databaseCount * noShowIndexes.length * 1_000) / noShowMs)
+          : 0,
+        noShowsMatch,
         frontDeskIdentityDocuments: databaseCount,
         frontDeskIdentityMs: Number(frontDeskIdentityMs.toFixed(1)),
         frontDeskIdentityDocumentsPerSecond: Math.round((databaseCount * 1_000) / frontDeskIdentityMs),
