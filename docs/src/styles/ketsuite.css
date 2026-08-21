@@ -256,6 +256,10 @@ starlight-lang-select select {
   font-size: 0.8125rem;
 }
 
+.sl-markdown-content .expressive-code pre code {
+  font-size: 0.75rem;
+}
+
 .card-grid {
   gap: var(--ks-gap);
   margin-block-start: var(--ks-gap);
@@ -291,10 +295,25 @@ starlight-lang-select select {
 }
 
 .sl-markdown-content table {
+  display: table;
+  inline-size: 100%;
+  overflow: hidden;
   border: 1px solid var(--ks-line);
   border-radius: var(--ks-radius);
   background: var(--ks-surface);
   box-shadow: var(--ks-shadow-card);
+}
+
+.sl-markdown-content table :is(th, td) {
+  padding: 0.625rem 0.75rem;
+}
+
+.sl-markdown-content table :is(th, td):first-child {
+  padding-inline-start: 0.75rem;
+}
+
+.sl-markdown-content table :is(th, td):last-child {
+  padding-inline-end: 0.75rem;
 }
 
 .sl-markdown-content pre.mermaid {
@@ -398,6 +417,11 @@ main footer .meta {
 }
 
 @media (max-width: 49.999rem) {
+  .sl-markdown-content table {
+    display: block;
+    overflow-x: auto;
+  }
+
   header.header {
     padding-inline: var(--ks-gap-sm);
   }

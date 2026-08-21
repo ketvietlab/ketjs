@@ -40,7 +40,8 @@ export type HttpRouteContract = {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   operationId: string
   summary?: string
-  auth?: 'public' | 'optional-customer' | 'customer'
+  /** Application-defined authentication policy interpreted by the contract facade. */
+  auth?: string
   capability?: { key: string; action: string }
   request?: {
     params?: JsonSchema
