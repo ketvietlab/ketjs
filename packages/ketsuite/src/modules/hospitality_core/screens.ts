@@ -5347,6 +5347,12 @@ const reservationDetailFeedback = (
       message: _('hospitality_core.reservation.feedback.amendedHint'),
       tone: 'positive',
     })
+  if (status === 'departure-adjusted')
+    return notice({
+      title: _('hospitality_core.reservation.feedback.departureAdjusted'),
+      message: _('hospitality_core.reservation.feedback.departureAdjustedHint'),
+      tone: 'positive',
+    })
   if (status === 'no-show')
     return notice({
       title: _('hospitality_core.reservation.feedback.noShow'),
@@ -5369,6 +5375,7 @@ export const reservationDetailScreen = (
   roomTypes: Choice[],
   partners: Choice[],
   amendment: ReservationAmendmentValues,
+  departure: string,
   locale: string,
   timezone: string,
   frame: Frame,
@@ -5487,6 +5494,26 @@ export const reservationDetailScreen = (
 
   if (reservation.state === 'checked_in' && reservation.stayId) {
     actions.push(
+      section({
+        title: _('hospitality_core.reservation.action.adjustDeparture'),
+        description: _('hospitality_core.reservation.action.adjustDepartureHint'),
+        body: recordForm({
+          action,
+          method: 'post',
+          submit: _('hospitality_core.reservation.action.adjustDeparture'),
+          submitVariant: 'secondary',
+          hidden: { operation: 'adjust-departure', lang: locale },
+          fields: [
+            {
+              name: 'checkOut',
+              label: _('hospitality_core.col.checkOut'),
+              type: 'datetime-local',
+              value: departure,
+              required: true,
+            },
+          ],
+        }),
+      }),
       section({
         title: _('hospitality_core.reservation.action.checkOut'),
         description: _('hospitality_core.reservation.action.checkOutHint'),

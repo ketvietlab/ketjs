@@ -689,6 +689,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.amended': 'Đã cập nhật đặt phòng',
     'reservation.feedback.amendedHint':
       'Lịch ở, tồn phòng, khách chính và tiền phòng đã được cập nhật trong cùng giao dịch.',
+    'reservation.feedback.departureAdjusted': 'Đã cập nhật ngày trả phòng',
+    'reservation.feedback.departureAdjustedHint':
+      'Lịch lưu trú, tồn phòng và tiền phòng đã được đồng bộ trong cùng giao dịch.',
     'reservation.feedback.noShow': 'Đã ghi nhận khách không đến',
     'reservation.feedback.noShowHint':
       'Tồn phòng đã được hoàn, hồ sơ lưu trú đã đóng và các khoản phí hiện có được giữ lại để đối soát.',
@@ -720,6 +723,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.checkOut': 'Trả phòng',
     'reservation.action.checkOutHint':
       'Đóng kỳ lưu trú, chuyển phòng sang chờ dọn và tạo công việc buồng phòng.',
+    'reservation.action.adjustDeparture': 'Điều chỉnh ngày trả phòng',
+    'reservation.action.adjustDepartureHint':
+      'Gia hạn hoặc rút ngắn kỳ đang lưu trú; hệ thống sẽ kiểm tra lại tồn phòng và tiền phòng.',
     'reservation.action.cancel': 'Hủy đặt phòng',
     'reservation.action.cancelHint': 'Hủy đặt phòng sẽ hoàn tồn phòng và đóng hồ sơ liên quan.',
     'reservation.action.amend': 'Cập nhật đặt phòng',
@@ -1006,6 +1012,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.reservation_external_readonly':
       'Đặt phòng từ OTA được cập nhật theo dữ liệu của kênh; không thể sửa nội dung thương mại tại quầy.',
     'validation.stay_missing': 'Không tìm thấy hồ sơ lưu trú.',
+    'validation.stay_cannot_adjust_departure': 'Chỉ có thể điều chỉnh ngày trả phòng khi khách đang lưu trú.',
+    'validation.departure_not_future': 'Ngày trả phòng mới phải ở trong tương lai.',
     'validation.stay_cannot_check_in': 'Không thể nhận phòng ở trạng thái hiện tại.',
     'validation.early_check_in': 'Chưa đến giờ nhận phòng theo chính sách cơ sở.',
     'validation.no_available_room': 'Không còn phòng sẵn sàng thuộc loại đã đặt.',
@@ -1767,6 +1775,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.amended': 'Reservation updated',
     'reservation.feedback.amendedHint':
       'The stay schedule, inventory, lead guest, and room charge were updated in one transaction.',
+    'reservation.feedback.departureAdjusted': 'Departure updated',
+    'reservation.feedback.departureAdjustedHint':
+      'The stay schedule, inventory, and room charge were synchronized in one transaction.',
     'reservation.feedback.noShow': 'Guest marked as no-show',
     'reservation.feedback.noShowHint':
       'Inventory was released, the stay was closed, and existing charges were retained for reconciliation.',
@@ -1798,6 +1809,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.checkOut': 'Check out',
     'reservation.action.checkOutHint':
       'Close the stay, move the room to awaiting service, and create the housekeeping task.',
+    'reservation.action.adjustDeparture': 'Adjust departure',
+    'reservation.action.adjustDepartureHint':
+      'Extend or shorten the in-house stay; availability and the room charge are checked again.',
     'reservation.action.cancel': 'Cancel reservation',
     'reservation.action.cancelHint':
       'Cancelling releases inventory and closes the related operating records.',
@@ -2089,6 +2103,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.reservation_external_readonly':
       'OTA reservations follow channel revisions and cannot have commercial details edited at the front desk.',
     'validation.stay_missing': 'Stay was not found.',
+    'validation.stay_cannot_adjust_departure': 'Departure can only be adjusted while the guest is in house.',
+    'validation.departure_not_future': 'The new departure must be in the future.',
     'validation.stay_cannot_check_in': 'The stay cannot be checked in from its current state.',
     'validation.early_check_in': 'The property check-in time has not been reached.',
     'validation.no_available_room': 'No ready room remains for the reserved room type.',
