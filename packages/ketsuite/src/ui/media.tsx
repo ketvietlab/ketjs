@@ -55,6 +55,8 @@ export type MediaPanelProps = {
   images?: readonly MediaItem[]
   error?: string | null
   extension?: JSXChild
+  /** Optional progressively enhanced upload control supplied by a domain bridge. */
+  uploadControl?: JSXChild
   uploadAction?: string | null
   labels?: Partial<MediaLabels>
 }
@@ -139,7 +141,9 @@ export const mediaPanel = (props: MediaPanelProps): TemplateResult => {
         </div>
       )}
       <div data-ui="media-actions">
-        {props.uploadAction ? (
+        {props.uploadControl !== undefined ? (
+          props.uploadControl
+        ) : props.uploadAction ? (
           <form
             data-ui="media-upload"
             method="post"

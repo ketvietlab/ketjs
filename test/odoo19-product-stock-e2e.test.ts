@@ -126,6 +126,32 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
     ],
   )
 
+  const uploadForm = new FormData()
+  uploadForm.set(
+    'file',
+    new File(
+      [
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2n0cAAAAASUVORK5CYII=',
+          'base64',
+        ),
+      ],
+      'Ảnh tải lên.png',
+      { type: 'image/png' },
+    ),
+  )
+  const uploadedResponse = await e2e.client.post('/admin/products/tpl/media?tab=media&lang=vi', uploadForm, {
+    redirect: 'manual',
+  })
+  assert.equal(uploadedResponse.status, 303, await uploadedResponse.clone().text())
+  const afterUpload = (await call<Row[]>('product_media.listMedia', { templateId: 'tpl' })).value
+  const uploadedMedia = afterUpload.find((row) => (row.attachment as Row | undefined)?.kind === 'stored')
+  assert.ok(uploadedMedia)
+  assert.equal((uploadedMedia.attachment as Row).mimetype, 'image/png')
+  const downloadedImage = await e2e.client.get(`/files/${uploadedMedia.attachmentId}`)
+  assert.equal(downloadedImage.status, 200)
+  assert.equal(downloadedImage.headers.get('content-type'), 'image/png')
+
   await call('pricing.savePricelist', { id: 'retail', name: 'Bán lẻ' })
   await call('pricing.savePricelistItem', {
     id: 'global',
@@ -281,6 +307,7 @@ test('e2e product 19: UoM, variants, media and pricing cross real HTTP', async (
   assert.equal(mediaPage.status, 200)
   const mediaHtml = await mediaPage.text()
   assert.match(mediaHtml, /data-ui="media" data-state="ready"/)
+  assert.match(mediaHtml, /data-island="product\.media-upload"/)
   assert.match(mediaHtml, /action="\/admin\/products\/tpl\/media\?tab=media&amp;lang=vi"/)
   assert.ok((mediaHtml.match(/<img /g) ?? []).length >= 3)
 
