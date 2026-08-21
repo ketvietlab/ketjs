@@ -1918,3 +1918,12 @@ room count is not sellable availability and does not emit an OTA content mutatio
 availability remains durable in `AvailabilityLedger`, exactly as in the legacy
 hospitality inventory boundary. No payment, invoice or accounting behavior is opened
 by this workspace.
+
+Buildings and floors use reversible archive rather than deletion. A building cannot
+be archived while it still owns an active floor or room, and a floor cannot be archived
+while it still owns an active room. Restoration proceeds from the outside in: the
+property must be active before a building, and the building before a floor. The archive
+functions and location-changing room writes lock the same active rows inside their
+transactions, so a concurrent archive and room/floor move cannot leave an inactive
+container with an active child. Archived locations remain readable in room history but
+are excluded from choices for new operational work.
