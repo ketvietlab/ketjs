@@ -2976,6 +2976,15 @@
     inline-size: 100%;
     min-inline-size: 0;
   }
+  [data-ui="relation-native"] {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
   [data-ui="relation-trigger"] {
     display: flex;
     inline-size: 100%;

@@ -64,6 +64,8 @@ test('relational select HTTP: browser module and shared view are served by backe
   const source = await shared.text()
   assert.match(source, /relation-footer/)
   assert.match(source, /data-presentation="dialog"/)
+  assert.match(source, /data-ui="relation-native"/)
+  assert.match(source, /activeRequest === request/)
 })
 
 test('relational select HTTP: declared partner capabilities cover create and update', async (t) => {

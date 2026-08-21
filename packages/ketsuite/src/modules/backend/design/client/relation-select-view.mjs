@@ -72,21 +72,22 @@ export function createRelationSelectView(runtime, props) {
   const loadRows = async () => {
     if (!manager?.listFunction) return
     activeRequest?.abort()
-    activeRequest = new AbortController()
+    const request = new AbortController()
+    activeRequest = request
     loading.set(true)
     error.set('')
     try {
       const input = { ...(manager.listInput ?? {}) }
       input[manager.searchParam || 'search'] = query().trim()
       input[manager.limitParam || 'limit'] = manager.limit || 80
-      const value = await callApi(manager.listFunction, input, activeRequest.signal)
+      const value = await callApi(manager.listFunction, input, request.signal)
       const excluded = new Set(array(manager.excludeIds).map(string))
       rows.set(array(value).filter((row) => !excluded.has(rowId(row))))
     } catch (caught) {
       if (disposed || caught?.name === 'AbortError') return
       error.set(caught instanceof Error ? caught.message : labels.loadError)
     } finally {
-      loading.set(false)
+      if (activeRequest === request) loading.set(false)
     }
   }
 
@@ -259,10 +260,32 @@ export function createRelationSelectView(runtime, props) {
     closeDialog()
   }
 
+  const handleInvalid = (event) => {
+    event.preventDefault()
+    open.set(true)
+    event.currentTarget.nextElementSibling?.focus()
+  }
+
   return {
     view: () => html`
       <div data-ui="relation-select" on:keydown=${handleKeydown}>
-        <input type="hidden" name=${config.name} value=${selected()}>
+        <select
+          data-ui="relation-native"
+          name=${config.name}
+          required=${config.required === true}
+          disabled=${config.disabled === true}
+          tabindex="-1"
+          aria-hidden="true"
+          on:invalid=${handleInvalid}
+        >
+          <option value="" selected=${!selected()}></option>
+          ${each(
+            options().filter((entry) => string(entry.value)),
+            (entry) => entry.value,
+            (entry) =>
+              html`<option value=${entry.value} selected=${string(entry.value) === selected()}>${entry.label}</option>`,
+          )}
+        </select>
         <button
           data-ui="relation-trigger"
           data-empty=${String(!selected())}
