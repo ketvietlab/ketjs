@@ -11,30 +11,33 @@
 // a datastore that is not SQLite. Those arrive through `AppSpec.serve` as data
 // rather than as a closure the framework has to trust.
 
-import { compose } from '../kernel/compose.ts'
 import { createAppRegistry } from '../kernel/apps.ts'
 import { translator } from '../kernel/i18n.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createTheme } from '../theme/render.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
-import { registerFunctions, callFn } from './fn.ts'
+import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
 import { createSessions, dbSessionStore } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
 import type { MenuNode } from '../kernel/menu.ts'
-import type { Markup } from 'ketjs-view'
+import type { IslandRegistry, Markup } from 'ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { AppInfo } from '../kernel/apps.ts'
-import type { Sessions, SessionOptions } from './session.ts'
+import type { SessionContext, Sessions, SessionOptions, SessionRecord } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
 import { html, each } from 'ketjs-view'
-import { readConfig, sqliteStore } from './config.ts'
+import { sqliteStore } from './config.ts'
+import { bootRuntime } from './runtime.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
+import { namespacedStorage, storageFromConfig } from './storage/index.ts'
+import type { OpenStorage, Storage } from './storage/index.ts'
+import type { OpenTransport } from './transport/index.ts'
 import type { AppSpec } from '../kernel/workspace.ts'
 import type { AppRegistry } from '../kernel/apps.ts'
 import type { Translator } from '../kernel/i18n.ts'
@@ -43,7 +46,17 @@ import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 
 export type { Html, RouteResult } from './respond.ts'
-export { page, fragment, text, raw, withHeaders } from './respond.ts'
+export {
+  page,
+  fragment,
+  navigablePage,
+  isNavigationRequest,
+  text,
+  bytes,
+  streamed,
+  raw,
+  withHeaders,
+} from './respond.ts'
 export { json } from './respond.ts'
 import type { Html, RouteResult } from './respond.ts'
 export type Route = (
@@ -113,6 +126,8 @@ export type ServeContext = {
    * in that tenant's database — one per tenant, not one per deployment.
    */
   sessionsOf: (url: URL, req: IncomingMessage) => Promise<Sessions | null>
+  /** Blob storage isolated to this request's tenant. */
+  storageOf: (url: URL, req: IncomingMessage) => Promise<Storage>
 }
 
 /**
@@ -125,9 +140,19 @@ export type ServeContext = {
  */
 export type PagesSpec = {
   resolve: string
+  /** Theme region whose host carries the same data-ket-slot name. */
+  region?: string
   /** Message key for the title of a path that has no page. */
   notFound?: string
   siteTitle?: string
+}
+
+export type SessionResolveContext = {
+  adapter: Adapter
+  manifest: Manifest
+  record: SessionRecord
+  url: URL
+  req: IncomingMessage
 }
 
 export type ServeSpec = {
@@ -138,11 +163,17 @@ export type ServeSpec = {
   routes?: (ctx: ServeContext) => Record<string, Route>
   /** Anything other than SQLite; the framework cannot depend on a driver. */
   openStore?: OpenStore
+  /** Override the built-in local/S3 storage selected by RuntimeConfig. */
+  openStorage?: OpenStorage
+  /** Inject a deployment-owned outbound provider for durable worker jobs. */
+  openTransport?: OpenTransport
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
    */
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
+  /** Revalidate live account state and memberships before scope and permissions. */
+  resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
   /**
    * Serve several tenants, one database each — Odoo's model, and the one that
    * makes per-tenant module sets work. Absent, the app has a single datastore.
@@ -172,26 +203,32 @@ export type BootedApp = {
   close: () => Promise<void>
 }
 
+export type BootAppOptions = {
+  env?: Record<string, string | undefined>
+  port?: number
+  /** Boot progress. Long-running serve keeps its banner separate. */
+  log?: (line: string) => void
+}
+
 /**
  * Opens, migrates, installs, serves. Returns before listening is announced so a
  * caller can print its own banner, or a test can boot on port 0 and never print.
  */
-export async function bootApp(
-  spec: AppSpec,
-  o: { env?: Record<string, string | undefined>; port?: number } = {},
-): Promise<BootedApp> {
+export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
   const serve = spec.serve ?? {}
-  const config = readConfig(o.env ?? process.env, {
-    sqliteFile: `.ket/${spec.name}.db`,
-    ...serve.defaults,
-    ...(o.port !== undefined ? { port: o.port } : {}),
-  })
-  if (o.port !== undefined) config.port = o.port
-
-  const modules = spec.theme ? [...spec.modules, spec.theme] : [...spec.modules]
-  const manifest = compose(modules, { appRequires: spec.requires ?? [], headless: spec.headless ?? false })
-
-  registerFunctions(modules)
+  const log = o.log ?? console.log
+  const { config, modules, manifest } = await bootRuntime(spec, o)
+  const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
+  const storages = new Map<string, Storage>()
+  const storageFor = (key: string): Storage => {
+    const namespace = key || spec.name
+    let storage = storages.get(namespace)
+    if (!storage) {
+      storage = namespacedStorage(baseStorage, namespace)
+      storages.set(namespace, storage)
+    }
+    return storage
+  }
 
   /**
    * An empty database is not a useful one to look at, so a first run installs
@@ -202,9 +239,7 @@ export async function bootApp(
   const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
     if (!bootstrap.length || (await apps.enabled()).size !== 0) return
     for (const name of bootstrap) await apps.install(name)
-    console.log(
-      `  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`,
-    )
+    log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
   }
 
   // Opened here only when there is one. With tenants there is no single datastore,
@@ -214,7 +249,7 @@ export async function bootApp(
   if (adapter) {
     if (config.migrateOnBoot) {
       const ops = await migrateOne(adapter, manifest)
-      if (ops.length) console.log(`  migrate: ${ops.length} operation(s)`)
+      if (ops.length) log(`  migrate: ${ops.length} operation(s)`)
     }
     apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
     await bootstrapInto('', apps)
@@ -256,6 +291,16 @@ export async function bootApp(
   const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
 
   // Built per tenant, because which templates exist depends on what is installed.
+  const islandRegistry = (live: Manifest): IslandRegistry => {
+    const disabled = new Set(live.disabledModules ?? [])
+    const registry: IslandRegistry = {}
+    for (const module of modules) {
+      if (disabled.has(module.name)) continue
+      for (const [name, definition] of Object.entries(module.islands)) registry[name] = definition.view
+    }
+    return registry
+  }
+
   const themeFactory =
     spec.headless || !spec.theme
       ? {}
@@ -266,7 +311,7 @@ export async function bootApp(
 
   // Fills are KTL, so they translate the way templates do.
   const jointFactory = (live: Manifest, locale: string) =>
-    createJoints(live, { translate: translate(locale) })
+    createJoints(live, { translate: translate(locale), islands: islandRegistry(live) })
 
   const tenants: Tenants = serve.tenants
     ? createTenants({
@@ -286,7 +331,7 @@ export async function bootApp(
           ? {
               prepare: async (key, a) => {
                 const ops = await migrateOne(a, manifest)
-                if (ops.length) console.log(`  migrate [${key}]: ${ops.length} operation(s)`)
+                if (ops.length) log(`  migrate [${key}]: ${ops.length} operation(s)`)
               },
             }
           : {}),
@@ -313,6 +358,41 @@ export async function bootApp(
   const sessionsOf = (url: URL, req: IncomingMessage): Promise<Sessions | null> =>
     sessions ? Promise.resolve(sessions) : tenants.ofRequest(url, req, async (t) => t.sessions)
 
+  // One cookie lookup per request even though scope, permissions and actor all
+  // depend on it. With tenant databases this also avoids three separate leases.
+  const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
+  const sessionRecordOf = (url: URL, req: IncomingMessage): Promise<SessionRecord | null> => {
+    if (!makeSessions) return Promise.resolve(null)
+    let record = sessionRecords.get(req)
+    if (!record) {
+      record = sessionsOf(url, req).then(async (manager) => {
+        const raw = (await manager?.of(req)) ?? null
+        if (!raw || !manager || !serve.resolveSession) return raw
+        const resolved = await tenants.ofRequest(url, req, (tenant) =>
+          serve.resolveSession!({ adapter: tenant.adapter, manifest: tenant.live, record: raw, url, req }),
+        )
+        if (!resolved) {
+          await manager.store.destroy(raw.id)
+          return null
+        }
+        const current: SessionContext = {
+          companies: raw.companies,
+          company: raw.company,
+          branch: raw.branch,
+          branches: raw.branches,
+          securityVersion: raw.securityVersion,
+        }
+        if (JSON.stringify(current) === JSON.stringify(resolved)) return raw
+        return manager.update(raw, resolved)
+      })
+      sessionRecords.set(req, record)
+    }
+    return record
+  }
+
+  const actorOf = async (url: URL, req: IncomingMessage): Promise<string | null> =>
+    (await sessionRecordOf(url, req))?.userId ?? null
+
   /**
    * The one place a request's identity is decided — one function since D27,
    * precisely so that replacing headers with a login would be one change.
@@ -336,11 +416,12 @@ export async function bootApp(
       return {
         company,
         companies: companies.length ? [...new Set([company, ...companies])] : null,
+        branch: (req.headers['x-ket-current-branch'] as string | undefined) ?? null,
         branches: list('x-ket-branch') || null,
       }
     }
     const s = await sessionsOf(url, req)
-    return s?.scopeOf(await s.of(req)) ?? { company: null }
+    return s?.scopeOf(await sessionRecordOf(url, req)) ?? { company: null }
   }
 
   /**
@@ -395,6 +476,7 @@ export async function bootApp(
     translate,
     styles,
     sessionsOf,
+    storageOf: async (url, req) => storageFor(tenants.keyOf(url, req)),
     document,
     joint: (url, req, key, props) =>
       tenants.ofRequest(url, req, async (t) => t.joints(localeOf(url, req)).render(key, props)),
@@ -414,10 +496,20 @@ export async function bootApp(
     appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
     callUnchecked: async (name, input, url, req) => {
       const scope = await scopeOf(url, req)
+      const actor = await actorOf(url, req)
       return tenants.ofRequest(
         url,
         req,
-        async (t) => (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope })).value,
+        async (t) =>
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope,
+              actor,
+              queueNotify: config.queueNotify,
+            })
+          ).value,
       )
     },
     call: async (name, input, url, req) => {
@@ -425,11 +517,21 @@ export async function bootApp(
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
+      const actor = await actorOf(url, req)
       return tenants.ofRequest(
         url,
         req,
         async (t) =>
-          (await callFn(name, input, { adapter: t.adapter, manifest: t.live, scope, allow })).value,
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope,
+              allow,
+              actor,
+              queueNotify: config.queueNotify,
+            })
+          ).value,
       )
     },
   }
@@ -458,8 +560,7 @@ export async function bootApp(
       // page carrying where it was going; anything else gets the status, because a
       // redirect to an HTML form is a useless answer to a fetch().
       if (makeSessions && !entry.anonymous) {
-        const s = await sessionsOf(url, req)
-        if (!(await s?.of(req))) {
+        if (!(await sessionRecordOf(url, req))) {
           const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
           return wantsHtml
             ? withHeaders(text('', { status: 303 }), {
@@ -505,11 +606,11 @@ export async function bootApp(
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
     if (!makeSessions) return null // no login exists yet; the shim is the identity
-    const s = await sessionsOf(url, req)
-    const record = await s?.of(req)
+    const record = await sessionRecordOf(url, req)
     if (!record) return anonymousFns // a stranger, not an administrator
     if (!serve.permissions) return null
-    return serve.permissions(ctx, record.userId)
+    const granted = await serve.permissions(ctx, record.userId)
+    return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
   }
 
   const pages = serve.pages
@@ -519,6 +620,14 @@ export async function bootApp(
       module: spec.name,
       message: `app "${spec.name}" resolves pages with "${pages.resolve}", which no installed module declares`,
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
+    })
+  }
+  if (pages?.region && spec.theme && !spec.theme.templates[pages.region]) {
+    throw new KetError({
+      code: 'E_PAGE_REGION_MISSING',
+      module: spec.name,
+      message: `app "${spec.name}" navigates through region "${pages.region}", which its theme does not render`,
+      hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
     })
   }
 
@@ -568,6 +677,16 @@ export async function bootApp(
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: allowFor,
+    resolveActor: actorOf,
+    queueNotify: config.queueNotify,
+    islandClients: (url: URL, req: IncomingMessage) =>
+      tenants.ofRequest(url, req, async (tenant) =>
+        Object.fromEntries(
+          Object.entries(tenant.live.islands)
+            .filter(([, island]) => island.client !== undefined)
+            .map(([name, island]) => [name, island.client as { src: string; export: string }]),
+        ),
+      ),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !spec.theme
       ? {}
@@ -583,6 +702,7 @@ export async function bootApp(
      */
     ...(pages
       ? {
+          ...(pages.region ? { pageRegion: pages.region } : {}),
           pageScope: async (url: URL, req: IncomingMessage) => {
             const site = { title: pages.siteTitle ?? spec.name }
             // The theme's layout writes <html lang>, so the locale has to reach it.
@@ -699,10 +819,7 @@ export async function bootApp(
 }
 
 /** bootApp, plus the banner and the signal handling a long-running process wants. */
-export async function serveApp(
-  spec: AppSpec,
-  o: { env?: Record<string, string | undefined>; port?: number } = {},
-): Promise<BootedApp> {
+export async function serveApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
   const booted = await bootApp(spec, o)
   console.log(await booted.banner())
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {

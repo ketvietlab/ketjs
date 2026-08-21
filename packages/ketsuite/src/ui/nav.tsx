@@ -1,13 +1,14 @@
 // The sidebar: permitted apps, the open app's menu, operational indicators and viewer.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import type { MenuNode, Translator } from 'ketjs'
 import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 
 export const HOOKS = [
   'sidebar',
+  'sidebar-main',
   'sidebar-header',
   'sidebar-brand',
   'sidebar-brand-name',
@@ -26,6 +27,7 @@ export const HOOKS = [
   'menu',
   'menu-item-wrap',
   'menu-item',
+  'menu-icon',
   'menu-label',
   'menu-dot',
   'menu-section',
@@ -34,19 +36,37 @@ export const HOOKS = [
   'menu-section-text',
   'menu-section-children',
   'sidebar-foot',
+  'sidebar-tools',
+  'sidebar-settings',
   'indicators',
   'indicator',
   'indicator-icon',
   'indicator-count',
+  'viewer-company-indicator',
   'viewer',
+  'viewer-trigger',
+  'viewer-presence',
+  'viewer-menu',
   'viewer-who',
   'viewer-name',
   'viewer-company',
   'signout',
   'signout-button',
+  'signout-label',
 ] as const
 
-export type Viewer = { name: string; company: string | null; companies: string[] }
+export type Viewer = {
+  name: string
+  company: string | null
+  companies: string[]
+  companyName?: string | null
+  branch?: string | null
+  branches?: string[] | null
+  branchName?: string | null
+  contextPath?: string | null
+  profilePath?: string | null
+  timezone?: string
+}
 
 export type Indicator = {
   id: string
@@ -54,6 +74,15 @@ export type Indicator = {
   label: string
   count: number
   path: string
+}
+
+export type SidebarOptions = {
+  menu: MenuNode[]
+  viewer?: Viewer | null
+  indicators?: Indicator[]
+  menuFilter?: string | null
+  navItems?: JSXChild
+  footItems?: JSXChild
 }
 
 const destination = (node: MenuNode): string => {
@@ -71,6 +100,7 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
       <details data-ui="menu-section" open={node.active || depth === 0}>
         <summary data-ui="menu-section-title">
           <span data-ui="menu-section-chevron">{icon('chevron-right')}</span>
+          {node.icon && hasIcon(node.icon) ? <span data-ui="menu-icon">{icon(node.icon)}</span> : ''}
           <span data-ui="menu-section-text">{node.label}</span>
         </summary>
         <ul data-ui="menu-section-children">
@@ -85,27 +115,21 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
   ) : (
     <li data-ui="menu-item-wrap" data-depth={String(depth)}>
       <a data-ui="menu-item" data-active={String(node.active)} href={destination(node)}>
-        <span data-ui="menu-dot" aria-hidden="true" />
+        {node.icon && hasIcon(node.icon) ? (
+          <span data-ui="menu-icon">{icon(node.icon)}</span>
+        ) : (
+          <span data-ui="menu-dot" aria-hidden="true" />
+        )}
         <span data-ui="menu-label">{node.label}</span>
       </a>
     </li>
   )
 
-export const sidebar = (
-  _: Translator,
-  options: {
-    menu: MenuNode[]
-    viewer?: Viewer | null
-    indicators?: Indicator[]
-    menuFilter?: string | null
-    navItems?: unknown
-    footItems?: unknown
-  },
-): TemplateResult => {
-  const { menu, viewer = null, indicators = [], navItems, footItems } = options
+export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateResult => {
+  const { menu, navItems } = options
   const app = menu.find((item) => item.active) ?? menu[0] ?? null
   return (
-    <aside data-ui="sidebar">
+    <>
       <div data-ui="sidebar-header">
         <a data-ui="sidebar-brand" href="/admin" title={_('backend.nav.apps')}>
           <span data-ui="sidebar-brand-name">{app ? app.label : _('backend.nav.apps')}</span>
@@ -171,8 +195,15 @@ export const sidebar = (
         )}
         {navItems ?? ''}
       </nav>
+    </>
+  )
+}
 
-      <div data-ui="sidebar-foot">
+export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateResult => {
+  const { viewer = null, indicators = [], footItems } = options
+  return (
+    <div data-ui="sidebar-foot">
+      <div data-ui="sidebar-tools">
         {(indicators.length > 0 || !!footItems) && (
           <div data-ui="indicators">
             {each(
@@ -195,28 +226,62 @@ export const sidebar = (
           </div>
         )}
 
+        {!!viewer?.company && (
+          <span
+            data-ui="viewer-company-indicator"
+            role="img"
+            title={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+            aria-label={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
+          >
+            {icon('building-2')}
+          </span>
+        )}
+
         {!!viewer && (
-          <div data-ui="viewer">
-            <span data-ui="avatar" aria-hidden="true">
-              {initials(viewer.name)}
-            </span>
-            <span data-ui="viewer-who">
-              <span data-ui="viewer-name">{viewer.name}</span>
-              {viewer.companies.length > 1 && <span data-ui="viewer-company">{viewer.company}</span>}
-            </span>
-            <form data-ui="signout" method="post" action="/logout">
-              <button
-                data-ui="signout-button"
-                type="submit"
-                title={_('backend.signOut')}
-                aria-label={_('backend.signOut')}
-              >
-                {icon('log-out')}
-              </button>
-            </form>
-          </div>
+          <details data-ui="viewer">
+            <summary data-ui="viewer-trigger" title={viewer.name} aria-label={viewer.name}>
+              <span data-ui="avatar" aria-hidden="true">
+                {initials(viewer.name)}
+              </span>
+              <span data-ui="viewer-presence" aria-hidden="true" />
+            </summary>
+            <div data-ui="viewer-menu">
+              <span data-ui="viewer-who">
+                <span data-ui="viewer-name">
+                  {viewer.profilePath ? <a href={viewer.profilePath}>{viewer.name}</a> : viewer.name}
+                </span>
+                {(viewer.companies.length > 1 || !!viewer.branchName) && (
+                  <span data-ui="viewer-company">
+                    {viewer.companyName ?? viewer.company}
+                    {viewer.branchName ? ` · ${viewer.branchName}` : ''}
+                  </span>
+                )}
+              </span>
+              <form data-ui="signout" method="post" action="/logout">
+                <button data-ui="signout-button" type="submit">
+                  {icon('log-out')}
+                  <span data-ui="signout-label">{_('backend.signOut')}</span>
+                </button>
+              </form>
+            </div>
+          </details>
         )}
       </div>
+
+      <a data-ui="sidebar-settings" href="/admin/settings">
+        {_('backend.nav.settings')}
+      </a>
+    </div>
+  )
+}
+
+export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => {
+  return (
+    <aside data-ui="sidebar">
+      <div data-ui="sidebar-main" data-ket-slot="backend.sidebar-main">
+        {sidebarMain(_, options)}
+      </div>
+      {sidebarFoot(_, options)}
     </aside>
   )
 }

@@ -31,6 +31,8 @@ test('config: sensible defaults, so a bare `ket serve` works with nothing set', 
   assert.equal(c.migrateOnBoot, true)
   assert.equal(c.autoInstall, true)
   assert.equal(c.bootstrapApps, null, 'the framework installs nothing an app did not ask for')
+  assert.equal(c.queueNotify, true)
+  assert.equal(c.webhookSecret, null)
 })
 
 test('config: every knob is settable, and DATABASE_URL is what switches the engine', () => {
@@ -42,6 +44,8 @@ test('config: every knob is settable, and DATABASE_URL is what switches the engi
     KET_APPS: 'website, product',
     KET_LOCALE: 'en',
     KET_COMPANY: 'acme',
+    KET_QUEUE_NOTIFY: '0',
+    KET_WEBHOOK_SECRET: 'provider-only-secret',
   })
   assert.equal(c.port, 8080)
   assert.equal(c.databaseUrl, 'postgres://x/y')
@@ -49,6 +53,8 @@ test('config: every knob is settable, and DATABASE_URL is what switches the engi
   assert.equal(c.autoInstall, false)
   assert.deepEqual(c.bootstrapApps, ['website', 'product'], 'whitespace is not a module name')
   assert.equal(c.defaultCompany, 'acme')
+  assert.equal(c.queueNotify, false, 'polling remains available when notification is disabled')
+  assert.equal(c.webhookSecret, 'provider-only-secret')
 })
 
 test("config: an app's defaults lose to the environment, and win over the framework's", () => {
@@ -250,10 +256,12 @@ test('ket new: writes an app whose workspace composes', async () => {
   assert.ok(existsSync(join(dir, 'tsconfig.json')))
   assert.ok(existsSync(join(dir, 'biome.json')))
   assert.ok(existsSync(join(dir, 'tools/dev.mjs')))
+  assert.ok(existsSync(join(dir, 'test/app.test.ts')))
   assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),
     /ket serve --workspace dist\/ket\.workspace\.js/,
   )
+  assert.match(readFileSync(join(dir, 'package.json'), 'utf8'), /ket test dist\/test/)
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {

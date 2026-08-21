@@ -60,15 +60,36 @@ export const models: Record<string, ModelDef> = {
       partnerId: 'ref:partner.Partner',
       // 'contact' | 'invoice' | 'delivery' | 'other'
       use: 'text',
-      street: 'text',
+      street1: 'text',
       street2: 'text?',
-      city: 'text',
-      zip: 'text?',
-      /** Province or state, as free text until there is a reason for a table. */
-      state: 'text?',
-      country: 'text',
-      /** The one to reach for when a document names no address of this use. */
-      isDefault: 'bool',
+      locality: 'text?',
+      postalCode: 'text?',
+      /** ISO alpha-2 remains available when a country has no installed catalog. */
+      countryCode: 'text',
+      countryId: 'ref:address.Country?',
+      /** Deepest selected node; its parents provide every higher level. */
+      divisionId: 'ref:address.Division?',
+      /** Explicit fallback for countries without a packaged administrative catalog. */
+      divisionText: 'text?',
+    },
+  },
+
+  /**
+   * The selected address for one purpose. A separate unique row makes the
+   * invariant enforceable by PostgreSQL; a boolean on Address cannot prevent two
+   * concurrent requests from both becoming default.
+   */
+  AddressDefault: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      partnerId: 'ref:partner.Partner',
+      use: 'text',
+      addressId: 'ref:partner.Address',
+    },
+    indexes: {
+      partner_use: { fields: ['partnerId', 'use'], unique: true },
+      address: { fields: ['addressId'], unique: true },
     },
   },
 
@@ -81,6 +102,7 @@ export const models: Record<string, ModelDef> = {
       // 'customer' | 'supplier' | 'employee'
       role: 'text',
     },
+    indexes: { partner_role: { fields: ['partnerId', 'role'], unique: true } },
   },
 
   /**
@@ -99,12 +121,9 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       partnerId: 'ref:partner.Partner',
-      paymentTermDays: 'int?',
       creditLimit: 'decimal?',
-      /** Ledger account, once accounting exists. Text until then, not a dangling ref. */
-      receivableAccount: 'text?',
-      payableAccount: 'text?',
       note: 'text?',
     },
+    indexes: { company_partner: { fields: ['companyId', 'partnerId'], unique: true } },
   },
 }

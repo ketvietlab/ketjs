@@ -1,6 +1,6 @@
 # Backend UI — bàn giao cho đội design
 
-## Trạng thái triển khai — 2026-08-19
+## Trạng thái triển khai — 2026-08-20
 
 Visual baseline đã hoàn tất trong `design/tokens.css` và `design/admin.css` theo hướng
 **enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
@@ -10,11 +10,12 @@ Các thông số đã chốt:
 
 | Vai trò | Giá trị |
 |---|---:|
-| Sidebar desktop | `228px` |
-| Topbar desktop | `52px` |
-| Data row | `44px` |
-| Control compact desktop | `32px` |
-| Touch target mobile | `44px` |
+| Sidebar desktop | `224px` |
+| Topbar desktop | `44px` |
+| Data row | `36px` |
+| Control desktop | `28px` |
+| Icon trong control | `14px` |
+| Touch target action mobile | `44px` |
 | Body / compact UI | `14px` / `13px` |
 | Breakpoint mobile shell | `< 768px` |
 
@@ -139,7 +140,8 @@ lập bằng CSS.
 
 ## Bàn giao cho framework
 
-Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại thuộc markup/behavior:
+Baseline thị giác đã phủ shell, data view và component kit hiện tại. Các việc còn lại
+thuộc behavior hoặc workflow chưa có contract:
 
 - nối nút Cài/Gỡ vào server function;
 - thêm island cho List View và những chỗ cần tương tác thật;
@@ -147,7 +149,6 @@ Phần CSS trong contract hiện tại đã hoàn tất. Các việc còn lại 
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
 - thêm toggle `data-theme="light|dark"`; system preference hiện là fallback;
-- form tạo/sửa trang;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
@@ -158,9 +159,9 @@ preference. Quality gate chuẩn là `npm run verify` với Node `>=24`.
 ở thời điểm bàn giao, không thay thế token, CSS hoặc `data-ui` contract làm đặc tả.
 
 
-## Màn hình đăng nhập và thanh danh tính (mới)
+## Màn hình đăng nhập và footer sidebar
 
-Hai bề mặt vừa thêm, chưa có CSS. Markup đã xong, phần nhìn là của đội design.
+Hai bề mặt dùng cùng token, focus contract và density với phần backend còn lại.
 
 **Màn đăng nhập** — `/login`, do module `user` dựng:
 
@@ -173,37 +174,45 @@ Hai bề mặt vừa thêm, chưa có CSS. Markup đã xong, phần nhìn là c�
 | `[data-ui="field"]`, `[data-ui="field-label"]`, `[data-ui="field-input"]` | một ô nhập; dùng lại được ở form khác |
 | `[data-ui="login-submit"]` | nút gửi |
 | `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, chỉ hiện khi có nhiều hơn một |
+| `[data-ui="login-providers"]`, `[data-ui="login-provider"]` | các OIDC provider đang hoạt động; không render logo hoặc request ngoài |
+| `[data-ui="login-divider"]` | ngăn cách đăng nhập mật khẩu và OIDC |
 
 Trang này **chạy không cần JavaScript** và phải giữ như vậy: một trang đăng nhập
 hỏng khi script lỗi là trang hỏng đúng lúc người ta cần vào nhất.
 
-**Thanh danh tính** — nằm trong `[data-ui="topbar"]` đã có, bên cạnh
-`[data-ui="title"]`:
+**Footer sidebar** — bám theo cấu trúc KétViệt cũ: systray một hàng, divider, rồi
+liên kết Cài đặt. Tin nhắn/Hoạt động là ô icon + số đếm; kế bên là công ty hiện tại
+và avatar có presence dot. Avatar là `<summary>` native, mở menu tài khoản mà không
+cần JavaScript:
 
 | Selector | Là gì |
 |---|---|
-| `[data-ui="viewer"]` | cụm bên phải thanh trên |
+| `[data-ui="sidebar-tools"]` | một hàng Tin nhắn · Hoạt động · Công ty · Avatar |
+| `[data-ui="indicator"]`, `[data-ui="mail-indicator"]`, `[data-ui="activity-indicator"]` | ô đếm nghiệp vụ, cả ô là link |
+| `[data-ui="viewer-company-indicator"]` | công ty/chi nhánh đang chọn, icon có accessible label |
+| `[data-ui="viewer"]`, `[data-ui="viewer-trigger"]` | `<details>` tài khoản và avatar mở nó |
+| `[data-ui="viewer-presence"]` | dấu hiện diện, chỉ là thông tin thị giác |
+| `[data-ui="viewer-menu"]` | popover native chứa danh tính và đăng xuất |
 | `[data-ui="viewer-name"]` | tên người đang đăng nhập |
 | `[data-ui="viewer-company"]` | công ty đang chọn — **chỉ hiện khi tài khoản thuộc nhiều hơn một công ty** |
 | `[data-ui="signout"]` | form POST tới `/logout` |
 | `[data-ui="signout-button"]` | nút bên trong nó |
+| `[data-ui="sidebar-settings"]` | link thật tới `/admin/settings`, nằm dưới divider |
 
 Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
 
     login            đăng nhập, trống
     login-failed     sai mật khẩu — thông báo có role="alert"
     login-next       có ô ẩn "next", quay lại nơi đang tới
-    viewer-one       thanh trên, tài khoản một công ty
-    viewer-many      thanh trên, nhiều công ty — có tên công ty đang chọn
-    viewer-long      tên người và tên công ty đều dài, kiểm tra thanh trên không vỡ
+    viewer-one       footer, tài khoản một công ty
+    viewer-many      footer, nhiều công ty — có tên công ty/chi nhánh đang chọn
+    viewer-long      tên người và tên công ty đều dài, kiểm tra popover không vỡ
 
-Hiện **chưa có quy tắc CSS nào** cho các selector này: trang đăng nhập nhúng
-`tokens.css` và `admin.css` như mọi màn hình khác, nhưng hai file đó chưa nói gì
-về `[data-ui="login"]`. Đó là phần việc tiếp theo của đội design.
+Các selector này đã có baseline trong `admin.css` và nằm trong `@layer ket.app`, nên
+`ket.user` vẫn override được mà không cần tăng specificity.
 
-Một chỗ chưa có điều khiển: tài khoản thuộc nhiều công ty thì `viewer-company` chỉ
-**hiện** công ty đang chọn, chưa **đổi** được. Khi vẽ tới đó, cần một control ở chính
-chỗ này.
+Việc đổi công ty/chi nhánh dùng `context-switcher` trên thanh trên. Footer chỉ hiển
+thị ngữ cảnh hiện tại trong menu tài khoản để giữ hàng systray gọn như KétViệt cũ.
 
 ## Điều hướng hai cấp
 
@@ -291,9 +300,10 @@ không có thanh ứng dụng ngang trên desktop, systray nằm ở chân. Cùn
 bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên nào thì phải nói bên
 kia — mục tiêu là hai sản phẩm trông như một.
 
-Icon: 12 glyph Lucide (ISC) **chép vào** `icons.ts`, không cài package — giống hệt
-cách theme Odoo làm. `MenuDef.icon` là *tên* icon; tên nào không có thì rơi về
-monogram (chữ đầu), không mất dòng.
+Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
+theme Odoo làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
+design system sở hữu glyph. Tên app không có glyph thì rơi về monogram (chữ đầu),
+tên menu con không có glyph thì rơi về dot; cả hai đều không làm mất dòng.
 
 `[data-ui="icon"]` mặc định `1em`. Hộp nào cỡ cố định thì tự khai báo cho `<svg>`
 bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
@@ -308,4 +318,39 @@ bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
 | `[data-ui="app-entry"][data-active]`, `[data-ui="app-icon"]`, `[data-ui="app-monogram"]` | một app |
 | `[data-ui="menu-item-wrap"][data-depth]` | một mục, kèm độ sâu |
 | `[data-ui="menu-section-chevron"]`, `[data-ui="menu-section-text"]`, `[data-ui="menu-section-children"]` | nhóm; con có đường kẻ dọc bên trái |
-| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá |
+| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-icon"]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá; icon do module chọn, dot là fallback |
+
+## Form và media
+
+`recordForm` là form native, không cần island. Required có indicator nhìn thấy được;
+helper và lỗi tại field được nối với control qua `aria-describedby`; lỗi tổng hợp có
+`role="alert"`. Checkbox giữ vùng label click được, còn control invalid/disabled/focus
+dùng đúng semantic token.
+
+Mỗi cụm quyết định chỉ có **một primary**. `recordForm` bắt buộc khai báo
+`submitVariant`; module không được dựa vào màu mặc định:
+
+| Vai trò | Dùng cho |
+| --- | --- |
+| `primary` | bước chính hoàn tất mục tiêu hiện tại: tạo, lưu, xác nhận, hoàn tất |
+| `secondary` | phương án phụ hoặc có thể thử lại: đổi hạn, tính lại, retry |
+| `tertiary` | điều hướng, quay lại, đóng một bề mặt |
+| `destructive` | huỷ nghiệp vụ hoặc xoá dữ liệu |
+
+Các form liên quan đặt trong `formCluster`, là block flow hợp lệ; không đặt `<form>`
+trong `inline`/phrasing content. Form bản ghi desktop dùng nhịp **label | control** trên
+cùng một hàng: label nằm trong rail hẹp, control chiếm phần còn lại; helper và lỗi bám
+theo cột control. Input và nút liền kề dùng `layout: 'inline'`, chung baseline và chỉ
+wrap theo **cả cụm** khi không đủ chỗ. Mọi `form-control`, kể cả
+`date`/`datetime-local`, có `inline-size: 100%`, `min-inline-size: 0` và chiều cao
+`28px` để native picker không tự nới grid. Mobile hẹp xếp label trên control; action
+giữ touch target `44px`.
+
+`mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
+sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
+chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `28px`,
+tooltip và accessible label; mobile tăng vùng bấm lên `44px` theo quality gate.
+
+Status surface (`neutral`, `info`, `positive`, `warning`, `danger`) giữ surface sáng và
+màu chữ cố định ở cả light/dark như KétViệt Design System. Chỉ canvas, surface, border,
+text, active navigation và focus role được remap khi đổi theme.

@@ -1,4 +1,5 @@
 import { defineModule } from 'ketjs'
+import { fills } from './fills.ts'
 import { islands } from './islands.ts'
 
 export default defineModule({
@@ -8,6 +9,7 @@ export default defineModule({
   title: 'Tìm kiếm',
   summary: 'Ô tìm kiếm đặt được vào bất kỳ theme nào.',
   category: 'Website',
+  assets: new URL('./client/', import.meta.url),
   messages: {
     vi: {
       'app.title': 'Tìm kiếm',
@@ -21,5 +23,6 @@ export default defineModule({
     },
   },
   depends: ['website'],
+  fills,
   islands,
 })

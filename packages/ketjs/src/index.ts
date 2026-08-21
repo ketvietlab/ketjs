@@ -1,5 +1,19 @@
 export { defineModule, defineTheme } from './kernel/define.ts'
-export { defineApp, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { defineApp, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { resolveWorkspace } from './kernel/modules.ts'
+export type {
+  ModuleRef,
+  ModulePath,
+  AppDeclaration,
+  AppSpec,
+  WorkspaceDeclaration,
+} from './kernel/workspace.ts'
+export type {
+  ModuleSource,
+  ResolvedModuleInfo,
+  ResolvedWorkspace,
+  ResolveWorkspaceOptions,
+} from './kernel/modules.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
 export { createAppRegistry, restrictManifest } from './kernel/apps.ts'
@@ -11,17 +25,73 @@ export type { AppRegistry, AppInfo, AppState } from './kernel/apps.ts'
 export type { Placement, LayoutError } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
+export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
 export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
 export { bootApp, serveApp } from './server/boot.ts'
-export type { ServeSpec, ServeContext, PagesSpec, BootedApp, Route } from './server/boot.ts'
+export type {
+  ServeSpec,
+  ServeContext,
+  SessionResolveContext,
+  PagesSpec,
+  BootedApp,
+  BootAppOptions,
+  Route,
+} from './server/boot.ts'
+export { bootRuntime } from './server/runtime.ts'
+export type { BootedRuntime } from './server/runtime.ts'
+export { bootWorker, serveWorker } from './server/worker.ts'
+export type { BootedWorker, WorkerLog } from './server/worker.ts'
+export { defineJob, registerJobs } from './server/jobs.ts'
 export type { RouteParams } from './kernel/routes.ts'
-export { page, fragment, json, text, raw, document, withHeaders } from './server/respond.ts'
-export type { Html, RouteResult } from './server/respond.ts'
+export {
+  page,
+  fragment,
+  navigablePage,
+  isNavigationRequest,
+  NAVIGATION_HEADER,
+  NAVIGATION_VERSION,
+  NAVIGATION_TYPE,
+  json,
+  text,
+  bytes,
+  streamed,
+  raw,
+  document,
+  withHeaders,
+} from './server/respond.ts'
+export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
 export type { RuntimeConfig, OpenStore } from './server/config.ts'
+export {
+  storageFromConfig,
+  localStorage,
+  s3Storage,
+  namespacedStorage,
+  effectStorage,
+} from './server/storage/index.ts'
+export { signRequest, presignUrl, sha256 } from './server/storage/index.ts'
+export type { Storage, Stored, OpenStorage, S3StorageOptions, StorageEffect } from './server/storage/index.ts'
+export type { SigV4Credentials } from './server/storage/index.ts'
+export {
+  effectTransport,
+  memoryTransport,
+  unavailableTransport,
+  validateOutboundMessage,
+} from './server/transport/index.ts'
+export type {
+  MemoryTransport,
+  OpenTransport,
+  OutboundMessage,
+  OutboundTransport,
+  TransportAddress,
+  TransportEffect,
+  TransportReceipt,
+} from './server/transport/index.ts'
+export { multipart } from './server/multipart.ts'
+export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
 export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
 export {
   createSessions,
@@ -30,9 +100,16 @@ export {
   parseCookies,
   SESSION_COOKIE,
 } from './server/session.ts'
-export type { Sessions, SessionOptions, SessionStore, SessionRecord } from './server/session.ts'
+export type {
+  Sessions,
+  SessionOptions,
+  SessionContext,
+  SessionStore,
+  SessionRecord,
+} from './server/session.ts'
 export type { StreamStore, Writer } from './server/stream.ts'
-export { createQueue } from './server/queue.ts'
+export { createQueue, queueFor, JOB_CHANNEL } from './server/queue.ts'
+export type { DurableJob, JobState, Queue, QueueListOptions } from './server/queue.ts'
 export { createIdempotency } from './server/idem.ts'
 
 export { sqliteAdapter } from './data/sqlite.ts'
@@ -44,9 +121,62 @@ export type { AdapterPool, PoolOptions } from './data/pool.ts'
 export { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
 export type { MigrationResult } from './data/fleet.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
-export type { Dialect, Sql, Table, Order } from './data/query.ts'
-export { eq, ne, gt, lt, gte, lte, like, inArray, isNull, isNotNull, and, or, not } from './data/expr.ts'
+export type {
+  Dialect,
+  Sql,
+  Table,
+  Order,
+  GroupSpec,
+  AggregateSpec,
+  GroupOrder,
+  GroupRow,
+} from './data/query.ts'
+export { dateBucket, isTimezone, assertTimezone, localDateTimeToUtc, localDayRange } from './data/time.ts'
+export type { GroupInterval } from './data/time.ts'
+export {
+  eq,
+  ne,
+  gt,
+  lt,
+  gte,
+  lte,
+  numericCompare,
+  like,
+  ilike,
+  inArray,
+  isNull,
+  isNotNull,
+  bucketEq,
+  and,
+  or,
+  not,
+} from './data/expr.ts'
 export type { Col, Expr } from './data/expr.ts'
+export {
+  defineListSearch,
+  parseListState,
+  encodeListState,
+  validateListState,
+  compileListFilter,
+} from './data/list-search.ts'
+export type {
+  ListFieldType,
+  FilterOperator,
+  FilterRule,
+  FilterGroup,
+  FilterNode,
+  SearchFieldSpec,
+  FilterFieldSpec,
+  GroupFieldSpec,
+  SortFieldSpec,
+  PresetFilterSpec,
+  ListSearchSpec,
+  ListGroup,
+  ListSort,
+  ListState,
+  ParsedListState,
+  ListSearchLimits,
+} from './data/list-search.ts'
 export { changeset, Changeset } from './data/changeset.ts'
 export type { FieldError, Validator } from './data/changeset.ts'
 export {
@@ -66,6 +196,7 @@ export {
   mountHydrated,
   renderIsland,
   hydrateIslands,
+  createIslandManager,
   ISLAND_TAG,
 } from 'ketjs-view'
 export { createTheme } from './theme/render.ts'

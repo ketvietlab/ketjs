@@ -239,6 +239,20 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     const live = by.filter(keep)
     if (live.length) provided[region] = live
   }
+  const fills = manifest.fills.filter((fill) => keep(fill.by) && joints[fill.joint] !== undefined)
+  const patches = Object.entries(joints).flatMap(([key, joint]) => {
+    if (!joint.omittedBy.length) return []
+    const fillers = fills.filter((fill) => fill.joint === key).map((fill) => fill.by)
+    return fillers.length
+      ? [
+          {
+            by: joint.omittedBy.join(', '),
+            target: key,
+            reason: `omitted, so fills from ${fillers.join(', ')} will not render`,
+          },
+        ]
+      : []
+  })
 
   return {
     ...manifest,
@@ -262,11 +276,13 @@ export function restrictManifest(manifest: Manifest, enabled: Set<string>): Mani
     styles: manifest.styles.filter((s) => keep(s.by)),
     routes: pick(manifest.routes),
     functions: pick(manifest.functions),
+    jobs: pick(manifest.jobs),
     sections: pick(manifest.sections),
     islands: pick(manifest.islands),
     views: pick(manifest.views),
     joints,
-    fills: manifest.fills.filter((f) => keep(f.by) && joints[f.joint] !== undefined),
+    fills,
+    patches,
     regions: { required: manifest.regions.required, provided },
   }
 }

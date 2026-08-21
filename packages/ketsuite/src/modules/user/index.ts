@@ -22,9 +22,15 @@ export default defineModule({
   functions,
   messages,
   routes,
+  joints: {
+    'auth.mail': {
+      props: { userId: 'id', kind: 'text', token: 'text', expiresAt: 'datetime' },
+    },
+  },
 })
 
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'
 export { routes } from './routes.ts'
 export { loginScreen } from './login.ts'
 export { permittedFor } from './roles.ts'
+export { resolveUserSession } from './session-context.ts'

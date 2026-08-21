@@ -8,7 +8,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { KetError } from '../kernel/errors.ts'
 import { memorySessionStore } from './sessionstore.ts'
-import type { SessionRecord, SessionStore } from './sessionstore.ts'
+import type { SessionContext, SessionRecord, SessionStore } from './sessionstore.ts'
 import type { Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 
@@ -70,12 +70,17 @@ export type Sessions = {
     userId: string
     companies: string[]
     company?: string | null
+    branch?: string | null
     branches?: string[] | null
+    securityVersion?: number
   }): Promise<{ record: SessionRecord; cookie: string }>
   /** The session a request carries, refreshed if it is still alive. */
   of(req: IncomingMessage): Promise<SessionRecord | null>
   end(req: IncomingMessage): Promise<void>
   endUser(userId: string): Promise<number>
+  endUserExcept(userId: string, keepId: string): Promise<number>
+  /** Atomically switch or reconcile the live company/branch context. */
+  update(record: SessionRecord, context: SessionContext): Promise<SessionRecord | null>
   /** A cookie that clears the browser's. */
   clearCookie(): string
   scopeOf(record: SessionRecord | null): Scope | null
@@ -113,7 +118,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     store,
     ephemeralSecret,
 
-    async start({ userId, companies, company, branches }) {
+    async start({ userId, companies, company, branch, branches, securityVersion }) {
       if (!companies.length) {
         throw new KetError({
           code: 'E_SESSION_NO_COMPANY',
@@ -129,13 +134,25 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
           hint: 'the active company must be one the user is a member of',
         })
       }
+      const readableBranches = branches ?? null
+      const activeBranch = branch ?? readableBranches?.[0] ?? null
+      if (activeBranch && readableBranches && !readableBranches.includes(activeBranch)) {
+        throw new KetError({
+          code: 'E_WRITE_BRANCH_NOT_READABLE',
+          message: `session for "${userId}" would write to branch "${activeBranch}" outside its readable set`,
+          hint: 'the active branch must be one the user is a member of',
+        })
+      }
       const at = now()
       const record: SessionRecord = {
         id: randomBytes(32).toString('base64url'),
         userId,
         companies: [...companies],
         company: active,
-        branches: branches ?? null,
+        branch: activeBranch,
+        branches: readableBranches,
+        securityVersion: securityVersion ?? 0,
+        revision: 0,
         createdAt: at,
         expiresAt: at + idleTtl,
       }
@@ -173,13 +190,38 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       return store.destroyUser(userId)
     },
 
+    endUserExcept(userId, keepId) {
+      return store.destroyUserExcept(userId, keepId)
+    },
+
+    update(record, context) {
+      if (!context.company || !context.companies.includes(context.company)) {
+        throw new KetError({
+          code: 'E_WRITE_COMPANY_NOT_READABLE',
+          message: 'the active company must be one of the session readable companies',
+        })
+      }
+      if (context.branch && context.branches && !context.branches.includes(context.branch)) {
+        throw new KetError({
+          code: 'E_WRITE_BRANCH_NOT_READABLE',
+          message: 'the active branch must be one of the session readable branches',
+        })
+      }
+      return store.updateContext(record.id, record.revision, context)
+    },
+
     clearCookie() {
       return cookie('', 0)
     },
 
     scopeOf(record) {
       if (!record) return o.anonymous ?? null
-      return { company: record.company, companies: record.companies, branches: record.branches }
+      return {
+        company: record.company,
+        companies: record.companies,
+        branch: record.branch,
+        branches: record.branches,
+      }
     },
 
     sweep() {
@@ -189,4 +231,4 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
 }
 
 export { memorySessionStore, dbSessionStore } from './sessionstore.ts'
-export type { SessionStore, SessionRecord } from './sessionstore.ts'
+export type { SessionContext, SessionStore, SessionRecord } from './sessionstore.ts'

@@ -23,7 +23,7 @@ const owner = defineModule({
 const filler = (name: string, template: string, extra: Record<string, unknown> = {}) =>
   defineModule({ name, depends: ['screen'], fills: { 'screen:card.actions': template }, ...extra })
 
-const render = (mods: Parameters<typeof compose>[0], props: Record<string, unknown> = {}) =>
+const render = (mods: Parameters<typeof compose>[0], props: Record<string, unknown> = { app: {} }) =>
   createJoints(compose(mods)).render('screen:card.actions', props).html
 
 test('fill: renders into the joint it names', () => {
@@ -68,6 +68,95 @@ test('fill: a function cannot be smuggled in through props', () => {
       return true
     },
   )
+})
+
+test('fill: declared prop types are checked at the extension boundary', () => {
+  assert.throws(
+    () => render([owner, filler('a', `x`)], { app: 'not an object' }),
+    /joint "screen:card.actions" prop "app" expects json/,
+  )
+})
+
+test('fill: required props cannot be missing or null', () => {
+  assert.throws(() => render([owner, filler('a', `x`)], {}), /prop "app" expects json/)
+  assert.throws(() => render([owner, filler('a', `x`)], { app: null }), /prop "app" expects json/)
+
+  const optionalOwner = defineModule({
+    name: 'optional',
+    joints: { slot: { props: { note: 'text?' } } },
+  })
+  const optionalFill = defineModule({
+    name: 'optional_fill',
+    depends: ['optional'],
+    fills: { 'optional:slot': `[{{ note }}]` },
+  })
+  assert.equal(createJoints(compose([optionalOwner, optionalFill])).render('optional:slot').html, '[]')
+})
+
+test('fill: nested callables and non-finite numbers cannot cross as data', () => {
+  assert.throws(
+    () => render([owner, filler('a', `{{ app.callback }}`)], { app: { callback: () => 'secret' } }),
+    /contains a non-data value/,
+  )
+  assert.throws(
+    () => render([owner, filler('a', `{{ app.total }}`)], { app: { total: Number.POSITIVE_INFINITY } }),
+    /contains a non-data value/,
+  )
+})
+
+test('fill: a singleton joint refuses ambiguous contributors at compose time', () => {
+  const singleton = defineModule({
+    name: 'single',
+    joints: { slot: { multiple: false } },
+  })
+  assert.throws(
+    () =>
+      compose([
+        singleton,
+        defineModule({ name: 'left', depends: ['single'], fills: { 'single:slot': 'left' } }),
+        defineModule({ name: 'right', depends: ['single'], fills: { 'single:slot': 'right' } }),
+      ]),
+    /accepts one fill but 2 modules fill it/,
+  )
+})
+
+test('fill: recursive joints fail with the chain instead of overflowing the stack', () => {
+  const recursive = filler('recursive', `{% joint "screen:card.actions" %}`)
+  assert.throws(
+    () => render([owner, recursive]),
+    /joint recursion: screen:card.actions -> screen:card.actions/,
+  )
+})
+
+test('fill: an island can render inside a first-party screen joint', () => {
+  const extension = defineModule({
+    name: 'interactive',
+    depends: ['screen'],
+    islands: {
+      panel: {
+        props: { app: 'json' },
+        view: (props) => {
+          const app = props.app as { name: string }
+          return () => html`<button>${app.name}</button>`
+        },
+      },
+    },
+    fills: { 'screen:card.actions': `{% island "panel" %}` },
+  })
+  const manifest = compose([owner, extension])
+  const markup = createJoints(manifest, { islands: { panel: extension.islands.panel!.view } }).render(
+    'screen:card.actions',
+    { app: { name: 'Kho' }, secret: 'no' },
+  ).html
+  assert.match(markup, /data-island="panel"/)
+  assert.match(markup, /><!--k\[-->Kho<!--k--><\/button>/)
+  assert.ok(!markup.includes('secret'))
+})
+
+test('fill: unknown joints fail consistently for render() and shows()', () => {
+  const joints = createJoints(compose([owner]))
+  assert.throws(() => joints.render('screen:nope'), /no installed module publishes/)
+  assert.throws(() => joints.shows('screen:nope'), /no installed module publishes/)
 })
 
 test('fill: naming a joint nobody publishes is a build error, with a suggestion', () => {
@@ -115,10 +204,11 @@ test('omit: an omission by a module that is switched off is not an omission', ()
   ])
   const live = restrictManifest(full, new Set(['screen', 'a']))
   assert.equal(
-    createJoints(live).render('screen:card.actions').html,
+    createJoints(live).render('screen:card.actions', { app: {} }).html,
     '<i>x</i>',
     'the joint comes back, exactly as its fills would',
   )
+  assert.deepEqual(live.patches, [], 'the live diagnostics do not report an omission that is switched off')
 })
 
 test('omit: omitting a joint nobody publishes is a build error', () => {
@@ -151,6 +241,7 @@ test('omit: a fill that will never render is recorded rather than left to be dis
 test('screen: the fill lands verbatim between the hydration markers', () => {
   const markup = createJoints(compose([owner, filler('a', `<a href="/x">Kho</a>`)])).render(
     'screen:card.actions',
+    { app: {} },
   )
   const out = renderToString(html`<div data-ui="app-actions">${markup}</div>`)
   assert.equal(out, '<div data-ui="app-actions"><!--k[--><a href="/x">Kho</a><!--k--></div>')
@@ -164,13 +255,25 @@ test('bridge: a module does not depend on the admin just to add a button to it',
   //
   // The fill belongs in a bridge that installs itself once both sides are there,
   // which is what install:'auto' was built for and what Odoo does with sale_stock.
-  const { product, productBackend, uom } = await import('ketsuite')
+  const { address, company, partner, product, productBackend, productMedia, storage, uom } = await import(
+    'ketsuite'
+  )
   const backend = (await import('ketsuite/backend')).default
 
   const catalogueOnly = compose([uom, product])
   assert.ok(catalogueOnly.modules['product'], 'a catalogue composes with no admin at all')
 
-  const both = compose([uom, product, backend, productBackend])
+  const both = compose([
+    address,
+    partner,
+    company,
+    storage,
+    uom,
+    product,
+    productMedia,
+    backend,
+    productBackend,
+  ])
   assert.equal(
     both.modules['product_backend']!.install,
     'auto',

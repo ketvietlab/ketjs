@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter, schemaFromManifest } from 'ketjs'
 import type { Adapter, Manifest, Scope } from 'ketjs'
 import { partner, company, user, hashPassword, verifyPassword, needsRehash } from 'ketsuite'
+import { address } from 'ketsuite'
 
-const mods = [partner, company, user]
+const mods = [address, partner, company, user]
 const SCOPE: Scope = { company: 'c1' }
 
 async function boot(): Promise<{ adapter: Adapter; manifest: Manifest }> {
@@ -20,7 +21,8 @@ const call = (
   fn: string,
   args: Record<string, unknown> = {},
   scope: Scope = SCOPE,
-) => callFn(fn, args, { ...o, scope }).then((r) => r.value as Record<string, unknown>)
+  actor?: string,
+) => callFn(fn, args, { ...o, scope, actor }).then((r) => r.value as Record<string, unknown>)
 
 // ── the party model, and what splitting addresses out removed ────────────────
 
@@ -28,7 +30,7 @@ test('partner: a party is a person or an organisation, and nothing else', async 
   const o = await boot()
   const bad = await call(o, 'partner.savePartner', { id: 'p1', kind: 'robot', name: 'X' })
   assert.equal(bad.ok, false)
-  assert.match(JSON.stringify(bad.errors), /loại đối tác/)
+  assert.match(JSON.stringify(bad.errors), /partner\.error\.kind/)
   const good = await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
   assert.equal(good.ok, true)
   await o.adapter.close()
@@ -48,11 +50,16 @@ test('partner: an address is its own row, so there is nothing to compute about w
       street: '1 Lê Lợi',
       city: 'Hà Nội',
       country: 'VN',
+      isDefault: true,
     })
     assert.equal(r.ok, true)
   }
   const got = await call(o, 'partner.getPartner', { id: 'p1' })
   assert.equal((got.addresses as unknown[]).length, 2)
+  assert.equal(
+    (got.addresses as Array<{ isDefault: boolean }>).filter((address) => address.isDefault).length,
+    2,
+  )
   // In Odoo both of these would be partners, and `commercial_partner_id` would
   // exist to walk back up and answer "so who is the customer".
   const parties = await callFn('partner.listPartners', {}, { ...o, scope: SCOPE })
@@ -71,6 +78,33 @@ test('partner: an address must belong to a party that exists', async () => {
     country: 'VN',
   })
   assert.equal(r.ok, false)
+  await o.adapter.close()
+})
+
+test('partner: an existing address cannot be moved to another party', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
+  await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Globex' })
+  await call(o, 'partner.saveAddress', {
+    id: 'a1',
+    partnerId: 'p1',
+    use: 'invoice',
+    street: 'A',
+    city: 'Hà Nội',
+    country: 'VN',
+  })
+  const moved = await call(o, 'partner.saveAddress', {
+    id: 'a1',
+    partnerId: 'p2',
+    use: 'invoice',
+    street: 'B',
+    city: 'Hà Nội',
+    country: 'VN',
+  })
+  assert.equal(moved.ok, false)
+  assert.match(JSON.stringify(moved.errors), /partner\.error\.addressOwner/)
+  assert.equal(((await call(o, 'partner.getPartner', { id: 'p1' })).addresses as unknown[]).length, 1)
+  assert.equal(((await call(o, 'partner.getPartner', { id: 'p2' })).addresses as unknown[]).length, 0)
   await o.adapter.close()
 })
 
@@ -102,19 +136,81 @@ test('partner: a party cannot be its own parent', async () => {
   await o.adapter.close()
 })
 
+test('partner: hierarchy rejects deep cycles and a person parenting a company', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'a', kind: 'company', name: 'A' })
+  await call(o, 'partner.savePartner', { id: 'b', kind: 'company', name: 'B', parentId: 'a' })
+  await call(o, 'partner.savePartner', { id: 'c', kind: 'company', name: 'C', parentId: 'b' })
+  const cycle = await call(o, 'partner.savePartner', {
+    id: 'a',
+    kind: 'company',
+    name: 'A',
+    parentId: 'c',
+  })
+  assert.equal(cycle.ok, false)
+  assert.match(JSON.stringify(cycle.errors), /partner\.error\.parentCycle/)
+
+  await call(o, 'partner.savePartner', { id: 'person', kind: 'person', name: 'Person' })
+  const wrongParent = await call(o, 'partner.savePartner', {
+    id: 'child',
+    kind: 'company',
+    name: 'Child',
+    parentId: 'person',
+  })
+  assert.equal(wrongParent.ok, false)
+  assert.match(JSON.stringify(wrongParent.errors), /partner\.error\.personCannotOwnCompany/)
+  await o.adapter.close()
+})
+
+test('partner: repeated defaults and roles remain unique and idempotent', async () => {
+  const o = await boot()
+  await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
+  for (const id of ['a1', 'a2'])
+    await call(o, 'partner.saveAddress', {
+      id,
+      partnerId: 'p1',
+      use: 'invoice',
+      street: id,
+      city: 'Hà Nội',
+      country: 'VN',
+      isDefault: true,
+    })
+  for (let index = 0; index < 8; index++)
+    await call(o, 'partner.grantRole', {
+      id: `role-${index}`,
+      partnerId: 'p1',
+      role: 'customer',
+    })
+  assert.equal((await o.adapter.all('SELECT * FROM partner_address_default', [])).length, 1)
+  assert.equal((await o.adapter.all('SELECT * FROM partner_role', [])).length, 1)
+  await call(o, 'partner.saveAddress', {
+    id: 'a2',
+    partnerId: 'p1',
+    use: 'invoice',
+    street: 'a2',
+    city: 'Hà Nội',
+    country: 'VN',
+    isDefault: false,
+  })
+  assert.equal((await o.adapter.all('SELECT * FROM partner_address_default', [])).length, 0)
+  const addresses = (await call(o, 'partner.getPartner', { id: 'p1' })).addresses as Array<{
+    id: string
+    isDefault: boolean
+  }>
+  assert.equal(addresses.find((address) => address.id === 'a2')?.isDefault, false)
+  await o.adapter.close()
+})
+
 // ── the per-company segment: ir.property, as an ordinary model ───────────────
 
 test('terms: the same shared party carries different terms per legal entity', async () => {
   const o = await boot()
   await call(o, 'partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme' })
-  await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', paymentTermDays: 30 }, { company: 'c1' })
-  await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', paymentTermDays: 0 }, { company: 'c2' })
+  await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', creditLimit: '3000' }, { company: 'c1' })
+  await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', creditLimit: '0' }, { company: 'c2' })
 
-  assert.equal(
-    (await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).paymentTermDays,
-    30,
-  )
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).paymentTermDays, 0)
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit, 3000)
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, 0)
   // And the party itself is one row, seen identically from both.
   assert.equal((await call(o, 'partner.getPartner', { id: 'p1' }, { company: 'c2' })).name, 'Acme')
   await o.adapter.close()
@@ -123,7 +219,12 @@ test('terms: the same shared party carries different terms per legal entity', as
 test('terms: the segment is a real table, not an EAV side table', () => {
   const schema = schemaFromManifest(compose(mods))
   const cols = Object.keys(schema.tables['partner_company_terms']!.columns).sort()
-  assert.ok(cols.includes('paymentTermDays'), 'a typed column, visible to SQL')
+  assert.ok(cols.includes('creditLimit'), 'a typed column, visible to SQL')
+  assert.ok(cols.includes('note'), 'core terms contain only domain-neutral fields')
+  assert.ok(
+    !cols.includes('paymentTermDays'),
+    'accounting terms do not remain as text or day counters in core',
+  )
   assert.ok(cols.includes('companyId'), 'and scoped by the machinery that already exists')
 })
 
@@ -134,7 +235,7 @@ test('company: a legal entity is backed by an organisation, not by a person', as
   await call(o, 'partner.savePartner', { id: 'p1', kind: 'person', name: 'Nguyễn Văn A' })
   const bad = await call(o, 'company.saveCompany', { id: 'c1', partnerId: 'p1', currency: 'VND' })
   assert.equal(bad.ok, false)
-  assert.match(JSON.stringify(bad.errors), /loại/)
+  assert.match(JSON.stringify(bad.errors), /company\.error\.partnerKind/)
 
   await call(o, 'partner.savePartner', { id: 'p2', kind: 'company', name: 'Acme JSC' })
   assert.equal(
@@ -166,11 +267,11 @@ test('user: no function hands back the password hash, because none declares it',
   ] as const) {
     const got = JSON.stringify(await call(o, fn, args))
     assert.ok(!got.includes('scrypt'), `${fn} leaked the hash`)
-    assert.ok(!got.includes('password'), `${fn} leaked the field`)
+    assert.ok(!got.includes('passwordHash'), `${fn} leaked the hash field`)
   }
   // The row does hold it — the projection is what keeps it in.
-  const raw = await o.adapter.all('SELECT password FROM user_user', [])
-  assert.match(String(raw[0]!.password), /^scrypt\$/)
+  const raw = await o.adapter.all('SELECT "passwordHash" FROM user_user', [])
+  assert.match(String(raw[0]!.passwordHash), /^scrypt\$/)
   await o.adapter.close()
 })
 
@@ -188,7 +289,7 @@ test('user: a short password is refused, and a duplicate login too', async () =>
     name: 'B',
   })
   assert.equal(dup.ok, false)
-  assert.match(JSON.stringify(dup.errors), /đã tồn tại/)
+  assert.match(JSON.stringify(dup.errors), /user\.error\.loginUnique/)
   await o.adapter.close()
 })
 
@@ -251,17 +352,30 @@ test('user: changing a password takes the old one, even for your own account', a
   const o = await boot()
   await call(o, 'user.createUser', { id: 'u1', login: 'admin', password: 'correct horse', name: 'Admin' })
   assert.equal(
-    (await call(o, 'user.setPassword', { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' }))
-      .ok,
+    (
+      await call(
+        o,
+        'user.setPassword',
+        { id: 'u1', currentPassword: 'wrong', newPassword: 'battery staple' },
+        SCOPE,
+        'u1',
+      )
+    ).ok,
     false,
   )
   assert.equal(
     (
-      await call(o, 'user.setPassword', {
-        id: 'u1',
-        currentPassword: 'correct horse',
-        newPassword: 'battery staple',
-      })
+      await call(
+        o,
+        'user.setPassword',
+        {
+          id: 'u1',
+          currentPassword: 'correct horse',
+          newPassword: 'battery staple',
+        },
+        SCOPE,
+        'u1',
+      )
     ).ok,
     true,
   )

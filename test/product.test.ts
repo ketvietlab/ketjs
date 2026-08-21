@@ -68,7 +68,7 @@ test('product: a template carries its variants, on request', async () => {
   assert.equal(bare[0]!.variants, undefined, 'nothing arrives unless it was asked for')
 
   const full = (await call('product.listTemplates', { withVariants: true }, db)).value as Row[]
-  assert.deepEqual((full[0]!.variants as Row[]).map((v) => v.sku).sort(), ['AO-M', 'AO-S'])
+  assert.deepEqual((full[0]!.variants as Row[]).map((v) => v.defaultCode).sort(), ['AO-M', 'AO-S'])
   await db.close()
 })
 
@@ -137,18 +137,14 @@ test('product: archiving hides a template without deleting anything', async () =
 test('product: a variant is defined by attribute values through an explicit join', async () => {
   const db = await boot()
   await call('product.saveTemplate', { id: 'tpl', name: 'Áo', type: 'goods' }, db)
-  await call('product.saveVariant', { id: 'v1', templateId: 'tpl', sku: 'AO-DO-M' }, db)
-  await db.run('INSERT INTO product_attribute (id, name) VALUES (?, ?)', ['a-color', 'Màu'])
-  await db.run('INSERT INTO product_attribute_value (id, "attributeId", name) VALUES (?, ?, ?)', [
-    'av-red',
-    'a-color',
-    'Đỏ',
-  ])
-  await db.run('INSERT INTO product_product_value (id, "productId", "attributeValueId") VALUES (?, ?, ?)', [
-    'pv1',
-    'v1',
-    'av-red',
-  ])
+  await call('product.saveAttribute', { id: 'a-color', name: 'Màu' }, db)
+  await call('product.saveAttributeValue', { id: 'av-red', attributeId: 'a-color', name: 'Đỏ' }, db)
+  await call(
+    'product.saveAttributeLine',
+    { id: 'tpl:color', templateId: 'tpl', attributeId: 'a-color', valueIds: ['av-red'] },
+    db,
+  )
+  await call('product.generateVariants', { templateId: 'tpl' }, db)
 
   assert.deepEqual(manifest.relations['product.Product']!.values, {
     kind: 'hasMany',
@@ -233,4 +229,54 @@ test('product: a page of templates, and a count that filters the same way', asyn
     ((await call('product.countTemplates', { search: 'Xoài' }, db)).value as { count: number }).count,
     3,
   )
+})
+
+test('product: list, count and database grouping share the same URL filter state', async () => {
+  const db = await boot()
+  for (const row of [
+    { id: 'g1', name: 'Desk', type: 'goods', listPrice: 100 },
+    { id: 'g2', name: 'Door', type: 'goods', listPrice: 30 },
+    { id: 's1', name: 'Design', type: 'service', listPrice: 200 },
+  ])
+    await call('product.saveTemplate', row, db)
+  const state = {
+    q: 'd',
+    presets: [],
+    filters: [{ kind: 'rule', field: 'listPrice', operator: 'gte', value: 50 }],
+    groupBy: [{ key: 'type' }],
+    sort: [{ key: 'name', dir: 'asc' }],
+    openGroups: [],
+    groupPages: {},
+    page: 1,
+    includeArchived: false,
+  }
+  const rows = (await call('product.listTemplates', { state }, db)).value as Row[]
+  const count = (await call('product.countTemplates', { state }, db)).value as { count: number }
+  const groups = (await call('product.groupTemplates', { state, timezone: 'Asia/Ho_Chi_Minh' }, db))
+    .value as Array<{
+    key: unknown[]
+    count: number
+  }>
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    ['s1', 'g1'],
+  )
+  assert.equal(count.count, 2)
+  assert.deepEqual(groups, [
+    { key: ['goods'], count: 1, aggregates: {} },
+    { key: ['service'], count: 1, aggregates: {} },
+  ])
+  await db.close()
+})
+
+test('product: timestamp fields are added without inventing history for old migrations', async () => {
+  assert.equal(manifest.models['product.Template']!.timestamps, true)
+  assert.equal(manifest.models['product.Product']!.timestamps, true)
+  assert.equal(manifest.models['product.Template']!.fields.createdAt!.optional, true)
+  const db = await boot()
+  await call('product.saveTemplate', { id: 'timed', name: 'Timed', type: 'goods' }, db)
+  const row = ((await call('product.listTemplates', {}, db)).value as Row[])[0]!
+  assert.equal(typeof row.createdAt, 'string')
+  assert.equal(row.createdAt, row.updatedAt)
+  await db.close()
 })

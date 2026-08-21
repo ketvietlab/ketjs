@@ -16,6 +16,7 @@ const SQL: Record<FieldBase, string> = {
   decimal: 'NUMERIC',
   bool: 'BOOLEAN',
   json: 'JSONB',
+  date: 'DATE',
   datetime: 'TIMESTAMPTZ',
   ref: 'TEXT',
 }
@@ -32,6 +33,11 @@ type Sql = {
   unsafe(text: string, params?: unknown[]): Promise<unknown[]> & { count?: number }
   reserve(): Promise<Sql & { release(): void }>
   end(opts?: { timeout?: number }): Promise<void>
+  listen?(
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+  ): Promise<{ unlisten(): Promise<void> }>
 }
 
 export type PostgresOptions = {
@@ -48,8 +54,26 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     return sql
   }
 
+  const introspect = async (handle: Sql): Promise<Record<string, Record<string, string>>> => {
+    const rows = (await handle.unsafe(
+      `SELECT table_name, column_name, data_type FROM information_schema.columns
+       WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`,
+    )) as Array<{ table_name: string; column_name: string; data_type: string }>
+    const tables: Record<string, Record<string, string>> = {}
+    for (const r of rows) (tables[r.table_name] ??= {})[r.column_name] = r.data_type
+    return tables
+  }
+
   const fromHandle = (handle: Sql): Adapter => ({
     ...a,
+    transaction: true,
+    notifications: {
+      // pg_notify participates in the transaction on this reserved connection;
+      // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
+      async publish(channel, payload) {
+        await handle.unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+      },
+    },
     async exec(text) {
       await handle.unsafe(text)
     },
@@ -62,6 +86,9 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     },
     async tx() {
       throw new Error('nested transactions are not supported')
+    },
+    async introspect() {
+      return introspect(handle)
     },
   })
 
@@ -101,6 +128,20 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
       const r = (await need().unsafe(text, params.map(bind))) as unknown[] & { count?: number }
       return { changes: Number(r.count ?? r.length ?? 0) }
     },
+    notifications: {
+      async publish(channel, payload) {
+        await need().unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+      },
+      async subscribe(channel, onMessage, onReady) {
+        const listen = need().listen
+        if (!listen) throw new Error('this injected postgres handle does not support LISTEN')
+        // postgres.js owns a dedicated listener connection and reconnects it. Its
+        // onReady callback also runs after a reconnect, so the worker drains any
+        // notifications missed during the gap.
+        const request = await listen.call(need(), channel, onMessage, onReady)
+        return () => request.unlisten()
+      },
+    },
 
     // A reserved connection, so BEGIN and the body are guaranteed to be the same
     // session rather than two arbitrary members of the pool.
@@ -128,13 +169,7 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     },
 
     async introspect() {
-      const rows = (await need().unsafe(
-        `SELECT table_name, column_name, data_type FROM information_schema.columns
-         WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`,
-      )) as Array<{ table_name: string; column_name: string; data_type: string }>
-      const tables: Record<string, Record<string, string>> = {}
-      for (const r of rows) (tables[r.table_name] ??= {})[r.column_name] = r.data_type
-      return tables
+      return introspect(need())
     },
   }
 

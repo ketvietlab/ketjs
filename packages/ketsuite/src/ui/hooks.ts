@@ -16,6 +16,14 @@ import { HOOKS as actions } from './actions.tsx'
 import { HOOKS as surfaces } from './surfaces.tsx'
 import { HOOKS as navigation } from './navigation.tsx'
 import { HOOKS as data } from './data.tsx'
+import { HOOKS as media } from './media.tsx'
+import { HOOKS as form } from './form.tsx'
+import { HOOKS as datePicker } from './date-picker.tsx'
+import { HOOKS as schedule } from './schedule.tsx'
+import { HOOKS as mail } from './mail.ts'
+import { HOOKS as activity } from './activity.ts'
+import { HOOKS as calendar } from './calendar.ts'
+import { HOOKS as record } from './record.tsx'
 
 const ALL = [
   ...icons,
@@ -25,10 +33,18 @@ const ALL = [
   ...surfaces,
   ...table,
   ...data,
+  ...media,
+  ...form,
+  ...datePicker,
+  ...schedule,
   ...navigation,
   ...nav,
   ...chrome,
   ...layout,
+  ...mail,
+  ...activity,
+  ...calendar,
+  ...record,
 ]
 
 /** Sorted and de-duplicated: two files may legitimately share `title`. */
@@ -52,6 +68,14 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['surfaces', surfaces],
           ['navigation', navigation],
           ['data', data],
+          ['media', media],
+          ['form', form],
+          ['date-picker', datePicker],
+          ['schedule', schedule],
+          ['mail', mail],
+          ['activity', activity],
+          ['calendar', calendar],
+          ['record', record],
         ] as Array<[string, readonly string[]]>
       )
         .filter(([, list]) => (list as readonly string[]).includes(h))

@@ -32,6 +32,7 @@ export function compose(
     joints: {},
     fills: [],
     functions: {},
+    jobs: {},
     views: {},
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
@@ -165,8 +166,22 @@ export function compose(
       // that spelled them itself could spell them differently, and the filter would
       // silently stop matching.
       if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
-      if (def.scope === 'company+branch') fields['branchId'] = { base: 'text', optional: true, by: '(scope)' }
+      if (def.scope === 'company+branch')
+        fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (def.timestamps) {
+        fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
+        fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
+      }
       for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
+        if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
+          diag.add({
+            code: 'E_TIMESTAMP_FIELD_RESERVED',
+            module: m.name,
+            message: `${key}.${fname} is supplied by timestamps: true`,
+            hint: `remove the explicit field or disable timestamps`,
+          })
+          continue
+        }
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` })
@@ -183,7 +198,46 @@ export function compose(
         }
         fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
       }
-      manifest.models[key] = { owner: m.name, scope: def.scope, fields }
+      const indexes: ComposedModel['indexes'] = {}
+      for (const [indexName, index] of Object.entries(def.indexes ?? {})) {
+        if (!/^[a-z][a-z0-9_]*$/.test(indexName)) {
+          diag.add({
+            code: 'E_INDEX_NAME',
+            module: m.name,
+            message: `${key} index name ${JSON.stringify(indexName)} must be lowercase snake_case`,
+          })
+          continue
+        }
+        if (!index.fields.length) {
+          diag.add({ code: 'E_INDEX_EMPTY', module: m.name, message: `${key}.${indexName} has no fields` })
+          continue
+        }
+        const unknown = index.fields.filter((field) => !fields[field])
+        if (unknown.length) {
+          diag.add({
+            code: 'E_INDEX_UNKNOWN_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} references unknown field(s): ${unknown.join(', ')}`,
+          })
+          continue
+        }
+        if (new Set(index.fields).size !== index.fields.length) {
+          diag.add({
+            code: 'E_INDEX_DUPLICATE_FIELD',
+            module: m.name,
+            message: `${key}.${indexName} repeats a field`,
+          })
+          continue
+        }
+        indexes[indexName] = { fields: [...index.fields], unique: index.unique === true, by: m.name }
+      }
+      manifest.models[key] = {
+        owner: m.name,
+        scope: def.scope,
+        timestamps: def.timestamps === true,
+        fields,
+        indexes,
+      }
     }
   }
 
@@ -415,6 +469,18 @@ export function compose(
       manifest.fills.push({ joint: key, by: m.name, template: value })
     }
   }
+  for (const [key, joint] of Object.entries(manifest.joints)) {
+    if (joint.multiple) continue
+    const fillers = manifest.fills.filter((fill) => fill.joint === key).map((fill) => fill.by)
+    if (fillers.length > 1) {
+      diag.add({
+        code: 'E_JOINT_CARDINALITY',
+        module: joint.owner,
+        message: `joint "${key}" accepts one fill but ${fillers.length} modules fill it`,
+        hint: `fillers: ${fillers.join(', ')}; set multiple:true or keep one contributor`,
+      })
+    }
+  }
   // Omissions travel the same road as fills: a declared joint, and a declared
   // dependency on whoever published it.
   for (const m of order) {
@@ -460,6 +526,22 @@ export function compose(
   // --- server functions ----------------------------------------------------
   for (const m of order) {
     for (const [fname, def] of Object.entries(m.functions)) {
+      if (def.exposure !== undefined && def.exposure !== 'http' && def.exposure !== 'internal') {
+        diag.add({
+          code: 'E_FUNCTION_EXPOSURE',
+          module: m.name,
+          message: `function "${qualify(m.name, fname)}" has unknown exposure "${String(def.exposure)}"`,
+          hint: 'use "http" or "internal"',
+        })
+      }
+      if (def.provision === true && def.exposure !== 'internal') {
+        diag.add({
+          code: 'E_PROVISION_EXPOSED',
+          module: m.name,
+          message: `provision function "${qualify(m.name, fname)}" must be internal`,
+          hint: 'set exposure: "internal" so bootstrap credentials never have a generic endpoint',
+        })
+      }
       manifest.functions[qualify(m.name, fname)] = {
         by: m.name,
         input: def.input ?? {},
@@ -467,9 +549,139 @@ export function compose(
         effects: [...(def.effects ?? [])],
         crossCompany: def.crossCompany === true,
         anonymous: def.anonymous === true,
+        exposure: def.exposure ?? 'http',
+        provision: def.provision === true,
         idempotent: def.idempotent === true,
         dryRun: def.dryRun !== false,
         agent: def.agent === true,
+      }
+    }
+  }
+
+  // --- background jobs -----------------------------------------------------
+  //
+  // Jobs run later and often on another process, but they touch the same data.
+  // Their contract is therefore composed and checked as strictly as a function's
+  // rather than being left as an import-time registry only the worker can see.
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.jobs)) {
+      const key = qualify(m.name, name)
+      if (!/^[a-z][a-zA-Z0-9_]*$/.test(name)) {
+        diag.add({ code: 'E_JOB_NAME', module: m.name, message: `invalid job name "${name}"` })
+        continue
+      }
+      const queue = def.queue ?? 'default'
+      if (!/^[a-z][a-z0-9_-]*$/.test(queue)) {
+        diag.add({
+          code: 'E_JOB_QUEUE',
+          module: m.name,
+          message: `job "${key}" has invalid queue "${queue}"`,
+          hint: 'use lowercase letters, digits, underscore or dash',
+        })
+        continue
+      }
+      if (def.idempotent !== true) {
+        diag.add({
+          code: 'E_JOB_NOT_IDEMPOTENT',
+          module: m.name,
+          message: `job "${key}" must declare idempotent: true`,
+          hint: 'workers provide at-least-once delivery, so a crashed job may run again',
+        })
+        continue
+      }
+      const maxAttempts = def.maxAttempts ?? 20
+      const timeoutMs = def.timeoutMs ?? 300_000
+      if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+        diag.add({ code: 'E_JOB_ATTEMPTS', module: m.name, message: `job "${key}" needs maxAttempts >= 1` })
+        continue
+      }
+      if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+        diag.add({ code: 'E_JOB_TIMEOUT', module: m.name, message: `job "${key}" needs timeoutMs >= 1` })
+        continue
+      }
+      for (const [input, spec] of Object.entries(def.input ?? {})) {
+        const parsed = parseType(spec)
+        if (!parsed.ok)
+          diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key} input ${input}: ${parsed.reason}` })
+      }
+      for (const effect of def.effects ?? []) {
+        // Enqueue targets are validated after every job has been collected, so a
+        // producer may refer to a job contributed later in dependency order.
+        if (effect.startsWith('enqueue')) continue
+        if (
+          effect === 'storage:read' ||
+          effect === 'storage:write' ||
+          effect === 'storage:remove' ||
+          effect === 'transport:send'
+        )
+          continue
+        const match = /^(read|write):(.+)$/.exec(effect)
+        const model = match ? manifest.models[match[2] as string] : null
+        if (!match || !model) {
+          diag.add({
+            code: 'E_JOB_EFFECT',
+            module: m.name,
+            message: `job "${key}" declares unknown effect "${effect}"`,
+          })
+          continue
+        }
+        if (!canSee(m, model.owner)) {
+          diag.add({
+            code: 'E_JOB_EFFECT_NOT_DEPENDED',
+            module: m.name,
+            message: `job "${key}" touches ${match[2]} but does not depend on "${model.owner}"`,
+          })
+        }
+      }
+      manifest.jobs[key] = {
+        by: m.name,
+        queue,
+        input: { ...(def.input ?? {}) },
+        effects: [...(def.effects ?? [])],
+        crossCompany: def.crossCompany === true,
+        idempotent: true,
+        maxAttempts,
+        timeoutMs,
+      }
+    }
+  }
+
+  // Enqueue is a first-class effect. Moving a write to another process must not
+  // let the producer bypass the operation boundary: both functions and jobs must
+  // name the exact background operation they are allowed to schedule.
+  for (const m of order) {
+    const producers: Array<{ kind: 'function' | 'job'; key: string; effects: string[] }> = [
+      ...Object.entries(m.functions).map(([name, def]) => ({
+        kind: 'function' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+      ...Object.entries(m.jobs).map(([name, def]) => ({
+        kind: 'job' as const,
+        key: qualify(m.name, name),
+        effects: def.effects ?? [],
+      })),
+    ]
+    for (const producer of producers) {
+      for (const effect of producer.effects) {
+        if (!effect.startsWith('enqueue')) continue
+        const match = /^enqueue:(.+)$/.exec(effect)
+        const target = match ? manifest.jobs[match[1] as string] : null
+        if (!match || !target) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" declares unknown effect "${effect}"`,
+          })
+          continue
+        }
+        if (!canSee(m, target.by)) {
+          diag.add({
+            code: producer.kind === 'job' ? 'E_JOB_EFFECT_NOT_DEPENDED' : 'E_FN_EFFECT_NOT_DEPENDED',
+            module: m.name,
+            message: `${producer.kind} "${producer.key}" enqueues ${match[1]} but does not depend on "${target.by}"`,
+          })
+        }
       }
     }
   }
@@ -521,9 +733,30 @@ export function compose(
     }
   }
 
+  // Joint and island props use the scalar vocabulary or a declared view-model key.
+  // Views are composed first so a contract may name one regardless of module order.
+  const validContractType = (spec: unknown): spec is string => {
+    if (typeof spec !== 'string') return false
+    if (parseType(spec).ok) return true
+    const view = spec.endsWith('?') ? spec.slice(0, -1) : spec
+    return manifest.views[view] !== undefined
+  }
+  for (const [key, joint] of Object.entries(manifest.joints)) {
+    for (const [name, spec] of Object.entries(joint.props)) {
+      if (!validContractType(spec)) {
+        diag.add({
+          code: 'E_JOINT_PROP_TYPE',
+          module: joint.owner,
+          message: `joint "${key}" prop "${name}" has unknown type "${spec}"`,
+          hint: 'use a scalar type or a composed view-model key',
+        })
+      }
+    }
+  }
+
   // --- islands -------------------------------------------------------------
   for (const m of order) {
-    for (const name of Object.keys(m.islands)) {
+    for (const [name, def] of Object.entries(m.islands)) {
       const existing = manifest.islands[name]
       if (existing) {
         diag.add({
@@ -533,7 +766,91 @@ export function compose(
         })
         continue
       }
-      manifest.islands[name] = { by: m.name }
+      if (!def || typeof def !== 'object' || typeof def.view !== 'function') {
+        diag.add({
+          code: 'E_ISLAND_SHAPE',
+          module: m.name,
+          message: `island "${name}" needs a view factory`,
+          hint: 'declare { view: props => () => html`...`, props, client? }',
+        })
+        continue
+      }
+      for (const [prop, spec] of Object.entries(def.props ?? {})) {
+        if (!validContractType(spec)) {
+          diag.add({
+            code: 'E_ISLAND_PROP_TYPE',
+            module: m.name,
+            message: `island "${name}" prop "${prop}" has unknown type "${spec}"`,
+            hint: 'use a scalar type or a composed view-model key',
+          })
+        }
+      }
+      if (def.key !== undefined && !Array.isArray(def.key)) {
+        diag.add({
+          code: 'E_ISLAND_KEY',
+          module: m.name,
+          message: `island "${name}" key must be an array of required scalar prop names`,
+        })
+      } else if (Array.isArray(def.key)) {
+        if (new Set(def.key).size !== def.key.length) {
+          diag.add({ code: 'E_ISLAND_KEY', module: m.name, message: `island "${name}" repeats a key prop` })
+        }
+        for (const field of def.key) {
+          const spec = def.props?.[field]
+          const parsed = spec === undefined ? null : parseType(spec)
+          if (!parsed?.ok || parsed.optional || parsed.base === 'json') {
+            diag.add({
+              code: 'E_ISLAND_KEY',
+              module: m.name,
+              message: `island "${name}" key prop "${field}" must be a declared, required scalar`,
+            })
+          }
+        }
+      }
+      const client = def.client
+      if (client !== undefined && (typeof client !== 'string' || client.length === 0)) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT',
+          module: m.name,
+          message: `island "${name}" client must be a non-empty relative path`,
+        })
+      }
+      if (typeof client === 'string' && client && !m.assets) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT_WITHOUT_ASSETS',
+          module: m.name,
+          message: `island "${name}" declares client module "${client}" but "${m.name}" has no assets directory`,
+          hint: 'declare module assets and place the prebuilt browser module inside it',
+        })
+      }
+      if (
+        typeof client === 'string' &&
+        client &&
+        (client.startsWith('/') ||
+          client.includes('\\') ||
+          client.includes('?') ||
+          client.includes('#') ||
+          client.split('/').includes('..'))
+      ) {
+        diag.add({
+          code: 'E_ISLAND_CLIENT_PATH',
+          module: m.name,
+          message: `island "${name}" client path must stay inside the module assets directory`,
+        })
+      }
+      manifest.islands[name] = {
+        by: m.name,
+        props: { ...(def.props ?? {}) },
+        ...(def.key === undefined ? {} : { key: [...def.key] }),
+        ...(typeof client === 'string' && client
+          ? {
+              client: {
+                src: `/_ket/asset/${m.name}/${client}`,
+                export: def.export ?? 'default',
+              },
+            }
+          : {}),
+      }
     }
   }
 

@@ -9,8 +9,9 @@ import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { type Changeset, changeset } from '../data/changeset.ts'
+import { type Changeset, changeset, decimalText } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
+import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
 export function createContext(o: {
@@ -20,23 +21,30 @@ export function createContext(o: {
   dryRun?: boolean
   actor?: string | null
   scope?: Scope
+  kind?: 'function' | 'job'
+  queueNotify?: boolean
+  writes?: WriteRecord[]
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
-  const fn = manifest.functions[fnKey]
-  if (!fn) throw new KetError({ code: 'E_UNKNOWN_FUNCTION', message: `no server function "${fnKey}"` })
+  const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
+  if (!operation)
+    throw new KetError({
+      code: o.kind === 'job' ? 'E_UNKNOWN_JOB' : 'E_UNKNOWN_FUNCTION',
+      message: `no ${o.kind === 'job' ? 'background job' : 'server function'} "${fnKey}"`,
+    })
 
-  const effects = new Set(fn.effects)
-  const writes: WriteRecord[] = []
+  const effects = new Set(operation.effects)
+  const writes = o.writes ?? []
 
-  const need = (effect: 'read' | 'write', model: string): void => {
-    if (effects.has(`${effect}:${model}`)) return
+  const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
+    if (effects.has(`${effect}:${target}`)) return
     throw new KetError({
       code: 'E_EFFECT_NOT_DECLARED',
-      module: fn.by,
-      message: `"${fnKey}" attempted ${effect} on ${model} but declares effects [${[...effects].join(', ') || 'none'}]`,
-      hint: `add "${effect}:${model}" to the function's effects, or stop touching that model`,
+      module: operation.by,
+      message: `"${fnKey}" attempted ${effect} on ${target} but declares effects [${[...effects].join(', ') || 'none'}]`,
+      hint: `add "${effect}:${target}" to the ${o.kind === 'job' ? 'job' : 'function'}'s effects, or stop performing that operation`,
     })
   }
 
@@ -48,7 +56,7 @@ export function createContext(o: {
     if (!rel) {
       throw new KetError({
         code: 'E_UNKNOWN_RELATION',
-        module: fn.by,
+        module: operation.by,
         message: `"${model}" has no relation "${name}"`,
         hint: `declared: ${Object.keys(manifest.relations[model] ?? {}).join(', ') || '(none)'}`,
       })
@@ -87,7 +95,7 @@ export function createContext(o: {
   if (scope.company && scope.companies && !scope.companies.includes(scope.company)) {
     throw new KetError({
       code: 'E_WRITE_COMPANY_NOT_READABLE',
-      module: fn.by,
+      module: operation.by,
       message: `the request writes to "${scope.company}" but may only read ${scope.companies.join(', ')}`,
       hint: 'scope.company must be one of scope.companies — otherwise a row is written and then invisible',
     })
@@ -106,18 +114,34 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'decimal')
       .map(([n]) => n)
 
+  const booleansOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'bool')
+      .map(([n]) => n)
+
+  const jsonOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'json')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     if (!cols.length) return row
     const out: Row = { ...row }
-    for (const c of cols) if (out[c] != null) out[c] = String(out[c])
+    // decimalText, not String: a raw db.update never passes through a changeset, so
+    // this is the only place that can keep "1e-7" out of a decimal column.
+    for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
     return out
   }
 
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const cols = decimalsOf(model)
-    if (!cols.length) return rows
+    const bools = booleansOf(model)
+    const json = dialect === 'sqlite' ? jsonOf(model) : []
     for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
+    for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
+    for (const row of rows)
+      for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)
     return rows
   }
 
@@ -133,7 +157,7 @@ export function createContext(o: {
     if (set.length) return set
     throw new KetError({
       code: 'E_NO_COMPANY_IN_SCOPE',
-      module: fn.by,
+      module: operation.by,
       message: `"${fnKey}" touches ${model}, which is company-scoped, but the request carries no company`,
       hint: 'resolve a company for the request, or declare crossCompany: true if this really reads across legal entities',
     })
@@ -144,7 +168,7 @@ export function createContext(o: {
     const readable = scope.companies ?? []
     throw new KetError({
       code: 'E_NO_COMPANY_IN_SCOPE',
-      module: fn.by,
+      module: operation.by,
       message: readable.length
         ? `"${fnKey}" writes ${model}, but the request names ${readable.length} readable compan${readable.length > 1 ? 'ies' : 'y'} and none to write to`
         : `"${fnKey}" touches ${model}, which is company-scoped, but the request carries no company`,
@@ -158,7 +182,7 @@ export function createContext(o: {
   const scoped = (q: Query): Query => {
     const kind = scopeOf(q.model)
     if (kind === 'shared') return q
-    if (fn.crossCompany) return q // declared, and visible in the manifest
+    if (operation.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
     const col = { model: q.model, name: 'companyId' }
@@ -177,15 +201,44 @@ export function createContext(o: {
       if (key in row) {
         throw new KetError({
           code: 'E_SCOPE_FIELD_WRITTEN',
-          module: fn.by,
+          module: operation.by,
           message: `"${fnKey}" set ${model}.${key} itself`,
           hint: 'the scope columns come from the request, not from the caller — otherwise a write could be aimed at another company',
         })
       }
     }
-    const out: Row = { ...row, companyId: requireCompany(model) }
-    if (kind === 'company+branch' && scope.branches?.length === 1) out.branchId = scope.branches[0]
+    const company = requireCompany(model)
+    const out: Row = { ...row, companyId: company }
+    if (kind === 'company+branch') {
+      const branch = scope.branch ?? null
+      if (!branch) {
+        throw new KetError({
+          code: 'E_NO_BRANCH_IN_SCOPE',
+          module: operation.by,
+          message: `"${fnKey}" writes ${model}, but the request names no branch to write to`,
+          hint: 'set scope.branch to one readable branch; scope.branches is only the read set',
+        })
+      }
+      if (scope.branches && !scope.branches.includes(branch)) {
+        throw new KetError({
+          code: 'E_WRITE_BRANCH_NOT_READABLE',
+          module: operation.by,
+          message: `"${fnKey}" would write to branch "${branch}", which is not in its readable branch set`,
+          hint: 'the write branch must be one of scope.branches',
+        })
+      }
+      out.branchId = branch
+    }
     return out
+  }
+
+  const timestamped = (model: string, row: Row, action: 'insert' | 'update'): Row => {
+    if (!manifest.models[model]?.timestamps) return row
+    const now = new Date().toISOString()
+    const clean = { ...row }
+    delete clean.createdAt
+    delete clean.updatedAt
+    return action === 'insert' ? { ...clean, createdAt: now, updatedAt: now } : { ...clean, updatedAt: now }
   }
   // Placeholders are dialect-specific. The query builder already knew this; these
   // direct helpers did not, which is a bug only a second dialect could reveal.
@@ -261,6 +314,23 @@ export function createContext(o: {
       const rows = await adapter.all(text, params)
       return Number((rows[0] as { count: number }).count)
     },
+    async group(q) {
+      if (q.kind !== 'group')
+        throw new KetError({ code: 'E_NOT_A_GROUP', message: 'db.group requires query.groupBy(...)' })
+      checkQuery(q)
+      const grouped = scoped(q)
+      const { text, params } = grouped.toSQL(dialect)
+      const rows = await adapter.all(text, params)
+      return rows.map((row) => {
+        const aggregates: Record<string, unknown> = {}
+        for (const aggregate of grouped.aggregates) aggregates[aggregate.as] = row[aggregate.as]
+        return {
+          key: grouped.groups.map((_, index) => row[`__group${index}`]),
+          count: Number(row.__count),
+          aggregates,
+        }
+      })
+    },
     async del(q) {
       // A select passed to del renders as a select and deletes nothing — and the
       // effect check sees 'read', so a function that correctly declared 'write'
@@ -269,7 +339,7 @@ export function createContext(o: {
       if (q.kind !== 'delete') {
         throw new KetError({
           code: 'E_NOT_A_DELETE',
-          module: fn.by,
+          module: operation.by,
           message: `"${fnKey}" passed a ${q.kind} query to db.del`,
           hint: 'build it with deleteFrom(table), not from(table)',
         })
@@ -284,7 +354,7 @@ export function createContext(o: {
       if (!cs.valid) {
         throw new KetError({
           code: 'E_INVALID_CHANGESET',
-          module: fn.by,
+          module: operation.by,
           message: `${cs.model}: ${cs.errors.map((e) => `${e.field} ${e.message}`).join('; ')}`,
           hint: 'inspect changeset.errors for the structured form',
         })
@@ -301,8 +371,9 @@ export function createContext(o: {
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
-      const open = scopeOf(model) === 'shared' || fn.crossCompany
+      const open = scopeOf(model) === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
+      fresh()
       const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
       const params: unknown[] = keys.map((k) => where[k])
       if (!open) {
@@ -312,7 +383,6 @@ export function createContext(o: {
         conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
         params.push(...cs)
       }
-      fresh()
       const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
       return decodeRows(model, await adapter.all(sql, params))
     },
@@ -327,7 +397,7 @@ export function createContext(o: {
           hint: `fields: ${known.join(', ')}`,
         })
       }
-      const stamped = encodeRow(model, stamp(model, row))
+      const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
       writes.push({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -338,23 +408,58 @@ export function createContext(o: {
         ks.map((k) => stamped[k]),
       )
     },
+    async insertIfAbsent(model, row) {
+      need('write', model)
+      const known = Object.keys(manifest.models[model]?.fields ?? {})
+      const unknown = Object.keys(row).filter((k) => !known.includes(k))
+      if (unknown.length) {
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          message: `${model} has no field(s): ${unknown.join(', ')}`,
+          hint: `fields: ${known.join(', ')}`,
+        })
+      }
+      const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
+      writes.push({ op: 'insert', model, row: stamped })
+      if (dryRun) return { dryRun: true }
+      const ks = Object.keys(stamped)
+      fresh()
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${ks.map((k) => adapter.quoteIdent(k)).join(', ')}) VALUES (${ks.map(() => ph()).join(', ')}) ON CONFLICT DO NOTHING`
+      const result = await adapter.run(
+        sql,
+        ks.map((k) => stamped[k]),
+      )
+      return { changes: result.changes, inserted: result.changes === 1 }
+    },
     async update(model, where, patch) {
       need('write', model)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 =
-        scopeOf(model) === 'shared' || fn.crossCompany
+      const where3 = encodeRow(
+        model,
+        scopeOf(model) === 'shared' || operation.crossCompany
           ? where
-          : { ...where, companyId: requireCompany(model) }
-      const patch2 = encodeRow(model, patch)
+          : { ...where, companyId: requireCompany(model) },
+      )
+      const patch2 = encodeRow(model, timestamped(model, patch, 'update'))
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
       fresh()
       const sets = pk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
-      const conds = wk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(' AND ')
+      const boundWhere = wk.filter((k) => where3[k] !== null)
+      const conds = wk
+        .map((k) =>
+          where3[k] === null ? `${adapter.quoteIdent(k)} IS NULL` : `${adapter.quoteIdent(k)} = ${ph()}`,
+        )
+        .join(' AND ')
       const sql =
         `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...wk.map((k) => where3[k])])
+      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...boundWhere.map((k) => where3[k])])
+    },
+    async compareAndSet(model, where, expected, patch) {
+      const result = await db.update(model, { ...expected, ...where }, patch)
+      if ('dryRun' in result) return result
+      return { changes: result.changes, matched: result.changes === 1 }
     },
   }
 
@@ -367,11 +472,43 @@ export function createContext(o: {
     db,
     writes,
     effects: [...effects],
+    jobs: {
+      async enqueue(name, args, options) {
+        const meta = manifest.jobs[name]
+        if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
+        need('enqueue', name)
+        if (manifest.disabledModules?.includes(meta.by)) {
+          throw new KetError({
+            code: 'E_APP_NOT_INSTALLED',
+            module: meta.by,
+            message: `job "${name}" belongs to a module that is not installed`,
+          })
+        }
+        validateJobInput(name, manifest, args)
+        const queue =
+          o.queueNotify === undefined
+            ? await queueFor(adapter)
+            : await createQueue(adapter, { notify: o.queueNotify })
+        return queue.enqueue(name, args, {
+          ...options,
+          queue: meta.queue,
+          maxAttempts: meta.maxAttempts,
+          actor: o.actor ?? null,
+          scope,
+        })
+      },
+    },
     // A transaction hands the body a ctx bound to the transaction's connection —
     // the same reason tx() takes a scoped adapter rather than assuming the pool
     // will hand back the session that issued BEGIN.
-    tx: <T>(body: (inner: Ctx) => Promise<T>): Promise<T> =>
-      adapter.tx((txAdapter) => body(createContext({ ...o, adapter: txAdapter }))),
+    tx: async <T>(body: (inner: Ctx) => Promise<T>): Promise<T> => {
+      const transactionWrites: WriteRecord[] = []
+      const value = await adapter.tx((txAdapter) =>
+        body(createContext({ ...o, adapter: txAdapter, writes: transactionWrites })),
+      )
+      writes.push(...transactionWrites)
+      return value
+    },
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
       changeset(manifest, model, params, base),

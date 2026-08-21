@@ -12,10 +12,11 @@
 // undiffable by `ket diff`, unsnapshotable. A fill is text.
 
 import { compileKtl } from './ktl/compile.ts'
-import { sealScope } from './viewmodel.ts'
-import { trustedMarkup } from 'ketjs-view'
-import type { Markup } from 'ketjs-view'
+import { contractProps } from './contracts.ts'
+import { renderIsland, trustedMarkup } from 'ketjs-view'
+import type { IslandRegistry, Markup } from 'ketjs-view'
 import type { Manifest } from '../types.ts'
+import { KetError } from '../kernel/errors.ts'
 
 export type Joints = {
   /**
@@ -32,34 +33,117 @@ export type Joints = {
 
 export function createJoints(
   manifest: Manifest,
-  o: { translate?: (key: string, params?: Record<string, unknown>) => string } = {},
+  o: {
+    translate?: (key: string, params?: Record<string, unknown>) => string
+    islands?: IslandRegistry
+  } = {},
 ): Joints {
   // Compiled once. A fill is KTL source, so compiling per request would parse the
   // same text on every page view.
   const compiled = new Map<string, Array<ReturnType<typeof compileKtl>>>()
+  const atRuntime = manifest.disabledModules !== undefined
+  const stack: string[] = []
+  const omitted = (key: string): boolean => (manifest.joints[key]?.omittedBy.length ?? 0) > 0
+
+  const renderJoint = (key: string, props: Record<string, unknown>): string => {
+    const definition = manifest.joints[key]
+    if (!definition) {
+      throw new KetError({
+        code: 'E_UNKNOWN_JOINT',
+        message: `no installed module publishes joint "${key}"`,
+        hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
+      })
+    }
+    if (omitted(key)) return ''
+    if (stack.includes(key)) {
+      throw new KetError({
+        code: 'E_JOINT_CYCLE',
+        message: `joint recursion: ${[...stack, key].join(' -> ')}`,
+        hint: 'a fill may render another joint, but never itself through any chain',
+      })
+    }
+    if (stack.length >= 16)
+      throw new KetError({ code: 'E_JOINT_TOO_DEEP', message: 'joint rendering exceeds 16 levels' })
+    stack.push(key)
+    try {
+      const scope = contractProps(manifest, 'joint', key, definition.props, props)
+      return (compiled.get(key) ?? []).map((entry) => entry.render(scope)).join('')
+    } finally {
+      stack.pop()
+    }
+  }
+
+  const renderIslandAt = (name: string, scope: Record<string, unknown>): string => {
+    const factory = o.islands?.[name]
+    const definition = manifest.islands[name]
+    if (!factory || !definition) {
+      if (atRuntime) return ''
+      throw new KetError({
+        code: 'E_UNKNOWN_ISLAND',
+        message: `a fill places island "${name}", which no installed module provides`,
+        hint: `available islands: ${Object.keys(o.islands ?? {}).join(', ') || '(none)'}`,
+      })
+    }
+    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope), {
+      key: definition.key,
+    })
+  }
+
   for (const fill of manifest.fills) {
     const list = compiled.get(fill.joint) ?? []
-    list.push(
-      compileKtl(fill.template, {
-        name: `${fill.joint}#${list.length}`,
-        ...(o.translate ? { translate: o.translate } : {}),
-      }),
-    )
+    const entry = compileKtl(fill.template, {
+      name: `${fill.joint}#${list.length}`,
+      ...(o.translate ? { translate: o.translate } : {}),
+      renderJoint,
+      renderIsland: renderIslandAt,
+    })
+    const module = manifest.modules[fill.by]
+    for (const used of entry.jointsUsed) {
+      const target = manifest.joints[used]
+      if (!target)
+        throw new KetError({
+          code: 'E_FILL_UNKNOWN_JOINT',
+          module: fill.by,
+          message: `fill for "${fill.joint}" renders unknown joint "${used}"`,
+        })
+      if (target.owner !== fill.by && !module?.depends?.includes(target.owner))
+        throw new KetError({
+          code: 'E_FILL_NOT_DEPENDED',
+          module: fill.by,
+          message: `fill for "${fill.joint}" renders "${used}" without depending on "${target.owner}"`,
+        })
+    }
+    for (const used of entry.islandsUsed) {
+      const target = manifest.islands[used]
+      if (!target && !atRuntime)
+        throw new KetError({
+          code: 'E_FILL_UNKNOWN_ISLAND',
+          module: fill.by,
+          message: `fill for "${fill.joint}" places unknown island "${used}"`,
+        })
+      if (target && target.by !== fill.by && !module?.depends?.includes(target.by))
+        throw new KetError({
+          code: 'E_FILL_NOT_DEPENDED',
+          module: fill.by,
+          message: `fill for "${fill.joint}" places "${used}" without depending on "${target.by}"`,
+        })
+    }
+    list.push(entry)
     compiled.set(fill.joint, list)
   }
 
-  const omitted = (key: string): boolean => (manifest.joints[key]?.omittedBy.length ?? 0) > 0
-
   return {
-    shows: (key) => !omitted(key),
+    shows: (key) => {
+      if (!manifest.joints[key]) {
+        throw new KetError({
+          code: 'E_UNKNOWN_JOINT',
+          message: `no installed module publishes joint "${key}"`,
+        })
+      }
+      return !omitted(key)
+    },
     render(key, props = {}) {
-      if (omitted(key)) return trustedMarkup('')
-      const list = compiled.get(key)
-      if (!list?.length) return trustedMarkup('')
-      // sealScope is what keeps a function out of a template's reach — the same
-      // guard the theme runtime applies, for the same reason.
-      const scope = sealScope(props)
-      return trustedMarkup(list.map((c) => c.render(scope)).join(''))
+      return trustedMarkup(renderJoint(key, props))
     },
   }
 }

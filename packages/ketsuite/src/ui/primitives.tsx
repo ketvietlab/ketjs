@@ -5,7 +5,7 @@
 // stylesheet's contract drifting one screen at a time.
 
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 
 /** The data-ui names this file emits. See ui/hooks.ts. */
 export const HOOKS = [
@@ -19,11 +19,17 @@ export const HOOKS = [
   'person-name',
   'avatar',
   'app-action',
+  'qr-code',
 ] as const
 
-/** Small values on one line, allowed to wrap without a caller writing a container. */
-export const inline = (items: readonly unknown[]): TemplateResult => (
-  <span data-ui="inline">
+/**
+ * Small values on one line, allowed to wrap without a caller writing a container.
+ *
+ * This is deliberately a `div`, not a `span`: callers may supply native forms or
+ * other flow content, and the browser must never repair an invalid phrasing tree.
+ */
+export const inline = (items: readonly JSXChild[]): TemplateResult => (
+  <div data-ui="inline">
     {each(
       items,
       (_, i) => i,
@@ -31,7 +37,7 @@ export const inline = (items: readonly unknown[]): TemplateResult => (
         <>{item}</>
       ),
     )}
-  </span>
+  </div>
 )
 
 /**
@@ -127,3 +133,32 @@ export const actionButton = (o: { label: string; action: string; disabled?: bool
     {o.label}
   </button>
 )
+
+/** A server-rendered QR matrix with a four-module quiet zone. */
+export const qrCode = (
+  matrix: readonly (readonly boolean[])[],
+  label: string,
+  pixels = 264,
+): TemplateResult => {
+  const size = matrix.length + 8
+  const cells = matrix.flatMap((row, y) => row.map((dark, x) => ({ x, y, dark }))).filter((cell) => cell.dark)
+  return (
+    <svg
+      data-ui="qr-code"
+      viewBox={`0 0 ${size} ${size}`}
+      width={pixels}
+      height={pixels}
+      role="img"
+      aria-label={label}
+    >
+      <rect width={size} height={size} fill="white" />
+      {each(
+        cells,
+        (cell) => `${cell.x}:${cell.y}`,
+        (cell) => (
+          <rect x={cell.x + 4} y={cell.y + 4} width="1" height="1" fill="black" />
+        ),
+      )}
+    </svg>
+  )
+}

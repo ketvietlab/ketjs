@@ -24,14 +24,22 @@ export type RouteEntry =
       handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
 
-export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'datetime'
+export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'date' | 'datetime'
 export type FieldBase = Scalar | 'ref'
 
 export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
 export type TypeParse = ({ ok: true } & ParsedType) | { ok: false; reason: string }
 
 export type Field = ParsedType & { by: string }
-export type ComposedModel = { owner: string; scope: ModelScope; fields: Record<string, Field> }
+export type IndexDef = { fields: string[]; unique?: boolean }
+export type ComposedIndex = { fields: string[]; unique: boolean; by: string }
+export type ComposedModel = {
+  owner: string
+  scope: ModelScope
+  timestamps: boolean
+  fields: Record<string, Field>
+  indexes: Record<string, ComposedIndex>
+}
 
 /**
  * Where a model's rows live in the two isolation dimensions.
@@ -49,7 +57,14 @@ export type ComposedModel = { owner: string; scope: ModelScope; fields: Record<s
  */
 export type ModelScope = 'shared' | 'company' | 'company+branch'
 
-export type ModelDef = { scope: ModelScope; fields: Record<string, string> }
+export type ModelDef = {
+  scope: ModelScope
+  /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
+  timestamps?: boolean
+  fields: Record<string, string>
+  /** Named database indexes. Names are local to the model and remain stable across migrations. */
+  indexes?: Record<string, IndexDef>
+}
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
 /**
@@ -78,9 +93,9 @@ export type MenuDef = {
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**
-   * For an app: the glyph shown beside it, by name. The theme decides what a
-   * name draws and what an unknown one falls back to — a module naming an icon
-   * this build does not carry loses its icon, not its row.
+   * The glyph shown beside this entry, by semantic name. The declaring module
+   * owns the choice; the theme owns the drawing and fallback. An unknown name
+   * loses its glyph, not its row.
    */
   icon?: string
 }
@@ -119,6 +134,20 @@ export type FnSpec = {
    * whatever a public storefront reads.
    */
   anonymous?: boolean
+  /**
+   * Whether the generic `/_ket/fn/*` transport may call this function.
+   *
+   * `internal` functions remain callable by trusted application/module routes and
+   * in-process code, but they are absent from the public HTTP and agent surfaces.
+   * Authentication checks and one-time credential issuance belong here: their
+   * route owns rate limiting, origin checks and response shaping.
+   */
+  exposure?: 'http' | 'internal'
+  /**
+   * Allow the one-shot `ket provision` command to invoke this internal function.
+   * Provisioning is opt-in and never makes a function HTTP- or agent-callable.
+   */
+  provision?: boolean
   input?: Record<string, string>
   output?: Record<string, string>
   effects?: string[]
@@ -138,6 +167,8 @@ export type FnSpec = {
 export type FnMeta = {
   by: string
   anonymous: boolean
+  exposure: 'http' | 'internal'
+  provision: boolean
   input: Record<string, string>
   output: Record<string, string>
   effects: string[]
@@ -145,6 +176,51 @@ export type FnMeta = {
   idempotent: boolean
   dryRun: boolean
   agent: boolean
+}
+
+/**
+ * A durable background operation. Jobs deliberately reuse the function effect
+ * vocabulary, including enqueue: moving work out of an HTTP request or chaining
+ * it to another job must not become a way around the operation boundary.
+ */
+export type JobSpec = {
+  queue?: string
+  input?: Record<string, string>
+  effects?: string[]
+  crossCompany?: boolean
+  /** At-least-once delivery makes acknowledging idempotency mandatory. */
+  idempotent: true
+  maxAttempts?: number
+  timeoutMs?: number
+  handler: (ctx: JobContext, args: Record<string, unknown>) => Promise<void>
+}
+
+export type JobMeta = {
+  by: string
+  queue: string
+  input: Record<string, string>
+  effects: string[]
+  crossCompany: boolean
+  idempotent: true
+  maxAttempts: number
+  timeoutMs: number
+}
+
+export type JobEnqueueOptions = {
+  runAt?: Date
+  uniqueKey?: string
+  /** Zero is highest priority. */
+  priority?: number
+}
+
+export type JobEnqueueResult = { id: string; existing: boolean }
+
+export type JobExecution = {
+  id: string
+  key: string
+  queue: string
+  attempt: number
+  maxAttempts: number
 }
 
 export type AppMeta = {
@@ -206,6 +282,7 @@ export type ModuleSpec = AppMeta & {
    */
   omits?: string[]
   functions?: Record<string, FnSpec>
+  jobs?: Record<string, JobSpec>
   views?: Record<string, ViewDef>
   requires?: string[]
   tokens?: Record<string, string>
@@ -239,7 +316,7 @@ export type ModuleSpec = AppMeta & {
    */
   routes?: Record<string, RouteEntry>
   /** Interactive views a theme may place but never write. */
-  islands?: Record<string, import('ketjs-view').IslandView>
+  islands?: Record<string, import('ketjs-view').IslandDefinition>
   sections?: Record<string, SectionDef>
   relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
@@ -258,6 +335,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly omits: readonly string[]
   readonly fills: Record<string, string>
   readonly functions: Record<string, FnSpec>
+  readonly jobs: Record<string, JobSpec>
   readonly views: Record<string, ViewDef>
   readonly requires: readonly string[]
   readonly tokens: Record<string, string>
@@ -266,7 +344,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly assets: string | URL | null
   readonly styles: readonly string[]
   readonly routes: Record<string, RouteEntry>
-  readonly islands: Record<string, import('ketjs-view').IslandView>
+  readonly islands: Record<string, import('ketjs-view').IslandDefinition>
   readonly sections: Record<string, SectionDef>
   readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
@@ -287,9 +365,13 @@ export type Manifest = {
   >
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>
+  jobs: Record<string, JobMeta>
   views: Record<string, ViewDef & { by: string }>
   regions: { required: string[]; provided: Record<string, string[]> }
-  islands: Record<string, { by: string }>
+  islands: Record<
+    string,
+    { by: string; props: Record<string, string>; key?: string[]; client?: { src: string; export: string } }
+  >
   sections: Record<string, SectionDef & { by: string }>
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
@@ -325,6 +407,9 @@ export type Diagnostic = {
 
 export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
 export type Row = Record<string, unknown>
+export type WriteResult = { changes: number }
+export type InsertIfAbsentResult = WriteResult & { inserted: boolean }
+export type CompareAndSetResult = WriteResult & { matched: boolean }
 
 /** Which company, and which of its branches, this request is acting within. */
 export type Scope = {
@@ -340,7 +425,10 @@ export type Scope = {
    */
   companies?: string[] | null
 
-  /** Null means every branch of the company — ordinary, not privileged. */
+  /** The branch a new company+branch row is stamped with. */
+  branch?: string | null
+
+  /** Branches this request may read. Null means every branch of its companies. */
   branches?: string[] | null
 }
 
@@ -353,6 +441,13 @@ export type Ctx = {
   dryRun: boolean
   effects: string[]
   writes: WriteRecord[]
+  jobs: {
+    enqueue(
+      name: string,
+      args: Record<string, unknown>,
+      options?: JobEnqueueOptions,
+    ): Promise<JobEnqueueResult>
+  }
   /** Column handles for a model, for building queries. */
   table(model: string): import('./data/query.ts').Table
   /** A changeset bound to this app's manifest. */
@@ -363,6 +458,7 @@ export type Ctx = {
     all(q: import('./data/query.ts').Query): Promise<Row[]>
     one(q: import('./data/query.ts').Query): Promise<Row | null>
     count(q: import('./data/query.ts').Query): Promise<number>
+    group(q: import('./data/query.ts').Query): Promise<import('./data/query.ts').GroupRow[]>
     del(q: import('./data/query.ts').Query): Promise<{ changes: number }>
     /** Write a changeset. An invalid one is refused with its structured errors. */
     commit(
@@ -370,9 +466,25 @@ export type Ctx = {
       where?: Row,
     ): Promise<{ changes: number } | { dryRun: true }>
     select(model: string, where?: Row): Promise<Row[]>
-    insert(model: string, row: Row): Promise<unknown>
-    update(model: string, where: Row, patch: Row): Promise<unknown>
+    insert(model: string, row: Row): Promise<WriteResult | { dryRun: true }>
+    /** Insert atomically, returning inserted=false when any declared unique constraint wins the race. */
+    insertIfAbsent(model: string, row: Row): Promise<InsertIfAbsentResult | { dryRun: true }>
+    update(model: string, where: Row, patch: Row): Promise<WriteResult | { dryRun: true }>
+    /** Update only when both identity (`where`) and the expected old values still match. */
+    compareAndSet(
+      model: string,
+      where: Row,
+      expected: Row,
+      patch: Row,
+    ): Promise<CompareAndSetResult | { dryRun: true }>
   }
+}
+
+export type JobContext = Ctx & {
+  job: JobExecution
+  signal: AbortSignal
+  storage: import('./server/storage/types.ts').Storage
+  transport: import('./server/transport/types.ts').OutboundTransport
 }
 
 // The adapter contract is asynchronous because a network database has no other
@@ -381,6 +493,8 @@ export type Ctx = {
 // Only quoteIdent and columnSql stay synchronous: they are pure string functions.
 export type Adapter = {
   name: string
+  /** True when this adapter is already bound to an open transaction. */
+  readonly transaction?: boolean
   open(): Promise<void>
   close(): Promise<void>
   exec(sql: string): Promise<void>
@@ -395,4 +509,17 @@ export type Adapter = {
   quoteIdent(name: string): string
   columnSql(c: { base: FieldBase }): string
   introspect(): Promise<Record<string, Record<string, string>>>
+  /** Optional because SQLite and third-party adapters may rely on polling. */
+  notifications?: DatabaseNotifications
+}
+
+export type DatabaseNotifications = {
+  /** Publish on this adapter's current connection, and therefore its transaction. */
+  publish(channel: string, payload: string): Promise<void>
+  /** Root adapters may keep a dedicated listener connection. */
+  subscribe?(
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady: () => void,
+  ): Promise<() => Promise<void>>
 }

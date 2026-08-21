@@ -21,7 +21,13 @@ export type SessionRecord = {
   companies: string[]
   /** The one it writes to — becomes scope.company. Always in `companies`. */
   company: string | null
+  /** The one operational branch new company+branch rows are stamped with. */
+  branch: string | null
   branches: string[] | null
+  /** Invalidates sessions after credential or account-state changes. */
+  securityVersion: number
+  /** Compare-and-set revision for context switches and live reconciliation. */
+  revision: number
   createdAt: number
   /** Refreshed while in use, never past createdAt + absoluteTtl. */
   expiresAt: number
@@ -34,12 +40,23 @@ export type SessionStore = {
   read(id: string): Promise<SessionRecord | null>
   /** Extend a live session. Returns the new expiry, or null if it was already gone. */
   touch(id: string, expiresAt: number): Promise<number | null>
+  /** Replace identity scope only if nobody changed this session since it was read. */
+  updateContext(id: string, expectedRevision: number, context: SessionContext): Promise<SessionRecord | null>
   destroy(id: string): Promise<void>
+  /** List live sessions for profile/admin screens. */
+  listUser(userId: string): Promise<SessionRecord[]>
   /** Every session of one user — logging out everywhere, or revoking an account. */
   destroyUser(userId: string): Promise<number>
+  /** Rotate credentials while keeping the session that performed the change. */
+  destroyUserExcept(userId: string, keepId: string): Promise<number>
   /** Remove what has expired. Returns rows removed. */
   sweep(now: number): Promise<number>
 }
+
+export type SessionContext = Pick<
+  SessionRecord,
+  'companies' | 'company' | 'branches' | 'branch' | 'securityVersion'
+>
 
 const alive = (r: SessionRecord, now: number): boolean => r.expiresAt > now
 
@@ -69,13 +86,41 @@ export function memorySessionStore(o: { now?: () => number } = {}): SessionStore
       r.expiresAt = expiresAt
       return expiresAt
     },
+    async updateContext(id, expectedRevision, context) {
+      const r = rows.get(id)
+      if (!r || !alive(r, now()) || r.revision !== expectedRevision) return null
+      const next = { ...r, ...context, revision: r.revision + 1 }
+      rows.set(id, next)
+      return { ...next, companies: [...next.companies], branches: next.branches ? [...next.branches] : null }
+    },
     async destroy(id) {
       rows.delete(id)
+    },
+    async listUser(userId) {
+      const out: SessionRecord[] = []
+      for (const [id, r] of rows) {
+        if (!alive(r, now())) {
+          rows.delete(id)
+          continue
+        }
+        if (r.userId === userId)
+          out.push({ ...r, companies: [...r.companies], branches: r.branches ? [...r.branches] : null })
+      }
+      return out.sort((a, b) => b.createdAt - a.createdAt)
     },
     async destroyUser(userId) {
       let n = 0
       for (const [id, r] of rows)
         if (r.userId === userId) {
+          rows.delete(id)
+          n++
+        }
+      return n
+    },
+    async destroyUserExcept(userId, keepId) {
+      let n = 0
+      for (const [id, r] of rows)
+        if (r.userId === userId && id !== keepId) {
           rows.delete(id)
           n++
         }
@@ -99,7 +144,10 @@ CREATE TABLE IF NOT EXISTS ket_session (
   user_id     TEXT NOT NULL,
   companies   TEXT NOT NULL,
   company     TEXT,
+  branch      TEXT,
   branches    TEXT,
+  security_version INTEGER NOT NULL DEFAULT 0,
+  revision    INTEGER NOT NULL DEFAULT 0,
   created_at  BIGINT NOT NULL,
   expires_at  BIGINT NOT NULL
 );
@@ -125,10 +173,13 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
     userId: String(row.user_id),
     companies: JSON.parse(String(row.companies)) as string[],
     company: row.company === null || row.company === undefined ? null : String(row.company),
+    branch: row.branch === null || row.branch === undefined ? null : String(row.branch),
     branches:
       row.branches === null || row.branches === undefined
         ? null
         : (JSON.parse(String(row.branches)) as string[]),
+    securityVersion: Number(row.security_version ?? 0),
+    revision: Number(row.revision ?? 0),
     createdAt: Number(row.created_at),
     expiresAt: Number(row.expires_at),
   })
@@ -137,18 +188,30 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
     name: adapter.name,
     async init() {
       await adapter.exec(DDL)
+      const columns = (await adapter.introspect()).ket_session ?? {}
+      for (const [name, sql] of [
+        ['branch', 'TEXT'],
+        ['security_version', 'INTEGER NOT NULL DEFAULT 0'],
+        ['revision', 'INTEGER NOT NULL DEFAULT 0'],
+      ] as const)
+        if (pg) await adapter.exec(`ALTER TABLE ket_session ADD COLUMN IF NOT EXISTS ${name} ${sql}`)
+        else if (!columns[name]) await adapter.exec(`ALTER TABLE ket_session ADD COLUMN ${name} ${sql}`)
     },
 
     async create(r) {
       await adapter.run(
-        `INSERT INTO ket_session (id, user_id, companies, company, branches, created_at, expires_at)
-         VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)})`,
+        `INSERT INTO ket_session
+           (id, user_id, companies, company, branch, branches, security_version, revision, created_at, expires_at)
+         VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)})`,
         [
           r.id,
           r.userId,
           JSON.stringify(r.companies),
           r.company,
+          r.branch,
           r.branches ? JSON.stringify(r.branches) : null,
+          r.securityVersion,
+          r.revision,
           r.createdAt,
           r.expiresAt,
         ],
@@ -176,14 +239,56 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
       return res.changes ? expiresAt : null
     },
 
+    async updateContext(id, expectedRevision, context) {
+      const res = (await adapter.run(
+        `UPDATE ket_session SET
+           companies = ${p(1)}, company = ${p(2)}, branch = ${p(3)}, branches = ${p(4)},
+           security_version = ${p(5)}, revision = revision + 1
+         WHERE id = ${p(6)} AND revision = ${p(7)} AND expires_at > ${p(8)}`,
+        [
+          JSON.stringify(context.companies),
+          context.company,
+          context.branch,
+          context.branches ? JSON.stringify(context.branches) : null,
+          context.securityVersion,
+          id,
+          expectedRevision,
+          now(),
+        ],
+      )) as { changes?: number }
+      if (!res.changes) return null
+      const rows = await adapter.all(`SELECT * FROM ket_session WHERE id = ${p(1)}`, [id])
+      return rows.length ? decode(rows[0] as Record<string, unknown>) : null
+    },
+
     async destroy(id) {
       await adapter.run(`DELETE FROM ket_session WHERE id = ${p(1)}`, [id])
+    },
+
+    async listUser(userId) {
+      await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)} AND expires_at <= ${p(2)}`, [
+        userId,
+        now(),
+      ])
+      const rows = await adapter.all(
+        `SELECT * FROM ket_session WHERE user_id = ${p(1)} ORDER BY created_at DESC`,
+        [userId],
+      )
+      return rows.map((row) => decode(row as Record<string, unknown>))
     },
 
     async destroyUser(userId) {
       const res = (await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)}`, [userId])) as {
         changes?: number
       }
+      return res.changes ?? 0
+    },
+
+    async destroyUserExcept(userId, keepId) {
+      const res = (await adapter.run(`DELETE FROM ket_session WHERE user_id = ${p(1)} AND id <> ${p(2)}`, [
+        userId,
+        keepId,
+      ])) as { changes?: number }
       return res.changes ?? 0
     },
 

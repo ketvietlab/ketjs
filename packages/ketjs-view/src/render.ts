@@ -6,6 +6,7 @@ import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
 import type { Host, HostNode } from './host.ts'
 import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
+import type { Markup } from './ssr.ts'
 
 const RESULT = Symbol('ket.result')
 const EACH = Symbol('ket.each')
@@ -17,6 +18,8 @@ export type EachResult = {
   keyOf: (item: unknown, i: number) => unknown
   render: (item: unknown, i: number) => TemplateResult
 }
+/** Values the renderer understands without falling back to `[object Object]`. */
+export type Renderable = TemplateResult | EachResult | Markup | string | number | boolean | null | undefined
 
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult {
   return { [RESULT]: true, strings, values }
@@ -75,6 +78,8 @@ class Part {
   child: Instance | null = null
   keyed: Map<unknown, Instance> | null = null
   keys: unknown[] = []
+  markupNodes: HostNode[] = []
+  markupHtml = ''
 
   constructor(host: Host, parent: HostNode, anchor: HostNode) {
     this.host = host
@@ -96,7 +101,15 @@ class Part {
       this.keyed = null
       this.keys = []
     }
+    for (const node of this.markupNodes) this.host.remove(node)
+    this.markupNodes = []
+    this.markupHtml = ''
     this.kind = null
+  }
+
+  disposeBehavior(): void {
+    this.child?.dispose(false)
+    if (this.keyed) for (const instance of this.keyed.values()) instance.dispose(false)
   }
 
   commit(value: unknown): void {
@@ -108,7 +121,19 @@ class Part {
       this.commitEach(value)
       return
     }
+    if (isMarkup(value)) {
+      this.commitMarkup(value.html)
+      return
+    }
     this.commitText(value)
+  }
+
+  commitMarkup(html: string): void {
+    if (this.kind === 'markup' && this.markupHtml === html) return
+    this.clear()
+    this.kind = 'markup'
+    this.markupHtml = html
+    this.markupNodes = this.host.insertMarkup(this.parent, html, this.anchor)
   }
 
   commitText(value: unknown): void {
@@ -359,20 +384,33 @@ class Instance {
   }
 
   remove(): void {
+    this.dispose(true)
+  }
+
+  dispose(removeNodes: boolean): void {
     for (const p of this.parts) {
       if (!p) continue
       if ('event' in p) {
         p.detach()
         continue
       }
-      if (!p.attr) (p as Part).clear()
+      if (!p.attr) {
+        if (removeNodes) (p as Part).clear()
+        else (p as Part).disposeBehavior()
+      }
     }
-    for (const n of this.roots) this.host.remove(n)
-    this.roots = []
+    if (removeNodes) {
+      for (const n of this.roots) this.host.remove(n)
+      this.roots = []
+    }
   }
 }
 
-export type Root = { render(result: TemplateResult): void }
+export type Root = {
+  render(result: TemplateResult): void
+  /** Detach behaviour; optionally remove the rendered nodes too. */
+  dispose(options?: { remove?: boolean }): void
+}
 
 export function createRoot(host: Host, container: HostNode): Root {
   let instance: Instance | null = null
@@ -384,6 +422,10 @@ export function createRoot(host: Host, container: HostNode): Root {
         instance.mount(container, null)
       }
       instance.update(result.values)
+    },
+    dispose(options = {}) {
+      instance?.dispose(options.remove === true)
+      instance = null
     },
   }
 }
@@ -432,7 +474,11 @@ function hydrateInstance(
     // why a hole is fenced on both sides rather than only anchored at the end.
     if (isMarkup(value)) {
       part.kind = 'markup'
-      while (c && !(c.nodeType === COMMENT && c.data === HOLE_MARKER)) c = c.nextSibling
+      while (c && !(c.nodeType === COMMENT && c.data === HOLE_MARKER)) {
+        part.markupNodes.push(c)
+        c = c.nextSibling
+      }
+      part.markupHtml = value.html
       return
     }
     if (isResult(value)) {
@@ -456,7 +502,10 @@ function hydrateInstance(
       }
       return
     }
-    if (value == null || value === false) {
+    // SSR emits no node for an empty string, just as it emits none for null/false.
+    // Requiring a text node here makes any initially-empty conditional fail only
+    // in a real HTML parser, where zero-length text nodes cannot survive.
+    if (value == null || value === false || value === '') {
       part.kind = null
       return
     }
@@ -543,6 +592,10 @@ export function hydrateRoot(host: Host, container: HostNode, result: TemplateRes
         instance.mount(container, null)
       }
       instance.update(next.values)
+    },
+    dispose(options = {}) {
+      instance?.dispose(options.remove === true)
+      instance = null
     },
   }
 }

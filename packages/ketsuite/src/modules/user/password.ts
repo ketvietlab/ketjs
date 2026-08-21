@@ -12,6 +12,7 @@ import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 
 /** N=2^15 costs ~160ms here. Interactive, and expensive per guess. */
 const PARAMS = { N: 2 ** 15, r: 8, p: 1, keylen: 64 }
+const LIMITS = { minN: 2 ** 14, maxN: 2 ** 17, maxR: 16, maxP: 4, salt: 16, keylen: 64 }
 /** Node's default cap is 32MB, which 2^15 exceeds — so it is passed, not assumed. */
 const maxmem = 256 * PARAMS.N * PARAMS.r
 
@@ -50,11 +51,25 @@ export async function verifyPassword(password: string, encoded: string): Promise
   const N = Number(sN),
     r = Number(sr),
     p = Number(sp)
-  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false
+  if (
+    !Number.isInteger(N) ||
+    !Number.isInteger(r) ||
+    !Number.isInteger(p) ||
+    N < LIMITS.minN ||
+    N > LIMITS.maxN ||
+    (N & (N - 1)) !== 0 ||
+    r < 1 ||
+    r > LIMITS.maxR ||
+    p < 1 ||
+    p > LIMITS.maxP
+  )
+    return false
   let expected: Buffer
   try {
     expected = Buffer.from(hash64, 'base64url')
-    const got = await scrypt(password, Buffer.from(salt64, 'base64url'), N, r, p, expected.length)
+    const salt = Buffer.from(salt64, 'base64url')
+    if (salt.length !== LIMITS.salt || expected.length !== LIMITS.keylen) return false
+    const got = await scrypt(password, salt, N, r, p, expected.length)
     return expected.length === got.length && timingSafeEqual(expected, got)
   } catch {
     return false

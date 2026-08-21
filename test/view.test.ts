@@ -44,6 +44,64 @@ test('signals: computed derives without a manual subscription', () => {
   assert.equal(total(), 300)
 })
 
+test('signals: an effect reading a source and its computed value runs once per write', () => {
+  const source = signal(2)
+  const doubled = computed(() => source() * 2)
+  const seen: number[] = []
+  effect(() => {
+    seen.push(source() + doubled())
+  })
+
+  source.set(3)
+  assert.deepEqual(seen, [6, 9], 'computed values settle before ordinary effects, without a duplicate run')
+})
+
+test('signals: cleanup runs before the next effect and once more on disposal', () => {
+  const source = signal(0)
+  const log: string[] = []
+  const stop = effect(() => {
+    const value = source()
+    log.push(`run:${value}`)
+    return () => log.push(`clean:${value}`)
+  })
+
+  source.set(1)
+  stop()
+  source.set(2)
+  assert.deepEqual(log, ['run:0', 'clean:0', 'run:1', 'clean:1'])
+})
+
+test('signals: a failed eager effect leaves no live subscription behind', () => {
+  const source = signal(0)
+  let runs = 0
+  assert.throws(
+    () =>
+      effect(() => {
+        runs++
+        void source()
+        throw new Error('setup failed')
+      }),
+    /setup failed/,
+  )
+
+  source.set(1)
+  assert.equal(runs, 1)
+})
+
+test('signals: a computed subscription can be disposed', () => {
+  const source = signal(1)
+  let runs = 0
+  const derived = computed(() => {
+    runs++
+    return source() * 2
+  })
+  source.set(2)
+  derived.dispose()
+  source.set(3)
+  assert.equal(runs, 2)
+  assert.equal(derived.peek(), 4, 'disposing stops derivation without destroying its last value')
+})
+
 type Item = { id: number; name: string }
 const view = (items: Item[]) =>
   html`<ul>${each(

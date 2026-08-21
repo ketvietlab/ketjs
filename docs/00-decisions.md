@@ -1105,10 +1105,11 @@ eventually have it chosen.
 ## D17 — A framework table appears only when something uses it
 Asked why the framework owns tables at all, the honest audit found that
 `createKetServer` created `ket_stream` at boot — so an app that never streamed still
-found a stream table in its database. Now every framework table is created on first
-use: migrating an app yields `ket_migration` and the app's own tables and nothing
-else, `ket_stream` appears on the first stream, `ket_idem` on the first idempotency
-key, `ket_job` on the first enqueue.
+found a stream table in its database. Framework tables now arrive with the runtime
+that owns them: `ket_stream` on the first stream, `ket_idem` on the first
+idempotency key, and `ket_job` when a queue producer or worker first prepares the
+database. Queue preparation happens before user transactions so rolling back a
+first enqueue cannot also roll back its system schema.
 
 The same audit found two gaps in idempotency, both the kind that only bite during an
 incident:
@@ -1293,9 +1294,16 @@ hook, no component that has to be told what page it is on. The consequences are 
 point: the back button works, a bookmark works, and a link somebody pastes into chat
 opens the same list they were looking at. None of that needed code.
 
-Every control in the chrome is a link or a `method="get"` form. There is no
-`<button>` in it and a test asserts there is none, because the moment one appears
-the state has moved into the client and all three of those properties are gone.
+Every applied control in the chrome is a link or a `method="get"` form. A custom
+filter editor may use buttons and temporary draft state, but Apply must navigate to
+a canonical URL before the table changes. The table never owns a second client-side
+copy of search, filter, grouping, sorting, paging, or open-group state.
+
+Filter and Group By tokens name only fields declared by a per-list allowlist. Same-group
+preset filters are OR-ed, different groups are AND-ed, and a custom filter is a bounded
+nested AND/OR tree. Group headers and their counts come from database grouping, not from
+loading a page and grouping it in memory. Open paths and group pages are URL values, so an
+expanded grouped list remains reloadable and shareable.
 
 **What that cost, and where it bit.** A GET form replaces the whole query string, so
 searching while looking at the cards threw you back to the list. The fix is
@@ -1403,9 +1411,11 @@ build step and a supply chain between this repo and twelve strings. `audit:zero-
 is not a slogan to work around; it is the reason a Ket app is one `node` away from
 running.
 
-`MenuDef.icon` therefore became a *name*, not a glyph. The theme decides what a name
-draws, and a name this build does not carry falls back to a monogram — a module
-naming an icon we never vendored loses its icon, not its row.
+`MenuDef.icon` therefore became a *name*, not a glyph. Every entry may name one: the
+declaring module owns the semantic choice and the theme owns the drawing. An app
+name this build does not carry falls back to a monogram; a nested entry falls back
+to the existing dot. A module naming an icon we never vendored loses its icon, not
+its row.
 
 **A glyph with no size is the size of its container,** which the search icon
 demonstrated at about 300px tall. `[data-ui="icon"]` now defaults to `1em`, and the
@@ -1438,44 +1448,455 @@ did; the resolver is the fallback for paths no route owns. Website modules there
 declare the public URL they own rather than teaching their own handlers to parse a
 path the engine claimed not to understand.
 
-## D47 — A row id is one number, and the clock is its high bits
-```
-id = millisecondsSinceEpoch * 2048 + counter        epoch 2026-01-01T00:00:00Z
-```
+## D47 — Durable jobs live with tenant data; notification is only a bell
 
-**What was wrong.** `id` and `ref` were `TEXT PRIMARY KEY`, and the framework generated
-none of them — all 19 `save*` functions took an id from the caller. So every module
-invented a convention (`'p1'`, `'t-goods'`, `'acme'`), nothing sorted, and a public API
-would have had to let a client choose its own primary key.
+**Chosen:** PostgreSQL or SQLite owns every job state. Redis is not required.
+`LISTEN/NOTIFY` carries only the queue name and only shortens wake-up latency;
+adaptive polling, due-time checks and expired-lease rescue are the correctness
+path. PostgreSQL sends `pg_notify` on the enqueue transaction's reserved
+connection, so rollback leaves neither business data, job nor notification.
 
-**Why not a sequence.** A sequence must be asked, and a handler that round-trips to the
-database to learn an id cannot build a graph of rows in one pass.
+**One app, two process roles.** `ket serve` and `ket worker` both start with
+`bootRuntime`, compose the same `AppSpec` and register the same emitted module
+artifact. Production runs them as separate processes; `ket dev --all` runs both
+loops under the existing single source watcher. There is no second build watcher
+and no execution of source TypeScript in production.
 
-**Why 53 bits and not 64.** `Number.MAX_SAFE_INTEGER` is 2^53−1. Past it JavaScript
-rounds silently and two different ids compare equal — the worst failure available. A
-`bigint` avoids that and brings its own: `JSON.stringify` throws on one. So the scheme
-is built to fit a plain `number`, and asserts on every mint rather than trusting that it
-always will. 42 bits of milliseconds is 139 years; 11 bits is 2048 ids per millisecond
-per database, which is two million rows a second.
+**Delivery is at least once.** A claim is a short transaction, the handler runs
+outside it, and completion is another short transaction. A process can therefore
+die after a business write and before completion; every job must explicitly state
+`idempotent: true`. Leases, heartbeat and exponential full-jitter retry recover the
+other crash positions. A handler receives an `AbortSignal`, but Node cannot
+forcibly stop a Promise that ignores it. Heartbeat continues while that handler is
+alive to avoid manufacturing an overlapping retry; if it eventually returns after
+abort, the worker records a structured `handler_ignored_abort` warning.
 
-**Uniqueness is per database, and that is what makes it fit.** No node identifier has to
-be carved out of the number, so none can be misconfigured. Two writers in one millisecond
-are separated by starting the counter at a random slot; a collision then fails on the
-primary key and the id is minted again. The database is the arbiter because it is the
-only participant that cannot be configured into agreeing with itself.
+**Scheduling is itself an effect.** A function or another job may enqueue only a
+qualified job named by an `enqueue:module.job` effect. Composition checks that the
+target exists and that the producer depends on its module; runtime checks the same
+effect before a durable row is inserted. Otherwise asynchronous work would be a
+way to bypass the model effects enforced on the request.
 
-**A clock that steps backwards** inside five seconds is treated as monotonic by fiat —
-ids keep issuing from the high-water mark, so none repeats. Beyond five seconds it
-refuses: that is a broken host, and ids minted across it could never be ordered
-afterwards.
+**Queue uniqueness coalesces active delivery, not business history.** A
+`(job, unique_key)` constraint covers available, scheduled, executing and retryable
+rows. Terminal rows release the key immediately, so whether the prune command ran
+cannot decide whether new work executes. A handler that must apply a business
+operation only once still enforces that invariant in business data.
 
-**Do not write `ms << 11`.** JavaScript's bitwise operators truncate to 32 bits, so the
-shift is wrong from the first id. `decodeId` exists so the division is written once.
+Expired leases are rescued in bounded batches. Queue DDL uses explicit PostgreSQL
+timestamp types, and legacy table migration is serialized by a transaction-scoped
+PostgreSQL advisory lock so replicas may start concurrently without racing a
+rename.
 
-**An id is not a secret.** It carries the millisecond it was made, and rows written in
-the same millisecond are adjacent. Anything reachable by a stranger needs its own
-unguessable handle; this decision does not provide one.
+**Tenant fairness is scheduler state, not central queue state.** Jobs stay in each
+tenant database so enqueue and business writes share one transaction. The worker
+refreshes the tenant list, claims one bounded batch per turn and rotates the first
+tenant. It does not reserve one PostgreSQL listener connection per tenant. If a
+future fleet needs sub-100ms wake-up across thousands of databases, that is a
+separate wake-up plane; durable ownership remains with the tenant database.
+## D48 — Blob bytes are outside SQL; their authority is not
 
-**Cost:** ids are 14–16 digit numbers. That is affordable only because the number a
-person reads is not this one — a document code (`SO00042`) is a separate field with its
-own sequence, exactly as Odoo separates `id` from `name`.
+**Metadata and bytes have different jobs.** `storage.Attachment` is a
+company-scoped row in each tenant database: ownership, target record, media type,
+size, checksum and visibility remain queryable and transactional. The byte stream
+lives behind one `Storage` contract on local disk or an S3-compatible service.
+Putting large opaque bodies in SQL would make ordinary backups, replication and
+table scans pay for data they cannot inspect.
+
+**Tenant isolation is applied before a key reaches an adapter.** HTTP and worker
+roles open the same configured storage and receive a namespace derived from the
+resolved tenant key. A module never supplies that namespace, just as it never
+supplies a database connection. Inside it, stored attachments are content
+addressed by company and SHA-256; duplicate metadata rows share bytes safely.
+
+**The contract streams.** `put` and `get` use async byte iterables. Local writes go
+to a unique temporary file, sync, validate their declared length and rename into
+place. S3 requests use Signature V4 with no SDK dependency; live MinIO tests cover
+PUT, HEAD, GET, ListObjectsV2, presigned GET and DELETE. Multipart parsing is
+bounded by total, part and header limits and keeps boundary fragments across
+network chunks rather than buffering the upload in memory.
+
+**A filename and media type are data, not trust.** Responses add `nosniff` and
+force unknown or active content to `application/octet-stream` plus attachment
+disposition. Only a small inline-safe set may use a short-lived S3 redirect. Public
+download is a separately declared anonymous function that still passes through
+company scope and the attachment's `public` predicate.
+
+**Deletion is asynchronous and conservative.** Removing metadata does not delete
+a content-addressed blob another row may share. `storage.sweep` runs on the durable
+`maintenance` queue, lists only the captured company prefix and removes only
+unreferenced objects older than a grace period. Its blob reads/removals are declared
+effects, so adding storage to a job does not become a new way around the operation
+boundary.
+
+## D49 — Product and stock follow Odoo 19 where the subset is real
+**Names and codes are compatibility boundaries.** UoM is a relative tree with one
+root, product variants have a stable combination key, pricelist applicability keeps
+Odoo's selection codes, and stock operations keep their warehouse and procurement
+codes. Unsupported accounting, purchasing, selling and valuation behaviour returns
+an explicit error; it is not approximated behind a familiar name.
+
+**A reservation has one source of truth.** Demand belongs to `stock.Move`, reserved
+detail belongs to `stock.MoveLine`, and `stock.Quant.reservedQuantity` is only a
+query-friendly mirror. Updating that mirror uses compare-and-set, so two workers can
+compete for the same quant without both winning. Inventory counts create completed
+moves instead of rewriting a quant directly, preserving the trail that explains the
+balance.
+
+**Warehouse is a boundary, not a label.** Locations, quants, picking types and
+warehouse routes determine which physical stock a flow may see. Forecast and
+reservation operate on a requested location, while replenishment selects product,
+category, then warehouse routes. Stock in one warehouse therefore cannot silently
+satisfy another warehouse's move.
+
+**Product media is metadata over storage, not a second blob system.** Product
+screens retain the named template and variant media joints and the unavailable,
+loading, ready and error states. The installed `product_media` bridge adds only
+company-scoped ordering, alt text and primary-image metadata; bytes, checksums,
+delivery and garbage collection stay with `storage.Attachment` and the `Storage`
+contract from D48. Upload, primary selection, reordering and removal use native
+forms, and the neutral UI component receives URLs and action endpoints instead of
+depending on a schema or object-store convention. Product and stock still own no
+blob column, resize pipeline, CDN rule or file-processing implementation.
+
+## D50 — Module paths discover packages; they do not decide the deployment
+
+**Chosen:** a workspace may declare several filesystem roots whose direct children
+contain `ket.module.json`. An app selects a module by its declared name; resolution
+loads that module and its dependency closure into the ordinary object-only
+`AppSpec` before composition. Imported `KetModule` objects remain valid in the same
+list, so existing workspaces need no migration.
+
+**Why:** Odoo's `addons_path` makes private and vendor modules operationally easy
+to place, but scanning a root and installing everything found are different
+decisions. Ket keeps them different. A file appearing on disk makes a module
+discoverable, not shipped; the workspace remains the reviewable statement of what
+the deployment contains, and the database still only switches that build-time set
+on or off.
+
+**The fences:** roots are canonicalized, duplicate names across roots are errors
+rather than order-dependent overrides, descriptor and executable identities must
+match, and an entry may not escape its module directory. Discovery reads every
+small descriptor but executes only selected modules. Production accepts emitted
+JavaScript artifacts, preserving D6; TypeScript entries are admitted only through
+the explicit development loader.
+
+**Where it lives:** resolution is asynchronous and belongs between loading the
+workspace and calling `composeWorkspace`. Composition, migrations, HTTP and workers
+continue to know only `KetModule[]`. Module location therefore cannot become a
+second registration mechanism or leak into business runtime code.
+
+## D51 — Hospitality is two business modules, and language is not business data
+
+The fourteen `vidoo_hospitality*` Odoo addons are a packaging history, not fourteen
+bounded contexts. KetSuite consolidates property, content, rooms, reservations,
+inventory restrictions, housekeeping, services and Vietnamese lodging operations
+under `hospitality_core`; provider-neutral channel work and provider adapters live
+under `hospitality_ota`. The public names carry no `vidoo_` prefix. Accounting and
+legal e-invoicing remain outside both modules until their own contracts exist.
+
+Operational codes are stable data. `available`, `out_of_order`, `hotel`,
+`non_refundable` and their peers are stored and exchanged; labels are resolved by
+the module catalogue. Every visible key and validation code ships in Vietnamese
+and English from its first PR. Business names and authored descriptions remain the
+user's data and are not copied into message catalogues.
+
+A property is company-scoped and is itself the operational accommodation boundary.
+Buildings, floors, room types and rooms repeat `propertyId` deliberately so every
+write can prove the full structure belongs to one property before committing. The
+database indexes enforce company and property uniqueness; APIs return translated
+message keys for validation failures rather than embedding one locale in business
+logic.
+
+Hospitality screens are owned by the same module as their functions because the
+agreed deployment has only two hospitality modules. They still compose the shared
+KetSuite UI kit and write no private markup. Media remains `storage.Attachment`
+metadata plus the storage backend; hospitality does not invent another binary
+table or object-key convention.
+
+## D52 — Reservation intent, physical stay and operational folio are separate records
+
+A reservation is the commercial promise, a stay is the physical visit, and a
+folio is the operational account for room and service charges. They are created in
+one transaction but have independent state machines: cancelling before arrival
+does not delete audit rows, checking in assigns a physical room, and checkout
+closes the stay and folio. The `Charge` table is deliberately not an invoice or
+accounting entry; accounting will consume this boundary in a later stack.
+
+Room assignment history is append-only. Check-in claims a room with compare-and-set,
+moving closes the current assignment and appends another, and checkout closes the
+last assignment while marking the room dirty. A PostgreSQL benchmark opens two
+connections against the same room and requires exactly one winner. SQLite keeps
+the same transition contract for development but is only a single-writer target.
+
+The tape chart reads stays and assignment history rather than becoming a second
+availability source. Confirmed stays without a physical room have dedicated rows,
+so overlapping unassigned bookings remain legible instead of painting over each
+other. The browser acceptance path runs every hospitality route with seeded data
+in Vietnamese and English, plus the calendar at a narrow viewport; this is part of
+the feature definition, not a release-only visual pass.
+
+Housekeeping tasks are durable operational records, not ephemeral UI cards. Checkout
+creates exactly one urgent task in the same transaction that marks the room dirty;
+manual daily cleaning, inspection and maintenance use the same state machine. Starting,
+completing or cancelling a task uses compare-and-set and recalculates room state in the
+same transaction. A company-scoped detail read preloads only its property, room and stay,
+and archived rooms remain visible in history but cannot receive new work from the UI.
+The room-status board reads sellable inventory and physical-room state as separate concepts. Occupied
+and cleaning states remain lifecycle-owned; the housekeeping workflow also owns the transition back to
+sellable. A supervisor may take an active, unoccupied ready/dirty room out of service, or release a repaired
+room back to dirty. Out-of-service transitions require a reason, reject open housekeeping work, and compare
+against the status the operator viewed so concurrent changes cannot be silently overwritten.
+## D53 — Collaboration keeps one polymorphic boundary and external I/O behind jobs
+
+**A date is not a datetime with the clock hidden.** Activity deadlines and all-day
+event boundaries use the `date` scalar and canonical `YYYY-MM-DD` values. SQLite
+stores it as text and PostgreSQL as `DATE`; changesets, function/job inputs, layout
+contracts, generated declarations and agent JSON schemas all retain that meaning.
+Impossible and normalized dates such as `2026-02-30` are refused at every input
+boundary rather than left for a database or timezone conversion to reinterpret.
+
+**Record access stays with the record owner.** `mail.Thread` is the sole
+`resModel/resId` boundary. Mail has no public generic function that accepts an
+arbitrary model and id. Product, Stock and later business modules publish typed
+joints; a bridge depending on both sides verifies the target row under its normal
+company scope, then calls Mail operations while declaring both effect sets. The
+small bridge cost is intentional: a reusable generic Chatter endpoint would be a
+cross-domain record-rule bypass in a permission system whose unit is the function.
+
+**The first message document is plain text.** Chatter and inbound bodies are stored
+as text and escaped by the rendering layer. Odoo HTML is not copied into a trusted
+backend surface before a sanitizer or restricted document format exists. Internal
+notes exclude external followers; an external mention is rejected unless the UI
+passes a confirmation that represents an explicit user decision.
+
+**A delivery request is business data; `ket_job` is not.** Message, recipient
+Notification and the later rendered Delivery snapshot commit with the enqueue.
+The queue row owns attempts, leases and scheduling and may be pruned. A worker gets
+an `OutboundTransport` from the deployment through `serve.openTransport`; the job
+must declare `transport:send` before the provider sees anything. Provider secrets
+therefore remain deployment secrets rather than plaintext company rows or module
+globals.
+
+Every send carries a stable idempotency key. The in-memory provider double proves
+retry and provider-side deduplication, while the contract records whether a receipt
+was deduplicated. This yields exactly-once external acceptance only for providers
+that honor the key. Raw SMTP can reuse a stable RFC Message-ID but cannot close the
+crash-after-acceptance window, so no UI or runbook may claim that it can.
+
+## D54 — Inbound email enters through signed, concrete routes
+
+**Anonymous does not mean unauthenticated.** Provider callbacks use a dedicated
+`KET_WEBHOOK_SECRET`, not the session cookie key. The HMAC covers timestamp, path
+and exact body bytes; a five-minute window rejects replay and binding the path stops
+a valid reply callback from being replayed against an alias bridge. Only the route
+may call the closed receive function without a session. The generic function HTTP
+surface stays unavailable to strangers.
+
+**Dedupe precedes business work.** A company-scoped `(provider, providerEventId)`
+identity owns the receive attempt. The message, attachment metadata and event state
+commit together. Repeating a callback returns the existing outcome, while provider
+References resolve only through a recorded outbound provider message id. A supplied
+but invalid reply token is terminal and never falls back to a guessed Reference.
+
+**HTML is input, never a document.** A conservative converter removes active blocks
+and tags and stores only plain text in Chatter. Inbound files pass the same upload
+limit, content-addressed company key and `storage.Attachment` contract as browser
+uploads. A blob written before a failed database transaction is an unreferenced
+object and is collected by the storage sweep.
+
+**Aliases are bridges, not model names.** Core Mail records alias configuration but
+does not dynamically open a table or call a string-named model. The first concrete
+`stock.receipt` bridge depends on Stock and Mail, validates a configured picking
+type, creates one draft receipt, then posts to its ordinary Chatter thread. Unknown
+or uninstalled bridges remain bounded diagnostics. A maintenance job prunes failed
+diagnostics and expired token digests; processed provider identities remain compact
+dedupe tombstones.
+
+## D55 — Odoo collaboration cutover advances one explicit checkpoint
+
+**Identity is a four-part fact, not an inherited integer.** The import map keys the
+source database, Odoo model, source record id and explicit Ket target model. One
+Odoo Calendar row may therefore map both to its typed `calendar.Event` and to the
+`mail.Thread` authorized by the Calendar bridge without pretending those targets
+are interchangeable. Generated target ids contain a database namespace and remain
+stable across retries.
+
+**A batch and its checkpoint are one transaction.** Snapshot/delta rows, maps,
+issues, pending outbound jobs and the completed run commit before `lastCursor`
+moves. Delta callers must present the exact previous cursor. A repeated run payload
+returns its stored report; a different payload under the same run id is refused.
+Unresolved partners, users and business targets stay visible as issues rather than
+causing generic records to appear outside a domain owner.
+
+**Migration is allowed to lose syntax, never meaning silently.** Chatter-like Odoo
+HTML becomes plain text. Recurrence rules outside the supported Calendar contract
+are errors. Legacy QWeb templates are disabled for review, sent mail is not queued
+again, and secret-like alias defaults are stripped with warnings. Attachment bytes
+are streamed and checksummed before their transactional metadata is imported; the
+importer accepts only the same content-addressed company key used by Storage.
+
+**Rollback does not reverse history.** Until cutover, Odoo is the writable source;
+at freeze it remains an intact read-only fallback. The rollback manifest is a read
+of imported targets, not a delete script. Once KetSuite has accepted writes, an
+automated reverse merge would guess at business conflicts, so both sides must be
+frozen and reconciled explicitly.
+
+## D56 — OAuth belongs to KetSuite; provider policy belongs to the deployment
+
+KetJS remains an application-neutral framework. Its signed sessions, actor,
+function allow-list, transaction and compare-and-set primitives are enough for an
+application to build identity, but the framework does not own issuer discovery,
+external subjects or account provisioning. The open-source `oauth` and
+`oauth_backend` modules live in KetSuite because they map verified identities into
+`user.User`, company/branch context and KetSuite Role/Grant rows.
+
+The protocol path is generic OpenID Connect Authorization Code with PKCE. Provider
+configuration contains issuer, client id, exact callback, scopes, client auth
+method and signature algorithm allow-list; there is no ZITADEL branch in protocol
+code. ZITADEL organization binding, KétViệt tenant policy and provisioning
+credentials remain deployment adapters. Keycloak, Auth0, Okta, Entra or another
+conforming issuer use the same module.
+
+An external identity is `(provider, issuer, subject)`, never email. State and nonce
+are digest-only, the short-lived verifier is server-side, and claiming a callback
+is single-use CAS before code exchange. ID tokens must pass signature, key,
+algorithm, issuer, audience, authorized-party, nonce and time validation. Provider
+claims cannot grant function permissions; they resolve one local User, after which
+the existing live session and Role/Grant rules remain authoritative.
+
+## D57 — Address catalogs are versioned, lazy reference data
+
+KetSuite owns one `address` module, not one source module per country and not a
+country registry inside KetJS. Bundled data is organized by ISO 3166-1 alpha-2 and
+catalog version. The server reads no administrative dataset at boot: a small index
+is opened on first discovery and complete chunks only on explicit installation.
+Every manifest, policy and chunk is checksum-verified before a transaction can move
+the country's single active-catalog pointer.
+
+Country and Division are shared reference rows; a Partner address remains the
+business-owned row. Company refers to the Partner that represents the legal entity
+instead of copying address columns. Canonical addresses store the terminal Division
+reference and derive the complete parent path. A policy declares required levels,
+allowed kinds, postal-code validation and formatting, so a new country is data plus
+policy rather than new application code.
+
+Catalog rows are immutable after verification. New writes must resolve against the
+active catalog, while business modules that freeze a document must retain an address
+snapshot with catalog id, named division path and formatted lines. `DivisionTransition` records
+explicit splits, merges and replacements when a future source provides them; the
+system never guesses a replacement by string similarity. Catalog installation is
+an internal function owned by a trusted administration route and uses unique
+indexes, `insertIfAbsent` and CAS so concurrent pods converge.
+
+## D58 — Hospitality services are intentions plus immutable occurrences
+
+A service intention (`ExtraLine`) attaches one sellable Product variant to exactly
+one reservation or physical stay. It snapshots the description, unit, quantity,
+price and recurrence used by hotel operations. `once`, `per_night` and `per_unit`
+are explicit policies: a night must fall inside the property-timezone occupancy
+range, while each quantity-based post carries a caller request key. Every policy
+produces a stable Charge source key, so a retry or two concurrent PostgreSQL
+connections converge on one operational occurrence.
+
+Posting a service and advancing the open Folio total share one transaction. Once
+any occurrence exists, the intention cannot be repriced or retargeted; corrections
+will be represented by later operational adjustments rather than rewriting audit
+history. The Charge remains an operational folio record, not an accounting move or
+invoice line. Those systems may consume the stable Product, UoM, ExtraLine and
+Charge references later without changing the hotel source of truth.
+
+Property fees are separate provider-visible content. Their create/update writes a
+ContentChange in the same transaction so each private OTA connection can rebuild
+its current payload independently. Storage is not involved: services and fees are
+structured database records, while Storage continues to own only binary media.
+
+## D59 — Hospitality closes a business date on its own worker
+
+A night audit is an operational close for one Property and one local calendar
+date, not an accounting period close. The web process only validates and enqueues
+`hospitality_core.nightAudit` on the maintenance queue. Posting per-night service
+occurrences and recurring weekly/monthly room rent happens on the hospitality
+worker, so a failing hotel job cannot hold an HTTP request open. Deployment owns
+the daily trigger; KetSuite does not add a distributed cron scheduler.
+
+`NightAuditRun` is unique by company, property and business date and records the
+attempt count plus the cumulative occurrences attached to that run. Each Charge still
+has its own stable source key, so a crash after one folio write, two workers racing
+on PostgreSQL or an operator rerunning a completed date converges without duplicate
+money. A run may therefore catch up several missed rent periods and can be retried
+after late service intentions are added.
+
+Long-stay schedules use fixed seven- and thirty-day periods to preserve the source
+system's weekly/monthly contract. Check-in can post the first period immediately,
+or leave it for night audit through `Property.longStayBillOnCheckIn`. Calendar
+dates are normalized at the adapter boundary because SQLite returns date text while
+PostgreSQL may return Date objects. Charges and folio totals remain operational
+records; invoices, tax documents and accounting moves consume them in a later
+integration rather than being created by night audit.
+
+## D60 — Vietnam stay notices are an evidence workflow, not a simulated connector
+
+The first Vietnam compliance slice follows the current Ministry of Public Security
+[Circular 116/2026/TT-BCA](https://vanban.bocongan.gov.vn/co-so-du-lieu-van-ban/thong-tu-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-cu-tru-1784261073?tab=attributes)
+and its [stay-notice procedure](https://dichvucong.bocongan.gov.vn/public/link-to/chi-tiet-thu-tuc?ma-thu-tuc=26346).
+For a normal arrival, the property must notify by 23:00 on the arrival date; an
+arrival from 23:00 onward is due by 08:00 the following date. Deadlines are computed
+in the Property timezone. The durable preparation job runs after check-in and again
+when a checked-in stay gains a guest or updated document, with enqueue committed in
+the same transaction as the triggering business write.
+
+Readiness covers the current statutory content: guest name and birth date, identity
+or passport number, an explicitly chosen reason, stay period and property address.
+A single notice is refused when the stay exceeds the current 30-day limit. Supported
+evidence channels mirror Circular 116: registered telephone, email or website,
+National Public Service Portal, VNeID, or stay-notice software.
+
+The public procedure exposes human-facing online channels but no stable machine API
+contract that this module can safely claim to implement. KetSuite therefore never
+marks a record submitted merely because a worker ran. A signed-in operator records
+the actual official channel and a required verifiable evidence reference; a later
+confirmation retains its actor and timestamp. Adding a real connector requires a
+separate reviewed contract and encrypted deployment credentials. No portal account
+or password is stored by `hospitality_core`.
+
+`StayNotice` is an operational checklist, not a copy of the declaration. It stores
+the guest name already needed by hotel operations, document type, only the final
+four document digits, readiness issues, actors, timestamps, evidence reference and
+a SHA-256 comparison hash. The full statutory package is reconstructed from live
+Property, Stay, StayGuest and GuestDocument rows only in memory while submission is
+recorded; neither the package nor the full document number is copied into the notice
+row, queue payload or default logs. Foreign-guest temporary-residence integration
+and accounting/e-invoice behavior remain later private slices.
+
+## D61 — Property settings preserve canonical location and publish one content change
+
+The Property workspace edits the accommodation identity, operating timezone,
+check-in/out clock, long-stay behavior, guest policy and public copy. Timezones must
+be valid IANA names and a default cancellation policy must resolve inside the same
+company scope. A successful create or update writes one `ContentChange` in the same
+transaction so private channel connections independently rebuild current content.
+
+Canonical address fields are intentionally read-only in this first workspace slice.
+Saving operational settings copies their existing structured country/division and
+coordinate values back through the public function; it never replaces them with a
+free-text approximation. A dedicated address-picker slice may edit those references
+later. Property charges remain provider content, and invoices or accounting entries
+remain outside this boundary.
+
+## D62 — Room types are sellable products, while physical rooms remain operational assets
+
+The Room Type workspace owns the public accommodation product: stable code and
+names, guest limits, room size and view, bathroom mode, fallback rate, identity
+colour, cancellation policy, publication state and marketing description. A room
+type belongs to one property for its lifetime; moving an existing record to another
+property is rejected because its rooms, inventory, rates and channel mappings are
+already property-scoped. Operators create a new room type when a product must move.
+
+Every successful create or update appends one `ContentChange` in the same transaction.
+Private OTA connections consume that durable signal independently and rebuild the
+current public record; the open-source module stores no provider credentials or
+provider-specific identifiers. The fallback rate is not an invoice or accounting
+entry and never replaces a matching Rate Plan. Physical location, room lifecycle and
+archive controls belong to the following Room configuration slice so sellable content
+cannot directly bypass operational room transitions.

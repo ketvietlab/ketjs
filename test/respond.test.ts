@@ -1,7 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { page, fragment, json, text, raw, document, bootApp, defineApp, defineModule } from 'ketjs'
+import {
+  NAVIGATION_TYPE,
+  bootApp,
+  defineApp,
+  defineModule,
+  document,
+  fragment,
+  isNavigationRequest,
+  json,
+  navigablePage,
+  page,
+  raw,
+  text,
+} from 'ketjs'
 import { html } from 'ketjs-view'
+
+const stringBody = (body: ReturnType<typeof page>['body']): string => {
+  assert.equal(typeof body, 'string')
+  return body as string
+}
 
 /**
  * A route's body used to be a `string`, so a value that had been through the
@@ -17,30 +35,65 @@ test('respond: a document is markup, so a hole cannot become markup', () => {
   const r = page({
     body: document({ lang: 'en', title: 'Home', body: html`<p>${'<script>alert(1)</script>'}</p>` }),
   })
-  assert.match(r.body, /^<!doctype html><html lang="en">/)
-  assert.ok(r.body.includes('&lt;script&gt;'), 'the hole was escaped')
-  assert.ok(!r.body.includes('<script>alert'), 'and nothing got through')
+  const body = stringBody(r.body)
+  assert.match(body, /^<!doctype html><html lang="en">/)
+  assert.ok(body.includes('&lt;script&gt;'), 'the hole was escaped')
+  assert.ok(!body.includes('<script>alert'), 'and nothing got through')
 })
 
 test('respond: the lang attribute is a hole like any other', () => {
   const r = page({ body: document({ lang: 'vi"><script>x</script>', body: html`<p>hi</p>` }) })
-  assert.ok(!r.body.includes('<script>x'), 'an attribute hole is escaped, so it cannot close its own quote')
+  assert.ok(
+    !stringBody(r.body).includes('<script>x'),
+    'an attribute hole is escaped, so it cannot close its own quote',
+  )
 })
 
 test('respond: a title is optional, and absent means absent rather than empty', () => {
   const r = page({ body: document({ lang: 'en', body: html`<p>x</p>` }) })
-  assert.ok(!r.body.includes('<title>'))
+  assert.ok(!stringBody(r.body).includes('<title>'))
 })
 
 test('respond: head content is markup too', () => {
   const r = page({
     body: document({ lang: 'en', head: html`<link rel="stylesheet" href="/a.css">`, body: html`<p>x</p>` }),
   })
-  assert.match(r.body, /<link rel="stylesheet" href="\/a\.css">/)
+  assert.match(stringBody(r.body), /<link rel="stylesheet" href="\/a\.css">/)
 })
 
 test('respond: a fragment carries no doctype, so it can be swapped into a page', () => {
   assert.equal(fragment(html`<li>a</li>`).body, '<li>a</li>')
+})
+
+test('respond: a navigable page lazily chooses a document or named slot envelope', () => {
+  let documents = 0
+  let slots = 0
+  const options = {
+    title: 'A & B',
+    document: () => {
+      documents++
+      return document({ lang: 'en', body: html`<main data-ket-slot="page">full</main>` })
+    },
+    slots: {
+      page: () => {
+        slots++
+        return html`partial`
+      },
+    },
+  }
+
+  const full = navigablePage({ headers: {} }, options)
+  assert.match(stringBody(full.body), /^<!doctype html>/)
+  assert.deepEqual({ documents, slots }, { documents: 1, slots: 0 })
+  assert.equal(full.headers?.vary, 'X-Ket-Navigation')
+
+  const partialRequest = { headers: { 'x-ket-navigation': 'fragment-v1' } }
+  assert.equal(isNavigationRequest(partialRequest), true)
+  const partial = navigablePage(partialRequest, options)
+  assert.equal(partial.type, NAVIGATION_TYPE)
+  assert.match(stringBody(partial.body), /^<ket-fragments data-title="A &amp; B">/)
+  assert.match(stringBody(partial.body), /<template data-ket-slot="page">.*partial.*<\/template>/)
+  assert.deepEqual({ documents, slots }, { documents: 1, slots: 1 })
 })
 
 test('respond: every constructor names its own content type', () => {

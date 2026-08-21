@@ -17,4 +17,11 @@ export const menus: Record<string, MenuDef> = {
     needs: 'product.listTemplates',
     sequence: 10,
   },
+  'product.attributes': {
+    parent: 'product.catalogue',
+    label: 'menu.attributes',
+    path: '/admin/product-attributes',
+    needs: 'product.listAttributes',
+    sequence: 20,
+  },
 }

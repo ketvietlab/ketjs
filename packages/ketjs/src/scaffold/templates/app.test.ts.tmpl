@@ -1,0 +1,17 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { createTestApp } from 'ketjs/testing'
+import { app } from '../ket.workspace.ts'
+
+test('__NAME__: the function is reachable through real HTTP', async () => {
+  const e2e = await createTestApp(app, {
+    worker: false,
+    client: { company: 'test' },
+  })
+  try {
+    const result = await e2e.client.call<unknown[]>('__NAME__.list')
+    assert.deepEqual(result.value, [])
+  } finally {
+    await e2e.close()
+  }
+})

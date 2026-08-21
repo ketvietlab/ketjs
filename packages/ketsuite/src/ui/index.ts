@@ -14,6 +14,7 @@
 // deliberate trade, noted in design/HANDOFF.md.
 
 export { icon, hasIcon } from './icons.ts'
+export { formatMoney } from './format.ts'
 export { button, linkButton, iconButton, actionGroup } from './actions.tsx'
 export type { ActionVariant, ActionSize, ButtonSpec, LinkButtonSpec } from './actions.tsx'
 export {
@@ -26,20 +27,35 @@ export {
   initials,
   actionButton,
   code,
+  qrCode,
 } from './primitives.tsx'
 export type { Tone } from './primitives.tsx'
 export { notice, emptyState, errorState, loadingState } from './state.tsx'
 export type { NoticeTone } from './state.tsx'
 export { stack, section, surface, cardGrid, contentCard, metric } from './surfaces.tsx'
 export { dataTable, visibleColumns } from './table.tsx'
-export type { Cell, Column, DataTable } from './table.tsx'
+export type { Cell, Column, DataTable, TableGroup } from './table.tsx'
+export { scheduleBoard } from './schedule.tsx'
+export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './schedule.tsx'
 export { kanbanCard, kanbanGrid, recordList } from './data.tsx'
+export { mediaPanel } from './media.tsx'
+export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
+export { recordForm, recordActions, formCluster } from './form.tsx'
+export { authTokenScreen } from './auth.tsx'
+export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
+export { datePicker } from './date-picker.tsx'
+export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
 export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
-export { sidebar } from './nav.tsx'
-export type { Indicator, Viewer } from './nav.tsx'
+export { recordWorkspace, recordToggle } from './record.tsx'
+export type { RecordSummaryItem, RecordWorkspaceSlots } from './record.tsx'
+export { sidebar, sidebarMain, sidebarFoot } from './nav.tsx'
+export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
-export type { Facet, ListChrome, Pager, ViewKind } from './chrome.tsx'
-export { shell, framed, appCard, card, cardGroups, definitionList } from './layout.tsx'
+export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
+export { backendPage, shell, framed, appCard, card, cardGroups, definitionList } from './layout.tsx'
 export type { CardMeta, Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
+export { mailContractCases } from './mail.ts'
+export { activityContractCases } from './activity.ts'
+export { calendarContractCases } from './calendar.ts'

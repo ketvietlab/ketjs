@@ -17,6 +17,16 @@ import type { Schema } from '../data/migrate.ts'
 import type { KetModule, Manifest } from '../types.ts'
 import type { ServeSpec } from '../server/boot.ts'
 
+export type WorkerSpec = {
+  /** Local concurrency per queue. Several worker processes multiply it. */
+  queues: Record<string, number>
+  pollMinMs?: number
+  pollMaxMs?: number
+  tenantRefreshMs?: number
+  leaseMs?: number
+  shutdownGraceMs?: number
+}
+
 export type AppSpec = {
   name: string
   modules: KetModule[]
@@ -27,6 +37,28 @@ export type AppSpec = {
   headless?: boolean
   /** How the app runs: pages, routes, assets, datastore. Absent means it is never served. */
   serve?: ServeSpec
+  /** Same app and manifest, a separate production process role. */
+  worker?: WorkerSpec
+}
+
+/**
+ * What an authored workspace may name before module paths have been resolved.
+ *
+ * Keeping this separate from AppSpec is deliberate: composition, HTTP and workers
+ * continue to receive executable KetModule objects only. A string is allowed at
+ * the workspace boundary and nowhere deeper in the framework.
+ */
+export type ModuleRef = KetModule | string
+export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme'> & {
+  modules: ModuleRef[]
+  theme?: ModuleRef
+}
+
+export type ModulePath = string | URL
+export type WorkspaceDeclaration = {
+  apps: AppDeclaration[]
+  /** Odoo-like roots whose direct children may contain ket.module.json. */
+  modulePaths?: ModulePath[]
 }
 
 export type Workspace = {
@@ -36,10 +68,30 @@ export type Workspace = {
   soloed: Record<string, string[]>
 }
 
-export function defineApp(spec: AppSpec): AppSpec {
+export function defineApp(spec: AppSpec): AppSpec
+export function defineApp(spec: AppDeclaration): AppDeclaration
+export function defineApp(spec: AppDeclaration): AppDeclaration {
   if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
   if (spec.headless && spec.theme) throw new Error(`app "${spec.name}" is headless but installs a theme`)
   if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
+  const pageRegion = spec.serve?.pages?.region
+  if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
+    throw new Error(`app "${spec.name}" declares invalid page region "${pageRegion}"`)
+  if (spec.worker && !Object.keys(spec.worker.queues).length)
+    throw new Error(`app "${spec.name}" declares a worker with no queues`)
+  for (const [queue, concurrency] of Object.entries(spec.worker?.queues ?? {})) {
+    if (!/^[a-z][a-z0-9_-]*$/.test(queue)) throw new Error(`app "${spec.name}" has invalid queue "${queue}"`)
+    if (!Number.isInteger(concurrency) || concurrency < 1)
+      throw new Error(`app "${spec.name}" queue "${queue}" needs concurrency >= 1`)
+  }
+  return spec
+}
+
+export function defineWorkspace<T extends WorkspaceDeclaration>(spec: T): T {
+  if (!spec || typeof spec !== 'object') throw new Error('defineWorkspace() expects an object')
+  if (!Array.isArray(spec.apps)) throw new Error('workspace apps must be an array')
+  if (spec.modulePaths !== undefined && !Array.isArray(spec.modulePaths))
+    throw new Error('workspace modulePaths must be an array')
   return spec
 }
 
@@ -62,6 +114,16 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
         message: `app "${app.name}" failed to compose: ${(e as Error).message}`,
       })
       continue
+    }
+    const configured = app.worker?.queues ?? {}
+    for (const [job, meta] of Object.entries(manifests[app.name]!.jobs)) {
+      if (configured[meta.queue]) continue
+      diag.add({
+        code: 'E_APP_JOB_QUEUE_UNCONFIGURED',
+        module: app.name,
+        message: `app "${app.name}" ships job "${job}" on queue "${meta.queue}" but does not configure that worker queue`,
+        hint: `add worker.queues.${meta.queue}, or remove the module that contributes the job`,
+      })
     }
     for (const m of mods) {
       const list = usedBy.get(m.name) ?? []
@@ -130,7 +192,7 @@ export function explainWorkspace(ws: Workspace): string {
   lines.push('apps:')
   for (const [name, m] of Object.entries(ws.apps)) {
     lines.push(
-      `  ${name.padEnd(14)} modules=${m.order.length}  fns=${Object.keys(m.functions).length}  regions=${m.regions.required.length}`,
+      `  ${name.padEnd(14)} modules=${m.order.length}  fns=${Object.keys(m.functions).length}  jobs=${Object.keys(m.jobs).length}  regions=${m.regions.required.length}`,
     )
   }
   lines.push('datastores:')

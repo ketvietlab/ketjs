@@ -55,11 +55,10 @@ test('anonymous: cannot read business data', async () => {
   await b.close()
 })
 
-test('anonymous: may check a password, because there is no session until it does', async () => {
+test('anonymous: cannot bypass the trusted login route to call authentication', async () => {
   const b = await boot()
   const r = await post(b.port, 'user.authenticate', { login: 'nobody', password: 'x' })
-  assert.equal(r.code, undefined, 'not refused')
-  assert.equal(r.ok, true, 'the call succeeded; the verdict inside it is what says no')
+  assert.equal(r.code, 'E_FUNCTION_INTERNAL')
   await b.close()
 })
 
@@ -81,8 +80,26 @@ test('routes: the backend is closed to a stranger, and says so rather than rende
 
 test('routes: the storefront stays open, which is the point of the distinction', async () => {
   const b = await boot()
-  assert.equal((await fetch(`http://127.0.0.1:${b.port}/`)).status, 200)
-  await b.close()
+  try {
+    await b.apps!.install('website_search')
+    const full = await fetch(`http://127.0.0.1:${b.port}/`)
+    assert.equal(full.status, 200)
+    const fullHtml = await full.text()
+    assert.match(fullHtml, /data-ket-slot="website\.page"/)
+    assert.match(fullHtml, /data-island="website\.search"/)
+
+    const navigation = await fetch(`http://127.0.0.1:${b.port}/`, {
+      headers: { 'x-ket-navigation': 'fragment-v1' },
+    })
+    assert.equal(navigation.status, 200)
+    assert.equal(navigation.headers.get('content-type'), 'text/vnd.ket.fragments+html; charset=utf-8')
+    const fragment = await navigation.text()
+    assert.match(fragment, /^<ket-fragments /)
+    assert.match(fragment, /<template data-ket-slot="website\.page">/)
+    assert.doesNotMatch(fragment, /<!doctype|<html|<body|data-ket-section="menu"|website\.search/)
+  } finally {
+    await b.close()
+  }
 })
 
 test('routes: signing in opens what was closed', async () => {

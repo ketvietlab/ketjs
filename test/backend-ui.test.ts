@@ -4,10 +4,14 @@ import { readFileSync } from 'node:fs'
 import { renderToString } from 'ketjs-view'
 import { compose, translator } from 'ketjs'
 import type { MenuNode } from 'ketjs'
+import { ketsuite } from '../apps/ketsuite/app.ts'
 import backend from 'ketsuite/backend'
 import {
   actionGroup,
+  activityContractCases,
+  calendarContractCases,
   appsScreen,
+  backendPage,
   badge,
   breadcrumbs,
   button,
@@ -17,9 +21,12 @@ import {
   contentCard,
   countBadge,
   dataTable,
+  datePicker,
   emptyState,
   errorState,
+  formCluster,
   HOOKS,
+  hasIcon,
   icon,
   iconButton,
   inline,
@@ -27,11 +34,19 @@ import {
   kanbanGrid,
   linkButton,
   loadingState,
+  mailContractCases,
   metric,
+  mediaPanel,
   notice,
   pagesScreen,
   person,
+  qrCode,
   recordList,
+  recordActions,
+  recordForm,
+  recordToggle,
+  recordWorkspace,
+  scheduleBoard,
   section,
   settingsScreen,
   stack,
@@ -84,8 +99,11 @@ const MENU: MenuNode[] = [
     icon: 'settings',
     active: true,
     children: [
-      node('admin.apps', { path: '/admin', active: true }),
-      node('admin.content', { children: [node('admin.pages', { path: '/admin/pages' })] }),
+      node('admin.apps', { icon: 'layout-grid', path: '/admin', active: true }),
+      node('admin.content', {
+        icon: 'file-text',
+        children: [node('admin.pages', { path: '/admin/pages' })],
+      }),
     ],
   }),
   // An icon this build does not carry: the entry keeps its row and falls back to
@@ -101,6 +119,21 @@ const CHROME: ListChrome = {
     value: 'x',
     placeholder: 'Tìm',
     facets: [{ label: 'Tìm: x', without: '/admin/pages' }],
+    menus: [
+      {
+        id: 'filters',
+        label: 'Bộ lọc',
+        items: [{ id: 'active', label: 'Đang hoạt động', path: '?preset=active', active: true }],
+        customFilter: {
+          fields: [{ value: 'name', label: 'Tên' }],
+          operators: [{ value: 'contains', label: 'chứa' }],
+          fieldLabel: 'Trường',
+          operatorLabel: 'Điều kiện',
+          valueLabel: 'Giá trị',
+          applyLabel: 'Áp dụng',
+        },
+      },
+    ],
   },
   pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
   views: [
@@ -112,6 +145,7 @@ const CHROME: ListChrome = {
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
 const componentContract = [
+  qrCode([[true]], 'QR code'),
   actionGroup({
     label: 'Actions',
     actions: [
@@ -126,6 +160,29 @@ const componentContract = [
     tag({ label: 'Filter', removeHref: '/clear' }),
     countBadge(3, '3 items'),
   ]),
+  recordWorkspace({
+    kicker: 'Product',
+    title: 'Linen shirt',
+    subtitle: 'LINEN-01 · Unit',
+    image: null,
+    imageFallback: icon('package'),
+    badges: [
+      badge('Goods', 'neutral'),
+      recordToggle({ name: 'saleOk', label: 'Can be sold', checked: true, form: 'product-form' }),
+    ],
+    summary: [
+      { id: 'variants', label: 'Variants', value: 6, href: '?tab=variants' },
+      { id: 'tracking', label: 'Tracking', value: 'Lots' },
+    ],
+    navigation: tabs({
+      label: 'Product sections',
+      items: [{ id: 'general', label: 'General', href: '?tab=general', active: true }],
+    }),
+    controller: notice({ title: 'Saved', message: 'Product updated', tone: 'positive' }),
+    body: surface({ body: 'Product form', padding: 'compact' }),
+    aside: surface({ body: 'Collaboration', padding: 'compact' }),
+    asideLabel: 'Collaboration',
+  }),
   stack([
     notice({
       title: 'Heads up',
@@ -161,6 +218,90 @@ const componentContract = [
     card: () => contentCard({ title: 'Grid card' }),
   }),
   metric({ label: 'Orders', value: '42', detail: 'Today' }),
+  datePicker({
+    action: '/calendar',
+    label: 'Stay dates',
+    submit: 'Apply',
+    clearHref: '/calendar',
+    clearLabel: 'Clear',
+    hidden: { property: 'hotel-1' },
+    fields: [
+      { name: 'from', label: 'From', value: '2026-08-20', required: true, help: 'Property timezone' },
+      { name: 'to', label: 'To', value: '2026-08-18', error: 'Must be after from' },
+    ],
+  }),
+  recordForm({
+    action: '/records',
+    submit: 'Save',
+    submitVariant: 'primary',
+    errors: ['Invalid value'],
+    fields: [
+      { name: 'name', label: 'Name', required: true, help: 'Required', error: 'Enter a name' },
+      { name: 'kind', label: 'Kind', type: 'select', options: [{ value: 'a', label: 'A' }] },
+      {
+        name: 'type',
+        label: 'Product type',
+        type: 'radio',
+        value: 'goods',
+        options: [
+          { value: 'goods', label: 'Goods' },
+          { value: 'service', label: 'Service' },
+        ],
+      },
+    ],
+  }),
+  formCluster({
+    label: 'Activity actions',
+    forms: [
+      recordForm({
+        action: '/activities/1',
+        submit: 'Complete',
+        submitVariant: 'primary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'complete' },
+        fields: [{ name: 'feedback', label: 'Feedback' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Reschedule',
+        submitVariant: 'secondary',
+        layout: 'inline',
+        hidden: { id: '1', action: 'reschedule' },
+        fields: [{ name: 'dueDate', label: 'New due date', type: 'date' }],
+      }),
+      recordForm({
+        action: '/activities/1',
+        submit: 'Cancel',
+        submitVariant: 'destructive',
+        layout: 'inline',
+        hidden: { id: '1', action: 'cancel' },
+        fields: [],
+      }),
+    ],
+  }),
+  recordActions({
+    action: '/records/1',
+    actions: [
+      { value: 'confirm', label: 'Confirm', variant: 'primary' },
+      { value: 'cancel', label: 'Cancel', variant: 'destructive' },
+    ],
+  }),
+  mediaPanel({ status: 'unavailable' }),
+  mediaPanel({
+    status: 'ready',
+    uploadAction: '/media',
+    images: [
+      {
+        id: 'main',
+        src: '/fixture-main.png',
+        alt: 'Main',
+        primary: true,
+        actions: { remove: '/media/main/remove' },
+      },
+      { id: 'other', src: '/fixture-other.png', alt: 'Other' },
+    ],
+    extension: 'Adapter slot',
+  }),
   breadcrumbs({ label: 'Breadcrumb', items: [{ label: 'Home', href: '/' }, { label: 'Current' }] }),
   tabs({ label: 'Tabs', items: [{ id: 'all', label: 'All', href: '?tab=all', active: true, count: 3 }] }),
   kanbanGrid({
@@ -170,6 +311,7 @@ const componentContract = [
       kanbanCard({
         key: row.id,
         title: 'Card',
+        href: `/k/${row.id}`,
         meta: badge('Draft'),
         note: 'Note',
         actions: linkButton({ label: 'Open', href: '/k' }),
@@ -187,12 +329,42 @@ const componentContract = [
     caption: 'Sortable records',
     rows: [{ id: 'r', name: 'Record' }],
     id: (row) => row.id,
+    rowHref: (row) => `/r/${row.id}`,
     columns: [
       {
         key: 'name',
         label: 'Name',
         cell: (row) => row.name,
         sort: { href: '?sort=name', direction: 'asc', label: 'Sort by name' },
+      },
+    ],
+    groups: [
+      {
+        id: 'goods',
+        label: 'Goods',
+        count: 1,
+        depth: 0,
+        open: true,
+        href: '?open=goods',
+        rows: [{ id: 'r', name: 'Record' }],
+        pager: { label: '1-1 / 2', next: '?groupPage=goods:2' },
+      },
+    ],
+  }),
+  scheduleBoard({
+    corner: 'Room / day',
+    days: [{ key: '2026-08-20', label: 'Thu', detail: '20/08', today: true }],
+    rows: [{ id: '101', label: 'Room 101', detail: 'Deluxe', state: 'occupied' }],
+    events: [
+      {
+        id: 'stay-1',
+        rowId: '101',
+        start: 0,
+        span: 1,
+        label: 'Nguyễn An',
+        detail: 'Direct',
+        tone: 'positive',
+        state: 'checked_in',
       },
     ],
   }),
@@ -204,7 +376,16 @@ const everything = [
     [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })],
     {
       menu: MENU,
-      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      viewer: {
+        name: 'Nguyễn Quản Trị',
+        company: 'acme',
+        companies: ['acme', 'globex'],
+        companyName: 'Công ty Kết Việt',
+        branch: 'root:acme',
+        branches: ['root:acme'],
+        branchName: 'Trụ sở chính',
+        contextPath: '/admin/context',
+      },
       indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
     },
   ),
@@ -221,6 +402,9 @@ const everything = [
   settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
   errorState('E_X', 'msg', 'hint'),
   ...componentContract,
+  ...mailContractCases(),
+  ...activityContractCases(),
+  ...calendarContractCases(),
 ]
   .map((r) => renderToString(r))
   .join('')
@@ -237,9 +421,306 @@ test('ui contract: no hook is emitted that the contract does not list', () => {
 })
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
+})
+
+test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const missing = Object.entries(manifest.menus)
+    .filter(([, entry]) => !entry.parent)
+    .filter(([, entry]) => !entry.icon || !hasIcon(entry.icon))
+    .map(([id]) => id)
+    .sort()
+  assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
+})
+
+test('sidebar footer: legacy systray order keeps settings and sign-out functional', () => {
+  const html = renderToString(
+    appsScreen(_, [app({ state: 'installed' })], {
+      menu: MENU,
+      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      indicators: [
+        { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
+        { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
+  assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
+  assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
+  assert.match(html, /<a data-ui="sidebar-settings" href="\/admin\/settings">/)
+  assert.ok(
+    html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
+    'Settings belongs below the systray divider',
+  )
+})
+
+test('backend shell: fragment navigation emits only replaceable slots', () => {
+  const html = renderToString(
+    appsScreen(_, [app({ state: 'installed' })], {
+      navigation: true,
+      menu: MENU,
+      extras: { 'sidebar.foot': 'persistent foot' },
+      indicators: [{ id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' }],
+    }),
+  )
+  assert.match(html, /^<ket-fragments data-title=/)
+  assert.deepEqual(
+    [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
+    ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
+  )
+  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+})
+
+test('backend responder: a fragment request never renders document infrastructure', async () => {
+  let styles = 0
+  let documents = 0
+  const result = await backendPage(
+    {
+      styles: async () => {
+        styles++
+        throw new Error('fragment navigation must not resolve styles')
+      },
+      document: () => {
+        documents++
+        throw new Error('fragment navigation must not render a document')
+      },
+    } as never,
+    { headers: { 'x-ket-navigation': 'fragment-v1' } } as never,
+    {
+      lang: 'vi',
+      title: 'Ứng dụng',
+      body: appsScreen(_, [app()], { navigation: true, menu: MENU }),
+    },
+  )
+  assert.equal(result.type, 'text/vnd.ket.fragments+html')
+  assert.deepEqual({ styles, documents }, { styles: 0, documents: 0 })
+})
+
+test('design tokens: every admin role used by components is declared', () => {
+  const css = [
+    'packages/ketsuite/src/modules/backend/design/admin.css',
+    'packages/ketsuite/src/ui/client/mail.css',
+    'packages/ketsuite/src/ui/client/activity.css',
+    'packages/ketsuite/src/ui/client/calendar.css',
+  ]
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
+  const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
+  assert.deepEqual(
+    [...referenced].filter((name) => !declared.has(name)).sort(),
+    [],
+    'a visual role must exist before a component can consume it',
+  )
+})
+
+test('design tokens: status surfaces stay fixed across light and dark themes', () => {
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  for (const name of [
+    '--admin-neutral-soft',
+    '--admin-success-soft',
+    '--admin-warning-soft',
+    '--admin-danger-soft',
+  ]) {
+    assert.equal(
+      [...tokens.matchAll(new RegExp(`${name}\\s*:`, 'g'))].length,
+      1,
+      `${name} is a self-contained status surface, not a theme role`,
+    )
+  }
+})
+
+test('design density: desktop controls share the 28px operational height', () => {
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+})
+
+test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
+  assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
+  assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
+  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(
+    css,
+    /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,
+  )
+})
+
+test('form: required, help and error states are visible and semantically connected', () => {
+  const html = renderToString(
+    recordForm({
+      action: '/records',
+      submit: 'Save',
+      submitVariant: 'primary',
+      fields: [
+        {
+          name: 'name',
+          label: 'Name',
+          required: true,
+          help: 'Public label',
+          error: 'Enter a name',
+        },
+        { name: 'active', label: 'Active', type: 'checkbox', value: true },
+        { name: 'checkIn', label: 'Check-in', type: 'time', value: '14:00', step: '60' },
+        { name: 'identityColor', label: 'Colour', type: 'color', value: '#2563eb' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="form-required" aria-hidden="true"/)
+  assert.match(
+    html,
+    /aria-invalid="true" aria-describedby="field--records-name-help field--records-name-error"/,
+  )
+  assert.match(html, /data-ui="form-help" id="field--records-name-help"/)
+  assert.match(html, /data-ui="form-error" id="field--records-name-error"/)
+  assert.match(html, /data-kind="checkbox"[\s\S]*type="checkbox"[\s\S]*data-ui="form-label"/)
+  assert.match(html, /data-kind="time"[\s\S]*type="time"[\s\S]*value="14:00"[\s\S]*step="60"/)
+  assert.match(html, /data-kind="color"[\s\S]*type="color"[\s\S]*value="#2563eb"/)
+})
+
+test('form: related inline actions keep valid flow layout and explicit hierarchy', () => {
+  const html = renderToString(
+    formCluster({
+      forms: [
+        recordForm({
+          action: '/activities',
+          submit: 'Complete',
+          submitVariant: 'primary',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'complete' },
+          fields: [{ name: 'feedback', label: 'Feedback' }],
+        }),
+        recordForm({
+          action: '/activities',
+          submit: 'Cancel',
+          submitVariant: 'destructive',
+          layout: 'inline',
+          hidden: { id: 'one', action: 'cancel' },
+          fields: [],
+        }),
+      ],
+    }),
+  )
+  assert.match(html, /^<div data-ui="form-cluster"/)
+  assert.match(html, /data-layout="inline" data-has-fields="true" data-submit-variant="primary"/)
+  assert.match(html, /data-layout="inline" data-has-fields="false" data-submit-variant="destructive"/)
+  assert.doesNotMatch(html, /^<span/, 'a form cluster must never use a phrasing root')
+  assert.match(html, /id="field--activities-one-complete-feedback"/)
+})
+
+test('actions: one decision cluster cannot declare two primary actions', () => {
+  assert.throws(
+    () =>
+      recordActions({
+        action: '/records/1',
+        actions: [
+          { value: 'confirm', label: 'Confirm', variant: 'primary' },
+          { value: 'approve', label: 'Approve', variant: 'primary' },
+        ],
+      }),
+    /declares 2 primary actions/,
+  )
+})
+
+test('islands: every business button declares the shared action role and hierarchy', () => {
+  for (const path of [
+    'packages/ketsuite/src/ui/client/mail-view.mjs',
+    'packages/ketsuite/src/ui/client/activity-view.mjs',
+    'packages/ketsuite/src/ui/client/calendar-view.mjs',
+  ]) {
+    const source = readFileSync(path, 'utf8')
+    for (const [index, match] of [...source.matchAll(/<button\b[\s\S]*?>/g)].entries()) {
+      assert.match(
+        match[0],
+        /(?:data-ui="action"|data-control="action")/,
+        `${path} button ${index + 1} bypasses the shared action control`,
+      )
+      assert.match(match[0], /data-variant="(?:primary|secondary|tertiary|destructive)"/)
+    }
+  }
+})
+
+test('date picker: range remains a native, accessible and URL-driven form', () => {
+  const html = renderToString(
+    datePicker({
+      action: '/calendar',
+      label: 'Stay dates',
+      submit: 'Apply',
+      clearHref: '/calendar',
+      clearLabel: 'Clear',
+      hidden: { property: 'hotel-1' },
+      fields: [
+        { name: 'from', label: 'From', value: '2026-08-20', min: '2026-01-01', required: true },
+        { name: 'to', label: 'To', value: '2026-08-18', error: 'Must be after from' },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="date-picker" method="get" action="\/calendar" data-range="true"/)
+  assert.match(html, /type="hidden" name="property" value="hotel-1"/)
+  assert.match(html, /type="date" name="from" value="2026-08-20" min="2026-01-01"/)
+  assert.match(html, /aria-invalid="true" aria-describedby="date-picker--calendar-to-error"/)
+  assert.match(html, /data-ui="date-picker-error" id="date-picker--calendar-to-error"/)
+  assert.match(html, /href="\/calendar"/)
+
+  const single = renderToString(
+    datePicker({
+      action: '/day',
+      label: 'Business date',
+      submit: 'Open',
+      method: 'post',
+      fields: [{ name: 'date', label: 'Date', disabled: true }],
+    }),
+  )
+  assert.match(single, /method="post" action="\/day" data-range="false"/)
+  assert.match(single, /type="date" name="date" value="" disabled/)
+  assert.doesNotMatch(single, /href=/)
+})
+
+test('media: primary state has a label and image actions keep accessible icon controls', () => {
+  const html = renderToString(
+    mediaPanel({
+      status: 'ready',
+      images: [
+        { id: 'main', src: '/main.png', alt: 'Main', primary: true },
+        {
+          id: 'other',
+          src: '/other.png',
+          alt: 'Other',
+          actions: { primary: '/primary', moveUp: '/up', remove: '/remove' },
+        },
+      ],
+    }),
+  )
+  assert.match(html, /data-ui="media-item" data-primary="true"/)
+  assert.match(html, /data-value="primary"/)
+  assert.match(html, /data-icon-only="true"[\s\S]*aria-label="Set as primary"/)
+  assert.match(html, /data-variant="destructive"[\s\S]*aria-label="Remove image"/)
+})
+
+test('schedule: every declared status tone has a concrete visual state', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  for (const tone of ['neutral', 'positive', 'info', 'warning', 'danger'])
+    assert.ok(
+      css.includes(`[data-ui="schedule-event"][data-tone="${tone}"]`),
+      `schedule tone ${tone} needs an explicit design-system rule`,
+    )
 })
 
 test('ui contract: the states a stylesheet branches on are present', () => {
@@ -268,6 +749,7 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
     'apps-blocked',
     'pages-empty',
     'pages-long',
+    'kit-form',
     'state-error',
   ]) {
     assert.ok(
@@ -277,6 +759,9 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
   }
   const html = renderToString(cataloguePage(_))
   assert.equal([...html.matchAll(/data-ui="catalogue-case"/g)].length, CASES.length)
+  for (const entry of CASES) {
+    assert.match(html, new RegExp(`href="#${entry.id}"`))
+  }
   assert.ok(
     CASES.every((c) => c.note.length > 10),
     'every case says what it is testing',

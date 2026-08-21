@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { assertAdapter } from './adapter.ts'
 import type { Adapter, FieldBase, Row } from '../types.ts'
+import { dateBucket } from './time.ts'
 
 // Binding rules belong to the adapter, not to the layers above it: SQLite has no
 // boolean and no JSON, Postgres has both. Normalising here means every call path —
@@ -21,12 +22,14 @@ const SQL: Record<FieldBase, string> = {
   decimal: 'TEXT',
   bool: 'INTEGER',
   json: 'TEXT',
+  date: 'TEXT',
   datetime: 'TEXT',
   ref: 'TEXT',
 }
 
 export function sqliteAdapter(path = ':memory:'): Adapter {
   let db: DatabaseSync | null = null
+  let inTransaction = false
   const need = (): DatabaseSync => {
     if (!db) throw new Error('adapter is not open()')
     return db
@@ -34,8 +37,14 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
 
   const a: Adapter = {
     name: 'sqlite',
+    get transaction() {
+      return inTransaction
+    },
     async open() {
       db = new DatabaseSync(path)
+      db.function('ket_date_bucket', (value, interval, timezone) =>
+        dateBucket(value, String(interval) as Parameters<typeof dateBucket>[1], String(timezone)),
+      )
       db.exec('PRAGMA journal_mode = WAL')
       db.exec('PRAGMA foreign_keys = ON')
     },
@@ -60,6 +69,7 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
     async tx(fn) {
       const d = need()
       d.exec('BEGIN')
+      inTransaction = true
       try {
         const r = await fn(a)
         d.exec('COMMIT')
@@ -67,6 +77,8 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
       } catch (e) {
         d.exec('ROLLBACK')
         throw e
+      } finally {
+        inTransaction = false
       }
     },
     quoteIdent(n) {

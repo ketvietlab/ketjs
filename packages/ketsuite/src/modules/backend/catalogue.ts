@@ -10,6 +10,7 @@ import {
   code,
   contentCard,
   countBadge,
+  datePicker,
   emptyState,
   errorState,
   icon,
@@ -20,8 +21,10 @@ import {
   linkButton,
   loadingState,
   metric,
+  mediaPanel,
   notice,
   person,
+  recordForm,
   recordList,
   section,
   stack,
@@ -67,6 +70,11 @@ const viewer = (over: Partial<Viewer> = {}): Viewer => ({
   name: 'Nguyễn Quản Trị',
   company: 'acme',
   companies: ['acme'],
+  companyName: 'Công ty Kết Việt',
+  branch: 'root:acme',
+  branches: ['root:acme'],
+  branchName: 'Trụ sở chính',
+  contextPath: '/admin/context',
   ...over,
 })
 
@@ -86,13 +94,17 @@ const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode
 })
 
 const MENU: MenuNode[] = [
-  node('sales', 'Bán hàng', {
-    icon: 'shopping-cart',
+  node('hospitality', 'Khách sạn', { icon: 'hotel', path: '/admin/hospitality' }),
+  node('partner', 'Đối tác', { icon: 'users', path: '/admin/partners' }),
+  node('pos', 'Điểm bán hàng', { icon: 'store', path: '/admin/pos' }),
+  node('sale', 'Bán hàng', {
+    icon: 'shopping-bag',
     children: [
-      node('sales.orders', 'Đơn hàng', {
+      node('sale.orders', 'Đơn hàng', {
+        icon: 'receipt-text',
         children: [
-          node('sales.quotes', 'Báo giá', { path: '/quotes' }),
-          node('sales.list', 'Đơn hàng', { path: '/orders' }),
+          node('sale.quotes', 'Báo giá', { path: '/quotes' }),
+          node('sale.list', 'Đơn hàng', { path: '/orders' }),
         ],
       }),
     ],
@@ -101,19 +113,26 @@ const MENU: MenuNode[] = [
     icon: 'package',
     children: [
       node('product.catalogue', 'Danh mục', {
+        icon: 'package',
         children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/products' })],
       }),
     ],
   }),
+  node('pricing', 'Bảng giá', { icon: 'tag', path: '/admin/pricing' }),
+  node('purchase', 'Mua hàng', { icon: 'shopping-cart', path: '/admin/purchase' }),
+  node('accounting', 'Kế toán', { icon: 'banknote', path: '/admin/accounting' }),
+  node('stock', 'Kho', { icon: 'warehouse', path: '/admin/stock' }),
   node('admin', 'Quản trị', {
     icon: 'settings',
     active: true,
     children: [
-      node('admin.apps', 'Ứng dụng', { path: '/admin', active: true }),
+      node('admin.apps', 'Ứng dụng', { icon: 'layout-grid', path: '/admin', active: true }),
       node('admin.content', 'Nội dung', {
+        icon: 'file-text',
         children: [node('admin.pages', 'Trang', { path: '/admin/pages' })],
       }),
       node('admin.config', 'Cấu hình', {
+        icon: 'settings',
         children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })],
       }),
     ],
@@ -171,15 +190,15 @@ export const CASES: Array<{
   },
   {
     id: 'viewer-one',
-    label: 'Thanh trên — một công ty',
-    note: 'Chỉ tên và nút đăng xuất. Tên công ty cố tình ẩn khi tài khoản chỉ thuộc một.',
+    label: 'Footer sidebar — một công ty',
+    note: 'Systray KétViệt: counters, công ty, avatar; menu tài khoản native giữ đăng xuất.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], { viewer: viewer(), menu: MENU, indicators: INDICATORS }),
   },
   {
     id: 'viewer-many',
-    label: 'Thanh trên — nhiều công ty',
-    note: 'Có tên công ty đang chọn. Chưa có cách đổi công ty — chỗ này sẽ cần một điều khiển.',
+    label: 'Footer sidebar — nhiều công ty',
+    note: 'Icon công ty có accessible label; tên công ty/chi nhánh hiện trong menu và thanh trên vẫn đổi được ngữ cảnh.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], {
         viewer: viewer({ companies: ['acme', 'globex', 'initech'] }),
@@ -188,8 +207,8 @@ export const CASES: Array<{
   },
   {
     id: 'viewer-long',
-    label: 'Thanh trên — tên dài',
-    note: 'Kiểm tra thanh trên không vỡ khi tên người và tên công ty đều dài.',
+    label: 'Footer sidebar — tên dài',
+    note: 'Kiểm tra popover tài khoản không vỡ khi tên người và tên công ty đều dài.',
     render: (_) =>
       appsScreen(_, [app({ state: 'installed' })], {
         viewer: viewer({
@@ -504,6 +523,145 @@ export const CASES: Array<{
       ),
   },
   {
+    id: 'kit-date-picker',
+    label: 'Component — chọn khoảng ngày',
+    note: 'Native date control giữ locale, bàn phím và mobile picker của trình duyệt; form GET giữ bộ lọc trong URL.',
+    render: () =>
+      surface({
+        body: datePicker({
+          action: '#kit-date-picker',
+          label: 'Khoảng lưu trú',
+          submit: 'Xem lịch',
+          clearHref: '#kit-date-picker',
+          clearLabel: 'Xóa',
+          hidden: { property: 'hotel-hn' },
+          fields: [
+            {
+              name: 'from',
+              label: 'Từ ngày',
+              value: '2026-08-20',
+              min: '2026-01-01',
+              required: true,
+              help: 'Theo múi giờ của cơ sở.',
+            },
+            {
+              name: 'to',
+              label: 'Đến ngày',
+              value: '2026-08-18',
+              min: '2026-08-20',
+              required: true,
+              error: 'Ngày kết thúc phải sau ngày bắt đầu.',
+            },
+          ],
+        }),
+      }),
+  },
+  {
+    id: 'kit-form',
+    label: 'Component — biểu mẫu nghiệp vụ',
+    note: 'Required, helper, lỗi tại field, lỗi tổng hợp, checkbox và disabled đều có hierarchy và liên kết semantic.',
+    render: () =>
+      surface({
+        body: recordForm({
+          action: '#kit-form',
+          submit: 'Lưu sản phẩm',
+          submitVariant: 'primary',
+          cancelHref: '#kit-form',
+          cancelLabel: 'Hủy',
+          errors: ['Tên sản phẩm cần ít nhất 3 ký tự.'],
+          fields: [
+            {
+              name: 'name',
+              label: 'Tên sản phẩm',
+              value: 'X',
+              required: true,
+              help: 'Tên hiển thị trên đơn hàng và chứng từ.',
+              error: 'Nhập ít nhất 3 ký tự.',
+            },
+            {
+              name: 'type',
+              label: 'Loại sản phẩm',
+              type: 'select',
+              value: 'goods',
+              options: [
+                { value: 'goods', label: 'Hàng hóa' },
+                { value: 'service', label: 'Dịch vụ' },
+              ],
+            },
+            {
+              name: 'saleOk',
+              label: 'Có thể bán',
+              type: 'checkbox',
+              value: true,
+              help: 'Cho phép chọn sản phẩm trên báo giá và đơn hàng.',
+            },
+            {
+              name: 'reference',
+              label: 'Mã nội bộ',
+              value: 'SKU-2026-001',
+              disabled: true,
+              help: 'Mã do hệ thống quản lý.',
+            },
+            {
+              name: 'description',
+              label: 'Mô tả bán hàng',
+              type: 'textarea',
+              span: 'full',
+              placeholder: 'Thông tin cần xuất hiện trên báo giá…',
+            },
+          ],
+        }),
+      }),
+  },
+  {
+    id: 'product-media-scaffold',
+    label: 'Sản phẩm — hình ảnh chưa kết nối',
+    note: 'Không có request hay broken image; các thao tác bị vô hiệu cho tới khi backend media cung cấp adapter.',
+    render: () =>
+      mediaPanel({
+        status: 'unavailable',
+        labels: { unavailable: 'Chưa kết nối dịch vụ hình ảnh.', add: 'Thêm ảnh' },
+      }),
+  },
+  {
+    id: 'product-media-ready',
+    label: 'Sản phẩm — thư viện hình ảnh',
+    note: 'Upload, chọn ảnh chính, sắp xếp và xóa dùng form native; adapter storage vẫn nằm ngoài component.',
+    render: () =>
+      mediaPanel({
+        status: 'ready',
+        uploadAction: '/fixture/media',
+        labels: {
+          primary: 'Ảnh chính',
+          makePrimary: 'Đặt làm ảnh chính',
+          moveUp: 'Dịch lên',
+          moveDown: 'Dịch xuống',
+          remove: 'Xóa ảnh',
+          choose: 'Chọn ảnh',
+          add: 'Thêm ảnh',
+        },
+        images: [
+          {
+            id: 'front',
+            src: '/design/fixtures/product-front.svg',
+            alt: 'Mặt trước',
+            primary: true,
+            actions: { remove: '/fixture/media/front/remove', moveDown: '/fixture/media/front/down' },
+          },
+          {
+            id: 'back',
+            src: '/design/fixtures/product-back.svg',
+            alt: 'Mặt sau',
+            actions: {
+              primary: '/fixture/media/back/primary',
+              remove: '/fixture/media/back/remove',
+              moveUp: '/fixture/media/back/up',
+            },
+          },
+        ],
+      }),
+  },
+  {
     id: 'settings',
     label: 'Cài đặt — token',
     note: 'Danh sách token đang áp dụng.',
@@ -543,7 +701,7 @@ export const cataloguePage = (_: Translator): TemplateResult => {
     <nav data-ui="catalogue-nav">${each(
       CASES,
       (c) => c.id,
-      (c) => html`<a href="#${c.id}">${c.label}</a>`,
+      (c) => html`<a href=${`#${c.id}`}>${c.label}</a>`,
     )}</nav>
     ${each(
       CASES,

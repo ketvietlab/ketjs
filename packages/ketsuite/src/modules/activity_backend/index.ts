@@ -1,0 +1,81 @@
+import { defineModule } from 'ketjs'
+import { islands } from './islands.ts'
+import { routes } from './routes.ts'
+
+export default defineModule({
+  name: 'activity_backend',
+  version: '0.1.0',
+  depends: ['activity', 'backend'],
+  install: 'auto',
+  app: true,
+  title: 'Hoạt động trong quản trị',
+  summary: 'Danh sách việc cần làm, hạn xử lý và thao tác trên từng bản ghi.',
+  category: 'Năng suất',
+  assets: new URL('../../ui/client/', import.meta.url),
+  styles: ['activity.css'],
+  islands,
+  routes,
+  menus: {
+    activity: {
+      label: 'menu.app',
+      icon: 'check-circle',
+      path: '/admin/activities',
+      sequence: 14,
+      needs: 'activity.listMy',
+    },
+  },
+  fills: {
+    'backend:sidebar.foot': `{% island "activity.indicator" %}`,
+  },
+  messages: {
+    vi: {
+      'app.title': 'Hoạt động trong quản trị',
+      'app.summary': 'Danh sách việc cần làm, hạn xử lý và thao tác trên từng bản ghi.',
+      'app.category': 'Năng suất',
+      'menu.app': 'Hoạt động',
+      title: 'Hoạt động của tôi',
+      empty: 'Không có hoạt động cần xử lý.',
+      emptyHint: 'Hoạt động được lên lịch từ Chatter sẽ xuất hiện tại đây.',
+      overdue: 'quá hạn',
+      today: 'hôm nay',
+      showDone: 'Hiện hoạt động đã đóng',
+      hideDone: 'Ẩn hoạt động đã đóng',
+      complete: 'Hoàn tất',
+      feedback: 'Phản hồi hoàn tất',
+      reschedule: 'Đổi hạn',
+      dueDate: 'Hạn mới',
+      cancel: 'Hủy',
+      'state.overdue': 'Quá hạn',
+      'state.today': 'Hôm nay',
+      'state.planned': 'Đã lên kế hoạch',
+      'state.done': 'Hoàn tất',
+      'state.canceled': 'Đã hủy',
+    },
+    en: {
+      'app.title': 'Activities in admin',
+      'app.summary': 'Personal work list, deadlines and record actions.',
+      'app.category': 'Productivity',
+      'menu.app': 'Activities',
+      title: 'My activities',
+      empty: 'No activities need attention.',
+      emptyHint: 'Activities scheduled from Chatter will appear here.',
+      overdue: 'overdue',
+      today: 'today',
+      showDone: 'Show closed activities',
+      hideDone: 'Hide closed activities',
+      complete: 'Complete',
+      feedback: 'Completion feedback',
+      reschedule: 'Reschedule',
+      dueDate: 'New due date',
+      cancel: 'Cancel',
+      'state.overdue': 'Overdue',
+      'state.today': 'Today',
+      'state.planned': 'Planned',
+      'state.done': 'Done',
+      'state.canceled': 'Canceled',
+    },
+  },
+})
+
+export { islands } from './islands.ts'
+export { activitiesScreen } from './screens.ts'

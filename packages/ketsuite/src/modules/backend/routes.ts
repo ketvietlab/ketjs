@@ -5,11 +5,12 @@
 // because it needs the running server. Dispatch checks the live manifest, so these
 // stop answering the moment the module is switched off.
 
-import { page } from 'ketjs'
+import { isTimezone } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
 import type { Extras, Frame, Viewer } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'
 
 type Build = (
@@ -31,9 +32,45 @@ export const viewerOf = async (
   if (!record) return null
   const user = (await ctx.callUnchecked('user.getUser', { id: record.userId }, url, req)) as {
     name?: string
+    timezone?: string | null
   } | null
-  return { name: user?.name ?? record.userId, company: record.company, companies: record.companies }
+  const live = await ctx.live(req)
+  const labels = live.functions['company.contextLabels']
+    ? ((await ctx.callUnchecked(
+        'company.contextLabels',
+        { companyId: record.company, branchId: record.branch },
+        url,
+        req,
+      )) as {
+        companyName?: string | null
+        branchName?: string | null
+        branchCode?: string | null
+        branchIsRoot?: boolean | null
+      })
+    : {}
+  const lang = url.searchParams.get('lang')
+  return {
+    name: user?.name ?? record.userId,
+    company: record.company,
+    companies: record.companies,
+    companyName: labels.companyName ?? record.company,
+    branch: record.branch,
+    branches: record.branches,
+    branchName: labels.branchIsRoot
+      ? `${ctx.translate(ctx.localeOf(url, req))('backend.context.rootBranch')} · ${labels.branchCode}`
+      : (labels.branchName ?? record.branch),
+    contextPath: live.routes['/admin/context']
+      ? `/admin/context${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
+      : null,
+    profilePath: live.routes['/admin/profile']
+      ? `/admin/profile${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
+      : null,
+    timezone: user?.timezone && isTimezone(user.timezone) ? user.timezone : ctx.config.defaultTimezone,
+  }
 }
+
+export const timezoneOf = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<string> =>
+  (await viewerOf(ctx, url, req))?.timezone ?? ctx.config.defaultTimezone
 
 /**
  * The shell every backend screen sits in. The stylesheets come from ctx.styles(),
@@ -53,18 +90,25 @@ const screen =
     const extras: Extras = {
       'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
+      'sidebar.foot':
+        req.headers['x-ket-navigation'] === 'fragment-v1'
+          ? undefined
+          : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
       'apps.footer': await ctx.joint(url, req, 'backend:apps.footer'),
     }
-    return page({
-      body: ctx.document({
-        lang,
-        title: 'KetSuite',
-        head: await ctx.styles(req),
-        body: await build(ctx.translate(lang), {
-          url,
-          raw: req,
-          frame: { viewer, extras, menu, menuFilter },
-        }),
+    return backendPage(ctx, req, {
+      lang,
+      title: 'KetSuite',
+      body: await build(ctx.translate(lang), {
+        url,
+        raw: req,
+        frame: {
+          navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
+          viewer,
+          extras,
+          menu,
+          menuFilter,
+        },
       }),
     })
   }

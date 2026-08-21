@@ -22,7 +22,13 @@ function drive(root: Root, view: () => TemplateResult): Mounted {
   const stop = effect(() => {
     root.render(view())
   })
-  return { dispose: stop, refresh: () => root.render(view()) }
+  return {
+    dispose: () => {
+      stop()
+      root.dispose()
+    },
+    refresh: () => root.render(view()),
+  }
 }
 
 /** Render into a container and keep it in sync with whatever signals the view reads. */
@@ -32,8 +38,17 @@ export function mount(host: Host, container: HostNode, view: () => TemplateResul
 
 /** The same, but adopting server-rendered markup rather than building it. */
 export function mountHydrated(host: Host, container: HostNode, view: () => TemplateResult): Mounted {
-  // The first call must produce exactly what the server rendered, so hydration
-  // happens outside the effect and the effect picks up from there.
-  const root = hydrateRoot(host, container, view())
-  return drive(root, view)
+  let root: Root | null = null
+  const stop = effect(() => {
+    const result = view()
+    if (root) root.render(result)
+    else root = hydrateRoot(host, container, result)
+  })
+  return {
+    dispose: () => {
+      stop()
+      root?.dispose()
+    },
+    refresh: () => root?.render(view()),
+  }
 }
