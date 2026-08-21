@@ -10,6 +10,7 @@ import {
   product,
   TT99_ACCOUNT_CHECKSUM,
   TT99_ACCOUNTS,
+  TT99_CATALOG_CHECKSUM,
   TT99_CODE,
   uom,
   VIETNAM_TAXES,
@@ -50,7 +51,7 @@ test('account TT99: first accounting read installs the complete Vietnam defaults
     ])
     assert.equal((first.value as Row[]).length, TT99_ACCOUNTS.length)
     assert.equal((second.value as Row).standard, TT99_CODE)
-    assert.equal((second.value as Row).sourceChecksum, TT99_ACCOUNT_CHECKSUM)
+    assert.equal((second.value as Row).sourceChecksum, TT99_CATALOG_CHECKSUM)
 
     const accounts = (await call('account.listAccounts', {}, adapter)).value as Row[]
     assert.equal(accounts.length, 216)
@@ -66,10 +67,31 @@ test('account TT99: first accounting read installs the complete Vietnam defaults
         retired,
       )
 
-    assert.equal(((await call('account.listTaxes', {}, adapter)).value as Row[]).length, VIETNAM_TAXES.length)
+    const taxes = (await call('account.listTaxes', {}, adapter)).value as Row[]
+    assert.equal(VIETNAM_TAXES.length, 17)
+    assert.equal(taxes.length, VIETNAM_TAXES.length)
+    const kkknt = taxes.filter((tax) => tax.name === 'KKKNT')
+    assert.deepEqual(kkknt.map((tax) => tax.typeTaxUse).sort(), ['purchase', 'sale'])
+    assert.ok(kkknt.every((tax) => Number(tax.amount) === 0 && !tax.accountId))
     assert.equal(((await call('account.listJournals', {}, adapter)).value as Row[]).length, 5)
     assert.equal(((await call('account.listPaymentTerms', {}, adapter)).value as Row[]).length, 2)
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_setup'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('account TT99: catalog upgrade backfills KKKNT for an existing company', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    await adapter.run(`DELETE FROM account_tax WHERE name = ?`, ['KKKNT'])
+    await adapter.run(`UPDATE account_setup SET "sourceChecksum" = ?`, [TT99_ACCOUNT_CHECKSUM])
+
+    const upgraded = (await call('account.initializeCompany', {}, adapter)).value as Row
+    const taxes = (await call('account.listTaxes', {}, adapter)).value as Row[]
+    assert.equal(upgraded.sourceChecksum, TT99_CATALOG_CHECKSUM)
+    assert.equal(taxes.filter((tax) => tax.name === 'KKKNT').length, 2)
   } finally {
     await adapter.close()
   }
@@ -124,6 +146,31 @@ test('account TT99: configured tax carries its posting account into invoices', a
       lines: Row[]
     }
     assert.equal(move.lines.find((line) => line.id === 'tt99-invoice:tax')?.accountId, id('33311'))
+
+    const kkknt = await call(
+      'account.createInvoice',
+      {
+        id: 'kkknt-invoice',
+        journalId: journals.find((row) => row.type === 'sale')?.id,
+        moveType: 'out_invoice',
+        partnerId: 'acme-party',
+        description: 'Không kê khai, tính nộp thuế GTGT',
+        quantity: '1',
+        priceUnit: '100',
+        lineAccountId: id('511'),
+        counterpartAccountId: id('1311'),
+        taxId: taxes.find((row) => row.name === 'KKKNT')?.id,
+      },
+      adapter,
+    )
+    assert.deepEqual(kkknt.value, { ok: true, id: 'kkknt-invoice', amountTotal: '100' })
+    const kkkntMove = (await call('account.getMove', { id: 'kkknt-invoice' }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    assert.equal(
+      kkkntMove.lines.some((line) => line.id === 'kkknt-invoice:tax'),
+      false,
+    )
   } finally {
     await adapter.close()
   }

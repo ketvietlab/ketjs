@@ -22,7 +22,7 @@ The first Accounting read initializes the active company in one transaction. The
 operation is idempotent and safe when several requests arrive concurrently. It creates:
 
 - the Circular 99 chart of accounts;
-- Vietnam sale and purchase VAT rates, import VAT and import tax;
+- Vietnam sale and purchase VAT rates, KCT, KKKNT, import VAT and import tax;
 - sale, purchase, bank, cash and general journals;
 - immediate and net-30 payment terms;
 - an `account.Setup` audit row containing the country, standard, legal basis,
@@ -34,6 +34,11 @@ own bank or cash account before opening Accounting. A non-Vietnam company is rej
 clearly; KetSuite must not silently install Vietnam rules based on an unrelated
 currency or country.
 
+The catalog checksum also supports additive upgrades. When a newer bundled catalog is
+available, the next Accounting request inserts missing defaults and updates the setup
+audit row without overwriting company-owned records. The KKKNT addition uses this path,
+so an existing TT99 company does not need its database recreated.
+
 ## Tax posting
 
 Each non-zero default tax points to its statutory posting account. Invoice creation
@@ -42,6 +47,12 @@ uses that account automatically when the caller does not explicitly supply one:
 - deductible purchase VAT uses account 1331;
 - output sale VAT uses account 33311;
 - import tax uses account 33331 and participates in the tax base.
+
+`KCT` and `KKKNT` are separate zero-amount classifications. KCT means the goods or
+services are not subject to VAT. KKKNT means the transaction is not declared or used
+to calculate VAT payable. Both sale and purchase scopes are bundled because KetSuite,
+like Odoo, keeps those selectable tax directions separate. Neither creates a tax
+posting line or points to a tax account.
 
 The technical classification of account 411121 is `liability_current`. This corrects
 an Odoo 19 localization mapping that labels the account as a liability but classifies

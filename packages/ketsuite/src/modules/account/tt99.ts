@@ -1528,6 +1528,7 @@ export const TT99_ACCOUNTS: readonly Tt99Account[] = [
   },
 ] as const
 export const TT99_ACCOUNT_CHECKSUM = '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71'
+export const TT99_CATALOG_CHECKSUM = 'c5fa8cb1c165ae56c5137d99df72464914a6f9dc63a2d4cdf807a465f0432da9'
 
 export const TT99_CODE = 'TT99_2025'
 export const TT99_COUNTRY = 'VN'
@@ -1584,6 +1585,13 @@ export const VIETNAM_TAXES: readonly VietnamTax[] = [
     amount: '0',
   },
   {
+    key: 'vat-purchase-not-declared',
+    name: 'KKKNT',
+    description: 'Không kê khai, tính nộp thuế GTGT',
+    use: 'purchase',
+    amount: '0',
+  },
+  {
     key: 'vat-sale-10',
     name: 'GTGT 10%',
     description: 'Thuế GTGT phải nộp 10%',
@@ -1619,6 +1627,13 @@ export const VIETNAM_TAXES: readonly VietnamTax[] = [
     key: 'vat-sale-exempt',
     name: 'KCT',
     description: 'Không thuộc đối tượng chịu thuế GTGT',
+    use: 'sale',
+    amount: '0',
+  },
+  {
+    key: 'vat-sale-not-declared',
+    name: 'KKKNT',
+    description: 'Không kê khai, tính nộp thuế GTGT',
     use: 'sale',
     amount: '0',
   },

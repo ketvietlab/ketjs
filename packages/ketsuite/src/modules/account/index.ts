@@ -5,7 +5,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'account',
-  version: '0.2.0',
+  version: '0.2.1',
   depends: ['company', 'partner', 'product', 'uom'],
   app: true,
   title: 'Kế toán',
@@ -41,4 +41,10 @@ export {
   TAX_USES,
   TAX_AMOUNT_TYPES,
 } from './functions.ts'
-export { TT99_ACCOUNTS, TT99_ACCOUNT_CHECKSUM, TT99_CODE, VIETNAM_TAXES } from './tt99.ts'
+export {
+  TT99_ACCOUNTS,
+  TT99_ACCOUNT_CHECKSUM,
+  TT99_CATALOG_CHECKSUM,
+  TT99_CODE,
+  VIETNAM_TAXES,
+} from './tt99.ts'

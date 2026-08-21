@@ -81,7 +81,13 @@ export {
   TAX_USES,
   TAX_AMOUNT_TYPES,
 } from './modules/account/functions.ts'
-export { TT99_ACCOUNTS, TT99_ACCOUNT_CHECKSUM, TT99_CODE, VIETNAM_TAXES } from './modules/account/tt99.ts'
+export {
+  TT99_ACCOUNTS,
+  TT99_ACCOUNT_CHECKSUM,
+  TT99_CATALOG_CHECKSUM,
+  TT99_CODE,
+  VIETNAM_TAXES,
+} from './modules/account/tt99.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
 export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './modules/pos/functions.ts'
