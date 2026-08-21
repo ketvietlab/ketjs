@@ -525,6 +525,116 @@ try {
       throw new Error('concurrent location archive and floor creation left an inconsistent hierarchy')
   }
 
+  const roomLifecycleStarted = performance.now()
+  const roomLifecycleResults = await Promise.all(
+    keys.map(async (key) => {
+      await call(key, 'hospitality_core.saveRoom', {
+        id: 'lifecycle-room',
+        propertyId: 'property',
+        roomTypeId: 'type:0',
+        buildingId: 'lifecycle-building',
+        floorId: 'lifecycle-floor',
+        code: 'LIFE-ROOM',
+        name: `Lifecycle room ${key}`,
+      })
+      const archived = await call(key, 'hospitality_core.archiveRoom', {
+        id: 'lifecycle-room',
+        active: false,
+      })
+      const activeRooms = await call(key, 'hospitality_core.listRooms', { propertyId: 'property' })
+      const allRooms = await call(key, 'hospitality_core.listRooms', {
+        propertyId: 'property',
+        includeArchived: true,
+      })
+      await call(key, 'hospitality_core.archiveFloor', { id: 'lifecycle-floor', active: false })
+      await call(key, 'hospitality_core.archiveBuilding', {
+        id: 'lifecycle-building',
+        active: false,
+      })
+      const blockedRestore = await call(key, 'hospitality_core.archiveRoom', {
+        id: 'lifecycle-room',
+        active: true,
+      })
+      await call(key, 'hospitality_core.archiveBuilding', {
+        id: 'lifecycle-building',
+        active: true,
+      })
+      await call(key, 'hospitality_core.archiveFloor', { id: 'lifecycle-floor', active: true })
+      const restored = await call(key, 'hospitality_core.archiveRoom', {
+        id: 'lifecycle-room',
+        active: true,
+      })
+      const detail = await call(key, 'hospitality_core.getRoom', { id: 'lifecycle-room' })
+      return {
+        key,
+        match:
+          (archived.value as { ok: boolean }).ok === true &&
+          !(activeRooms.value as Array<Record<string, unknown>>).some((row) => row.id === 'lifecycle-room') &&
+          (allRooms.value as Array<Record<string, unknown>>).some(
+            (row) => row.id === 'lifecycle-room' && row.active === false,
+          ) &&
+          (blockedRestore.value as { ok: boolean }).ok === false &&
+          (restored.value as { ok: boolean }).ok === true &&
+          (detail.value as Record<string, unknown>).active === true &&
+          (detail.value as Record<string, unknown>).status === 'available',
+      }
+    }),
+  )
+  const roomLifecycleMatch = roomLifecycleResults.every((result) => result.match)
+  const roomLifecycleMs = performance.now() - roomLifecycleStarted
+  if (!roomLifecycleMatch)
+    throw new Error(
+      `room lifecycle did not preserve archive history or parent restore order: ${JSON.stringify(
+        roomLifecycleResults.filter((result) => !result.match),
+      )}`,
+    )
+
+  let concurrentRoomArchiveTaskSingleWinner = true
+  if (driver === 'postgres') {
+    const races = await Promise.all(
+      keys.map(async (key) => {
+        await call(key, 'hospitality_core.saveRoom', {
+          id: 'room-archive-race',
+          propertyId: 'property',
+          roomTypeId: 'type:0',
+          code: 'ROOM-RACE',
+          name: `Room archive race ${key}`,
+        })
+        const contender = open(key)
+        await contender.open()
+        try {
+          const [archive, task] = await Promise.all([
+            call(key, 'hospitality_core.archiveRoom', { id: 'room-archive-race', active: false }),
+            callWith(contender, key, 'hospitality_core.createCleaningTask', {
+              id: 'room-archive-race-task',
+              code: 'HK-ARCHIVE-RACE',
+              roomId: 'room-archive-race',
+              taskType: 'daily_clean',
+            }),
+          ])
+          const room = (await call(key, 'hospitality_core.getRoom', { id: 'room-archive-race' }))
+            .value as Record<string, unknown>
+          const tasks = await adapters
+            .get(key)!
+            .all(
+              `SELECT state FROM hospitality_core_cleaning_task WHERE id = ${driver === 'postgres' ? '$1' : '?'}`,
+              ['room-archive-race-task'],
+            )
+          return (
+            [archive, task].filter((result) => (result.value as { ok: boolean }).ok).length === 1 &&
+            (room.active === true ||
+              !tasks.some((row) => row.state === 'todo' || row.state === 'in_progress'))
+          )
+        } finally {
+          await contender.close()
+        }
+      }),
+    )
+    concurrentRoomArchiveTaskSingleWinner = races.every(Boolean)
+    if (!concurrentRoomArchiveTaskSingleWinner)
+      throw new Error('concurrent room archive and housekeeping task creation did not serialize')
+  }
+
   const contentImagesPerTarget = 3
   const contentStarted = performance.now()
   await Promise.all(
@@ -1476,6 +1586,11 @@ try {
         locationLifecycleTransitionsPerSecond: Math.round((databaseCount * 4 * 1_000) / locationLifecycleMs),
         locationLifecycleMatch,
         concurrentLocationMutationConsistent,
+        roomLifecycleTransitions: databaseCount * 2,
+        roomLifecycleMs: Number(roomLifecycleMs.toFixed(1)),
+        roomLifecycleTransitionsPerSecond: Math.round((databaseCount * 2 * 1_000) / roomLifecycleMs),
+        roomLifecycleMatch,
+        concurrentRoomArchiveTaskSingleWinner,
         contentImages: totalContentImages,
         contentMs: Number(contentMs.toFixed(1)),
         contentImagesPerSecond: Math.round((totalContentImages * 1_000) / contentMs),
@@ -1549,7 +1664,7 @@ try {
                 `SELECT COUNT(*) AS n FROM hospitality_core_room WHERE "companyId" = ${driver === 'postgres' ? '$1' : '?'}`,
                 [key],
               )
-            return Number(rows[0]!.n) === roomsPerDatabase + 1
+            return Number(rows[0]!.n) === roomsPerDatabase + 2 + (driver === 'postgres' ? 1 : 0)
           }),
         ).then((matches) => matches.every(Boolean)),
       },

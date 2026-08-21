@@ -619,6 +619,100 @@ test('hospitality core: room configuration preserves workflow-owned status and p
       ).ok,
       true,
     )
+
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'annex-room',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'annex',
+        floorId: 'annex-floor',
+        code: '201',
+        name: 'Annex room 201',
+      },
+      adapter,
+    )
+    const archivedRoom = (
+      await call('hospitality_core.archiveRoom', { id: 'annex-room', active: false }, adapter)
+    ).value as Row
+    assert.equal(archivedRoom.ok, true)
+    const archivedTask = (
+      await call(
+        'hospitality_core.createCleaningTask',
+        {
+          id: 'archived-task',
+          code: 'HK-ARCHIVED',
+          roomId: 'annex-room',
+          taskType: 'daily_clean',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(archivedTask.ok, false)
+    assert.equal((archivedTask.errors as Row[])[0]?.code, 'room_archived')
+
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: false }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+    const blockedRoomRestore = (
+      await call('hospitality_core.archiveRoom', { id: 'annex-room', active: true }, adapter)
+    ).value as Row
+    assert.equal(blockedRoomRestore.ok, false)
+    assert.equal((blockedRoomRestore.errors as Row[])[0]?.code, 'location_archived')
+    await call('hospitality_core.archiveBuilding', { id: 'annex', active: true }, adapter)
+    await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter)
+    assert.equal(
+      ((await call('hospitality_core.archiveRoom', { id: 'annex-room', active: true }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'task-room',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: '202',
+        name: 'Task room 202',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.createCleaningTask',
+      {
+        id: 'task-room-clean',
+        code: 'HK-202',
+        roomId: 'task-room',
+        taskType: 'daily_clean',
+      },
+      adapter,
+    )
+    const blockedTaskRoom = (
+      await call('hospitality_core.archiveRoom', { id: 'task-room', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedTaskRoom.ok, false)
+    assert.equal((blockedTaskRoom.errors as Row[])[0]?.code, 'room_has_open_task')
+    assert.equal(
+      ((await call('hospitality_core.getRoom', { id: 'task-room' }, adapter)).value as Row).active,
+      true,
+    )
+
+    const blockedStatusRoom = (
+      await call('hospitality_core.archiveRoom', { id: '101', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedStatusRoom.ok, false)
+    assert.equal((blockedStatusRoom.errors as Row[])[0]?.code, 'room_archive_status')
   } finally {
     await adapter.close()
   }
