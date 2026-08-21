@@ -8,6 +8,7 @@ import {
   emptyState,
   formatMoney,
   framed,
+  inline,
   linkButton,
   metric,
   recordActions,
@@ -29,47 +30,58 @@ const pathOf = (order: AnyRow) =>
     ? `/admin/sales/quotations/${String(order.id)}`
     : `/admin/sales/orders/${String(order.id)}`
 const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_backend.emptyHint'))
+const localized = (path: string, localeSuffix: string): string =>
+  localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame): TemplateResult =>
+export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuffix = ''): TemplateResult =>
   framed(
     _,
     _('sale_backend.dashboard.title'),
     frame,
-    cardGrid({
-      items: [
-        {
-          id: 'draft',
-          title: _('sale_backend.dashboard.draft'),
-          value: rows.filter((r) => r.state === 'draft').length,
-          href: '/admin/sales/quotations?state=draft',
-        },
-        {
-          id: 'sent',
-          title: _('sale_backend.dashboard.sent'),
-          value: rows.filter((r) => r.state === 'sent').length,
-          href: '/admin/sales/quotations?state=sent',
-        },
-        {
-          id: 'orders',
-          title: _('sale_backend.menu.orders'),
-          value: rows.filter((r) => r.state === 'sale').length,
-          href: '/admin/sales/orders',
-        },
-        {
-          id: 'invoice',
-          title: _('sale_backend.dashboard.toInvoice'),
-          value: rows.filter((r) => r.invoiceStatus === 'to invoice').length,
-          href: '/admin/sales/orders',
-        },
-      ],
-      id: (item) => item.id,
-      card: (item) =>
-        contentCard({
-          title: item.title,
-          href: item.href,
-          body: metric({ label: _('sale_backend.dashboard.records'), value: String(item.value) }),
+    stack([
+      inline([
+        linkButton({
+          label: _('sale_backend.action.create'),
+          href: `${localized('/admin/sales/quotations', localeSuffix)}#quotation-create-form`,
+          variant: 'primary',
         }),
-    }),
+      ]),
+      cardGrid({
+        items: [
+          {
+            id: 'draft',
+            title: _('sale_backend.dashboard.draft'),
+            value: rows.filter((r) => r.state === 'draft').length,
+            href: localized('/admin/sales/quotations?state=draft', localeSuffix),
+          },
+          {
+            id: 'sent',
+            title: _('sale_backend.dashboard.sent'),
+            value: rows.filter((r) => r.state === 'sent').length,
+            href: localized('/admin/sales/quotations?state=sent', localeSuffix),
+          },
+          {
+            id: 'orders',
+            title: _('sale_backend.menu.orders'),
+            value: rows.filter((r) => r.state === 'sale').length,
+            href: localized('/admin/sales/orders', localeSuffix),
+          },
+          {
+            id: 'invoice',
+            title: _('sale_backend.dashboard.toInvoice'),
+            value: rows.filter((r) => r.invoiceStatus === 'to invoice').length,
+            href: localized('/admin/sales/orders', localeSuffix),
+          },
+        ],
+        id: (item) => item.id,
+        card: (item) =>
+          contentCard({
+            title: item.title,
+            href: item.href,
+            body: metric({ label: _('sale_backend.dashboard.records'), value: String(item.value) }),
+          }),
+      }),
+    ]),
   )
 
 export const ordersScreen = (
