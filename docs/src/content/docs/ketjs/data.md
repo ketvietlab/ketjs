@@ -6,6 +6,30 @@ description: Read and write KetJS data with immutable queries, validated changes
 KetJS exposes data access only through an operation context. Queries are immutable values that can be
 inspected before execution; changesets cast and validate untrusted input before persistence.
 
+## Sortable row ID primitives
+
+`createIdGenerator()` mints non-negative safe JavaScript integers without a database round trip. The
+high bits encode milliseconds since the fixed `2026-01-01T00:00:00Z` epoch and the low eleven bits
+select one of 2048 slots in that millisecond:
+
+```ts
+import { createIdGenerator, decodeId } from 'ketjs'
+
+const ids = createIdGenerator()
+const id = ids.next()
+const { at, counter } = decodeId(id)
+```
+
+Sorting IDs groups rows by creation millisecond. It does not define a strict order inside one
+millisecond: each process begins at a random counter and may wrap. One generator never repeats a slot
+within a millisecond, while concurrent generators may still collide. Persistence code must let the
+database primary key arbitrate that race and retry with a newly minted ID.
+
+The generator holds small clock regressions at its last millisecond and reports one warning per
+incident through `onClockRegression`. It refuses regressions over five seconds, clocks before the
+fixed epoch, invalid entropy, and values beyond `Number.MAX_SAFE_INTEGER`. IDs expose their creation
+time and are not security tokens; use a separate unguessable public handle where enumeration matters.
+
 ## Build a query
 
 ```ts

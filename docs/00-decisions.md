@@ -1900,3 +1900,49 @@ provider-specific identifiers. The fallback rate is not an invoice or accounting
 entry and never replaces a matching Rate Plan. Physical location, room lifecycle and
 archive controls belong to the following Room configuration slice so sellable content
 cannot directly bypass operational room transitions.
+
+## D63 — A row id is one number, and the clock is its high bits
+
+```
+id = millisecondsSinceEpoch * 2048 + counter        epoch 2026-01-01T00:00:00Z
+```
+
+**What was wrong.** `id` and `ref` were `TEXT PRIMARY KEY`, and the framework generated
+none of them. Every module invented a convention (`'p1'`, `'t-goods'`, `'acme'`),
+nothing grouped chronologically, and a public API would have had to let a client choose
+its own primary key.
+
+**Why not a sequence.** A sequence must be asked, and a handler that round-trips to the
+database to learn an id cannot build a graph of rows in one pass.
+
+**Why 53 bits and not 64.** `Number.MAX_SAFE_INTEGER` is 2^53−1. Past it JavaScript
+rounds silently and two different ids compare equal. A `bigint` avoids that but cannot
+be serialized by `JSON.stringify`. The scheme therefore fits a plain `number` and
+asserts on every mint. Forty-two bits of milliseconds lasts 139 years; eleven counter
+bits provide 2048 slots per millisecond per database.
+
+**The clock provides millisecond buckets, not a total order.** Sorting ids groups rows
+by creation millisecond. Counter order inside one millisecond is intentionally
+unspecified because each writer starts at a random slot and may wrap. Code that needs a
+strict business order uses its own sequence or timestamp plus tie-breaker.
+
+**Uniqueness is local first and database-arbitrated across writers.** One generator
+never repeats a slot within a millisecond. Random starts reduce the chance that two
+writers choose the same early slots, but do not prove process-wide uniqueness. The
+future storage integration must retry a primary-key collision with a newly minted id;
+the database remains the final arbiter.
+
+**A clock that steps backwards** inside five seconds is treated as monotonic by fiat —
+ids keep issuing from the high-water bucket, so none repeats locally. Each regression
+incident is reported once. Beyond five seconds the generator refuses to mint.
+
+**Do not write `ms << 11`.** JavaScript bitwise operators truncate to 32 bits, so the
+shift is wrong from the first id. `decodeId` centralizes the safe division and rejects
+negative, fractional or unsafe inputs.
+
+**An id is not a secret.** It carries the millisecond it was made, and rows written in
+the same millisecond are adjacent. Anything reachable by a stranger needs its own
+unguessable handle.
+
+**Cost:** ids are 14–16 digit numbers. The number a person reads is instead a document
+code (`SO00042`) with its own sequence, as Odoo separates `id` from `name`.

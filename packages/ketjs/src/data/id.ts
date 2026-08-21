@@ -36,7 +36,7 @@ const MAX_CLOCK_REGRESSION_MS = 5_000
 export type IdGenerator = {
   /** The next id. Never returns the same number twice in one process. */
   next(): number
-  /** For tests and for support: what an id says about itself. */
+  /** For diagnostics and support: what a valid id says about itself. */
   decode(id: number): { at: Date; counter: number }
 }
 
@@ -49,14 +49,23 @@ export type IdGeneratorOptions = {
   onClockRegression?: (byMs: number) => void
 }
 
-export const decodeId = (id: number): { at: Date; counter: number } => ({
-  // Not `id >>> 11`: JavaScript's bitwise operators truncate to 32 bits, so a
-  // shift would be wrong from the very first id. Division is the only correct
-  // spelling above 2^31, and the reason this function exists rather than being
-  // inlined at each call site.
-  at: new Date(Math.floor(id / ID_COUNTER_RANGE) + ID_EPOCH_MS),
-  counter: id % ID_COUNTER_RANGE,
-})
+export const decodeId = (id: number): { at: Date; counter: number } => {
+  if (!Number.isSafeInteger(id) || id < 0) {
+    throw new KetError({
+      code: 'E_INVALID_ID',
+      message: `cannot decode invalid row id ${String(id)}`,
+      hint: 'a row id must be a non-negative safe JavaScript integer',
+    })
+  }
+  return {
+    // Not `id >>> 11`: JavaScript's bitwise operators truncate to 32 bits, so a
+    // shift would be wrong from the very first id. Division is the only correct
+    // spelling above 2^31, and the reason this function exists rather than being
+    // inlined at each call site.
+    at: new Date(Math.floor(id / ID_COUNTER_RANGE) + ID_EPOCH_MS),
+    counter: id % ID_COUNTER_RANGE,
+  }
+}
 
 export function createIdGenerator(o: IdGeneratorOptions = {}): IdGenerator {
   const now = o.now ?? Date.now
@@ -66,7 +75,46 @@ export function createIdGenerator(o: IdGeneratorOptions = {}): IdGenerator {
   let counter = 0
   /** How many of this millisecond's 2048 slots we have handed out. */
   let issued = 0
-  let warned = false
+  let regressionActive = false
+
+  const readClock = (): number => {
+    const ms = now()
+    if (!Number.isSafeInteger(ms)) {
+      throw new KetError({
+        code: 'E_INVALID_ID_CLOCK',
+        message: `the id clock returned ${String(ms)}`,
+        hint: 'the id clock must return an integer number of milliseconds since the Unix epoch',
+      })
+    }
+    if (lastMs === -1 && ms < ID_EPOCH_MS) {
+      throw new KetError({
+        code: 'E_CLOCK_BEFORE_EPOCH',
+        message: `the clock reads ${new Date(ms).toISOString()}, before the id epoch`,
+        hint: 'the host clock is wrong, or someone moved ID_EPOCH_MS',
+      })
+    }
+    if (ms >= lastMs) {
+      regressionActive = false
+      return ms
+    }
+
+    const behind = lastMs - ms
+    if (behind > MAX_CLOCK_REGRESSION_MS) {
+      throw new KetError({
+        code: 'E_CLOCK_REGRESSION',
+        message: `the clock moved back ${behind}ms; refusing to mint ids`,
+        hint: 'check NTP on this host — ids minted across a large backwards jump cannot be ordered afterwards',
+      })
+    }
+    // Inside tolerance the clock is treated as monotonic by fiat: we keep
+    // issuing from where we were, so ids stay in the same time bucket and none
+    // repeats. Report one warning per regression incident.
+    if (!regressionActive) {
+      regressionActive = true
+      o.onClockRegression?.(behind)
+    }
+    return lastMs
+  }
 
   const startOfMillisecond = (ms: number): void => {
     lastMs = ms
@@ -76,39 +124,21 @@ export function createIdGenerator(o: IdGeneratorOptions = {}): IdGenerator {
     // when two pods are given the same one. A random start makes a collision
     // unlikely and the primary key makes it loud — the database is the arbiter,
     // which is the only participant that cannot be misconfigured into agreeing.
-    counter = Math.floor(random() * ID_COUNTER_RANGE) % ID_COUNTER_RANGE
+    const entropy = random()
+    if (!Number.isFinite(entropy) || entropy < 0 || entropy >= 1) {
+      throw new KetError({
+        code: 'E_INVALID_ID_ENTROPY',
+        message: `the id entropy source returned ${String(entropy)}`,
+        hint: 'the id entropy source must return a number in the range [0, 1)',
+      })
+    }
+    counter = Math.floor(entropy * ID_COUNTER_RANGE)
     issued = 0
   }
 
   return {
     next(): number {
-      let ms = now()
-
-      if (ms < lastMs) {
-        const behind = lastMs - ms
-        if (behind > MAX_CLOCK_REGRESSION_MS) {
-          throw new KetError({
-            code: 'E_CLOCK_REGRESSION',
-            message: `the clock moved back ${behind}ms; refusing to mint ids`,
-            hint: 'check NTP on this host — ids minted across a large backwards jump cannot be ordered afterwards',
-          })
-        }
-        // Inside tolerance the clock is treated as monotonic by fiat: we keep
-        // issuing from where we were, so ids stay ordered and none repeats.
-        if (!warned) {
-          warned = true
-          o.onClockRegression?.(behind)
-        }
-        ms = lastMs
-      }
-
-      if (ms < ID_EPOCH_MS) {
-        throw new KetError({
-          code: 'E_CLOCK_BEFORE_EPOCH',
-          message: `the clock reads ${new Date(ms).toISOString()}, before the id epoch`,
-          hint: 'the host clock is wrong, or someone moved ID_EPOCH_MS',
-        })
-      }
+      const ms = readClock()
 
       if (ms !== lastMs) startOfMillisecond(ms)
 
@@ -116,8 +146,8 @@ export function createIdGenerator(o: IdGeneratorOptions = {}): IdGenerator {
       // both ordering and uniqueness, so wait for the clock instead. At 2048 ids
       // per millisecond this is unreachable outside a benchmark.
       if (issued >= ID_COUNTER_RANGE) {
-        let spin = now()
-        while (spin <= lastMs) spin = now()
+        let spin = readClock()
+        while (spin <= lastMs) spin = readClock()
         startOfMillisecond(spin)
       }
 
@@ -125,7 +155,7 @@ export function createIdGenerator(o: IdGeneratorOptions = {}): IdGenerator {
       counter = (counter + 1) % ID_COUNTER_RANGE
       issued++
 
-      if (value > Number.MAX_SAFE_INTEGER) {
+      if (!Number.isSafeInteger(value)) {
         throw new KetError({
           code: 'E_ID_EXHAUSTED',
           message: `id ${value} is past Number.MAX_SAFE_INTEGER`,

@@ -28,19 +28,21 @@ test('id: the number carries the millisecond it was made', () => {
   assert.equal(id, 1_000 * ID_COUNTER_RANGE, 'one second past the epoch, first slot')
 })
 
-test('id: ordering follows creation, including inside one millisecond', () => {
+test('id: sorting groups creation by millisecond and every local id is unique', () => {
   const c = clock(AT)
-  const ids = createIdGenerator({ now: c.now, random: () => 0 })
+  // Start near the end so the counter wraps. Counter order inside one
+  // millisecond is intentionally unspecified; the timestamp remains sortable.
+  const ids = createIdGenerator({ now: c.now, random: () => 2040 / ID_COUNTER_RANGE })
 
   const made: number[] = []
   for (let i = 0; i < 50; i++) {
     made.push(ids.next())
     if (i % 7 === 0) c.advance(1)
   }
+  const decodedTimes = [...made].sort((a, b) => a - b).map((id) => decodeId(id).at.getTime())
   assert.deepEqual(
-    made,
-    [...made].sort((a, b) => a - b),
-    'sorting by id is sorting by creation',
+    decodedTimes,
+    [...decodedTimes].sort((a, b) => a - b),
   )
   assert.equal(new Set(made).size, made.length, 'and none repeats')
 })
@@ -56,7 +58,7 @@ test('id: a random start keeps ids inside the millisecond it belongs to', () => 
   assert.equal(new Set(made.map((id) => decodeId(id).counter)).size, 10, 'ten distinct slots')
 })
 
-test('id: two writers in one millisecond do not agree by accident', () => {
+test('id: two writers with different entropy start in different slots', () => {
   const c = clock(AT)
   // Two processes, same clock, different entropy — the case a node id would have
   // had to be configured for, and would have been configured wrongly.
@@ -105,6 +107,20 @@ test('id: with the clock standing still, the 2049th spins until it advances', ()
   assert.equal(new Set([...full, spilled]).size, ID_COUNTER_RANGE + 1)
 })
 
+test('id: the full-millisecond wait still refuses a large clock regression', () => {
+  let reads = 0
+  const ids = createIdGenerator({
+    now: () => (++reads <= ID_COUNTER_RANGE + 1 ? AT : AT - 10_000),
+    random: () => 0,
+  })
+
+  for (let i = 0; i < ID_COUNTER_RANGE; i++) ids.next()
+  assert.throws(
+    () => ids.next(),
+    (e: unknown) => (e as { code: string }).code === 'E_CLOCK_REGRESSION',
+  )
+})
+
 test('id: a small clock step backwards holds the line instead of repeating', () => {
   const c = clock(AT)
   const seen: number[] = []
@@ -126,6 +142,12 @@ test('id: a small clock step backwards holds the line instead of repeating', () 
   )
   assert.equal(new Set(seen).size, seen.length, 'and still unique')
   assert.deepEqual(regressions, [100], 'reported once, not once per id')
+
+  c.set(AT + 1)
+  seen.push(ids.next())
+  c.set(AT)
+  seen.push(ids.next())
+  assert.deepEqual(regressions, [100, 1], 'a later regression incident is reported again')
 })
 
 test('id: a large clock step backwards refuses rather than inventing order', () => {
@@ -154,6 +176,26 @@ test('id: a clock before the epoch is refused, not wrapped into a negative id', 
   )
 })
 
+test('id: invalid clock and entropy sources fail with actionable errors', () => {
+  assert.throws(
+    () => createIdGenerator({ now: () => Number.NaN }).next(),
+    (e: unknown) => (e as { code: string }).code === 'E_INVALID_ID_CLOCK',
+  )
+  assert.throws(
+    () => createIdGenerator({ now: () => AT, random: () => 1 }).next(),
+    (e: unknown) => (e as { code: string }).code === 'E_INVALID_ID_ENTROPY',
+  )
+})
+
+test('id: decode refuses values that could already have lost precision', () => {
+  for (const id of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+    assert.throws(
+      () => decodeId(id),
+      (e: unknown) => (e as { code: string }).code === 'E_INVALID_ID',
+    )
+  }
+})
+
 test('id: the far end of the range is still an exact JavaScript integer', () => {
   // 42 bits of milliseconds from the epoch — the last id the scheme can mint.
   const last = ID_EPOCH_MS + 2 ** 42 - 1
@@ -166,7 +208,7 @@ test('id: the far end of the range is still an exact JavaScript integer', () => 
 })
 
 test('id: past the range it fails loudly rather than losing precision', () => {
-  const ids = createIdGenerator({ now: () => ID_EPOCH_MS + 2 ** 43, random: () => 0 })
+  const ids = createIdGenerator({ now: () => ID_EPOCH_MS + 2 ** 42, random: () => 0 })
   assert.throws(
     () => ids.next(),
     (e: unknown) => {

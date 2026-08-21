@@ -87,6 +87,8 @@ adapters and operational tooling, not a requirement for ordinary modules.
 | `sqliteAdapter` | Built-in SQLite adapter. |
 | `assertAdapter`, `ADAPTER_METHODS` | Validate a custom adapter contract. |
 | `createAdapterPool` | Lease bounded per-key adapters, including tenant databases. |
+| `createIdGenerator`, `decodeId` | Mint and inspect safe numeric row IDs grouped by creation millisecond. |
+| `ID_EPOCH_MS`, `ID_COUNTER_BITS`, `ID_COUNTER_RANGE` | Describe the stable numeric row-ID layout. |
 | `from`, `deleteFrom`, `table`, `Query` | Build parameterized select, delete, and grouped queries. |
 | `eq`, `ne`, `gt`, `lt`, `gte`, `lte`, `like`, `ilike` | Comparison expressions. |
 | `inArray`, `isNull`, `isNotNull`, `and`, `or`, `not` | Set, null, and boolean expressions. |
