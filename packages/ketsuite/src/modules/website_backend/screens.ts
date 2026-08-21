@@ -40,7 +40,7 @@ export type EntryRow = {
 
 export type EntryDetail = {
   entry: EntryRow
-  revision?: { title: string; excerpt?: string | null; layout: unknown; fields: unknown } | null
+  revision?: { id: string; title: string; excerpt?: string | null; layout: unknown; fields: unknown } | null
 }
 
 const statusTone = (status: string): 'positive' | 'info' | 'warning' | 'neutral' =>
@@ -294,7 +294,10 @@ export const entryFormScreen = (
         body: surface({
           body: recordForm({
             action,
-            hidden: { siteId },
+            hidden: {
+              siteId,
+              ...(revision?.id ? { expectedRevisionId: revision.id } : {}),
+            },
             fields: [
               {
                 name: 'title',
@@ -364,6 +367,7 @@ export const entryFormScreen = (
               body: surface({
                 body: recordActions({
                   action: `/admin/content/${entry.id}/publish${options.locale ?? ''}`,
+                  hidden: revision?.id ? { expectedRevisionId: revision.id } : undefined,
                   actions: [
                     { value: 'publish', label: _('website_backend.action.publish'), variant: 'primary' },
                   ],

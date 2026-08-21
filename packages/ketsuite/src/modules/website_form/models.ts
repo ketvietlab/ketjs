@@ -25,11 +25,13 @@ export const models: Record<string, ModelDef> = {
       status: 'text',
       source: 'text?',
       fingerprint: 'text?',
+      dedupeKey: 'text?',
       createdAt: 'datetime',
     },
     indexes: {
       form_created: { fields: ['companyId', 'formId', 'createdAt'] },
       form_status: { fields: ['companyId', 'formId', 'status'] },
+      form_dedupe: { fields: ['companyId', 'formId', 'dedupeKey'], unique: true },
     },
   },
   FormRateLimit: {

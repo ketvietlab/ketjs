@@ -61,6 +61,55 @@ test('creates a schema-backed form and keeps the English backend translated', as
   await expect(page.locator('body')).not.toContainText('website_backend.')
 })
 
+test('hardens the public form boundary and unknown hosts', async ({ page }) => {
+  const submit = () =>
+    page.request.post('/website/forms/contact-form/submit', {
+      headers: {
+        Origin: 'http://127.0.0.1:4173',
+        'Idempotency-Key': 'website-e2e-contact-1',
+      },
+      data: {
+        payload: { name: 'Lan Anh', email: 'lan.anh@example.test' },
+        consent: true,
+        source: '/',
+      },
+    })
+  const first = await submit()
+  expect(first.status()).toBe(200)
+  const firstBody = (await first.json()) as { ok: boolean; id: string }
+  expect(firstBody.ok).toBe(true)
+  const replay = await submit()
+  expect(replay.status()).toBe(200)
+  expect((await replay.json()).id).toBe(firstBody.id)
+
+  const crossOrigin = await page.request.post('/website/forms/contact-form/submit', {
+    headers: { Origin: 'https://evil.example' },
+    data: { payload: { name: 'Bot', email: 'bot@example.test' } },
+  })
+  expect(crossOrigin.status()).toBe(403)
+
+  const checkIn = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10)
+  const checkOut = new Date(Date.now() + 12 * 86_400_000).toISOString().slice(0, 10)
+  const booking = await page.request.post('/website/hospitality/hospitality-site/booking', {
+    headers: {
+      Origin: 'http://127.0.0.1:4173',
+      'Idempotency-Key': 'website-e2e-booking-1',
+    },
+    data: {
+      guestName: 'Lan Anh',
+      email: 'lan.anh@example.test',
+      checkIn,
+      checkOut,
+      adults: 2,
+    },
+  })
+  expect(booking.status()).toBe(200)
+  expect((await booking.json()).ok).toBe(true)
+
+  const unknownHost = await page.request.get('/', { headers: { Host: 'unknown.example.test' } })
+  expect(unknownHost.status()).toBe(404)
+})
+
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const screens = [

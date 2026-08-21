@@ -650,13 +650,21 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
 
   type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
   const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
+  const requestHost = (url: URL, req: IncomingMessage): string => {
+    const raw = String(req.headers.host ?? url.host).trim()
+    try {
+      return new URL(`http://${raw}`).hostname.replace(/^\[|\]$/g, '')
+    } catch {
+      return ''
+    }
+  }
   const siteOf = (url: URL, req: IncomingMessage): Promise<ResolvedSite | null> => {
     if (!pages?.siteResolve) return Promise.resolve(null)
     let pending = siteRecords.get(req)
     if (!pending) {
       pending = ctx.call(
         pages.siteResolve,
-        { host: (req.headers.host ?? url.host).split(':')[0] },
+        { host: requestHost(url, req) },
         url,
         req,
       ) as Promise<ResolvedSite | null>
@@ -729,6 +737,10 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
           theme: (url: URL, req: IncomingMessage) =>
             tenants.ofRequest(url, req, async (t) => {
               const site = await siteOf(url, req)
+              // A multisite app must never serve its fallback site for an unknown
+              // Host header. Apart from leaking tenant content, that turns Host
+              // header poisoning into generated links and cached HTML.
+              if (pages?.siteResolve && !site) return null
               const chosen = site?.theme ?? fallbackTheme.name
               const allowed = availableThemes.find((theme) => theme.name === chosen)
               if (!allowed || t.live.disabledModules?.includes(allowed.name)) return null

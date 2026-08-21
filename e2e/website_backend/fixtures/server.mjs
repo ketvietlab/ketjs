@@ -75,6 +75,12 @@ const seedSite = async ({ id, title, locale, theme, host, entryId, layout }) => 
     theme,
     active: true,
   })
+  await call('website.saveSiteMember', {
+    id: `${id}:website-admin`,
+    siteId: id,
+    userId: 'website-admin',
+    role: 'administrator',
+  })
   await call('website.saveDomain', {
     id: `${id}-domain`,
     siteId: id,

@@ -1,6 +1,20 @@
 import type { ModelDef } from 'ketjs'
 
 export const models: Record<string, ModelDef> = {
+  CatalogItem: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      siteId: 'ref:website.Site',
+      productId: 'ref:product.Product',
+      active: 'bool',
+      position: 'int',
+    },
+    indexes: {
+      site_product: { fields: ['companyId', 'siteId', 'productId'], unique: true },
+      site_position: { fields: ['companyId', 'siteId', 'active', 'position'] },
+    },
+  },
   Cart: {
     scope: 'company',
     timestamps: true,
@@ -15,6 +29,7 @@ export const models: Record<string, ModelDef> = {
       customerPhone: 'text?',
       note: 'text?',
       submittedAt: 'datetime?',
+      expiresAt: 'datetime',
     },
     indexes: {
       token: { fields: ['companyId', 'tokenDigest'], unique: true },
