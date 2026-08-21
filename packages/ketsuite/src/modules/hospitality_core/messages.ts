@@ -86,6 +86,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'room.action.save': 'Lưu cấu hình phòng',
     'room.action.back': 'Quay lại sơ đồ phòng',
     'room.action.openHousekeeping': 'Mở quy trình trạng thái phòng',
+    'room.action.archive': 'Lưu trữ phòng',
+    'room.action.restore': 'Khôi phục phòng',
     'room.field.property': 'Cơ sở lưu trú',
     'room.field.roomType': 'Loại phòng',
     'room.field.code': 'Mã phòng',
@@ -120,7 +122,7 @@ export const messages: Record<string, Record<string, Message>> = {
       'Cấu hình không được thay đổi trạng thái; mọi chuyển trạng thái phải đi qua lifecycle vận hành.',
     'room.section.lifecycle': 'Trạng thái vận hành',
     'room.section.lifecycleHint':
-      'Housekeeping và lưu trú sở hữu chuyển trạng thái để tránh bỏ qua phòng đang có khách hoặc công việc mở.',
+      'Housekeeping và lưu trú sở hữu chuyển trạng thái. Chỉ phòng sẵn sàng, không có khách hoặc công việc mở mới được lưu trữ.',
     'room.empty.prerequisite': 'Chưa thể tạo phòng',
     'room.empty.prerequisiteHint': 'Hãy tạo một cơ sở và ít nhất một loại phòng trước.',
     'room.empty.buildings': 'Cơ sở này chưa có tòa nhà.',
@@ -131,6 +133,11 @@ export const messages: Record<string, Record<string, Message>> = {
     'room.feedback.floor-created': 'Đã thêm tầng',
     'room.feedback.created': 'Đã tạo phòng vật lý',
     'room.feedback.saved': 'Đã lưu cấu hình phòng',
+    'room.feedback.archived': 'Đã lưu trữ phòng',
+    'room.feedback.archivedHint':
+      'Phòng đã rời khỏi lựa chọn lễ tân và buồng phòng nhưng toàn bộ lịch sử vẫn được giữ lại.',
+    'room.feedback.restored': 'Đã khôi phục phòng',
+    'room.feedback.restoredHint': 'Phòng đã trở lại trạng thái sẵn sàng để vận hành.',
     'room.feedback.savedHint':
       'Cấu hình vật lý đã được lưu; tồn kho bán vẫn chỉ thay đổi qua availability ledger.',
     'building.detail.kicker': 'Hồ sơ tòa nhà',
@@ -901,6 +908,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.room_occupied': 'Phòng đang có khách; hãy chuyển hoặc trả phòng trước.',
     'validation.room_cleaning': 'Phòng đang được vệ sinh; hãy hoàn tất hoặc hủy công việc trước.',
     'validation.room_task_open': 'Phòng còn công việc buồng phòng đang mở; hãy xử lý công việc trước.',
+    'validation.room_archive_status':
+      'Chỉ có thể lưu trữ phòng đang sẵn sàng; hãy hoàn tất quy trình trạng thái trước.',
+    'validation.room_has_active_stay':
+      'Phòng đang có hồ sơ lưu trú hoạt động; hãy chuyển hoặc trả phòng trước.',
+    'validation.room_has_open_task':
+      'Phòng còn công việc buồng phòng đang mở; hãy hoàn tất hoặc hủy công việc trước.',
     'validation.amenity_scope': 'Phạm vi tiện nghi không hợp lệ.',
     'validation.amenity_target': 'Đối tượng gán tiện nghi không hợp lệ.',
     'validation.amenity_scope_mismatch': 'Tiện nghi không dùng được cho đối tượng này.',
@@ -912,6 +925,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.building_missing': 'Không tìm thấy tòa nhà.',
     'validation.floor_missing': 'Không tìm thấy tầng.',
     'validation.room_type_missing': 'Không tìm thấy loại phòng.',
+    'validation.room_type_archived': 'Loại phòng đang được lưu trữ; hãy khôi phục loại phòng trước.',
     'validation.room_missing': 'Không tìm thấy phòng.',
     'validation.policy_missing': 'Không tìm thấy chính sách hủy.',
     'validation.amenity_missing': 'Không tìm thấy tiện nghi.',
@@ -1094,6 +1108,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'room.action.save': 'Save room settings',
     'room.action.back': 'Back to room board',
     'room.action.openHousekeeping': 'Open room-status workflow',
+    'room.action.archive': 'Archive room',
+    'room.action.restore': 'Restore room',
     'room.field.property': 'Property',
     'room.field.roomType': 'Room type',
     'room.field.code': 'Room code',
@@ -1130,7 +1146,7 @@ export const messages: Record<string, Record<string, Message>> = {
       'Settings cannot change status; every state transition must use the operating lifecycle.',
     'room.section.lifecycle': 'Operating status',
     'room.section.lifecycleHint':
-      'Housekeeping and stays own status transitions so occupied rooms and open work cannot be bypassed.',
+      'Housekeeping and stays own status transitions. Only an available room with no guest or open work can be archived.',
     'room.empty.prerequisite': 'A room cannot be created yet',
     'room.empty.prerequisiteHint': 'Create a property and at least one room type first.',
     'room.empty.buildings': 'This property has no buildings.',
@@ -1141,6 +1157,11 @@ export const messages: Record<string, Record<string, Message>> = {
     'room.feedback.floor-created': 'Floor added',
     'room.feedback.created': 'Physical room created',
     'room.feedback.saved': 'Room settings saved',
+    'room.feedback.archived': 'Room archived',
+    'room.feedback.archivedHint':
+      'The room is no longer offered to front desk or housekeeping, while its full history remains available.',
+    'room.feedback.restored': 'Room restored',
+    'room.feedback.restoredHint': 'The room is available for operations again.',
     'room.feedback.savedHint':
       'Physical settings were saved; sellable inventory still changes only through the availability ledger.',
     'building.detail.kicker': 'Building record',
@@ -1913,6 +1934,11 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.room_occupied': 'The room is occupied; move or check out the stay first.',
     'validation.room_cleaning': 'The room is being cleaned; complete or cancel the task first.',
     'validation.room_task_open': 'The room has open housekeeping work; resolve the task first.',
+    'validation.room_archive_status':
+      'Only an available room can be archived; finish its operating-status workflow first.',
+    'validation.room_has_active_stay': 'The room has an active stay; move or check out the guest first.',
+    'validation.room_has_open_task':
+      'The room has open housekeeping work; complete or cancel the task first.',
     'validation.amenity_scope': 'Amenity scope is invalid.',
     'validation.amenity_target': 'Amenity assignment target is invalid.',
     'validation.amenity_scope_mismatch': 'The amenity cannot be used for this target.',
@@ -1924,6 +1950,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.building_missing': 'Building was not found.',
     'validation.floor_missing': 'Floor was not found.',
     'validation.room_type_missing': 'Room type was not found.',
+    'validation.room_type_archived': 'The room type is archived; restore it first.',
     'validation.room_missing': 'Room was not found.',
     'validation.policy_missing': 'Cancellation policy was not found.',
     'validation.amenity_missing': 'Amenity was not found.',
