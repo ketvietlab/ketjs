@@ -163,7 +163,8 @@ const app = defineApp({
 
 `resolve()` returning `null` produces `E_UNKNOWN_TENANT`; KetJS never falls back to a default customer.
 The bounded adapter pool leases one tenant for the duration of a callback and prevents connections
-from escaping their lease.
+from escaping their lease. An adapter counts as busy while `open()` is pending, so a concurrent request
+cannot evict or close a connection that the first request is still establishing.
 
 ## Per-tenant live state
 
