@@ -6,6 +6,7 @@ import type { FormField, Frame } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
+import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
@@ -85,6 +86,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     )
   return {
     partners: partners.filter((r) => !own.has(r.id)),
+    excludedPartnerIds: [...own].map(String),
     templates: sellable,
     variants,
     units,
@@ -96,11 +98,25 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     terms,
   }
 }
-const orderFields = (_: Translator, d: Awaited<ReturnType<typeof common>>): FormField[] => [
+const orderFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  d: Awaited<ReturnType<typeof common>>,
+): Promise<FormField[]> => [
   {
     name: 'partnerId',
     label: _('sale_backend.field.customer'),
     type: 'select',
+    control: await partnerRelationControl(ctx, url, req, _, {
+      id: 'sale-customer',
+      partners: d.partners as Array<{ id: string; name: string; ref?: string | null }>,
+      fieldLabel: _('sale_backend.field.customer'),
+      title: _('sale_backend.relation.customers'),
+      required: true,
+      excludeIds: d.excludedPartnerIds,
+    }),
     options: choices(d.partners, true),
     required: true,
   },
@@ -409,6 +425,7 @@ const vi = {
   'action.savePolicy': 'Lưu chính sách',
   'field.name': 'Số đơn',
   'field.customer': 'Khách hàng',
+  'relation.customers': 'Quản lý khách hàng',
   'field.clientOrderRef': 'Tham chiếu khách hàng',
   'field.state': 'Trạng thái',
   'field.dateOrder': 'Ngày đặt hàng',
@@ -536,6 +553,7 @@ const en = {
   'action.savePolicy': 'Save Policy',
   'field.name': 'Order Reference',
   'field.customer': 'Customer',
+  'relation.customers': 'Manage customers',
   'field.clientOrderRef': 'Customer Reference',
   'field.state': 'Status',
   'field.dateOrder': 'Order Date',
@@ -579,7 +597,7 @@ const en = {
 export default defineModule({
   name: 'sale_backend',
   version: '0.1.0',
-  depends: ['sale', 'backend'],
+  depends: ['sale', 'backend', 'partner_backend'],
   install: 'auto',
   app: true,
   assets: new URL('./client/', import.meta.url),
@@ -672,10 +690,10 @@ export default defineModule({
           ]),
           state = url.searchParams.get('state'),
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
-        return document(ctx, url, req, 'sale_backend.quotations.title', (_, shell) =>
+        return document(ctx, url, req, 'sale_backend.quotations.title', async (_, shell) =>
           quotationsScreen(_, {
             frame: shell,
-            fields: orderFields(_, d),
+            fields: await orderFields(ctx, url, req, _, d),
             rows: rows
               .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
               .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),

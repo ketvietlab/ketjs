@@ -146,6 +146,7 @@ export const partnerDetailScreen = (
     terms?: { creditLimit?: string | number | null; note?: string | null } | null
     errors?: string[]
     integration?: JSXChild
+    parentControl?: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
   },
   frame: Frame,
@@ -213,6 +214,7 @@ export const partnerDetailScreen = (
                 name: 'parentId',
                 label: _('partner_backend.field.parent'),
                 type: 'select',
+                control: options.parentControl,
                 value: row.parentId,
                 options: [{ value: '', label: '—' }, ...options.parents],
               },
@@ -290,6 +292,7 @@ export const newPartnerScreen = (
   frame: Frame,
   errors?: string[],
   locale = '',
+  parentControl?: JSXChild,
 ): TemplateResult =>
   framed(
     _,
@@ -316,6 +319,7 @@ export const newPartnerScreen = (
             name: 'parentId',
             label: _('partner_backend.field.parent'),
             type: 'select',
+            control: parentControl,
             options: [{ value: '', label: '—' }, ...parents],
           },
           { name: 'ref', label: _('partner_backend.field.ref') },
