@@ -88,6 +88,7 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   assert.match(html, /12 Nguyễn Huệ/)
   assert.match(html, /Phường Ba Đình/)
   assert.match(html, /data-island="partner\.address-form"/)
+  assert.match(html, /<form[^>]*data-layout="default"[^>]*data-has-fields="true"[^>]*data-address-form/)
   assert.match(html, /name="divisionId"/)
   assert.doesNotMatch(html, /src="(?:undefined|null)?"/)
 
