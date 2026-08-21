@@ -1,5 +1,5 @@
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
 import type { ActionSize, ActionVariant } from './actions.tsx'
 
@@ -127,6 +127,8 @@ export type RecordFormOptions = {
   /** Every submit declares its business hierarchy; there is no accidental primary. */
   submitVariant: ActionVariant
   submitSize?: ActionSize
+  /** Keep the form submit in a record-level action bar instead of duplicating it here. */
+  submitPlacement?: 'inside' | 'external'
   layout?: 'default' | 'inline'
   method?: 'get' | 'post'
   /** Optional behavior scope for a progressively enhanced form. */
@@ -259,34 +261,35 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
         },
       )}
     </div>
-    <div data-ui="form-actions">
-      {actionGroup({
-        actions: [
-          button({
-            label: o.submit,
-            type: 'submit',
-            variant: o.submitVariant,
-            size: o.submitSize,
-          }),
-          ...(o.cancelHref
-            ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
-            : []),
-        ],
-      })}
-    </div>
+    {o.submitPlacement !== 'external' && (
+      <div data-ui="form-actions">
+        {actionGroup({
+          actions: [
+            button({
+              label: o.submit,
+              type: 'submit',
+              variant: o.submitVariant,
+              size: o.submitSize,
+            }),
+            ...(o.cancelHref
+              ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
+              : []),
+          ],
+        })}
+      </div>
+    )}
   </form>
 )
 
-/** Valid block-level grouping for related forms; never place a form in `inline`. */
-export const formCluster = (o: {
-  forms: readonly TemplateResult[]
-  label?: string | null
-}): TemplateResult => (
+/** Valid block-level grouping for related forms and their external controls. */
+export const formCluster = (o: { forms: readonly JSXChild[]; label?: string | null }): TemplateResult => (
   <div data-ui="form-cluster" role="group" aria-label={o.label ?? null}>
     {each(
       o.forms,
       (_, index) => index,
-      (form) => form,
+      (form) => (
+        <>{form}</>
+      ),
     )}
   </div>
 )
