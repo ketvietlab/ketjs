@@ -3,7 +3,7 @@
 A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
 
 > [!WARNING]
-> **Ket is under active development. It has not been released and is not stable.**
+> **Ket is under active development. The 0.x line is preview software and is not stable.**
 > APIs, data formats, CLI behavior, and deployment assumptions may change without
 > notice. Do not use Ket for production workloads yet.
 

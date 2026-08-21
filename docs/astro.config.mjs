@@ -99,6 +99,7 @@ export default defineConfig({
                 { label: 'Testing', slug: 'ketjs/testing' },
                 { label: 'CLI and configuration', slug: 'ketjs/cli-config' },
                 { label: 'Deployment', slug: 'ketjs/deployment' },
+                { label: 'Publishing packages', slug: 'ketjs/releasing' },
                 { label: 'Public API', slug: 'ketjs/api' },
               ],
             },
