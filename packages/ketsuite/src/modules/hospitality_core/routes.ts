@@ -47,6 +47,7 @@ import type {
   CleaningTaskSummary,
   CleaningTaskRow,
   FolioRow,
+  GuestDocumentRow,
   FloorRow,
   FloorDetail,
   FloorFormValues,
@@ -199,10 +200,11 @@ const renderStayDetail = async (
 ) => {
   const stay = (await ctx.call('hospitality_core.getStay', { id }, url, req)) as StayRow | null
   if (!stay) return text('Not found', { status: 404 })
-  const [rooms, partners] = (await Promise.all([
+  const [rooms, partners, documents] = (await Promise.all([
     ctx.call('hospitality_core.listRooms', { propertyId: stay.propertyId, includeArchived: true }, url, req),
     ctx.call('partner.listPartners', { kind: 'person', limit: 500 }, url, req),
-  ])) as [RoomRow[], Array<{ id: string; name: string; ref?: string }>]
+    ctx.call('hospitality_core.listGuestDocuments', { stayId: stay.id }, url, req),
+  ])) as [RoomRow[], Array<{ id: string; name: string; ref?: string }>, GuestDocumentRow[]]
   const timezone = await propertyTimezone(ctx, stay.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
@@ -216,6 +218,8 @@ const renderStayDetail = async (
       stay,
       rooms,
       partners,
+      documents,
+      randomUUID(),
       lang,
       timezone,
       await frame(ctx, url, req),
@@ -1171,7 +1175,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!stay) return text('Not found', { status: 404 })
 
       let result: OperationResult
-      let status: 'guest-added' | 'room-moved'
+      let status: 'guest-added' | 'room-moved' | 'document-saved'
       if (form.operation === 'add-guest') {
         result = (await ctx.call(
           'hospitality_core.addStayGuest',
@@ -1202,6 +1206,28 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as OperationResult
         status = 'room-moved'
+      } else if (form.operation === 'save-document') {
+        result = (await ctx.call(
+          'hospitality_core.saveGuestDocument',
+          {
+            id: form.documentId?.trim() || randomUUID(),
+            stayId: stay.id,
+            partnerId: form.partnerId?.trim() || '',
+            type: form.type?.trim() || 'cccd',
+            number: form.number?.trim() || undefined,
+            fullName: form.fullName?.trim() || '',
+            dateOfBirth: form.dateOfBirth?.trim() || undefined,
+            gender: form.gender?.trim() || undefined,
+            nationality: form.nationality?.trim() || undefined,
+            permanentAddress: form.permanentAddress?.trim() || undefined,
+            issueDate: form.issueDate?.trim() || undefined,
+            issuePlace: form.issuePlace?.trim() || undefined,
+            ocrState: 'pending',
+          },
+          url,
+          req,
+        )) as OperationResult
+        status = 'document-saved'
       } else return text('unknown action', { status: 400 })
 
       if (!result.ok)
