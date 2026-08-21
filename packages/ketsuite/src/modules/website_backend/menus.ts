@@ -1,47 +1,48 @@
 import type { MenuDef } from 'ketjs'
 
 export const menus: Record<string, MenuDef> = {
-  'admin.website': { parent: 'admin', label: 'menu.website', sequence: 25 },
-  'admin.website.content': {
-    parent: 'admin.website',
+  website: { label: 'menu.app', icon: 'globe', sequence: 18 },
+  'website.content': {
+    parent: 'website',
     label: 'menu.content',
     path: '/admin/content',
     needs: 'website.listEntries',
     sequence: 10,
   },
-  'admin.website.taxonomies': {
-    parent: 'admin.website',
+  'website.taxonomies': {
+    parent: 'website',
     label: 'menu.taxonomies',
     path: '/admin/taxonomies',
     needs: 'website.listTaxonomyTerms',
     sequence: 20,
   },
-  'admin.website.media': {
-    parent: 'admin.website',
+  'website.media': {
+    parent: 'website',
     label: 'menu.media',
     path: '/admin/media',
     needs: 'website.listMedia',
     sequence: 30,
   },
-  'admin.website.menus': {
-    parent: 'admin.website',
+  'website.menus': {
+    parent: 'website',
     label: 'menu.menus',
     path: '/admin/menus',
     needs: 'website_menu.listMenu',
     sequence: 40,
   },
-  'admin.website.forms': {
-    parent: 'admin.website',
+  'website.forms': {
+    parent: 'website',
     label: 'menu.forms',
     path: '/admin/forms',
     needs: 'website_form.listForms',
     sequence: 50,
   },
-  'admin.website.sites': {
-    parent: 'admin.website',
+  'website.configuration': { parent: 'website', label: 'menu.configuration', sequence: 90 },
+  'website.sites': {
+    parent: 'website.configuration',
     label: 'menu.sites',
     path: '/admin/sites',
     needs: 'website.listSites',
-    sequence: 90,
+    sequence: 10,
   },
 }
