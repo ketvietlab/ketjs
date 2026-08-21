@@ -358,7 +358,22 @@ test('hospitality operations: identity documents use storage references and safe
   const adapter = await boot()
   try {
     await call('hospitality_core.createReservation', reservation('r1'), adapter)
-    await call(
+    const unregistered = await call(
+      'hospitality_core.saveGuestDocument',
+      {
+        id: 'doc1',
+        stayId: 'r1:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        number: 'P7654321',
+        fullName: 'TRAN BINH',
+      },
+      adapter,
+    )
+    assert.equal((unregistered.value as Row).ok, false)
+    assert.equal(((unregistered.value as Row).errors as Row[])[0]?.code, 'guest_not_registered')
+
+    const saved = await call(
       'hospitality_core.saveGuestDocument',
       {
         id: 'doc1',
@@ -367,17 +382,41 @@ test('hospitality operations: identity documents use storage references and safe
         type: 'passport',
         number: 'P1234567',
         fullName: 'NGUYEN AN',
+        dateOfBirth: '1990-05-12T00:00:00.000Z',
         nationality: 'VN',
         permanentAddress: 'private address',
         ocrRaw: { confidence: 0.99 },
       },
       adapter,
     )
+    assert.equal((saved.value as Row).ok, true)
+    await call(
+      'hospitality_core.addStayGuest',
+      { id: 'g2', stayId: 'r1:stay', partnerId: 'companion', displayName: 'Trần Bình' },
+      adapter,
+    )
+    const reassigned = await call(
+      'hospitality_core.saveGuestDocument',
+      {
+        id: 'doc1',
+        stayId: 'r1:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        fullName: 'TRAN BINH',
+      },
+      adapter,
+    )
+    assert.equal((reassigned.value as Row).ok, false)
+    assert.equal(((reassigned.value as Row).errors as Row[])[0]?.code, 'document_owner_immutable')
+
     const documents = (await call('hospitality_core.listGuestDocuments', { stayId: 'r1:stay' }, adapter))
       .value as Row[]
-    assert.equal(documents[0]!.number, 'P1234567')
+    assert.equal(documents[0]!.numberLast4, '4567')
+    assert.equal(documents[0]!.dateOfBirthPresent, true)
+    assert.equal('number' in documents[0]!, false)
     assert.equal('permanentAddress' in documents[0]!, false)
     assert.equal('ocrRaw' in documents[0]!, false)
+    assert.doesNotMatch(JSON.stringify(documents), /P1234567|private address|confidence/)
   } finally {
     await adapter.close()
   }

@@ -390,6 +390,23 @@ location, booking, inventory, folio, housekeeping, night-audit, content-feed and
 tenant-isolation assertions remained green; these timings are regression evidence,
 not an operator-latency or production-capacity SLA.
 
+The front-desk identity extension enters one stay-scoped synthetic identity document
+in every physical database. Each database also rejects an unregistered guest and an
+attempt to move an existing document to another owner, then reads the operational list
+and proves that only the last four number characters and a date-of-birth readiness flag
+cross the function boundary.
+
+| driver | physical databases | accepted documents | elapsed | documents/s | ownership and safe projection |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 8.7 ms | 925 | complete |
+| PostgreSQL 17 | 4 | 4 | 15.4 ms | 260 | complete |
+
+These checks ran inside the complete 2,000-room/800-booking SQLite and
+1,000-room/400-booking PostgreSQL workloads. All reservation, room-transition,
+housekeeping, folio, stay-notice, night-audit, PostgreSQL contention and physical-
+database isolation assertions stayed green. The numbers measure domain calls only;
+browser rendering and operator input are verified separately.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
