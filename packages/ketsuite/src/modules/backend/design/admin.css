@@ -2901,6 +2901,149 @@
     padding: 0;
   }
 
+  /* Durable record attachments. The upload stays compact, while long file
+     names wrap inside the panel instead of widening the page. */
+  [data-ui="attachments"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+  [data-ui="attachment-list"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    list-style: none;
+  }
+  [data-ui="attachment-item"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-sm) var(--admin-gap);
+  }
+  [data-ui="attachment-item"] + [data-ui="attachment-item"] {
+    border-block-start: 1px solid var(--admin-line);
+  }
+  [data-ui="attachment-link"] {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--admin-accent-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  [data-ui="attachment-meta"] {
+    flex: 0 0 auto;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    white-space: nowrap;
+  }
+  [data-ui="attachment-upload"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="attachment-upload"] > label {
+    display: grid;
+    min-inline-size: min(18rem, 100%);
+    flex: 1 1 18rem;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+  [data-ui="attachment-input"] {
+    inline-size: 100%;
+    min-block-size: var(--admin-control-height);
+    min-inline-size: 0;
+    color: var(--admin-ink);
+    font: inherit;
+  }
+
+  /* URL-addressable modal workspace. The backdrop is a real close link and
+     the sheet owns its scroll, so the document never grows horizontally. */
+  [data-ui="modal-layer"] {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    min-inline-size: 0;
+    justify-items: end;
+  }
+  [data-ui="modal-backdrop"] {
+    position: absolute;
+    inset: 0;
+    display: block;
+    background: color-mix(in srgb, #000 36%, transparent);
+    text-decoration: none;
+  }
+  [data-ui="modal-backdrop"] > span {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-ui="modal-sheet"] {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    inline-size: min(34rem, calc(100vw - var(--admin-gap-lg)));
+    max-inline-size: 100%;
+    block-size: 100dvh;
+    min-inline-size: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-inline-start: 1px solid var(--admin-line-strong);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+  [data-ui="modal-head"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap) var(--admin-gap-md);
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="modal-title"] {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-md);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="modal-close"] {
+    display: grid;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    text-decoration: none;
+  }
+  [data-ui="modal-body"] {
+    min-inline-size: 0;
+    overflow: auto;
+    padding: var(--admin-gap-md);
+    overscroll-behavior: contain;
+  }
+
   [data-ui="media"] {
     display: grid;
     min-inline-size: 0;
@@ -3800,6 +3943,15 @@
     }
     [data-ui="card-grid"] {
       grid-template-columns: 1fr;
+    }
+    [data-ui="attachment-item"] {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--admin-gap-xs);
+    }
+    [data-ui="modal-sheet"] {
+      inline-size: 100%;
+      border-inline-start: 0;
     }
     [data-ui="table"] [data-priority="tertiary"] {
       display: none;

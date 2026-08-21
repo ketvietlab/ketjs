@@ -48,6 +48,7 @@ export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
 export { routes, viewerOf, timezoneOf } from './routes.ts'
+export { readForm, seeOther } from './forms.ts'
 
 /**
  * The kit, re-exported.
@@ -104,6 +105,8 @@ export {
   breadcrumbs,
   tabs,
   mediaPanel,
+  attachmentPanel,
+  modalSheet,
   recordForm,
   formCluster,
   recordActions,
