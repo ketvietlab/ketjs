@@ -189,7 +189,10 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     }
     if (path === '/admin/accounting/trial-balance') {
       assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="trial-balance-filter-form"/)
+      // the range filter is `DatePicker`, which owns its own GET form
+      assert.match(html, /data-ui="date-picker" method="get"/)
+      assert.match(html, /data-ui="date-picker-control"[^>]*name="dateFrom"/)
+      assert.match(html, /data-ui="date-picker-control"[^>]*name="dateTo"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/general-ledger') {
