@@ -247,7 +247,10 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       await ensureCompanyAccounting(ctx)
-      return ctx.db.select('account.Journal', args.type ? { type: args.type, active: true } : { active: true })
+      return ctx.db.select(
+        'account.Journal',
+        args.type ? { type: args.type, active: true } : { active: true },
+      )
     },
   }),
   saveJournal: defineFn({
