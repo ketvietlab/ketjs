@@ -3,17 +3,17 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   code,
   dataTable,
+  DatePicker,
   emptyState,
   formatMoney,
   Framed,
   icon,
-  RecordForm,
   RecordWorkspace,
   Section,
   stack,
   Surface,
 } from '../../ui/index.ts'
-import type { FormField, Frame } from '../../ui/index.ts'
+import type { DatePickerField, Frame } from '../../ui/index.ts'
 
 type Row = Record<string, unknown>
 
@@ -21,7 +21,8 @@ export const trialBalanceScreen = (
   _: Translator,
   options: {
     frame: Frame
-    fields: FormField[]
+    /** From and to. This screen is a date range and nothing else. */
+    fields: readonly [DatePickerField, DatePickerField]
     rows: Row[]
     action: string
     currency: unknown
@@ -110,14 +111,13 @@ export const trialBalanceScreen = (
                   <Surface
                     padding="compact"
                     body={
-                      <RecordForm
-                        id="trial-balance-filter-form"
-                        scope="account-trial-balance"
+                      // A from and a to, a submit, nothing else — which is what
+                      // `DatePicker` already is, down to the GET form it owns.
+                      <DatePicker
                         action={options.action}
-                        method="get"
-                        submit={_('account_backend.action.calculate')}
-                        submitVariant="secondary"
+                        label={_('account_backend.trial.filter.title')}
                         fields={options.fields}
+                        submit={_('account_backend.action.calculate')}
                       />
                     }
                   />

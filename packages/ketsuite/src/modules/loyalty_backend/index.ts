@@ -693,10 +693,16 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             channel: params.channel as 'sale' | 'pos',
             orderId: params.id,
             orderName,
-            backHref:
-              params.channel === 'sale'
-                ? `/admin/sales/${['draft', 'sent'].includes(String(order.state)) ? 'quotations' : 'orders'}/${params.id}${localeQuery(url)}`
-                : `/admin/pos/orders/${params.id}${localeQuery(url)}`,
+            // A quotation and a confirmed order are two screens, so the branch
+            // picks the path rather than a word inside one.
+            backHref: inLocale(
+              url,
+              params.channel !== 'sale'
+                ? `/admin/pos/orders/${params.id}`
+                : ['draft', 'sent'].includes(String(order.state))
+                  ? `/admin/sales/quotations/${params.id}`
+                  : `/admin/sales/orders/${params.id}`,
+            ),
             result: evaluated,
             errors,
           }),
