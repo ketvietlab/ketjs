@@ -64,10 +64,86 @@ test('website backend: owns a primary application menu instead of hiding under a
     icon: 'globe',
     sequence: 18,
   })
-  assert.equal(websiteBackend.menus?.['website.content']?.parent, 'website')
+  assert.equal(websiteBackend.menus?.['website.pages']?.parent, 'website')
+  assert.equal(websiteBackend.menus?.['website.posts']?.parent, 'website')
+  assert.equal(websiteBackend.menus?.['website.pages']?.path, '/admin/website/pages')
+  assert.equal(websiteBackend.menus?.['website.posts']?.path, '/admin/website/posts')
   assert.equal(websiteBackend.menus?.['website.configuration']?.parent, 'website')
   assert.equal(websiteBackend.menus?.['website.sites']?.parent, 'website.configuration')
   assert.equal('admin.website' in (websiteBackend.menus ?? {}), false)
+})
+
+test('cms: taxonomy and media metadata support complete create, read, update and delete lifecycles', async () => {
+  const { db } = await boot()
+  await call(db, 'website.saveSite', {
+    id: 'crud-site',
+    name: 'CRUD',
+    title: 'CRUD site',
+    defaultLocale: 'en',
+    theme: 'theme_paper',
+  })
+
+  assert.deepEqual(
+    await call(db, 'website.saveTerm', {
+      id: 'term-news',
+      siteId: 'crud-site',
+      taxonomy: 'website.category',
+      slug: 'news',
+      name: 'News',
+    }),
+    { ok: true, id: 'term-news' },
+  )
+  assert.equal(
+    ((await call(db, 'website.getTaxonomyTerm', { id: 'term-news' })) as { name: string }).name,
+    'News',
+  )
+  await call(db, 'website.saveTerm', {
+    id: 'term-news',
+    siteId: 'crud-site',
+    taxonomy: 'website.category',
+    slug: 'updates',
+    name: 'Updates',
+  })
+  assert.equal(
+    ((await call(db, 'website.getTaxonomyTerm', { id: 'term-news' })) as { slug: string }).slug,
+    'updates',
+  )
+  assert.deepEqual(await call(db, 'website.deleteTerm', { id: 'term-news' }), { ok: true, id: 'term-news' })
+  assert.equal(await call(db, 'website.getTaxonomyTerm', { id: 'term-news' }), null)
+
+  assert.deepEqual(
+    await call(db, 'website.saveMediaMetadata', {
+      id: 'media-hero',
+      siteId: 'crud-site',
+      attachmentId: 'attachment-hero',
+      alt: 'Hero',
+      width: 1200,
+      height: 800,
+    }),
+    { ok: true, id: 'media-hero' },
+  )
+  assert.equal(
+    ((await call(db, 'website.getMediaMetadata', { id: 'media-hero' })) as { alt: string }).alt,
+    'Hero',
+  )
+  await call(db, 'website.saveMediaMetadata', {
+    id: 'media-hero',
+    siteId: 'crud-site',
+    attachmentId: 'attachment-hero',
+    alt: 'Updated hero',
+    width: 1200,
+    height: 800,
+  })
+  assert.equal(
+    ((await call(db, 'website.getMediaMetadata', { id: 'media-hero' })) as { alt: string }).alt,
+    'Updated hero',
+  )
+  assert.deepEqual(await call(db, 'website.deleteMediaMetadata', { id: 'media-hero' }), {
+    ok: true,
+    id: 'media-hero',
+  })
+  assert.equal(await call(db, 'website.getMediaMetadata', { id: 'media-hero' }), null)
+  await db.close()
 })
 
 test('cms: domains resolve isolated sites with their locale and selected KTL theme', async () => {

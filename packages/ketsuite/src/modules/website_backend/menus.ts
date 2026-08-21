@@ -2,12 +2,19 @@ import type { MenuDef } from 'ketjs'
 
 export const menus: Record<string, MenuDef> = {
   website: { label: 'menu.app', icon: 'globe', sequence: 18 },
-  'website.content': {
+  'website.pages': {
     parent: 'website',
-    label: 'menu.content',
-    path: '/admin/content',
+    label: 'menu.pages',
+    path: '/admin/website/pages',
     needs: 'website.listEntries',
     sequence: 10,
+  },
+  'website.posts': {
+    parent: 'website',
+    label: 'menu.posts',
+    path: '/admin/website/posts',
+    needs: 'website.listEntries',
+    sequence: 15,
   },
   'website.taxonomies': {
     parent: 'website',

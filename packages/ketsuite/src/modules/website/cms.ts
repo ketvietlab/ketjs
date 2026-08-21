@@ -869,6 +869,24 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  getTaxonomyTerm: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      siteId: 'id',
+      taxonomy: 'text',
+      slug: 'text',
+      name: 'text',
+      description: 'text?',
+      parentId: 'id?',
+    },
+    effects: ['read:website.TaxonomyTerm', 'read:website.SiteMember'],
+    handler: async (ctx: Ctx, args) => {
+      const term = (await ctx.db.select('website.TaxonomyTerm', { id: args.id }))[0]
+      return term && (await canAccessSite(ctx, term.siteId)) ? term : null
+    },
+  }),
+
   saveTerm: defineFn({
     input: {
       id: 'id',
@@ -925,6 +943,29 @@ export const cmsFunctions: Record<string, FnSpec> = {
       }
       if (existing) await ctx.db.update('website.TaxonomyTerm', { id: args.id }, row)
       else await ctx.db.insert('website.TaxonomyTerm', row)
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  deleteTerm: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:website.TaxonomyTerm',
+      'read:website.EntryTerm',
+      'read:website.SiteMember',
+      'write:website.TaxonomyTerm',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const term = (await ctx.db.select('website.TaxonomyTerm', { id: args.id }))[0]
+      if (!term) return { ok: true, id: args.id }
+      if (!(await canManageStructure(ctx, term.siteId))) return forbidden()
+      const children = await ctx.db.select('website.TaxonomyTerm', { parentId: term.id })
+      const assignments = await ctx.db.select('website.EntryTerm', { termId: term.id })
+      if (children.length || assignments.length) return invalid('id', 'website.error.termInUse')
+      const Term = ctx.table('website.TaxonomyTerm')
+      await ctx.db.del(deleteFrom(Term).where(eq(Term.id, args.id)))
       return { ok: true, id: args.id }
     },
   }),
@@ -987,6 +1028,39 @@ export const cmsFunctions: Record<string, FnSpec> = {
       }
       if (existing) await ctx.db.update('website.MediaMetadata', { id: args.id }, row)
       else await ctx.db.insert('website.MediaMetadata', row)
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  getMediaMetadata: defineFn({
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      siteId: 'id',
+      attachmentId: 'id',
+      alt: 'text?',
+      caption: 'text?',
+      width: 'int?',
+      height: 'int?',
+    },
+    effects: ['read:website.MediaMetadata', 'read:website.SiteMember'],
+    handler: async (ctx: Ctx, args) => {
+      const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
+      return media && (await canAccessSite(ctx, media.siteId)) ? media : null
+    },
+  }),
+
+  deleteMediaMetadata: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.MediaMetadata', 'read:website.SiteMember', 'write:website.MediaMetadata'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
+      if (!media) return { ok: true, id: args.id }
+      if (!(await canManageStructure(ctx, media.siteId))) return forbidden()
+      const Media = ctx.table('website.MediaMetadata')
+      await ctx.db.del(deleteFrom(Media).where(eq(Media.id, args.id)))
       return { ok: true, id: args.id }
     },
   }),
