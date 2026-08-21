@@ -593,6 +593,70 @@ test('routes: the segment after /admin names the app, so a path says where it li
   assert.deepEqual(stray, [], 'a backend path must start with the app it belongs to')
 })
 
+test('routes: every path a screen builds is a path some module serves', () => {
+  // A link is only as good as the route behind it, and nothing checked that the two
+  // agreed: renaming `/admin/taxes` to `/admin/accounting/taxes` left twenty form
+  // actions and redirects on the old one, every last of them written as
+  // `` `/admin/taxes${localeQuery(url)}` `` — a template hole away from the search
+  // that found the rest. The route table is the answer; this asks it.
+  const routes = Object.keys(compose(ketsuite.modules, { headless: true }).routes).map((route) =>
+    route.split('/'),
+  )
+  const served = (path: string): boolean => {
+    const parts = path.split('/')
+    return routes.some(
+      (route) =>
+        route.length === parts.length &&
+        route.every((segment, index) => segment.startsWith('{') || segment === parts[index]),
+    )
+  }
+
+  /**
+   * The literal, with its holes read the way a router would.
+   *
+   * A hole filling a whole segment is a path parameter. A hole anywhere else is an
+   * id glued to the segment before it or the `?lang=` suffix every link carries, and
+   * neither says anything about the shape of the path — so the path ends there.
+   * Holes nest (`${a ? `?x=${b}` : ''}`), which is why this counts braces.
+   */
+  const shape = (literal: string): string => {
+    let out = ''
+    for (let i = 0; i < literal.length; ) {
+      if (literal[i] === '$' && literal[i + 1] === '{') {
+        if (!out.endsWith('/')) return out
+        let depth = 1
+        i += 2
+        while (i < literal.length && depth > 0) {
+          if (literal[i] === '{') depth++
+          if (literal[i] === '}') depth--
+          i++
+        }
+        out += '{}'
+        continue
+      }
+      if (literal[i] === '?' || literal[i] === '#') break
+      out += literal[i]
+      i++
+    }
+    return out
+  }
+
+  const stray: string[] = []
+  for (const file of globSync('packages/ketsuite/src/**/*.{ts,tsx}')) {
+    // the design harness names paths for screens it renders without a server
+    if (file.includes('/backend/catalogue')) continue
+    const source = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    for (const match of source.matchAll(/[`'](\/admin\/[^`'\n]*)[`']/g)) {
+      const path = shape(match[1] as string).replace(/\/$/, '')
+      if (!path.startsWith('/admin/') || served(path)) continue
+      stray.push(`${file.split('/src/')[1]}: ${path}`)
+    }
+  }
+  assert.deepEqual([...new Set(stray)].sort(), [], 'a screen links somewhere no route answers')
+})
+
 test('sidebar: every menu entry says where it goes in the list', () => {
   // Without `sequence` an entry falls to 100 and ties with every other one, and the
   // tie-break is the label — so a Vietnamese menu came out in the order its English
