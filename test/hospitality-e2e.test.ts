@@ -90,6 +90,13 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     name: 'Phòng 103',
   })
   await seed('hospitality_core.saveRoom', {
+    id: '104',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    code: '104',
+    name: 'Phòng 104',
+  })
+  await seed('hospitality_core.saveRoom', {
     id: 'archived-room',
     propertyId: 'hotel',
     roomTypeId: 'deluxe',
@@ -1093,14 +1100,38 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     assert.match(html, new RegExp(title), path)
   }
 
+  const overdueReservation = await seed('hospitality_core.createReservation', {
+    id: 'overdue-booking',
+    code: 'RES-OVERDUE',
+    propertyId: 'hotel',
+    roomTypeId: 'deluxe',
+    partnerId: 'companion',
+    checkIn: '2026-08-18T07:00:00.000Z',
+    checkOut: '2026-08-19T05:00:00.000Z',
+    rate: '100',
+  })
+  assert.equal((overdueReservation.value as Row).ok, true)
+  const overdueCheckIn = await seed('hospitality_core.checkIn', {
+    stayId: 'overdue-booking:stay',
+    roomId: '104',
+    at: '2026-08-18T07:00:00.000Z',
+  })
+  assert.equal((overdueCheckIn.value as Row).ok, true)
+
   const frontDesk = await e2e.client.get('/admin/hospitality/front-desk?lang=vi&date=2026-08-20')
   const html = await frontDesk.text()
   assert.match(html, /Bàn lễ tân/)
   assert.match(html, /Nguyễn An/)
+  assert.match(html, /Lưu trú quá giờ trả phòng/)
+  assert.match(html, /RES-OVERDUE/)
+  assert.match(html, /Trần Bình/)
 
   const english = await e2e.client.get('/admin/hospitality/front-desk?lang=en&date=2026-08-20')
   assert.equal(english.status, 200)
-  assert.match(await english.text(), /Front desk/)
+  const englishHtml = await english.text()
+  assert.match(englishHtml, /Front desk/)
+  assert.match(englishHtml, /Overdue departures/)
+  assert.match(englishHtml, /RES-OVERDUE/)
   const englishServices = await e2e.client.get('/admin/hospitality/services?lang=en&property=hotel')
   assert.equal(englishServices.status, 200)
   const englishServicesHtml = await englishServices.text()
