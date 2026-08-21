@@ -1,3 +1,8 @@
+---
+title: Benchmarks
+description: Reproducible performance measurements for KetJS and selected KetSuite workloads.
+---
+
 # Benchmarks
 
 Numbers measured on 2026-08-19, Node 26.7.0, Apple Silicon. Every one of these was

@@ -1,3 +1,9 @@
+---
+title: Company and Branch
+description: KetSuite company, branch, membership, and session-scope design notes.
+draft: true
+---
+
 # Company và Branch
 
 Tài liệu này mô tả Company/Branch được port từ the domain contract vào KetSuite, cách phạm vi
@@ -241,13 +247,6 @@ Mọi lỗi nghiệp vụ trả `{field, code, params?}` và được dịch b�
 Context mutation chỉ chấp nhận POST same-origin. Toàn bộ màn hình giữ locale trong
 link và đã được kiểm tra bằng trình duyệt thật ở desktop 1440×900, mobile 390×844,
 tiếng Việt và tiếng Anh.
-
-Ảnh kiểm tra:
-
-- `docs/screenshots/company/company-list-en-desktop.jpg`;
-- `docs/screenshots/company/company-detail-vi-desktop.jpg`;
-- `docs/screenshots/company/context-switcher-vi-mobile.jpg`;
-- `docs/screenshots/company/branch-detail-vi-mobile.jpg`.
 
 ## Kiểm thử theo phạm vi
 

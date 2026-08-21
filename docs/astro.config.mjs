@@ -43,7 +43,7 @@ export default defineConfig({
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/ketvietlab/ketjs/edit/develop/docs/',
+        baseUrl: 'https://github.com/ketvietlab/ketjs/edit/develop/docs/src/content/docs/',
       },
       customCss: ['./src/styles/ketsuite.css'],
       sidebar: [
@@ -61,6 +61,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Workspaces and apps', slug: 'ketjs/workspaces' },
+                { label: 'Application lifecycle', slug: 'ketjs/app-lifecycle' },
                 { label: 'Modules and manifest', slug: 'ketjs/modules' },
                 { label: 'Module discovery', slug: 'ketjs/module-discovery' },
               ],
@@ -115,17 +116,34 @@ export default defineConfig({
             { label: 'Quick start', slug: 'ketsuite/quick-start' },
             { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
             { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
+            {
+              label: 'Business modules',
+              collapsed: true,
+              items: [
+                { label: 'CRM', slug: 'ketsuite/crm' },
+                { label: 'Loyalty', slug: 'ketsuite/loyalty' },
+                { label: 'Vietnam accounting defaults', slug: 'ketsuite/accounting-tt99' },
+              ],
+            },
           ],
         },
         {
           label: 'Architecture & internals',
           collapsed: true,
-          items: [{ label: 'Architecture overview', slug: 'architecture' }],
+          items: [
+            { label: 'Architecture overview', slug: 'architecture' },
+            { label: 'Architecture decisions', slug: 'architecture/decisions' },
+            { label: 'Open questions', slug: 'architecture/open-questions' },
+          ],
         },
         {
           label: 'Operations & migration',
           collapsed: true,
-          items: [{ label: 'Operations overview', slug: 'operations' }],
+          items: [
+            { label: 'Operations overview', slug: 'operations' },
+            { label: 'Benchmarks', slug: 'operations/benchmarks' },
+            { label: 'Loyalty benchmarks', slug: 'ketsuite/benchmarks/loyalty' },
+          ],
         },
         {
           label: 'Contributing',
@@ -133,6 +151,14 @@ export default defineConfig({
           items: [
             { label: 'Develop the docs', slug: 'getting-started' },
             { label: 'Docs application boundary', slug: 'foundation/app-boundary' },
+            {
+              label: 'Team handoffs',
+              collapsed: true,
+              items: [
+                { label: 'Hospitality to Website', slug: 'handoffs/hospitality-website' },
+                { label: 'View system to KetSuite', slug: 'handoffs/view-system-ketsuite' },
+              ],
+            },
           ],
         },
       ],

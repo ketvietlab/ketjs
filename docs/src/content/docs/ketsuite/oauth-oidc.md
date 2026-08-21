@@ -1,3 +1,9 @@
+---
+title: OAuth and OIDC
+description: KetSuite OAuth and OIDC architecture, provider policy, and protocol behavior.
+draft: true
+---
+
 # OAuth/OIDC trong KetSuite
 
 Module `oauth` là phần nguồn mở của **KetSuite**, không phải primitive bắt buộc của
@@ -189,18 +195,6 @@ party sai, nonce sai và token ngoài time window.
 Không tải logo từ provider, do đó màn hình login không phát request ảnh ngoài hoặc
 tạo broken image. Mọi form dùng native server-rendered HTML và POST mutation áp
 dụng same-origin guard.
-
-Evidence từ trình duyệt thật:
-
-- [login desktop tiếng Anh](screenshots/oauth/login-desktop-en.jpg) và
-  [login mobile tiếng Việt](screenshots/oauth/login-mobile-vi.jpg);
-- [danh sách provider desktop tiếng Việt](screenshots/oauth/providers-desktop-vi.jpg),
-  [form provider mobile tiếng Việt](screenshots/oauth/provider-new-mobile-vi.jpg)
-  và [provider detail desktop tiếng Anh](screenshots/oauth/provider-detail-desktop-en.jpg);
-- [danh sách identity desktop tiếng Việt](screenshots/oauth/identities-desktop-vi.jpg),
-  [danh sách identity mobile tiếng Anh](screenshots/oauth/identities-mobile-en.jpg),
-  [form link identity mobile tiếng Anh](screenshots/oauth/identity-new-mobile-en.jpg)
-  và [self-service link desktop tiếng Anh](screenshots/oauth/link-desktop-en.jpg).
 
 Ma trận browser acceptance mở cả sáu route ở 1440×1000 và 390×844, mỗi route bằng
 tiếng Việt lẫn tiếng Anh. Mỗi lượt xác nhận title/heading, main landmark, nhãn form,

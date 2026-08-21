@@ -1,3 +1,8 @@
+---
+title: Architecture decisions
+description: The design decisions, trade-offs, and reversibility constraints behind KetJS and KetSuite.
+---
+
 # Decisions
 
 Each entry records what was chosen, why, and what it costs. Reversibility is stated

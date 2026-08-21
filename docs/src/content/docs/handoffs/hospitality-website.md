@@ -1,3 +1,9 @@
+---
+title: Hospitality to Website handoff
+description: Internal integration contract between the KetSuite Hospitality and Website teams.
+pagefind: false
+---
+
 # Hospitality → Website handoff
 
 Trạng thái: sẵn sàng để team Website tích hợp BFF. Hospitality không mở HTTP route công khai và không phụ thuộc ngược vào module Website.
@@ -352,8 +358,6 @@ Benchmark ba database vật lý, mỗi database 72 phòng, 10 vòng đọc và 2
 | PostgreSQL | 773 qps | 363 qps | 149 booking/s | đạt |
 
 Các số trên dùng để bắt regression và kiểm chứng multi-database, không phải SLA production.
-
-Ảnh nghiệm thu: [Reservation website — VI](../screenshots/hospitality/website-handoff/online-reservation-detail-vi-desktop.png).
 
 ## Thay đổi và giới hạn cần biết
 
