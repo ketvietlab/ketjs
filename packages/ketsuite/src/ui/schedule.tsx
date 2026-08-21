@@ -1,8 +1,8 @@
 // A dense, server-rendered schedule board. Modules provide rows, days and spans;
 // this component owns the grid markup, sticky labels and overflow behaviour.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'schedule-scroll',

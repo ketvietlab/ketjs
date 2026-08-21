@@ -1,5 +1,5 @@
-import { html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 import { createProductEditorView } from './client/editor-view.mjs'
 
 const runtime = { html, signal }

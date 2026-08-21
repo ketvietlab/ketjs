@@ -10,7 +10,7 @@ installed module state controls behavior.
 ## Schema pipeline
 
 ```ts
-import { planMigration, renderSql, schemaFromManifest, sqliteAdapter } from 'ketjs'
+import { planMigration, renderSql, schemaFromManifest, sqliteAdapter } from '@ketvietlab/ketjs'
 
 const next = schemaFromManifest(manifest)
 const operations = planMigration(previous, next)
@@ -58,10 +58,10 @@ Programmatic code can apply one manifest with `migrateOne(adapter, manifest)`.
 
 ## SQLite
 
-SQLite is built into `ketjs` and requires no driver package:
+SQLite is built into `@ketvietlab/ketjs` and requires no driver package:
 
 ```ts
-import { sqliteAdapter } from 'ketjs'
+import { sqliteAdapter } from '@ketvietlab/ketjs'
 
 const adapter = sqliteAdapter('.ket/app.db')
 await adapter.open()
@@ -85,14 +85,14 @@ to one connection and cannot represent cross-process visibility.
 Install the separate adapter and its optional driver:
 
 ```bash
-npm install ketjs-postgres postgres
+npm install @ketvietlab/ketjs-postgres postgres
 ```
 
 Wire it at the application boundary:
 
 ```ts
-import { defineApp } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
+import { defineApp } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
 export const app = defineApp({
   name: 'orders',
@@ -114,7 +114,7 @@ Then configure the connection:
 DATABASE_URL=postgres://app:secret@db.example/orders ket serve
 ```
 
-`ketjs-postgres` is separate so the core cannot accidentally require a database driver. PostgreSQL
+`@ketvietlab/ketjs-postgres` is separate so the core cannot accidentally require a database driver. PostgreSQL
 transactions reserve one connection. Queue notifications use `LISTEN/NOTIFY` as a wake-up accelerator;
 leases and polling remain the durability guarantee.
 

@@ -1,5 +1,5 @@
-import { defineFn } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as stockFunctions } from '../stock/functions.ts'
 
 export const PURCHASE_STATES = ['draft', 'sent', 'to approve', 'purchase', 'cancel'] as const

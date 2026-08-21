@@ -1,5 +1,5 @@
-import { asc, deleteFrom, desc, eq, from, inArray, isNull, KetError } from 'ketjs'
-import type { Ctx, Row } from 'ketjs'
+import { asc, deleteFrom, desc, eq, from, inArray, isNull, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { MESSAGE_KINDS } from './types.ts'
 import type { MessageKind } from './types.ts'
 

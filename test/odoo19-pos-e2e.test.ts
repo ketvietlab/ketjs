@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { Row } from 'ketjs'
-import { createTestApp } from 'ketjs/testing'
+import type { Row } from '@ketvietlab/ketjs'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 async function bootPos(t: TestContext) {

@@ -5,9 +5,9 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineApp, defineModule, from, json, text, withHeaders } from 'ketjs'
-import type { Ctx, JobContext } from 'ketjs'
-import { CookieJar, createTestApp, TestHttpError } from 'ketjs/testing'
+import { defineApp, defineModule, from, json, text, withHeaders } from '@ketvietlab/ketjs'
+import type { Ctx, JobContext } from '@ketvietlab/ketjs'
+import { CookieJar, createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
 
 const headless = defineModule({
   name: 'headless_test',

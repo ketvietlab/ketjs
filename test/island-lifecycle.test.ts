@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { each, html, signal } from 'ketjs-view'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
 import { createProductEditorView } from '../packages/ketsuite/src/modules/product_backend/client/editor-view.mjs'
 import { createSaleEditorView } from '../packages/ketsuite/src/modules/sale_backend/client/editor-view.mjs'
 import { createStockEditorView } from '../packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs'

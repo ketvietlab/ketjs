@@ -1,5 +1,5 @@
-import { json } from 'ketjs'
-import type { Route, RouteEntry, ServeContext } from 'ketjs'
+import { json } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 
 type Req = Parameters<Route>[1]
 

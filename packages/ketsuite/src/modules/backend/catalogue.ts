@@ -1,5 +1,5 @@
-import { html, each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { html, each } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
 import {
   actionGroup,
@@ -37,7 +37,7 @@ import {
 import type { AppRow, PageRow } from './screens.tsx'
 import type { ListChrome, Viewer } from '../../ui/index.ts'
 import { loginScreen } from '../user/login.ts'
-import type { MenuNode, Translator } from 'ketjs'
+import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 
 /**
  * Every screen in every state, on one page.

@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /**
  * Parties, and the three things Odoo folds into them.

@@ -13,9 +13,9 @@ import {
   defineModule,
   registerFunctions,
   sqliteAdapter,
-} from 'ketjs'
-import type { Ctx, JobContext } from 'ketjs'
-import type { WorkerLog } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Ctx, JobContext } from '@ketvietlab/ketjs'
+import type { WorkerLog } from '@ketvietlab/ketjs'
 
 const tasks = defineModule({
   name: 'tasks',

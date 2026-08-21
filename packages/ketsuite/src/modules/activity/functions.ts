@@ -1,5 +1,5 @@
-import { asc, defineFn, deleteFrom, eq, from, inArray } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorId,
   cancelActivity,

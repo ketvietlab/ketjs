@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { defineModule, text } from 'ketjs'
-import type { Route, ServeContext } from 'ketjs'
+import { defineModule, text } from '@ketvietlab/ketjs'
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { pricelistDetailScreen, pricelistsScreen } from './screens.tsx'

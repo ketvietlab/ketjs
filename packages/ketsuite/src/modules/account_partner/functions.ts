@@ -1,5 +1,5 @@
-import { defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec } from 'ketjs'
+import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 
 const missing = (field: string, code: string) => ({ ok: false, errors: [{ field, code }] })
 

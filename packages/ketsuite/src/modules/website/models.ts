@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /**
  * A page's body is not markup and not code: `layout` holds an ordered list of

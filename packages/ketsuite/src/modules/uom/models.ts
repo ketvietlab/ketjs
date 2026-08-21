@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /** Odoo 19 models UoMs as relative trees, not categories. */
 export const models: Record<string, ModelDef> = {

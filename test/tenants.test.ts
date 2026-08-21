@@ -9,8 +9,8 @@ import {
   compose,
   sqliteAdapter,
   memorySessionStore,
-} from 'ketjs'
-import type { Adapter, ServeContext, Route } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Adapter, ServeContext, Route } from '@ketvietlab/ketjs'
 
 /**
  * One deployment, many databases — Odoo's model, and the one that makes per-tenant

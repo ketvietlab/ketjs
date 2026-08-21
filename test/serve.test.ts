@@ -11,9 +11,9 @@ import {
   from,
   eq,
   json,
-} from 'ketjs'
-import type { Ctx } from 'ketjs'
-import backend from 'ketsuite/backend'
+} from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
+import backend from '@ketvietlab/ketsuite/backend'
 import { scaffold } from '../packages/ketjs/src/scaffold/index.ts'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'

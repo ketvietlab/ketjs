@@ -2,7 +2,7 @@
 
 Ket's end-to-end boundary is HTTP, not a browser. A test that calls `callFn()`
 directly is useful, but it does not exercise request parsing, sessions, permissions,
-tenant resolution, response projection or error serialization. `ketjs/testing`
+tenant resolution, response projection or error serialization. `@ketvietlab/ketjs/testing`
 boots the real `AppSpec` on an ephemeral port and gives the test an HTTP client.
 No UI or browser is involved.
 
@@ -11,7 +11,7 @@ No UI or browser is involved.
 ```ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestApp } from 'ketjs/testing'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 test('a product can be listed', async () => {

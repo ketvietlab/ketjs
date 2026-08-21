@@ -202,7 +202,7 @@ export {
   hydrateIslands,
   createIslandManager,
   ISLAND_TAG,
-} from 'ketjs-view'
+} from '@ketvietlab/ketjs-view'
 export { createTheme } from './theme/render.ts'
 export { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
 export type { Reach, GrantedFn, ModelReach } from './agent/permissions.ts'

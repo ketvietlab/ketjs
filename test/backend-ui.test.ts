@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { renderToString } from 'ketjs-view'
-import { compose, translator } from 'ketjs'
-import type { MenuNode } from 'ketjs'
+import { renderToString } from '@ketvietlab/ketjs-view'
+import { compose, translator } from '@ketvietlab/ketjs'
+import type { MenuNode } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
-import backend from 'ketsuite/backend'
+import backend from '@ketvietlab/ketsuite/backend'
 import {
   actionGroup,
   attachmentPanel,
@@ -56,8 +56,8 @@ import {
   surface,
   tabs,
   tag,
-} from 'ketsuite/backend'
-import type { AppRow, ListChrome, PageRow } from 'ketsuite/backend'
+} from '@ketvietlab/ketsuite/backend'
+import type { AppRow, ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
 
 /**
  * The design team writes CSS against these attributes.

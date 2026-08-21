@@ -1,4 +1,4 @@
-import type { ModelDef } from 'ketjs'
+import type { ModelDef } from '@ketvietlab/ketjs'
 
 /** Ordered image metadata. Bytes and delivery remain owned by storage. */
 export const models: Record<string, ModelDef> = {

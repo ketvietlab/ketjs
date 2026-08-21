@@ -1,5 +1,5 @@
-import { asc, defineFn, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { asc, defineFn, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   ensureThread,
   followThread,

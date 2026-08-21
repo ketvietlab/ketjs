@@ -5,9 +5,9 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bootWorker, createQueue, defineApp, defineModule, sqliteAdapter } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import type { Adapter, JobContext } from 'ketjs'
+import { bootWorker, createQueue, defineApp, defineModule, sqliteAdapter } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import type { Adapter, JobContext } from '@ketvietlab/ketjs'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const databaseCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 8 : 32))

@@ -20,7 +20,7 @@ import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import { compileRoutes } from '../kernel/routes.ts'
 import type { RouteParams } from '../kernel/routes.ts'
-import { html, trustedMarkup } from 'ketjs-view'
+import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
@@ -368,7 +368,7 @@ export async function createKetServer(o: ServeOpts) {
       prefix: '/_ket/view/',
       // `tsx` resolves the workspace package to src/index.ts while production
       // resolves its export to dist/index.js. Both entries share this dist root.
-      dir: fileURLToPath(new URL('../dist/', import.meta.resolve('ketjs-view'))),
+      dir: fileURLToPath(new URL('../dist/', import.meta.resolve('@ketvietlab/ketjs-view'))),
     },
     ...configuredMounts,
   ]

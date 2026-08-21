@@ -1,8 +1,24 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, renderToString, sqliteAdapter } from 'ketjs'
-import { company, mediaPanel, partner, product, productBackend, productMedia, storage, uom } from 'ketsuite'
-import { address } from 'ketsuite'
+import {
+  callFn,
+  compose,
+  migrateOne,
+  registerFunctions,
+  renderToString,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
+import {
+  company,
+  mediaPanel,
+  partner,
+  product,
+  productBackend,
+  productMedia,
+  storage,
+  uom,
+} from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 test('product media: unavailable state performs no image request and cannot upload', () => {
   const html = renderToString(mediaPanel({ status: 'unavailable' }))
@@ -93,7 +109,7 @@ test('product media: metadata is ordered and primary is unique per target', asyn
 })
 
 test('product media: backend retains named integration joints and Product stays headless', async () => {
-  const backend = (await import('ketsuite/backend')).default
+  const backend = (await import('@ketvietlab/ketsuite/backend')).default
   const manifest = compose([
     address,
     partner,

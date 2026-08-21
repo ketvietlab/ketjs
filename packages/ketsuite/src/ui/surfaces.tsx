@@ -1,8 +1,8 @@
 // Reusable operational surfaces. These own hierarchy and spacing; a module owns
 // only the content and the business meaning placed inside them.
 
-import { each } from 'ketjs-view'
-import type { JSXChild, TemplateResult } from 'ketjs-view'
+import { each } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'stack',
