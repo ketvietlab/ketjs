@@ -58,6 +58,8 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 | `json`, `text`, `bytes`, `streamed`, `raw` | Create typed non-page response bodies. |
 | `withHeaders` | Add headers without discarding a response body's type. |
 | `multipart` | Parse bounded multipart input. |
+| `assertForm`, `invalidForm`, `FormValidationError` | Enforce form schemas and produce structured HTTP 422 failures. |
+| `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
 `ServeContext`, `BootedApp`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
@@ -173,6 +175,9 @@ The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOption
 | API | Purpose |
 | --- | --- |
 | `signal`, `computed`, `effect`, `batch` | Fine-grained reactive state and scheduling. |
+| `defineFormSchema`, `validateForm`, `validationIssue` | Declare and execute browser-safe form validation. |
+| `valuesFromFormData`, `createForm` | Preserve native form values and manage reactive form lifecycle state. |
+| `validationProblem`, `fieldErrorsOf`, `formErrorsOf` | Build and group the stable validation transport shape. |
 | `html`, `each`, `when` | Tagged templates and conditional/list composition. |
 | `isResult`, `isEach`, `isMarkup` | Type guards for the three values the renderer understands. |
 | `createRoot`, `hydrateRoot` | Create or hydrate a rendering root. |

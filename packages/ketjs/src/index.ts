@@ -121,6 +121,12 @@ export type { StreamStore, Writer } from './server/stream.ts'
 export { createQueue, queueFor, JOB_CHANNEL } from './server/queue.ts'
 export type { DurableJob, JobState, Queue, QueueListOptions } from './server/queue.ts'
 export { createIdempotency } from './server/idem.ts'
+export {
+  FormValidationError,
+  assertForm,
+  invalidForm,
+  issuesFromFieldErrors,
+} from './server/form.ts'
 
 export {
   compileReportTemplate,
@@ -250,6 +256,14 @@ export {
   createIslandManager,
   IslandError,
   ISLAND_TAG,
+  validationIssue,
+  fieldErrorsOf,
+  formErrorsOf,
+  validationProblem,
+  valuesFromFormData,
+  defineFormSchema,
+  validateForm,
+  createForm,
 } from '@ketvietlab/ketjs-view'
 export type {
   Signal,
@@ -271,6 +285,17 @@ export type {
   HydratedIsland,
   IslandElement,
   IslandManager,
+  FormValues,
+  FormFieldType,
+  ValidationIssue,
+  ValidationIssueInput,
+  ValidationVerdict,
+  FormFieldRule,
+  FormSchema,
+  FormValidationResult,
+  FormValidationProblem,
+  ReadonlySignal,
+  FormController,
   JSXChild,
   JSXComponent,
   IntrinsicProps,

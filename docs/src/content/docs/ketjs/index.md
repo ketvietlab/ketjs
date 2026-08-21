@@ -89,7 +89,8 @@ planned from the complete deployment manifest.
 - Read [Modules and manifest](/ketjs/modules/) before creating reusable business capabilities.
 - Continue with [Models and scopes](/ketjs/models/), [Queries and changesets](/ketjs/data/), and
   [Functions and effects](/ketjs/functions/) for the core server model.
-- Use [Rendering and islands](/ketjs/rendering/) and [Themes and KTL](/ketjs/themes/) for UI work.
+- Use [Form validation](/ketjs/form-validation/), [Rendering and islands](/ketjs/rendering/), and
+  [Themes and KTL](/ketjs/themes/) for UI work.
 - Use [Reports and PDF](/ketjs/reports/) for printable business documents.
 - Finish with [Testing](/ketjs/testing/) and [Deployment](/ketjs/deployment/) before shipping an app.
 

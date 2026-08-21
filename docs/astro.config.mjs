@@ -90,6 +90,7 @@ export default defineConfig({
               label: 'UI and presentation',
               collapsed: true,
               items: [
+                { label: 'Form validation', slug: 'ketjs/form-validation' },
                 { label: 'Rendering and islands', slug: 'ketjs/rendering' },
                 { label: 'Themes and KTL', slug: 'ketjs/themes' },
                 { label: 'Menus and localization', slug: 'ketjs/menus-i18n' },

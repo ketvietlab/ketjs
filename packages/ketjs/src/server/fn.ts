@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { KetError } from '../kernel/errors.ts'
 import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
+import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { queueFor } from './queue.ts'
@@ -51,31 +52,51 @@ const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
 export function validateInput(fnKey: string, manifest: Manifest, args: Record<string, unknown>): void {
   const sig = manifest.functions[fnKey]?.input ?? {}
   const errors: string[] = []
+  const issues: import('@ketvietlab/ketjs-view').ValidationIssue[] = []
+  const add = (
+    field: string,
+    code: string,
+    message: string,
+    params: Readonly<Record<string, unknown>> = {},
+  ): void => {
+    errors.push(message)
+    issues.push({ field, code, messageKey: `validation.${code}`, params })
+  }
   for (const [name, tspec] of Object.entries(sig)) {
     const t = parseType(tspec)
     const v = args?.[name]
     if (v == null) {
-      if (t.ok && !t.optional) errors.push(`missing required input "${name}" (${tspec})`)
+      if (t.ok && !t.optional)
+        add(name, 'required', `missing required input "${name}" (${tspec})`, { expected: tspec })
       continue
     }
     if (!t.ok) continue
     const want = JS_OF[t.base]
-    if (want && typeof v !== want) errors.push(`input "${name}" expects ${t.base} (${want}), got ${typeof v}`)
+    if (want && typeof v !== want) {
+      add(name, 'type', `input "${name}" expects ${t.base} (${want}), got ${typeof v}`, {
+        expected: t.base,
+        actual: typeof v,
+      })
+      continue
+    }
     if (
       t.base === 'decimal' &&
       !((typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && DECIMAL.test(v.trim())))
     )
-      errors.push(`input "${name}" expects a finite number or an exact decimal string`)
+      add(name, 'decimal', `input "${name}" expects a finite number or an exact decimal string`)
     if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
-      errors.push(`input "${name}" expects an integer`)
+      add(name, 'integer', `input "${name}" expects an integer`)
     if (t.base === 'date' && !isDateText(v))
-      errors.push(`input "${name}" expects a calendar date (YYYY-MM-DD)`)
+      add(name, 'date', `input "${name}" expects a calendar date (YYYY-MM-DD)`)
   }
   for (const k of Object.keys(args ?? {})) {
-    if (!(k in sig)) errors.push(`unknown input "${k}" (accepted: ${Object.keys(sig).join(', ') || 'none'})`)
+    if (!Object.hasOwn(sig, k)) {
+      const accepted = Object.keys(sig)
+      add(k, 'unknown', `unknown input "${k}" (accepted: ${accepted.join(', ') || 'none'})`, { accepted })
+    }
   }
   if (errors.length) {
-    throw new KetError({
+    throw new FormValidationError(issues, {
       code: 'E_INVALID_INPUT',
       message: `${fnKey}: ${errors.join('; ')}`,
       hint: `signature: ${JSON.stringify(sig)}`,

@@ -1,5 +1,28 @@
 export { signal, computed, effect, batch } from './signal.ts'
 export type { Signal, Computed } from './signal.ts'
+export {
+  validationIssue,
+  fieldErrorsOf,
+  formErrorsOf,
+  validationProblem,
+  valuesFromFormData,
+  defineFormSchema,
+  validateForm,
+  createForm,
+} from './form.ts'
+export type {
+  FormValues,
+  FormFieldType,
+  ValidationIssue,
+  ValidationIssueInput,
+  ValidationVerdict,
+  FormFieldRule,
+  FormSchema,
+  FormValidationResult,
+  FormValidationProblem,
+  ReadonlySignal,
+  FormController,
+} from './form.ts'
 export { html, each, when, isResult, isEach, createRoot, hydrateRoot, EVENT_PREFIX } from './render.ts'
 export type { TemplateResult, EachResult, Renderable, Root } from './render.ts'
 export { mount, mountHydrated } from './mount.ts'

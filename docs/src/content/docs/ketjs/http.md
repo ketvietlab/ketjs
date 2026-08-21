@@ -257,5 +257,10 @@ cookies, identity headers, dry-run, idempotency keys, and error parsing.
 decisions and messages for diagnostics. Unexpected errors remain server failures; do not convert every
 exception into a successful JSON body.
 
+`FormValidationError` and invalid generic function input use HTTP `422`. Their JSON includes flat
+`issues`, grouped `fieldErrors`, and whole-form `formErrors`. See [Form validation](/ketjs/form-validation/)
+for the shared browser/server contract. Other `KetError` values remain HTTP `400` unless a more specific
+transport status applies.
+
 Keep body-size limits and provider authentication on dedicated routes. Use [Storage, transport, and
 streams](/ketjs/integrations/) for bounded multipart uploads and webhook/service boundaries.

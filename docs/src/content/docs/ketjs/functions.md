@@ -63,6 +63,11 @@ The composed key is `sales.createOrder`.
 `input` and `output` use the same type vocabulary as model fields. Unknown input keys, missing
 required inputs, and incompatible values fail before the handler runs. Optional keys end in `?`.
 
+Over HTTP, a signature failure returns status `422`, code `E_INVALID_INPUT`, and the shared
+`issues`/`fieldErrors` validation shape. Use a [form schema](/ketjs/form-validation/) for presentation
+constraints such as length, ranges, choices, and cross-field rules; function signatures remain the transport
+type contract.
+
 Output projection keeps only declared fields. Declare output whenever callers, permissions tooling,
 or agents need to know field-level reach. A function without `output` may return a value, but the
 permission inventory marks its response shape as unprojected.
