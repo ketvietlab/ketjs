@@ -2,6 +2,7 @@ import type { RelationDef } from 'ketjs'
 
 export const relations: Record<string, Record<string, RelationDef>> = {
   'account.Account': { lines: { hasMany: 'account.MoveLine', by: 'accountId' } },
+  'account.Tax': { account: { belongsTo: 'account.Account', by: 'accountId' } },
   'account.Journal': {
     defaultAccount: { belongsTo: 'account.Account', by: 'defaultAccountId' },
     moves: { hasMany: 'account.Move', by: 'journalId' },

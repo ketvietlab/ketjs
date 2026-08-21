@@ -5,11 +5,11 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'account',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: ['company', 'partner', 'product', 'uom'],
   app: true,
   title: 'Kế toán',
-  summary: 'Sổ cái, hoá đơn, thanh toán và đối soát theo subset Odoo 19.',
+  summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
   category: 'Tài chính',
   models,
   relations,
@@ -17,12 +17,12 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Kế toán',
-      'app.summary': 'Sổ cái, hoá đơn, thanh toán và đối soát theo subset Odoo 19.',
+      'app.summary': 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
       'app.category': 'Tài chính',
     },
     en: {
       'app.title': 'Accounting',
-      'app.summary': 'Ledger, invoices, payments, and reconciliation from the Odoo 19 subset.',
+      'app.summary': 'Ledger, invoices, payments, and Vietnam accounting defaults under Circular 99.',
       'app.category': 'Finance',
     },
   },
@@ -41,3 +41,4 @@ export {
   TAX_USES,
   TAX_AMOUNT_TYPES,
 } from './functions.ts'
+export { TT99_ACCOUNTS, TT99_ACCOUNT_CHECKSUM, TT99_CODE, VIETNAM_TAXES } from './tt99.ts'

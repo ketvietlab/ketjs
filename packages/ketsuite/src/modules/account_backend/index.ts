@@ -83,6 +83,7 @@ const currencyOf = (companies: AnyRow[], shell: Frame): unknown =>
   companies.find((company) => company.id === shell.viewer?.company)?.currency
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
+  await ctx.call('account.initializeCompany', {}, url, req)
   const [accounts, journals, taxes, terms, partners, companies, templates, units] = (await Promise.all([
     ctx.call('account.listAccounts', {}, url, req),
     ctx.call('account.listJournals', {}, url, req),
@@ -426,11 +427,13 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const [accounts, journals, moves] = (await Promise.all([
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, journals, moves, setup] = (await Promise.all([
           ctx.call('account.listAccounts', {}, url, req),
           ctx.call('account.listJournals', {}, url, req),
           ctx.call('account.listMoves', {}, url, req),
-        ])) as [AnyRow[], AnyRow[], AnyRow[]]
+          ctx.call('account.getSetup', {}, url, req),
+        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow]
         return document(ctx, url, req, 'account_backend.dashboard.title', (_, tr, shell) =>
           accountingOverviewScreen(tr, {
             counts: {
@@ -442,6 +445,7 @@ export default defineModule({
             },
             frame: shell,
             locale: localeSuffix(url),
+            standard: String(setup.standard),
           }),
         )
       },
@@ -560,6 +564,7 @@ export default defineModule({
                 amount: form.amount || '0',
                 priceInclude: form.priceInclude === '1',
                 includeBaseAmount: form.includeBaseAmount === '1',
+                ...optional(form, 'accountId'),
                 sequence: Number(form.sequence || 10),
                 active: true,
               },
@@ -576,6 +581,7 @@ export default defineModule({
             frame: shell,
             action: `/admin/taxes${localeSuffix(url)}`,
             rows: data.taxes,
+            accounts: data.accounts,
             currency,
             errors:
               url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
@@ -606,6 +612,12 @@ export default defineModule({
                 type: 'decimal',
                 value: 0,
                 required: true,
+              },
+              {
+                name: 'accountId',
+                label: tr('account_backend.field.accountId'),
+                type: 'select',
+                options: choices(data.accounts, true),
               },
               { name: 'priceInclude', label: tr('account_backend.field.priceInclude'), type: 'checkbox' },
               {
@@ -1060,7 +1072,7 @@ const vi: Record<string, string> = {
   'dashboard.trialBalanceHint': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản.',
   'dashboard.generalLedgerHint': 'Xem chi tiết phát sinh trên từng tài khoản.',
   'dashboard.partnerLedgerHint': 'Theo dõi công nợ phải thu, phải trả theo đối tác.',
-  'dashboard.accountsHint': 'Mã tài khoản và hành vi báo cáo theo Odoo 19.',
+  'dashboard.accountsHint': 'Hệ thống tài khoản Việt Nam theo Thông tư 99/2025/TT-BTC.',
   'dashboard.journalsHint': 'Phân loại và đánh số chứng từ kế toán.',
   'dashboard.taxesHint': 'Cấu hình phạm vi và cách tính thuế.',
   'dashboard.paymentTermsHint': 'Lịch thanh toán dùng cho hoá đơn và công nợ.',
@@ -1323,7 +1335,7 @@ const en: Record<string, string> = {
   'dashboard.trialBalanceHint': 'Compare total debit and credit movements by account.',
   'dashboard.generalLedgerHint': 'Inspect posted movements on an individual account.',
   'dashboard.partnerLedgerHint': 'Track receivable and payable balances by partner.',
-  'dashboard.accountsHint': 'Account codes and Odoo 19 reporting behavior.',
+  'dashboard.accountsHint': 'Vietnam chart of accounts under Circular 99/2025/TT-BTC.',
   'dashboard.journalsHint': 'Classify and sequence accounting documents.',
   'dashboard.taxesHint': 'Configure tax scope and calculation methods.',
   'dashboard.paymentTermsHint': 'Payment schedules used by invoices and balances.',
