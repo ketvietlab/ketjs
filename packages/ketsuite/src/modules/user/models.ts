@@ -3,7 +3,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * Users, and the companies each may act as.
  *
- * A user *has* a party rather than *being* one. Odoo is alone in making the user a
+ * A user *has* a party rather than *being* one. the domain contract is alone in making the user a
  * delegated subclass of the partner (`_inherits`), which puts every user in the
  * address book and leaks the mechanism through archiving, deletion and sudo.
  * Salesforce keeps `User` a separate object and links a Contact only for external
@@ -42,7 +42,7 @@ export const models: Record<string, ModelDef> = {
        *
        * Something has to be, or a deployment that turns roles on can never grant
        * the first one — the functions that manage roles are themselves behind the
-       * check. Odoo solves it with a magic user id and a group; a declared column
+       * check. the domain contract solves it with a magic user id and a group; a declared column
        * is the same escape hatch with its name written on it, and it shows up in
        * a query rather than in institutional memory.
        */
@@ -55,7 +55,7 @@ export const models: Record<string, ModelDef> = {
   /**
    * A named set of functions.
    *
-   * Not a set of models with CRUD flags, which is what Odoo's ir.model.access is
+   * Not a set of models with CRUD flags, which is what the domain contract's model-level CRUD grants is
    * and what makes its permissions unanswerable: granting read on a table grants
    * it in the form, the list, the export, XML-RPC and every search() any module
    * makes. Here the unit is the action, so a role is exactly the list of actions,

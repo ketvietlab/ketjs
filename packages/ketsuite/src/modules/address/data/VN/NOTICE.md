@@ -2,7 +2,7 @@
 
 The normalized administrative names and hierarchy in this directory are derived
 from the JSON data distributed with **Vidoo Vietnam Address Core**, authored by
-[vidoo.dev](https://vidoo.dev) and declared `LGPL-3` in its Odoo 19 addon manifest.
+[vidoo.dev](https://vidoo.dev) and distributed upstream under `LGPL-3`.
 
 KetSuite records the source file SHA-256 digests, row counts, source attribution,
 catalog code system and legal basis in each versioned `manifest.json`. The original

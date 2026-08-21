@@ -106,6 +106,10 @@ export default defineConfig({
           ],
         },
         {
+          label: 'KetSuite application',
+          items: [{ label: 'Quick start', slug: 'ketsuite/quick-start' }],
+        },
+        {
           label: 'Architecture & internals',
           collapsed: true,
           items: [{ label: 'Architecture overview', slug: 'architecture' }],

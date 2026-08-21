@@ -3,7 +3,7 @@
 /**
  * `decimal` and `float` differ in storage, not in arithmetic.
  *
- * Odoo takes this split and it is the right one: a quantity or a price is stored
+ * the domain contract takes this split and it is the right one: a quantity or a price is stored
  * as exact decimal and computed as a binary float, with explicit rounding helpers
  * standing between the two. Storing it as a float instead means every trip through
  * the database can put back the error the rounding just took out — 0.1 written to
@@ -70,7 +70,7 @@ export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 /**
  * One entry in the navigation tree — an app, a section inside it, or a link.
  *
- * Declared by the module that owns the screen, not stored as rows. Odoo keeps
+ * Declared by the module that owns the screen, not stored as rows. the domain contract keeps
  * `ir.ui.menu` in the database so a customer can rearrange it, and pays for that
  * with a menu that can point at a module nobody installed. Here a menu entry is
  * checked when the deployment is composed: an unknown parent is a build error, and
@@ -490,8 +490,8 @@ export type Scope = {
    * Companies this request may READ. Absent means just `company` — the safe
    * default, because widening what you can see should take saying so.
    *
-   * Reads use the set and writes use `company`, which is Odoo's split between
-   * allowed_company_ids and company_id, and the split is right: a report may span
+   * Reads use the set and writes use `company`, which is the domain contract's split between
+   * readable company set and company_id, and the split is right: a report may span
    * three legal entities, but an invoice belongs to exactly one.
    */
   companies?: string[] | null

@@ -15,7 +15,7 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
 
 /**
  * A role is a named list of function keys, additive across roles — Salesforce
- * permission sets rather than Odoo's ir.model.access. The unit is the action, so
+ * permission sets rather than the domain contract's model-level CRUD grants. The unit is the action, so
  * the role *is* the list of actions, and `ket permissions` can print what any list
  * reaches because there is nothing to traverse.
  */

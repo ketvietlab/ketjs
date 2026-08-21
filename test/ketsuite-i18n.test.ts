@@ -105,7 +105,7 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
   assert.match(html, /Product images/)
   assert.match(html, /Shared countries, versioned administrative divisions/)
   assert.match(html, /Install and inspect country administrative catalogs/)
-  assert.match(html, /Odoo 19 stock, transfers, and replenishment/)
+  assert.match(html, /Stock, transfers, and replenishment/)
   assert.match(html, /Manage company pricelists/)
   assert.doesNotMatch(html, /Hình ảnh sản phẩm/)
   assert.doesNotMatch(html, /Quốc gia, catalog địa giới/)
@@ -113,7 +113,7 @@ test('ketsuite i18n: app metadata is translated instead of falling back to Vietn
   assert.doesNotMatch(html, /Danh sách bảng giá theo company/)
 })
 
-test('ketsuite i18n: Product selection labels are translated, not leaked as Odoo codes', () => {
+test('ketsuite i18n: Product selection labels are translated, not leaked as storage codes', () => {
   const rows = [
     { id: 'attribute', name: 'Màu', displayType: 'pills', createVariant: 'no_variant', values: [] },
   ]

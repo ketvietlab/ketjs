@@ -112,6 +112,171 @@ test('hospitality core: property defaults and uniqueness are company-scoped', as
   }
 })
 
+test('hospitality core: a property accepts only an active branch from its own company', async () => {
+  const adapter = await boot()
+  try {
+    await adapter.exec(
+      `INSERT INTO company_branch (id, "companyId", code, name, "parentId", "rootKey", active) VALUES
+        ('acme-branch', 'acme', 'HCM', 'Ho Chi Minh City', NULL, NULL, 1),
+        ('globex-branch', 'globex', 'HN', 'Ha Noi', NULL, NULL, 1),
+        ('archived-branch', 'acme', 'OLD', 'Archived', NULL, NULL, 0)`,
+    )
+
+    const created = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'branched-hotel',
+        branchId: 'acme-branch',
+        code: 'BRANCH',
+        name: 'Branched Hotel',
+        accommodationType: 'hotel',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+    const detail = (await call('hospitality_core.getProperty', { id: 'branched-hotel' }, adapter))
+      .value as Row
+    assert.equal(detail.companyId, 'acme')
+    assert.equal(detail.branchId, 'acme-branch')
+
+    const wrongCompany = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'wrong-company',
+        branchId: 'globex-branch',
+        code: 'WRONG',
+        name: 'Wrong company',
+        accommodationType: 'hotel',
+      },
+      adapter,
+    )
+    assert.equal((wrongCompany.value as Row).ok, false)
+    assert.equal(((wrongCompany.value as Row).errors as Row[])[0]?.code, 'branch_company_mismatch')
+
+    const archived = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'archived-branch-hotel',
+        branchId: 'archived-branch',
+        code: 'ARCHIVED',
+        name: 'Archived branch',
+        accommodationType: 'hotel',
+      },
+      adapter,
+    )
+    assert.equal((archived.value as Row).ok, false)
+    assert.equal(((archived.value as Row).errors as Row[])[0]?.code, 'branch_archived')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality catalog: internal projections are company-scoped and public-safe', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await property(adapter, 'globex-hotel', GLOBEX)
+    await call(
+      'hospitality_core.saveProperty',
+      { id: 'inactive-hotel', code: 'OLD', name: 'Old Hotel', accommodationType: 'hotel' },
+      adapter,
+    )
+    await call('hospitality_core.archiveProperty', { id: 'inactive-hotel', active: false }, adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'published-room',
+        propertyId: 'hotel',
+        code: 'PUB',
+        name: 'Published room',
+        published: true,
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'draft-room', propertyId: 'hotel', code: 'DRAFT', name: 'Draft room' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'secret-room-number',
+        propertyId: 'hotel',
+        roomTypeId: 'published-room',
+        code: '101',
+        name: 'Room 101',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveAmenity',
+      { id: 'wifi', code: 'WIFI', name: 'Wi-Fi', scope: 'property' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.assignAmenity',
+      { id: 'hotel-wifi', target: 'property', targetId: 'hotel', amenityId: 'wifi' },
+      adapter,
+    )
+    await call(
+      'storage.createAttachment',
+      {
+        id: 'catalog-image',
+        name: 'catalog.jpg',
+        resModel: 'hospitality_core.Property',
+        resId: 'hotel',
+        resField: 'contentImages',
+        kind: 'url',
+        url: 'https://private-origin.example/catalog.jpg',
+        mimetype: 'image/jpeg',
+        size: 42,
+        public: true,
+        createdAt: '2026-08-20T00:00:00.000Z',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.attachContentImage',
+      {
+        id: 'catalog-image',
+        attachmentId: 'catalog-image',
+        propertyId: 'hotel',
+        category: 'exterior',
+        caption: 'Main entrance',
+      },
+      adapter,
+    )
+
+    const properties = (await call('hospitality_core.listPropertyCatalog', {}, adapter)).value as Row[]
+    assert.deepEqual(
+      properties.map((row) => row.id),
+      ['hotel'],
+    )
+    const publicProperty = properties[0]!
+    assert.equal(publicProperty.companyId, 'acme')
+    assert.equal('rooms' in publicProperty, false)
+    assert.equal('availableRooms' in publicProperty, false)
+    assert.equal('url' in (publicProperty.primaryImage as Row), false)
+    assert.equal(((publicProperty.amenities as Row[])[0] as Row).code, 'WIFI')
+
+    const rooms = (await call('hospitality_core.listRoomTypeCatalog', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.deepEqual(
+      rooms.map((row) => row.id),
+      ['published-room'],
+    )
+    assert.equal(rooms[0]?.companyId, 'acme')
+    assert.equal('rooms' in rooms[0]!, false)
+    assert.equal(
+      (await call('hospitality_core.getPropertyCatalog', { id: 'globex-hotel' }, adapter)).value,
+      null,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality core: explicit booleans override creation defaults', async () => {
   const adapter = await boot()
   try {

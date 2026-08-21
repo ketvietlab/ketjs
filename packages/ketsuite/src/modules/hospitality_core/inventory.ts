@@ -249,6 +249,7 @@ export const replaceReservedInventory = async (
   previousDates: readonly string[],
   nextRoomTypeId: unknown,
   nextDates: readonly string[],
+  quantity = 1,
 ): Promise<void> => {
   const deltas = new Map<string, { roomTypeId: unknown; date: string; delta: number }>()
   const add = (roomTypeId: unknown, date: string, delta: number) => {
@@ -256,8 +257,8 @@ export const replaceReservedInventory = async (
     const current = deltas.get(key)
     deltas.set(key, { roomTypeId, date, delta: (current?.delta ?? 0) + delta })
   }
-  for (const date of previousDates) add(previousRoomTypeId, date, -1)
-  for (const date of nextDates) add(nextRoomTypeId, date, 1)
+  for (const date of previousDates) add(previousRoomTypeId, date, -quantity)
+  for (const date of nextDates) add(nextRoomTypeId, date, quantity)
 
   const changes = [...deltas.entries()]
     .filter(([, value]) => value.delta !== 0)

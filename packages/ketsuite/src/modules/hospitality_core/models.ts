@@ -3,7 +3,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * The operational and sellable hotel structure.
  *
- * The Odoo source spreads these records over core, content and inventory addons.
+ * The the domain contract source spreads these records over core, content and inventory addons.
  * KetSuite keeps them together because a room without its sellable description is
  * not a useful bounded context. Accounting remains outside this boundary.
  */
@@ -12,6 +12,7 @@ export const models: Record<string, ModelDef> = {
     scope: 'company',
     fields: {
       id: 'id',
+      branchId: 'ref:company.Branch?',
       code: 'text',
       name: 'text',
       publicName: 'text?',
@@ -399,10 +400,12 @@ export const models: Record<string, ModelDef> = {
       code: 'text',
       propertyId: 'ref:hospitality_core.Property',
       roomTypeId: 'ref:hospitality_core.RoomType',
+      ratePlanId: 'ref:hospitality_core.RatePlan?',
       folioId: 'ref:hospitality_core.Folio',
       stayId: 'ref:hospitality_core.Stay?',
       partnerId: 'ref:partner.Partner',
       provider: 'text',
+      requestKey: 'text?',
       externalId: 'text?',
       channelRef: 'text?',
       bookingType: 'text',
@@ -410,10 +413,13 @@ export const models: Record<string, ModelDef> = {
       checkOut: 'datetime',
       adults: 'int',
       children: 'int',
+      infants: 'int?',
+      roomQuantity: 'int?',
       rate: 'decimal',
       quantity: 'decimal',
       billingMode: 'text',
       amountTotal: 'decimal',
+      currency: 'text?',
       state: 'text',
       cancelReason: 'text?',
       noShowAt: 'datetime?',
@@ -425,6 +431,10 @@ export const models: Record<string, ModelDef> = {
       code_company: { fields: ['companyId', 'code'], unique: true },
       provider_external: {
         fields: ['companyId', 'propertyId', 'provider', 'externalId'],
+        unique: true,
+      },
+      provider_request: {
+        fields: ['companyId', 'provider', 'requestKey'],
         unique: true,
       },
       property_schedule: {
@@ -453,6 +463,8 @@ export const models: Record<string, ModelDef> = {
       checkOut: 'datetime',
       adults: 'int',
       children: 'int',
+      infants: 'int?',
+      roomQuantity: 'int?',
       billingMode: 'text',
       rate: 'decimal',
       nextBillDate: 'date?',

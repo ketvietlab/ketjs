@@ -28,7 +28,7 @@ account supports that transition.
 Update the root and all workspace package versions together. Also update every internal dependency and the
 version used by `ket new`. The release checker rejects drift between any of these locations.
 
-The first coordinated scoped release is `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
+The first coordinated scoped release was `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
 initial bootstrap attempt and is not part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
 
@@ -45,7 +45,8 @@ npm run release:check
 - creates the same tarballs npm will receive and enforces package-size ceilings;
 - installs all tarballs into a clean consumer and imports every public entry point;
 - invokes the installed `ket new` binary;
-- installs the local tarballs into that generated project, then runs its check and integration test.
+- installs the local tarballs into that generated project, resolves its development CLI entry, then runs its
+  check and integration test.
 
 To retain inspectable tarballs under `.release/`:
 
@@ -59,13 +60,13 @@ No publish command is part of either local script.
 
 1. Merge the release preparation into `develop` and let required checks pass.
 2. Promote the verified commit according to the repository branch policy.
-3. Create and publish GitHub release `v0.1.1` at that exact commit.
+3. Create and publish GitHub release `v0.1.3` at that exact commit.
 4. Approve the protected `npm` environment when prompted.
 5. Confirm all four packages and provenance attestations on npm.
 6. Run the public smoke path without local tarballs:
 
 ```bash
-npx --package @ketvietlab/ketjs@0.1.1 ket new public_smoke
+npx -y @ketvietlab/ketjs@0.1.3 new public_smoke
 cd public_smoke
 npm install
 npm test

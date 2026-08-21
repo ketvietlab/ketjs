@@ -200,7 +200,7 @@ const capture = async (cdp: Cdp, path: string): Promise<void> => {
 
 const e2e = await collaborationEvidenceApp()
 let chrome: ChromeHandle | null = null
-const artifactDir = resolve('docs/assets/odoo-collaboration')
+const artifactDir = resolve('docs/assets/collaboration')
 const lotEvidenceDir = resolve('docs/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/assets/inventory-route-detail')
@@ -3199,8 +3199,8 @@ try {
             'Product save replaced only its record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Transfer actions replaced only the record header/body and preserved Chatter, Activity and sidebar DOM identity',
             'Inventory adjustment selected a product, applied a count through real browser HTTP and rendered no Chatter',
-            'Transfer list rendered Odoo 19 operational columns, created a transfer and rendered no list-level Chatter',
-            'Warehouse configuration rendered Odoo 19 shipment-step radios, created a warehouse and rendered no Chatter',
+            'Transfer list rendered the domain contract operational columns, created a transfer and rendered no list-level Chatter',
+            'Warehouse configuration rendered the domain contract shipment-step radios, created a warehouse and rendered no Chatter',
             'Location configuration rendered complete names, created a child location and rendered no Chatter',
             'Lot list rendered human product labels and internal-location on-hand quantities, created a lot and rendered no collection-level Chatter',
             'Lot detail kept its collaboration column near one third of the large viewport and at least 32rem wide',

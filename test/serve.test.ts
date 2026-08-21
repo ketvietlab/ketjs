@@ -258,6 +258,10 @@ test('ket new: writes an app whose workspace composes', async () => {
   assert.ok(existsSync(join(dir, 'tools/dev.mjs')))
   assert.ok(existsSync(join(dir, 'test/app.test.ts')))
   assert.match(
+    readFileSync(join(dir, 'tools/dev.mjs'), 'utf8'),
+    /node_modules\/@ketvietlab\/ketjs\/dist\/cli\.js/,
+  )
+  assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),
     /ket serve --workspace dist\/ket\.workspace\.js/,
   )

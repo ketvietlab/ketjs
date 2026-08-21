@@ -51,7 +51,15 @@ export const RESERVATION_STATES = ['draft', 'confirmed', 'checked_in', 'checked_
 export const STAY_STATES = ['draft', 'checked_in', 'checked_out', 'cancelled'] as const
 export const FOLIO_STATES = ['draft', 'open', 'closed', 'cancelled'] as const
 export const ASSIGNMENT_STATES = ['active', 'closed'] as const
-export const BOOKING_PROVIDERS = ['direct', 'booking', 'agoda', 'expedia', 'traveloka', 'airbnb'] as const
+export const BOOKING_PROVIDERS = [
+  'direct',
+  'website',
+  'booking',
+  'agoda',
+  'expedia',
+  'traveloka',
+  'airbnb',
+] as const
 export const CHARGE_TYPES = ['room', 'minibar', 'spa', 'restaurant', 'service', 'discount'] as const
 export const PROPERTY_CHARGE_TYPES = ['parking', 'city_tax', 'internet', 'resort_fee', 'other'] as const
 export const EXTRA_RECURRENCES = ['once', 'per_night', 'per_unit'] as const

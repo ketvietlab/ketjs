@@ -5,7 +5,7 @@ because two of these cannot be undone later.
 
 ## D1 — Extension points are published, not discovered
 **Chosen:** a module declares `joints`; other modules may only fill those.
-**Why:** Odoo composes brilliantly because any module can patch anything, and it
+**Why:** the domain contract composes brilliantly because any module can patch anything, and it
 cannot be upgraded safely for exactly the same reason: with no public API, nothing
 is safe to change. Its ecosystem is a debt taken on purpose that now cannot be repaid.
 **Cost:** you will sometimes need a joint the author did not publish. The answer is
@@ -16,7 +16,7 @@ is impossible; strict-then-loose is not.
 ## D2 — An escape hatch exists but must be declared
 **Chosen:** `patches[]` in the manifest, surfaced by every upgrade diff.
 **Why:** absolute prohibition gets routed around. A declared escape hatch keeps the
-debt visible, which is the one thing Odoo lacks.
+debt visible, which is the one thing the domain contract lacks.
 
 ## D3 — Themes are third-party code
 **Chosen:** a restricted template language (KTL) compiled to closures — no `eval`,
@@ -87,7 +87,7 @@ tested locally.
 initial build. It remains absent from runtime dependencies.
 
 ## D7 — Destructive migrations are generated but refused
-**Why:** Odoo alters schema silently at install time, which is a root cause of its
+**Why:** the domain contract alters schema silently at install time, which is a root cause of its
 upgrade failures. Here "never drop a field" stops being discipline someone has to
 remember and becomes something the tool enforces.
 
@@ -127,7 +127,7 @@ joints only existed in KTL, so `backend` published none and nothing could reach
 them. A module could not add a column, a button or a menu item. For a framework
 whose first pillar is lego, that was a hole rather than a style choice.
 
-**What actually hurts in Odoo is not extension.** It is two specific things, and
+**What actually hurts in the domain contract is not extension.** It is two specific things, and
 naming them is what settled the design:
 
 1. **XPath into unpromised anchors.** `<xpath expr="//field[@name='partner_id']"
@@ -175,7 +175,7 @@ server — and the design catalogue renders these same screens with no server at
 went into `product` first, which made `product` depend on `backend` — so every
 composition without an admin failed, and a headless API could not have a catalogue.
 It belongs in a bridge that installs itself once both sides are present, which is
-what `install: 'auto'` was built for and what Odoo does with `sale_stock`. CI found
+what `install: 'auto'` was built for and what the domain contract does with sales/inventory bridge. CI found
 this; running only the tests I had touched did not, because I had touched
 `product` without thinking of it as touched.
 
@@ -272,7 +272,7 @@ because there is no login to be outside of — the header shim is still the iden
 there, and the banner still says so.
 
 ## D37 — One deployment, many databases, and one door into each
-**Chosen:** Odoo's model — the code ships with the deployment, the decision about
+**Chosen:** the domain contract's model — the code ships with the deployment, the decision about
 what is switched on lives in each database. `ket_app` per database is
 `ir_module_module` per database, and D7 makes it cheaper here: every schema exists
 everywhere, so enabling a module for a tenant is one UPDATE rather than a
@@ -298,7 +298,7 @@ request to the same tenant worked. It now leases through the tenant runtime, so
 there is one place preparation can be forgotten rather than two.
 
 **Leases are scoped, never handed out.** The pool is bounded — Postgres has a hard
-connection ceiling, which is where the Odoo model hurts most in practice — so
+connection ceiling, which is where the domain contract model hurts most in practice — so
 `ServeContext` exposes `live(req)` and `appsOf(req)` rather than an adapter or a
 registry. An adapter that escapes its lease is a connection nobody gives back.
 
@@ -344,8 +344,8 @@ app's model; a framework that knew their shape would be a framework every app ha
 to agree with.
 
 **A role is a named list of function keys, additive across roles**, which is
-Salesforce's permission sets rather than Odoo's `ir.model.access`. Model-plus-CRUD
-is what makes Odoo's permissions unanswerable: granting read on `product.template`
+Salesforce's permission sets rather than the domain contract's model-level CRUD grants. Model-plus-CRUD
+is what makes the domain contract's permissions unanswerable: granting read on `product.template`
 grants it in the form, the list, the export, XML-RPC and every `search()` any
 module makes. Here the unit is the action, so the role *is* the list of actions,
 and `ket permissions --role kho` prints exactly what it reaches — including which
@@ -368,7 +368,7 @@ on the next call. Cache it when a measurement says to.
 
 **A superuser column rather than a magic id.** Something has to be exempt or a
 deployment that turns roles on can never grant the first one — the functions that
-manage roles are themselves behind the check. Odoo solves this with user id 2 and a
+manage roles are themselves behind the check. the domain contract solves this with user id 2 and a
 group that everyone learns about by being told. A declared boolean is the same
 escape hatch with its name written on it, and it shows up in a query.
 
@@ -438,27 +438,27 @@ someone learns which of the three they hit.
 spreading would produce a plain object that only looks like a RouteResult, which is
 the hole the brand exists to close.
 
-## D34 — Parties, legal entities and users, with the three things Odoo folds together kept apart
+## D34 — Parties, legal entities and users, with the three things the domain contract folds together kept apart
 **Parties are shared, and addresses are their own model.** `res.partner` is one
 table for customer, supplier, contact, delivery address, invoice address and legal
 entity, and the cost is visible in the model itself: `is_company` to ask whether
 this is a legal entity, `type` to ask whether it is an address, and a computed
-`commercial_partner_id` to answer the only question invoicing cares about — who do
+computed commercial-party pointer to answer the only question invoicing cares about — who do
 we bill.
 
 That third field is the tell. It exists *because* addresses are parties: when a
 delivery address is itself a partner, the system has lost the ability to say who
 the counterparty is, so it walks up the parent chain to recover it. SAP, Tryton and
-ERPNext all keep addresses separate. Doing the same removes `commercial_partner_id`
+ERPNext all keep addresses separate. Doing the same removes computed commercial-party pointer
 and `type` outright — the party on a document is the party.
 
 **Roles are rows, as in SAP's BUT100.** A supplier who is also a customer is one
-party with two rows. Odoo uses `customer_rank` / `supplier_rank` counters, so a new
+party with two rows. the domain contract uses customer and supplier role counters counters, so a new
 role is a new column on a table that already has about 120.
 
-**`ir.property` becomes an ordinary company-scoped model.** The party is shared, its
+**property side table becomes an ordinary company-scoped model.** The party is shared, its
 payment terms are not: the same customer may be on 30 days with one company and
-prepayment with another. Odoo keeps that in a side table keyed by
+prepayment with another. the domain contract keeps that in a side table keyed by
 (field, company, record) — EAV, invisible to SQL, untyped, and the reason "it is
 blank in company B" is a recurring ticket. `partner.CompanyTerms` is SAP's KNB1: a
 real table with real columns, scoped by machinery that already existed.
@@ -469,7 +469,7 @@ would hand back every company's terms at once. SAP reads KNB1 by (customer, comp
 code) for the same reason: the segment is reached from the scoped side, never from
 the shared one. The relation is one-directional now because the framework insisted.
 
-**A user *has* a party rather than *being* one.** Odoo is alone in making the user a
+**A user *has* a party rather than *being* one.** the domain contract is alone in making the user a
 delegated subclass (`_inherits`), which puts every user in the address book and
 leaks through archiving, deletion and sudo. Salesforce keeps `User` separate and
 links a Contact only for external users; SAP keeps SU01 separate from the business
@@ -550,7 +550,7 @@ website_menu.listMenu  reads
 ```
 
 ## D32 — Reads span a set of companies, writes go to exactly one
-**Chosen:** Odoo's split, deliberately. `scope.companies` is what a read may see;
+**Chosen:** the domain contract's split, deliberately. `scope.companies` is what a read may see;
 `scope.company` is what a new row is stamped with. The split is right because the
 two questions genuinely differ: a report may span three legal entities, but an
 invoice belongs to one.
@@ -591,7 +591,7 @@ and the report costs a fraction of what guessing wrong would.
 **The question that prompted it:** a user needs orders but must not have products.
 In most systems answering that takes reading every module, because permission is
 granted on a *table* and a table is used everywhere — grant read on
-`product.template` in Odoo and you have granted it in the order form, the list
+`product.template` in the domain contract and you have granted it in the order form, the list
 view, the export, XML-RPC, and every `search()` any module makes.
 
 **Here the unit is the action, so the answer is arithmetic rather than
@@ -629,9 +629,9 @@ about defaults that is better made with the count in front of you. The report
 flags every unprojected function so the field-level gap is *visible* rather than
 remembered — which is the same move as the banner saying auto-install is off.
 
-**Cost:** granting by function means more functions than Odoo has rules — two
+**Cost:** granting by function means more functions than the domain contract has rules — two
 audiences needing two slices of one model is two functions, not one function with a
-flag. In exchange the reach is computable, which Odoo cannot do at all.
+flag. In exchange the reach is computable, which the domain contract cannot do at all.
 
 ## D30 — A module contributes to the served surface, not just to the database
 **The hole, stated as a measurement.** With `backend` uninstalled, `/admin` still
@@ -811,8 +811,8 @@ eventually forget, and forgetting means answering with another company's rows.
 a document. Until there is a session, the company comes from a header, which is
 fine for development and not for production.
 
-## D26 — Units of measure: Odoo's model, and the rounding it depends on
-**Chosen:** Odoo's shape, deliberately. A category groups units that convert between
+## D26 — Units of measure: the domain contract's model, and the rounding it depends on
+**Chosen:** the domain contract's shape, deliberately. A category groups units that convert between
 one another; exactly one is the reference; every other records `factor` — how many
 of itself make one reference unit — and `rounding`, the precision it is meaningful
 to. Conversion runs through the reference, both ways.
@@ -821,7 +821,7 @@ to. Conversion runs through the reference, both ways.
 kilograms in a litre, and a framework that guessed one would be worse than one that
 stopped.
 
-**Quantities are floats, as in Odoo, and that has teeth.** 0.1 + 0.2 is not 0.3, and
+**Quantities are floats, as in the domain contract, and that has teeth.** 0.1 + 0.2 is not 0.3, and
 a figure that drifts by 1e-16 per movement eventually compares unequal to zero. The
 defence is that every value crossing a boundary is rounded to its unit's precision,
 and that comparisons go through `compareQty` and `isZero` — never `===`.
@@ -837,41 +837,41 @@ and that comparisons go through `compareQty` and `isZero` — never `===`.
    0.30000000000000004, so `roundTo` returned a value it would not itself consider
    rounded. A test now asserts every result is stable under a second rounding.
 
-**Product depends on uom**, as in Odoo: a template counts in a unit, optional so a
+**Product depends on uom**, as in the domain contract: a template counts in a unit, optional so a
 service needs none and so existing rows survive the module arriving.
 
 **`decimal` is a separate type from `float`, and the difference is storage only.**
-Odoo splits these and the split is right: a quantity or a price is stored as exact
+the domain contract splits these and the split is right: a quantity or a price is stored as exact
 decimal and computed as a binary float, with the rounding helpers standing between.
 The first version here copied the arithmetic and missed the storage — quantities
 went into `DOUBLE PRECISION`, where 0.1 comes back as 0.1000000000000000055 and
 every trip through the database puts back the error the rounding just took out.
 
-- Postgres: `NUMERIC`, unbounded, as Odoo uses.
+- Postgres: `NUMERIC`, unbounded, as the domain contract uses.
 - SQLite: `TEXT`. SQLite has no exact decimal at all — `NUMERIC` affinity silently
   becomes `REAL` — so text is the only storage that returns what it was given.
 - Both adapters hand it back as a string; `ctx` converts, because it is the one
-  place that knows the model and the row. Arithmetic stays on numbers, as in Odoo.
+  place that knows the model and the row. Arithmetic stays on numbers, as in the domain contract.
 
 Tested both ways: awkward values round-trip unchanged through SQLite and through a
 live Postgres, and the raw column is confirmed to hold `"0.1"` rather than a binary
 approximation of it.
 
-**Cut:** purchase units, and the reference-changing migration Odoo needs when a
+**Cut:** purchase units, and the reference-changing migration the domain contract needs when a
 category's reference moves. Both wait for a real case.
 
 ## D25 — Product: template and variant, with the stock concern left to stock
-**Naming follows Odoo** — `product.Template` and `product.Product`, where Product is
+**Naming follows the domain contract** — `product.Template` and `product.Product`, where Product is
 the variant — so the migration map stays one to one. The name reads oddly and a
 comment says so; a comment costs less than a translation table.
 
-**Where it deliberately does not follow Odoo:** `product.template.type` there takes
+**Where it deliberately does not follow the domain contract:** `product.template.type` there takes
 three values, one of which — `product`, meaning storable — is a *stock* concept
 living in a module that must not know stock exists. Uninstall stock and the value
 means nothing while still sitting in the data.
 
 Here `product` says only `goods` or `service`, and `stock` extends the template with
-`tracked`. Odoo's three states still map one to one — service · goods+untracked ·
+`tracked`. the domain contract's three states still map one to one — service · goods+untracked ·
 goods+tracked — and a template keeps its meaning when stock is switched off. A test
 asserts both halves.
 
@@ -924,11 +924,11 @@ present only if the query asked for them. The type says so instead of pretending
 every row arrives complete.
 
 ## D23 — Company is a row-level boundary; branch is a dimension
-**The situation being replaced:** Odoo has no branch concept, so a business with
+**The situation being replaced:** the domain contract has no branch concept, so a business with
 several branches of one legal entity models each branch as a `res.company`. That
 forces a chart of accounts per branch, turns internal transfers into inter-company
 invoices that then have to be eliminated, and fragments master data. It is not the
-right model — it is the model Odoo leaves you with.
+right model — it is the model the domain contract leaves you with.
 
 **Chosen:** two dimensions with different semantics.
 
@@ -1000,8 +1000,8 @@ that wants them translated adds `app.title` and friends to its own messages. No
 module has to change, and the pseudo-locale shows which ones have not been done.
 
 ## D21 — Apps install at build, switch on at run
-KetSuite needs what Odoo has: a list of apps, installed or not, with install and
-remove. Odoo gets it by letting each database hold a different set of modules — the
+KetSuite needs what the domain contract has: a list of apps, installed or not, with install and
+remove. the domain contract gets it by letting each database hold a different set of modules — the
 exact thing D16 refused, because it is why a fleet upgrade there is N unknown
 migrations instead of one known one.
 
@@ -1012,7 +1012,7 @@ placed, which fills appear — and never the shape of the database. Verified: th
 list is byte-identical before and after installing and removing an app.
 
 **Uninstalling deletes nothing.** The columns stay, the rows stay, re-installing
-finds the data where it was. Odoo drops columns on uninstall and people lose data to
+finds the data where it was. the domain contract drops columns on uninstall and people lose data to
 a misclick. Refusing that is the same rule as D7, applied one level up.
 
 **The cost, stated:** a database carries columns for apps it does not use. Nullable
@@ -1048,7 +1048,7 @@ same declaration serves both — no second schema to drift.
 
 **A module is one file per concern.** `index.ts` assembles; models, joints,
 sections, views, functions and tokens each live in their own file. The alternative
-is the giant `models.py` that every mature Odoo module turns into.
+is the giant central model file that every mature the domain contract module turns into.
 
 **Writing a real module found a real gap:** `parentId: 'ref:MenuItem'` declared
 required is a contradiction — the first row can never satisfy it — and nothing
@@ -1140,7 +1140,7 @@ render.
 **Chosen:** a database per tenant, all migrating to the same target schema, each
 recording the schema it is actually on.
 
-**Why not Odoo's version:** Odoo lets every database install a different module set,
+**Why not the domain contract's version:** the domain contract lets every database install a different module set,
 so there is no single schema to reason about and a fleet upgrade is N unknown
 migrations. That is the root of the upgrade failures, not a detail of them. Giving
 up per-tenant module sets buys a fleet where the upgrade diff runs **once**.
@@ -1241,7 +1241,7 @@ until the query shape has run against real data.
 package. Flagged: `ket` is UK slang for ketamine and bra-ket notation in physics.
 
 ## D42 — Menus are declared in the module, and hidden by permission
-**Where a menu lives.** Odoo keeps menus as rows: `ir.ui.menu`, created by XML data
+**Where a menu lives.** the domain contract keeps menus as rows: `ir.ui.menu`, created by XML data
 files, edited in the database, surviving the code that put them there. That is why
 an upgrade can leave an entry pointing at an action nobody ships any more, and why
 "who put this here" is answered by an XML id rather than by a file.
@@ -1280,7 +1280,7 @@ is dropped silently. That is what let `backend` gate its Pages entry on
 `website.listPages` without depending on `website`.
 
 **Cost and reversibility.** Menus can no longer be reordered by an administrator at
-runtime, which Odoo allows; `sequence` is the only lever and it is in code. Cheap to
+runtime, which the domain contract allows; `sequence` is the only lever and it is in code. Cheap to
 reverse — a database table read *after* the manifest would layer on top without
 changing any of this. Deferred until somebody actually asks.
 
@@ -1311,7 +1311,7 @@ searching while looking at the cards threw you back to the list. The fix is
 the test came after.
 
 **Paging is on the function, not on a generic list endpoint.** `listTemplates` grew
-`limit`, `offset` and `search`, and `countTemplates` appeared beside it — Odoo's
+`limit`, `offset` and `search`, and `countTemplates` appeared beside it — the domain contract's
 `search_read` / `search_count` pair, for the same reason: a page needs a total it
 cannot compute from the page. Both are built from one shared query expression,
 because a count that filters differently from the list it counts is the bug you find
@@ -1396,7 +1396,7 @@ it would have had to be anyway. Vietnamese puts the given name last, so that is 
 letter that comes first.
 
 ## D45 — The shell is ported from vidoo_backend_theme, icons included
-**Why port rather than design.** KétViệt already runs an Odoo backend with a theme
+**Why port rather than design.** KétViệt already runs an the domain contract backend with a theme
 the team built and uses daily — `vidoo_backend_theme`, 228px sidebar, no desktop
 application bar, systray at the foot. A framework that ships a *different* good admin
 gives the company two products to learn. So the sidebar here is that sidebar: the
@@ -1405,7 +1405,7 @@ already derived from, the same brand row, menu search, app list, section tree wi
 rule down its left and a dot on each leaf, and the same footer.
 
 **Icons are vendored, not installed.** Twelve Lucide glyphs (ISC) as strings in
-`icons.ts`, which is what the Odoo theme does too. An icon set is data — a few
+`icons.ts`, which is what the domain contract theme does too. An icon set is data — a few
 hundred bytes of path each — and taking a package for it would put a dependency, a
 build step and a supply chain between this repo and twelve strings. `audit:zero-dep`
 is not a slogan to work around; it is the reason a Ket app is one `node` away from
@@ -1529,10 +1529,10 @@ unreferenced objects older than a grace period. Its blob reads/removals are decl
 effects, so adding storage to a job does not become a new way around the operation
 boundary.
 
-## D49 — Product and stock follow Odoo 19 where the subset is real
+## D49 — Product and stock follow the domain contract where the subset is real
 **Names and codes are compatibility boundaries.** UoM is a relative tree with one
 root, product variants have a stable combination key, pricelist applicability keeps
-Odoo's selection codes, and stock operations keep their warehouse and procurement
+the domain contract's selection codes, and stock operations keep their warehouse and procurement
 codes. Unsupported accounting, purchasing, selling and valuation behaviour returns
 an explicit error; it is not approximated behind a familiar name.
 
@@ -1567,7 +1567,7 @@ loads that module and its dependency closure into the ordinary object-only
 `AppSpec` before composition. Imported `KetModule` objects remain valid in the same
 list, so existing workspaces need no migration.
 
-**Why:** Odoo's `addons_path` makes private and vendor modules operationally easy
+**Why:** the domain contract's module search paths makes private and vendor modules operationally easy
 to place, but scanning a root and installing everything found are different
 decisions. Ket keeps them different. A file appearing on disk makes a module
 discoverable, not shipped; the workspace remains the reviewable statement of what
@@ -1588,7 +1588,7 @@ second registration mechanism or leak into business runtime code.
 
 ## D51 — Hospitality is two business modules, and language is not business data
 
-The fourteen `vidoo_hospitality*` Odoo addons are a packaging history, not fourteen
+The fourteen `vidoo_hospitality*` the domain contract addons are a packaging history, not fourteen
 bounded contexts. KetSuite consolidates property, content, rooms, reservations,
 inventory restrictions, housekeeping, services and Vietnamese lodging operations
 under `hospitality_core`; provider-neutral channel work and provider adapters live
@@ -1665,7 +1665,7 @@ small bridge cost is intentional: a reusable generic Chatter endpoint would be a
 cross-domain record-rule bypass in a permission system whose unit is the function.
 
 **The first message document is plain text.** Chatter and inbound bodies are stored
-as text and escaped by the rendering layer. Odoo HTML is not copied into a trusted
+as text and escaped by the rendering layer. the domain contract HTML is not copied into a trusted
 backend surface before a sanitizer or restricted document format exists. Internal
 notes exclude external followers; an external mention is rejected unless the UI
 passes a confirmation that represents an explicit user decision.
@@ -1712,35 +1712,6 @@ type, creates one draft receipt, then posts to its ordinary Chatter thread. Unkn
 or uninstalled bridges remain bounded diagnostics. A maintenance job prunes failed
 diagnostics and expired token digests; processed provider identities remain compact
 dedupe tombstones.
-
-## D55 — Odoo collaboration cutover advances one explicit checkpoint
-
-**Identity is a four-part fact, not an inherited integer.** The import map keys the
-source database, Odoo model, source record id and explicit Ket target model. One
-Odoo Calendar row may therefore map both to its typed `calendar.Event` and to the
-`mail.Thread` authorized by the Calendar bridge without pretending those targets
-are interchangeable. Generated target ids contain a database namespace and remain
-stable across retries.
-
-**A batch and its checkpoint are one transaction.** Snapshot/delta rows, maps,
-issues, pending outbound jobs and the completed run commit before `lastCursor`
-moves. Delta callers must present the exact previous cursor. A repeated run payload
-returns its stored report; a different payload under the same run id is refused.
-Unresolved partners, users and business targets stay visible as issues rather than
-causing generic records to appear outside a domain owner.
-
-**Migration is allowed to lose syntax, never meaning silently.** Chatter-like Odoo
-HTML becomes plain text. Recurrence rules outside the supported Calendar contract
-are errors. Legacy QWeb templates are disabled for review, sent mail is not queued
-again, and secret-like alias defaults are stripped with warnings. Attachment bytes
-are streamed and checksummed before their transactional metadata is imported; the
-importer accepts only the same content-addressed company key used by Storage.
-
-**Rollback does not reverse history.** Until cutover, Odoo is the writable source;
-at freeze it remains an intact read-only fallback. The rollback manifest is a read
-of imported targets, not a delete script. Once KetSuite has accepted writes, an
-automated reverse merge would guess at business conflicts, so both sides must be
-frozen and reconciled explicitly.
 
 ## D56 — OAuth belongs to KetSuite; provider policy belongs to the deployment
 

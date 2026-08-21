@@ -11,7 +11,7 @@ import { menus } from './menus.ts'
  * API could not have products. But a screen in the admin genuinely needs both.
  *
  * So it is a bridge, and it installs itself once both sides are there — what
- * `install: 'auto'` was built for, and what Odoo does with `sale_stock` and its
+ * `install: 'auto'` was built for, and what the domain contract does with sales/inventory bridge and its
  * kin. Install only product and there is no screen and no link; install the admin
  * too and both appear without anyone asking.
  *
@@ -44,6 +44,7 @@ export default defineModule({
     },
     'template.editor': { props: { identity: 'text', templateId: 'id', lang: 'text?' } },
     'variant.editor': { props: { identity: 'text', productId: 'id', lang: 'text?' } },
+    'media.upload': { props: { identity: 'text', action: 'text', label: 'text' } },
   },
   messages: {
     vi: {
@@ -280,6 +281,7 @@ export default defineModule({
   fills: {
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
+    'product_backend:media.upload': `{% island "product.media-upload" %}`,
     // KTL, addressing joints by name — the same language a storefront theme uses.
     'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },

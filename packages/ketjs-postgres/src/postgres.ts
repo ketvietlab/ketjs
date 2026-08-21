@@ -11,7 +11,7 @@ const SQL: Record<FieldBase, string> = {
   text: 'TEXT',
   int: 'BIGINT',
   float: 'DOUBLE PRECISION',
-  // Unbounded numeric, as Odoo uses for quantities and money. The driver hands it
+  // Unbounded numeric, as the domain contract uses for quantities and money. The driver hands it
   // back as a string, which is exactly what keeps it exact.
   decimal: 'NUMERIC',
   bool: 'BOOLEAN',

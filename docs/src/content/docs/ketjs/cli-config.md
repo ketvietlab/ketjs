@@ -98,7 +98,7 @@ require `--tenant KEY` for provisioning and job operations.
 ## Scaffold
 
 ```bash
-ket new inventory --dir ./inventory
+npx -y @ketvietlab/ketjs@latest new inventory --dir ./inventory
 cd inventory
 npm install
 npm run dev

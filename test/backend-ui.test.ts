@@ -530,6 +530,10 @@ test('backend layout: framed list and form screens share the accounting workspac
 
   const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
   assert.match(css, /data-page-frame="true"\]:has/)
+  assert.ok(
+    css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
+    'the generic frame also flattens a rich workspace wrapped by feedback or a stack',
+  )
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {

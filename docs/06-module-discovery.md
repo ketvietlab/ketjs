@@ -2,7 +2,7 @@
 
 Ket can compose modules imported by the workspace and modules selected by name
 from one or more filesystem roots. The filesystem convention is deliberately
-similar to Odoo's `addons_path`; the deployment semantics are not.
+similar to the domain contract's module search paths; the deployment semantics are not.
 
 Discovery answers **where executable modules are available**. The workspace still
 decides **which modules the deployment ships**, and each database independently
