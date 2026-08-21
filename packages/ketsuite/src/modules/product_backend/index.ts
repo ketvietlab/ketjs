@@ -285,5 +285,5 @@ export default defineModule({
   },
 })
 
-export { productsScreen, productDetailScreen } from './screens.ts'
-export type { TemplateRow } from './screens.ts'
+export { productsScreen, productDetailScreen } from './screens.tsx'
+export type { TemplateRow } from './screens.tsx'

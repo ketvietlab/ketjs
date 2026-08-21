@@ -1,0 +1,33 @@
+const vi = {
+  'app.title': 'CRM Website',
+  'app.summary': 'Thu thập tiềm năng từ website.',
+  'app.category': 'Website',
+  'website.title': 'Liên hệ tư vấn',
+  'website.hint': 'Cho chúng tôi biết nhu cầu; đội ngũ bán hàng sẽ liên hệ lại.',
+  'website.submit': 'Gửi yêu cầu tư vấn',
+  'website.successTitle': 'Đã tiếp nhận',
+  'website.success': 'Cảm ơn bạn. Chúng tôi đã tiếp nhận thông tin.',
+  'website.validation': 'Vui lòng nhập tên và ít nhất một cách liên hệ.',
+  'field.subject': 'Tiêu đề',
+  'field.contactName': 'Người liên hệ',
+  'field.email': 'Email',
+  'field.phone': 'Điện thoại',
+  'field.description': 'Mô tả',
+} as const
+const en: Record<keyof typeof vi, string> = {
+  'app.title': 'CRM Website',
+  'app.summary': 'Capture leads from the website.',
+  'app.category': 'Website',
+  'website.title': 'Request a consultation',
+  'website.hint': 'Tell us what you need and our sales team will contact you.',
+  'website.submit': 'Send consultation request',
+  'website.successTitle': 'Request received',
+  'website.success': 'Thank you. We received your request.',
+  'website.validation': 'Enter your name and at least one contact method.',
+  'field.subject': 'Subject',
+  'field.contactName': 'Contact name',
+  'field.email': 'Email',
+  'field.phone': 'Phone',
+  'field.description': 'Description',
+}
+export const messages = { vi, en }

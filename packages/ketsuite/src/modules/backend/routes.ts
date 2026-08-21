@@ -8,7 +8,7 @@
 import { isTimezone } from 'ketjs'
 import type { ServeContext, Route } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
-import { appsScreen, pagesScreen, settingsScreen } from './screens.ts'
+import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
 import type { Extras, Frame, Viewer } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
 import { colsHref, colsOf, pageOf, PAGE_SIZE, pager, searchOf } from './paging.ts'

@@ -1,6 +1,18 @@
 import type { ModelDef } from 'ketjs'
 
 export const models: Record<string, ModelDef> = {
+  Setup: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      countryCode: 'text',
+      standard: 'text',
+      legalBasis: 'text',
+      sourceChecksum: 'text',
+      installedAt: 'datetime',
+    },
+    indexes: { company: { fields: ['companyId'], unique: true } },
+  },
   Account: {
     scope: 'company',
     fields: {
@@ -38,6 +50,7 @@ export const models: Record<string, ModelDef> = {
       amount: 'decimal',
       priceInclude: 'bool',
       includeBaseAmount: 'bool',
+      accountId: 'ref:account.Account?',
       sequence: 'int',
       active: 'bool',
     },

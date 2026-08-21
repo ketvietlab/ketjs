@@ -1,0 +1,69 @@
+[data-ui="crm-kanban-board"] {
+  display: grid;
+  grid-auto-columns: minmax(17rem, 1fr);
+  grid-auto-flow: column;
+  gap: var(--admin-gap-md);
+  overflow-x: auto;
+  padding-block-end: var(--admin-gap);
+}
+
+[data-ui="crm-kanban-column"] {
+  min-height: 22rem;
+  padding: var(--admin-gap);
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface-subtle);
+}
+
+[data-ui="crm-kanban-stage"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--admin-gap);
+}
+
+[data-ui="crm-kanban-stage"] h2 {
+  margin: 0;
+  font-size: var(--admin-size-base);
+}
+[data-ui="crm-kanban-cards"] {
+  display: grid;
+  gap: var(--admin-gap);
+}
+[data-ui="crm-kanban-card"] {
+  display: grid;
+  gap: var(--admin-gap-sm);
+  padding: var(--admin-gap);
+  border: 1px solid var(--admin-line-strong);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+[data-ui="crm-kanban-card"] h3,
+[data-ui="crm-kanban-card"] p {
+  margin: 0;
+}
+[data-ui="crm-kanban-card"] form {
+  display: grid;
+  gap: var(--admin-gap-sm);
+}
+[data-ui="crm-kanban-card"] label {
+  display: grid;
+  gap: var(--admin-gap-xs);
+}
+[data-ui="crm-kanban-card"] select {
+  inline-size: 100%;
+}
+[data-ui="crm-kanban-error"] {
+  margin-block-end: var(--admin-gap);
+  color: var(--admin-danger);
+}
+[data-ui="crm-kanban-empty"] {
+  color: var(--admin-ink-muted);
+}
+
+@media (max-width: 48rem) {
+  [data-ui="crm-kanban-board"] {
+    grid-auto-columns: minmax(15rem, 88vw);
+  }
+}

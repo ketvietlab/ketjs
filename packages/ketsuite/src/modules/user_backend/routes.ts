@@ -11,8 +11,8 @@ import {
   rolesScreen,
   userFormScreen,
   usersScreen,
-} from './screens.ts'
-import type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens.ts'
+} from './screens.tsx'
+import type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>

@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  framed,
+  framedPage as Framed,
   icon,
   linkButton,
   recordForm as RecordForm,
@@ -15,7 +15,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type QuotationRow = Record<string, unknown>
 
@@ -90,50 +90,54 @@ export const quotationsScreen = (_: Translator, options: QuotationsScreenOptions
     />
   )
 
-  return framed(
-    _,
-    _('sale_backend.quotations.title'),
-    options.frame,
-    <RecordWorkspace
-      kicker={_('sale_backend.quotation.kicker')}
-      title={_('sale_backend.quotation.title')}
-      subtitle={_('sale_backend.quotation.subtitle')}
-      imageFallback={icon('shopping-bag')}
-      summary={[
-        { id: 'total', label: _('sale_backend.quotation.summary.total'), value: options.rows.length },
-        { id: 'draft', label: _('sale_backend.quotation.summary.draft'), value: draft },
-        { id: 'sent', label: _('sale_backend.quotation.summary.sent'), value: sent },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('sale_backend.quotation.create.title')}
-            description={_('sale_backend.quotation.create.hint')}
-            body={
-              <Surface
-                padding="compact"
+  return (
+    <Framed
+      translator={_}
+      title={_('sale_backend.quotations.title')}
+      frame={options.frame}
+      body={
+        <RecordWorkspace
+          kicker={_('sale_backend.quotation.kicker')}
+          title={_('sale_backend.quotation.title')}
+          subtitle={_('sale_backend.quotation.subtitle')}
+          imageFallback={icon('shopping-bag')}
+          summary={[
+            { id: 'total', label: _('sale_backend.quotation.summary.total'), value: options.rows.length },
+            { id: 'draft', label: _('sale_backend.quotation.summary.draft'), value: draft },
+            { id: 'sent', label: _('sale_backend.quotation.summary.sent'), value: sent },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('sale_backend.quotation.create.title')}
+                description={_('sale_backend.quotation.create.hint')}
                 body={
-                  <RecordForm
-                    id="quotation-create-form"
-                    scope="sale-quotation-create"
-                    action={options.action}
-                    submit={_('sale_backend.action.create')}
-                    submitVariant="primary"
-                    errors={options.errors}
-                    fields={options.fields}
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        id="quotation-create-form"
+                        scope="sale-quotation-create"
+                        action={options.action}
+                        submit={_('sale_backend.action.create')}
+                        submitVariant="primary"
+                        errors={options.errors}
+                        fields={options.fields}
+                      />
+                    }
                   />
                 }
-              />
-            }
-          />,
-          <Section
-            title={_('sale_backend.quotation.list.title')}
-            description={_('sale_backend.quotation.list.hint')}
-            body={table}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+              />,
+              <Section
+                title={_('sale_backend.quotation.list.title')}
+                description={_('sale_backend.quotation.list.hint')}
+                body={table}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

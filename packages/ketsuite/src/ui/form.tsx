@@ -1,5 +1,5 @@
 import { each } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import type { JSXChild, TemplateResult } from 'ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
 import type { ActionSize, ActionVariant } from './actions.tsx'
 
@@ -24,11 +24,15 @@ export type FormOption = { value: string; label: string }
 export type FormField = {
   name: string
   label: string
+  /** A trusted control such as a progressively enhanced relational selector. */
+  control?: JSXChild
   type?:
     | 'text'
     | 'password'
     | 'number'
     | 'decimal'
+    | 'time'
+    | 'color'
     | 'date'
     | 'datetime-local'
     | 'select'
@@ -47,6 +51,7 @@ export type FormField = {
 }
 
 const control = (field: FormField, id: string, describedBy: string | null): TemplateResult => {
+  if (field.control !== undefined) return <>{field.control}</>
   if (field.type === 'textarea')
     return (
       <textarea
@@ -125,6 +130,8 @@ export type RecordFormOptions = {
   /** Every submit declares its business hierarchy; there is no accidental primary. */
   submitVariant: ActionVariant
   submitSize?: ActionSize
+  /** Keep the form submit in a record-level action bar instead of duplicating it here. */
+  submitPlacement?: 'inside' | 'external'
   layout?: 'default' | 'inline'
   method?: 'get' | 'post'
   /** Optional behavior scope for a progressively enhanced form. */
@@ -231,6 +238,28 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
                 )}
               </div>
             )
+          if (field.control !== undefined)
+            return (
+              <div
+                data-ui="form-field"
+                data-span={field.span ?? 'half'}
+                data-kind="relation"
+                data-invalid={String(!!field.error)}
+              >
+                {fieldLabel}
+                {field.control}
+                {!!field.help && (
+                  <small data-ui="form-help" id={helpId ?? undefined}>
+                    {field.help}
+                  </small>
+                )}
+                {!!field.error && (
+                  <small data-ui="form-error" id={errorId ?? undefined}>
+                    {field.error}
+                  </small>
+                )}
+              </div>
+            )
           return (
             <label
               data-ui="form-field"
@@ -257,34 +286,35 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
         },
       )}
     </div>
-    <div data-ui="form-actions">
-      {actionGroup({
-        actions: [
-          button({
-            label: o.submit,
-            type: 'submit',
-            variant: o.submitVariant,
-            size: o.submitSize,
-          }),
-          ...(o.cancelHref
-            ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
-            : []),
-        ],
-      })}
-    </div>
+    {o.submitPlacement !== 'external' && (
+      <div data-ui="form-actions">
+        {actionGroup({
+          actions: [
+            button({
+              label: o.submit,
+              type: 'submit',
+              variant: o.submitVariant,
+              size: o.submitSize,
+            }),
+            ...(o.cancelHref
+              ? [linkButton({ label: o.cancelLabel, href: o.cancelHref, variant: 'tertiary' })]
+              : []),
+          ],
+        })}
+      </div>
+    )}
   </form>
 )
 
-/** Valid block-level grouping for related forms; never place a form in `inline`. */
-export const formCluster = (o: {
-  forms: readonly TemplateResult[]
-  label?: string | null
-}): TemplateResult => (
+/** Valid block-level grouping for related forms and their external controls. */
+export const formCluster = (o: { forms: readonly JSXChild[]; label?: string | null }): TemplateResult => (
   <div data-ui="form-cluster" role="group" aria-label={o.label ?? null}>
     {each(
       o.forms,
       (_, index) => index,
-      (form) => form,
+      (form) => (
+        <>{form}</>
+      ),
     )}
   </div>
 )
@@ -293,6 +323,7 @@ export const formCluster = (o: {
 export const recordActions = (o: {
   action: string
   label?: string | null
+  hidden?: Record<string, string>
   actions: ReadonlyArray<{
     value: string
     label: string
@@ -308,6 +339,9 @@ export const recordActions = (o: {
 
   return (
     <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
+      {Object.entries(o.hidden ?? {}).map(([name, value]) => (
+        <input type="hidden" name={name} value={value} />
+      ))}
       {actionGroup({
         label: o.label,
         actions: o.actions.map((action) =>

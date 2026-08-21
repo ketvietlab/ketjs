@@ -2,7 +2,7 @@
 // The target must be an explicit, new SQLite file; this tool never replaces data.
 
 import { existsSync } from 'node:fs'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
+import { bootWorker, callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
 import type { Adapter } from 'ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
@@ -18,8 +18,9 @@ await migrateOne(adapter, manifest)
 registerFunctions(modules)
 
 const scope = { company: 'default', companies: ['default'], branches: null }
+let visualActor: string | null = null
 const call = async (name: string, args: Record<string, unknown>) => {
-  const result = await callFn(name, args, { adapter, manifest, scope })
+  const result = await callFn(name, args, { adapter, manifest, scope, actor: visualActor })
   const value = result.value as { ok?: boolean; errors?: unknown }
   if (value?.ok === false) throw new Error(`${name}: ${JSON.stringify(value.errors)}`)
   return result.value
@@ -47,12 +48,34 @@ try {
     defaultCompanyId: 'default',
     superuser: true,
   })
+  visualActor = 'visual-admin'
   await call('user.grantCompany', {
     id: 'visual-admin:default',
     userId: 'visual-admin',
     companyId: 'default',
   })
   await call('address.installCatalog', { countryCode: 'VN' })
+  await call('uom.saveUnit', { id: 'service-unit', name: 'Lần', relativeFactor: '1' })
+  for (const service of [
+    { id: 'breakfast', code: 'BF', name: 'Bữa sáng buffet', price: '220000' },
+    { id: 'minibar', code: 'MB', name: 'Minibar', price: '180000' },
+    { id: 'laundry', code: 'LD', name: 'Giặt ủi', price: '90000' },
+  ]) {
+    await call('product.saveTemplate', {
+      id: `${service.id}-template`,
+      name: service.name,
+      type: 'service',
+      uomId: 'service-unit',
+      listPrice: service.price,
+      saleOk: true,
+    })
+    await call('product.saveVariant', {
+      id: service.id,
+      templateId: `${service.id}-template`,
+      defaultCode: service.code,
+      combinationKey: '',
+    })
+  }
   for (const guest of [
     { id: 'guest-an', name: 'Nguyễn Minh An' },
     { id: 'guest-binh', name: 'Trần Gia Bình' },
@@ -83,6 +106,16 @@ try {
     divisionId: 'VN:2025-07-01:70101063',
     defaultCancellationPolicyId: 'flexible',
   })
+  for (const fee of [
+    { id: 'city-tax', chargeType: 'city_tax', name: 'Thuế lưu trú thành phố', amount: '35000' },
+    { id: 'parking-fee', chargeType: 'parking', name: 'Phí đỗ xe qua đêm', amount: '120000' },
+    { id: 'resort-fee', chargeType: 'resort_fee', name: 'Phí tiện ích', amount: '180000' },
+  ])
+    await call('hospitality_core.savePropertyCharge', {
+      ...fee,
+      propertyId: property,
+      active: true,
+    })
   await call('hospitality_core.saveBuilding', {
     id: 'tower-a',
     propertyId: property,
@@ -106,7 +139,13 @@ try {
     defaultCapacity: 2,
     maxAdults: 2,
     maxChildren: 1,
+    maxInfants: 1,
+    maxExtraBeds: 1,
+    sizeSqm: '29.5',
+    viewType: 'city',
     baseRate: '1450000',
+    color: '#2563eb',
+    cancellationPolicyId: 'flexible',
     published: true,
   })
   await call('hospitality_core.saveRoomType', {
@@ -119,8 +158,20 @@ try {
     defaultCapacity: 3,
     maxAdults: 2,
     maxChildren: 2,
+    maxInfants: 1,
+    maxExtraBeds: 1,
+    sizeSqm: '48',
+    viewType: 'river',
     baseRate: '2650000',
+    color: '#0f766e',
+    cancellationPolicyId: 'flexible',
     published: true,
+  })
+  await call('hospitality_core.saveBed', {
+    id: 'deluxe-king-bed',
+    roomTypeId: roomType,
+    type: 'king',
+    quantity: 1,
   })
   for (const image of [
     {
@@ -180,11 +231,12 @@ try {
     })
   }
   for (const room of [
-    { id: '101', type: roomType, status: 'available' },
-    { id: '102', type: roomType, status: 'available' },
-    { id: '103', type: roomType, status: 'cleaning' },
-    { id: '104', type: 'suite', status: 'available' },
-    { id: '105', type: 'suite', status: 'maintenance' },
+    { id: '101', type: roomType },
+    { id: '102', type: roomType },
+    { id: '103', type: roomType },
+    { id: '104', type: 'suite' },
+    { id: '105', type: 'suite' },
+    { id: '106', type: roomType },
   ])
     await call('hospitality_core.saveRoom', {
       id: room.id,
@@ -194,8 +246,13 @@ try {
       floorId: 'floor-1',
       code: room.id,
       name: `Phòng ${room.id}`,
-      status: room.status,
     })
+  await call('hospitality_core.setRoomStatus', {
+    id: '105',
+    expectedStatus: 'available',
+    status: 'maintenance',
+    note: 'Bảo trì điều hòa theo kế hoạch.',
+  })
   await call('hospitality_core.saveRatePlan', {
     id: 'deluxe-flex',
     propertyId: property,
@@ -299,6 +356,19 @@ try {
     externalId: 'TVL-9931',
   })
   await booking('res-cancel', 'guest-giang', '2026-08-22T14:00:00.000Z', '2026-08-23T12:00:00.000Z')
+  await call('hospitality_core.createReservation', {
+    id: 'res-long-stay',
+    code: 'RES-LONG-STAY',
+    propertyId: property,
+    roomTypeId: 'suite',
+    partnerId: 'guest-giang',
+    bookingType: 'weekly',
+    billingMode: 'recurring',
+    checkIn: '2026-07-01T14:00:00.000Z',
+    checkOut: '2026-09-02T12:00:00.000Z',
+    rate: '9200000',
+    createdAt: '2026-06-25T02:00:00.000Z',
+  })
   await call('hospitality_core.cancelReservation', {
     id: 'res-cancel',
     reason: 'Khách đổi lịch',
@@ -316,6 +386,111 @@ try {
     assignmentId: 'assignment-depart',
     at: '2026-08-18T14:10:00.000Z',
   })
+  await call('hospitality_core.checkIn', {
+    stayId: 'res-long-stay:stay',
+    roomId: '104',
+    assignmentId: 'assignment-long-stay',
+    at: '2026-07-01T14:00:00.000Z',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-binh',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-binh',
+    type: 'cccd',
+    number: '079201004201',
+    fullName: 'Trần Gia Bình',
+    dateOfBirth: '1988-04-20T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-chi',
+    stayId: 'res-depart:stay',
+    partnerId: 'guest-chi',
+    type: 'passport',
+    number: 'P8842001',
+    fullName: 'Lê Thùy Chi',
+    dateOfBirth: '1992-09-12T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  await call('hospitality_core.addStayGuest', {
+    id: 'res-house:companion',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-an',
+    displayName: 'Nguyễn Minh An',
+  })
+  await call('hospitality_core.saveGuestDocument', {
+    id: 'document-an',
+    stayId: 'res-house:stay',
+    partnerId: 'guest-an',
+    type: 'cccd',
+    number: '079202007530',
+    fullName: 'Nguyễn Minh An',
+    dateOfBirth: '1995-11-08T00:00:00.000Z',
+    ocrState: 'done',
+  })
+  const worker = await bootWorker(ketsuite, {
+    env: { KET_SQLITE: path, KET_COMPANY: 'default', KET_QUEUE_NOTIFY: '0' },
+    log: () => {},
+  })
+  try {
+    await worker.drain()
+  } finally {
+    await worker.close()
+  }
+  await call('hospitality_core.recordStayNoticeSubmission', {
+    id: 'res-house:stay:notice:res-house:guest',
+    reason: 'business',
+    channel: 'online',
+    evidenceRef: 'DVC-4201',
+  })
+  await call('hospitality_core.confirmStayNotice', {
+    id: 'res-house:stay:notice:res-house:guest',
+    receiptRef: 'DVC-4201',
+  })
+  await call('hospitality_core.recordStayNoticeSubmission', {
+    id: 'res-depart:stay:notice:res-depart:guest',
+    reason: 'tourism',
+    channel: 'vneid',
+    evidenceRef: 'VNEID-8842',
+  })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-minibar',
+    reservationId: 'res-arrive',
+    productId: 'minibar',
+    description: 'Minibar chào phòng',
+    recurrence: 'once',
+  })
+  await call('hospitality_core.materializeExtraLine', { id: 'extra-minibar' })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-breakfast',
+    stayId: 'res-house:stay',
+    productId: 'breakfast',
+    description: 'Bữa sáng người lớn',
+    recurrence: 'per_night',
+    quantity: '2',
+  })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-long-stay-breakfast',
+    stayId: 'res-long-stay:stay',
+    productId: 'breakfast',
+    description: 'Bữa sáng lưu trú dài hạn',
+    recurrence: 'per_night',
+    quantity: '1',
+  })
+  for (const serviceDate of ['2026-08-19', '2026-08-20'])
+    await call('hospitality_core.materializeExtraLine', { id: 'extra-breakfast', serviceDate })
+  await call('hospitality_core.saveExtraLine', {
+    id: 'extra-laundry',
+    stayId: 'res-house:stay',
+    productId: 'laundry',
+    description: 'Giặt ủi theo túi',
+    recurrence: 'per_unit',
+  })
+  await call('hospitality_core.materializeExtraLine', {
+    id: 'extra-laundry',
+    quantity: '3',
+    requestKey: 'laundry-bag-001',
+  })
   await call('hospitality_core.addCharge', {
     id: 'charge-spa',
     folioId: 'res-house:folio',
@@ -326,6 +501,12 @@ try {
     unitPrice: '650000',
     sourceKey: 'visual:spa:1',
     occurredAt: '2026-08-19T16:00:00.000Z',
+  })
+  await call('hospitality_core.voidCharge', {
+    id: 'charge-spa',
+    folioId: 'res-house:folio',
+    reason: 'Khách đổi ý trước khi sử dụng dịch vụ',
+    voidedAt: '2026-08-19T16:15:00.000Z',
   })
   await call('hospitality_core.createCleaningTask', {
     id: 'cleaning-103',
@@ -341,6 +522,10 @@ try {
     id: 'cleaning-103',
     assigneeId: 'visual-admin',
     at: '2026-08-20T01:45:00.000Z',
+  })
+  await call('hospitality_core.requestNightAudit', {
+    propertyId: property,
+    auditDate: '2026-08-20',
   })
   console.log(`hospitality visual database ready: ${path}`)
   console.log('sign in with admin / hospitality-demo')

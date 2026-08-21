@@ -3,7 +3,7 @@ import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import type { TemplateResult } from 'ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { actionGroup, backendPage, code, formatMoney, linkButton } from '../../ui/index.ts'
+import { actionGroup, backendPage, formatMoney, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
@@ -16,19 +16,19 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import {
-  accountingDashboard,
-  entityScreen,
-  labelOf,
-  movesScreen,
-  optionsOf,
-  reportScreen,
-} from './screens.ts'
+import { optionsOf } from './screens.tsx'
+import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
 import { accountsScreen } from './accounts-screen.tsx'
+import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
+import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
+import { paymentTermsScreen } from './payment-terms-screen.tsx'
+import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
+import { taxesScreen } from './taxes-screen.tsx'
+import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -83,6 +83,7 @@ const currencyOf = (companies: AnyRow[], shell: Frame): unknown =>
   companies.find((company) => company.id === shell.viewer?.company)?.currency
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
+  await ctx.call('account.initializeCompany', {}, url, req)
   const [accounts, journals, taxes, terms, partners, companies, templates, units] = (await Promise.all([
     ctx.call('account.listAccounts', {}, url, req),
     ctx.call('account.listJournals', {}, url, req),
@@ -444,23 +445,26 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const [accounts, journals, moves] = (await Promise.all([
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, journals, moves, setup] = (await Promise.all([
           ctx.call('account.listAccounts', {}, url, req),
           ctx.call('account.listJournals', {}, url, req),
           ctx.call('account.listMoves', {}, url, req),
-        ])) as [AnyRow[], AnyRow[], AnyRow[]]
+          ctx.call('account.getSetup', {}, url, req),
+        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow]
         return document(ctx, url, req, 'account_backend.dashboard.title', (_, tr, shell) =>
-          accountingDashboard(
-            tr,
-            {
+          accountingOverviewScreen(tr, {
+            counts: {
               accounts: accounts.length,
               journals: journals.length,
               draft: moves.filter((move) => move.state === 'draft').length,
               posted: moves.filter((move) => move.state === 'posted').length,
               unpaid: moves.filter((move) => move.paymentState === 'not_paid').length,
             },
-            shell,
-          ),
+            frame: shell,
+            locale: localeSuffix(url),
+            standard: String(setup.standard),
+          }),
         )
       },
     '/admin/accounts':
@@ -578,24 +582,27 @@ export default defineModule({
                 amount: form.amount || '0',
                 priceInclude: form.priceInclude === '1',
                 includeBaseAmount: form.includeBaseAmount === '1',
+                ...optional(form, 'accountId'),
                 sequence: Number(form.sequence || 10),
                 active: true,
               },
               url,
               req,
             ),
-            '/admin/taxes',
+            `/admin/taxes${localeSuffix(url)}`,
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         return document(ctx, url, req, 'account_backend.taxes.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return entityScreen(tr, {
-            title: tr('account_backend.taxes.title'),
+          return taxesScreen(tr, {
             frame: shell,
-            action: '/admin/taxes',
-            submit: tr('account_backend.action.create'),
+            action: `/admin/taxes${localeSuffix(url)}`,
             rows: data.taxes,
+            accounts: data.accounts,
+            currency,
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
             fields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               { name: 'description', label: tr('account_backend.field.description') },
@@ -619,10 +626,16 @@ export default defineModule({
               },
               {
                 name: 'amount',
-                label: tr('account_backend.field.paymentAmount'),
+                label: tr('account_backend.field.amount'),
                 type: 'decimal',
                 value: 0,
                 required: true,
+              },
+              {
+                name: 'accountId',
+                label: tr('account_backend.field.accountId'),
+                type: 'select',
+                options: choices(data.accounts, true),
               },
               { name: 'priceInclude', label: tr('account_backend.field.priceInclude'), type: 'checkbox' },
               {
@@ -631,41 +644,6 @@ export default defineModule({
                 type: 'checkbox',
               },
               { name: 'sequence', label: tr('account_backend.field.sequence'), type: 'number', value: 10 },
-            ],
-            columns: [
-              {
-                key: 'name',
-                label: tr('account_backend.field.name'),
-                cell: (row) => String(row.name),
-                priority: 'primary',
-              },
-              {
-                key: 'use',
-                label: tr('account_backend.field.typeTaxUse'),
-                cell: (row) => labelOf(tr, 'taxUse', row.typeTaxUse),
-              },
-              {
-                key: 'computation',
-                label: tr('account_backend.field.amountType'),
-                cell: (row) => labelOf(tr, 'taxAmountType', row.amountType),
-              },
-              {
-                key: 'amount',
-                label: tr('account_backend.field.amount'),
-                cell: (row) =>
-                  row.amountType === 'fixed'
-                    ? formatMoney(tr, row.amount, currency)
-                    : row.amountType === 'group'
-                      ? '—'
-                      : `${String(row.amount)}%`,
-                align: 'end',
-                kind: 'number',
-              },
-              {
-                key: 'included',
-                label: tr('account_backend.field.priceInclude'),
-                cell: (row) => (row.priceInclude ? tr('account_backend.yes') : tr('account_backend.no')),
-              },
             ],
           })
         })
@@ -698,94 +676,69 @@ export default defineModule({
                   url,
                   req,
                 )
-          return resultRedirect(result, '/admin/payment-terms')
+          return resultRedirect(result, `/admin/payment-terms${localeSuffix(url)}`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listPaymentTerms', {}, url, req)) as AnyRow[]
         return document(ctx, url, req, 'account_backend.terms.title', (_, tr, shell) =>
-          entityScreen(tr, {
-            title: tr('account_backend.terms.title'),
+          paymentTermsScreen(tr, {
             frame: shell,
-            action: '/admin/payment-terms',
-            submit: tr('account_backend.action.createTerm'),
+            action: `/admin/payment-terms${localeSuffix(url)}`,
             rows,
-            fields: [
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
+            termFields: [
               { name: 'name', label: tr('account_backend.field.name'), required: true },
               { name: 'note', label: tr('account_backend.field.note'), type: 'textarea', span: 'full' },
             ],
-            extraForms: rows.length
+            lineFields: rows.length
               ? [
                   {
-                    action: '/admin/payment-terms',
-                    submit: tr('account_backend.action.addTermLine'),
-                    hidden: { action: 'line' },
-                    fields: [
-                      {
-                        name: 'paymentId',
-                        label: tr('account_backend.field.paymentTermId'),
-                        type: 'select',
-                        options: choices(rows),
-                        required: true,
-                      },
-                      {
-                        name: 'value',
-                        label: tr('account_backend.field.termValue'),
-                        type: 'select',
-                        options: optionsOf(tr, 'paymentTermValue', PAYMENT_TERM_VALUES),
-                      },
-                      {
-                        name: 'valueAmount',
-                        label: tr('account_backend.field.valueAmount'),
-                        type: 'decimal',
-                        value: 100,
-                        required: true,
-                      },
-                      {
-                        name: 'delayType',
-                        label: tr('account_backend.field.delayType'),
-                        type: 'select',
-                        options: optionsOf(tr, 'paymentTermDelay', PAYMENT_TERM_DELAY_TYPES),
-                      },
-                      {
-                        name: 'nbDays',
-                        label: tr('account_backend.field.nbDays'),
-                        type: 'number',
-                        value: 0,
-                        required: true,
-                      },
-                      {
-                        name: 'daysNextMonth',
-                        label: tr('account_backend.field.daysNextMonth'),
-                        type: 'number',
-                      },
-                      {
-                        name: 'sequence',
-                        label: tr('account_backend.field.sequence'),
-                        type: 'number',
-                        value: 10,
-                      },
-                    ],
+                    name: 'paymentId',
+                    label: tr('account_backend.field.paymentTermId'),
+                    type: 'select',
+                    options: choices(rows),
+                    required: true,
+                  },
+                  {
+                    name: 'value',
+                    label: tr('account_backend.field.termValue'),
+                    type: 'select',
+                    options: optionsOf(tr, 'paymentTermValue', PAYMENT_TERM_VALUES),
+                  },
+                  {
+                    name: 'valueAmount',
+                    label: tr('account_backend.field.valueAmount'),
+                    type: 'decimal',
+                    value: 100,
+                    required: true,
+                  },
+                  {
+                    name: 'delayType',
+                    label: tr('account_backend.field.delayType'),
+                    type: 'select',
+                    options: optionsOf(tr, 'paymentTermDelay', PAYMENT_TERM_DELAY_TYPES),
+                  },
+                  {
+                    name: 'nbDays',
+                    label: tr('account_backend.field.nbDays'),
+                    type: 'number',
+                    value: 0,
+                    required: true,
+                  },
+                  {
+                    name: 'daysNextMonth',
+                    label: tr('account_backend.field.daysNextMonth'),
+                    type: 'number',
+                  },
+                  {
+                    name: 'sequence',
+                    label: tr('account_backend.field.sequence'),
+                    type: 'number',
+                    value: 10,
                   },
                 ]
-              : [],
-            columns: [
-              {
-                key: 'name',
-                label: tr('account_backend.field.name'),
-                cell: (row) => String(row.name),
-                priority: 'primary',
-              },
-              {
-                key: 'lines',
-                label: tr('account_backend.terms.lines'),
-                cell: (row) => String(Array.isArray(row.lines) ? row.lines.length : 0),
-              },
-              {
-                key: 'note',
-                label: tr('account_backend.field.note'),
-                cell: (row) => String(row.note ?? '—'),
-              },
-            ],
+              : undefined,
           }),
         )
       },
@@ -836,19 +789,22 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         const data = await common(ctx, url, req)
-        if (req.method === 'POST') return createInvoice(ctx, url, req, '/admin/customer-invoices')
+        if (req.method === 'POST')
+          return createInvoice(ctx, url, req, `/admin/customer-invoices${localeSuffix(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
         const rows = all.filter((move) =>
           ['out_invoice', 'out_refund', 'out_receipt'].includes(String(move.moveType)),
         )
         return document(ctx, url, req, 'account_backend.customerInvoices.title', (_, tr, shell) =>
-          movesScreen(tr, {
-            title: tr('account_backend.customerInvoices.title'),
+          customerInvoicesScreen(tr, {
             frame: shell,
-            action: '/admin/customer-invoices',
+            action: `/admin/customer-invoices${localeSuffix(url)}`,
             fields: invoiceFields(tr, data, ['out_invoice', 'out_refund', 'out_receipt']),
             rows,
+            locale: localeSuffix(url),
+            errors:
+              url.searchParams.get('invalid') === '1' ? [tr('account_backend.error.invalid')] : undefined,
           }),
         )
       },
@@ -999,11 +955,11 @@ export default defineModule({
         ])) as [AnyRow[], AnyRow[]]
         return document(ctx, url, req, 'account_backend.trialBalance.title', (_, tr, shell) => {
           const currency = currencyOf(companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.trialBalance.title'),
+          return trialBalanceScreen(tr, {
             frame: shell,
-            action: '/admin/trial-balance',
+            action: `/admin/trial-balance${localeSuffix(url)}`,
             rows,
+            currency,
             fields: [
               {
                 name: 'dateFrom',
@@ -1012,36 +968,6 @@ export default defineModule({
                 value: dateFrom,
               },
               { name: 'dateTo', label: tr('account_backend.field.dateTo'), type: 'date', value: dateTo },
-            ],
-            columns: [
-              {
-                key: 'code',
-                label: tr('account_backend.field.code'),
-                cell: (row) => code(String(row.code)),
-                priority: 'primary',
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'balance',
-                label: tr('account_backend.field.balance'),
-                cell: (row) => formatMoney(tr, row.balance, currency),
-                align: 'end',
-                kind: 'currency',
-              },
             ],
           })
         })
@@ -1066,11 +992,11 @@ export default defineModule({
         )) as AnyRow[]
         return document(ctx, url, req, 'account_backend.generalLedger.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.generalLedger.title'),
+          return generalLedgerScreen(tr, {
             frame: shell,
-            action: '/admin/general-ledger',
+            action: `/admin/general-ledger${localeSuffix(url)}`,
             rows,
+            currency,
             fields: [
               {
                 name: 'accountId',
@@ -1087,34 +1013,6 @@ export default defineModule({
               },
               { name: 'dateTo', label: tr('account_backend.field.dateTo'), type: 'date', value: dateTo },
             ],
-            columns: [
-              {
-                key: 'date',
-                label: tr('account_backend.field.date'),
-                cell: (row) => String((row.move as AnyRow)?.date ?? '').slice(0, 10),
-                priority: 'primary',
-              },
-              {
-                key: 'entry',
-                label: tr('account_backend.field.entry'),
-                cell: (row) => String((row.move as AnyRow)?.name ?? ''),
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-            ],
           })
         })
       },
@@ -1129,11 +1027,12 @@ export default defineModule({
           : []
         return document(ctx, url, req, 'account_backend.partnerStatement.title', (_, tr, shell) => {
           const currency = currencyOf(data.companies, shell)
-          return reportScreen(tr, {
-            title: tr('account_backend.partnerStatement.title'),
+          return partnerLedgerScreen(tr, {
             frame: shell,
-            action: '/admin/partner-statement',
+            action: `/admin/partner-statement${localeSuffix(url)}`,
             rows,
+            currency,
+            selected: Boolean(partnerId),
             fields: [
               {
                 name: 'partnerId',
@@ -1141,41 +1040,6 @@ export default defineModule({
                 type: 'select',
                 value: partnerId,
                 options: choices(data.partners, true),
-              },
-            ],
-            columns: [
-              {
-                key: 'date',
-                label: tr('account_backend.field.date'),
-                cell: (row) => String((row.move as AnyRow)?.date ?? '').slice(0, 10),
-                priority: 'primary',
-              },
-              {
-                key: 'entry',
-                label: tr('account_backend.field.entry'),
-                cell: (row) => String((row.move as AnyRow)?.name ?? ''),
-              },
-              { key: 'name', label: tr('account_backend.field.name'), cell: (row) => String(row.name) },
-              {
-                key: 'debit',
-                label: tr('account_backend.field.debit'),
-                cell: (row) => formatMoney(tr, row.debit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'credit',
-                label: tr('account_backend.field.credit'),
-                cell: (row) => formatMoney(tr, row.credit, currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'residual',
-                label: tr('account_backend.field.residual'),
-                cell: (row) => formatMoney(tr, row.amountResidual, currency),
-                align: 'end',
-                kind: 'currency',
               },
             ],
           })
@@ -1208,11 +1072,28 @@ const vi: Record<string, string> = {
   'menu.taxes': 'Thuế',
   'menu.paymentTerms': 'Điều khoản thanh toán',
   'dashboard.title': 'Tổng quan kế toán',
+  'dashboard.kicker': 'Không gian tài chính',
+  'dashboard.subtitle': 'Theo dõi chứng từ, công nợ, báo cáo và cấu hình kế toán tại một nơi.',
   'dashboard.draft': 'Bút toán nháp',
   'dashboard.posted': 'Bút toán đã ghi sổ',
   'dashboard.unpaid': 'Chứng từ chưa thanh toán',
   'dashboard.records': 'Bản ghi',
   'dashboard.reports': 'Báo cáo tài chính',
+  'dashboard.reportsHint': 'Mở các báo cáo sổ cái và công nợ đã ghi sổ.',
+  'dashboard.operations': 'Nghiệp vụ hằng ngày',
+  'dashboard.operationsHint': 'Tạo và theo dõi hoá đơn, bút toán và thanh toán.',
+  'dashboard.configurationHint': 'Quản lý nền tảng dùng khi ghi sổ chứng từ.',
+  'dashboard.customerInvoicesHint': 'Hoá đơn bán hàng và phần công nợ chưa thanh toán.',
+  'dashboard.vendorBillsHint': 'Chứng từ mua hàng và nghĩa vụ phải trả nhà cung cấp.',
+  'dashboard.entriesHint': 'Bút toán nháp và đã ghi sổ trong sổ nhật ký.',
+  'dashboard.paymentsHint': 'Khoản thu, chi và đối soát công nợ.',
+  'dashboard.trialBalanceHint': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản.',
+  'dashboard.generalLedgerHint': 'Xem chi tiết phát sinh trên từng tài khoản.',
+  'dashboard.partnerLedgerHint': 'Theo dõi công nợ phải thu, phải trả theo đối tác.',
+  'dashboard.accountsHint': 'Hệ thống tài khoản Việt Nam theo Thông tư 99/2025/TT-BTC.',
+  'dashboard.journalsHint': 'Phân loại và đánh số chứng từ kế toán.',
+  'dashboard.taxesHint': 'Cấu hình phạm vi và cách tính thuế.',
+  'dashboard.paymentTermsHint': 'Lịch thanh toán dùng cho hoá đơn và công nợ.',
   'accounts.title': 'Hệ thống tài khoản',
   'account.kicker': 'Cấu hình sổ cái',
   'account.subtitle': 'Quản lý hệ thống mã và loại tài khoản theo chuẩn Odoo 19.',
@@ -1240,7 +1121,32 @@ const vi: Record<string, string> = {
   'journal.empty': 'Chưa có sổ nhật ký',
   'journal.emptyHint': 'Tạo sổ đầu tiên để bắt đầu phân loại chứng từ.',
   'taxes.title': 'Thuế',
+  'tax.kicker': 'Cấu hình thuế',
+  'tax.subtitle': 'Quản lý phạm vi và cách tính thuế theo selection code Odoo 19.',
+  'tax.summary.total': 'Tổng sắc thuế',
+  'tax.summary.sale': 'Bán hàng',
+  'tax.summary.purchase': 'Mua hàng',
+  'tax.summary.included': 'Đã gồm trong giá',
+  'tax.create.title': 'Tạo thuế',
+  'tax.create.hint': 'Chọn phạm vi sử dụng, cách tính và nhập số tiền hoặc tỷ lệ.',
+  'tax.list.title': 'Thuế hiện có',
+  'tax.list.hint': 'Kiểm tra phạm vi, phép tính, giá trị và chính sách bao gồm trong giá.',
+  'tax.empty': 'Chưa có thuế',
+  'tax.emptyHint': 'Tạo sắc thuế đầu tiên để áp dụng trên chứng từ.',
   'terms.title': 'Điều khoản thanh toán',
+  'term.kicker': 'Lịch thanh toán',
+  'term.subtitle': 'Cấu hình các mốc đến hạn theo quy tắc Odoo 19.',
+  'term.summary.total': 'Tổng điều khoản',
+  'term.summary.configured': 'Đã có mốc',
+  'term.summary.lines': 'Tổng số mốc',
+  'term.create.title': 'Tạo điều khoản thanh toán',
+  'term.create.hint': 'Đặt tên và ghi chú hiển thị trên chứng từ.',
+  'term.line.create.title': 'Thêm mốc đến hạn',
+  'term.line.create.hint': 'Phân bổ phần trăm hoặc số tiền và chọn cách tính ngày đến hạn.',
+  'term.list.title': 'Điều khoản hiện có',
+  'term.list.hint': 'Kiểm tra số mốc đến hạn và ghi chú của từng điều khoản.',
+  'term.empty': 'Chưa có điều khoản thanh toán',
+  'term.emptyHint': 'Tạo điều khoản đầu tiên, sau đó thêm các mốc đến hạn.',
   'entries.title': 'Bút toán',
   'entry.kicker': 'Sổ cái',
   'entry.subtitle': 'Ghi nhận và kiểm soát các bút toán kế toán thủ công.',
@@ -1254,6 +1160,18 @@ const vi: Record<string, string> = {
   'entry.empty': 'Chưa có bút toán',
   'entry.emptyHint': 'Tạo bút toán đầu tiên để bắt đầu ghi nhận vào sổ cái.',
   'customerInvoices.title': 'Hoá đơn khách hàng',
+  'customerInvoice.kicker': 'Công nợ khách hàng',
+  'customerInvoice.subtitle': 'Lập, kiểm tra và theo dõi thanh toán hoá đơn bán hàng.',
+  'customerInvoice.summary.total': 'Tổng hoá đơn',
+  'customerInvoice.summary.draft': 'Bản nháp',
+  'customerInvoice.summary.posted': 'Đã ghi sổ',
+  'customerInvoice.summary.unpaid': 'Chưa thanh toán',
+  'customerInvoice.create.title': 'Tạo hoá đơn khách hàng',
+  'customerInvoice.create.hint': 'Nhập khách hàng, dòng doanh thu, thuế và tài khoản phải thu.',
+  'customerInvoice.list.title': 'Hoá đơn khách hàng hiện có',
+  'customerInvoice.list.hint': 'Mở chứng từ để kiểm tra dòng, ghi sổ, theo dõi thanh toán và trao đổi.',
+  'customerInvoice.empty': 'Chưa có hoá đơn khách hàng',
+  'customerInvoice.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải thu.',
   'vendorBills.title': 'Hoá đơn nhà cung cấp',
   'vendorBill.kicker': 'Công nợ nhà cung cấp',
   'vendorBill.subtitle': 'Ghi nhận, kiểm tra và theo dõi thanh toán hoá đơn mua hàng.',
@@ -1282,8 +1200,43 @@ const vi: Record<string, string> = {
   'payment.empty': 'Chưa có thanh toán',
   'payment.emptyHint': 'Ghi nhận khoản thu hoặc chi đầu tiên để bắt đầu theo dõi dòng tiền.',
   'trialBalance.title': 'Bảng cân đối thử',
+  'trial.kicker': 'Báo cáo sổ cái',
+  'trial.subtitle': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản trong kỳ.',
+  'trial.summary.debit': 'Tổng Nợ',
+  'trial.summary.credit': 'Tổng Có',
+  'trial.summary.balance': 'Chênh lệch',
+  'trial.filter.title': 'Kỳ báo cáo',
+  'trial.filter.hint': 'Để trống ngày để tính trên toàn bộ bút toán đã ghi sổ.',
+  'trial.result.title': 'Số dư theo tài khoản',
+  'trial.result.hint': 'Tổng Nợ và Có phải cân bằng trên toàn bộ hệ thống tài khoản.',
+  'trial.empty': 'Không có số liệu trong kỳ',
+  'trial.emptyHint': 'Thay đổi khoảng ngày hoặc ghi sổ các bút toán trước khi tính lại.',
   'generalLedger.title': 'Sổ cái',
+  'ledger.kicker': 'Chi tiết sổ cái',
+  'ledger.subtitle': 'Theo dõi phát sinh Nợ và Có của từng tài khoản theo kỳ.',
+  'ledger.summary.lines': 'Dòng bút toán',
+  'ledger.summary.debit': 'Tổng Nợ',
+  'ledger.summary.credit': 'Tổng Có',
+  'ledger.filter.title': 'Bộ lọc sổ cái',
+  'ledger.filter.hint': 'Chọn một tài khoản hoặc để trống để xem toàn bộ dòng đã ghi sổ.',
+  'ledger.result.title': 'Chi tiết phát sinh',
+  'ledger.result.hint': 'Mỗi dòng liên kết phát sinh với bút toán và ngày ghi sổ.',
+  'ledger.empty': 'Không có phát sinh phù hợp',
+  'ledger.emptyHint': 'Thay đổi tài khoản hoặc khoảng ngày để xem dữ liệu khác.',
   'partnerStatement.title': 'Sổ đối tác',
+  'partnerLedger.kicker': 'Công nợ đối tác',
+  'partnerLedger.subtitle': 'Theo dõi phát sinh phải thu, phải trả và số còn lại theo đối tác.',
+  'partnerLedger.summary.debit': 'Tổng Nợ',
+  'partnerLedger.summary.credit': 'Tổng Có',
+  'partnerLedger.summary.residual': 'Còn lại',
+  'partnerLedger.filter.title': 'Chọn đối tác',
+  'partnerLedger.filter.hint': 'Báo cáo chỉ bao gồm tài khoản phải thu và phải trả trên bút toán đã ghi sổ.',
+  'partnerLedger.result.title': 'Chi tiết công nợ',
+  'partnerLedger.result.hint': 'Theo dõi chứng từ, phát sinh Nợ/Có và phần chưa đối soát.',
+  'partnerLedger.select': 'Chưa chọn đối tác',
+  'partnerLedger.selectHint': 'Chọn một đối tác để xem sổ công nợ.',
+  'partnerLedger.empty': 'Đối tác chưa có phát sinh',
+  'partnerLedger.emptyHint': 'Đối tác đã chọn không có bút toán phải thu hoặc phải trả đã ghi sổ.',
   'lines.title': 'Dòng bút toán',
   'lines.add': 'Thêm dòng bút toán',
   'move.kicker': 'Chứng từ kế toán',
@@ -1382,11 +1335,28 @@ const en: Record<string, string> = {
   'menu.taxes': 'Taxes',
   'menu.paymentTerms': 'Payment terms',
   'dashboard.title': 'Accounting overview',
+  'dashboard.kicker': 'Finance workspace',
+  'dashboard.subtitle': 'Track documents, balances, reports, and accounting configuration in one place.',
   'dashboard.draft': 'Draft entries',
   'dashboard.posted': 'Posted entries',
   'dashboard.unpaid': 'Unpaid documents',
   'dashboard.records': 'Records',
   'dashboard.reports': 'Financial reports',
+  'dashboard.reportsHint': 'Open posted ledger and receivable or payable reports.',
+  'dashboard.operations': 'Daily operations',
+  'dashboard.operationsHint': 'Create and track invoices, journal entries, and payments.',
+  'dashboard.configurationHint': 'Manage the foundations used when posting documents.',
+  'dashboard.customerInvoicesHint': 'Sales invoices and outstanding customer balances.',
+  'dashboard.vendorBillsHint': 'Purchase documents and supplier obligations.',
+  'dashboard.entriesHint': 'Draft and posted entries across accounting journals.',
+  'dashboard.paymentsHint': 'Inbound, outbound, and reconciled payments.',
+  'dashboard.trialBalanceHint': 'Compare total debit and credit movements by account.',
+  'dashboard.generalLedgerHint': 'Inspect posted movements on an individual account.',
+  'dashboard.partnerLedgerHint': 'Track receivable and payable balances by partner.',
+  'dashboard.accountsHint': 'Vietnam chart of accounts under Circular 99/2025/TT-BTC.',
+  'dashboard.journalsHint': 'Classify and sequence accounting documents.',
+  'dashboard.taxesHint': 'Configure tax scope and calculation methods.',
+  'dashboard.paymentTermsHint': 'Payment schedules used by invoices and balances.',
   'accounts.title': 'Chart of accounts',
   'account.kicker': 'Ledger configuration',
   'account.subtitle': 'Manage account codes and Odoo 19 account types.',
@@ -1414,7 +1384,32 @@ const en: Record<string, string> = {
   'journal.empty': 'No journals yet',
   'journal.emptyHint': 'Create the first journal to start classifying documents.',
   'taxes.title': 'Taxes',
+  'tax.kicker': 'Tax configuration',
+  'tax.subtitle': 'Manage tax scope and computation with Odoo 19 selection codes.',
+  'tax.summary.total': 'Total taxes',
+  'tax.summary.sale': 'Sales',
+  'tax.summary.purchase': 'Purchases',
+  'tax.summary.included': 'Price included',
+  'tax.create.title': 'Create a tax',
+  'tax.create.hint': 'Choose the use, computation, and enter an amount or rate.',
+  'tax.list.title': 'Current taxes',
+  'tax.list.hint': 'Review use, computation, value, and price-included behavior.',
+  'tax.empty': 'No taxes yet',
+  'tax.emptyHint': 'Create the first tax to apply it on documents.',
   'terms.title': 'Payment terms',
+  'term.kicker': 'Payment schedule',
+  'term.subtitle': 'Configure due milestones with Odoo 19 rules.',
+  'term.summary.total': 'Total terms',
+  'term.summary.configured': 'With milestones',
+  'term.summary.lines': 'Total milestones',
+  'term.create.title': 'Create a payment term',
+  'term.create.hint': 'Set the name and note shown on documents.',
+  'term.line.create.title': 'Add a due milestone',
+  'term.line.create.hint': 'Allocate a percentage or fixed amount and choose the due-date computation.',
+  'term.list.title': 'Current payment terms',
+  'term.list.hint': 'Review milestone counts and notes for every term.',
+  'term.empty': 'No payment terms yet',
+  'term.emptyHint': 'Create the first term, then add its due milestones.',
   'entries.title': 'Journal entries',
   'entry.kicker': 'General ledger',
   'entry.subtitle': 'Record and control manual accounting journal entries.',
@@ -1428,6 +1423,18 @@ const en: Record<string, string> = {
   'entry.empty': 'No journal entries yet',
   'entry.emptyHint': 'Create the first entry to start recording in the general ledger.',
   'customerInvoices.title': 'Customer invoices',
+  'customerInvoice.kicker': 'Customer receivables',
+  'customerInvoice.subtitle': 'Create, review, and track payment of sales invoices.',
+  'customerInvoice.summary.total': 'Total invoices',
+  'customerInvoice.summary.draft': 'Draft',
+  'customerInvoice.summary.posted': 'Posted',
+  'customerInvoice.summary.unpaid': 'Unpaid',
+  'customerInvoice.create.title': 'Create a customer invoice',
+  'customerInvoice.create.hint': 'Enter the customer, revenue line, tax, and receivable account.',
+  'customerInvoice.list.title': 'Current customer invoices',
+  'customerInvoice.list.hint': 'Open a document to review lines, post it, track payment, and collaborate.',
+  'customerInvoice.empty': 'No customer invoices yet',
+  'customerInvoice.emptyHint': 'Create the first invoice to start tracking accounts receivable.',
   'vendorBills.title': 'Vendor bills',
   'vendorBill.kicker': 'Vendor payable',
   'vendorBill.subtitle': 'Record, review, and track payment of purchase invoices.',
@@ -1456,8 +1463,43 @@ const en: Record<string, string> = {
   'payment.empty': 'No payments yet',
   'payment.emptyHint': 'Register the first receipt or disbursement to start tracking cash flow.',
   'trialBalance.title': 'Trial balance',
+  'trial.kicker': 'General ledger report',
+  'trial.subtitle': 'Reconcile total debits and credits by account for the period.',
+  'trial.summary.debit': 'Total debit',
+  'trial.summary.credit': 'Total credit',
+  'trial.summary.balance': 'Difference',
+  'trial.filter.title': 'Reporting period',
+  'trial.filter.hint': 'Leave dates blank to calculate across all posted entries.',
+  'trial.result.title': 'Balances by account',
+  'trial.result.hint': 'Total debit and credit must balance across the chart of accounts.',
+  'trial.empty': 'No figures for this period',
+  'trial.emptyHint': 'Change the dates or post journal entries before recalculating.',
   'generalLedger.title': 'General ledger',
+  'ledger.kicker': 'Ledger detail',
+  'ledger.subtitle': 'Track debit and credit movements by account and period.',
+  'ledger.summary.lines': 'Journal items',
+  'ledger.summary.debit': 'Total debit',
+  'ledger.summary.credit': 'Total credit',
+  'ledger.filter.title': 'Ledger filters',
+  'ledger.filter.hint': 'Choose an account or leave it blank to show all posted journal items.',
+  'ledger.result.title': 'Account movements',
+  'ledger.result.hint': 'Each item relates the movement to its journal entry and posting date.',
+  'ledger.empty': 'No matching movements',
+  'ledger.emptyHint': 'Change the account or date range to view other data.',
   'partnerStatement.title': 'Partner ledger',
+  'partnerLedger.kicker': 'Partner receivables and payables',
+  'partnerLedger.subtitle': 'Track receivable, payable, and residual movements by partner.',
+  'partnerLedger.summary.debit': 'Total debit',
+  'partnerLedger.summary.credit': 'Total credit',
+  'partnerLedger.summary.residual': 'Residual',
+  'partnerLedger.filter.title': 'Select a partner',
+  'partnerLedger.filter.hint': 'The report includes only posted receivable and payable journal items.',
+  'partnerLedger.result.title': 'Partner movements',
+  'partnerLedger.result.hint': 'Review documents, debit/credit movements, and unreconciled amounts.',
+  'partnerLedger.select': 'No partner selected',
+  'partnerLedger.selectHint': 'Choose a partner to view its ledger.',
+  'partnerLedger.empty': 'No partner movements',
+  'partnerLedger.emptyHint': 'The selected partner has no posted receivable or payable items.',
   'lines.title': 'Journal items',
   'lines.add': 'Add journal item',
   'move.kicker': 'Accounting document',

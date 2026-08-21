@@ -1,0 +1,1 @@
+<article class="editorial-page" data-ket-section="page" data-path="{{ page.path }}">{% sections %}</article>

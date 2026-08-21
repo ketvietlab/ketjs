@@ -67,4 +67,4 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export { outboxScreen } from './screens.ts'
+export { outboxScreen } from './screens.tsx'

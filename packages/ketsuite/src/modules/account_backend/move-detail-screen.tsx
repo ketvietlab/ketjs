@@ -7,7 +7,7 @@ import {
   emptyState,
   formatMoney,
   formCluster as FormCluster,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -16,7 +16,7 @@ import {
   surface as Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.ts'
+import { labelOf } from './screens.tsx'
 
 type Row = Record<string, unknown>
 
@@ -95,94 +95,103 @@ export const moveDetailScreen = (
       })
     : emptyState(_('account_backend.empty'), _('account_backend.emptyHint'), { icon: icon('banknote') })
 
-  return framed(
-    _,
-    String(move.name),
-    frame,
-    <RecordWorkspace
-      kicker={_('account_backend.move.kicker')}
+  return (
+    <Framed
+      translator={_}
       title={String(move.name)}
-      subtitle={String(move.ref ?? move.partnerId ?? '')}
-      imageFallback={icon('banknote')}
-      badges={[
-        badge(
-          labelOf(_, 'moveState', move.state),
-          move.state === 'posted' ? 'positive' : 'neutral',
-          String(move.state),
-        ),
-        badge(
-          labelOf(_, 'paymentState', move.paymentState),
-          move.paymentState === 'paid' ? 'positive' : 'warning',
-        ),
-      ]}
-      summary={[
-        {
-          id: 'total',
-          label: _('account_backend.field.amountTotal'),
-          value: formatMoney(_, move.amountTotal, move.currency),
-        },
-        {
-          id: 'residual',
-          label: _('account_backend.field.residual'),
-          value: formatMoney(_, residual, move.currency),
-        },
-        {
-          id: 'type',
-          label: _('account_backend.field.moveType'),
-          value: labelOf(_, 'moveType', move.moveType),
-        },
-      ]}
-      body={stack(
-        [
-          actionForms.length ? (
-            <FormCluster forms={actionForms} label={_('account_backend.move.actions')} />
-          ) : null,
-          printActions === undefined ? null : <Surface body={printActions} />,
-          <Section title={_('account_backend.lines.title')} body={table} />,
-          draft ? (
-            <Section
-              title={_('account_backend.lines.add')}
-              body={
-                <Surface
-                  padding="compact"
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('account_backend.move.kicker')}
+          title={String(move.name)}
+          subtitle={String(move.ref ?? move.partnerId ?? '')}
+          imageFallback={icon('banknote')}
+          badges={[
+            badge(
+              labelOf(_, 'moveState', move.state),
+              move.state === 'posted' ? 'positive' : 'neutral',
+              String(move.state),
+            ),
+            badge(
+              labelOf(_, 'paymentState', move.paymentState),
+              move.paymentState === 'paid' ? 'positive' : 'warning',
+            ),
+          ]}
+          summary={[
+            {
+              id: 'total',
+              label: _('account_backend.field.amountTotal'),
+              value: formatMoney(_, move.amountTotal, move.currency),
+            },
+            {
+              id: 'residual',
+              label: _('account_backend.field.residual'),
+              value: formatMoney(_, residual, move.currency),
+            },
+            {
+              id: 'type',
+              label: _('account_backend.field.moveType'),
+              value: labelOf(_, 'moveType', move.moveType),
+            },
+          ]}
+          body={stack(
+            [
+              actionForms.length ? (
+                <FormCluster forms={actionForms} label={_('account_backend.move.actions')} />
+              ) : null,
+              printActions === undefined ? null : <Surface body={printActions} />,
+              <Section title={_('account_backend.lines.title')} body={table} />,
+              draft ? (
+                <Section
+                  title={_('account_backend.lines.add')}
                   body={
-                    <RecordForm
-                      id="account-move-line-form"
-                      scope="account-move"
-                      action={action}
-                      submit={_('account_backend.action.addLine')}
-                      submitVariant="secondary"
-                      hidden={{ action: 'add-line' }}
-                      fields={[
-                        { name: 'name', label: _('account_backend.field.name'), required: true },
-                        {
-                          name: 'accountId',
-                          label: _('account_backend.field.accountId'),
-                          type: 'select',
-                          options: accountOptions,
-                          required: true,
-                        },
-                        { name: 'partnerId', label: _('account_backend.field.partnerId') },
-                        { name: 'debit', label: _('account_backend.field.debit'), type: 'decimal', value: 0 },
-                        {
-                          name: 'credit',
-                          label: _('account_backend.field.credit'),
-                          type: 'decimal',
-                          value: 0,
-                        },
-                      ]}
+                    <Surface
+                      padding="compact"
+                      body={
+                        <RecordForm
+                          id="account-move-line-form"
+                          scope="account-move"
+                          action={action}
+                          submit={_('account_backend.action.addLine')}
+                          submitVariant="secondary"
+                          hidden={{ action: 'add-line' }}
+                          fields={[
+                            { name: 'name', label: _('account_backend.field.name'), required: true },
+                            {
+                              name: 'accountId',
+                              label: _('account_backend.field.accountId'),
+                              type: 'select',
+                              options: accountOptions,
+                              required: true,
+                            },
+                            { name: 'partnerId', label: _('account_backend.field.partnerId') },
+                            {
+                              name: 'debit',
+                              label: _('account_backend.field.debit'),
+                              type: 'decimal',
+                              value: 0,
+                            },
+                            {
+                              name: 'credit',
+                              label: _('account_backend.field.credit'),
+                              type: 'decimal',
+                              value: 0,
+                            },
+                          ]}
+                        />
+                      }
                     />
                   }
                 />
-              }
-            />
-          ) : null,
-        ],
-        'loose',
-      )}
-      aside={collaboration}
-      asideLabel={_('account_backend.move.collaboration')}
-      slots={{ header: 'account.move-header', body: 'account.move-body' }}
-    />,
+              ) : null,
+            ],
+            'loose',
+          )}
+          aside={collaboration}
+          asideLabel={_('account_backend.move.collaboration')}
+          slots={{ header: 'account.move-header', body: 'account.move-body' }}
+        />
+      }
+    />
   )
 }

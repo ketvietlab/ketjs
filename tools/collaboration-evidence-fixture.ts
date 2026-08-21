@@ -198,6 +198,32 @@ export async function collaborationEvidenceApp(
       code: 'PUR',
       type: 'purchase',
     })
+    await call('account.saveTax', {
+      id: 'tax-sale-collab',
+      name: 'VAT 10%',
+      description: 'Thuế GTGT bán ra 10%',
+      typeTaxUse: 'sale',
+      taxScope: 'consu',
+      amountType: 'percent',
+      amount: '10',
+      priceInclude: false,
+      includeBaseAmount: false,
+      sequence: 10,
+    })
+    await call('account.savePaymentTerm', {
+      id: 'payment-term-collab',
+      name: '30 ngày',
+      note: 'Thanh toán toàn bộ sau 30 ngày.',
+    })
+    await call('account.savePaymentTermLine', {
+      id: 'payment-term-line-collab',
+      paymentId: 'payment-term-collab',
+      value: 'percent',
+      valueAmount: '100',
+      delayType: 'days_after',
+      nbDays: 30,
+      sequence: 10,
+    })
     await call('account.createInvoice', {
       id: 'vendor-bill-collab',
       journalId: 'account-purchase-collab',

@@ -6,8 +6,9 @@ import type { FormField, Frame } from '../../ui/index.ts'
 import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
+import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.ts'
+import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -39,6 +40,10 @@ const document = async (
 const redirect = (result: unknown, ok: string) =>
   (result as { ok?: boolean }).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
 const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
+const localeSuffix = (url: URL) => {
+  const lang = url.searchParams.get('lang')
+  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
+}
 const choices = (rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({
@@ -68,6 +73,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   return {
     companies,
     partners: partners.filter((row) => !own.has(row.id)),
+    excludedPartnerIds: [...own].map(String),
     templates: purchasable,
     variants,
     units,
@@ -78,11 +84,25 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
-const orderFields = (_: Translator, data: Awaited<ReturnType<typeof common>>): FormField[] => [
+const orderFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  data: Awaited<ReturnType<typeof common>>,
+): Promise<FormField[]> => [
   {
     name: 'partnerId',
     label: _('purchase_backend.field.vendor'),
     type: 'select',
+    control: await partnerRelationControl(ctx, url, req, _, {
+      id: 'purchase-vendor',
+      partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+      fieldLabel: _('purchase_backend.field.vendor'),
+      title: _('purchase_backend.relation.vendors'),
+      required: true,
+      excludeIds: data.excludedPartnerIds,
+    }),
     options: choices(data.partners),
     required: true,
   },
@@ -302,7 +322,7 @@ const vi = {
   'bills.title': 'Hoá đơn nhà cung cấp',
   empty: 'Chưa có dữ liệu.',
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
-  'action.createRfq': 'Tạo RFQ',
+  'action.createRfq': 'Tạo yêu cầu báo giá',
   'action.addLine': 'Thêm dòng',
   'action.send': 'Đánh dấu đã gửi',
   'action.confirm': 'Xác nhận đơn',
@@ -317,6 +337,7 @@ const vi = {
   'action.saveMethod': 'Lưu chính sách',
   'field.name': 'Số đơn',
   'field.vendor': 'Nhà cung cấp',
+  'relation.vendors': 'Quản lý nhà cung cấp',
   'field.partnerRef': 'Tham chiếu nhà cung cấp',
   'field.state': 'Trạng thái',
   'field.dateOrder': 'Ngày đặt hàng',
@@ -405,6 +426,7 @@ const en = {
   'action.saveMethod': 'Save Policy',
   'field.name': 'Order Reference',
   'field.vendor': 'Vendor',
+  'relation.vendors': 'Manage vendors',
   'field.partnerRef': 'Vendor Reference',
   'field.state': 'Status',
   'field.dateOrder': 'Order Deadline',
@@ -453,7 +475,7 @@ const en = {
 export default defineModule({
   name: 'purchase_backend',
   version: '0.1.0',
-  depends: ['purchase', 'backend'],
+  depends: ['purchase', 'backend', 'partner_backend'],
   install: 'auto',
   app: true,
   title: 'Mua hàng trong quản trị',
@@ -495,12 +517,18 @@ export default defineModule({
       async (url, req) =>
         req.method === 'GET'
           ? document(ctx, url, req, 'purchase_backend.dashboard.title', async (_, shell) =>
-              dashboard(_, (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[], shell),
+              dashboard(
+                _,
+                (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
+                shell,
+                localeSuffix(url),
+              ),
             )
           : text('GET', { status: 405 }),
     '/admin/purchase/rfqs':
       (ctx): Route =>
       async (url, req) => {
+        const rfqPath = `/admin/purchase/rfqs${localeSuffix(url)}`
         if (req.method === 'POST') {
           const form = await readForm(req)
           const result = await ctx.call(
@@ -517,7 +545,7 @@ export default defineModule({
             url,
             req,
           )
-          return redirect(result, '/admin/purchase/rfqs')
+          return redirect(result, rfqPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [orders, data] = await Promise.all([
@@ -532,12 +560,13 @@ export default defineModule({
               ['draft', 'sent', 'to approve'].includes(String(row.state)) && (!state || row.state === state),
           )
           .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
-        return document(ctx, url, req, 'purchase_backend.rfqs.title', (_, shell) =>
+        return document(ctx, url, req, 'purchase_backend.rfqs.title', async (_, shell) =>
           ordersScreen(_, {
             title: _('purchase_backend.rfqs.title'),
             frame: shell,
             rows,
-            createFields: orderFields(_, data),
+            createFields: await orderFields(ctx, url, req, _, data),
+            createAction: rfqPath,
           }),
         )
       },

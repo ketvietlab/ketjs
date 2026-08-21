@@ -64,6 +64,7 @@ export default defineModule({
       'field.name': 'Tên',
       'field.kind': 'Loại',
       'field.parent': 'Tổ chức cha',
+      'relation.parents': 'Quản lý tổ chức',
       'field.ref': 'Mã đối tác',
       'field.vat': 'Mã số thuế',
       'field.email': 'Email',
@@ -131,6 +132,7 @@ export default defineModule({
       'field.name': 'Name',
       'field.kind': 'Type',
       'field.parent': 'Parent organisation',
+      'relation.parents': 'Manage organisations',
       'field.ref': 'Partner reference',
       'field.vat': 'Tax ID',
       'field.email': 'Email',
@@ -174,4 +176,5 @@ export default defineModule({
   },
 })
 
-export { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.ts'
+export { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
+export { partnerRelationControl } from './relation-control.ts'

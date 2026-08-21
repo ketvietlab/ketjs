@@ -2,7 +2,7 @@ import { json, text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
-import { calendarScreen } from './screens.ts'
+import { calendarScreen } from './screens.tsx'
 
 const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], lang: string) => ({
   navigation: req.headers['x-ket-navigation'] === 'fragment-v1',

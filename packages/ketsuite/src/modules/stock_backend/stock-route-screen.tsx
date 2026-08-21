@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  framed,
+  framedPage as Framed,
   icon,
   recordForm as RecordForm,
   recordWorkspace as RecordWorkspace,
@@ -185,52 +185,56 @@ export const stockRouteDetailScreen = (
     />
   )
 
-  return framed(
-    _,
-    _('stock_backend.routeDetail'),
-    frame,
-    <RecordWorkspace
-      kicker={_('stock_backend.stockRoute.detail.kicker')}
-      title={options.route.name}
-      subtitle={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}
-      imageFallback={icon('sliders-horizontal')}
-      badges={[
-        badge(
-          options.route.active
-            ? _('stock_backend.stockRoute.status.active')
-            : _('stock_backend.stockRoute.status.archived'),
-          options.route.active ? 'positive' : 'danger',
-        ),
-      ]}
-      summary={[
-        {
-          id: 'rules',
-          label: _('stock_backend.stockRoute.detail.summary.rules'),
-          value: options.rows.length,
-        },
-        { id: 'pull', label: _('stock_backend.stockRoute.detail.summary.pull'), value: pullCount },
-        { id: 'push', label: _('stock_backend.stockRoute.detail.summary.push'), value: pushCount },
-      ]}
-      body={stack(
-        [
-          <Section
-            title={_('stock_backend.stockRoute.detail.information.title')}
-            description={_('stock_backend.stockRoute.detail.information.hint')}
-            body={<Surface padding="compact" body={routeForm(_, options)} />}
-          />,
-          <Section
-            title={_('stock_backend.stockRoute.detail.rules.title')}
-            description={_('stock_backend.stockRoute.detail.rules.hint')}
-            body={rules}
-          />,
-          <Section
-            title={_('stock_backend.stockRoute.rule.create.title')}
-            description={_('stock_backend.stockRoute.rule.create.hint')}
-            body={<Surface padding="compact" body={ruleForm(_, options)} />}
-          />,
-        ],
-        'loose',
-      )}
-    />,
+  return (
+    <Framed
+      translator={_}
+      title={_('stock_backend.routeDetail')}
+      frame={frame}
+      body={
+        <RecordWorkspace
+          kicker={_('stock_backend.stockRoute.detail.kicker')}
+          title={options.route.name}
+          subtitle={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}
+          imageFallback={icon('sliders-horizontal')}
+          badges={[
+            badge(
+              options.route.active
+                ? _('stock_backend.stockRoute.status.active')
+                : _('stock_backend.stockRoute.status.archived'),
+              options.route.active ? 'positive' : 'danger',
+            ),
+          ]}
+          summary={[
+            {
+              id: 'rules',
+              label: _('stock_backend.stockRoute.detail.summary.rules'),
+              value: options.rows.length,
+            },
+            { id: 'pull', label: _('stock_backend.stockRoute.detail.summary.pull'), value: pullCount },
+            { id: 'push', label: _('stock_backend.stockRoute.detail.summary.push'), value: pushCount },
+          ]}
+          body={stack(
+            [
+              <Section
+                title={_('stock_backend.stockRoute.detail.information.title')}
+                description={_('stock_backend.stockRoute.detail.information.hint')}
+                body={<Surface padding="compact" body={routeForm(_, options)} />}
+              />,
+              <Section
+                title={_('stock_backend.stockRoute.detail.rules.title')}
+                description={_('stock_backend.stockRoute.detail.rules.hint')}
+                body={rules}
+              />,
+              <Section
+                title={_('stock_backend.stockRoute.rule.create.title')}
+                description={_('stock_backend.stockRoute.rule.create.hint')}
+                body={<Surface padding="compact" body={ruleForm(_, options)} />}
+              />,
+            ],
+            'loose',
+          )}
+        />
+      }
+    />
   )
 }

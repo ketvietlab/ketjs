@@ -45,4 +45,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { calendarScreen } from './screens.ts'
+export { calendarScreen } from './screens.tsx'

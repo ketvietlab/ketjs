@@ -34,6 +34,7 @@ export type ScheduleEvent = {
   detail?: string | null
   tone?: ScheduleTone | null
   state?: string | null
+  href?: string | null
 }
 
 const columns = (count: number): string => `12rem repeat(${count}, minmax(6.5rem, 1fr))`
@@ -90,18 +91,28 @@ export const scheduleBoard = (o: {
               {each(
                 o.events.filter((event) => event.rowId === row.id),
                 (event) => event.id,
-                (event) => (
-                  <article
-                    data-ui="schedule-event"
-                    data-tone={event.tone ?? 'neutral'}
-                    data-state={event.state ?? null}
-                    style={{ gridColumn: `${event.start + 2} / span ${Math.max(1, event.span)}` }}
-                    title={event.detail ? `${event.label} · ${event.detail}` : event.label}
-                  >
-                    <strong data-ui="schedule-event-title">{event.label}</strong>
-                    {!!event.detail && <span data-ui="schedule-event-detail">{event.detail}</span>}
-                  </article>
-                ),
+                (event) => {
+                  const content = (
+                    <>
+                      <strong data-ui="schedule-event-title">{event.label}</strong>
+                      {!!event.detail && <span data-ui="schedule-event-detail">{event.detail}</span>}
+                    </>
+                  )
+                  const props = {
+                    'data-ui': 'schedule-event',
+                    'data-tone': event.tone ?? 'neutral',
+                    'data-state': event.state ?? null,
+                    style: { gridColumn: `${event.start + 2} / span ${Math.max(1, event.span)}` },
+                    title: event.detail ? `${event.label} · ${event.detail}` : event.label,
+                  }
+                  return event.href ? (
+                    <a {...props} href={event.href}>
+                      {content}
+                    </a>
+                  ) : (
+                    <article {...props}>{content}</article>
+                  )
+                },
               )}
             </div>
           ),

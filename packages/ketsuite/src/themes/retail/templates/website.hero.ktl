@@ -1,0 +1,1 @@
+<section class="hero" data-ket-section="hero">{% if image %}<img src="{{ image }}" alt="">{% endif %}<div><p class="drop">New / useful / now</p><h1>{{ heading }}</h1>{% if subheading %}<p>{{ subheading }}</p>{% endif %}{% if ctaLabel %}<a class="buy" href="{{ ctaHref | default: '/shop' }}">{{ ctaLabel }} →</a>{% endif %}</div></section>

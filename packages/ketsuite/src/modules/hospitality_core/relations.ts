@@ -10,6 +10,10 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     rooms: { hasMany: 'hospitality_core.Room', by: 'propertyId' },
     amenities: { hasMany: 'hospitality_core.PropertyAmenity', by: 'propertyId' },
     contacts: { hasMany: 'hospitality_core.PropertyContact', by: 'propertyId' },
+    propertyCharges: { hasMany: 'hospitality_core.PropertyCharge', by: 'propertyId' },
+    extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'propertyId' },
+    nightAudits: { hasMany: 'hospitality_core.NightAuditRun', by: 'propertyId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'propertyId' },
     contentImages: { hasMany: 'hospitality_core.ContentImage', by: 'propertyId' },
     cancellationPolicy: {
       belongsTo: 'hospitality_core.CancellationPolicy',
@@ -85,12 +89,16 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.PropertyContact': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
   },
+  'hospitality_core.PropertyCharge': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+  },
   'hospitality_core.Folio': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
     reservations: { hasMany: 'hospitality_core.Reservation', by: 'folioId' },
     stays: { hasMany: 'hospitality_core.Stay', by: 'folioId' },
     charges: { hasMany: 'hospitality_core.Charge', by: 'folioId' },
+    extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'folioId' },
   },
   'hospitality_core.Reservation': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
@@ -98,6 +106,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'reservationId' },
   },
   'hospitality_core.Stay': {
     folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
@@ -110,6 +119,12 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     guests: { hasMany: 'hospitality_core.StayGuest', by: 'stayId' },
     charges: { hasMany: 'hospitality_core.Charge', by: 'stayId' },
     documents: { hasMany: 'hospitality_core.GuestDocument', by: 'stayId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'stayId' },
+    extraLines: { hasMany: 'hospitality_core.ExtraLine', by: 'stayId' },
+  },
+  'hospitality_core.NightAuditRun': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    charges: { hasMany: 'hospitality_core.Charge', by: 'nightAuditRunId' },
   },
   'hospitality_core.RoomAssignment': {
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
@@ -120,16 +135,38 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   'hospitality_core.StayGuest': {
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'stayGuestId' },
+  },
+  'hospitality_core.StayNotice': {
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    stayGuest: { belongsTo: 'hospitality_core.StayGuest', by: 'stayGuestId' },
+    partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
+    document: { belongsTo: 'hospitality_core.GuestDocument', by: 'documentId' },
   },
   'hospitality_core.Charge': {
     folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    extraLine: { belongsTo: 'hospitality_core.ExtraLine', by: 'extraLineId' },
+    nightAuditRun: { belongsTo: 'hospitality_core.NightAuditRun', by: 'nightAuditRunId' },
+    product: { belongsTo: 'product.Product', by: 'productId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
+  },
+  'hospitality_core.ExtraLine': {
+    reservation: { belongsTo: 'hospitality_core.Reservation', by: 'reservationId' },
+    stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
+    folio: { belongsTo: 'hospitality_core.Folio', by: 'folioId' },
+    property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },
+    product: { belongsTo: 'product.Product', by: 'productId' },
+    uom: { belongsTo: 'uom.Unit', by: 'uomId' },
+    charges: { hasMany: 'hospitality_core.Charge', by: 'extraLineId' },
   },
   'hospitality_core.GuestDocument': {
     stay: { belongsTo: 'hospitality_core.Stay', by: 'stayId' },
     partner: { belongsTo: 'partner.Partner', by: 'partnerId' },
     frontAttachment: { belongsTo: 'storage.Attachment', by: 'frontAttachmentId' },
     backAttachment: { belongsTo: 'storage.Attachment', by: 'backAttachmentId' },
+    stayNotices: { hasMany: 'hospitality_core.StayNotice', by: 'documentId' },
   },
   'hospitality_core.CleaningTask': {
     property: { belongsTo: 'hospitality_core.Property', by: 'propertyId' },

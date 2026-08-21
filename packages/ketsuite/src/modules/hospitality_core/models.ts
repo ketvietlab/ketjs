@@ -20,6 +20,7 @@ export const models: Record<string, ModelDef> = {
       defaultCheckIn: 'text',
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
+      longStayBillOnCheckIn: 'bool?',
       starRating: 'int',
       street1: 'text?',
       street2: 'text?',
@@ -349,6 +350,27 @@ export const models: Record<string, ModelDef> = {
     indexes: { property_type: { fields: ['companyId', 'propertyId', 'type'], unique: true } },
   },
 
+  /** Provider-visible property fees; accounting documents remain out of scope. */
+  PropertyCharge: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      chargeType: 'text',
+      name: 'text',
+      amount: 'decimal',
+      description: 'text?',
+      active: 'bool',
+    },
+    indexes: {
+      property_type_name: {
+        fields: ['companyId', 'propertyId', 'chargeType', 'name'],
+        unique: true,
+      },
+      property_active: { fields: ['companyId', 'propertyId', 'active', 'chargeType'] },
+    },
+  },
+
   /** Operational account for one payer and one or more physical stays. */
   Folio: {
     scope: 'company',
@@ -394,6 +416,8 @@ export const models: Record<string, ModelDef> = {
       amountTotal: 'decimal',
       state: 'text',
       cancelReason: 'text?',
+      noShowAt: 'datetime?',
+      noShowReason: 'text?',
       createdAt: 'datetime',
       updatedAt: 'datetime',
     },
@@ -431,14 +455,44 @@ export const models: Record<string, ModelDef> = {
       children: 'int',
       billingMode: 'text',
       rate: 'decimal',
+      nextBillDate: 'date?',
       state: 'text',
       checkedInAt: 'datetime?',
       checkedOutAt: 'datetime?',
+      noShowAt: 'datetime?',
     },
     indexes: {
       code_company: { fields: ['companyId', 'code'], unique: true },
       reservation: { fields: ['companyId', 'reservationId'], unique: true },
       property_state: { fields: ['companyId', 'propertyId', 'state', 'checkIn'] },
+    },
+  },
+
+  /**
+   * One durable operational close per property and local calendar date. A run
+   * may be retried, but recurring charges remain idempotent through Charge.sourceKey.
+   */
+  NightAuditRun: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      auditDate: 'date',
+      state: 'text',
+      inHouseCount: 'int',
+      servicePosted: 'int',
+      rentPosted: 'int',
+      existingCount: 'int',
+      totalAmount: 'decimal',
+      attempt: 'int',
+      requestedAt: 'datetime',
+      startedAt: 'datetime?',
+      completedAt: 'datetime?',
+      error: 'text?',
+    },
+    indexes: {
+      property_date: { fields: ['companyId', 'propertyId', 'auditDate'], unique: true },
+      property_state: { fields: ['companyId', 'propertyId', 'state', 'auditDate'] },
     },
   },
 
@@ -479,6 +533,74 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * Operational evidence for Vietnam's stay-notification procedure. The row
+   * keeps masked identity metadata and a package hash, never a submitted PII payload.
+   */
+  StayNotice: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      propertyId: 'ref:hospitality_core.Property',
+      stayId: 'ref:hospitality_core.Stay',
+      stayGuestId: 'ref:hospitality_core.StayGuest',
+      partnerId: 'ref:partner.Partner?',
+      documentId: 'ref:hospitality_core.GuestDocument?',
+      state: 'text',
+      reason: 'text?',
+      dueAt: 'datetime',
+      guestName: 'text',
+      documentType: 'text?',
+      documentLast4: 'text?',
+      issueCodes: 'json',
+      attempt: 'int',
+      preparedAt: 'datetime?',
+      submissionChannel: 'text?',
+      packageHash: 'text?',
+      submittedAt: 'datetime?',
+      submittedBy: 'text?',
+      receiptRef: 'text?',
+      confirmedAt: 'datetime?',
+      confirmedBy: 'text?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      stay_guest: { fields: ['companyId', 'stayId', 'stayGuestId'], unique: true },
+      property_state_due: { fields: ['companyId', 'propertyId', 'state', 'dueAt', 'id'] },
+    },
+  },
+
+  /**
+   * A priced service intention attached to one reservation or one stay. Charge
+   * rows snapshot every materialised occurrence, so invoice integration can be
+   * added later without changing the operational source of truth.
+   */
+  ExtraLine: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      reservationId: 'ref:hospitality_core.Reservation?',
+      stayId: 'ref:hospitality_core.Stay?',
+      folioId: 'ref:hospitality_core.Folio',
+      propertyId: 'ref:hospitality_core.Property',
+      productId: 'ref:product.Product',
+      uomId: 'ref:uom.Unit?',
+      description: 'text',
+      quantity: 'decimal',
+      unitPrice: 'decimal',
+      recurrence: 'text',
+      active: 'bool',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      reservation_active: { fields: ['companyId', 'reservationId', 'active', 'createdAt'] },
+      stay_active: { fields: ['companyId', 'stayId', 'active', 'createdAt'] },
+      property_active: { fields: ['companyId', 'propertyId', 'active', 'createdAt'] },
+    },
+  },
+
   /** Operational charge only. Accounting documents are a later integration. */
   Charge: {
     scope: 'company',
@@ -486,18 +608,27 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       folioId: 'ref:hospitality_core.Folio',
       stayId: 'ref:hospitality_core.Stay?',
+      extraLineId: 'ref:hospitality_core.ExtraLine?',
+      nightAuditRunId: 'ref:hospitality_core.NightAuditRun?',
+      productId: 'ref:product.Product?',
+      uomId: 'ref:uom.Unit?',
       description: 'text',
       type: 'text',
       quantity: 'decimal',
       unitPrice: 'decimal',
       amount: 'decimal',
       occurredAt: 'datetime',
+      serviceDate: 'date?',
       sourceKey: 'text?',
       state: 'text',
+      voidedAt: 'datetime?',
+      voidReason: 'text?',
     },
     indexes: {
       folio_date: { fields: ['companyId', 'folioId', 'occurredAt'] },
       source: { fields: ['companyId', 'sourceKey'], unique: true },
+      extra_line: { fields: ['companyId', 'extraLineId', 'occurredAt'] },
+      night_audit: { fields: ['companyId', 'nightAuditRunId', 'occurredAt'] },
     },
   },
 

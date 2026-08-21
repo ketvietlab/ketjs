@@ -110,6 +110,41 @@ const physicalTotal = async (ctx: Ctx, propertyId: unknown, roomTypeId: unknown)
   )
 }
 
+/** Read-only availability used by quotes. The final reservation still claims with compare-and-set. */
+export const quoteAvailability = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  roomTypeId: unknown,
+  dates: readonly string[],
+  quantity = 1,
+): Promise<{ minimumAvailable: number; errors: InventoryIssue[] }> => {
+  const total = await physicalTotal(ctx, propertyId, roomTypeId)
+  if (!dates.length) return { minimumAvailable: total, errors: [] }
+  const Ledger = ctx.table('hospitality_core.AvailabilityLedger')
+  const rows = await ctx.db.all(
+    from(Ledger).where(
+      eq(Ledger.propertyId, propertyId),
+      eq(Ledger.roomTypeId, roomTypeId),
+      gte(Ledger.date, dates[0]),
+      lte(Ledger.date, dates.at(-1)),
+    ),
+  )
+  const byDate = new Map(rows.map((row) => [String(row.date), row]))
+  let minimumAvailable = Number.POSITIVE_INFINITY
+  const errors: InventoryIssue[] = []
+  for (const date of dates) {
+    const row = byDate.get(date)
+    const available = Number(row?.available ?? total)
+    minimumAvailable = Math.min(minimumAvailable, available)
+    if (available < quantity)
+      errors.push(issue('roomTypeId', 'no_availability', { date, available, required: quantity }))
+  }
+  return {
+    minimumAvailable: Number.isFinite(minimumAvailable) ? minimumAvailable : total,
+    errors,
+  }
+}
+
 const ledgerId = (roomTypeId: unknown, date: string): string => `${String(roomTypeId)}:${date}`
 const restrictionId = (roomTypeId: unknown, date: string): string => `${String(roomTypeId)}:${date}`
 
@@ -200,6 +235,55 @@ export const releaseInventory = async (
       sold: Math.max(Number(current.sold) - quantity, 0),
       blocked: Number(current.blocked),
     }))
+}
+
+/**
+ * Replace one reservation's room-night claim without exposing a release window.
+ * Deltas are applied in one stable order so two concurrent room-type swaps do
+ * not lock the same ledger rows in opposite order.
+ */
+export const replaceReservedInventory = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  previousRoomTypeId: unknown,
+  previousDates: readonly string[],
+  nextRoomTypeId: unknown,
+  nextDates: readonly string[],
+): Promise<void> => {
+  const deltas = new Map<string, { roomTypeId: unknown; date: string; delta: number }>()
+  const add = (roomTypeId: unknown, date: string, delta: number) => {
+    const key = `${String(roomTypeId)}\u0000${date}`
+    const current = deltas.get(key)
+    deltas.set(key, { roomTypeId, date, delta: (current?.delta ?? 0) + delta })
+  }
+  for (const date of previousDates) add(previousRoomTypeId, date, -1)
+  for (const date of nextDates) add(nextRoomTypeId, date, 1)
+
+  const changes = [...deltas.entries()]
+    .filter(([, value]) => value.delta !== 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, value]) => value)
+  const datesByRoomType = new Map<unknown, string[]>()
+  for (const change of changes) {
+    const dates = datesByRoomType.get(change.roomTypeId) ?? []
+    dates.push(change.date)
+    datesByRoomType.set(change.roomTypeId, dates)
+  }
+  for (const [roomTypeId, dates] of datesByRoomType)
+    await ensureLedgerRows(ctx, propertyId, roomTypeId, dates)
+  for (const change of changes)
+    await changeLedger(ctx, propertyId, change.roomTypeId, change.date, (current) => {
+      const total = Number(current.total)
+      const sold = Number(current.sold)
+      const blocked = Number(current.blocked)
+      if (change.delta > 0 && total - sold - blocked < change.delta)
+        return issue('roomTypeId', 'no_availability', {
+          date: change.date,
+          available: total - sold - blocked,
+          required: change.delta,
+        })
+      return { total, sold: Math.max(sold + change.delta, 0), blocked }
+    })
 }
 
 export const defaultRatePlan = async (

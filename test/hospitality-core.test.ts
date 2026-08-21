@@ -10,11 +10,11 @@ import {
   translator,
 } from 'ketjs'
 import type { Adapter, Row } from 'ketjs'
-import { company, hospitalityCore, partner, storage } from 'ketsuite'
+import { company, hospitalityCore, partner, product, storage, uom } from 'ketsuite'
 import { address } from 'ketsuite'
 import backend from 'ketsuite/backend'
 
-const modules = [address, partner, company, storage, backend, hospitalityCore]
+const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const ACME = { company: 'acme', branches: null }
 const GLOBEX = { company: 'globex', branches: null }
@@ -54,13 +54,18 @@ test('hospitality core: public namespace is clean and the whole vertical is one 
   assert.ok(manifest.models['hospitality_core.Amenity'])
   assert.ok(manifest.models['hospitality_core.ContentImage'])
   assert.ok(manifest.models['hospitality_core.ContentChange'])
+  assert.ok(manifest.models['hospitality_core.PropertyCharge'])
+  assert.ok(manifest.models['hospitality_core.ExtraLine'])
   assert.equal(
     Object.keys(manifest.modules).some((name) => name.startsWith('vidoo_')),
     false,
   )
   assert.equal(JSON.stringify(hospitalityCore).includes('vidoo_'), false)
   assert.equal(hospitalityCore.depends.includes('storage'), true)
+  assert.equal(hospitalityCore.depends.includes('product'), true)
+  assert.equal(hospitalityCore.depends.includes('uom'), true)
   assert.equal('invoiceId' in manifest.models['hospitality_core.Property']!.fields, false)
+  assert.equal('invoiceId' in manifest.models['hospitality_core.Charge']!.fields, false)
 })
 
 test('hospitality core: property defaults and uniqueness are company-scoped', async () => {
@@ -149,6 +154,188 @@ test('hospitality core: explicit booleans override creation defaults', async () 
       { timezone: 'Pacific/Honolulu', enforceTimes: 0, childrenStayFree: 1 },
     )
     assert.equal(savedType.published, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality core: property settings validate timezone and default cancellation policy', async () => {
+  const adapter = await boot()
+  try {
+    const invalidTimezone = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'invalid-timezone',
+        code: 'TZ-BAD',
+        name: 'Invalid timezone',
+        accommodationType: 'hotel',
+        timezone: 'Asia/Nowhere',
+      },
+      adapter,
+    )
+    assert.equal((invalidTimezone.value as Row).ok, false)
+    assert.equal(((invalidTimezone.value as Row).errors as Row[])[0]?.code, 'timezone')
+
+    const missingPolicy = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'missing-policy',
+        code: 'POL-BAD',
+        name: 'Missing policy',
+        accommodationType: 'hotel',
+        defaultCancellationPolicyId: 'not-here',
+      },
+      adapter,
+    )
+    assert.equal((missingPolicy.value as Row).ok, false)
+    assert.equal(((missingPolicy.value as Row).errors as Row[])[0]?.code, 'policy_missing')
+
+    await call(
+      'hospitality_core.saveCancellationPolicy',
+      { id: 'flex', code: 'FLEX', name: 'Flexible', type: 'flexible' },
+      adapter,
+    )
+    const saved = await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'policy-hotel',
+        code: 'POLICY',
+        name: 'Policy Hotel',
+        accommodationType: 'hotel',
+        timezone: 'Pacific/Honolulu',
+        longStayBillOnCheckIn: false,
+        defaultCancellationPolicyId: 'flex',
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    const detail = (await call('hospitality_core.getProperty', { id: 'policy-hotel' }, adapter)).value as Row
+    assert.equal(detail.longStayBillOnCheckIn, false)
+    assert.equal((detail.defaultCancellationPolicy as Row).name, 'Flexible')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality core: room type settings are validated, preloaded and cannot move properties', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveProperty',
+      { id: 'other-hotel', code: 'OTHER', name: 'Other Hotel', accommodationType: 'hotel' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveCancellationPolicy',
+      { id: 'flex', code: 'FLEX', name: 'Flexible', type: 'flexible' },
+      adapter,
+    )
+    const saved = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: ' dlx ',
+        name: 'Deluxe river room',
+        publicName: 'Deluxe River View',
+        defaultCapacity: 3,
+        maxAdults: 2,
+        maxChildren: 1,
+        maxInfants: 1,
+        maxExtraBeds: 1,
+        sizeSqm: '31.5',
+        viewType: 'river',
+        sharedBathroom: false,
+        baseRate: '1850000.50',
+        color: '#0f766e',
+        cancellationPolicyId: 'flex',
+        published: true,
+      },
+      adapter,
+    )
+    assert.equal((saved.value as Row).ok, true)
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'room-301',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: '301',
+        name: 'Room 301',
+      },
+      adapter,
+    )
+
+    const detail = (await call('hospitality_core.getRoomType', { id: 'deluxe' }, adapter)).value as Row
+    assert.equal(detail.code, 'DLX')
+    assert.equal(detail.viewType, 'river')
+    assert.equal(detail.color, '#0f766e')
+    assert.equal((detail.property as Row).name, 'Ket Hotel Saigon')
+    assert.equal((detail.cancellationPolicy as Row).name, 'Flexible')
+    assert.deepEqual(
+      (detail.rooms as Row[]).map((room) => room.id),
+      ['room-301'],
+    )
+
+    const moved = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: detail.id,
+        propertyId: 'other-hotel',
+        code: detail.code,
+        name: detail.name,
+        publicName: detail.publicName,
+        description: detail.description,
+        defaultCapacity: detail.defaultCapacity,
+        maxAdults: detail.maxAdults,
+        maxChildren: detail.maxChildren,
+        maxInfants: detail.maxInfants,
+        maxExtraBeds: detail.maxExtraBeds,
+        sizeSqm: String(detail.sizeSqm),
+        viewType: detail.viewType,
+        sharedBathroom: detail.sharedBathroom,
+        baseRate: String(detail.baseRate),
+        color: detail.color,
+        cancellationPolicyId: detail.cancellationPolicyId,
+        published: detail.published,
+      },
+      adapter,
+    )
+    assert.equal((moved.value as Row).ok, false)
+    assert.ok(((moved.value as Row).errors as Row[]).some((error) => error.code === 'property_mismatch'))
+
+    const invalid = await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'invalid-room-type',
+        propertyId: 'hotel',
+        code: 'INVALID',
+        name: 'Invalid room type',
+        defaultCapacity: 4,
+        maxAdults: 2,
+        maxChildren: 1,
+        baseRate: '-1',
+        sizeSqm: '0',
+        viewType: 'space',
+        color: 'teal',
+      },
+      adapter,
+    )
+    assert.equal((invalid.value as Row).ok, false)
+    const codes = new Set(((invalid.value as Row).errors as Row[]).map((error) => error.code))
+    assert.deepEqual(
+      ['capacity_total', 'non_negative', 'positive', 'view_type', 'color'].every((code) => codes.has(code)),
+      true,
+    )
+    const changes = await adapter.all(
+      `SELECT "resourceId" FROM hospitality_core_content_change WHERE "resourceType" = ?`,
+      ['room_type'],
+    )
+    assert.deepEqual(
+      changes.map((change) => change.resourceId),
+      ['deluxe'],
+    )
   } finally {
     await adapter.close()
   }
@@ -259,6 +446,273 @@ test('hospitality core: building, floor, room type and room cannot cross propert
     const rooms = (await call('hospitality_core.listRooms', { propertyId: 'hotel' }, adapter)).value as Row[]
     assert.equal(rooms[0]!.status, 'dirty')
     assert.equal((rooms[0]!.roomType as Row).name, 'Deluxe')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality core: room configuration preserves workflow-owned status and preloads location', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveBuilding',
+      { id: 'tower-a', propertyId: 'hotel', code: 'A', name: 'Tower A', sequence: 10 },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveFloor',
+      { id: 'floor-1', propertyId: 'hotel', buildingId: 'tower-a', code: '01', name: 'Floor 1' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'deluxe', propertyId: 'hotel', code: 'DLX', name: 'Deluxe', defaultCapacity: 2 },
+      adapter,
+    )
+    const created = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'Room 101',
+        capacity: 3,
+        status: 'available',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+
+    await call('hospitality_core.setRoomStatus', { id: '101', status: 'dirty' }, adapter)
+    const bypass = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'tower-a',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'Room 101',
+        capacity: 3,
+        status: 'maintenance',
+      },
+      adapter,
+    )
+    assert.equal((bypass.value as Row).ok, false)
+    assert.equal(((bypass.value as Row).errors as Row[])[0]?.code, 'room_status_configuration_managed')
+
+    const updated = await call(
+      'hospitality_core.saveRoom',
+      {
+        id: '101',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'tower-a',
+        floorId: 'floor-1',
+        code: '101',
+        name: 'River Room 101',
+        capacity: 4,
+      },
+      adapter,
+    )
+    assert.equal((updated.value as Row).ok, true)
+
+    const detail = (await call('hospitality_core.getRoom', { id: '101' }, adapter)).value as Row
+    assert.equal(detail.status, 'dirty')
+    assert.equal(detail.name, 'River Room 101')
+    assert.equal(Number(detail.capacity), 4)
+    assert.equal((detail.property as Row).name, 'Ket Hotel Saigon')
+    assert.equal((detail.roomType as Row).name, 'Deluxe')
+    assert.equal((detail.building as Row).name, 'Tower A')
+    assert.equal((detail.floor as Row).name, 'Floor 1')
+
+    const buildings = (await call('hospitality_core.listBuildings', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const floors = (await call('hospitality_core.listFloors', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const buildingRow = buildings[0]
+    const floorRow = floors[0]
+    assert.ok(buildingRow)
+    assert.ok(floorRow)
+    assert.equal((buildingRow.floors as Row[]).length, 1)
+    assert.equal((buildingRow.rooms as Row[]).length, 1)
+    assert.equal((floorRow.rooms as Row[]).length, 1)
+    assert.equal((floorRow.building as Row).id, 'tower-a')
+
+    const buildingDetail = (await call('hospitality_core.getBuilding', { id: 'tower-a' }, adapter))
+      .value as Row
+    const floorDetail = (await call('hospitality_core.getFloor', { id: 'floor-1' }, adapter)).value as Row
+    assert.equal((buildingDetail.property as Row).id, 'hotel')
+    assert.equal((buildingDetail.floors as Row[]).length, 1)
+    assert.equal((floorDetail.property as Row).id, 'hotel')
+    assert.equal((floorDetail.building as Row).id, 'tower-a')
+
+    const blockedFloor = (
+      await call('hospitality_core.archiveFloor', { id: 'floor-1', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedFloor.ok, false)
+    assert.equal((blockedFloor.errors as Row[])[0]?.code, 'location_has_active_rooms')
+
+    await call(
+      'hospitality_core.saveBuilding',
+      { id: 'annex', propertyId: 'hotel', code: 'B', name: 'Annex', sequence: 20 },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveFloor',
+      { id: 'annex-floor', propertyId: 'hotel', buildingId: 'annex', code: '01', name: 'Annex floor' },
+      adapter,
+    )
+    const blockedBuilding = (
+      await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedBuilding.ok, false)
+    assert.equal((blockedBuilding.errors as Row[])[0]?.code, 'location_has_active_floors')
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: false }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+    const activeBuildings = (await call('hospitality_core.listBuildings', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    const archivedBuildings = (
+      await call('hospitality_core.listBuildings', { propertyId: 'hotel', includeArchived: true }, adapter)
+    ).value as Row[]
+    const archivedFloors = (
+      await call('hospitality_core.listFloors', { propertyId: 'hotel', includeArchived: true }, adapter)
+    ).value as Row[]
+    assert.equal(activeBuildings.length, 1)
+    assert.equal(
+      archivedBuildings.some((row) => row.id === 'annex' && row.active === false),
+      true,
+    )
+    assert.equal(
+      archivedFloors.some((row) => row.id === 'annex-floor' && row.active === false),
+      true,
+    )
+
+    const blockedRestore = (
+      await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter)
+    ).value as Row
+    assert.equal(blockedRestore.ok, false)
+    assert.equal((blockedRestore.errors as Row[])[0]?.code, 'location_archived')
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: true }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'annex-room',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        buildingId: 'annex',
+        floorId: 'annex-floor',
+        code: '201',
+        name: 'Annex room 201',
+      },
+      adapter,
+    )
+    const archivedRoom = (
+      await call('hospitality_core.archiveRoom', { id: 'annex-room', active: false }, adapter)
+    ).value as Row
+    assert.equal(archivedRoom.ok, true)
+    const archivedTask = (
+      await call(
+        'hospitality_core.createCleaningTask',
+        {
+          id: 'archived-task',
+          code: 'HK-ARCHIVED',
+          roomId: 'annex-room',
+          taskType: 'daily_clean',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(archivedTask.ok, false)
+    assert.equal((archivedTask.errors as Row[])[0]?.code, 'room_archived')
+
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: false }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+    const blockedRoomRestore = (
+      await call('hospitality_core.archiveRoom', { id: 'annex-room', active: true }, adapter)
+    ).value as Row
+    assert.equal(blockedRoomRestore.ok, false)
+    assert.equal((blockedRoomRestore.errors as Row[])[0]?.code, 'location_archived')
+    await call('hospitality_core.archiveBuilding', { id: 'annex', active: true }, adapter)
+    await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter)
+    assert.equal(
+      ((await call('hospitality_core.archiveRoom', { id: 'annex-room', active: true }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+
+    await call(
+      'hospitality_core.saveRoom',
+      {
+        id: 'task-room',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: '202',
+        name: 'Task room 202',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.createCleaningTask',
+      {
+        id: 'task-room-clean',
+        code: 'HK-202',
+        roomId: 'task-room',
+        taskType: 'daily_clean',
+      },
+      adapter,
+    )
+    const blockedTaskRoom = (
+      await call('hospitality_core.archiveRoom', { id: 'task-room', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedTaskRoom.ok, false)
+    assert.equal((blockedTaskRoom.errors as Row[])[0]?.code, 'room_has_open_task')
+    assert.equal(
+      ((await call('hospitality_core.getRoom', { id: 'task-room' }, adapter)).value as Row).active,
+      true,
+    )
+
+    const blockedStatusRoom = (
+      await call('hospitality_core.archiveRoom', { id: '101', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedStatusRoom.ok, false)
+    assert.equal((blockedStatusRoom.errors as Row[])[0]?.code, 'room_archive_status')
   } finally {
     await adapter.close()
   }
@@ -689,6 +1143,607 @@ test('hospitality inventory: room-night capacity is atomic and cancellation rele
       )
     ).value as Row[]
     assert.equal(rest.length, 3, 'the durable cursor resumes after an exact timestamp/id pair')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality reservations: front desk amends a direct booking atomically', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    for (const [id, code, rate] of [
+      ['standard', 'STD', '100'],
+      ['deluxe', 'DLX', '200'],
+    ]) {
+      await call(
+        'hospitality_core.saveRoomType',
+        { id, propertyId: 'hotel', code, name: code, baseRate: rate },
+        adapter,
+      )
+      await call(
+        'hospitality_core.saveRoom',
+        { id: `${id}-room`, propertyId: 'hotel', roomTypeId: id, code, name: code },
+        adapter,
+      )
+    }
+    await call('partner.savePartner', { id: 'guest-a', kind: 'person', name: 'Guest A' }, adapter)
+    await call('partner.savePartner', { id: 'guest-b', kind: 'person', name: 'Guest B' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'amend-me',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest-a',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-02T05:00:00.000Z',
+        rate: '100',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+    await call(
+      'hospitality_core.addCharge',
+      {
+        id: 'late-checkout',
+        folioId: 'amend-me:folio',
+        stayId: 'amend-me:stay',
+        description: 'Late checkout',
+        type: 'service',
+        quantity: '1',
+        unitPrice: '50',
+      },
+      adapter,
+    )
+
+    const amended = await call(
+      'hospitality_core.amendReservation',
+      {
+        id: 'amend-me',
+        roomTypeId: 'deluxe',
+        partnerId: 'guest-b',
+        checkIn: '2026-10-02T07:00:00.000Z',
+        checkOut: '2026-10-04T05:00:00.000Z',
+        adults: 2,
+        children: 1,
+        rate: '200',
+        at: '2026-09-20T00:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.deepEqual(amended.value, { ok: true, id: 'amend-me', errors: [], amountTotal: '400' })
+
+    const reservation = (await call('hospitality_core.getReservation', { id: 'amend-me' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'amend-me:stay' }, adapter)).value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'amend-me:folio' }, adapter)).value as Row
+    assert.deepEqual(
+      {
+        partnerId: reservation.partnerId,
+        roomTypeId: reservation.roomTypeId,
+        adults: reservation.adults,
+        children: reservation.children,
+        rate: Number(reservation.rate),
+        amountTotal: Number(reservation.amountTotal),
+      },
+      {
+        partnerId: 'guest-b',
+        roomTypeId: 'deluxe',
+        adults: 2,
+        children: 1,
+        rate: 200,
+        amountTotal: 400,
+      },
+    )
+    assert.equal(stay.partnerId, 'guest-b')
+    assert.equal(stay.roomTypeId, 'deluxe')
+    assert.equal(Number(folio.amountTotal), 450, 'non-room charges remain on the folio')
+    assert.equal(
+      ((stay.guests as Row[]).find((guest) => guest.primary === true || guest.primary === 1) as Row)
+        .displayName,
+      'Guest B',
+    )
+    const ledger = await adapter.all(
+      `SELECT "roomTypeId", date, sold FROM hospitality_core_availability_ledger ORDER BY "roomTypeId", date`,
+    )
+    assert.deepEqual(
+      ledger.map((row) => ({ roomTypeId: row.roomTypeId, date: row.date, sold: Number(row.sold) })),
+      [
+        { roomTypeId: 'deluxe', date: '2026-10-02', sold: 1 },
+        { roomTypeId: 'deluxe', date: '2026-10-03', sold: 1 },
+        { roomTypeId: 'standard', date: '2026-10-01', sold: 0 },
+      ],
+    )
+
+    const retried = await call(
+      'hospitality_core.amendReservation',
+      {
+        id: 'amend-me',
+        roomTypeId: 'deluxe',
+        partnerId: 'guest-b',
+        checkIn: '2026-10-02T07:00:00.000Z',
+        checkOut: '2026-10-04T05:00:00.000Z',
+        adults: 2,
+        children: 1,
+        rate: '200',
+        at: '2026-09-20T00:01:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((retried.value as Row).ok, true, 'the current reservation owns its occupied nights')
+
+    await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'blocks-amendment',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest-a',
+        checkIn: '2026-10-05T07:00:00.000Z',
+        checkOut: '2026-10-06T05:00:00.000Z',
+      },
+      adapter,
+    )
+    const rejected = await call(
+      'hospitality_core.amendReservation',
+      {
+        id: 'amend-me',
+        roomTypeId: 'standard',
+        partnerId: 'guest-b',
+        checkIn: '2026-10-05T07:00:00.000Z',
+        checkOut: '2026-10-06T05:00:00.000Z',
+        adults: 2,
+        children: 1,
+        rate: '200',
+      },
+      adapter,
+    )
+    assert.equal((rejected.value as Row).ok, false)
+    assert.equal(((rejected.value as Row).errors as Row[])[0]?.code, 'no_availability')
+    const afterRejected = (await call('hospitality_core.getReservation', { id: 'amend-me' }, adapter))
+      .value as Row
+    assert.equal(afterRejected.roomTypeId, 'deluxe')
+    assert.equal(afterRejected.checkIn, '2026-10-02T07:00:00.000Z')
+
+    await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'ota-booking',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest-a',
+        provider: 'agoda',
+        externalId: 'AGODA-1',
+        checkIn: '2026-10-07T07:00:00.000Z',
+        checkOut: '2026-10-08T05:00:00.000Z',
+      },
+      adapter,
+    )
+    const external = await call(
+      'hospitality_core.amendReservation',
+      {
+        id: 'ota-booking',
+        roomTypeId: 'standard',
+        partnerId: 'guest-a',
+        checkIn: '2026-10-08T07:00:00.000Z',
+        checkOut: '2026-10-09T05:00:00.000Z',
+        adults: 1,
+        children: 0,
+        rate: '100',
+      },
+      adapter,
+    )
+    assert.equal(((external.value as Row).errors as Row[])[0]?.code, 'reservation_external_readonly')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality stays: front desk adjusts an in-house departure atomically', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '100' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'in-house',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-02T05:00:00.000Z',
+        rate: '100',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+    const checkedIn = await call(
+      'hospitality_core.checkIn',
+      { stayId: 'in-house:stay', roomId: '101', at: '2026-10-01T07:00:00.000Z' },
+      adapter,
+    )
+    assert.equal((checkedIn.value as Row).ok, true)
+    await call(
+      'hospitality_core.addCharge',
+      {
+        id: 'breakfast',
+        folioId: 'in-house:folio',
+        stayId: 'in-house:stay',
+        description: 'Breakfast',
+        type: 'service',
+        quantity: '1',
+        unitPrice: '25',
+      },
+      adapter,
+    )
+
+    const extended = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-03T05:00:00.000Z',
+        at: '2026-10-01T08:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.deepEqual(extended.value, {
+      ok: true,
+      id: 'in-house:stay',
+      checkOut: '2026-10-03T05:00:00.000Z',
+      amountTotal: '200',
+      errors: [],
+    })
+    const reservation = (await call('hospitality_core.getReservation', { id: 'in-house' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'in-house:stay' }, adapter)).value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'in-house:folio' }, adapter)).value as Row
+    assert.deepEqual(
+      {
+        reservationCheckOut: reservation.checkOut,
+        stayCheckOut: stay.checkOut,
+        quantity: Number(reservation.quantity),
+        amountTotal: Number(reservation.amountTotal),
+        folioTotal: Number(folio.amountTotal),
+        roomCharge: Number(
+          ((folio.charges as Row[]).find((charge) => charge.id === 'in-house:room') as Row).amount,
+        ),
+      },
+      {
+        reservationCheckOut: '2026-10-03T05:00:00.000Z',
+        stayCheckOut: '2026-10-03T05:00:00.000Z',
+        quantity: 2,
+        amountTotal: 200,
+        folioTotal: 225,
+        roomCharge: 200,
+      },
+    )
+    assert.deepEqual(
+      (await adapter.all(`SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`)).map(
+        (row) => ({ date: row.date, sold: Number(row.sold) }),
+      ),
+      [
+        { date: '2026-10-01', sold: 1 },
+        { date: '2026-10-02', sold: 1 },
+      ],
+    )
+
+    const retried = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-03T05:00:00.000Z',
+        at: '2026-10-01T08:01:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((retried.value as Row).ok, true)
+
+    const shortened = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-02T05:00:00.000Z',
+        at: '2026-10-01T08:02:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((shortened.value as Row).ok, true)
+    assert.equal(
+      Number(
+        ((await call('hospitality_core.getFolio', { id: 'in-house:folio' }, adapter)).value as Row)
+          .amountTotal,
+      ),
+      125,
+    )
+
+    const blocker = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'blocks-extension',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-02T07:00:00.000Z',
+        checkOut: '2026-10-04T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((blocker.value as Row).ok, true)
+    const rejected = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-04T05:00:00.000Z',
+        at: '2026-10-01T08:03:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((rejected.value as Row).ok, false)
+    assert.equal(((rejected.value as Row).errors as Row[])[0]?.code, 'no_availability')
+    const afterRejected = (await call('hospitality_core.getReservation', { id: 'in-house' }, adapter))
+      .value as Row
+    assert.equal(afterRejected.checkOut, '2026-10-02T05:00:00.000Z')
+    assert.equal(Number(afterRejected.amountTotal), 100)
+
+    const expiredRetry = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-02T05:00:00.000Z',
+        at: '2026-10-03T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((expiredRetry.value as Row).ok, true, 'an idempotent retry remains safe after departure')
+
+    const elapsed = await call(
+      'hospitality_core.adjustStayDeparture',
+      {
+        stayId: 'in-house:stay',
+        checkOut: '2026-10-03T05:00:00.000Z',
+        at: '2026-10-03T05:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal(((elapsed.value as Row).errors as Row[])[0]?.code, 'departure_not_future')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality stays: early check-out releases only future inventory and retains charges', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '100' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'early-departure',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-05T05:00:00.000Z',
+        rate: '100',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+    await call(
+      'hospitality_core.checkIn',
+      { stayId: 'early-departure:stay', roomId: '101', at: '2026-10-01T07:00:00.000Z' },
+      adapter,
+    )
+
+    const checkedOut = await call(
+      'hospitality_core.checkOut',
+      { stayId: 'early-departure:stay', at: '2026-10-02T05:00:00.000Z' },
+      adapter,
+    )
+    assert.deepEqual(checkedOut.value, {
+      ok: true,
+      id: 'early-departure:stay',
+      roomId: '101',
+      state: 'checked_out',
+      inventoryReleased: 3,
+      errors: [],
+    })
+    const reservation = (await call('hospitality_core.getReservation', { id: 'early-departure' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'early-departure:stay' }, adapter))
+      .value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'early-departure:folio' }, adapter))
+      .value as Row
+    assert.deepEqual(
+      {
+        reservationState: reservation.state,
+        scheduledCheckOut: reservation.checkOut,
+        stayState: stay.state,
+        actualCheckOut: stay.checkedOutAt,
+        folioState: folio.state,
+        folioTotal: Number(folio.amountTotal),
+      },
+      {
+        reservationState: 'checked_out',
+        scheduledCheckOut: '2026-10-05T05:00:00.000Z',
+        stayState: 'checked_out',
+        actualCheckOut: '2026-10-02T05:00:00.000Z',
+        folioState: 'closed',
+        folioTotal: 400,
+      },
+    )
+    assert.deepEqual(
+      (await adapter.all(`SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`)).map(
+        (row) => ({ date: row.date, sold: Number(row.sold) }),
+      ),
+      [
+        { date: '2026-10-01', sold: 1 },
+        { date: '2026-10-02', sold: 0 },
+        { date: '2026-10-03', sold: 0 },
+        { date: '2026-10-04', sold: 0 },
+      ],
+    )
+    const room = (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!
+    assert.equal(room.status, 'dirty')
+    assert.equal(
+      Number(
+        (
+          await adapter.all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_cleaning_task WHERE id = 'checkout:early-departure:stay'`,
+          )
+        )[0]!.n,
+      ),
+      1,
+    )
+
+    const retried = await call(
+      'hospitality_core.checkOut',
+      { stayId: 'early-departure:stay', at: '2026-10-02T05:01:00.000Z' },
+      adapter,
+    )
+    assert.equal((retried.value as Row).ok, true)
+    assert.equal(
+      Number(
+        (
+          await adapter.all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_inventory_change WHERE "aggregateId" = 'early-departure'`,
+          )
+        )[0]!.n,
+      ),
+      2,
+      'booking and early release each emit one durable inventory signal',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality reservations: no-show releases inventory but retains charges for reconciliation', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '125' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'no-show-booking',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-03T05:00:00.000Z',
+        rate: '125',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+
+    const early = await call(
+      'hospitality_core.markNoShow',
+      {
+        id: 'no-show-booking',
+        reason: 'Guest did not answer',
+        at: '2026-10-01T06:59:59.000Z',
+      },
+      adapter,
+    )
+    assert.equal((early.value as Row).ok, false)
+    assert.equal(((early.value as Row).errors as Row[])[0]?.code, 'reservation_no_show_too_early')
+
+    const marked = await call(
+      'hospitality_core.markNoShow',
+      {
+        id: 'no-show-booking',
+        reason: 'Guest did not answer',
+        at: '2026-10-01T07:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.deepEqual(marked.value, { ok: true, id: 'no-show-booking', state: 'no_show', errors: [] })
+    const reservation = (await call('hospitality_core.getReservation', { id: 'no-show-booking' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'no-show-booking:stay' }, adapter))
+      .value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'no-show-booking:folio' }, adapter))
+      .value as Row
+    assert.deepEqual(
+      {
+        reservationState: reservation.state,
+        stayState: stay.state,
+        folioState: folio.state,
+        amountTotal: Number(folio.amountTotal),
+        noShowReason: reservation.noShowReason,
+        noShowAt: reservation.noShowAt,
+      },
+      {
+        reservationState: 'no_show',
+        stayState: 'no_show',
+        folioState: 'closed',
+        amountTotal: 250,
+        noShowReason: 'Guest did not answer',
+        noShowAt: '2026-10-01T07:00:00.000Z',
+      },
+    )
+    assert.equal((folio.charges as Row[])[0]?.state, 'active', 'no-show does not void the room charge')
+    const ledger = await adapter.all(
+      `SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`,
+    )
+    assert.deepEqual(
+      ledger.map((row) => ({ date: row.date, sold: Number(row.sold) })),
+      [
+        { date: '2026-10-01', sold: 0 },
+        { date: '2026-10-02', sold: 0 },
+      ],
+    )
+    const retried = await call(
+      'hospitality_core.markNoShow',
+      { id: 'no-show-booking', reason: 'Guest did not answer', at: '2026-10-01T08:00:00.000Z' },
+      adapter,
+    )
+    assert.equal((retried.value as Row).state, 'no_show')
+    const cancelled = await call(
+      'hospitality_core.cancelReservation',
+      { id: 'no-show-booking', reason: 'late provider cancellation' },
+      adapter,
+    )
+    assert.equal(
+      (cancelled.value as Row).state,
+      'no_show',
+      'a later cancellation keeps the no-show audit state',
+    )
   } finally {
     await adapter.close()
   }

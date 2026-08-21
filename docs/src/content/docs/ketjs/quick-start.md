@@ -6,10 +6,9 @@ description: Scaffold, inspect, and run a minimal KetJS application.
 This guide creates a headless notes application backed by SQLite. It exercises a real module, model,
 function, route, migration, and HTTP call without adding a database server.
 
-:::caution[Unreleased package]
-The repository currently identifies KetJS as `0.0.0`. The commands below describe the intended
-package workflow. When working from this monorepo, use its existing workspace install and root
-scripts instead of expecting a stable public npm release.
+:::caution[Preview release]
+KetJS `0.1.x` is preview software. The package workflow below is verified before each release, but APIs and
+deployment contracts may still change before 1.0.
 :::
 
 ## Requirements
@@ -43,7 +42,9 @@ notes/
 ├── tools/
 │   └── dev.mjs
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json
+├── biome.json
+└── .gitignore
 ```
 
 ## The module

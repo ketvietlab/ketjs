@@ -196,6 +196,14 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
   assert.match(quotationsHtml, /Chưa có báo giá/)
   assert.doesNotMatch(quotationsHtml, /data-island="mail\.chatter"/)
 
+  const salesDashboard = await e2e.client.get('/admin/sales?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const salesDashboardHtml = await salesDashboard.text()
+  assert.match(salesDashboardHtml, /Tạo báo giá/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi#quotation-create-form"/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/orders\?lang=vi"/)
+
   const invalidQuotation = await e2e.client.form<string>('/admin/sales/quotations?lang=vi', {
     partnerId: '',
     warehouseId: '',
@@ -215,6 +223,12 @@ test('e2e sale 19: quotation to delivery and invoice crosses real HTTP', async (
     headers: { accept: 'text/html' },
   })
   assert.match(await englishQuotations.text(), /href="\/admin\/sales\/quotations\/[^"?]+\?lang=en"/)
+  const englishDashboard = await e2e.client.get('/admin/sales?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const englishDashboardHtml = await englishDashboard.text()
+  assert.match(englishDashboardHtml, /Create Quotation/)
+  assert.match(englishDashboardHtml, /href="\/admin\/sales\/quotations\?lang=en#quotation-create-form"/)
   const english = await e2e.client.get('/admin/sales/orders/so-1?lang=en', {
     headers: { accept: 'text/html' },
   })

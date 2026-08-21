@@ -38,6 +38,8 @@ export function compose(
     regions: { required: [...(opts.appRequires ?? [])], provided: {} },
     islands: {},
     sections: {},
+    contentTypes: {},
+    taxonomies: {},
     relations: {},
     tokens: {},
     assets: {},
@@ -913,6 +915,90 @@ export function compose(
         continue
       }
       manifest.sections[name] = { ...def, by: m.name }
+    }
+  }
+
+  // --- CMS content registry --------------------------------------------------
+  // Local names are qualified exactly like models and views. A module may point
+  // at another module's type or taxonomy only when it depends on that module.
+  const registryRef = (m: KetModule, name: string): string =>
+    name.includes('.') ? name : qualify(m.name, name)
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.contentTypes ?? {})) {
+      const key = qualify(m.name, name)
+      const fields: Record<string, string> = {}
+      for (const [field, type] of Object.entries(def.fields ?? {})) {
+        const parsed = parseType(type)
+        if (!parsed.ok) {
+          diag.add({
+            code: 'E_CONTENT_FIELD_TYPE',
+            module: m.name,
+            message: `${key}.${field}: ${parsed.reason}`,
+          })
+          continue
+        }
+        fields[field] = type
+      }
+      if (def.detailPath && !def.detailPath.includes('{slug}')) {
+        diag.add({
+          code: 'E_CONTENT_DETAIL_PATH',
+          module: m.name,
+          message: `content type "${key}" detailPath must contain {slug}`,
+        })
+      }
+      manifest.contentTypes[key] = {
+        ...def,
+        by: m.name,
+        fields,
+        taxonomies: (def.taxonomies ?? []).map((ref) => registryRef(m, ref)),
+      }
+    }
+    for (const [name, def] of Object.entries(m.taxonomies ?? {})) {
+      const key = qualify(m.name, name)
+      manifest.taxonomies[key] = {
+        ...def,
+        by: m.name,
+        hierarchical: def.hierarchical === true,
+        contentTypes: def.contentTypes.map((ref) => registryRef(m, ref)),
+      }
+    }
+  }
+  for (const [key, type] of Object.entries(manifest.contentTypes)) {
+    for (const taxonomy of type.taxonomies) {
+      const target = manifest.taxonomies[taxonomy]
+      if (!target) {
+        diag.add({
+          code: 'E_CONTENT_TAXONOMY_MISSING',
+          module: type.by,
+          message: `content type "${key}" references unknown taxonomy "${taxonomy}"`,
+        })
+        continue
+      }
+      if (!canSee(order.find((m) => m.name === type.by)!, target.by))
+        diag.add({
+          code: 'E_CONTENT_TAXONOMY_DEPENDENCY',
+          module: type.by,
+          message: `content type "${key}" reaches taxonomy "${taxonomy}" without depending on "${target.by}"`,
+        })
+    }
+  }
+  for (const [key, taxonomy] of Object.entries(manifest.taxonomies)) {
+    for (const contentType of taxonomy.contentTypes) {
+      const target = manifest.contentTypes[contentType]
+      if (!target) {
+        diag.add({
+          code: 'E_TAXONOMY_CONTENT_MISSING',
+          module: taxonomy.by,
+          message: `taxonomy "${key}" references unknown content type "${contentType}"`,
+        })
+        continue
+      }
+      if (!canSee(order.find((m) => m.name === taxonomy.by)!, target.by))
+        diag.add({
+          code: 'E_TAXONOMY_CONTENT_DEPENDENCY',
+          module: taxonomy.by,
+          message: `taxonomy "${key}" reaches content type "${contentType}" without depending on "${target.by}"`,
+        })
     }
   }
 

@@ -1,11 +1,32 @@
 {
   "name": "ketjs-view",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Ket view layer — signals, surgical DOM rendering, SSR, hydration and islands. Browser-safe, zero dependencies.",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/ketjs-view"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "keywords": [
+    "signals",
+    "ssr",
+    "hydration",
+    "islands",
+    "typescript"
+  ],
   "engines": {
     "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../.."
   },
   "exports": {
     ".": {
@@ -22,6 +43,11 @@
     }
   },
   "dependencies": {},
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "dist"
   ]

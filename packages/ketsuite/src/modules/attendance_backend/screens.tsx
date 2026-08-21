@@ -5,7 +5,7 @@ import {
   dataTable,
   definitionList as DefinitionList,
   emptyState,
-  framed,
+  framedPage as Framed,
   notice as Notice,
   qrCode,
   recordActions as RecordActions,
@@ -27,12 +27,12 @@ export const myWorkScreen = (
   shifts: R[],
   leaves: R[],
   message?: string,
-): TemplateResult =>
-  framed(
-    _,
-    _('attendance_backend.my.title'),
-    frame,
-    stack([
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('attendance_backend.my.title')}
+    frame={frame}
+    body={stack([
       ...(message
         ? [<Notice title={_('attendance_backend.result.title')} message={message} tone="info" />]
         : []),
@@ -191,8 +191,9 @@ export const myWorkScreen = (
             : []),
         ])}
       />,
-    ]),
-  )
+    ])}
+  />
+)
 
 export const kioskScreen = (_: Translator, kioskSecret: string, result?: R): TemplateResult =>
   stack([
@@ -240,99 +241,110 @@ export const periodScreen = (
   period: R | null,
 ): TemplateResult => {
   const entries = (period?.entries as R[] | undefined) ?? []
-  return framed(
-    _,
-    _('attendance_backend.admin.title'),
-    frame,
-    stack([
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/attendance"
-            submit={_('attendance_backend.action.openPeriod')}
-            submitVariant="secondary"
-            fields={[
-              { name: 'month', label: _('attendance_backend.field.month'), value: month, required: true },
-            ]}
-          />
-        }
-      />,
-      ...(period
-        ? [
-            <Notice
-              title={_('attendance_backend.period.state')}
-              message={_(`attendance_backend.state.${period.state}`)}
-              tone={period.state === 'locked' ? 'positive' : 'info'}
-            />,
-            <Surface
-              body={
-                <RecordActions
-                  action={`/admin/attendance?month=${encodeURIComponent(month)}`}
-                  actions={
-                    period.state === 'locked'
-                      ? [
-                          {
-                            value: 'reopen',
-                            label: _('attendance_backend.action.reopen'),
-                            variant: 'secondary',
-                          },
-                        ]
-                      : [{ value: 'close', label: _('attendance_backend.action.close'), variant: 'primary' }]
-                  }
-                />
-              }
-            />,
-            entries.length
-              ? dataTable(_, {
-                  rows: entries,
-                  id: (row) => String(row.id),
-                  columns: [
-                    {
-                      key: 'employee',
-                      label: _('attendance_backend.field.employee'),
-                      cell: (row) => String(row.employeeId),
-                      priority: 'primary',
-                    },
-                    {
-                      key: 'date',
-                      label: _('attendance_backend.field.date'),
-                      cell: (row) => String(row.localDate),
-                    },
-                    {
-                      key: 'planned',
-                      label: _('attendance_backend.field.planned'),
-                      cell: (row) => String(row.plannedMinutes),
-                    },
-                    {
-                      key: 'worked',
-                      label: _('attendance_backend.field.worked'),
-                      cell: (row) => String(row.workedMinutes),
-                    },
-                    {
-                      key: 'overtime',
-                      label: _('attendance_backend.field.overtime'),
-                      cell: (row) => String(row.approvedOvertimeMinutes),
-                    },
-                    {
-                      key: 'exception',
-                      label: _('attendance_backend.field.exception'),
-                      cell: (row) => String(row.exception ?? '—'),
-                    },
-                  ],
-                })
-              : emptyState(_('attendance_backend.empty.entries'), _('attendance_backend.empty.entriesHint')),
-          ]
-        : []),
-    ]),
+  return (
+    <Framed
+      translator={_}
+      title={_('attendance_backend.admin.title')}
+      frame={frame}
+      body={stack([
+        <Surface
+          body={
+            <RecordForm
+              action="/admin/attendance"
+              submit={_('attendance_backend.action.openPeriod')}
+              submitVariant="secondary"
+              fields={[
+                { name: 'month', label: _('attendance_backend.field.month'), value: month, required: true },
+              ]}
+            />
+          }
+        />,
+        ...(period
+          ? [
+              <Notice
+                title={_('attendance_backend.period.state')}
+                message={_(`attendance_backend.state.${period.state}`)}
+                tone={period.state === 'locked' ? 'positive' : 'info'}
+              />,
+              <Surface
+                body={
+                  <RecordActions
+                    action={`/admin/attendance?month=${encodeURIComponent(month)}`}
+                    actions={
+                      period.state === 'locked'
+                        ? [
+                            {
+                              value: 'reopen',
+                              label: _('attendance_backend.action.reopen'),
+                              variant: 'secondary',
+                            },
+                          ]
+                        : [
+                            {
+                              value: 'close',
+                              label: _('attendance_backend.action.close'),
+                              variant: 'primary',
+                            },
+                          ]
+                    }
+                  />
+                }
+              />,
+              entries.length
+                ? dataTable(_, {
+                    rows: entries,
+                    id: (row) => String(row.id),
+                    columns: [
+                      {
+                        key: 'employee',
+                        label: _('attendance_backend.field.employee'),
+                        cell: (row) => String(row.employeeId),
+                        priority: 'primary',
+                      },
+                      {
+                        key: 'date',
+                        label: _('attendance_backend.field.date'),
+                        cell: (row) => String(row.localDate),
+                      },
+                      {
+                        key: 'planned',
+                        label: _('attendance_backend.field.planned'),
+                        cell: (row) => String(row.plannedMinutes),
+                      },
+                      {
+                        key: 'worked',
+                        label: _('attendance_backend.field.worked'),
+                        cell: (row) => String(row.workedMinutes),
+                      },
+                      {
+                        key: 'overtime',
+                        label: _('attendance_backend.field.overtime'),
+                        cell: (row) => String(row.approvedOvertimeMinutes),
+                      },
+                      {
+                        key: 'exception',
+                        label: _('attendance_backend.field.exception'),
+                        cell: (row) => String(row.exception ?? '—'),
+                      },
+                    ],
+                  })
+                : emptyState(
+                    _('attendance_backend.empty.entries'),
+                    _('attendance_backend.empty.entriesHint'),
+                  ),
+            ]
+          : []),
+      ])}
+    />
   )
 }
 
-export const credentialScreen = (_: Translator, frame: Frame, result?: R): TemplateResult =>
-  framed(
-    _,
-    _('attendance_backend.credentials.title'),
-    frame,
-    stack([
+export const credentialScreen = (_: Translator, frame: Frame, result?: R): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('attendance_backend.credentials.title')}
+    frame={frame}
+    body={stack([
       ...(result?.secret
         ? [
             <Notice
@@ -406,5 +418,6 @@ export const credentialScreen = (_: Translator, frame: Frame, result?: R): Templ
           />
         }
       />,
-    ]),
-  )
+    ])}
+  />
+)

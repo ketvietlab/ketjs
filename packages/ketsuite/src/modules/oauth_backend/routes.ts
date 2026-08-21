@@ -10,8 +10,8 @@ import {
   linkProviderScreen,
   providerFormScreen,
   providersScreen,
-} from './screens.ts'
-import type { IdentityRow, ProviderRow } from './screens.ts'
+} from './screens.tsx'
+import type { IdentityRow, ProviderRow } from './screens.tsx'
 
 type Req = Parameters<Route>[1]
 type AnyRow = Record<string, unknown>

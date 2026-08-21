@@ -30,8 +30,8 @@ import {
   user,
 } from 'ketsuite'
 import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/attributes-screen.tsx'
-import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.ts'
-import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.ts'
+import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.tsx'
+import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.tsx'
 
 const modules = [
   address,

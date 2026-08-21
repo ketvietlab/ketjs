@@ -126,6 +126,50 @@ export type ReportDef = {
 export type ComposedReport = ReportDef & { by: string; id: string }
 
 /**
+ * A CMS content type is a composition-time contract, not a row created by an
+ * administrator. Modules register the shape they own; website data stores the
+ * values after validating them against this registry. Keeping the registry in the
+ * manifest gives themes, agents and backend editors the same closed vocabulary.
+ */
+export type ContentTypeDef = {
+  /** Message key local to the declaring module. */
+  label: string
+  /** Message key local to the declaring module. */
+  pluralLabel: string
+  /** Custom fields stored with a revision. Values use the ordinary Ket scalar syntax. */
+  fields?: Record<string, string>
+  /** Local names or fully-qualified taxonomy names this type accepts. */
+  taxonomies?: string[]
+  archivePath?: string
+  /** A route pattern containing `{slug}` for one persisted or adapted record. */
+  detailPath?: string
+  /** Optional public functions for content backed by a business module rather than website.Entry. */
+  source?: { list: string; get: string }
+}
+
+export type TaxonomyDef = {
+  /** Message key local to the declaring module. */
+  label: string
+  /** Message key local to the declaring module. */
+  pluralLabel: string
+  hierarchical?: boolean
+  /** Local names or fully-qualified content type names this taxonomy accepts. */
+  contentTypes: string[]
+}
+
+export type ComposedContentType = Omit<ContentTypeDef, 'taxonomies'> & {
+  by: string
+  fields: Record<string, string>
+  taxonomies: string[]
+}
+
+export type ComposedTaxonomy = Omit<TaxonomyDef, 'contentTypes'> & {
+  by: string
+  hierarchical: boolean
+  contentTypes: string[]
+}
+
+/**
  * A relation between two models, declared by a module that depends on both.
  *
  * There is no lazy side. Nothing loads itself when touched, so the N+1 that makes
@@ -337,6 +381,8 @@ export type ModuleSpec = AppMeta & {
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('ketjs-view').IslandDefinition>
   sections?: Record<string, SectionDef>
+  contentTypes?: Record<string, ContentTypeDef>
+  taxonomies?: Record<string, TaxonomyDef>
   relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
   messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
@@ -366,6 +412,8 @@ export type KetModule = Readonly<AppMeta> & {
   readonly routes: Record<string, RouteEntry>
   readonly islands: Record<string, import('ketjs-view').IslandDefinition>
   readonly sections: Record<string, SectionDef>
+  readonly contentTypes: Record<string, ContentTypeDef>
+  readonly taxonomies: Record<string, TaxonomyDef>
   readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
@@ -394,6 +442,8 @@ export type Manifest = {
     { by: string; props: Record<string, string>; key?: string[]; client?: { src: string; export: string } }
   >
   sections: Record<string, SectionDef & { by: string }>
+  contentTypes: Record<string, ComposedContentType>
+  taxonomies: Record<string, ComposedTaxonomy>
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
