@@ -14,7 +14,7 @@ required application-server dependency.
 ## Create an application
 
 ```bash
-npx --package @ketvietlab/ketjs ket new notes
+npx -y @ketvietlab/ketjs new notes
 cd notes
 npm install
 npm run dev
@@ -22,6 +22,9 @@ npm run dev
 
 The generated project uses SQLite by default, contains a real module and integration test, and runs
 at `http://127.0.0.1:3000`.
+
+Application names use lowercase letters, digits, and underscores and must start with a letter. Use
+`--dir ./my-app` when the filesystem directory should have a different name.
 
 ## Install in an existing project
 
