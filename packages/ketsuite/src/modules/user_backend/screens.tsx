@@ -4,23 +4,21 @@ import {
   badge,
   code,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  notice,
+  Notice,
   person,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
-
-const localized = (path: string, locale: string): string =>
-  !locale ? path : path.includes('?') ? `${path}&${locale.slice(1)}` : `${path}${locale}`
+import { localized } from '../backend/screen.ts'
 
 export type UserRow = {
   id: string
@@ -199,15 +197,15 @@ export const userFormScreen = (
       body={stack([
         ...(options.oneTimeLink
           ? [
-              notice({
-                tone: 'warning',
-                title: _('user_backend.token.onceTitle'),
-                message: _('user_backend.token.onceHint'),
-              }),
-              definitionList({
-                title: _('user_backend.token.link'),
-                items: [{ key: 'link', term: _('user_backend.token.copyNow'), value: options.oneTimeLink }],
-              }),
+              <Notice
+                tone="warning"
+                title={_('user_backend.token.onceTitle')}
+                message={_('user_backend.token.onceHint')}
+              />,
+              <DefinitionList
+                title={_('user_backend.token.link')}
+                items={[{ key: 'link', term: _('user_backend.token.copyNow'), value: options.oneTimeLink }]}
+              />,
             ]
           : []),
         ...(options.integration ? [options.integration] : []),
@@ -290,17 +288,19 @@ export const userFormScreen = (
                 description={_('user_backend.security.hint')}
                 body={
                   <Surface
-                    body={recordActions({
-                      action: localized(`/admin/users/${id}/token`, locale),
-                      actions: [
-                        {
-                          value: 'invitation',
-                          label: _('user_backend.action.invitation'),
-                          variant: 'secondary',
-                        },
-                        { value: 'reset', label: _('user_backend.action.reset'), variant: 'destructive' },
-                      ],
-                    })}
+                    body={
+                      <RecordActions
+                        action={localized(`/admin/users/${id}/token`, locale)}
+                        actions={[
+                          {
+                            value: 'invitation',
+                            label: _('user_backend.action.invitation'),
+                            variant: 'secondary',
+                          },
+                          { value: 'reset', label: _('user_backend.action.reset'), variant: 'destructive' },
+                        ]}
+                      />
+                    }
                   />
                 }
               />,
@@ -341,17 +341,16 @@ export const sessionsScreen = (
             key: 'state',
             label: _('user_backend.field.state'),
             cell: (row) =>
-              row.current
-                ? badge(_('user_backend.sessions.current'), 'positive')
-                : recordActions({
-                    action: localized(
-                      `/admin/users/${userId}/sessions/${encodeURIComponent(row.id)}`,
-                      locale,
-                    ),
-                    actions: [
-                      { value: 'revoke', label: _('user_backend.sessions.revoke'), variant: 'destructive' },
-                    ],
-                  }),
+              row.current ? (
+                badge(_('user_backend.sessions.current'), 'positive')
+              ) : (
+                <RecordActions
+                  action={localized(`/admin/users/${userId}/sessions/${encodeURIComponent(row.id)}`, locale)}
+                  actions={[
+                    { value: 'revoke', label: _('user_backend.sessions.revoke'), variant: 'destructive' },
+                  ]}
+                />
+              ),
           },
         ],
       })
@@ -496,9 +495,7 @@ export const presetsScreen = (
     title={_('user_backend.presets.title')}
     frame={frame}
     body={stack([
-      ...(result
-        ? [notice({ tone: 'positive', title: _('user_backend.presets.done'), message: result })]
-        : []),
+      ...(result ? [<Notice tone="positive" title={_('user_backend.presets.done')} message={result} />] : []),
       <Section
         title={_('user_backend.presets.apply')}
         description={_('user_backend.presets.hint')}

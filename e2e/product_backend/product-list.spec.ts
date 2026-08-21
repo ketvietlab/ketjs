@@ -20,27 +20,30 @@ test.beforeAll(async () => mkdir(artifacts, { recursive: true }))
 test.beforeEach(async ({ page }) => login(page))
 
 test('search, pagination, columns, view switching and record navigation work', async ({ page }) => {
-  await page.goto('/admin/products?lang=vi&view=list&cols=id')
+  await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   await expect(page.getByRole('heading', { name: 'Danh mục sản phẩm' })).toBeVisible()
-  await expect(page.locator('[data-ui="chrome-create"]')).toHaveAttribute('href', /\/admin\/products\/new/)
+  await expect(page.locator('[data-ui="chrome-create"]')).toHaveAttribute(
+    'href',
+    /\/admin\/product\/templates\/new/,
+  )
 
   await page.getByRole('link', { name: 'Trang sau' }).click()
   await expect(page).toHaveURL(/page=2/)
   await expect(page.locator('[data-ui="row"]')).toHaveCount(2)
 
-  await page.goto('/admin/products?lang=vi&view=list&cols=id')
+  await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   const firstRecord = page.locator('[data-ui="row-link"]').first()
   await expect(firstRecord).toBeVisible()
   await firstRecord.click()
-  await expect(page).toHaveURL(/\/admin\/products\/[^/?]+/)
+  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 
-  await page.goto('/admin/products?lang=vi&view=list&cols=id')
+  await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   await page.locator('[data-ui="chrome-search-input"]').fill('Áo khoác')
   await page.locator('[data-ui="chrome-search-input"]').press('Enter')
   await expect(page).toHaveURL(/q=%C3%81o(?:\+|%20)kho%C3%A1c/)
   await expect(page.getByRole('link', { name: 'Áo khoác vận hành KETSUITE' })).toBeVisible()
 
-  await page.goto('/admin/products?lang=vi&view=list&cols=id')
+  await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   await page.locator('[data-ui="col-config-open"]').click()
   await page.locator('[data-ui="col-toggle"][data-on="true"]').click()
   await expect(page).not.toHaveURL(/cols=id/)
@@ -48,7 +51,7 @@ test('search, pagination, columns, view switching and record navigation work', a
   await page.getByRole('link', { name: 'Thẻ' }).click()
   await expect(page).toHaveURL(/view=kanban/)
   await page.locator('[data-ui="kanban-title"] a').first().click()
-  await expect(page).toHaveURL(/\/admin\/products\/[^/?]+/)
+  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 })
 
 for (const viewport of [
@@ -58,8 +61,8 @@ for (const viewport of [
   test(`renders aligned list and kanban views on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     for (const [view, path] of [
-      ['list', '/admin/products?lang=vi&view=list&cols=id'],
-      ['kanban', '/admin/products?lang=vi&view=kanban'],
+      ['list', '/admin/product/templates?lang=vi&view=list&cols=id'],
+      ['kanban', '/admin/product/templates?lang=vi&view=kanban'],
     ] as const) {
       await page.goto(path)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
@@ -97,8 +100,8 @@ for (const viewport of [
 }
 
 test('renders the English locale without falling back to the login screen', async ({ page }) => {
-  await page.goto('/admin/products?lang=en&view=list')
-  await expect(page).toHaveURL(/\/admin\/products/)
+  await page.goto('/admin/product/templates?lang=en&view=list')
+  await expect(page).toHaveURL(/\/admin\/product\/templates/)
   await expect(page.locator('[data-ui="main"]')).toBeVisible()
   await expect(page.locator('form[action="/login"]')).toHaveCount(0)
   await page.screenshot({ path: join(artifacts, 'list-en-desktop.png'), fullPage: true })

@@ -20,7 +20,7 @@ test.beforeAll(async () => mkdir(artifacts, { recursive: true }))
 test.beforeEach(async ({ page }) => login(page))
 
 test('validates and creates an attribute, then adds a value', async ({ page }) => {
-  await page.goto('/admin/product-attributes?lang=vi')
+  await page.goto('/admin/product/attributes?lang=vi')
   await expect(page.getByRole('heading', { name: 'Thuộc tính sản phẩm' })).toBeVisible()
   await expect(page.locator('[data-ui="content-card"]', { hasText: 'Màu sắc' })).toContainText(
     'Xanh nghiệp vụ',
@@ -28,7 +28,7 @@ test('validates and creates an attribute, then adds a value', async ({ page }) =
 
   const createForm = page.locator('#product-attribute-create')
   await createForm.getByRole('button', { name: 'Tạo mới' }).click()
-  await expect(page).toHaveURL(/\/admin\/product-attributes\?lang=vi$/)
+  await expect(page).toHaveURL(/\/admin\/product\/attributes\?lang=vi$/)
   expect(
     await createForm
       .locator('input[name="name"]')
@@ -45,7 +45,7 @@ test('validates and creates an attribute, then adds a value', async ({ page }) =
     .locator('[data-ui="content-card"]', { hasText: 'Chất liệu E2E' })
     .getByRole('button', { name: 'Thêm' })
     .click()
-  await expect(page).toHaveURL(/\/admin\/product-attributes\?lang=vi$/)
+  await expect(page).toHaveURL(/\/admin\/product\/attributes\?lang=vi$/)
 
   const card = page.locator('[data-ui="content-card"]', { hasText: 'Chất liệu E2E' })
   await card.locator('input[name="name"]').fill('Cotton kỹ thuật')
@@ -62,7 +62,7 @@ for (const viewport of [
   for (const locale of ['vi', 'en'] as const) {
     test(`renders the ${locale} attribute screen correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(`/admin/product-attributes?lang=${locale}`)
+      await page.goto(`/admin/product/attributes?lang=${locale}`)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
 

@@ -13,14 +13,14 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
+  AppCard,
   badge,
-  card,
-  cardGroups,
+  CardGroups,
   code,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
+  Framed,
   shell,
 } from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
@@ -66,51 +66,55 @@ export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): Te
     const owner = apps.find((a) => a.category === c)
     return owner ? label(_, owner.name, 'category', c) : c
   }
+  // Uninstalling something another app needs would take that app with it, so the
+  // control says no rather than the failure arriving after the click.
+  const card = (app: AppRow): TemplateResult => (
+    <AppCard
+      app={app.name}
+      state={app.state}
+      title={label(_, app.name, 'title', app.title)}
+      summary={label(_, app.name, 'summary', app.summary)}
+      meta={[
+        {
+          kind: 'depends' as const,
+          term: _('backend.apps.depends'),
+          value: app.depends.join(', ') || _('backend.apps.none'),
+        },
+        ...(app.dependents.length > 0
+          ? [
+              {
+                kind: 'dependents' as const,
+                term: _('backend.apps.dependents'),
+                value: app.dependents.join(', '),
+              },
+            ]
+          : []),
+      ]}
+      action={{
+        action: app.state === 'installed' ? 'uninstall' : 'install',
+        label: app.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install'),
+        disabled: app.state === 'installed' && app.dependents.length > 0,
+      }}
+      extra={extras['app-card.actions']?.[app.name]}
+    />
+  )
   return shell(
     _,
     _('backend.apps.title'),
-    apps.length === 0
-      ? emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
-      : cardGroups({
-          groups: categories.map((c) => ({
-            key: c,
-            title: categoryLabel(c),
-            items: apps.filter((a) => a.category === c),
-          })),
-          id: (a) => a.name,
-          footer: extras['apps.footer'],
-          card: (app) =>
-            card({
-              key: app.name,
-              state: app.state,
-              title: label(_, app.name, 'title', app.title),
-              summary: label(_, app.name, 'summary', app.summary),
-              meta: [
-                {
-                  kind: 'depends' as const,
-                  term: _('backend.apps.depends'),
-                  value: app.depends.join(', ') || _('backend.apps.none'),
-                },
-                ...(app.dependents.length > 0
-                  ? [
-                      {
-                        kind: 'dependents' as const,
-                        term: _('backend.apps.dependents'),
-                        value: app.dependents.join(', '),
-                      },
-                    ]
-                  : []),
-              ],
-              // Uninstalling something another app needs would take that app with it, so
-              // the control says no rather than the failure arriving after the click.
-              action: {
-                action: app.state === 'installed' ? 'uninstall' : 'install',
-                label: app.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install'),
-                disabled: app.state === 'installed' && app.dependents.length > 0,
-              },
-              extra: extras['app-card.actions']?.[app.name],
-            }),
-        }),
+    apps.length === 0 ? (
+      emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
+    ) : (
+      <CardGroups
+        groups={categories.map((c) => ({
+          key: c,
+          title: categoryLabel(c),
+          items: apps.filter((a) => a.category === c),
+        }))}
+        id={(a) => a.name}
+        footer={extras['apps.footer']}
+        card={card}
+      />
+    ),
     frame,
   )
 }
@@ -150,6 +154,16 @@ export const pageColumns = (_: Translator): Array<Column<PageRow>> => [
   },
 ]
 
+/**
+ * The list screen, as the design catalogue and the table contract exercise it.
+ *
+ * No route renders this: `website_backend` owns the product page list, which is
+ * site-scoped and carries revisions, preview and publish. This one used to be
+ * served at `/admin/pages` beside it, so the sidebar offered "Trang" twice, in two
+ * different apps, over the same rows. It stays because it is the smallest complete
+ * example of `dataTable` with chrome, and both `/catalogue` and the contract test
+ * are built on it.
+ */
 export const pagesScreen = (
   _: Translator,
   pages: PageRow[],
@@ -177,10 +191,12 @@ export const settingsScreen = (
     translator={_}
     title={_('backend.settings.title')}
     frame={frame}
-    body={definitionList({
-      title: _('backend.settings.tokens'),
-      items: Object.entries(tokens).map(([k, v]) => ({ key: k, term: `--ket-${k}`, value: v })),
-    })}
+    body={
+      <DefinitionList
+        title={_('backend.settings.tokens')}
+        items={Object.entries(tokens).map(([k, v]) => ({ key: k, term: `--ket-${k}`, value: v }))}
+      />
+    }
   />
 )
 

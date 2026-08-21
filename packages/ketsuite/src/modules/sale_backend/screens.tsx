@@ -2,38 +2,35 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  cardGrid,
-  contentCard,
+  CardGrid,
+  ContentCard,
   dataTable,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  metric,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Metric,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { localized, selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
-export const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? ''),
-    key = `sale_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable sale code in the reader's language; the code itself survives as data. */
+export const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'sale_backend', group, value)
 const pathOf = (order: AnyRow) =>
   ['draft', 'sent'].includes(String(order.state))
     ? `/admin/sales/quotations/${String(order.id)}`
     : `/admin/sales/orders/${String(order.id)}`
 const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_backend.emptyHint'))
-const localized = (path: string, localeSuffix: string): string =>
-  localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuffix = ''): TemplateResult => (
+export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, locale = ''): TemplateResult => (
   <Framed
     translator={_}
     title={_('sale_backend.dashboard.title')}
@@ -42,45 +39,46 @@ export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, localeSuf
       inline([
         linkButton({
           label: _('sale_backend.action.create'),
-          href: `${localized('/admin/sales/quotations', localeSuffix)}#quotation-create-form`,
+          href: `${localized('/admin/sales/quotations', locale)}#quotation-create-form`,
           variant: 'primary',
         }),
       ]),
-      cardGrid({
-        items: [
+      <CardGrid
+        items={[
           {
             id: 'draft',
             title: _('sale_backend.dashboard.draft'),
             value: rows.filter((r) => r.state === 'draft').length,
-            href: localized('/admin/sales/quotations?state=draft', localeSuffix),
+            href: localized('/admin/sales/quotations?state=draft', locale),
           },
           {
             id: 'sent',
             title: _('sale_backend.dashboard.sent'),
             value: rows.filter((r) => r.state === 'sent').length,
-            href: localized('/admin/sales/quotations?state=sent', localeSuffix),
+            href: localized('/admin/sales/quotations?state=sent', locale),
           },
           {
             id: 'orders',
             title: _('sale_backend.menu.orders'),
             value: rows.filter((r) => r.state === 'sale').length,
-            href: localized('/admin/sales/orders', localeSuffix),
+            href: localized('/admin/sales/orders', locale),
           },
           {
             id: 'invoice',
             title: _('sale_backend.dashboard.toInvoice'),
             value: rows.filter((r) => r.invoiceStatus === 'to invoice').length,
-            href: localized('/admin/sales/orders', localeSuffix),
+            href: localized('/admin/sales/orders', locale),
           },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({
-            title: item.title,
-            href: item.href,
-            body: metric({ label: _('sale_backend.dashboard.records'), value: String(item.value) }),
-          }),
-      }),
+        ]}
+        id={(item) => item.id}
+        card={(item) => (
+          <ContentCard
+            title={item.title}
+            href={item.href}
+            body={<Metric label={_('sale_backend.dashboard.records')} value={String(item.value)} />}
+          />
+        )}
+      />,
     ])}
   />
 )
@@ -235,8 +233,8 @@ export const orderDetail = (
       title={String(o.order.name)}
       frame={o.frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             { id: 'state', label: _('sale_backend.field.state'), value: labelOf(_, 'state', o.order.state) },
             {
               id: 'customer',
@@ -253,13 +251,16 @@ export const orderDetail = (
               label: _('sale_backend.field.amountTotal'),
               value: formatMoney(_, o.order.amountTotal, o.order.currency),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.label, body: metric({ label: item.label, value: item.value }) }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.label} body={<Metric label={item.label} value={item.value} />} />
+          )}
+        />,
         ...(o.integration === undefined ? [] : [o.integration]),
-        ...(actions.length ? [<Surface body={recordActions({ action: o.actionPath, actions })} />] : []),
+        ...(actions.length
+          ? [<Surface body={<RecordActions action={o.actionPath} actions={actions} />} />]
+          : []),
         <Section
           title={_('sale_backend.lines.title')}
           body={
@@ -362,7 +363,7 @@ export const orderDetail = (
                       cell: (r) =>
                         linkButton({
                           label: String(r.origin ?? r.id),
-                          href: `/admin/transfers/${String(r.pickingId)}`,
+                          href: `/admin/stock/transfers/${String(r.pickingId)}`,
                           variant: 'tertiary',
                         }),
                       priority: 'primary',
@@ -392,7 +393,7 @@ export const orderDetail = (
                       cell: (r) =>
                         linkButton({
                           label: String(r.name),
-                          href: `/admin/customer-invoices/${String(r.id)}`,
+                          href: `/admin/accounting/customer-invoices/${String(r.id)}`,
                           variant: 'tertiary',
                         }),
                       priority: 'primary',

@@ -3,34 +3,26 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  cardGrid as CardGrid,
-  contentCard as ContentCard,
+  CardGrid,
+  ContentCard,
   emptyState,
-  framedPage as Framed,
+  Framed,
   icon,
   inline,
-  recordForm as RecordForm,
-  section as Section,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 
 type AttributeRow = Record<string, unknown>
 
-const localized = (path: string, locale: string): string => {
-  if (!locale) return path
-  const target = new URL(path, 'http://ket.local')
-  const lang = new URLSearchParams(locale.replace(/^\?/, '')).get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
-
-const selectionLabel = (_: Translator, group: string, value: unknown): string => {
-  const raw = String(value)
-  const key = `product_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable product code in the reader's language; the code itself survives as data. */
+const selectionLabel = (_: Translator, group: string, value: unknown): string =>
+  resolveSelection(_, 'product_backend', group, value)
 
 const ValueBadges = ({
   _,
@@ -64,7 +56,7 @@ const AttributeCard = ({
       <ValueBadges _={_} values={values} />,
       <RecordForm
         scope="product-attribute-value"
-        action={localized(`/admin/product-attributes/${String(row.id)}/values`, locale)}
+        action={localized(`/admin/product/attributes/${String(row.id)}/values`, locale)}
         submit={_('product_backend.action.add')}
         submitVariant="secondary"
         fields={[
@@ -106,7 +98,7 @@ export const attributesScreen = (
     <RecordForm
       id="product-attribute-create"
       scope="product-attribute-create"
-      action={localized('/admin/product-attributes', locale)}
+      action={localized('/admin/product/attributes', locale)}
       submit={_('product_backend.action.create')}
       submitVariant="primary"
       errors={errors}

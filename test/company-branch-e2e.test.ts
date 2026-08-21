@@ -61,7 +61,7 @@ test('company-branch-e2e: company, hierarchy, branch and context screens cross r
     ['/admin/companies', /Công ty Kết Việt/],
     ['/admin/companies/acme', /Chi nhánh vận hành/],
     ['/admin/companies/hierarchy', /Cây pháp nhân/],
-    ['/admin/branches/acme:north', /Miền Bắc/],
+    ['/admin/companies/acme/branches/acme:north', /Miền Bắc/],
     ['/admin/context', /Ngữ cảnh làm việc/],
   ]
   for (const [path, expected] of pages) {

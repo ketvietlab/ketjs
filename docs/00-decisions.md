@@ -1255,7 +1255,7 @@ menus: {
   product: { label: 'menu.app', icon: '📦', sequence: 20 },
   'product.catalogue': { parent: 'product', label: 'menu.catalogue' },
   'product.templates': { parent: 'product.catalogue', label: 'menu.templates',
-                         path: '/admin/products', needs: 'product.listTemplates' },
+                         path: '/admin/product/templates', needs: 'product.listTemplates' },
 }
 ```
 

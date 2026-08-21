@@ -4,16 +4,17 @@ import {
   badge,
   dataTable,
   emptyState,
-  framedPage as Framed,
+  Framed,
   inline,
   linkButton,
-  metric,
-  notice,
-  recordActions,
-  section as Section,
+  Metric,
+  Notice,
+  RecordActions,
+  Section,
   stack,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
+import { localized } from '../backend/screen.ts'
 
 export type CatalogRow = {
   countryCode: string
@@ -34,9 +35,6 @@ export type DivisionRow = {
   kind: string
   level: number
 }
-
-const localized = (path: string, locale: string): string =>
-  !locale ? path : path.includes('?') ? `${path}&${locale.slice(1)}` : `${path}${locale}`
 
 export const catalogsScreen = (
   _: Translator,
@@ -99,22 +97,24 @@ export const catalogsScreen = (
                     label: _('address_backend.field.actions'),
                     priority: 'primary',
                     cell: (row) =>
-                      row.installed
-                        ? linkButton({
-                            label: _('address_backend.action.open'),
-                            href: localized(`/admin/addresses/${row.countryCode}`, locale),
-                            variant: 'secondary',
-                          })
-                        : recordActions({
-                            action: localized(`/admin/addresses/${row.countryCode}/install`, locale),
-                            actions: [
-                              {
-                                value: row.version,
-                                label: _('address_backend.action.install'),
-                                variant: 'primary',
-                              },
-                            ],
-                          }),
+                      row.installed ? (
+                        linkButton({
+                          label: _('address_backend.action.open'),
+                          href: localized(`/admin/addresses/${row.countryCode}`, locale),
+                          variant: 'secondary',
+                        })
+                      ) : (
+                        <RecordActions
+                          action={localized(`/admin/addresses/${row.countryCode}/install`, locale)}
+                          actions={[
+                            {
+                              value: row.version,
+                              label: _('address_backend.action.install'),
+                              variant: 'primary',
+                            },
+                          ]}
+                        />
+                      ),
                   },
                 ],
               })
@@ -150,26 +150,26 @@ export const countryScreen = (
           linkButton({ label: _('address_backend.action.back'), href: back, variant: 'tertiary' }),
           ...(!options.status?.installed
             ? [
-                recordActions({
-                  action: localized(`/admin/addresses/${options.countryCode}/install`, locale),
-                  actions: [
+                <RecordActions
+                  action={localized(`/admin/addresses/${options.countryCode}/install`, locale)}
+                  actions={[
                     {
                       value: options.status?.version ?? '2025-07-01',
                       label: _('address_backend.action.install'),
                       variant: 'primary',
                     },
-                  ],
-                }),
+                  ]}
+                />,
               ]
             : []),
         ]),
         ...(options.errors?.length
           ? [
-              notice({
-                title: _('address_backend.error.title'),
-                message: options.errors.join(' · '),
-                tone: 'danger',
-              }),
+              <Notice
+                title={_('address_backend.error.title')}
+                message={options.errors.join(' · ')}
+                tone="danger"
+              />,
             ]
           : []),
         <Section
@@ -181,15 +181,15 @@ export const countryScreen = (
           }
           body={stack([
             inline([
-              metric({ label: _('address_backend.field.version'), value: options.status?.version ?? '—' }),
-              metric({
-                label: _('address_backend.field.records'),
-                value: options.status?.recordCount == null ? '—' : String(options.status.recordCount),
-              }),
-              metric({
-                label: _('address_backend.field.codeSystem'),
-                value: options.status?.codeSystem ?? '—',
-              }),
+              <Metric label={_('address_backend.field.version')} value={options.status?.version ?? '—'} />,
+              <Metric
+                label={_('address_backend.field.records')}
+                value={options.status?.recordCount == null ? '—' : String(options.status.recordCount)}
+              />,
+              <Metric
+                label={_('address_backend.field.codeSystem')}
+                value={options.status?.codeSystem ?? '—'}
+              />,
             ]),
             !options.status?.installed
               ? emptyState(_('address_backend.notInstalled'), _('address_backend.notInstalledHint'))

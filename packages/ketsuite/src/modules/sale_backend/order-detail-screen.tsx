@@ -3,18 +3,18 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   dataTable,
-  definitionList,
+  DefinitionList,
   emptyState,
   formatMoney,
-  formCluster as FormCluster,
-  framedPage as Framed,
+  FormCluster,
+  Framed,
   icon,
   linkButton,
-  recordForm as RecordForm,
-  recordWorkspace as RecordWorkspace,
-  section as Section,
+  RecordForm,
+  RecordWorkspace,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { ActionVariant, FormField, Frame } from '../../ui/index.ts'
 import { labelOf } from './screens.tsx'
@@ -210,51 +210,53 @@ export const orderDetailScreen = (
             body={
               <Surface
                 padding="compact"
-                body={definitionList({
-                  title: _('sale_backend.order.information.title'),
-                  items: [
-                    {
-                      key: 'customer',
-                      term: _('sale_backend.field.customer'),
-                      value: String(order.partnerName ?? order.partnerId),
-                    },
-                    {
-                      key: 'date',
-                      term: _('sale_backend.field.dateOrder'),
-                      value: String(order.dateOrder ?? '').slice(0, 10) || '—',
-                    },
-                    {
-                      key: 'validity',
-                      term: _('sale_backend.field.validityDate'),
-                      value: String(order.validityDate ?? '').slice(0, 10) || '—',
-                    },
-                    {
-                      key: 'reference',
-                      term: _('sale_backend.field.clientOrderRef'),
-                      value: String(order.clientOrderRef ?? '—'),
-                    },
-                    {
-                      key: 'warehouse',
-                      term: _('sale_backend.field.warehouse'),
-                      value: String(order.warehouseName ?? order.warehouseId),
-                    },
-                    {
-                      key: 'pricelist',
-                      term: _('sale_backend.field.pricelist'),
-                      value: String(order.pricelistName ?? '—'),
-                    },
-                    {
-                      key: 'payment-term',
-                      term: _('sale_backend.field.paymentTerm'),
-                      value: String(order.paymentTermName ?? '—'),
-                    },
-                    {
-                      key: 'notes',
-                      term: _('sale_backend.field.notes'),
-                      value: String(order.notes ?? '—'),
-                    },
-                  ],
-                })}
+                body={
+                  <DefinitionList
+                    title={_('sale_backend.order.information.title')}
+                    items={[
+                      {
+                        key: 'customer',
+                        term: _('sale_backend.field.customer'),
+                        value: String(order.partnerName ?? order.partnerId),
+                      },
+                      {
+                        key: 'date',
+                        term: _('sale_backend.field.dateOrder'),
+                        value: String(order.dateOrder ?? '').slice(0, 10) || '—',
+                      },
+                      {
+                        key: 'validity',
+                        term: _('sale_backend.field.validityDate'),
+                        value: String(order.validityDate ?? '').slice(0, 10) || '—',
+                      },
+                      {
+                        key: 'reference',
+                        term: _('sale_backend.field.clientOrderRef'),
+                        value: String(order.clientOrderRef ?? '—'),
+                      },
+                      {
+                        key: 'warehouse',
+                        term: _('sale_backend.field.warehouse'),
+                        value: String(order.warehouseName ?? order.warehouseId),
+                      },
+                      {
+                        key: 'pricelist',
+                        term: _('sale_backend.field.pricelist'),
+                        value: String(order.pricelistName ?? '—'),
+                      },
+                      {
+                        key: 'payment-term',
+                        term: _('sale_backend.field.paymentTerm'),
+                        value: String(order.paymentTermName ?? '—'),
+                      },
+                      {
+                        key: 'notes',
+                        term: _('sale_backend.field.notes'),
+                        value: String(order.notes ?? '—'),
+                      },
+                    ]}
+                  />
+                }
               />
             }
           />,
@@ -322,7 +324,7 @@ export const orderDetailScreen = (
                     cell: (row) =>
                       linkButton({
                         label: String(row.origin ?? row.id),
-                        href: `/admin/transfers/${String(row.pickingId)}${options.locale ?? ''}`,
+                        href: `/admin/stock/transfers/${String(row.pickingId)}${options.locale ?? ''}`,
                         variant: 'tertiary',
                       }),
                     priority: 'primary',
@@ -356,7 +358,7 @@ export const orderDetailScreen = (
                     cell: (row) =>
                       linkButton({
                         label: String(row.name),
-                        href: `/admin/customer-invoices/${String(row.id)}${options.locale ?? ''}`,
+                        href: `/admin/accounting/customer-invoices/${String(row.id)}${options.locale ?? ''}`,
                         variant: 'tertiary',
                       }),
                     priority: 'primary',

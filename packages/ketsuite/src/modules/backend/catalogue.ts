@@ -13,7 +13,7 @@ import {
   datePicker,
   emptyState,
   errorState,
-  framed,
+  Framed,
   icon,
   iconButton,
   inline,
@@ -97,7 +97,7 @@ const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode
 
 const MENU: MenuNode[] = [
   node('hospitality', 'Khách sạn', { icon: 'hotel', path: '/admin/hospitality' }),
-  node('partner', 'Đối tác', { icon: 'users', path: '/admin/partners' }),
+  node('partner', 'Đối tác', { icon: 'users', path: '/admin/partner/partners' }),
   node('pos', 'Điểm bán hàng', { icon: 'store', path: '/admin/pos' }),
   node('sale', 'Bán hàng', {
     icon: 'shopping-bag',
@@ -116,23 +116,19 @@ const MENU: MenuNode[] = [
     children: [
       node('product.catalogue', 'Danh mục', {
         icon: 'package',
-        children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/products' })],
+        children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/product/templates' })],
       }),
     ],
   }),
-  node('pricing', 'Bảng giá', { icon: 'tag', path: '/admin/pricing' }),
+  node('pricing', 'Bảng giá', { icon: 'tag', path: '/admin/pricing/pricelists' }),
   node('purchase', 'Mua hàng', { icon: 'shopping-cart', path: '/admin/purchase' }),
   node('accounting', 'Kế toán', { icon: 'banknote', path: '/admin/accounting' }),
-  node('stock', 'Kho', { icon: 'warehouse', path: '/admin/stock' }),
+  node('stock', 'Kho', { icon: 'warehouse', path: '/admin/stock/transfers' }),
   node('admin', 'Quản trị', {
     icon: 'settings',
     active: true,
     children: [
       node('admin.apps', 'Ứng dụng', { icon: 'layout-grid', path: '/admin', active: true }),
-      node('admin.content', 'Nội dung', {
-        icon: 'file-text',
-        children: [node('admin.pages', 'Trang', { path: '/admin/pages' })],
-      }),
       node('admin.config', 'Cấu hình', {
         icon: 'settings',
         children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })],
@@ -147,9 +143,9 @@ const CHROME: ListChrome = {
     name: 'q',
     value: 'gioi',
     placeholder: 'Tìm trang…',
-    facets: [{ label: 'Tìm: gioi', without: '/admin/pages' }],
+    facets: [{ label: 'Tìm: gioi', without: '/admin/website/pages' }],
   },
-  pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
+  pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/website/pages?page=2' },
   views: [
     { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: true },
     { id: 'kanban', label: 'Thẻ', icon: 'layout-grid', path: '?view=kanban', active: false },
@@ -187,8 +183,8 @@ export const CASES: Array<{
   {
     id: 'login-next',
     label: 'Đăng nhập — quay lại nơi đang tới',
-    note: 'Có ô ẩn "next". Vào /admin/pages khi chưa đăng nhập thì sau khi vào phải quay lại đúng đó.',
-    render: (_) => loginScreen(_, { next: '/admin/pages', locales: ['vi', 'en'], locale: 'vi' }),
+    note: 'Có ô ẩn "next". Vào /admin/website/pages khi chưa đăng nhập thì sau khi vào phải quay lại đúng đó.',
+    render: (_) => loginScreen(_, { next: '/admin/website/pages', locales: ['vi', 'en'], locale: 'vi' }),
   },
   {
     id: 'viewer-one',
@@ -347,11 +343,11 @@ export const CASES: Array<{
     label: 'Workspace — không lồng layout',
     note: 'Màn hình đã có identity riêng giữ đúng một sheet khi đi qua framed layout dùng chung.',
     render: (_) =>
-      framed(
-        _,
-        'Chi tiết sản phẩm',
-        { menu: MENU },
-        recordWorkspace({
+      Framed({
+        translator: _,
+        title: 'Chi tiết sản phẩm',
+        frame: { menu: MENU },
+        body: recordWorkspace({
           kicker: 'Danh mục sản phẩm',
           title: 'Bàn làm việc tiêu chuẩn',
           subtitle: 'SKU-2026-001 · Nội thất',
@@ -365,7 +361,7 @@ export const CASES: Array<{
             body: surface({ body: 'Nội dung nghiệp vụ giữ nguyên padding và hierarchy.' }),
           }),
         }),
-      ),
+      }),
   },
   {
     id: 'people',

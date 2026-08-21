@@ -81,7 +81,7 @@ async function boot(t: TestContext, worker = false) {
 test('Chatter backend E2E: Product bridge renders, follows, posts attachments and updates inbox', async (t) => {
   const { e2e, call, member } = await boot(t)
 
-  const productPage = await e2e.client.get('/admin/products/tpl-collab?lang=en', {
+  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
     headers: { accept: 'text/html' },
   })
   assert.equal(productPage.status, 200)
@@ -93,7 +93,7 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.doesNotMatch(html, /data-ui="chatter-composer"/)
   assert.match(html, /data-island="mail\.inbox-indicator"/)
 
-  const navigation = await e2e.client.get('/admin/products/tpl-collab?lang=en', {
+  const navigation = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
     headers: { accept: 'text/html', 'x-ket-navigation': 'fragment-v1' },
   })
   assert.equal(navigation.status, 200)
@@ -181,7 +181,7 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
 
 test('Product Variant form keeps its own Chatter, activities and partial-save workspace', async (t) => {
   const { e2e, call, member } = await boot(t)
-  const path = '/admin/products/tpl-collab/variants/variant-collab?tab=general&lang=vi'
+  const path = '/admin/product/templates/tpl-collab/variants/variant-collab?tab=general&lang=vi'
   const page = await e2e.client.get(path, { headers: { accept: 'text/html' } })
   assert.equal(page.status, 200)
   const html = await page.text()
@@ -263,7 +263,7 @@ test('Product Variant form keeps its own Chatter, activities and partial-save wo
 
 test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer screen joint', async (t) => {
   const { e2e, call, member } = await boot(t)
-  const unconfiguredInventory = await e2e.client.get('/admin/inventory?lang=en', {
+  const unconfiguredInventory = await e2e.client.get('/admin/stock/inventory?lang=en', {
     headers: { accept: 'text/html' },
   })
   const unconfiguredInventoryHtml = await unconfiguredInventory.text()
@@ -279,7 +279,7 @@ test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer 
     productUomId: 'unit',
     productUomQty: '2',
   })
-  const transferPage = await e2e.client.get('/admin/transfers/pick-collab?lang=vi', {
+  const transferPage = await e2e.client.get('/admin/stock/transfers/pick-collab?lang=vi', {
     headers: { accept: 'text/html' },
   })
   assert.equal(transferPage.status, 200)
@@ -293,7 +293,7 @@ test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer 
   assert.match(html, /data-scope="stock-transfer"/)
 
   const partial = await e2e.client.post(
-    '/admin/transfers/pick-collab?lang=vi',
+    '/admin/stock/transfers/pick-collab?lang=vi',
     new URLSearchParams({ action: 'confirm' }),
     { headers: { accept: 'text/html', 'x-ket-partial': 'stock-transfer' } },
   )
@@ -386,7 +386,7 @@ test('Activity backend E2E: Product scheduling, due state, atomic completion and
   ).value.activity
   assert.equal(scheduled.threadId, 'thread:product.Template:tpl-collab')
 
-  const productPage = await e2e.client.get('/admin/products/tpl-collab?lang=en', {
+  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
     headers: { accept: 'text/html' },
   })
   const productHtml = await productPage.text()

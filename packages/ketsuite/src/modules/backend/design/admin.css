@@ -83,10 +83,21 @@
      systray at the foot. There is no application bar across the top — the row
      above the content is the control panel, and it belongs to the view. */
 
+  /* The sidebar is as tall as the window, not as tall as the page.
+     As a plain grid item it stretched to the shell's row, which is the content's
+     height — so on a list of forty rows the systray, the message and activity
+     counts and the settings link sat eight hundred pixels below the fold, and you
+     scrolled the whole page to reach them. Sticky at 100dvh keeps the document the
+     scroller, so the browser's own scrollbar and the navigation runtime's scroll
+     restoration go on working; `sidebar-nav` takes the overflow inside. */
   [data-ui="sidebar"] {
     z-index: 20;
     display: flex;
+    position: sticky;
+    inset-block-start: 0;
     min-inline-size: 0;
+    align-self: start;
+    block-size: 100dvh;
     flex-direction: column;
     overflow: hidden;
     padding: 0;
@@ -473,32 +484,6 @@
     text-decoration: none;
   }
 
-  [data-ui="crumbs"] {
-    display: flex;
-    min-inline-size: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--admin-gap-xs);
-  }
-
-  [data-ui="crumb"] {
-    color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
-    text-decoration: none;
-  }
-
-  [data-ui="crumb"][aria-current="page"] {
-    color: var(--admin-ink);
-    font-weight: 600;
-  }
-
-  /* The separator is CSS, so the markup stays a plain list of names. */
-  [data-ui="crumb"] + [data-ui="crumb"]::before {
-    margin-inline-end: var(--admin-gap-xs);
-    color: var(--admin-ink-muted);
-    content: "/";
-  }
-
   [data-ui="chrome-search"] {
     display: flex;
     inline-size: min(100%, 32rem);
@@ -779,6 +764,19 @@
     background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
     border-block-end: 1px solid var(--admin-line);
     backdrop-filter: blur(10px);
+  }
+
+  /* The bar is furniture for whatever is in it: a list's chrome, the context
+     switcher, whatever a module hangs on `topbar.end`. A framed screen names
+     itself in its own heading, so on one of those the bar can end up holding
+     nothing — and an empty bar is forty-four pixels and a rule drawn across the
+     page saying nothing. It stays in the DOM because it is a navigation slot; it
+     just stops taking up room. `:empty` will not do: the renderer leaves hydration
+     comments inside. */
+  [data-ui="topbar"]:not(:has(> *)) {
+    min-block-size: 0;
+    padding: 0;
+    border-block-end: 0;
   }
 
   body > [data-ui="shell"] [data-ui="topbar"] {
@@ -1755,81 +1753,6 @@
     [data-ui="content"] {
       padding: 0;
     }
-  }
-}
-
-/* The compact shell is two useful rows: identity/search, then a horizontally
-   scrollable menu for the current app. The old responsive rules changed the
-   sidebar to a row but left its flexing navigation at desktop height, producing
-   more than 500px of empty space above every mobile screen. */
-@media (max-width: 47.9375rem) {
-  [data-ui="sidebar-main"] {
-    display: contents;
-  }
-
-  [data-ui="sidebar"],
-  body > [data-ui="shell"] > [data-ui="sidebar"] {
-    display: grid;
-    grid-template-columns: auto minmax(8rem, 1fr);
-    align-items: center;
-    gap: var(--admin-gap-sm);
-    block-size: auto;
-    padding: var(--admin-gap-sm);
-  }
-  [data-ui="sidebar-header"] {
-    padding: 0;
-  }
-  [data-ui="sidebar-search"] {
-    margin: 0;
-  }
-  [data-ui="sidebar-nav"] {
-    display: block;
-    grid-column: 1 / -1;
-    padding: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  [data-ui="sidebar-section-label"],
-  [data-ui="app-list"],
-  [data-ui="menu-section-title"],
-  [data-ui="sidebar-foot"] {
-    display: none;
-  }
-  [data-ui="menu"] {
-    display: flex;
-    inline-size: max-content;
-    gap: var(--admin-gap-xs);
-  }
-  [data-ui="menu-item-wrap"],
-  [data-ui="menu-section"] {
-    display: block;
-  }
-  [data-ui="menu-section-children"] {
-    display: flex;
-    inline-size: max-content;
-    gap: var(--admin-gap-xs);
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-  [data-ui="menu-item"] {
-    min-block-size: 2.5rem;
-    padding-inline: var(--admin-gap);
-  }
-  [data-ui="menu-dot"] {
-    display: none;
-  }
-
-  /* A list remains a readable list on a narrow screen. Let its own scroll box
-     carry the width instead of squeezing identifiers into one-character lines. */
-  [data-ui="table"] {
-    inline-size: max-content;
-    min-inline-size: 100%;
-  }
-  [data-ui="row"] td,
-  [data-ui="cell"] code {
-    overflow-wrap: normal;
-    white-space: nowrap;
   }
 }
 
@@ -3473,6 +3396,18 @@
     min-block-size: 5rem;
     resize: vertical;
   }
+  /* The browser draws the calendar and clock glyphs in its own colour, which on a
+     dark canvas is a dark mark on a dark field. `color-scheme` on the root tells it
+     which set to use; this makes the mark follow the ink like every other glyph. */
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+    filter: invert(var(--admin-picker-invert, 0));
+  }
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
   input[type="checkbox"][data-ui="form-control"] {
     inline-size: 1rem;
     min-block-size: 1rem;
@@ -4219,10 +4154,85 @@
       transform: none !important;
     }
   }
-}
 
-@media (max-width: 47.9375rem) {
-  [data-ui="sidebar-foot"] {
-    display: none;
+  /* The compact shell is two useful rows: identity/search, then a horizontally
+     scrollable menu for the current app. The old responsive rules changed the
+     sidebar to a row but left its flexing navigation at desktop height, producing
+     more than 500px of empty space above every mobile screen. */
+  @media (max-width: 47.9375rem) {
+    [data-ui="sidebar-main"] {
+      display: contents;
+    }
+
+    [data-ui="sidebar"],
+    body > [data-ui="shell"] > [data-ui="sidebar"] {
+      display: grid;
+      grid-template-columns: auto minmax(8rem, 1fr);
+      align-items: center;
+      gap: var(--admin-gap-sm);
+      block-size: auto;
+      padding: var(--admin-gap-sm);
+    }
+    [data-ui="sidebar-header"] {
+      padding: 0;
+    }
+    [data-ui="sidebar-search"] {
+      margin: 0;
+    }
+    [data-ui="sidebar-nav"] {
+      display: block;
+      grid-column: 1 / -1;
+      padding: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    [data-ui="sidebar-section-label"],
+    [data-ui="app-list"],
+    [data-ui="menu-section-title"],
+    [data-ui="sidebar-foot"] {
+      display: none;
+    }
+    [data-ui="menu"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+    }
+    [data-ui="menu-item-wrap"],
+    [data-ui="menu-section"] {
+      display: block;
+    }
+    [data-ui="menu-section-children"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    [data-ui="menu-item"] {
+      min-block-size: 2.5rem;
+      padding-inline: var(--admin-gap);
+    }
+    [data-ui="menu-dot"] {
+      display: none;
+    }
+
+    /* A list remains a readable list on a narrow screen. Let its own scroll box
+       carry the width instead of squeezing identifiers into one-character lines. */
+    [data-ui="table"] {
+      inline-size: max-content;
+      min-inline-size: 100%;
+    }
+    [data-ui="row"] td,
+    [data-ui="cell"] code {
+      overflow-wrap: normal;
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="sidebar-foot"] {
+      display: none;
+    }
   }
 }

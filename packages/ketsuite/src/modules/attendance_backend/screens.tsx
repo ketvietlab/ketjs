@@ -3,16 +3,16 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   dataTable,
-  definitionList as DefinitionList,
+  DefinitionList,
   emptyState,
-  framedPage as Framed,
-  notice as Notice,
+  Framed,
+  Notice,
   qrCode,
-  recordActions as RecordActions,
-  recordForm as RecordForm,
-  section as Section,
+  RecordActions,
+  RecordForm,
+  Section,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { qrMatrix } from './qr.ts'
@@ -254,7 +254,13 @@ export const periodScreen = (
               submit={_('attendance_backend.action.openPeriod')}
               submitVariant="secondary"
               fields={[
-                { name: 'month', label: _('attendance_backend.field.month'), value: month, required: true },
+                {
+                  name: 'month',
+                  label: _('attendance_backend.field.month'),
+                  type: 'month',
+                  value: month,
+                  required: true,
+                },
               ]}
             />
           }
