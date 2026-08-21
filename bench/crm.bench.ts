@@ -1,9 +1,9 @@
 import { cpus, platform, release } from 'node:os'
 import { performance } from 'node:perf_hooks'
-import { tableNameFor } from 'ketjs'
-import type { Adapter, Row } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import { createTestApp } from 'ketjs/testing'
+import { tableNameFor } from '@ketvietlab/ketjs'
+import type { Adapter, Row } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'

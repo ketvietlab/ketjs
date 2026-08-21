@@ -14,8 +14,8 @@ import {
   schemaFromManifest,
   sqliteAdapter,
   streamed,
-} from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 

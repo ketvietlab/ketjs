@@ -24,9 +24,9 @@ import {
   sqliteAdapter,
   table,
   dateBucket,
-} from 'ketjs'
-import type { Adapter, Manifest } from 'ketjs'
-import { catalog, checkout, defaultTheme as theme, inventory } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import type { Adapter, Manifest } from '@ketvietlab/ketjs'
+import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)

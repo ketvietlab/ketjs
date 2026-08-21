@@ -1,10 +1,10 @@
 // Measures the new Odoo-derived hot paths separately from setup and migration.
 // The numbers are deliberately end-to-end through the public function boundary.
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter } from 'ketjs'
-import { company, partner, pricing, product, stock, uom } from 'ketsuite'
-import { address } from 'ketsuite'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Adapter } from '@ketvietlab/ketjs'
+import { company, partner, pricing, product, stock, uom } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const modules = [address, partner, company, uom, product, pricing, stock]
 const manifest = compose(modules, { headless: true })

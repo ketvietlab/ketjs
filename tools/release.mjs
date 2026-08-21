@@ -3,6 +3,7 @@
 // installs those tarballs into a clean consumer, and boots a generated project.
 
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -14,10 +15,10 @@ const node = process.execPath
 const command = process.argv[2] ?? 'check'
 
 const workspaces = [
-  { name: 'ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
-  { name: 'ketjs', dir: 'packages/ketjs', maxPackedBytes: 500_000 },
-  { name: 'ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  { name: 'ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 2_000_000 },
+  { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
+  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 500_000 },
+  { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 2_000_000 },
 ]
 
 /** @param {string} message @returns {never} */
@@ -181,16 +182,24 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('ketjs-view'), import('ketjs'), import('ketjs/theme'), import('ketjs/testing'), import('ketjs-postgres'), import('ketsuite'), import('ketsuite/ui'), import('ketsuite/backend')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
     ],
     { cwd: consumer },
   )
 
   const generated = join(parent, 'generated')
-  run(node, [join(consumer, 'node_modules/ketjs/dist/cli.js'), 'new', 'release_smoke', '--dir', generated])
+  run(node, [
+    join(consumer, 'node_modules/@ketvietlab/ketjs/dist/cli.js'),
+    'new',
+    'release_smoke',
+    '--dir',
+    generated,
+  ])
   const generatedPackage = readJson(join(generated, 'package.json'))
-  if (generatedPackage.dependencies?.ketjs !== `^${version}`)
-    fail(`ket new generated ketjs dependency ${generatedPackage.dependencies?.ketjs}`)
+  if (generatedPackage.dependencies?.['@ketvietlab/ketjs'] !== `^${version}`)
+    fail(
+      `ket new generated @ketvietlab/ketjs dependency ${generatedPackage.dependencies?.['@ketvietlab/ketjs']}`,
+    )
   run(
     npm,
     [
@@ -200,8 +209,8 @@ const smoke = (tarballs, version, parent) => {
       '--no-fund',
       '--package-lock=false',
       '--no-save',
-      tarball('ketjs-view'),
-      tarball('ketjs'),
+      tarball('@ketvietlab/ketjs-view'),
+      tarball('@ketvietlab/ketjs'),
     ],
     { cwd: generated },
   )
@@ -210,7 +219,43 @@ const smoke = (tarballs, version, parent) => {
   console.log('tarball consumer imports and generated application smoke test passed')
 }
 
-if (!['check', 'pack'].includes(command)) fail('usage: node tools/release.mjs check|pack')
+/** @param {string} name @param {string} version */
+const publishedShasum = (name, version) => {
+  const result = spawnSync(npm, ['view', `${name}@${version}`, 'dist.shasum', '--json'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  if (result.error) throw result.error
+  if (result.status === 0) return JSON.parse(result.stdout)
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  if (output.includes('E404')) return undefined
+  process.stderr.write(output)
+  fail(`could not inspect ${name}@${version} on npm`)
+}
+
+/** @param {Map<string, string>} tarballs @param {string} version */
+const publish = (tarballs, version) => {
+  if (process.env.GITHUB_ACTIONS !== 'true') fail('publish is restricted to GitHub Actions')
+  if (process.env.RELEASE_TAG !== `v${version}`)
+    fail(`release tag ${process.env.RELEASE_TAG ?? 'missing'} does not match v${version}`)
+
+  for (const workspace of workspaces) {
+    const tarball = tarballs.get(workspace.name) ?? fail(`missing tarball for ${workspace.name}`)
+    const localShasum = createHash('sha1').update(readFileSync(tarball)).digest('hex')
+    const remoteShasum = publishedShasum(workspace.name, version)
+    if (remoteShasum !== undefined) {
+      if (remoteShasum !== localShasum)
+        fail(`${workspace.name}@${version} exists with different contents; refusing to continue`)
+      console.log(`already published ${workspace.name}@${version} with matching contents; skipping`)
+      continue
+    }
+    run(npm, ['publish', tarball, '--access', 'public', '--provenance'])
+  }
+}
+
+if (!['check', 'pack', 'publish'].includes(command)) fail('usage: node tools/release.mjs check|pack|publish')
 const version = verifyMetadata()
 const temporary = mkdtempSync(join(tmpdir(), 'ketjs-release-'))
 const destination = command === 'pack' ? join(ROOT, '.release') : join(temporary, 'tarballs')
@@ -220,7 +265,8 @@ if (command === 'pack') {
 }
 try {
   const tarballs = pack(destination, version)
-  smoke(tarballs, version, temporary)
+  if (command === 'publish') publish(tarballs, version)
+  else smoke(tarballs, version, temporary)
   if (command === 'pack') console.log(`release tarballs are ready in ${destination}`)
 } finally {
   rmSync(temporary, { recursive: true, force: true })

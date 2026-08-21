@@ -1,5 +1,5 @@
-import { defineModule, eq, from, inArray, KetError } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineModule, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { calendarActor } from '../calendar/index.ts'
 import { queueTemplate } from '../mail_transport/index.ts'
 

@@ -1,4 +1,4 @@
-import { createTestApp } from 'ketjs/testing'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
 
 export async function collaborationEvidenceApp(

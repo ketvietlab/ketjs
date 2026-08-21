@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bootWorker, defineApp, defineModule, memoryTransport } from 'ketjs'
-import type { Ctx, FnSpec, Row, WorkerLog } from 'ketjs'
-import { createTestApp } from 'ketjs/testing'
+import { bootWorker, defineApp, defineModule, memoryTransport } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row, WorkerLog } from '@ketvietlab/ketjs'
+import { createTestApp } from '@ketvietlab/ketjs/testing'
 import {
   calendar,
   calendarMailTransport,
@@ -12,8 +12,8 @@ import {
   partner,
   storage,
   user,
-} from 'ketsuite'
-import { address } from 'ketsuite'
+} from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 import { deliveryEnvelope, queueTemplate } from '../packages/ketsuite/src/modules/mail_transport/index.ts'
 import { renderTemplate } from '../packages/ketsuite/src/modules/mail_transport/template.ts'
 

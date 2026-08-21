@@ -3,9 +3,16 @@
 
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
-import { callFn, compose, planMigration, registerFunctions, renderSql, schemaFromManifest } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import * as shippedSuite from 'ketsuite'
+import {
+  callFn,
+  compose,
+  planMigration,
+  registerFunctions,
+  renderSql,
+  schemaFromManifest,
+} from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import * as shippedSuite from '@ketvietlab/ketsuite'
 
 const url = process.env.KET_BENCH_PG
 if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark database')

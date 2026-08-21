@@ -5,11 +5,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bootApp, defineApp, s3Storage, sha256, signRequest, sqliteAdapter } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import type { Adapter, BootedApp } from 'ketjs'
-import { company, partner, storage as storageModule } from 'ketsuite'
-import { address } from 'ketsuite'
+import { bootApp, defineApp, s3Storage, sha256, signRequest, sqliteAdapter } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import type { Adapter, BootedApp } from '@ketvietlab/ketjs'
+import { company, partner, storage as storageModule } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const tenantCount = Number(process.env.KET_BENCH_DATABASES ?? (driver === 'postgres' ? 4 : 8))

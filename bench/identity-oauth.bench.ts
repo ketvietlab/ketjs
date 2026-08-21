@@ -2,10 +2,17 @@
 // Migration, fixture creation and password hashing during setup are excluded.
 
 import { performance } from 'node:perf_hooks'
-import { callFn, compose, planMigration, registerFunctions, renderSql, schemaFromManifest } from 'ketjs'
-import { postgresAdapter } from 'ketjs-postgres'
-import { company, oauth, partner, user } from 'ketsuite'
-import { address } from 'ketsuite'
+import {
+  callFn,
+  compose,
+  planMigration,
+  registerFunctions,
+  renderSql,
+  schemaFromManifest,
+} from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import { company, oauth, partner, user } from '@ketvietlab/ketsuite'
+import { address } from '@ketvietlab/ketsuite'
 
 const url = process.env.KET_BENCH_PG
 if (!url) throw new Error('set KET_BENCH_PG to an explicit PostgreSQL benchmark database')

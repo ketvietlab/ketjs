@@ -1,5 +1,5 @@
-import { text, withHeaders } from 'ketjs'
-import type { Route } from 'ketjs'
+import { text, withHeaders } from '@ketvietlab/ketjs'
+import type { Route } from '@ketvietlab/ketjs'
 
 type Req = Parameters<Route>[1]
 

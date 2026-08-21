@@ -9,8 +9,8 @@ import {
   registerFunctions,
   sqliteAdapter,
   project,
-} from 'ketjs'
-import type { Ctx } from 'ketjs'
+} from '@ketvietlab/ketjs'
+import type { Ctx } from '@ketvietlab/ketjs'
 
 /**
  * `output` used to be a comment: composed into the manifest and read by nothing, so

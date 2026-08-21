@@ -1,5 +1,5 @@
-import { defineFn, eq, from } from 'ketjs'
-import type { Ctx, FnSpec, Row } from 'ketjs'
+import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
 

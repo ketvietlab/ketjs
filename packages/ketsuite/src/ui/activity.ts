@@ -1,5 +1,5 @@
-import { each, html, signal } from 'ketjs-view'
-import type { TemplateResult } from 'ketjs-view'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { createActivityIndicatorView, createRecordActivityView } from './client/activity-view.mjs'
 
 export const HOOKS = [

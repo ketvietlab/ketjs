@@ -9,9 +9,9 @@ import {
   restrictManifest,
   sqliteAdapter,
   translator,
-} from 'ketjs'
-import type { Adapter, KetError, Row } from 'ketjs'
-import { product, uom } from 'ketsuite'
+} from '@ketvietlab/ketjs'
+import type { Adapter, KetError, Row } from '@ketvietlab/ketjs'
+import { product, uom } from '@ketvietlab/ketsuite'
 
 /** Products are shared master data, so the company in scope should not matter. */
 const SCOPE = { company: 'acme', branches: null }

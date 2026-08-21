@@ -3,8 +3,8 @@
 // module C — and everything that is NOT declared must be a compile error.
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { compose, generateDts } from 'ketjs'
-import { catalog, inventory, checkout, defaultTheme as theme } from 'ketsuite'
+import { compose, generateDts } from '@ketvietlab/ketjs'
+import { catalog, inventory, checkout, defaultTheme as theme } from '@ketvietlab/ketsuite'
 
 const manifest = compose([catalog, inventory, checkout, theme])
 const dts = generateDts(manifest)
@@ -45,15 +45,15 @@ const cases: Case[] = [
     name: 'a route cannot hand back a string it built itself',
     shouldCompile: false,
     expect: /RESPONSE|not assignable/,
-    code: `import type { Route } from 'ketjs'
+    code: `import type { Route } from '@ketvietlab/ketjs'
 export const r: Route = async () => ({ body: '<p>' + String(Math.random()) + '</p>' })`,
   },
   {
     name: 'and the way through is a constructor, which escapes',
     shouldCompile: true,
-    code: `import type { Route } from 'ketjs'
-import { page, document } from 'ketjs'
-import { html } from 'ketjs-view'
+    code: `import type { Route } from '@ketvietlab/ketjs'
+import { page, document } from '@ketvietlab/ketjs'
+import { html } from '@ketvietlab/ketjs-view'
 export const r: Route = async () => page({ body: document({ lang: 'en', body: html\`<p>\${'x'}</p>\` }) })`,
   },
   {

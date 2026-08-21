@@ -1,7 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentTools, bootApp, compose, defineApp, defineFn, defineModule, json, withHeaders } from 'ketjs'
-import type { SessionContext } from 'ketjs'
+import {
+  agentTools,
+  bootApp,
+  compose,
+  defineApp,
+  defineFn,
+  defineModule,
+  json,
+  withHeaders,
+} from '@ketvietlab/ketjs'
+import type { SessionContext } from '@ketvietlab/ketjs'
 
 test('identity engine: an internal function has no generic HTTP or agent surface', async () => {
   const identity = defineModule({

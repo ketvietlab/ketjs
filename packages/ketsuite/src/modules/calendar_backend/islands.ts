@@ -1,5 +1,5 @@
-import { each, html, signal } from 'ketjs-view'
-import type { IslandDefinition, IslandProps } from 'ketjs-view'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 import { createCalendarView } from '../../ui/client/calendar-view.mjs'
 
 const runtime = { each, html, signal }

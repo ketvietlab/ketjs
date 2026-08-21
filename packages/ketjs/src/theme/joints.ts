@@ -13,8 +13,8 @@
 
 import { compileKtl } from './ktl/compile.ts'
 import { contractProps } from './contracts.ts'
-import { renderIsland, trustedMarkup } from 'ketjs-view'
-import type { IslandRegistry, Markup } from 'ketjs-view'
+import { renderIsland, trustedMarkup } from '@ketvietlab/ketjs-view'
+import type { IslandRegistry, Markup } from '@ketvietlab/ketjs-view'
 import type { Manifest } from '../types.ts'
 import { KetError } from '../kernel/errors.ts'
 

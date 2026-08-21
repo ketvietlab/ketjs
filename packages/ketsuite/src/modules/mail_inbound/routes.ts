@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
-import { json, KetError, text } from 'ketjs'
-import type { Route, RouteEntry, RouteResult, ServeContext } from 'ketjs'
+import { json, KetError, text } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, RouteResult, ServeContext } from '@ketvietlab/ketjs'
 
 const MAX_BODY = 12 * 1024 * 1024
 const MAX_CLOCK_SKEW_SECONDS = 5 * 60

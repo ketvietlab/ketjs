@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from 'ketjs'
-import type { Adapter, Manifest, Row } from 'ketjs'
-import { address, loadAddressCatalog, partner } from 'ketsuite'
+import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import type { Adapter, Manifest, Row } from '@ketvietlab/ketjs'
+import { address, loadAddressCatalog, partner } from '@ketvietlab/ketsuite'
 import { loadCatalogFrom } from '../packages/ketsuite/src/modules/address/loader.ts'
 
 const modules = [address, partner]
@@ -52,7 +52,7 @@ test('address data: Vietnam bundle is checksum verified and complete', async () 
 test('address data: a modified signed file is rejected before installation', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'ket-address-corrupt-'))
   t.after(() => rm(root, { recursive: true, force: true }))
-  const shipped = new URL('modules/address/data/', import.meta.resolve('ketsuite'))
+  const shipped = new URL('modules/address/data/', import.meta.resolve('@ketvietlab/ketsuite'))
   await cp(shipped, root, { recursive: true })
   const policy = join(root, 'VN/catalogs/2025-07-01/policy.json')
   const contents = await readFile(policy, 'utf8')
