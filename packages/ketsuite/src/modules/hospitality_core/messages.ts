@@ -686,6 +686,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.feedback.cancelled': 'Đã hủy đặt phòng',
     'reservation.feedback.cancelledHint':
       'Tồn phòng đã được hoàn lại và các khoản phí chưa hoàn tất đã được vô hiệu hóa.',
+    'reservation.feedback.amended': 'Đã cập nhật đặt phòng',
+    'reservation.feedback.amendedHint':
+      'Lịch ở, tồn phòng, khách chính và tiền phòng đã được cập nhật trong cùng giao dịch.',
     'reservation.field.property': 'Cơ sở lưu trú',
     'reservation.field.code': 'Mã đặt phòng',
     'reservation.field.codeHint': 'Có thể sửa theo quy ước của lễ tân.',
@@ -713,6 +716,9 @@ export const messages: Record<string, Record<string, Message>> = {
       'Đóng kỳ lưu trú, chuyển phòng sang chờ dọn và tạo công việc buồng phòng.',
     'reservation.action.cancel': 'Hủy đặt phòng',
     'reservation.action.cancelHint': 'Hủy đặt phòng sẽ hoàn tồn phòng và đóng hồ sơ liên quan.',
+    'reservation.action.amend': 'Cập nhật đặt phòng',
+    'reservation.action.amendHint':
+      'Điều chỉnh đặt phòng trực tiếp trước khi nhận phòng; hệ thống sẽ kiểm tra lại hạn chế và tồn phòng.',
     'reservation.detail.title': 'Đặt phòng {code}',
     'reservation.detail.kicker': 'Hồ sơ đặt phòng',
     'reservation.detail.stay': 'Thông tin lưu trú',
@@ -981,6 +987,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.provider_external_unique': 'Mã đặt phòng này đã tồn tại trên kênh đã chọn.',
     'validation.reservation_missing': 'Không tìm thấy đặt phòng.',
     'validation.reservation_cannot_cancel': 'Không thể hủy đặt phòng ở trạng thái hiện tại.',
+    'validation.reservation_cannot_amend': 'Chỉ có thể sửa đặt phòng đã xác nhận trước khi khách nhận phòng.',
+    'validation.reservation_external_readonly':
+      'Đặt phòng từ OTA được cập nhật theo dữ liệu của kênh; không thể sửa nội dung thương mại tại quầy.',
     'validation.stay_missing': 'Không tìm thấy hồ sơ lưu trú.',
     'validation.stay_cannot_check_in': 'Không thể nhận phòng ở trạng thái hiện tại.',
     'validation.early_check_in': 'Chưa đến giờ nhận phòng theo chính sách cơ sở.',
@@ -1005,6 +1014,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.folio_missing': 'Không tìm thấy hồ sơ dịch vụ.',
     'validation.folio_not_open': 'Hồ sơ dịch vụ không còn mở.',
     'validation.folio_mismatch': 'Dịch vụ không thuộc hồ sơ lưu trú này.',
+    'validation.room_charge_missing': 'Không tìm thấy dòng tiền phòng đang hoạt động để cập nhật.',
     'validation.charge_missing': 'Không tìm thấy khoản phí.',
     'validation.charge_not_active': 'Khoản phí không còn hiệu lực để hủy.',
     'validation.charge_type': 'Loại dịch vụ phát sinh không hợp lệ.',
@@ -1739,6 +1749,9 @@ export const messages: Record<string, Record<string, Message>> = {
       'The stay is closed, the room is awaiting service, and a housekeeping task was created.',
     'reservation.feedback.cancelled': 'Reservation cancelled',
     'reservation.feedback.cancelledHint': 'Room inventory was released and unfinished charges were voided.',
+    'reservation.feedback.amended': 'Reservation updated',
+    'reservation.feedback.amendedHint':
+      'The stay schedule, inventory, lead guest, and room charge were updated in one transaction.',
     'reservation.field.property': 'Property',
     'reservation.field.code': 'Reservation code',
     'reservation.field.codeHint': 'You can change this to match the front desk convention.',
@@ -1767,6 +1780,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.cancel': 'Cancel reservation',
     'reservation.action.cancelHint':
       'Cancelling releases inventory and closes the related operating records.',
+    'reservation.action.amend': 'Update reservation',
+    'reservation.action.amendHint':
+      'Change a direct reservation before check-in; restrictions and availability are checked again.',
     'reservation.detail.title': 'Reservation {code}',
     'reservation.detail.kicker': 'Reservation record',
     'reservation.detail.stay': 'Stay information',
@@ -2038,6 +2054,10 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.provider_external_unique': 'This external booking already exists for the selected source.',
     'validation.reservation_missing': 'Reservation was not found.',
     'validation.reservation_cannot_cancel': 'The reservation cannot be cancelled in its current state.',
+    'validation.reservation_cannot_amend':
+      'Only a confirmed reservation can be changed before the guest checks in.',
+    'validation.reservation_external_readonly':
+      'OTA reservations follow channel revisions and cannot have commercial details edited at the front desk.',
     'validation.stay_missing': 'Stay was not found.',
     'validation.stay_cannot_check_in': 'The stay cannot be checked in from its current state.',
     'validation.early_check_in': 'The property check-in time has not been reached.',
@@ -2062,6 +2082,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'validation.folio_missing': 'Folio was not found.',
     'validation.folio_not_open': 'The folio is no longer open.',
     'validation.folio_mismatch': 'The charge does not belong to this stay folio.',
+    'validation.room_charge_missing': 'The active room charge required for this update was not found.',
     'validation.charge_missing': 'Charge was not found.',
     'validation.charge_not_active': 'The charge is no longer active and cannot be voided.',
     'validation.charge_type': 'Charge type is invalid.',

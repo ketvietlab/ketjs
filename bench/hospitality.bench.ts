@@ -774,6 +774,53 @@ try {
   )
   const bookingMs = performance.now() - bookingStarted
 
+  // Keep the first twelve reservations untouched for the check-in/out workload
+  // below; amend later direct bookings so the benchmark exercises room-night
+  // replacement on every physical database without changing that lifecycle.
+  const amendmentIndexes = Array.from(
+    { length: Math.max(0, Math.min(50, reservationsPerDatabase - 12)) },
+    (_, index) => index + 12,
+  ).filter((index) => index % 3 !== 0)
+  const amendmentStarted = performance.now()
+  const amendmentResults = await Promise.all(
+    keys.map(async (key) => {
+      for (const index of amendmentIndexes) {
+        const result = await call(key, 'hospitality_core.amendReservation', {
+          id: `reservation:${index}`,
+          roomTypeId: `type:${index % 12}`,
+          partnerId: 'companion',
+          checkIn: '2026-09-02T14:00:00.000Z',
+          checkOut: '2026-09-04T12:00:00.000Z',
+          adults: 2,
+          children: 0,
+          rate: String(825_000 + (index % 12) * 125_000),
+        })
+        if (!(result.value as { ok: boolean }).ok) return { key, match: false, index, failure: result.value }
+      }
+      if (!amendmentIndexes.length) return { key, match: true }
+      const sample = (
+        await call(key, 'hospitality_core.getReservation', {
+          id: `reservation:${amendmentIndexes[0]}`,
+        })
+      ).value as Record<string, unknown>
+      return {
+        key,
+        match:
+          sample.partnerId === 'companion' &&
+          new Date(String(sample.checkOut)).toISOString() === '2026-09-04T12:00:00.000Z',
+        sample,
+      }
+    }),
+  )
+  const amendmentMs = performance.now() - amendmentStarted
+  const amendmentsMatch = amendmentResults.every((result) => result.match)
+  if (!amendmentsMatch)
+    throw new Error(
+      `reservation amendment lost inventory, stay, guest or folio state: ${JSON.stringify(
+        amendmentResults.filter((result) => !result.match),
+      )}`,
+    )
+
   const frontDeskIdentityStarted = performance.now()
   const frontDeskIdentityResults = await Promise.all(
     keys.map(async (key) => {
@@ -1437,6 +1484,76 @@ try {
       Number(transitionState.assignments) === 0)
   if (!concurrentCancelCheckInConsistent) throw new Error('check-in/cancel race left inconsistent state')
 
+  const amendmentRaceRoom = candidateRooms.find(
+    (room) => !usedRooms.has(room) && room !== collisionRoom && room !== raceRoom,
+  )
+  if (amendmentRaceRoom === undefined) throw new Error('benchmark needs a room for amendment/check-in race')
+  const amendmentRaceType = `type:${amendmentRaceRoom % 12}`
+  const amendmentRaceNextType = `type:${(amendmentRaceRoom + 1) % 12}`
+  await call(collisionKey, 'hospitality_core.createReservation', {
+    id: 'amendment-transition-race',
+    propertyId: 'property',
+    roomTypeId: amendmentRaceType,
+    partnerId: 'guest',
+    bookingType: 'nightly',
+    checkIn: '2027-02-01T14:00:00.000Z',
+    checkOut: '2027-02-02T12:00:00.000Z',
+    rate: '1000000',
+  })
+  const amendmentContender = driver === 'postgres' ? open(collisionKey) : null
+  if (amendmentContender) await amendmentContender.open()
+  const amendRace = (adapter: Adapter) =>
+    callWith(adapter, collisionKey, 'hospitality_core.amendReservation', {
+      id: 'amendment-transition-race',
+      roomTypeId: amendmentRaceNextType,
+      partnerId: 'companion',
+      checkIn: '2027-02-02T14:00:00.000Z',
+      checkOut: '2027-02-04T12:00:00.000Z',
+      adults: 2,
+      children: 0,
+      rate: '1250000',
+    })
+  const checkInAmendRace = (adapter: Adapter) =>
+    callWith(adapter, collisionKey, 'hospitality_core.checkIn', {
+      stayId: 'amendment-transition-race:stay',
+      roomId: `room:${amendmentRaceRoom}`,
+      assignmentId: 'amendment-transition-race:assignment',
+      at: '2027-02-01T15:00:00.000Z',
+    })
+  const amendmentTransitionResults =
+    amendmentContender === null
+      ? [await amendRace(adapters.get(collisionKey)!), await checkInAmendRace(adapters.get(collisionKey)!)]
+      : await Promise.all([amendRace(adapters.get(collisionKey)!), checkInAmendRace(amendmentContender)])
+  if (amendmentContender) await amendmentContender.close()
+  if (amendmentTransitionResults.filter((result) => (result.value as { ok: boolean }).ok).length !== 1)
+    throw new Error('amendment/check-in race did not produce exactly one winner')
+  const amendmentTransitionState = (
+    await adapters.get(collisionKey)!.all(
+      `SELECT r.state AS reservation, s.state AS stay, s."roomTypeId" AS "roomTypeId",
+              s."currentRoomId" AS "currentRoomId", room.status AS room
+         FROM hospitality_core_reservation r
+         JOIN hospitality_core_stay s ON s.id = r."stayId"
+         JOIN hospitality_core_room room ON room.id = ${driver === 'postgres' ? '$1' : '?'}
+        WHERE r.id = ${driver === 'postgres' ? '$2' : '?'}`,
+      [`room:${amendmentRaceRoom}`, 'amendment-transition-race'],
+    )
+  )[0]!
+  const concurrentAmendCheckInConsistent =
+    (amendmentTransitionState.reservation === 'checked_in' &&
+      amendmentTransitionState.stay === 'checked_in' &&
+      amendmentTransitionState.roomTypeId === amendmentRaceType &&
+      amendmentTransitionState.currentRoomId === `room:${amendmentRaceRoom}` &&
+      amendmentTransitionState.room === 'occupied') ||
+    (amendmentTransitionState.reservation === 'confirmed' &&
+      amendmentTransitionState.stay === 'draft' &&
+      amendmentTransitionState.roomTypeId === amendmentRaceNextType &&
+      amendmentTransitionState.currentRoomId == null &&
+      amendmentTransitionState.room === 'available')
+  if (!concurrentAmendCheckInConsistent)
+    throw new Error(
+      `amendment/check-in race left inconsistent state: ${JSON.stringify(amendmentTransitionState)}`,
+    )
+
   const readStarted = performance.now()
   await Promise.all(
     keys.map(async (key) => {
@@ -1666,6 +1783,12 @@ try {
         quoteIsReadOnly,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
+        reservationAmendments: databaseCount * amendmentIndexes.length,
+        amendmentMs: Number(amendmentMs.toFixed(1)),
+        amendmentsPerSecond: amendmentIndexes.length
+          ? Math.round((databaseCount * amendmentIndexes.length * 1_000) / amendmentMs)
+          : 0,
+        amendmentsMatch,
         frontDeskIdentityDocuments: databaseCount,
         frontDeskIdentityMs: Number(frontDeskIdentityMs.toFixed(1)),
         frontDeskIdentityDocumentsPerSecond: Math.round((databaseCount * 1_000) / frontDeskIdentityMs),
@@ -1698,6 +1821,7 @@ try {
         concurrentInventoryClaimSingleWinner,
         concurrentServicePostSingleCharge,
         concurrentCancelCheckInConsistent,
+        concurrentAmendCheckInConsistent,
         housekeepingCheckoutTasksMatch,
         housekeepingMoveTasksMatch,
         housekeepingTasksCompleted: databaseCount * housekeepingTaskCount,
