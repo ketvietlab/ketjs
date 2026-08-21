@@ -210,7 +210,7 @@ export const siteFormScreen = (
                   submit={_('website_backend.action.save')}
                   submitVariant="primary"
                   errors={options.errors}
-                  cancelHref={`/admin/sites${options.locale ?? ''}`}
+                  cancelHref={`/admin/website/sites${options.locale ?? ''}`}
                   cancelLabel={_('website_backend.action.cancel')}
                 />
               }
