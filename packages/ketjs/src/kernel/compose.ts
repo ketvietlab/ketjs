@@ -50,7 +50,7 @@ export function compose(
   }
 
   for (const m of order) {
-    for (const raw of m.reserves) {
+    for (const raw of m.reserves ?? []) {
       const prefix = raw.trim()
       if (!prefix.startsWith('/') || !prefix.endsWith('/') || prefix.includes('{')) {
         diag.add({
@@ -82,7 +82,7 @@ export function compose(
     return match ? Number(match[1]) : null
   }
   for (const m of order) {
-    for (const [dependency, range] of Object.entries(m.compatible)) {
+    for (const [dependency, range] of Object.entries(m.compatible ?? {})) {
       if (!m.depends.includes(dependency)) {
         diag.add({
           code: 'E_MODULE_COMPATIBILITY_DEPENDENCY',
