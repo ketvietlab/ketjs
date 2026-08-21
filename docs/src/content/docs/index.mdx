@@ -3,12 +3,16 @@ title: KetSuite Docs
 description: Developer documentation for the KetJS framework and its application architecture.
 template: splash
 hero:
-  tagline: Build modular applications with KetJS using checked contracts, durable operations, and a complete deployment model.
+  tagline: Build the KetJS framework and KetSuite application using checked contracts, explicit module boundaries, and durable operations.
   actions:
     - text: Read the KetJS guide
       link: /ketjs/
       icon: right-arrow
       variant: primary
+    - text: Develop KetSuite
+      link: /ketsuite/
+      icon: right-arrow
+      variant: secondary
     - text: Develop the docs
       link: /getting-started/
       variant: minimal
@@ -20,7 +24,7 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
-<div class="docs-kicker">KETJS FRAMEWORK · DEVELOPMENT · OPERATIONS</div>
+<div class="docs-kicker">KETJS FRAMEWORK · KETSUITE APPLICATION · OPERATIONS</div>
 
 ## Documentation is part of the product
 
@@ -32,14 +36,15 @@ warm-neutral canvas, precise dividers, and indigo reserved for actions and selec
     Technical decisions, manifests, module graphs, data models, and authorization boundaries.
   </Card>
   <Card title="Development" icon="puzzle">
-    Local setup, testing, module extension, and guidance for writing verifiable documentation.
+    Local setup, testing, KetSuite module ownership, backend UI, and extension contracts.
   </Card>
   <Card title="Operations" icon="rocket">
     Runbooks for deployment, migrations, durable queues, Storage/S3, and system diagnostics.
   </Card>
 </CardGrid>
 
-:::note[KetSuite documentation]
-The KetSuite application documentation is intentionally deferred until the application suite is complete.
-The current developer guide covers the KetJS framework and its supported public contracts.
+:::tip[Two developer guides]
+Use the [KetJS guide](/ketjs/) for framework contracts. Use the [KetSuite guide](/ketsuite/) for the
+application composition, business-module boundaries, backend conventions, and security model built on
+those contracts.
 :::

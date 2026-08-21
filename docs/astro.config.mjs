@@ -113,9 +113,27 @@ export default defineConfig({
         {
           label: 'KetSuite application',
           items: [
-            { label: 'Quick start', slug: 'ketsuite/quick-start' },
-            { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
-            { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
+            { label: 'Developer guide', slug: 'ketsuite' },
+            { label: 'Local development', slug: 'ketsuite/quick-start' },
+            {
+              label: 'Architecture and development',
+              collapsed: false,
+              items: [
+                { label: 'Application architecture', slug: 'ketsuite/architecture' },
+                { label: 'Module development', slug: 'ketsuite/module-development' },
+                { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
+                { label: 'Security and data scope', slug: 'ketsuite/security-scope' },
+                { label: 'Testing KetSuite', slug: 'ketsuite/testing' },
+              ],
+            },
+            {
+              label: 'Channel API',
+              collapsed: true,
+              items: [
+                { label: 'Architecture', slug: 'ketsuite/channel-api' },
+                { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
+              ],
+            },
             {
               label: 'Business modules',
               collapsed: true,
