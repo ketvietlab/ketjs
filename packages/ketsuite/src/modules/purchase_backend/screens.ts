@@ -8,6 +8,7 @@ import {
   emptyState,
   formatMoney,
   framed,
+  inline,
   linkButton,
   metric,
   recordActions,
@@ -32,45 +33,59 @@ const pathOf = (order: AnyRow) =>
     : `/admin/purchase/orders/${String(order.id)}`
 
 const empty = (_: Translator) => emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'))
+const localized = (path: string, localeSuffix: string): string =>
+  localeSuffix ? `${path}${path.includes('?') ? '&' : '?'}${localeSuffix.slice(1)}` : path
 
-export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame): TemplateResult => {
+export const dashboard = (
+  _: Translator,
+  orders: AnyRow[],
+  frame: Frame,
+  localeSuffix = '',
+): TemplateResult => {
   const count = (states: string[]) => orders.filter((row) => states.includes(String(row.state))).length
   return framed(
     _,
     _('purchase_backend.dashboard.title'),
     frame,
     stack([
+      inline([
+        linkButton({
+          label: _('purchase_backend.action.createRfq'),
+          href: `${localized('/admin/purchase/rfqs', localeSuffix)}#rfq-create-form`,
+          variant: 'primary',
+        }),
+      ]),
       cardGrid({
         items: [
           {
             id: 'draft',
             title: _('purchase_backend.dashboard.toSend'),
             value: count(['draft']),
-            href: '/admin/purchase/rfqs?state=draft',
+            href: localized('/admin/purchase/rfqs?state=draft', localeSuffix),
           },
           {
             id: 'waiting',
             title: _('purchase_backend.dashboard.waiting'),
             value: count(['sent']),
-            href: '/admin/purchase/rfqs?state=sent',
+            href: localized('/admin/purchase/rfqs?state=sent', localeSuffix),
           },
           {
             id: 'approval',
             title: _('purchase_backend.dashboard.toApprove'),
             value: count(['to approve']),
-            href: '/admin/purchase/rfqs?state=to%20approve',
+            href: localized('/admin/purchase/rfqs?state=to%20approve', localeSuffix),
           },
           {
             id: 'orders',
             title: _('purchase_backend.menu.orders'),
             value: count(['purchase']),
-            href: '/admin/purchase/orders',
+            href: localized('/admin/purchase/orders', localeSuffix),
           },
           {
             id: 'bill',
             title: _('purchase_backend.dashboard.toBill'),
             value: orders.filter((row) => row.invoiceStatus === 'to invoice').length,
-            href: '/admin/purchase/orders',
+            href: localized('/admin/purchase/orders', localeSuffix),
           },
         ],
         id: (item) => item.id,
@@ -87,7 +102,13 @@ export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame): Templa
 
 export const ordersScreen = (
   _: Translator,
-  o: { title: string; frame: Frame; rows: AnyRow[]; createFields?: FormField[] },
+  o: {
+    title: string
+    frame: Frame
+    rows: AnyRow[]
+    createFields?: FormField[]
+    createAction?: string
+  },
 ): TemplateResult =>
   framed(
     _,
@@ -98,7 +119,9 @@ export const ordersScreen = (
         ? [
             surface({
               body: recordForm({
-                action: '/admin/purchase/rfqs',
+                id: 'rfq-create-form',
+                scope: 'purchase-rfq-create',
+                action: o.createAction ?? '/admin/purchase/rfqs',
                 submit: _('purchase_backend.action.createRfq'),
                 submitVariant: 'primary',
                 fields: o.createFields,
