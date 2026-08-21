@@ -16,7 +16,6 @@
 import { renderToString, html, when, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { IncomingMessage } from 'node:http'
-import { LAYER_ORDER_CSS } from '../theme/tokens.ts'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */
 export type Html = TemplateResult

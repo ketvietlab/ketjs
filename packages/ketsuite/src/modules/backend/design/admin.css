@@ -766,6 +766,19 @@
     backdrop-filter: blur(10px);
   }
 
+  /* The bar is furniture for whatever is in it: a list's chrome, the context
+     switcher, whatever a module hangs on `topbar.end`. A framed screen names
+     itself in its own heading, so on one of those the bar can end up holding
+     nothing — and an empty bar is forty-four pixels and a rule drawn across the
+     page saying nothing. It stays in the DOM because it is a navigation slot; it
+     just stops taking up room. `:empty` will not do: the renderer leaves hydration
+     comments inside. */
+  [data-ui="topbar"]:not(:has(> *)) {
+    min-block-size: 0;
+    padding: 0;
+    border-block-end: 0;
+  }
+
   body > [data-ui="shell"] [data-ui="topbar"] {
     position: sticky;
     inset-block-start: 0;

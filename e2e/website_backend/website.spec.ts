@@ -113,13 +113,8 @@ test('creates a schema-backed form and keeps the English backend translated', as
   await expect(page).toHaveURL(/\/admin\/website\/forms\?site=hospitality-site&lang=vi/)
   await expect(page.getByText('Đăng ký nhận tin')).toBeVisible()
 
-<<<<<<< HEAD
-  await page.goto('/admin/sites?lang=en')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
-=======
   await page.goto('/admin/website/sites?lang=en')
-  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
->>>>>>> 0d69311 (fix(backend): one URL convention, one JSX kit, one pinned sidebar)
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create site' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText('website_backend.')
 })
@@ -264,13 +259,8 @@ test('customer Channel API supports isolated browser and bearer sessions', async
   expect((await properties.json()).data).toEqual([])
 
   // The customer cookie coexists with, but never replaces, the backend admin session.
-<<<<<<< HEAD
-  await page.goto('/admin/sites?lang=en')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
-=======
   await page.goto('/admin/website/sites?lang=en')
-  await expect(page.getByRole('heading', { name: 'Sites' })).toBeVisible()
->>>>>>> 0d69311 (fix(backend): one URL convention, one JSX kit, one pinned sidebar)
+  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
 })
 
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {

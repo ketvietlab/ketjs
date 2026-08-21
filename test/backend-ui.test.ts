@@ -567,6 +567,7 @@ test('routes: the segment after /admin names the app, so a path says where it li
     'pricing',
     'product',
     'purchase',
+    'reports',
     'sales',
     'stock',
     'website',
@@ -777,6 +778,39 @@ test('ui kit: every PascalCase export takes the one props object JSX hands it', 
     .map(([name]) => name)
     .sort()
   assert.deepEqual(wrong, [], 'a JSX component takes props, not a positional argument list')
+})
+
+test('backend layout: a framed screen names itself once, and not with a placeholder', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const vi = translator(manifest, 'vi')
+  const menu = buildMenu(manifest, {
+    translate: (key) => vi(key),
+    locale: 'vi',
+    active: '/admin/stock/transfers',
+  })
+  const framed = renderToString(
+    Framed({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
+  )
+  // The title was printed twice — once in the bar, once in the heading a line below.
+  assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
+  assert.equal(framed.match(/data-ui="record-heading"/g)?.length, 1)
+  // And the header was a title beside a placeholder grid icon and nothing else.
+  assert.match(framed, /data-ui="record-kicker"[^>]*>(?:<!--k\[-->)?Kho/)
+
+  // A list keeps its toolbar; it just stops naming the page twice.
+  const listed = renderToString(
+    Framed({
+      translator: vi,
+      title: 'Điều chuyển',
+      frame: { menu, chrome: { create: { label: 'Mới', path: '/x' } } },
+      body: surface({ body: 'x' }),
+    }),
+  )
+  assert.match(listed, /data-ui="chrome-create"/)
+  assert.equal(listed.match(/data-ui="title"/g), null)
+
+  // The apps screen has no heading of its own, so the bar is still where it says it.
+  assert.match(renderToString(appsScreen(_, [app()], { menu: MENU })), /data-ui="title"/)
 })
 
 test('sidebar: the footer is pinned to the window, not to the end of the page', () => {

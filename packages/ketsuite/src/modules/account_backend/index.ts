@@ -2,11 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
-<<<<<<< HEAD
-import { actionGroup, backendPage, formatMoney, linkButton } from '../../ui/index.ts'
-=======
-import { formatMoney } from '../../ui/index.ts'
->>>>>>> 21b9c51 (refactor(backend): every admin screen through one shell)
+import { actionGroup, formatMoney, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   ACCOUNT_TYPES,
@@ -268,7 +264,6 @@ const accountMoveRoute =
       resId: String(move.id),
       lang,
     })
-<<<<<<< HEAD
     const wanted =
       move.moveType === 'out_invoice'
         ? 'account.customerInvoice'
@@ -276,18 +271,10 @@ const accountMoveRoute =
           ? 'account.vendorBill'
           : null
     const printable = (await ctx.reportsOf(url, req, 'account.Move')).filter((report) => report.id === wanted)
-    return document(
-      ctx,
-      url,
-      req,
-      String(move.name),
-      (_, tr, shell) =>
-=======
     return adminPage(ctx, url, req, {
       title: String(move.name),
       translate: false,
       body: (_, frame) =>
->>>>>>> 21b9c51 (refactor(backend): every admin screen through one shell)
         moveDetailScreen(
           _,
           move,
@@ -301,7 +288,7 @@ const accountMoveRoute =
                 label: 'Print',
                 actions: printable.map((report) =>
                   linkButton({
-                    label: tr(report.title),
+                    label: _(report.title),
                     href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(move.id))}${url.search}`,
                   }),
                 ),

@@ -220,20 +220,14 @@ for (const pattern of PATTERNS) {
         const line = source.slice(0, match.index).split('\n').length
         findings.push({ file: path, line, what: 'raw JSX tag', text: lines[line - 1]?.trim() ?? match[0] })
       }
-      // Every module .tsx, not just the ones whose filename happens to contain
-      // "screen": that spelling checked `screens.tsx` and skipped
-      // `create-screen`'s neighbours, which is how two call styles lived side by
-      // side for so long.
-      {
-        for (const match of source.matchAll(SCREEN_COMPONENT_CALL)) {
-          const line = source.slice(0, match.index).split('\n').length
-          findings.push({
-            file: path,
-            line,
-            what: 'component function call',
-            text: `${match[1]}(...) — the kit exports it as <${JSX_NAME[match[1] as string] ?? `${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)}`} />`,
-          })
-        }
+      for (const match of source.matchAll(SCREEN_COMPONENT_CALL)) {
+        const line = source.slice(0, match.index).split('\n').length
+        findings.push({
+          file: path,
+          line,
+          what: 'component function call',
+          text: `${match[1]}(...) — the kit exports it as <${JSX_NAME[match[1] as string] ?? `${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)}`} />`,
+        })
       }
     }
     for (const match of source.matchAll(/\bhtml\s*`/g)) {
