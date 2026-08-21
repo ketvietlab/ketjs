@@ -32,6 +32,10 @@ test('KetSuite scaffold writes the packaged app and safe development scripts', a
 test('development bootstrap creates admin/admin once on an empty SQLite database', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ketsuite-dev-admin-'))
   const database = join(dir, 'ketsuite.db')
+  // Not a spread of `process.env`: this test is named after SQLite, and the
+  // Postgres CI job sets DATABASE_URL for every step it runs — which the packaged
+  // app rightly refuses, because it only knows how to open SQLite. Inheriting the
+  // ambient environment made a test about one database fail because of another.
   const env = {
     ...process.env,
     DATABASE_URL: undefined,
