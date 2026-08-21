@@ -4,6 +4,7 @@
 
 import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
+import { createHash } from 'node:crypto'
 import { KetError } from '../kernel/errors.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
@@ -99,6 +100,18 @@ export const _resetIdempotency = (): void => {
   /* records are durable; nothing to clear */
 }
 
+const canonical = (value: unknown): string => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, held]) => `${JSON.stringify(key)}:${canonical(held)}`)
+    .join(',')}}`
+}
+
+const requestDigest = (args: Record<string, unknown>): string =>
+  createHash('sha256').update(canonical(args)).digest('hex')
+
 export async function callFn(
   fnKey: string,
   args: Record<string, unknown>,
@@ -108,6 +121,10 @@ export async function callFn(
     dryRun?: boolean
     actor?: string | null
     idempotencyKey?: string | null
+    /** Separates public callers that can choose the same client key. */
+    idempotencyNamespace?: string | null
+    /** Defaults to a canonical digest of validated function arguments. */
+    idempotencyDigest?: string | null
     scope?: import('../types.ts').Scope
     /**
      * The functions this caller may invoke. Undefined or null means unrestricted,
@@ -162,7 +179,10 @@ export async function callFn(
   // an in-memory "initialized" marker pointing at a table that no longer exists.
   if (Object.keys(o.manifest.jobs).length) await queueFor(o.adapter)
 
-  const idemKey = o.idempotencyKey ? `${fnKey}:${o.idempotencyKey}` : null
+  const idemKey = o.idempotencyKey
+    ? `${o.idempotencyNamespace ? `${o.idempotencyNamespace}:` : ''}${fnKey}:${o.idempotencyKey}`
+    : null
+  const idemDigest = idemKey ? (o.idempotencyDigest ?? requestDigest(args)) : null
   let idem: Idem | null = null
 
   if (idemKey) {
@@ -176,9 +196,16 @@ export async function callFn(
     idem = await idemFor(o.adapter)
     // Claim the key before doing any work. Losing the race means another caller is
     // either mid-flight or already finished, and both are answered from the record.
-    const claimed = await idem.claim(idemKey, fnKey)
+    const claimed = await idem.claim(idemKey, fnKey, 5 * 60_000, idemDigest)
     if (!claimed) {
       const existing = await idem.read(idemKey)
+      if (existing?.digest && existing.digest !== idemDigest) {
+        throw new KetError({
+          code: 'E_IDEMPOTENCY_CONFLICT',
+          message: `idempotency key "${o.idempotencyKey}" was already used with a different request`,
+          hint: 'reuse a key only when retrying the exact same command',
+        })
+      }
       if (existing?.state === 'done') return { ...(existing.result as CallResult), replayed: true }
       throw new KetError({
         code: 'E_IDEMPOTENCY_IN_FLIGHT',

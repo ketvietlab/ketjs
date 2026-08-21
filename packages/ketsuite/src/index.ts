@@ -6,6 +6,13 @@
 // exported rather than smuggled. The dependency audit enforces exactly that.
 
 // website vertical
+export { default as channelApi } from './modules/channel_api/index.ts'
+export {
+  defineChannelRoute,
+  openApiDocument,
+  routesOf as channelRoutesOf,
+} from './modules/channel_api/index.ts'
+export type { ChannelProfile, ChannelRouteSpec } from './modules/channel_api/index.ts'
 export { default as website } from './modules/website/index.ts'
 export { default as websiteMenu } from './modules/website_menu/index.ts'
 export { default as websiteSeo } from './modules/website_seo/index.ts'

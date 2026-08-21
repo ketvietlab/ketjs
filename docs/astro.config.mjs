@@ -24,8 +24,10 @@ export default defineConfig({
       description: 'Architecture, operations, and development documentation for the KetJS framework.',
       favicon: '/favicon.svg',
       logo: {
-        src: './src/assets/logo-placeholder.svg',
-        replacesTitle: false,
+        light: './src/assets/ketsuite-logo-light.png',
+        dark: './src/assets/ketsuite-logo-dark.png',
+        alt: 'KetSuite — Extensible Open ERP',
+        replacesTitle: true,
       },
       locales: {
         root: {
@@ -78,6 +80,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'HTTP routes and responses', slug: 'ketjs/http' },
+                { label: 'HTTP contracts and OpenAPI', slug: 'ketjs/openapi' },
                 { label: 'Sessions and tenants', slug: 'ketjs/sessions-tenants' },
                 { label: 'Durable jobs and workers', slug: 'ketjs/jobs' },
                 { label: 'Storage, transport, streams', slug: 'ketjs/integrations' },
@@ -107,7 +110,11 @@ export default defineConfig({
         },
         {
           label: 'KetSuite application',
-          items: [{ label: 'Quick start', slug: 'ketsuite/quick-start' }],
+          items: [
+            { label: 'Quick start', slug: 'ketsuite/quick-start' },
+            { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
+            { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
+          ],
         },
         {
           label: 'Architecture & internals',

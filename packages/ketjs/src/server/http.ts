@@ -491,6 +491,7 @@ export async function createKetServer(o: ServeOpts) {
             queueNotify: o.queueNotify,
             dryRun: url.searchParams.get('dryRun') === '1',
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
+            idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
           }),
         )
         return json(res, 200, result)
