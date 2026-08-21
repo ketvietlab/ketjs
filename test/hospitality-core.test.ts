@@ -1523,6 +1523,124 @@ test('hospitality stays: front desk adjusts an in-house departure atomically', a
   }
 })
 
+test('hospitality stays: early check-out releases only future inventory and retains charges', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '100' },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'standard', code: '101', name: '101' },
+      adapter,
+    )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    const created = await call(
+      'hospitality_core.createReservation',
+      {
+        id: 'early-departure',
+        propertyId: 'hotel',
+        roomTypeId: 'standard',
+        partnerId: 'guest',
+        checkIn: '2026-10-01T07:00:00.000Z',
+        checkOut: '2026-10-05T05:00:00.000Z',
+        rate: '100',
+      },
+      adapter,
+    )
+    assert.equal((created.value as Row).ok, true)
+    await call(
+      'hospitality_core.checkIn',
+      { stayId: 'early-departure:stay', roomId: '101', at: '2026-10-01T07:00:00.000Z' },
+      adapter,
+    )
+
+    const checkedOut = await call(
+      'hospitality_core.checkOut',
+      { stayId: 'early-departure:stay', at: '2026-10-02T05:00:00.000Z' },
+      adapter,
+    )
+    assert.deepEqual(checkedOut.value, {
+      ok: true,
+      id: 'early-departure:stay',
+      roomId: '101',
+      state: 'checked_out',
+      inventoryReleased: 3,
+      errors: [],
+    })
+    const reservation = (await call('hospitality_core.getReservation', { id: 'early-departure' }, adapter))
+      .value as Row
+    const stay = (await call('hospitality_core.getStay', { id: 'early-departure:stay' }, adapter))
+      .value as Row
+    const folio = (await call('hospitality_core.getFolio', { id: 'early-departure:folio' }, adapter))
+      .value as Row
+    assert.deepEqual(
+      {
+        reservationState: reservation.state,
+        scheduledCheckOut: reservation.checkOut,
+        stayState: stay.state,
+        actualCheckOut: stay.checkedOutAt,
+        folioState: folio.state,
+        folioTotal: Number(folio.amountTotal),
+      },
+      {
+        reservationState: 'checked_out',
+        scheduledCheckOut: '2026-10-05T05:00:00.000Z',
+        stayState: 'checked_out',
+        actualCheckOut: '2026-10-02T05:00:00.000Z',
+        folioState: 'closed',
+        folioTotal: 400,
+      },
+    )
+    assert.deepEqual(
+      (await adapter.all(`SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`)).map(
+        (row) => ({ date: row.date, sold: Number(row.sold) }),
+      ),
+      [
+        { date: '2026-10-01', sold: 1 },
+        { date: '2026-10-02', sold: 0 },
+        { date: '2026-10-03', sold: 0 },
+        { date: '2026-10-04', sold: 0 },
+      ],
+    )
+    const room = (await adapter.all('SELECT status FROM hospitality_core_room WHERE id = ?', ['101']))[0]!
+    assert.equal(room.status, 'dirty')
+    assert.equal(
+      Number(
+        (
+          await adapter.all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_cleaning_task WHERE id = 'checkout:early-departure:stay'`,
+          )
+        )[0]!.n,
+      ),
+      1,
+    )
+
+    const retried = await call(
+      'hospitality_core.checkOut',
+      { stayId: 'early-departure:stay', at: '2026-10-02T05:01:00.000Z' },
+      adapter,
+    )
+    assert.equal((retried.value as Row).ok, true)
+    assert.equal(
+      Number(
+        (
+          await adapter.all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_inventory_change WHERE "aggregateId" = 'early-departure'`,
+          )
+        )[0]!.n,
+      ),
+      2,
+      'booking and early release each emit one durable inventory signal',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality reservations: no-show releases inventory but retains charges for reconciliation', async () => {
   const adapter = await boot()
   try {

@@ -1325,17 +1325,28 @@ export const operations: Record<string, FnSpec> = {
 
   checkOut: defineFn({
     input: { stayId: 'id', at: 'datetime?' },
-    output: { ok: 'bool', id: 'id?', roomId: 'id?', state: 'text?', errors: 'json?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      roomId: 'id?',
+      state: 'text?',
+      inventoryReleased: 'int?',
+      errors: 'json?',
+    },
     effects: [
       'read:hospitality_core.Stay',
       'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
       'read:hospitality_core.RoomAssignment',
+      'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.Room',
       'write:hospitality_core.Stay',
       'write:hospitality_core.Reservation',
       'write:hospitality_core.Folio',
       'write:hospitality_core.RoomAssignment',
       'write:hospitality_core.CleaningTask',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
     ],
     idempotent: true,
     agent: true,
@@ -1347,6 +1358,14 @@ export const operations: Record<string, FnSpec> = {
       if (stay.state !== 'checked_in' || !stay.currentRoomId)
         return failure(issue('state', 'stay_cannot_check_out'))
       const at = date(args.at) ?? new Date()
+      const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
+      if (!property) return failure(issue('propertyId', 'property_missing'))
+      const remainingInventoryDates =
+        stay.bookingType === 'hourly'
+          ? []
+          : occupancyDates(stay.checkIn, stay.checkOut, String(property.timezone ?? 'UTC')).filter(
+              (value) => value >= dateKeyIn(at, String(property.timezone ?? 'UTC')),
+            )
       const A = ctx.table('hospitality_core.RoomAssignment')
       const current = await ctx.db.one(from(A).where(eq(A.stayId, stay.id), eq(A.state, 'active')))
       if (!current) return failure(issue('stayId', 'active_assignment_missing'))
@@ -1394,7 +1413,22 @@ export const operations: Record<string, FnSpec> = {
             { id: stay.folioId },
             { state: 'closed', closedAt: at.toISOString() },
           )
-          return success(stay.id, { roomId: stay.currentRoomId, state: 'checked_out' })
+          if (remainingInventoryDates.length) {
+            await releaseInventory(tx, stay.propertyId, stay.roomTypeId, remainingInventoryDates)
+            await recordInventoryChange(tx, {
+              propertyId: stay.propertyId,
+              roomTypeId: stay.roomTypeId,
+              kind: 'availability',
+              dateFrom: remainingInventoryDates[0]!,
+              dateTo: remainingInventoryDates.at(-1)!,
+              aggregateId: stay.reservationId ?? stay.id,
+            })
+          }
+          return success(stay.id, {
+            roomId: stay.currentRoomId,
+            state: 'checked_out',
+            inventoryReleased: remainingInventoryDates.length,
+          })
         }),
       )
     },
