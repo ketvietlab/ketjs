@@ -24,6 +24,8 @@ export type FormOption = { value: string; label: string }
 export type FormField = {
   name: string
   label: string
+  /** A trusted control such as a progressively enhanced relational selector. */
+  control?: JSXChild
   type?:
     | 'text'
     | 'password'
@@ -49,6 +51,7 @@ export type FormField = {
 }
 
 const control = (field: FormField, id: string, describedBy: string | null): TemplateResult => {
+  if (field.control !== undefined) return <>{field.control}</>
   if (field.type === 'textarea')
     return (
       <textarea
@@ -223,6 +226,28 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
                     ),
                   )}
                 </div>
+                {!!field.help && (
+                  <small data-ui="form-help" id={helpId ?? undefined}>
+                    {field.help}
+                  </small>
+                )}
+                {!!field.error && (
+                  <small data-ui="form-error" id={errorId ?? undefined}>
+                    {field.error}
+                  </small>
+                )}
+              </div>
+            )
+          if (field.control !== undefined)
+            return (
+              <div
+                data-ui="form-field"
+                data-span={field.span ?? 'half'}
+                data-kind="relation"
+                data-invalid={String(!!field.error)}
+              >
+                {fieldLabel}
+                {field.control}
                 {!!field.help && (
                   <small data-ui="form-help" id={helpId ?? undefined}>
                     {field.help}
