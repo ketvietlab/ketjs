@@ -342,6 +342,23 @@ cover the guarded update and relation-rich detail read; form rendering and opera
 input are intentionally excluded. All earlier booking, inventory, folio, housekeeping,
 night-audit, contention, durable-feed and cross-database assertions remained green.
 
+The physical-room configuration extension updates one populated room, reads its
+property/type/building/floor detail, reads location counts and attempts a direct
+status bypass in every physical database. The update must preserve the existing
+maintenance state, the bypass must fail, and the building must still preload all
+ten floors plus the exact room count. No OTA content or availability mutation is
+created by this configuration path.
+
+| driver | physical databases | room updates | elapsed | updates/s | location preloads and status guard |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 12.0 ms | 666 | complete |
+| PostgreSQL 17 | 4 | 4 | 24.0 ms | 166 | complete |
+
+The same full runs used 2,000 SQLite rooms and 1,000 PostgreSQL rooms and retained
+every lifecycle, inventory-ledger, concurrency, content-feed and physical-database
+isolation assertion. These timings cover domain calls only; native form rendering
+and operator input remain browser checks rather than throughput measurements.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so
