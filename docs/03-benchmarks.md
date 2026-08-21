@@ -359,6 +359,21 @@ every lifecycle, inventory-ledger, concurrency, content-feed and physical-databa
 isolation assertion. These timings cover domain calls only; native form rendering
 and operator input remain browser checks rather than throughput measurements.
 
+The location-lifecycle extension then archives and restores floors and buildings in
+dependency order. PostgreSQL also races a building archive against a floor creation
+through two real connections; exactly one mutation may win, and no inactive building
+may retain an active floor. Every database reads the same nested counts after the
+transitions.
+
+| driver | physical databases | lifecycle transitions | elapsed | transitions/s | concurrent location mutation |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 32 | 14.4 ms | 2,217 | consistent |
+| PostgreSQL 17 | 4 | 16 | 50.0 ms | 320 | consistent |
+
+The location run shares the same 2,000-room SQLite and 1,000-room PostgreSQL fixtures
+as the full Hospitality benchmark; all reservation, inventory, folio, housekeeping,
+night-audit, durable-feed and tenant-isolation assertions stayed green.
+
 ## Not measured
 
 - SSR throughput against Next/Nuxt/Astro end-to-end. Ket has no client bundler, so

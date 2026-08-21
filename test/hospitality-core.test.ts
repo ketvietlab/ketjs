@@ -543,8 +543,47 @@ test('hospitality core: room configuration preserves workflow-owned status and p
     assert.equal((floorRow.rooms as Row[]).length, 1)
     assert.equal((floorRow.building as Row).id, 'tower-a')
 
-    await adapter.run('UPDATE hospitality_core_building SET active = ? WHERE id = ?', [false, 'tower-a'])
-    await adapter.run('UPDATE hospitality_core_floor SET active = ? WHERE id = ?', [false, 'floor-1'])
+    const buildingDetail = (await call('hospitality_core.getBuilding', { id: 'tower-a' }, adapter))
+      .value as Row
+    const floorDetail = (await call('hospitality_core.getFloor', { id: 'floor-1' }, adapter)).value as Row
+    assert.equal((buildingDetail.property as Row).id, 'hotel')
+    assert.equal((buildingDetail.floors as Row[]).length, 1)
+    assert.equal((floorDetail.property as Row).id, 'hotel')
+    assert.equal((floorDetail.building as Row).id, 'tower-a')
+
+    const blockedFloor = (
+      await call('hospitality_core.archiveFloor', { id: 'floor-1', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedFloor.ok, false)
+    assert.equal((blockedFloor.errors as Row[])[0]?.code, 'location_has_active_rooms')
+
+    await call(
+      'hospitality_core.saveBuilding',
+      { id: 'annex', propertyId: 'hotel', code: 'B', name: 'Annex', sequence: 20 },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveFloor',
+      { id: 'annex-floor', propertyId: 'hotel', buildingId: 'annex', code: '01', name: 'Annex floor' },
+      adapter,
+    )
+    const blockedBuilding = (
+      await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)
+    ).value as Row
+    assert.equal(blockedBuilding.ok, false)
+    assert.equal((blockedBuilding.errors as Row[])[0]?.code, 'location_has_active_floors')
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: false }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: false }, adapter)).value as Row)
+        .ok,
+      true,
+    )
     const activeBuildings = (await call('hospitality_core.listBuildings', { propertyId: 'hotel' }, adapter))
       .value as Row[]
     const archivedBuildings = (
@@ -553,9 +592,33 @@ test('hospitality core: room configuration preserves workflow-owned status and p
     const archivedFloors = (
       await call('hospitality_core.listFloors', { propertyId: 'hotel', includeArchived: true }, adapter)
     ).value as Row[]
-    assert.equal(activeBuildings.length, 0)
-    assert.equal(archivedBuildings[0]?.id, 'tower-a')
-    assert.equal(archivedFloors[0]?.id, 'floor-1')
+    assert.equal(activeBuildings.length, 1)
+    assert.equal(
+      archivedBuildings.some((row) => row.id === 'annex' && row.active === false),
+      true,
+    )
+    assert.equal(
+      archivedFloors.some((row) => row.id === 'annex-floor' && row.active === false),
+      true,
+    )
+
+    const blockedRestore = (
+      await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter)
+    ).value as Row
+    assert.equal(blockedRestore.ok, false)
+    assert.equal((blockedRestore.errors as Row[])[0]?.code, 'location_archived')
+    assert.equal(
+      ((await call('hospitality_core.archiveBuilding', { id: 'annex', active: true }, adapter)).value as Row)
+        .ok,
+      true,
+    )
+    assert.equal(
+      (
+        (await call('hospitality_core.archiveFloor', { id: 'annex-floor', active: true }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
   } finally {
     await adapter.close()
   }
