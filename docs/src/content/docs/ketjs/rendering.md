@@ -19,6 +19,9 @@ npm install @ketvietlab/ketjs-view
 import { each, html, signal, when } from '@ketvietlab/ketjs-view'
 ```
 
+An application that has both packages need not remember which half a name lives in:
+`@ketvietlab/ketjs` re-exports the view entrypoint whole, so the same import works from there.
+
 ## HTML templates
 
 `html` returns a `TemplateResult`; it does not concatenate a string:
