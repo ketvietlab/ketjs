@@ -918,6 +918,13 @@ export const routes: Record<string, RouteEntry> = {
         {
           status: 'ready',
           uploadAction: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
+          uploadControl: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:media.upload', {
+                identity: `template:${row.id}`,
+                action: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
+                label: _('product_backend.media.add'),
+              }),
           images: mediaRows.map((image, index) => ({
             id: image.id,
             src: `/files/${image.attachmentId}`,
@@ -1117,6 +1124,16 @@ export const routes: Record<string, RouteEntry> = {
             url,
             `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
           ),
+          uploadControl: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:media.upload', {
+                identity: `variant:${params.variantId}`,
+                action: inLocale(
+                  url,
+                  `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
+                ),
+                label: _('product_backend.media.add'),
+              }),
           images: mediaRows.map((image, index) => ({
             id: image.id,
             src: `/files/${image.attachmentId}`,

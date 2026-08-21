@@ -44,6 +44,7 @@ export default defineModule({
     },
     'template.editor': { props: { identity: 'text', templateId: 'id', lang: 'text?' } },
     'variant.editor': { props: { identity: 'text', productId: 'id', lang: 'text?' } },
+    'media.upload': { props: { identity: 'text', action: 'text', label: 'text' } },
   },
   messages: {
     vi: {
@@ -280,6 +281,7 @@ export default defineModule({
   fills: {
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
+    'product_backend:media.upload': `{% island "product.media-upload" %}`,
     // KTL, addressing joints by name — the same language a storefront theme uses.
     'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/products">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },
