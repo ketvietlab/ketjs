@@ -44,8 +44,69 @@ export function compose(
     assets: {},
     styles: [],
     routes: {},
+    routePrefixes: {},
     patches: [],
     messages: {},
+  }
+
+  for (const m of order) {
+    for (const raw of m.reserves) {
+      const prefix = raw.trim()
+      if (!prefix.startsWith('/') || !prefix.endsWith('/') || prefix.includes('{')) {
+        diag.add({
+          code: 'E_ROUTE_PREFIX',
+          module: m.name,
+          message: `"${m.name}" reserves invalid route prefix "${raw}"`,
+          hint: 'a reserved prefix is an absolute static path ending in /',
+        })
+        continue
+      }
+      const conflict = Object.entries(manifest.routePrefixes).find(
+        ([other]) => prefix.startsWith(other) || other.startsWith(prefix),
+      )
+      if (conflict) {
+        diag.add({
+          code: 'E_ROUTE_PREFIX_CLASH',
+          module: m.name,
+          message: `"${m.name}" and "${conflict[1]}" reserve overlapping prefixes "${prefix}" and "${conflict[0]}"`,
+          hint: 'one module must own the whole public namespace',
+        })
+        continue
+      }
+      manifest.routePrefixes[prefix] = m.name
+    }
+  }
+
+  const major = (version: string): number | null => {
+    const match = /^(?:\^)?(\d+)(?:\.|$)/.exec(version.trim())
+    return match ? Number(match[1]) : null
+  }
+  for (const m of order) {
+    for (const [dependency, range] of Object.entries(m.compatible)) {
+      if (!m.depends.includes(dependency)) {
+        diag.add({
+          code: 'E_MODULE_COMPATIBILITY_DEPENDENCY',
+          module: m.name,
+          message: `"${m.name}" declares compatibility with "${dependency}" without depending on it`,
+          hint: `add "${dependency}" to depends`,
+        })
+        continue
+      }
+      const actual = order.find((candidate) => candidate.name === dependency)?.version
+      const wantedMajor = major(range)
+      const actualMajor = actual ? major(actual) : null
+      const matches = range.startsWith('^')
+        ? wantedMajor != null && actualMajor === wantedMajor
+        : actual === range
+      if (!matches) {
+        diag.add({
+          code: 'E_MODULE_VERSION_SKEW',
+          module: m.name,
+          message: `"${m.name}" requires "${dependency}" ${range}, but the deployment has ${actual ?? 'nothing'}`,
+          hint: 'upgrade the extension and its contract owner together',
+        })
+      }
+    }
   }
 
   for (const m of order) {
@@ -102,6 +163,21 @@ export function compose(
         })
         continue
       }
+      const reservation = Object.entries(manifest.routePrefixes).find(([prefix]) => path.startsWith(prefix))
+      if (reservation) {
+        const [prefix, owner] = reservation
+        const contribution = typeof make === 'function' ? null : make.through
+        const allowed = m.name === owner || (contribution === owner && m.depends.includes(owner))
+        if (!allowed) {
+          diag.add({
+            code: 'E_ROUTE_RESERVED',
+            module: m.name,
+            message: `"${m.name}" claims "${path}", inside the prefix reserved by "${owner}"`,
+            hint: `depend on "${owner}" and use its published route factory for "${prefix}"`,
+          })
+          continue
+        }
+      }
       const taken = manifest.routes[path]
       if (taken) {
         diag.add({
@@ -128,7 +204,13 @@ export function compose(
       manifest.routes[path] =
         typeof make === 'function'
           ? { by: m.name, anonymous: false, make }
-          : { by: m.name, anonymous: make.anonymous === true, make: make.handler }
+          : {
+              by: m.name,
+              anonymous: make.anonymous === true,
+              ...(make.through ? { through: make.through } : {}),
+              ...(make.contract ? { contract: make.contract } : {}),
+              make: make.handler,
+            }
     }
   }
 
