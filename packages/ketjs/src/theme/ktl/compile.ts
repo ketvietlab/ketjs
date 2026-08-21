@@ -145,7 +145,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   // holds data only — a theme that could call functions would be a theme that could
   // run code, which is the whole thing KTL exists to prevent.
   //
-  // The filter is named _ , the way gettext and Odoo name it: it appears often
+  // The filter is named _ , the way gettext and the domain contract name it: it appears often
   // enough in markup that a longer name would cost more than it explains.
   const filters: Record<string, Filter> = {
     ...BASE_FILTERS,

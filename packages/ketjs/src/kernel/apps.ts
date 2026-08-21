@@ -1,7 +1,7 @@
 // Installing and removing apps, without giving up the thing that makes fleet
 // upgrades survivable.
 //
-// Odoo lets each database install a different set of modules. That is why an Odoo
+// the domain contract lets each database install a different set of modules. That is why an the domain contract
 // fleet upgrade is N unknown migrations rather than one known one, and it is the
 // root of the failures rather than a detail of them (D16).
 //
@@ -12,7 +12,7 @@
 // the database.
 //
 // The consequence worth stating plainly: uninstalling does NOT delete anything. The
-// columns stay, the rows stay, and re-installing finds the data where it was. Odoo
+// columns stay, the rows stay, and re-installing finds the data where it was. the domain contract
 // drops columns on uninstall and people lose data to a misclick; refusing to do that
 // is the whole point of D7.
 
