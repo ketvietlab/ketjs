@@ -33,6 +33,7 @@ const ledger = defineModule({
     add: defineFn({
       input: { id: 'id', total: 'int' },
       effects: ['write:ledger.Invoice'],
+      idempotent: true,
       handler: async (ctx: Ctx, a) => ctx.db.insert('ledger.Invoice', { id: a.id, total: a.total } as Row),
     }),
     list: defineFn({
@@ -52,6 +53,19 @@ const ledger = defineModule({
       effects: ['write:ledger.Invoice'],
       handler: async (ctx: Ctx, a) =>
         ctx.db.insert('ledger.Invoice', { id: a.id, total: 1, companyId: a.companyId } as Row),
+    }),
+    move: defineFn({
+      input: { id: 'id', companyId: 'text?', branchId: 'text?' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) =>
+        ctx.db.update(
+          'ledger.Invoice',
+          { id: a.id },
+          {
+            ...(a.companyId ? { companyId: a.companyId } : {}),
+            ...(a.branchId ? { branchId: a.branchId } : {}),
+          },
+        ),
     }),
     saveSetting: defineFn({
       input: { id: 'id', value: 'text', branchId: 'text?' },
@@ -149,6 +163,66 @@ test('scope: a write is stamped from the request, and cannot be aimed elsewhere'
   )
   assert.equal((await db.all('SELECT * FROM ledger_invoice', [])).length, 0)
   await db.close()
+})
+
+test('scope: update cannot move an existing row to another company or branch', async () => {
+  const db = await boot()
+  try {
+    await callFn('ledger.add', { id: 'safe', total: 1 }, { adapter: db, manifest, scope: A })
+    for (const patch of [
+      { id: 'safe', companyId: 'globex' },
+      { id: 'safe', branchId: 'saigon' },
+    ]) {
+      await assert.rejects(
+        () => callFn('ledger.move', patch, { adapter: db, manifest, scope: A }),
+        (error: unknown) => (error as { code: string }).code === 'E_SCOPE_FIELD_WRITTEN',
+      )
+    }
+    const [row] = await db.all('SELECT companyId, branchId FROM ledger_invoice WHERE id = ?', ['safe'])
+    assert.deepEqual(
+      { companyId: row?.companyId, branchId: row?.branchId },
+      { companyId: 'acme', branchId: 'hanoi' },
+    )
+  } finally {
+    await db.close()
+  }
+})
+
+test('idempotency: retries are isolated by scope and reject changed input', async () => {
+  const db = await boot()
+  try {
+    await callFn(
+      'ledger.add',
+      { id: 'a', total: 1 },
+      { adapter: db, manifest, scope: A, idempotencyKey: 'same' },
+    )
+    await callFn(
+      'ledger.add',
+      { id: 'b', total: 2 },
+      { adapter: db, manifest, scope: B, idempotencyKey: 'same' },
+    )
+    await assert.rejects(
+      () =>
+        callFn(
+          'ledger.add',
+          { id: 'changed', total: 3 },
+          { adapter: db, manifest, scope: A, idempotencyKey: 'same' },
+        ),
+      (error: unknown) => (error as { code: string }).code === 'E_IDEMPOTENCY_CONFLICT',
+    )
+    assert.deepEqual(
+      (await db.all('SELECT id, companyId FROM ledger_invoice ORDER BY id')).map((row) => [
+        row.id,
+        row.companyId,
+      ]),
+      [
+        ['a', 'acme'],
+        ['b', 'globex'],
+      ],
+    )
+  } finally {
+    await db.close()
+  }
 })
 
 test('scope: a company-scoped model may use branchId as an ordinary optional relation', async () => {

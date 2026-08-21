@@ -162,11 +162,30 @@ test('pos: exact session/order states, pricing, payment, stock and accounting fo
       ),
       ['90', '9', '99'],
     )
+    let lineUpdates = 0
+    let taxReads = 0
+    const recording: Adapter = {
+      ...adapter,
+      async all(sql, params) {
+        if (sql.includes('FROM account_tax')) taxReads++
+        return adapter.all(sql, params)
+      },
+      async run(sql, params) {
+        if (sql.startsWith('UPDATE pos_order_line')) lineUpdates++
+        return adapter.run(sql, params)
+      },
+    }
     await call(
       'pos.addPayment',
       { id: 'payment-1', orderId: 'order-1', paymentMethodId: 'cash-method', amount: '99' },
-      adapter,
+      recording,
     )
+    assert.equal(
+      taxReads,
+      0,
+      'payment recomputation uses stored line totals instead of reloading tax per line',
+    )
+    assert.equal(lineUpdates, 0, 'payment recomputation does not rewrite every order line')
     const paid = (await call('pos.validateOrder', { id: 'order-1' }, adapter)).value as Row
     assert.equal(paid.state, 'paid')
     assert.equal(paid.pickingId, 'order-1:picking')

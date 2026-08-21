@@ -177,6 +177,10 @@ KetJS claims the key before work begins and stores the completed result in the d
 returns the first result with `replayed: true`; a concurrent call receives
 `E_IDEMPOTENCY_IN_FLIGHT`. Passing a key to a non-idempotent function fails with `E_NOT_IDEMPOTENT`.
 
+Keys are isolated by function, actor, company and branch scope. KetJS also fingerprints the validated
+input: reusing a key with different arguments receives `E_IDEMPOTENCY_CONFLICT` instead of replaying an
+unrelated result or executing a second operation.
+
 The application still chooses a stable business key. Random retry keys defeat deduplication.
 
 ## Company reach

@@ -58,6 +58,38 @@ test('pool: a database a request is still holding is never evicted', async () =>
   await pool.close()
 })
 
+test('pool: an adapter still opening cannot be evicted by a concurrent acquire', async () => {
+  let finishOpen!: () => void
+  const events: string[] = []
+  const delayed = (key: string) => {
+    const adapter = sqliteAdapter()
+    return {
+      ...adapter,
+      async open() {
+        events.push(`open:${key}`)
+        if (key === 'first')
+          await new Promise<void>((resolve) => {
+            finishOpen = resolve
+          })
+        await adapter.open()
+      },
+      async close() {
+        events.push(`close:${key}`)
+        await adapter.close()
+      },
+    }
+  }
+  const pool = createAdapterPool({ create: delayed, max: 1 })
+  const first = pool.acquire('first')
+  await Promise.resolve()
+  await assert.rejects(() => pool.acquire('second'), /pool is full .* every database is in use/)
+  assert.deepEqual(events, ['open:first'])
+  finishOpen()
+  await first
+  pool.release('first')
+  await pool.close()
+})
+
 test('pool: idle databases are closed, busy ones are not', async () => {
   let clock = 0
   const pool = createAdapterPool({ create, idleMs: 100, now: () => clock })
