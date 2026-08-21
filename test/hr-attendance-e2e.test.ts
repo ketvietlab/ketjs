@@ -191,7 +191,49 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Employees/)
+  assert.match(englishHtml, /name="name"/)
+  assert.doesNotMatch(englishHtml, /name="partnerId"|Partner ID/)
   assert.doesNotMatch(englishHtml, /hr_backend\.[A-Za-z]/)
+
+  const createdHtml = await e2e.client.form<string>('/admin/hr?lang=en', {
+    code: 'NV002',
+    name: 'Lê Thu Hà',
+    userId: '',
+    homeBranchId: 'root:default',
+    timezone: 'Asia/Ho_Chi_Minh',
+    startDate: '2026-08-21',
+  })
+  assert.match(createdHtml, /Lê Thu Hà/)
+  const employees = (await fixture('hr.employee.manageList', {}, 'admin')) as unknown as Row[]
+  const created = employees.find((row) => row.code === 'NV002')
+  assert.equal(created?.name, 'Lê Thu Hà')
+  assert.match(String(created?.partnerId), /^employee:.*:partner$/)
+  const employeePartners = (await fixture(
+    'partner.listPartners',
+    { role: 'employee', search: 'Lê Thu Hà' },
+    'admin',
+  )) as unknown as Row[]
+  assert.equal(employeePartners.length, 1)
+
+  const rejected = await fixture(
+    'hr.employee.create',
+    {
+      id: 'employee-invalid',
+      code: 'NV003',
+      name: 'Partner không được lưu',
+      homeBranchId: 'missing-branch',
+      timezone: 'Asia/Ho_Chi_Minh',
+      startDate: '2026-08-21',
+    },
+    'admin',
+  )
+  assert.equal(rejected.ok, false)
+  const rolledBack = (await fixture(
+    'partner.listPartners',
+    { search: 'Partner không được lưu' },
+    'admin',
+  )) as unknown as Row[]
+  assert.deepEqual(rolledBack, [])
 
   const period = await e2e.client.get('/admin/attendance?month=2026-08')
   assert.equal(period.status, 200)
