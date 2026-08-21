@@ -12,6 +12,7 @@ details.
 | Entrypoint | Runtime |
 | --- | --- |
 | `@ketvietlab/ketjs` | Framework composition, server, data, jobs, sessions, integrations, and selected view helpers. |
+| `@ketvietlab/ketjs/pdf` | Report-safe KTL compilation, constrained markup, HTML preview, fonts, and PDF rendering. |
 | `@ketvietlab/ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
 | `@ketvietlab/ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
@@ -60,7 +61,7 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
 `ServeContext`, `BootedApp`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
-`RouteResult`.
+`RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 
 ### Sessions, streams, queues, and integration effects
 
@@ -102,6 +103,20 @@ adapters and operational tooling, not a requirement for ordinary modules.
 
 The `Adapter`, `Transaction`, `Scope`, `Dialect`, `Sql`, `Table`, `Expr`, `FieldError`, and `Validator`
 types are exported from the same entrypoint.
+
+### Reports and PDF
+
+| API | Purpose |
+| --- | --- |
+| `compileReportTemplate` | Compile KTL in report-safe mode and return a typed document tree. |
+| `parseReportMarkup`, `renderReportHtml` | Validate constrained report markup and produce a safe HTML preview. |
+| `renderPdf` | Render deterministic PDF bytes using explicit TrueType fonts. |
+| `interFontUrl` | Resolve the framework-vendored Inter Regular, SemiBold, or Bold asset. |
+| `parseTrueType`, `parseImage` | Parse supported embedded font and image assets. |
+
+These APIs are exported from `@ketvietlab/ketjs` so application packages stay on the framework's main public
+contract. The narrow `@ketvietlab/ketjs/pdf` entrypoint exposes the same report-specific surface for independent tooling. Related types
+include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `TrueTypeFont`, and `PdfImage`.
 
 ### Presentation, menus, and capabilities
 

@@ -79,6 +79,7 @@ Route factories receive live runtime services:
 | --- | --- |
 | `manifest` | Full manifest shipped by the deployment. |
 | `live(request)` | Manifest restricted to modules enabled for this request's tenant. |
+| `reportsOf(url, request, target)` | Installed reports for a model whose source the viewer may call. |
 | `appsOf(request)` | Installed/available module information for this tenant. |
 | `scopeOf(url, request)` | Company and branch scope resolved from the session or development shim. |
 | `call(name, input, url, request)` | Function call carrying tenant, session, permissions, actor, and scope. |

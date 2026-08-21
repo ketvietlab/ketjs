@@ -118,6 +118,25 @@ export { createQueue, queueFor, JOB_CHANNEL } from './server/queue.ts'
 export type { DurableJob, JobState, Queue, QueueListOptions } from './server/queue.ts'
 export { createIdempotency } from './server/idem.ts'
 
+export {
+  compileReportTemplate,
+  interFontUrl,
+  parseImage,
+  parseReportMarkup,
+  parseTrueType,
+  renderPdf,
+  renderReportHtml,
+} from './pdf/index.ts'
+export type {
+  PdfImage,
+  PdfRenderOptions,
+  ReportDocument,
+  ReportElement,
+  ReportNode,
+  ReportTag,
+  TrueTypeFont,
+} from './pdf/index.ts'
+
 export { sqliteAdapter } from './data/sqlite.ts'
 export { assertAdapter, ADAPTER_METHODS } from './data/adapter.ts'
 export { createAdapterPool } from './data/pool.ts'

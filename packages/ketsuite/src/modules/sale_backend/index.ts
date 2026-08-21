@@ -3,7 +3,7 @@ import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
@@ -296,6 +296,23 @@ const detail =
       orderId: params.id,
       locale: localeSuffix(url),
     })
+    const reportId = ['draft', 'sent'].includes(String(order.state))
+      ? 'sale.quotation'
+      : order.state === 'sale'
+        ? 'sale.salesOrder'
+        : null
+    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) => report.id === reportId)
+    const printActions = printable.length
+      ? actionGroup({
+          label: 'Print',
+          actions: printable.map((report) =>
+            linkButton({
+              label: _(report.title),
+              href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
+            }),
+          ),
+        })
+      : undefined
     const canonical = orderPath(order, url)
     const body = orderDetailScreen(
       _,
@@ -311,6 +328,7 @@ const detail =
         lineFields,
         invoiceFields,
         integration,
+        printActions,
         locale: localeSuffix(url),
         collaboration: savedPartial
           ? ''

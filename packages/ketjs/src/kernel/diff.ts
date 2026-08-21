@@ -164,6 +164,31 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
       )
   }
 
+  for (const [key, report] of Object.entries(before.reports ?? {})) {
+    const next = after.reports?.[key]
+    if (!next) {
+      push(
+        'breaking',
+        'REPORT_REMOVED',
+        `report "${key}" was removed`,
+        'saved templates and print actions no longer resolve',
+      )
+      continue
+    }
+    if (report.target !== next.target)
+      push(
+        'breaking',
+        'REPORT_TARGET_CHANGED',
+        `report "${key}" moved from ${report.target} to ${next.target}`,
+      )
+    if (report.source !== next.source)
+      push(
+        'risky',
+        'REPORT_SOURCE_CHANGED',
+        `report "${key}" changed source from ${report.source} to ${next.source}`,
+      )
+  }
+
   for (const r of Object.keys(before.regions.provided)) {
     if (!after.regions.provided[r] && after.regions.required.includes(r)) {
       push('breaking', 'REGION_LOST', `region "${r}" is no longer provided by any theme`)
