@@ -35,11 +35,11 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         const form = await readForm(req)
         const result = await ctx.call(
-          'hr.employee.save',
+          'hr.employee.create',
           {
             id: form.id || crypto.randomUUID(),
             code: form.code,
-            partnerId: form.partnerId,
+            name: form.name,
             userId: form.userId || null,
             homeBranchId: form.homeBranchId,
             timezone: form.timezone || 'Asia/Ho_Chi_Minh',
