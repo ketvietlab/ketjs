@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
 import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
-import { compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
+import { buildMenu, compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
 import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
 import type { MenuNode } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/app.ts'
@@ -531,6 +531,47 @@ test('design tokens: no rule sits outside a cascade layer, where it outranks ket
       depth += (line.match(/{/g)?.length ?? 0) - (line.match(/}/g)?.length ?? 0)
     }
   }
+})
+
+test('sidebar: every menu entry says where it goes in the list', () => {
+  // Without `sequence` an entry falls to 100 and ties with every other one, and the
+  // tie-break is the label — so a Vietnamese menu came out in the order its English
+  // message keys happened to sort in. Purchasing read Đơn mua · RFQ · Bảng giá,
+  // which is the workflow backwards.
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const entries = Object.entries(manifest.menus)
+  assert.deepEqual(
+    entries
+      .filter(([, entry]) => entry.sequence === undefined)
+      .map(([id]) => id)
+      .sort(),
+    [],
+    'an entry with no sequence is an entry nobody decided the position of',
+  )
+
+  const bySibling = new Map<string, Map<number, string[]>>()
+  for (const [id, entry] of entries) {
+    const siblings = bySibling.get(entry.parent ?? '') ?? new Map()
+    siblings.set(entry.sequence as number, [...(siblings.get(entry.sequence as number) ?? []), id])
+    bySibling.set(entry.parent ?? '', siblings)
+  }
+  const tied = [...bySibling.values()]
+    .flatMap((siblings) => [...siblings.values()])
+    .filter((ids) => ids.length > 1)
+  assert.deepEqual(tied, [], 'two entries at one position leave the order to registration order')
+})
+
+test('sidebar: equal sequences fall back to the language being read, not the message key', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const order = (locale: string) =>
+    buildMenu(manifest, {
+      translate: (key) => translator(manifest, locale)(key),
+      locale,
+    }).map((node) => node.label)
+  // Vietnamese and English disagree about where "Bán hàng"/"Sales" sits relative to
+  // its neighbours, which is the whole point: the reader's alphabet decides.
+  assert.notDeepEqual(order('vi'), order('en'))
+  assert.ok(order('vi').every((label) => !label.startsWith('menu.')))
 })
 
 test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {

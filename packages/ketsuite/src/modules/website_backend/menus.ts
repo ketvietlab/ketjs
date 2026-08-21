@@ -1,7 +1,7 @@
 import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
-  website: { label: 'menu.app', icon: 'globe', sequence: 18 },
+  website: { label: 'menu.app', icon: 'globe', sequence: 30 },
   'website.pages': {
     parent: 'website',
     label: 'menu.pages',

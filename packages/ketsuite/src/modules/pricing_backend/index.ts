@@ -15,12 +15,13 @@ export default defineModule({
   summary: 'Danh sách bảng giá theo company.',
   category: 'Hệ thống',
   menus: {
-    pricing: { label: 'menu.app', icon: 'tag', sequence: 25 },
+    pricing: { label: 'menu.app', icon: 'tag', sequence: 21 },
     'pricing.lists': {
       parent: 'pricing',
       label: 'menu.lists',
       path: '/admin/pricelists',
       needs: 'pricing.listPricelists',
+      sequence: 10,
     },
   },
   routes: {

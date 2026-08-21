@@ -447,7 +447,7 @@ export default defineModule({
   summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Hệ thống',
   menus: {
-    purchase: { label: 'menu.app', icon: 'shopping-cart', sequence: 25 },
+    purchase: { label: 'menu.app', icon: 'shopping-cart', sequence: 24 },
     'purchase.dashboard': {
       parent: 'purchase',
       label: 'menu.dashboard',
@@ -461,12 +461,14 @@ export default defineModule({
       label: 'menu.rfqs',
       path: '/admin/purchase/rfqs',
       needs: 'purchase.listOrders',
+      sequence: 10,
     },
     'purchase.orders': {
       parent: 'purchase.ordersGroup',
       label: 'menu.orders',
       path: '/admin/purchase/orders',
       needs: 'purchase.listOrders',
+      sequence: 20,
     },
     'purchase.products': { parent: 'purchase', label: 'menu.products', sequence: 20 },
     'purchase.vendorPricelists': {
@@ -474,6 +476,7 @@ export default defineModule({
       label: 'menu.vendorPricelists',
       path: '/admin/purchase/vendor-pricelists',
       needs: 'purchase.listSupplierInfo',
+      sequence: 10,
     },
   },
   routes: {

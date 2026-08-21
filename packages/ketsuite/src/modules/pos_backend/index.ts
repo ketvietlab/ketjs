@@ -312,7 +312,7 @@ export default defineModule({
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Hệ thống',
   menus: {
-    pos: { label: 'menu.app', icon: 'store', sequence: 18 },
+    pos: { label: 'menu.app', icon: 'store', sequence: 23 },
     'pos.dashboard': {
       parent: 'pos',
       label: 'menu.dashboard',
@@ -326,12 +326,14 @@ export default defineModule({
       label: 'menu.orders',
       path: '/admin/pos/orders',
       needs: 'pos.listOrders',
+      sequence: 10,
     },
     'pos.sessions': {
       parent: 'pos.ordersGroup',
       label: 'menu.sessions',
       path: '/admin/pos/sessions',
       needs: 'pos.listSessions',
+      sequence: 20,
     },
     'pos.configGroup': { parent: 'pos', label: 'menu.configGroup', sequence: 20 },
     'pos.configs': {
@@ -339,12 +341,14 @@ export default defineModule({
       label: 'menu.configs',
       path: '/admin/pos/configurations',
       needs: 'pos.listConfigs',
+      sequence: 10,
     },
     'pos.methods': {
       parent: 'pos.configGroup',
       label: 'menu.methods',
       path: '/admin/pos/payment-methods',
       needs: 'pos.listPaymentMethods',
+      sequence: 20,
     },
   },
   routes: {

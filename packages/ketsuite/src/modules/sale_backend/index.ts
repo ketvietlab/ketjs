@@ -595,7 +595,7 @@ export default defineModule({
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
   menus: {
-    sale: { label: 'menu.app', icon: 'shopping-bag', sequence: 20 },
+    sale: { label: 'menu.app', icon: 'shopping-bag', sequence: 22 },
     'sale.dashboard': {
       parent: 'sale',
       label: 'menu.dashboard',
@@ -609,12 +609,14 @@ export default defineModule({
       label: 'menu.quotations',
       path: '/admin/sales/quotations',
       needs: 'sale.listOrders',
+      sequence: 10,
     },
     'sale.orders': {
       parent: 'sale.ordersGroup',
       label: 'menu.orders',
       path: '/admin/sales/orders',
       needs: 'sale.listOrders',
+      sequence: 20,
     },
     'sale.products': { parent: 'sale', label: 'menu.products', sequence: 20 },
     'sale.policies': {
@@ -622,6 +624,7 @@ export default defineModule({
       label: 'menu.policies',
       path: '/admin/sales/invoicing-policies',
       needs: 'sale.setInvoicePolicy',
+      sequence: 10,
     },
   },
   routes: {

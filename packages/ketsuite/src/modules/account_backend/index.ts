@@ -329,7 +329,7 @@ export default defineModule({
   summary: 'Giao diện sổ cái, hoá đơn, thanh toán và báo cáo.',
   category: 'Tài chính',
   menus: {
-    accounting: { label: 'menu.app', icon: 'banknote', sequence: 30 },
+    accounting: { label: 'menu.app', icon: 'banknote', sequence: 26 },
     'accounting.dashboard': {
       parent: 'accounting',
       label: 'menu.dashboard',
@@ -343,6 +343,7 @@ export default defineModule({
       label: 'menu.customerInvoices',
       path: '/admin/customer-invoices',
       needs: 'account.listMoves',
+      sequence: 10,
     },
     'accounting.vendors': { parent: 'accounting', label: 'menu.vendors', sequence: 20 },
     'accounting.vendorBills': {
@@ -350,6 +351,7 @@ export default defineModule({
       label: 'menu.vendorBills',
       path: '/admin/vendor-bills',
       needs: 'account.listMoves',
+      sequence: 10,
     },
     'accounting.operations': { parent: 'accounting', label: 'menu.operations', sequence: 30 },
     'accounting.entries': {
@@ -357,12 +359,14 @@ export default defineModule({
       label: 'menu.entries',
       path: '/admin/journal-entries',
       needs: 'account.listMoves',
+      sequence: 10,
     },
     'accounting.payments': {
       parent: 'accounting.operations',
       label: 'menu.payments',
       path: '/admin/payments',
       needs: 'account.listPayments',
+      sequence: 20,
     },
     'accounting.reporting': { parent: 'accounting', label: 'menu.reporting', sequence: 40 },
     'accounting.trialBalance': {
@@ -370,18 +374,21 @@ export default defineModule({
       label: 'menu.trialBalance',
       path: '/admin/trial-balance',
       needs: 'account.trialBalance',
+      sequence: 10,
     },
     'accounting.generalLedger': {
       parent: 'accounting.reporting',
       label: 'menu.generalLedger',
       path: '/admin/general-ledger',
       needs: 'account.generalLedger',
+      sequence: 20,
     },
     'accounting.partnerStatement': {
       parent: 'accounting.reporting',
       label: 'menu.partnerStatement',
       path: '/admin/partner-statement',
       needs: 'account.partnerStatement',
+      sequence: 30,
     },
     'accounting.configuration': { parent: 'accounting', label: 'menu.configuration', sequence: 50 },
     'accounting.accounts': {
@@ -389,24 +396,28 @@ export default defineModule({
       label: 'menu.accounts',
       path: '/admin/accounts',
       needs: 'account.listAccounts',
+      sequence: 10,
     },
     'accounting.journals': {
       parent: 'accounting.configuration',
       label: 'menu.journals',
       path: '/admin/journals',
       needs: 'account.listJournals',
+      sequence: 20,
     },
     'accounting.taxes': {
       parent: 'accounting.configuration',
       label: 'menu.taxes',
       path: '/admin/taxes',
       needs: 'account.listTaxes',
+      sequence: 30,
     },
     'accounting.terms': {
       parent: 'accounting.configuration',
       label: 'menu.paymentTerms',
       path: '/admin/payment-terms',
       needs: 'account.listPaymentTerms',
+      sequence: 40,
     },
   },
   routes: {
