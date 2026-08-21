@@ -162,6 +162,11 @@ try {
         kind: 'person',
         name: `Benchmark guest ${key}`,
       })
+      await call(key, 'partner.savePartner', {
+        id: 'companion',
+        kind: 'person',
+        name: `Benchmark companion ${key}`,
+      })
       await call(key, 'hospitality_core.saveProperty', {
         id: 'property',
         code: 'MAIN',
@@ -768,6 +773,61 @@ try {
     }),
   )
   const bookingMs = performance.now() - bookingStarted
+
+  const frontDeskIdentityStarted = performance.now()
+  const frontDeskIdentityResults = await Promise.all(
+    keys.map(async (key) => {
+      const rejected = await call(key, 'hospitality_core.saveGuestDocument', {
+        id: 'front-desk-unregistered',
+        stayId: 'reservation:1:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        number: `REJECTED-${key}-9876`,
+        fullName: `Benchmark companion ${key}`,
+      })
+      const leadSaved = await call(key, 'hospitality_core.saveGuestDocument', {
+        id: 'front-desk-lead-document',
+        stayId: 'reservation:0:stay',
+        partnerId: 'guest',
+        type: 'cccd',
+        number: `LEAD-${key}-9876`,
+        fullName: `Benchmark guest ${key}`,
+        dateOfBirth: '1990-05-12T00:00:00.000Z',
+        nationality: 'VN',
+        permanentAddress: 'Benchmark private address',
+      })
+      const reassigned = await call(key, 'hospitality_core.saveGuestDocument', {
+        id: 'front-desk-lead-document',
+        stayId: 'reservation:0:stay',
+        partnerId: 'companion',
+        type: 'passport',
+        fullName: `Benchmark companion ${key}`,
+      })
+      const documents = (
+        await call(key, 'hospitality_core.listGuestDocuments', { stayId: 'reservation:0:stay' })
+      ).value as Array<Record<string, unknown>>
+      return {
+        rejected: (rejected.value as { ok: boolean }).ok === false,
+        saved: (leadSaved.value as { ok: boolean }).ok === true,
+        immutable: (reassigned.value as { ok: boolean }).ok === false,
+        safe:
+          documents.length === 1 &&
+          documents.every(
+            (document) =>
+              document.numberLast4 === '9876' &&
+              document.dateOfBirthPresent === true &&
+              !('number' in document) &&
+              !('permanentAddress' in document),
+          ),
+      }
+    }),
+  )
+  const frontDeskIdentityMs = performance.now() - frontDeskIdentityStarted
+  const frontDeskIdentitySafe = frontDeskIdentityResults.every(
+    (result) => result.rejected && result.saved && result.immutable && result.safe,
+  )
+  if (!frontDeskIdentitySafe)
+    throw new Error('front-desk identity intake lost ownership guards or exposed protected fields')
 
   const serviceIntentionsPerDatabase = Math.min(50, reservationsPerDatabase)
   const serviceStarted = performance.now()
@@ -1606,6 +1666,10 @@ try {
         quoteIsReadOnly,
         bookingMs: Number(bookingMs.toFixed(1)),
         bookingsPerSecond: Math.round((totalReservations * 1_000) / bookingMs),
+        frontDeskIdentityDocuments: databaseCount,
+        frontDeskIdentityMs: Number(frontDeskIdentityMs.toFixed(1)),
+        frontDeskIdentityDocumentsPerSecond: Math.round((databaseCount * 1_000) / frontDeskIdentityMs),
+        frontDeskIdentitySafe,
         serviceIntentions: databaseCount * serviceIntentionsPerDatabase,
         serviceMs: Number(serviceMs.toFixed(1)),
         serviceMaterializationsPerSecond: Math.round(
