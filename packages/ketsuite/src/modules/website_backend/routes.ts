@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from 'ketjs'
 import type { Route, RouteEntry, ServeContext } from 'ketjs'
 import { backendPage } from '../../ui/index.ts'
-import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
+import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
 import {
   contentScreen,
@@ -99,8 +99,13 @@ const invalidJsonErrors = (form: Record<string, string>, _: ReturnType<ServeCont
 }
 
 const resultErrors = (result: unknown, _: ReturnType<ServeContext['translate']>) => {
-  const errors = errorsOf(result)
-  return errors.length ? errors : [_('website_backend.error.invalid')]
+  const issues = (result as { errors?: Array<{ field?: string; message?: string }> } | null)?.errors ?? []
+  if (!issues.length) return [_('website_backend.error.invalid')]
+  return issues.map((issue) => {
+    const message = issue.message ?? 'website_backend.error.invalid'
+    const translated = /^[a-z0-9_]+\./i.test(message) ? _(message) : message
+    return `${issue.field ? `${issue.field}: ` : ''}${translated}`
+  })
 }
 
 const entryOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
@@ -122,6 +127,7 @@ const saveEntry = async (ctx: ServeContext, url: URL, req: Req, id: string, form
       excerpt: form.excerpt || null,
       layout: layout.value,
       fields: fields.value,
+      expectedRevisionId: form.expectedRevisionId || null,
     },
     url,
     req,
@@ -332,7 +338,21 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
-      await ctx.call('website.publishEntry', { id: params.id }, url, req)
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.publishEntry',
+        { id: params.id, expectedRevisionId: form.expectedRevisionId || null },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) {
+        const detail = await entryOf(ctx, url, req, params.id)
+        const _ = ctx.translate(ctx.localeOf(url, req))
+        if (!detail) return text(_('website_backend.error.notFound'), { status: 404 })
+        return renderEntry(ctx, url, req, detail, detail.entry.siteId, {
+          errors: resultErrors(result, _),
+        })
+      }
       return seeOther(inLocale(url, `/admin/content/${params.id}`))
     },
 
