@@ -21,8 +21,36 @@ export type RouteEntry =
   | ((ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route)
   | {
       anonymous?: boolean
+      /**
+       * A published route-prefix owner this route contributes through.
+       *
+       * Reserved prefixes are closed to ordinary routes. An extension must name
+       * the owner explicitly, depend on it, and use the owner's route factory.
+       */
+      through?: string
+      /** Machine-readable HTTP contract used by facades such as channel_api. */
+      contract?: HttpRouteContract
       handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
+
+export type JsonSchema = Record<string, unknown>
+
+export type HttpRouteContract = {
+  profile: string
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  operationId: string
+  summary?: string
+  /** Application-defined authentication policy interpreted by the contract facade. */
+  auth?: string
+  capability?: { key: string; action: string }
+  request?: {
+    params?: JsonSchema
+    query?: JsonSchema
+    body?: JsonSchema
+  }
+  responses: Record<string, JsonSchema>
+  idempotent?: boolean
+}
 
 export type Scalar = 'id' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'json' | 'date' | 'datetime'
 export type FieldBase = Scalar | 'ref'
@@ -325,6 +353,8 @@ export type ModuleSpec = AppMeta & {
   name: string
   version?: string
   depends?: string[]
+  /** Version ranges required at compose time for published extension contracts. */
+  compatible?: Record<string, string>
   models?: Record<string, ModelDef>
   extend?: Record<string, Record<string, string>>
   /** Navigation entries this module contributes. Keys are ids other menus parent onto. */
@@ -378,6 +408,8 @@ export type ModuleSpec = AppMeta & {
    * to an uninstalled module is 404 rather than quietly still answering.
    */
   routes?: Record<string, RouteEntry>
+  /** Absolute path prefixes this module owns and exposes only via published contributors. */
+  reserves?: string[]
   /** Interactive views a theme may place but never write. */
   islands?: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
   sections?: Record<string, SectionDef>
@@ -393,6 +425,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly name: string
   readonly version: string
   readonly depends: readonly string[]
+  readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string>>
   readonly menus: Record<string, MenuDef>
@@ -410,6 +443,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly assets: string | URL | null
   readonly styles: readonly string[]
   readonly routes: Record<string, RouteEntry>
+  readonly reserves: readonly string[]
   readonly islands: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
   readonly sections: Record<string, SectionDef>
   readonly contentTypes: Record<string, ContentTypeDef>
@@ -457,9 +491,13 @@ export type Manifest = {
     {
       by: string
       anonymous: boolean
+      through?: string
+      contract?: HttpRouteContract
       make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
   >
+  /** Prefix -> owning module. Longest prefix wins, though overlapping claims are rejected. */
+  routePrefixes: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
   /** Set by restrictManifest: modules this deployment ships but this database has off. */
   disabledModules?: string[]

@@ -9,6 +9,7 @@ const MODULE_KEYS = new Set([
   'name',
   'version',
   'depends',
+  'compatible',
   'models',
   'extend',
   'joints',
@@ -40,6 +41,7 @@ const MODULE_KEYS = new Set([
   'assets',
   'styles',
   'routes',
+  'reserves',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -67,6 +69,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     name: spec.name,
     version: spec.version ?? '0.0.0',
     depends: Object.freeze([...(spec.depends ?? [])]),
+    compatible: Object.freeze({ ...(spec.compatible ?? {}) }),
     models: spec.models ?? {},
     extend: spec.extend ?? {},
     joints: spec.joints ?? {},
@@ -82,6 +85,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     assets: spec.assets ?? null,
     styles: Object.freeze([...(spec.styles ?? [])]),
     routes: spec.routes ?? {},
+    reserves: Object.freeze([...(spec.reserves ?? [])]),
     menus: spec.menus ?? {},
     omits: Object.freeze([...(spec.omits ?? [])]),
     islands: spec.islands ?? {},
@@ -129,6 +133,14 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       module: spec.name,
       message: `theme "${spec.name}" declares routes, which themes are not allowed to do`,
       hint: 'a route is server code; a theme may ship assets and styles, and place an island for behaviour',
+    })
+  }
+  if (spec.reserves?.length) {
+    throw new KetError({
+      code: 'E_THEME_OVERREACH',
+      module: spec.name,
+      message: `theme "${spec.name}" reserves server route prefixes, which themes are not allowed to do`,
+      hint: 'move the route contract into a module',
     })
   }
   for (const k of THEME_FORBIDDEN) {
