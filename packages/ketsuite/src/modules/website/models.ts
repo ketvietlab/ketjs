@@ -146,6 +146,105 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { digest: { fields: ['companyId', 'digest'], unique: true } },
   },
+  /**
+   * Customer identity is deliberately separate from user.User. A realm is the
+   * customer account boundary for one or more sites (usually one brand), while
+   * the linked Partner remains the business identity used by orders/bookings.
+   *
+   * Realm/account rows are shared because a brand site may sell properties
+   * belonging to several legal companies. The site link itself is company-scoped,
+   * so two companies may safely use the same local site id.
+   */
+  CustomerRealm: {
+    scope: 'shared',
+    timestamps: true,
+    fields: {
+      id: 'id',
+      name: 'text',
+      active: 'bool',
+      sessionIdleSeconds: 'int',
+      sessionAbsoluteSeconds: 'int',
+    },
+  },
+  CustomerRealmSite: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      siteId: 'ref:website.Site',
+      primary: 'bool',
+      active: 'bool',
+    },
+    indexes: {
+      site: { fields: ['companyId', 'siteId'], unique: true },
+      realm_site: { fields: ['companyId', 'realmId', 'siteId'], unique: true },
+    },
+  },
+  CustomerAccount: {
+    scope: 'shared',
+    timestamps: true,
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      partnerId: 'ref:partner.Partner',
+      email: 'text',
+      emailNormalized: 'text',
+      displayName: 'text',
+      status: 'text',
+      emailVerifiedAt: 'datetime?',
+      securityVersion: 'int',
+      failedLoginCount: 'int',
+      lockedUntil: 'datetime?',
+      lastLoginAt: 'datetime?',
+    },
+    indexes: {
+      realm_email: { fields: ['realmId', 'emailNormalized'], unique: true },
+      partner: { fields: ['partnerId'], unique: true },
+    },
+  },
+  CustomerCredential: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      accountId: 'ref:website.CustomerAccount',
+      passwordHash: 'text',
+      changedAt: 'datetime',
+    },
+    indexes: { account: { fields: ['accountId'], unique: true } },
+  },
+  CustomerSession: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      accountId: 'ref:website.CustomerAccount',
+      tokenDigest: 'text',
+      securityVersion: 'int',
+      createdAt: 'datetime',
+      lastSeenAt: 'datetime',
+      idleExpiresAt: 'datetime',
+      absoluteExpiresAt: 'datetime',
+      revokedAt: 'datetime?',
+      revokeReason: 'text?',
+      networkFingerprint: 'text?',
+    },
+    indexes: {
+      token: { fields: ['tokenDigest'], unique: true },
+      account_expiry: { fields: ['accountId', 'absoluteExpiresAt'] },
+    },
+  },
+  CustomerAuthRateLimit: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      action: 'text',
+      key: 'text',
+      windowStartedAt: 'datetime',
+      count: 'int',
+    },
+    indexes: { realm_action_key: { fields: ['realmId', 'action', 'key'], unique: true } },
+  },
   Page: {
     // Website content belongs to a legal entity, not to a branch: two branches of
     // one company share a site.
