@@ -9,6 +9,8 @@ import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
 import { actionButton } from './primitives.tsx'
+import { icon } from './icons.ts'
+import { recordWorkspace } from './record.tsx'
 
 export const HOOKS = [
   'shell',
@@ -135,8 +137,32 @@ export const backendPage = async (
   )
 }
 
+/**
+ * Every operational page gets the same bordered header/body sheet as accounting.
+ * A screen that already supplies a richer record workspace is flattened by CSS,
+ * so its domain-specific identity, facts, tabs, and collaboration rail remain the
+ * only visible workspace rather than being wrapped in a second card.
+ */
 export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
-  shell(_, title, body, frame)
+  shell(
+    _,
+    title,
+    recordWorkspace({
+      pageFrame: true,
+      title,
+      imageFallback: icon('layout-grid'),
+      body,
+    }),
+    frame,
+  )
+
+/** JSX entry point for backend screens; `framed` remains for extension compatibility. */
+export const framedPage = (options: {
+  translator: Translator
+  title: string
+  frame: Frame
+  body: TemplateResult
+}): TemplateResult => framed(options.translator, options.title, options.frame, options.body)
 
 export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
 

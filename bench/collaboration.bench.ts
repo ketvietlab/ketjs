@@ -129,6 +129,16 @@ try {
       markers: ['record-workspace', 'mail.chatter', 'activity.record'],
     },
     {
+      label: 'Accounting overview',
+      path: '/admin/accounting?lang=vi',
+      markers: ['record-workspace', 'Nghiệp vụ hằng ngày', 'Báo cáo tài chính'],
+    },
+    {
+      label: 'Accounting customer invoices',
+      path: '/admin/customer-invoices?lang=vi',
+      markers: ['record-workspace', 'customer-invoice-create-form', 'invoice-collab'],
+    },
+    {
       label: 'Accounting vendor bills',
       path: '/admin/vendor-bills?lang=vi',
       markers: ['record-workspace', 'vendor-bill-create-form', 'vendor-bill-collab'],
@@ -152,6 +162,31 @@ try {
       label: 'Accounting journals',
       path: '/admin/journals?lang=vi',
       markers: ['record-workspace', 'journal-create-form', 'account-bank-journal-collab'],
+    },
+    {
+      label: 'Accounting taxes',
+      path: '/admin/taxes?lang=vi',
+      markers: ['record-workspace', 'tax-create-form', 'VAT 10%'],
+    },
+    {
+      label: 'Accounting payment terms',
+      path: '/admin/payment-terms?lang=vi',
+      markers: ['record-workspace', 'payment-term-create-form', 'payment-term-line-form', '30 ngày'],
+    },
+    {
+      label: 'Accounting trial balance',
+      path: '/admin/trial-balance?lang=vi',
+      markers: ['record-workspace', 'trial-balance-filter-form', 'Tổng Nợ'],
+    },
+    {
+      label: 'Accounting general ledger',
+      path: '/admin/general-ledger?accountId=account-bank-collab&lang=vi',
+      markers: ['record-workspace', 'general-ledger-filter-form', 'Khách hàng thanh toán một phần'],
+    },
+    {
+      label: 'Accounting partner ledger',
+      path: '/admin/partner-statement?partnerId=member-party&lang=vi',
+      markers: ['record-workspace', 'partner-ledger-filter-form', 'Khách hàng thanh toán một phần'],
     },
     {
       label: 'Lot list',

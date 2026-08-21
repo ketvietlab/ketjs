@@ -46,6 +46,7 @@ type Finding = { file: string; line: number; what: string; text: string }
 /** An opening/closing tag in the literal portions of html`...`. */
 const TAG = /<\/?[a-z][a-z0-9-]*(?=[\s>/])/
 const DATA_UI = /data-ui\s*=/
+const SCREEN_COMPONENT_CALL = /\b(framed|recordWorkspace|recordForm|section|surface|formCluster)\s*\(/g
 
 const skipQuoted = (source: string, start: number, quote: string): number => {
   for (let i = start + 1; i < source.length; i++) {
@@ -127,6 +128,17 @@ for (const pattern of PATTERNS) {
       for (const match of source.matchAll(/<[a-z][a-z0-9-]*(?=[\s/>])/g)) {
         const line = source.slice(0, match.index).split('\n').length
         findings.push({ file: path, line, what: 'raw JSX tag', text: lines[line - 1]?.trim() ?? match[0] })
+      }
+      if (/\/[^/]*screen[^/]*\.tsx$/.test(path)) {
+        for (const match of source.matchAll(SCREEN_COMPONENT_CALL)) {
+          const line = source.slice(0, match.index).split('\n').length
+          findings.push({
+            file: path,
+            line,
+            what: 'component function call',
+            text: `${match[1]}(...) — use <${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)} /> JSX`,
+          })
+        }
       }
     }
     for (const match of source.matchAll(/\bhtml\s*`/g)) {

@@ -13,12 +13,12 @@ import {
   compositionSchema,
 } from 'ketjs'
 import type { Adapter, Manifest } from 'ketjs'
-import { website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
+import { address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme } from 'ketsuite'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
 
-const mods = [website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
+const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
 const manifest = compose(mods)
 
 async function boot(): Promise<{ db: Adapter; manifest: Manifest }> {

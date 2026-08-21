@@ -90,7 +90,14 @@ export function createAddressFormView(runtime, props) {
 
   return {
     view: () => html`
-    <form data-ui="record-form" data-address-form method="post" action=${props.action}>
+    <form
+      data-ui="record-form"
+      data-layout="default"
+      data-has-fields="true"
+      data-address-form
+      method="post"
+      action=${props.action}
+    >
       <div data-ui="form-grid">
         ${field(
           labels.use,

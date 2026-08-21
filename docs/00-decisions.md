@@ -1635,6 +1635,18 @@ so overlapping unassigned bookings remain legible instead of painting over each
 other. The browser acceptance path runs every hospitality route with seeded data
 in Vietnamese and English, plus the calendar at a narrow viewport; this is part of
 the feature definition, not a release-only visual pass.
+
+Housekeeping tasks are durable operational records, not ephemeral UI cards. Checkout
+creates exactly one urgent task in the same transaction that marks the room dirty;
+manual daily cleaning, inspection and maintenance use the same state machine. Starting,
+completing or cancelling a task uses compare-and-set and recalculates room state in the
+same transaction. A company-scoped detail read preloads only its property, room and stay,
+and archived rooms remain visible in history but cannot receive new work from the UI.
+The room-status board reads sellable inventory and physical-room state as separate concepts. Occupied
+and cleaning states remain lifecycle-owned; the housekeeping workflow also owns the transition back to
+sellable. A supervisor may take an active, unoccupied ready/dirty room out of service, or release a repaired
+room back to dirty. Out-of-service transitions require a reason, reject open housekeeping work, and compare
+against the status the operator viewed so concurrent changes cannot be silently overwritten.
 ## D53 — Collaboration keeps one polymorphic boundary and external I/O behind jobs
 
 **A date is not a datetime with the clock hidden.** Activity deadlines and all-day
@@ -1776,3 +1788,183 @@ explicit splits, merges and replacements when a future source provides them; the
 system never guesses a replacement by string similarity. Catalog installation is
 an internal function owned by a trusted administration route and uses unique
 indexes, `insertIfAbsent` and CAS so concurrent pods converge.
+
+## D58 — Hospitality services are intentions plus immutable occurrences
+
+A service intention (`ExtraLine`) attaches one sellable Product variant to exactly
+one reservation or physical stay. It snapshots the description, unit, quantity,
+price and recurrence used by hotel operations. `once`, `per_night` and `per_unit`
+are explicit policies: a night must fall inside the property-timezone occupancy
+range, while each quantity-based post carries a caller request key. Every policy
+produces a stable Charge source key, so a retry or two concurrent PostgreSQL
+connections converge on one operational occurrence.
+
+Posting a service and advancing the open Folio total share one transaction. Once
+any occurrence exists, the intention cannot be repriced or retargeted; corrections
+will be represented by later operational adjustments rather than rewriting audit
+history. The Charge remains an operational folio record, not an accounting move or
+invoice line. Those systems may consume the stable Product, UoM, ExtraLine and
+Charge references later without changing the hotel source of truth.
+
+Property fees are separate provider-visible content. Their create/update writes a
+ContentChange in the same transaction so each private OTA connection can rebuild
+its current payload independently. Storage is not involved: services and fees are
+structured database records, while Storage continues to own only binary media.
+
+## D59 — Hospitality closes a business date on its own worker
+
+A night audit is an operational close for one Property and one local calendar
+date, not an accounting period close. The web process only validates and enqueues
+`hospitality_core.nightAudit` on the maintenance queue. Posting per-night service
+occurrences and recurring weekly/monthly room rent happens on the hospitality
+worker, so a failing hotel job cannot hold an HTTP request open. Deployment owns
+the daily trigger; KetSuite does not add a distributed cron scheduler.
+
+`NightAuditRun` is unique by company, property and business date and records the
+attempt count plus the cumulative occurrences attached to that run. Each Charge still
+has its own stable source key, so a crash after one folio write, two workers racing
+on PostgreSQL or an operator rerunning a completed date converges without duplicate
+money. A run may therefore catch up several missed rent periods and can be retried
+after late service intentions are added.
+
+Long-stay schedules use fixed seven- and thirty-day periods to preserve the source
+system's weekly/monthly contract. Check-in can post the first period immediately,
+or leave it for night audit through `Property.longStayBillOnCheckIn`. Calendar
+dates are normalized at the adapter boundary because SQLite returns date text while
+PostgreSQL may return Date objects. Charges and folio totals remain operational
+records; invoices, tax documents and accounting moves consume them in a later
+integration rather than being created by night audit.
+
+## D60 — Vietnam stay notices are an evidence workflow, not a simulated connector
+
+The first Vietnam compliance slice follows the current Ministry of Public Security
+[Circular 116/2026/TT-BCA](https://vanban.bocongan.gov.vn/co-so-du-lieu-van-ban/thong-tu-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-cu-tru-1784261073?tab=attributes)
+and its [stay-notice procedure](https://dichvucong.bocongan.gov.vn/public/link-to/chi-tiet-thu-tuc?ma-thu-tuc=26346).
+For a normal arrival, the property must notify by 23:00 on the arrival date; an
+arrival from 23:00 onward is due by 08:00 the following date. Deadlines are computed
+in the Property timezone. The durable preparation job runs after check-in and again
+when a checked-in stay gains a guest or updated document, with enqueue committed in
+the same transaction as the triggering business write.
+
+Readiness covers the current statutory content: guest name and birth date, identity
+or passport number, an explicitly chosen reason, stay period and property address.
+A single notice is refused when the stay exceeds the current 30-day limit. Supported
+evidence channels mirror Circular 116: registered telephone, email or website,
+National Public Service Portal, VNeID, or stay-notice software.
+
+The public procedure exposes human-facing online channels but no stable machine API
+contract that this module can safely claim to implement. KetSuite therefore never
+marks a record submitted merely because a worker ran. A signed-in operator records
+the actual official channel and a required verifiable evidence reference; a later
+confirmation retains its actor and timestamp. Adding a real connector requires a
+separate reviewed contract and encrypted deployment credentials. No portal account
+or password is stored by `hospitality_core`.
+
+`StayNotice` is an operational checklist, not a copy of the declaration. It stores
+the guest name already needed by hotel operations, document type, only the final
+four document digits, readiness issues, actors, timestamps, evidence reference and
+a SHA-256 comparison hash. The full statutory package is reconstructed from live
+Property, Stay, StayGuest and GuestDocument rows only in memory while submission is
+recorded; neither the package nor the full document number is copied into the notice
+row, queue payload or default logs. Foreign-guest temporary-residence integration
+and accounting/e-invoice behavior remain later private slices.
+
+## D61 — Property settings preserve canonical location and publish one content change
+
+The Property workspace edits the accommodation identity, operating timezone,
+check-in/out clock, long-stay behavior, guest policy and public copy. Timezones must
+be valid IANA names and a default cancellation policy must resolve inside the same
+company scope. A successful create or update writes one `ContentChange` in the same
+transaction so private channel connections independently rebuild current content.
+
+Canonical address fields are intentionally read-only in this first workspace slice.
+Saving operational settings copies their existing structured country/division and
+coordinate values back through the public function; it never replaces them with a
+free-text approximation. A dedicated address-picker slice may edit those references
+later. Property charges remain provider content, and invoices or accounting entries
+remain outside this boundary.
+
+## D62 — Room types are sellable products, while physical rooms remain operational assets
+
+The Room Type workspace owns the public accommodation product: stable code and
+names, guest limits, room size and view, bathroom mode, fallback rate, identity
+colour, cancellation policy, publication state and marketing description. A room
+type belongs to one property for its lifetime; moving an existing record to another
+property is rejected because its rooms, inventory, rates and channel mappings are
+already property-scoped. Operators create a new room type when a product must move.
+
+Every successful create or update appends one `ContentChange` in the same transaction.
+Private OTA connections consume that durable signal independently and rebuild the
+current public record; the open-source module stores no provider credentials or
+provider-specific identifiers. The fallback rate is not an invoice or accounting
+entry and never replaces a matching Rate Plan. Physical location, room lifecycle and
+archive controls belong to the following Room configuration slice so sellable content
+cannot directly bypass operational room transitions.
+
+## D63 — Physical room configuration cannot mutate the operational lifecycle
+
+The Room workspace owns property-scoped buildings, floors and physical room records.
+A building cannot move to another property, and an existing floor cannot move to
+another building because rooms already reference that location. A selected floor
+canonically supplies its building when the room form omits it. Room type, building,
+floor and capacity remain editable inside the same property so operators can correct
+physical setup without recreating the asset.
+
+`saveRoom` never writes `status` or the operational note. New rooms start as
+`available`; later transitions continue through stay and housekeeping functions with
+their occupancy, open-task and compare-and-set guards. An explicit status passed to
+the configuration function is rejected when it differs from the live state. Physical
+room count is not sellable availability and does not emit an OTA content mutation:
+availability remains durable in `AvailabilityLedger`, exactly as in the legacy
+hospitality inventory boundary. No payment, invoice or accounting behavior is opened
+by this workspace.
+
+Buildings and floors use reversible archive rather than deletion. A building cannot
+be archived while it still owns an active floor or room, and a floor cannot be archived
+while it still owns an active room. Restoration proceeds from the outside in: the
+property must be active before a building, and the building before a floor. The archive
+functions and location-changing room writes lock the same active rows inside their
+transactions, so a concurrent archive and room/floor move cannot leave an inactive
+container with an active child. Archived locations remain readable in room history but
+are excluded from choices for new operational work.
+
+Physical rooms follow the same reversible rule. A room may be archived only from
+`available`, with no checked-in stay and no `todo`/`in_progress` housekeeping task.
+Archiving, check-in, manual status changes and task creation all compare the same
+`active + status` row version, so only one concurrent operation can win. Restoration
+requires the property, room type, building and floor to be active and returns the room
+to the front-desk candidate set without deleting its assignment, stay or task history.
+
+## D64 — Accounting includes one mandatory Vietnam TT99 data pack
+
+The `account` module owns the data that makes Accounting usable. KetSuite does not
+split country data into an `account_localization` application and does not expose a
+Circular 200/Circular 99 selector. For a Vietnam company, the first Accounting read
+installs the `TT99_2025` chart, Vietnam taxes, journals and payment terms in one
+idempotent transaction, then records the legal basis and source checksum in
+`account.Setup`.
+
+The statutory code is the identity used to preserve existing company accounts: setup
+does not replace a row that already owns a code, and generated journals resolve that
+row as their default. Concurrent requests converge on one setup row and one code per
+company. A company outside Vietnam is refused instead of receiving plausible-looking
+Vietnam accounting data silently. Future country packs remain data inside `account`;
+they do not become hundreds of installable source modules.
+
+## D65 — Front-desk identity intake is stay-scoped and exposes only a safe projection
+
+An identity document entered from a Stay belongs permanently to the selected Contact
+and that Stay. The Contact must already be a registered `StayGuest`; an arbitrary
+Contact cannot be attached through a forged form post. Reusing an existing document ID
+with another guest or Stay is rejected instead of silently moving protected data.
+
+Operational lists expose the document type, holder name, nationality, OCR state, date-
+of-birth readiness and only the final four number characters. They do not expose the
+full number, date of birth, address, OCR payload or attachment references. The complete
+record remains available only inside effect-checked business functions that need it,
+such as statutory stay-notice preparation. Default logs, screenshots and browser
+acceptance fixtures use synthetic values and must never contain real guest PII.
+
+Manual entry is the complete first front-desk path. Storage-backed front/back images
+and OCR state remain supported by the domain model, but automated scanning is a later
+adapter slice and is not required to receive or operate a stay.

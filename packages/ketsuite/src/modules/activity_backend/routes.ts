@@ -3,7 +3,7 @@ import type { Route, ServeContext } from 'ketjs'
 import { viewerOf } from '../backend/routes.ts'
 import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { activitiesScreen } from './screens.ts'
+import { activitiesScreen } from './screens.tsx'
 
 const todayOf = (url: URL): string => {
   const requested = url.searchParams.get('today')

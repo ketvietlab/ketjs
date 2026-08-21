@@ -3,7 +3,7 @@ import { defineModule, text } from 'ketjs'
 import type { Route, ServeContext } from 'ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { viewerOf } from '../backend/routes.ts'
-import { pricelistDetailScreen, pricelistsScreen } from './screens.ts'
+import { pricelistDetailScreen, pricelistsScreen } from './screens.tsx'
 import { backendPage } from '../../ui/index.ts'
 
 const localeSuffix = (url: URL): string => {

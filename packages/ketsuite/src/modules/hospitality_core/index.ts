@@ -3,7 +3,10 @@ import { functions } from './functions.ts'
 import { housekeeping } from './housekeeping.ts'
 import { content } from './content.ts'
 import { inventory } from './inventory.ts'
+import { nightAuditFunctions, nightAuditJobs } from './night-audit.ts'
 import { operations } from './operations.ts'
+import { services } from './services.ts'
+import { stayNoticeFunctions, stayNoticeJobs } from './stay-notices.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
@@ -13,14 +16,24 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'hospitality_core',
   version: '0.1.0',
-  depends: ['backend', 'storage', 'partner', 'address'],
+  depends: ['backend', 'storage', 'partner', 'address', 'uom', 'product'],
   app: true,
   title: 'Khách sạn',
   summary: 'Cơ sở lưu trú, loại phòng, phòng, tiện nghi và chính sách vận hành.',
   category: 'Khách sạn',
   models,
   relations,
-  functions: { ...functions, ...inventory, ...operations, ...housekeeping, ...content },
+  functions: {
+    ...functions,
+    ...inventory,
+    ...operations,
+    ...housekeeping,
+    ...content,
+    ...services,
+    ...nightAuditFunctions,
+    ...stayNoticeFunctions,
+  },
+  jobs: { ...nightAuditJobs, ...stayNoticeJobs },
   routes,
   menus,
   messages,
@@ -41,6 +54,8 @@ export {
   RATE_TYPES,
   MEAL_PLANS,
   CHARGE_TYPES,
+  PROPERTY_CHARGE_TYPES,
+  EXTRA_RECURRENCES,
   DOCUMENT_TYPES,
   FOLIO_STATES,
   GENDERS,
@@ -50,6 +65,10 @@ export {
   CLEANING_TASK_PRIORITIES,
   CLEANING_TASK_STATES,
   CLEANING_TASK_TYPES,
+  NIGHT_AUDIT_STATES,
+  STAY_NOTICE_CHANNELS,
+  STAY_NOTICE_REASONS,
+  STAY_NOTICE_STATES,
 } from './types.ts'
 export type {
   AccommodationType,
@@ -66,6 +85,8 @@ export type {
   RateType,
   MealPlan,
   ChargeType,
+  PropertyChargeType,
+  ExtraRecurrence,
   DocumentType,
   FolioState,
   Gender,
@@ -75,4 +96,8 @@ export type {
   CleaningTaskPriority,
   CleaningTaskState,
   CleaningTaskType,
+  NightAuditState,
+  StayNoticeChannel,
+  StayNoticeReason,
+  StayNoticeState,
 } from './types.ts'

@@ -216,18 +216,32 @@ select PostgreSQL with `KET_BENCH_DRIVER=postgres`.
 
 The hospitality benchmark migrates separate physical databases and loads each one
 through the public `hospitality_core` functions: one property, one building, ten
-floors, twelve room types, 250 rooms and 100 reservations. It then runs check-in,
-service-charge and checkout cycles, alternates room-board and reservation queries,
-and makes two PostgreSQL connections race for one physical room. A second race
-checks that cancel and check-in cannot both win or leave reservation, stay, room
-and assignment states out of sync. It also checks that every database contains
-exactly its own company-scoped rows and that PostgreSQL kept room rates as
-`numeric`.
+floors, twelve room types, 250 rooms and 100 reservations. It then creates and
+idempotently posts 50 service intentions per database, runs check-in/charge/
+checkout cycles and alternates room-board and reservation queries. Two PostgreSQL
+connections race for the same physical room and the same service occurrence. A
+third race checks that cancel and check-in cannot both win or leave reservation,
+stay, room and assignment states out of sync. The run also checks company isolation,
+content-change durability and PostgreSQL `numeric`/`date` column types.
 
-| driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | operation cycles/s | list pairs/s | one room winner | cancel/check-in consistent | isolated counts |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| SQLite | 8 | 2,000 | 800 | 119.5 ms | 2,397 | 727 | 929 | 379 | yes (sequential) | yes (sequential) | complete |
-| PostgreSQL 17 | 4 | 1,000 | 400 | 954.2 ms | 356 | 170 | 150 | 197 | yes (concurrent) | yes (concurrent) | complete |
+| driver | databases | rooms | reservations | migrate | room writes/s | bookings/s | service posts/s | operation cycles/s | list pairs/s | room/service races | isolated counts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| SQLite | 8 | 2,000 | 800 | 178.1 ms | 3,135 | 908 | 1,060 | 1,391 | 529 | one row (sequential) | complete |
+| PostgreSQL 17 | 4 | 1,000 | 400 | 906.1 ms | 729 | 227 | 195 | 237 | 261 | one row (concurrent) | complete |
+
+The reservation-intake run on 2026-08-21 adds a read-only quote before every
+booking and verifies that the quote phase does not create or update an
+`AvailabilityLedger` row.
+
+| driver | physical databases | quotes | elapsed | quotes/s | inventory unchanged |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 800 | 334.1 ms | 2,394 | yes |
+| PostgreSQL 17 | 4 | 400 | 600.6 ms | 666 | yes |
+
+Each quote resolves the default rate, validates the property calendar and sales
+restrictions, and reads the minimum room-night availability. Confirmation still
+performs the compare-and-set inventory claim; the quote is never treated as a
+hold.
 
 An operation cycle contains check-in, an idempotent folio charge and checkout for
 every second stay. A list pair contains the room board plus the reservation list;
@@ -245,7 +259,153 @@ include the much larger dependency manifest now pulled in by the backend module;
 the operation rates remain the hospitality-only paths. The rerun also includes
 the property-timezone, primary-guest, room-claim and cancel/check-in concurrency
 guards, and verifies that every checkout creates exactly one durable housekeeping
-task in every physical tenant database.
+task in every physical tenant database. The 2026-08-21 rerun adds provider-visible
+property fees, product-backed service intentions and immutable operational charges;
+retrying all 600 service-post attempts produced exactly 400 SQLite and 200
+PostgreSQL charge rows, while the two-connection PostgreSQL race produced one row.
+
+The 2026-08-21 stay-notice extension prepares one masked notice for every checked-in
+guest, builds and hashes the live submission package, records operator evidence and
+confirms half the rows. It asserts that every physical database contains only its
+own company rows, every notice has only the final four document digits, and every
+submitted package has a SHA-256 hash. PostgreSQL additionally checks `dueAt` is
+`TIMESTAMPTZ` and runs two real connections against the same notice without creating
+a duplicate.
+
+| driver | physical databases | notices | elapsed | notices/s | masked evidence and isolation |
+|---|---:|---:|---:|---:|---|
+| SQLite | 2 | 24 | 22.1 ms | 1,085 | complete |
+| PostgreSQL 17 | 2 | 24 | 172.3 ms | 139 | complete |
+
+This targeted run used 48 rooms, 12 reservations and 12 operational transitions in
+each database so both engines exercised the same workflow. It is a regression baseline,
+not a capacity estimate; the PostgreSQL figure includes real transactions and
+cross-connection contention on the local development cluster.
+
+The 2026-08-21 housekeeping-workspace extension then claimed and completed every
+checkout cleaning task through the public functions. It verifies the durable task
+state, assignee, timestamps and restored room state on every physical database; room
+moves and their pending cleaning tasks remain separately asserted.
+
+| driver | physical databases | tasks completed | elapsed | tasks/s | task and room lifecycle |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 48 | 14.9 ms | 3,226 | complete |
+| PostgreSQL 17 | 4 | 24 | 53.5 ms | 448 | complete |
+
+The same run retained the existing room, inventory, folio-correction, stay-notice,
+night-audit and cross-database isolation assertions. These figures measure the task
+lifecycle only; browser rendering and operator think time are intentionally excluded.
+
+The room-status workspace extension then released one maintenance room to housekeeping
+and returned it to service hold in every physical database through guarded public
+transitions. Each run verifies the final note, exact property summary and physical
+database isolation; occupied/cleaning/open-task rejection remains covered by the
+engine tests.
+
+| driver | physical databases | status transitions | elapsed | transitions/s | status, note and summary |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 16 | 3.4 ms | 4,713 | complete |
+| PostgreSQL 17 | 4 | 8 | 9.5 ms | 839 | complete |
+
+These are transition-engine timings, not operator or browser latency. The same run
+continued to pass the booking, folio, housekeeping-task, night-audit, concurrency and
+cross-database assertions listed above. PostgreSQL also races task creation against an
+out-of-service transition on two real connections and proves that exactly one wins.
+
+The property-workspace extension then creates a company-scoped cancellation policy,
+updates the operating profile through `saveProperty`, and reads the complete detail
+back in every physical database. The assertion covers the display name, local clocks,
+long-stay policy, preserved address, preloaded default policy, durable content feed and
+cross-database isolation.
+
+| driver | physical databases | profile updates | elapsed | updates/s | settings, address and policy |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 13.5 ms | 594 | complete |
+| PostgreSQL 17 | 4 | 4 | 21.1 ms | 190 | complete |
+
+These figures measure the guarded domain update plus detail read, not form rendering or
+operator input. The same runs kept every prior booking, inventory, folio, housekeeping,
+night-audit, stay-notice and PostgreSQL contention assertion green.
+
+The room-type workspace extension then updates a populated sellable product and reads
+its complete detail through every physical database. It verifies capacity, view, colour,
+property and cancellation-policy preloads, the exact physical-room count, one additional
+durable content signal and isolation between tenant databases.
+
+| driver | physical databases | room-type updates | elapsed | updates/s | settings, relations and room count |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 5.1 ms | 1,576 | complete |
+| PostgreSQL 17 | 4 | 4 | 19.5 ms | 205 | complete |
+
+The full runs used 2,000 rooms on SQLite and 1,000 rooms on PostgreSQL. These timings
+cover the guarded update and relation-rich detail read; form rendering and operator
+input are intentionally excluded. All earlier booking, inventory, folio, housekeeping,
+night-audit, contention, durable-feed and cross-database assertions remained green.
+
+The physical-room configuration extension updates one populated room, reads its
+property/type/building/floor detail, reads location counts and attempts a direct
+status bypass in every physical database. The update must preserve the existing
+maintenance state, the bypass must fail, and the building must still preload all
+ten floors plus the exact room count. No OTA content or availability mutation is
+created by this configuration path.
+
+| driver | physical databases | room updates | elapsed | updates/s | location preloads and status guard |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 12.0 ms | 666 | complete |
+| PostgreSQL 17 | 4 | 4 | 24.0 ms | 166 | complete |
+
+The same full runs used 2,000 SQLite rooms and 1,000 PostgreSQL rooms and retained
+every lifecycle, inventory-ledger, concurrency, content-feed and physical-database
+isolation assertion. These timings cover domain calls only; native form rendering
+and operator input remain browser checks rather than throughput measurements.
+
+The location-lifecycle extension then archives and restores floors and buildings in
+dependency order. PostgreSQL also races a building archive against a floor creation
+through two real connections; exactly one mutation may win, and no inactive building
+may retain an active floor. Every database reads the same nested counts after the
+transitions.
+
+| driver | physical databases | lifecycle transitions | elapsed | transitions/s | concurrent location mutation |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 32 | 14.4 ms | 2,217 | consistent |
+| PostgreSQL 17 | 4 | 16 | 50.0 ms | 320 | consistent |
+
+The location run shares the same 2,000-room SQLite and 1,000-room PostgreSQL fixtures
+as the full Hospitality benchmark; all reservation, inventory, folio, housekeeping,
+night-audit, durable-feed and tenant-isolation assertions stayed green.
+
+The physical-room lifecycle extension then archives a room, verifies that ordinary
+queries exclude it while history queries retain it, refuses restore under an archived
+floor/building, and restores it after the parent chain. PostgreSQL races room archive
+against housekeeping-task creation through two real connections and proves exactly
+one wins.
+
+| driver | physical databases | room transitions | elapsed | transitions/s | archive/task race |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 16 | 33.5 ms | 477 | consistent |
+| PostgreSQL 17 | 4 | 8 | 73.3 ms | 109 | consistent |
+
+The full fixtures still contain 2,000 rooms on SQLite and 1,000 on PostgreSQL. All
+location, booking, inventory, folio, housekeeping, night-audit, content-feed and
+tenant-isolation assertions remained green; these timings are regression evidence,
+not an operator-latency or production-capacity SLA.
+
+The front-desk identity extension enters one stay-scoped synthetic identity document
+in every physical database. Each database also rejects an unregistered guest and an
+attempt to move an existing document to another owner, then reads the operational list
+and proves that only the last four number characters and a date-of-birth readiness flag
+cross the function boundary.
+
+| driver | physical databases | accepted documents | elapsed | documents/s | ownership and safe projection |
+|---|---:|---:|---:|---:|---|
+| SQLite | 8 | 8 | 8.7 ms | 925 | complete |
+| PostgreSQL 17 | 4 | 4 | 15.4 ms | 260 | complete |
+
+These checks ran inside the complete 2,000-room/800-booking SQLite and
+1,000-room/400-booking PostgreSQL workloads. All reservation, room-transition,
+housekeeping, folio, stay-notice, night-audit, PostgreSQL contention and physical-
+database isolation assertions stayed green. The numbers measure domain calls only;
+browser rendering and operator input are verified separately.
 
 ## Not measured
 
