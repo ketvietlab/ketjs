@@ -123,7 +123,7 @@ thứ hai mà giả thì không chứng minh được gì về việc layout có
 
 Theme storefront là code của người lạ, nên viết bằng ngôn ngữ hạn chế không chạy được
 gì. Backend là của mình, nên viết bằng `html` đầy đủ. Hai thứ khác nhau và không dùng
-chung cơ chế — chi tiết trong `docs/00-decisions.md` (D3, D18).
+chung cơ chế — chi tiết trong `docs/src/content/docs/architecture/decisions.md` (D3, D18).
 
 Hệ quả với các bạn: ở đây các bạn có toàn quyền về CSS, nhưng markup thì đề xuất chứ
 không tự sửa, vì nó gắn với dữ liệu thật.

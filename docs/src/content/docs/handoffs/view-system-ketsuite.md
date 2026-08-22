@@ -1,3 +1,9 @@
+---
+title: View system handoff to KetSuite
+description: Internal handoff notes for framework view-system changes that affect KetSuite.
+pagefind: false
+---
+
 # Hệ thống view → bàn giao cho team KetSuite
 
 Trạng thái: phần framework đã sửa xong (PR "view system contracts"). Tài liệu này liệt kê
@@ -36,7 +42,7 @@ sang được.
 
 `req.headers['x-ket-navigation'] === 'fragment-v1'` được viết tay ở 22 module backend.
 Framework đã export sẵn `isNavigationRequest()`, `NAVIGATION_HEADER`, `NAVIGATION_VERSION`
-— hiện chỉ [ui/layout.tsx](../../packages/ketsuite/src/ui/layout.tsx) dùng. Đổi version
+— hiện chỉ [ui/layout.tsx](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/ui/layout.tsx) dùng. Đổi version
 protocol hôm nay là sửa 34 chỗ. Đây là việc cơ học, codemod được.
 
 ### 2.2 `stock_backend` dùng giao thức partial cũ
@@ -45,7 +51,7 @@ Ba bản `client/editor-view.mjs` (product, sale, stock) gần trùng nhau và �
 
 - `product_backend` và `sale_backend`: envelope `ket-fragments` + `globalThis.__ketNavigation.applyFragments`.
 - `stock_backend`: tự `querySelector('[data-ui="record-header"]')` rồi `replaceWith`
-  ([editor-view.mjs:48](../../packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs)).
+  ([editor-view.mjs:48](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs)).
 
 Bản stock bỏ qua runtime navigation, không giữ state island, và bám vào `data-ui` — vốn là
 hợp đồng của đội design, không phải điểm neo cho JS. Nên đưa stock về giao thức
@@ -60,7 +66,7 @@ riêng (`sale-order`, `stock-transfer`, `stock-lot`, `product-detail`). Nên xé
 ## 3. Việc của KetSuite — kit UI
 
 - **`framed` và `shell` đảo thứ tự tham số**: `shell(_, title, body, frame)` so với
-  `framed(_, title, frame, body)`, cùng file [ui/layout.tsx](../../packages/ketsuite/src/ui/layout.tsx).
+  `framed(_, title, frame, body)`, cùng file [ui/layout.tsx](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/ui/layout.tsx).
   Chỉ có TypeScript đỡ.
 - **JSX bắt buộc nhưng chỉ là hình thức**: `ui-audit` ép `*screen*.tsx` viết `<Section/>`,
   nên 53 file lặp `framedPage as Framed`, 49 file lặp `recordForm as RecordForm`. Nội dung
@@ -100,7 +106,7 @@ Giờ `/_ket/tokens.css` đã tự lên mọi trang storefront, ba việc trở 
    phẩm. Nếu muốn hợp nhất thì `design/tokens.css` nên nhận `--ket-*` làm nguồn và `--admin-*`
    là lớp vai trò dẫn xuất — nhưng đây là quyết định của đội design, không phải của framework.
 
-**Chưa làm, và cố ý:** `website.Site.tokens` (`json?`, [models.ts:18](../../packages/ketsuite/src/modules/website/models.ts))
+**Chưa làm, và cố ý:** `website.Site.tokens` (`json?`, [models.ts:18](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/modules/website/models.ts))
 cho phép mỗi site đè token, và hiện chưa ai đọc. Muốn nối thì phải làm cứng `tokensToCss()`
 trước: hiện nó chỉ lọc ký tự của **tên** token, không lọc **giá trị**, nên dữ liệu từ database
 có thể thoát khỏi khối CSS. Đó là lý do đợt này chỉ nối nguồn token đáng tin (khai báo trong

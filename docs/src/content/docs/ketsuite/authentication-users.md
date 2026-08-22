@@ -1,3 +1,9 @@
+---
+title: Authentication and Users
+description: KetSuite identity, role, session, token, and security-audit design notes.
+draft: true
+---
+
 # Authentication và Users
 
 Tài liệu này mô tả identity realm nội bộ được port từ the domain contract vào KetSuite: User,
@@ -31,7 +37,7 @@ Cụm này cung cấp:
 
 Website signup/portal UI, API key, passkey, MFA/TOTP và hạ tầng gửi mail chưa nằm
 trong phạm vi. OAuth/OIDC backend realm được triển khai ở module KetSuite riêng và
-được mô tả tại [10-oauth-oidc.md](./10-oauth-oidc.md). `portal`/`public` đã là access
+được mô tả tại [OAuth and OIDC](../oauth-oidc/). `portal`/`public` đã là access
 kind hợp lệ nhưng không được đăng nhập vào backend realm.
 
 ## Kiến trúc
@@ -311,14 +317,6 @@ Mọi màn hình đã được mở qua HTTP bằng trình duyệt thật ở de
 mobile 390×844, tiếng Việt/Anh. QA bao gồm populated/empty session, validation
 error, permission-filtered menu, no-Mail state, keyboard focus, console error và
 horizontal overflow. Không có console error hoặc viewport overflow.
-
-Ảnh kiểm tra:
-
-- `docs/screenshots/user/users-desktop-en.jpg`;
-- `docs/screenshots/user/user-detail-desktop-vi.jpg`;
-- `docs/screenshots/user/role-permissions-desktop-en.jpg`;
-- `docs/screenshots/user/profile-mobile-vi.jpg`;
-- `docs/screenshots/user/invitation-mobile-vi.jpg`.
 
 ## Kiểm thử theo phạm vi
 

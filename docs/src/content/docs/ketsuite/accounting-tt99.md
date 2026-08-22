@@ -1,3 +1,8 @@
+---
+title: Vietnam accounting defaults under Circular 99
+description: KetSuite's mandatory Vietnam TT99 chart, taxes, journals, and installation behavior.
+---
+
 # Vietnam accounting defaults under Circular 99
 
 KetSuite ships Vietnam accounting defaults inside the `account` module. There is no
@@ -73,5 +78,4 @@ accounts, 4.534 ms p95 for a warm account-list read, and 14.8 companies/second
 while initializing eight companies concurrently. Setup is deliberately lazy and
 runs once per company; normal accounting requests use the warm path.
 
-Browser evidence for the Vietnamese and English desktop/mobile layouts is stored
-under `docs/screenshots/accounting/`.
+Browser acceptance covers the Vietnamese and English desktop/mobile layouts.
