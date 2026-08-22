@@ -164,7 +164,16 @@ export type {
   GroupOrder,
   GroupRow,
 } from './data/query.ts'
-export { dateBucket, isTimezone, assertTimezone, localDateTimeToUtc, localDayRange } from './data/time.ts'
+export {
+  dateBucket,
+  isTimezone,
+  assertTimezone,
+  localDateTimeToUtc,
+  localDayRange,
+  GROUP_INTERVALS,
+  isGroupInterval,
+  assertGroupInterval,
+} from './data/time.ts'
 export type { GroupInterval } from './data/time.ts'
 export {
   eq,

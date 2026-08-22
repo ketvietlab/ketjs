@@ -379,7 +379,15 @@
       "get": {
         "operationId": "customer.hospitality.properties.list",
         "summary": "List the properties published by the resolved customer site.",
-        "security": [],
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -403,14 +411,22 @@
           "key": "website_hospitality.properties",
           "action": "read"
         },
-        "x-ket-auth": "public",
+        "x-ket-auth": "optional-customer",
         "x-ket-idempotent": false
       }
     },
     "/hospitality/properties/{slug}": {
       "get": {
         "operationId": "customer.hospitality.properties.get",
-        "security": [],
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
         "parameters": [
           {
             "name": "slug",
@@ -444,14 +460,22 @@
           "key": "website_hospitality.properties",
           "action": "read"
         },
-        "x-ket-auth": "public",
+        "x-ket-auth": "optional-customer",
         "x-ket-idempotent": false
       }
     },
     "/hospitality/properties/{id}/room-types": {
       "get": {
         "operationId": "customer.hospitality.room_types.list",
-        "security": [],
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -475,14 +499,22 @@
           "key": "website_hospitality.room_types",
           "action": "read"
         },
-        "x-ket-auth": "public",
+        "x-ket-auth": "optional-customer",
         "x-ket-idempotent": false
       }
     },
     "/hospitality/availability/search": {
       "post": {
         "operationId": "customer.hospitality.availability.search",
-        "security": [],
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -516,7 +548,7 @@
           "key": "website_hospitality.availability",
           "action": "read"
         },
-        "x-ket-auth": "public",
+        "x-ket-auth": "optional-customer",
         "x-ket-idempotent": false
       }
     },

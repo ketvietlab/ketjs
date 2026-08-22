@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   and,
   asc,
+  bucketEq,
   callFn,
   changeset,
   compose,
@@ -70,6 +71,29 @@ test('query: grouping and aggregates render without interpolating values', () =>
   assert.match(sql.text, /SUM\(.*"priceCents"\) AS "total"/)
   assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC LIMIT \?/)
   assert.deepEqual(sql.params, [true, 10])
+})
+
+test('query: a group interval is a member of the closed set, not a string the caller supplies', () => {
+  // The Postgres dialect interpolates the interval into DATE_TRUNC('<interval>',…);
+  // the value reaches the builder straight from JSON (a listState an agent sends),
+  // so a string outside the set is SQL, not data. Both the builder entry point and
+  // the SQL boundary must refuse it, on both dialects.
+  const injection = "day', now()) , (SELECT 1"
+
+  const isIntervalError = (e: unknown) => (e as { code?: string }).code === 'E_GROUP_INTERVAL'
+  for (const build of [
+    () => from(P).groupBy({ col: P.priceCents!, interval: injection as never }),
+    () => from(P).where(bucketEq(P.priceCents!, injection as never, 'UTC', 'x')),
+  ]) {
+    assert.throws(build, isIntervalError, 'a bad interval is refused before any SQL is built')
+  }
+
+  // The builder refuses to hold a bad interval, so a frozen query can never carry
+  // one to toSQL; the toSQL guard is the second line if that ever changes. A
+  // legitimate interval still renders, and DATE_TRUNC only ever sees a keyword.
+  const good = from(P).groupBy({ col: P.priceCents!, interval: 'month', timezone: 'UTC' }).toSQL('postgres')
+  assert.match(good.text, /DATE_TRUNC\('month'/)
+  assert.ok(!good.text.includes('SELECT 1'), 'nothing from the caller reaches the SQL text')
 })
 
 test('query: date buckets use the viewer timezone and ISO Monday weeks', () => {
