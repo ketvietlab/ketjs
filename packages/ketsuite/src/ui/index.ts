@@ -23,6 +23,7 @@ export {
   tag,
   countBadge,
   avatar,
+  thumbnail,
   person,
   initials,
   actionButton,

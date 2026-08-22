@@ -409,7 +409,12 @@ const loadProductGroups = async (
   req: Parameters<Route>[1],
   state: ListState,
   timezone: string,
-  labels: { categories: Map<string, string>; units: Map<string, string> },
+  labels: {
+    categories: Map<string, string>
+    units: Map<string, string>
+    /** Names and thumbnails for a group's rows, batched the same way a page is. */
+    decorate: (rows: ProductListRow[]) => Promise<TemplateRow[]>
+  },
   path: unknown[] = [],
 ): Promise<TableGroup<TemplateRow>[]> => {
   const groups = (await ctx.call(
@@ -448,7 +453,7 @@ const loadProductGroups = async (
           : undefined
       const rows =
         open && path.length + 1 === state.groupBy.length
-          ? (
+          ? await labels.decorate(
               (await ctx.call(
                 'product.listTemplates',
                 {
@@ -461,8 +466,8 @@ const loadProductGroups = async (
                 },
                 url,
                 req,
-              )) as ProductListRow[]
-            ).map(templateRow)
+              )) as ProductListRow[],
+            )
           : undefined
       const pageKey = JSON.stringify(nextPath)
       const page = state.groupPages[pageKey] ?? 1
@@ -615,13 +620,12 @@ export const routes: Record<string, RouteEntry> = {
       const { count } = (await ctx.call('product.countTemplates', { state, timezone }, url, req)) as {
         count: number
       }
+      // The names are needed by every row, not only by a group header: a table
+      // that prints a category id where it means a category name is showing its
+      // own plumbing.
       const [categoryRows, unitRows] = (await Promise.all([
-        state.groupBy.some((group) => group.key === 'categoryId')
-          ? ctx.call('product.listCategories', {}, url, req)
-          : Promise.resolve([]),
-        state.groupBy.some((group) => group.key === 'uomId')
-          ? ctx.call('uom.listUnits', {}, url, req)
-          : Promise.resolve([]),
+        ctx.call('product.listCategories', {}, url, req),
+        ctx.call('uom.listUnits', {}, url, req),
       ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>]
       const categoryMap = new Map<string, string>()
       const collectCategories = (items: Array<Record<string, unknown>>) => {
@@ -631,10 +635,33 @@ export const routes: Record<string, RouteEntry> = {
         }
       }
       collectCategories(categoryRows)
+      const unitMap = new Map(unitRows.map((row) => [String(row.id), String(row.name)]))
+      /** One media call per batch of rows, whether that batch is a page or a group. */
+      const decorate = async (batch: ProductListRow[]): Promise<TemplateRow[]> => {
+        if (!batch.length) return []
+        const media = (await ctx.call(
+          'product_media.listPrimaryMedia',
+          { templateIds: batch.map((row) => row.id) },
+          url,
+          req,
+        )) as Array<Record<string, unknown>>
+        const images = new Map(media.map((row) => [String(row.templateId), String(row.attachmentId)]))
+        return batch.map((row) => {
+          const attachmentId = images.get(String(row.id))
+          return {
+            ...templateRow(row),
+            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
+            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
+          }
+        })
+      }
+      const decoratedRows = await decorate(rows)
       const groups = grouped
         ? await loadProductGroups(ctx, url, req, state, timezone, {
             categories: categoryMap,
-            units: new Map(unitRows.map((row) => [String(row.id), String(row.name)])),
+            units: unitMap,
+            decorate,
           })
         : undefined
 
@@ -644,7 +671,7 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) =>
           productsScreen(
             _,
-            rows.map(templateRow),
+            decoratedRows,
             view,
             {
               ...frame,
@@ -926,9 +953,10 @@ export const routes: Record<string, RouteEntry> = {
         categoryId?: string | null
         saleOk?: boolean
         purchaseOk?: boolean
+        active?: boolean
       } | null
       if (!row) return text('Product not found', { status: 404 })
-      const [mediaRows, variants, options, stockConfig] = await Promise.all([
+      const [mediaRows, variants, options, stockConfig, attributeLines] = await Promise.all([
         mediaFor(ctx, url, req, row.id),
         ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
           Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
@@ -937,6 +965,7 @@ export const routes: Record<string, RouteEntry> = {
         hasStock
           ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
           : Promise.resolve(null),
+        ctx.call('product.listAttributeLines', { templateId: row.id }, url, req),
       ])
       const body = productDetailScreen(
         _,
@@ -989,6 +1018,12 @@ export const routes: Record<string, RouteEntry> = {
         {
           ...options,
           variants,
+          attributeLines: attributeLines as Array<{
+            id: string
+            attributeId: string
+            attribute?: string | null
+            values: Array<{ id: string; name: string }>
+          }>,
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
           controls: {
@@ -1078,6 +1113,33 @@ export const routes: Record<string, RouteEntry> = {
       return (result as { ok?: boolean }).ok
         ? seeProduct(params.id, url)
         : seeOther(inLocale(url, `/admin/product/templates/${params.id}?invalid=1`))
+    },
+  '/admin/product/templates/{id}/archive':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      await ctx.call('product.archiveTemplate', { id: params.id, active: form.active === '1' }, url, req)
+      return seeProduct(params.id, url)
+    },
+  '/admin/product/templates/{id}/attribute-lines/{lineId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      // The line has to belong to the template in the path, or a POST could take
+      // an attribute off a product the reader never opened.
+      const lines = (await ctx.call(
+        'product.listAttributeLines',
+        { templateId: params.id },
+        url,
+        req,
+      )) as Array<{ id: string }>
+      if (!lines.some((line) => line.id === params.lineId))
+        return text('Attribute line not found', { status: 404 })
+      await ctx.call('product.removeAttributeLine', { id: params.lineId }, url, req)
+      return seeProduct(params.id, url)
     },
   '/admin/product/templates/{id}/variants/{variantId}':
     (ctx: ServeContext): Route =>
@@ -1220,7 +1282,10 @@ export const routes: Record<string, RouteEntry> = {
           images: mediaRows.map((image, index) => ({
             id: image.id,
             src: `/files/${image.attachmentId}`,
-            alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
+            alt:
+              image.alt ||
+              image.attachment?.name ||
+              String(current.name || current.defaultCode || current.id),
             primary: image.primary,
             actions: {
               primary: inLocale(
@@ -1282,7 +1347,7 @@ export const routes: Record<string, RouteEntry> = {
         return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
-        title: String(current.defaultCode || current.id),
+        title: String(current.name || current.defaultCode || current.id),
         body,
       })
     },

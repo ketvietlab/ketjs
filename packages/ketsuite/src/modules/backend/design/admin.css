@@ -730,6 +730,13 @@
     background: var(--admin-surface);
   }
 
+  /* The card's picture sits above its title and spans the card, so a grid of
+     cards is scanned by image first and by name second. */
+  [data-ui="kanban-media"] {
+    display: block;
+    margin: calc(var(--admin-gap-sm) * -1) calc(var(--admin-gap-sm) * -1) 0;
+  }
+
   [data-ui="kanban-title"] {
     margin: 0;
     color: var(--admin-ink);
@@ -1303,6 +1310,46 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     line-height: 1;
+  }
+
+  /* A record's picture at list size. The empty state is the same box with the
+     same border, so a column of thumbnails reads as one column whether or not
+     every row has an image. */
+  [data-ui="thumbnail"] {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="thumbnail"] img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  [data-ui="thumbnail"] [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  /* A card is scanned from across the screen, so its picture takes the card's
+     width rather than a cell's height. */
+  [data-ui="thumbnail"][data-size="card"] {
+    inline-size: 100%;
+    block-size: 6rem;
+  }
+  [data-ui="thumbnail"][data-size="card"] [data-ui="icon"] {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+  /* The column is only as wide as the picture; the name beside it takes the rest. */
+  [data-ui="table"] :is(th, td)[data-kind="media"] {
+    inline-size: 2rem;
+    padding-inline-end: 0;
   }
 
   /* ── Settings token list ──────────────────────────────────────────────── */

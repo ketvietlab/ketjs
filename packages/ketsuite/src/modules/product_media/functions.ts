@@ -53,6 +53,40 @@ export const functions: Record<string, FnSpec> = {
     handler: rowsFor,
   }),
 
+  /**
+   * The primary image of many targets at once.
+   *
+   * A catalogue page shows a thumbnail per row, and asking `listMedia` per row
+   * would be one query per product plus every non-primary image none of them
+   * needs. Targets are named as ids, and only the primary of each comes back.
+   */
+  listPrimaryMedia: defineFn({
+    input: { templateIds: 'json?', productIds: 'json?' },
+    output: { id: 'id', attachmentId: 'id', templateId: 'id?', productId: 'id?', alt: 'text?' },
+    effects: ['read:product_media.Media'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const templateIds = new Set((Array.isArray(args.templateIds) ? args.templateIds : []).map(String))
+      const productIds = new Set((Array.isArray(args.productIds) ? args.productIds : []).map(String))
+      if (!templateIds.size && !productIds.size) return []
+      const M = ctx.table('product_media.Media')
+      const rows = await ctx.db.all(from(M).where(eq(M.primary, true)).orderBy(asc(M.sequence), asc(M.id)))
+      return rows
+        .filter(
+          (row) =>
+            (row.templateId != null && templateIds.has(String(row.templateId))) ||
+            (row.productId != null && productIds.has(String(row.productId))),
+        )
+        .map((row) => ({
+          id: row.id,
+          attachmentId: row.attachmentId,
+          templateId: row.templateId,
+          productId: row.productId,
+          alt: row.alt,
+        }))
+    },
+  }),
+
   attachMedia: defineFn({
     input: {
       id: 'id',

@@ -18,6 +18,7 @@ export const HOOKS = [
   'person',
   'person-name',
   'avatar',
+  'thumbnail',
   'app-action',
   'qr-code',
 ] as const
@@ -111,6 +112,31 @@ export const initials = (name: string): string => {
 export const avatar = (name: string): TemplateResult => (
   <span data-ui="avatar" title={name} aria-hidden="true">
     {initials(name)}
+  </span>
+)
+
+/**
+ * A record's picture at list size, with a placeholder when it has none.
+ *
+ * The placeholder is not decoration: it holds the column's width so rows keep
+ * their rhythm whether or not a picture exists, and it is the same shape as the
+ * image so the eye scans one column rather than two. The image is decorative in
+ * a row that already names the record, so the alt text stays empty unless the
+ * caller has something to add that the row does not already say.
+ */
+export const thumbnail = (options: {
+  src?: string | null
+  alt?: string
+  fallback?: JSXChild
+  /** `row` for a list cell, `card` for the wider crop a kanban card carries. */
+  size?: 'row' | 'card'
+}): TemplateResult => (
+  <span data-ui="thumbnail" data-size={options.size ?? 'row'} data-empty={String(!options.src)}>
+    {options.src ? (
+      <img src={options.src} alt={options.alt ?? ''} loading="lazy" decoding="async" />
+    ) : (
+      (options.fallback ?? '')
+    )}
   </span>
 )
 

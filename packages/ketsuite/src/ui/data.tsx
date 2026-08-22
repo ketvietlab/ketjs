@@ -7,6 +7,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 export const HOOKS = [
   'kanban',
   'kanban-card',
+  'kanban-media',
   'kanban-title',
   'kanban-meta',
   'kanban-note',
@@ -23,11 +24,14 @@ export const kanbanCard = (o: {
   key: string
   title: string
   href?: string | null
+  /** A picture of the record, above its title. Cards are scanned by eye first. */
+  media?: JSXChild
   meta?: JSXChild
   note?: string | null
   actions?: JSXChild
 }): TemplateResult => (
   <article data-ui="kanban-card" data-key={o.key} data-interactive={String(!!o.href)}>
+    {o.media !== undefined && <div data-ui="kanban-media">{o.media}</div>}
     <h3 data-ui="kanban-title">{o.href ? <a href={o.href}>{o.title}</a> : o.title}</h3>
     {o.meta !== undefined && <div data-ui="kanban-meta">{o.meta}</div>}
     {!!o.note && <p data-ui="kanban-note">{o.note}</p>}

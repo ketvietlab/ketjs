@@ -130,6 +130,65 @@ const companyKey = (company: string, ...parts: unknown[]): string =>
 
 const uomRoot = (row: Row): string => String(row.parentPath).split('/').filter(Boolean)[0] ?? ''
 
+/**
+ * What a variant is called, spelled out from the values that define it.
+ *
+ * `product.Product` has no name of its own — a variant *is* its combination, and
+ * storing a copy of that would be a second source of truth to keep in step. So
+ * the name is derived: "Đỏ · L" for a variant of colour and size. Callers that
+ * only need one variant still pay one pass, which is why the whole set is
+ * resolved at once rather than per row.
+ */
+const describeVariants = async (ctx: Ctx, products: Row[]): Promise<Row[]> => {
+  if (!products.length) return products
+  const wanted = new Set(products.map((product) => String(product.id)))
+  const links = (await ctx.db.select('product.ProductValue')).filter((link) =>
+    wanted.has(String(link.productId)),
+  )
+  if (!links.length) return products.map((product) => ({ ...product, values: [], name: null }))
+  const templateValues = new Map(
+    (await ctx.db.select('product.TemplateAttributeValue')).map((row) => [String(row.id), row]),
+  )
+  const attributeValues = new Map(
+    (await ctx.db.select('product.AttributeValue')).map((row) => [String(row.id), row]),
+  )
+  const lines = new Map(
+    (await ctx.db.select('product.TemplateAttributeLine')).map((row) => [String(row.id), row]),
+  )
+  const attributes = new Map((await ctx.db.select('product.Attribute')).map((row) => [String(row.id), row]))
+  const byProduct = new Map<string, Row[]>()
+  for (const link of links) {
+    const templateValue = templateValues.get(String(link.templateAttributeValueId))
+    const value = templateValue ? attributeValues.get(String(templateValue.valueId)) : undefined
+    if (!value) continue
+    const line = templateValue ? lines.get(String(templateValue.lineId)) : undefined
+    const attribute = line ? attributes.get(String(line.attributeId)) : undefined
+    const held = byProduct.get(String(link.productId)) ?? []
+    held.push({
+      valueId: String(value.id),
+      value: String(value.name),
+      attributeId: attribute ? String(attribute.id) : null,
+      attribute: attribute ? String(attribute.name) : null,
+      sequence: Number(attribute?.sequence ?? 10),
+      valueSequence: Number(value.sequence ?? 10),
+    })
+    byProduct.set(String(link.productId), held)
+  }
+  return products.map((product) => {
+    const values = (byProduct.get(String(product.id)) ?? []).sort(
+      (a, b) =>
+        Number(a.sequence) - Number(b.sequence) ||
+        Number(a.valueSequence) - Number(b.valueSequence) ||
+        String(a.value).localeCompare(String(b.value)),
+    )
+    return {
+      ...product,
+      values,
+      name: values.length ? values.map((entry) => String(entry.value)).join(' · ') : null,
+    }
+  })
+}
+
 type FieldErrors = { ok: false; errors: Array<{ field: string; message: string }> }
 type UomTarget = { ok: true; company: string; id: string; existing: Row | undefined }
 
@@ -224,18 +283,36 @@ const dropProductUoms = async (
 export const functions: Record<string, FnSpec> = {
   listVariants: defineFn({
     input: { templateId: 'id' },
-    effects: ['read:product.Product'],
+    effects: [
+      'read:product.Product',
+      'read:product.ProductValue',
+      'read:product.TemplateAttributeValue',
+      'read:product.TemplateAttributeLine',
+      'read:product.AttributeValue',
+      'read:product.Attribute',
+    ],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('product.Product', { templateId: args.templateId }),
+    handler: async (ctx, args) =>
+      describeVariants(ctx, await ctx.db.select('product.Product', { templateId: args.templateId })),
   }),
 
   getVariant: defineFn({
     input: { id: 'id' },
-    effects: ['read:product.Product', 'read:product.Cost', 'read:product.ProductUom'],
+    effects: [
+      'read:product.Product',
+      'read:product.Cost',
+      'read:product.ProductUom',
+      'read:product.ProductValue',
+      'read:product.TemplateAttributeValue',
+      'read:product.TemplateAttributeLine',
+      'read:product.AttributeValue',
+      'read:product.Attribute',
+    ],
     agent: true,
     handler: async (ctx, args) => {
-      const product = (await ctx.db.select('product.Product', { id: args.id }))[0]
-      if (!product) return null
+      const found = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      if (!found) return null
+      const product = (await describeVariants(ctx, [found]))[0]!
       // Cost and ProductUom are company-scoped, and a read spans every readable
       // company — so both are narrowed to the active one. Otherwise the variant
       // screen shows a sibling company's cost and unit, and saving the form
@@ -557,6 +634,95 @@ export const functions: Record<string, FnSpec> = {
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * The attribute lines of a template, each with the values it allows.
+   *
+   * `getTemplate` preloads the lines but not what is on them, and a line without
+   * its values says nothing a reader can act on — "Màu sắc" is not an answer to
+   * "which colours does this product come in".
+   */
+  listAttributeLines: defineFn({
+    input: { templateId: 'id' },
+    output: { id: 'id', templateId: 'id', attributeId: 'id', attribute: 'text?', values: 'json?' },
+    effects: [
+      'read:product.TemplateAttributeLine',
+      'read:product.TemplateAttributeValue',
+      'read:product.AttributeValue',
+      'read:product.Attribute',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const lines = await ctx.db.select('product.TemplateAttributeLine', { templateId: args.templateId })
+      if (!lines.length) return []
+      const attributes = new Map(
+        (await ctx.db.select('product.Attribute')).map((row) => [String(row.id), row]),
+      )
+      const values = new Map(
+        (await ctx.db.select('product.AttributeValue')).map((row) => [String(row.id), row]),
+      )
+      const templateValues = await ctx.db.select('product.TemplateAttributeValue')
+      const byLine = new Map<string, Row[]>()
+      for (const templateValue of templateValues) {
+        const value = values.get(String(templateValue.valueId))
+        if (!value) continue
+        const held = byLine.get(String(templateValue.lineId)) ?? []
+        held.push({ id: String(value.id), name: String(value.name), sequence: Number(value.sequence ?? 10) })
+        byLine.set(String(templateValue.lineId), held)
+      }
+      return lines
+        .map((line) => {
+          const attribute = attributes.get(String(line.attributeId))
+          return {
+            id: String(line.id),
+            templateId: String(line.templateId),
+            attributeId: String(line.attributeId),
+            attribute: attribute ? String(attribute.name) : null,
+            sequence: Number(attribute?.sequence ?? 10),
+            values: (byLine.get(String(line.id)) ?? []).sort(
+              (a, b) =>
+                Number(a.sequence) - Number(b.sequence) || String(a.name).localeCompare(String(b.name)),
+            ),
+          }
+        })
+        .sort(
+          (a, b) =>
+            a.sequence - b.sequence || String(a.attribute ?? '').localeCompare(String(b.attribute ?? '')),
+        )
+    },
+  }),
+
+  /**
+   * Take an attribute off a template, with the values it carried.
+   *
+   * Variants already generated from it are left alone: they are real records
+   * that may be on documents. Regenerating is what prunes them, and that is a
+   * decision the reader makes rather than a side effect of this one.
+   */
+  removeAttributeLine: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?' },
+    effects: [
+      'read:product.TemplateAttributeLine',
+      'read:product.TemplateAttributeValue',
+      'write:product.TemplateAttributeLine',
+      'write:product.TemplateAttributeValue',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const line = (await ctx.db.select('product.TemplateAttributeLine', { id: args.id }))[0]
+      if (!line) return { ok: true }
+      await ctx.tx(async (tx) => {
+        const TAV = tx.table('product.TemplateAttributeValue')
+        for (const value of await tx.db.select('product.TemplateAttributeValue', { lineId: args.id }))
+          await tx.db.del(deleteFrom(TAV).where(eq(TAV.id, value.id)))
+        const TAL = tx.table('product.TemplateAttributeLine')
+        await tx.db.del(deleteFrom(TAL).where(eq(TAL.id, args.id)))
+      })
+      return { ok: true, id: String(args.id) }
     },
   }),
 
