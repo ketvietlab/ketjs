@@ -1,6 +1,7 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { convertQty, type Unit } from '../uom/convert.ts'
+import { company, ours } from './scope.ts'
 
 export const RULE_ACTIONS = ['pull', 'push', 'pull_push'] as const
 export const PROCUREMENT_METHODS = ['make_to_stock', 'make_to_order', 'mts_else_mto'] as const
@@ -17,13 +18,9 @@ const invalid = (field: string, message: string): { ok: false; errors: object[] 
  * alone is the same string in every tenant. insertIfAbsent then turns the second
  * company's write into a no-op and reports it as a success.
  */
-const company = (ctx: Ctx): string => {
-  if (!ctx.scope.company) throw new Error('stock routing requires a company in scope')
-  return ctx.scope.company
-}
 
 async function orderedRouteIds(ctx: Ctx, ids: string[]): Promise<string[]> {
-  const routes = new Map((await ctx.db.select('stock.Route')).map((route) => [String(route.id), route]))
+  const routes = new Map((await ours(ctx, 'stock.Route')).map((route) => [String(route.id), route]))
   return [...new Set(ids)].sort(
     (a, b) =>
       Number(routes.get(a)?.sequence ?? 10) - Number(routes.get(b)?.sequence ?? 10) || a.localeCompare(b),
@@ -32,7 +29,7 @@ async function orderedRouteIds(ctx: Ctx, ids: string[]): Promise<string[]> {
 
 async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unknown): Promise<string[]> {
   if (explicit) return [String(explicit)]
-  const productRoutes = await ctx.db.select('stock.ProductRoute', { productId: product.id })
+  const productRoutes = await ours(ctx, 'stock.ProductRoute', { productId: product.id })
   if (productRoutes.length)
     return orderedRouteIds(
       ctx,
@@ -43,7 +40,7 @@ async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unkno
   const seenCategories = new Set<string>()
   while (categoryId && !seenCategories.has(categoryId)) {
     seenCategories.add(categoryId)
-    const categoryRoutes = await ctx.db.select('stock.CategoryRoute', { categoryId })
+    const categoryRoutes = await ours(ctx, 'stock.CategoryRoute', { categoryId })
     if (categoryRoutes.length)
       return orderedRouteIds(
         ctx,
@@ -53,7 +50,7 @@ async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unkno
     categoryId = category?.parentId == null ? null : String(category.parentId)
   }
   if (location.warehouseId) {
-    const warehouseRoutes = await ctx.db.select('stock.WarehouseRoute', {
+    const warehouseRoutes = await ours(ctx, 'stock.WarehouseRoute', {
       warehouseId: location.warehouseId,
     })
     if (warehouseRoutes.length)
@@ -69,14 +66,14 @@ async function routesFor(ctx: Ctx, product: Row, location: Row, explicit?: unkno
 export async function pushFromCompletedMove(ctx: Ctx, move: Row, quantity: number): Promise<string[]> {
   if (!(quantity > 0)) return []
   const product = (await ctx.db.select('product.Product', { id: move.productId }))[0]
-  const source = (await ctx.db.select('stock.Location', { id: move.locationDestId }))[0]
+  const source = (await ours(ctx, 'stock.Location', { id: move.locationDestId }))[0]
   if (!product || !source) return []
   const routeIds = await routesFor(ctx, product, source)
   const routeRank = new Map(routeIds.map((routeId, index) => [routeId, index]))
   const candidates: Row[] = []
   for (const routeId of routeIds)
     candidates.push(
-      ...(await ctx.db.select('stock.Rule', {
+      ...(await ours(ctx, 'stock.Rule', {
         routeId,
         locationSrcId: move.locationDestId,
         active: true,
@@ -91,10 +88,10 @@ export async function pushFromCompletedMove(ctx: Ctx, move: Row, quantity: numbe
         String(a.id).localeCompare(String(b.id)),
     )
   const ids: string[] = []
-  const links = await ctx.db.select('stock.MoveLink', { originMoveId: move.id })
+  const links = await ours(ctx, 'stock.MoveLink', { originMoveId: move.id })
   const linkedRules = new Set<string>()
   for (const link of links) {
-    const destination = (await ctx.db.select('stock.Move', { id: link.destinationMoveId }))[0]
+    const destination = (await ours(ctx, 'stock.Move', { id: link.destinationMoveId }))[0]
     if (destination?.ruleId) linkedRules.add(String(destination.ruleId))
   }
   for (const rule of rules) {
@@ -127,7 +124,7 @@ export async function pushFromCompletedMove(ctx: Ctx, move: Row, quantity: numbe
 }
 
 async function available(ctx: Ctx, productId: unknown, locationId: unknown): Promise<number> {
-  const quants = await ctx.db.select('stock.Quant', { productId, locationId })
+  const quants = await ours(ctx, 'stock.Quant', { productId, locationId })
   return quants.reduce((sum, quant) => sum + Number(quant.quantity) - Number(quant.reservedQuantity), 0)
 }
 
@@ -145,7 +142,7 @@ async function procure(
 ): Promise<{ ok: true; moveIds: string[]; method: string } | { ok: false; errors: object[] }> {
   const product = (await ctx.db.select('product.Product', { id: args.productId }))[0]
   if (!product) return invalid('productId', 'biến thể không tồn tại')
-  const destination = (await ctx.db.select('stock.Location', { id: args.locationId }))[0]
+  const destination = (await ours(ctx, 'stock.Location', { id: args.locationId }))[0]
   if (!destination) return invalid('locationId', 'location đích không tồn tại')
   const routeIds = await routesFor(ctx, product, destination, args.routeId)
   if (!routeIds.length) return invalid('routeId', 'không tìm thấy route cho sản phẩm và location')
@@ -154,7 +151,7 @@ async function procure(
     const candidates: Row[] = []
     for (const routeId of routeIds)
       candidates.push(
-        ...(await ctx.db.select('stock.Rule', { routeId, locationDestId: locationId, active: true })),
+        ...(await ours(ctx, 'stock.Rule', { routeId, locationDestId: locationId, active: true })),
       )
     return (
       candidates
@@ -236,14 +233,14 @@ export const routingFunctions: Record<string, FnSpec> = {
     input: {},
     effects: ['read:stock.Route'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.Route', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.Route', { active: true }),
   }),
   listRules: defineFn({
     input: { routeId: 'id?' },
     effects: ['read:stock.Rule'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('stock.Rule', {
+      ours(ctx, 'stock.Rule', {
         active: true,
         ...(args.routeId ? { routeId: args.routeId } : {}),
       }),
@@ -252,7 +249,7 @@ export const routingFunctions: Record<string, FnSpec> = {
     input: {},
     effects: ['read:stock.Orderpoint'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.Orderpoint', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.Orderpoint', { active: true }),
   }),
   saveRoute: defineFn({
     input: { id: 'id', name: 'text', sequence: 'int?' },
@@ -261,7 +258,7 @@ export const routingFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = (await ctx.db.select('stock.Route', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Route', { id: args.id }))[0]
       const values = { ...args, sequence: args.sequence ?? 10, active: true }
       const cs = ctx
         .change('stock.Route', values, existing ?? null)
@@ -294,9 +291,9 @@ export const routingFunctions: Record<string, FnSpec> = {
       const procureMethod = args.procureMethod ?? 'make_to_stock'
       if (!PROCUREMENT_METHODS.includes(procureMethod as never))
         return invalid('procureMethod', `phải là: ${PROCUREMENT_METHODS.join(', ')}`)
-      if (!(await ctx.db.select('stock.Route', { id: args.routeId }))[0])
+      if (!(await ours(ctx, 'stock.Route', { id: args.routeId }))[0])
         return invalid('routeId', 'route không tồn tại')
-      const existing = (await ctx.db.select('stock.Rule', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Rule', { id: args.id }))[0]
       const values = { ...args, procureMethod, sequence: args.sequence ?? 20, active: true }
       const cs = ctx
         .change('stock.Rule', values, existing ?? null)
@@ -434,9 +431,9 @@ export const routingFunctions: Record<string, FnSpec> = {
         return invalid('maxQuantity', 'phải lớn hơn hoặc bằng minQuantity')
       const trigger = String(args.trigger ?? 'auto')
       if (!['auto', 'manual'].includes(trigger)) return invalid('trigger', 'phải là auto hoặc manual')
-      if (!(await ctx.db.select('stock.Warehouse', { id: args.warehouseId }))[0])
+      if (!(await ours(ctx, 'stock.Warehouse', { id: args.warehouseId }))[0])
         return invalid('warehouseId', 'warehouse không tồn tại')
-      const location = (await ctx.db.select('stock.Location', { id: args.locationId }))[0]
+      const location = (await ours(ctx, 'stock.Location', { id: args.locationId }))[0]
       if (!location || location.warehouseId !== args.warehouseId)
         return invalid('locationId', 'location không thuộc warehouse')
       const product = (await ctx.db.select('product.Product', { id: args.productId }))[0]
@@ -450,7 +447,7 @@ export const routingFunctions: Record<string, FnSpec> = {
       const root = (unit: Row) => String(unit.parentPath).split('/').filter(Boolean)[0]
       if (!baseUom || !replenishmentUom || root(baseUom) !== root(replenishmentUom))
         return invalid('replenishmentUomId', 'đơn vị bổ sung phải cùng cây với UoM mặc định')
-      const existing = (await ctx.db.select('stock.Orderpoint', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Orderpoint', { id: args.id }))[0]
       const values = { ...args, trigger, replenishmentUomId, active: true }
       const cs = ctx
         .change('stock.Orderpoint', values, existing ?? null)
@@ -495,14 +492,14 @@ export const routingFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const point = (await ctx.db.select('stock.Orderpoint', { id: args.id }))[0]
+      const point = (await ours(ctx, 'stock.Orderpoint', { id: args.id }))[0]
       if (!point) return invalid('id', 'orderpoint không tồn tại')
-      const quants = await ctx.db.select('stock.Quant', {
+      const quants = await ours(ctx, 'stock.Quant', {
         productId: point.productId,
         locationId: point.locationId,
       })
       const onHand = quants.reduce((sum, quant) => sum + Number(quant.quantity), 0)
-      const moves = (await ctx.db.select('stock.Move', { productId: point.productId })).filter(
+      const moves = (await ours(ctx, 'stock.Move', { productId: point.productId })).filter(
         (move) => !['done', 'cancel', 'draft'].includes(String(move.state)),
       )
       const incoming = moves
@@ -553,7 +550,7 @@ routingFunctions.runOrderpoints = defineFn({
   effects: routingFunctions.runOrderpoint!.effects,
   agent: true,
   handler: async (ctx, args) => {
-    const points = (await ctx.db.select('stock.Orderpoint', { active: true })).filter(
+    const points = (await ours(ctx, 'stock.Orderpoint', { active: true })).filter(
       (point) => point.trigger === 'auto' && (!args.warehouseId || point.warehouseId === args.warehouseId),
     )
     const results: Row[] = []
