@@ -82,8 +82,14 @@ const castValue = (
       if (v === 'true' || v === 'false') return { ok: true, value: v === 'true' }
       return { ok: false, message: `expected a boolean, got ${JSON.stringify(v)}` }
     case 'datetime':
+      // Always ISO-8601 UTC, whatever offset it arrived in. Postgres normalises a
+      // TIMESTAMPTZ on the way in whether or not we ask, so storing "+07:00"
+      // verbatim would put a different string in SQLite than in Postgres for the
+      // same instant. It also makes the text sort chronologically, which is what
+      // a range query on SQLite compares.
       if (v instanceof Date) return { ok: true, value: v.toISOString() }
-      if (typeof v === 'string' && !Number.isNaN(Date.parse(v))) return { ok: true, value: v }
+      if (typeof v === 'string' && !Number.isNaN(Date.parse(v)))
+        return { ok: true, value: new Date(v).toISOString() }
       return { ok: false, message: `expected a date, got ${JSON.stringify(v)}` }
     case 'date':
       return isDateText(v)
