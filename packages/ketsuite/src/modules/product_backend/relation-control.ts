@@ -129,3 +129,77 @@ export const attributeValuesControl = (
       fields: [{ name: 'name', label: _('product_backend.attributes.valueName'), required: true }],
     },
   })
+
+/**
+ * A product template, chosen by searching the catalogue.
+ *
+ * `product.listTemplates` already takes `search` and `limit`, so the picker
+ * reaches a catalogue of any size without the form rendering all of it.
+ */
+export const templateRelationControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: {
+    id: string
+    name: string
+    label: string
+    value?: string | null
+    templates: RelationOption[]
+    required?: boolean
+    allowEmpty?: boolean
+  },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: options.name,
+    ariaLabel: options.label,
+    value: options.value,
+    required: options.required,
+    options: [...(options.allowEmpty ? [{ value: '', label: '—' }] : []), ...options.templates],
+    labels: relationLabels(_, _('product_backend.relation.templates')),
+    manager: {
+      listFunction: 'product.listTemplates',
+      // No create action: a template needs a type, a unit and a category, and the
+      // create screen asks for all of them.
+    },
+  })
+
+/**
+ * One sellable variant, searched across the whole catalogue.
+ *
+ * An order line names a variant rather than a template, and the forms were
+ * flat-mapping every variant of every template into a `<select>`. The dialog
+ * shows the template's name as each row's description, because "Xanh nghiệp vụ"
+ * on its own does not say which product it belongs to.
+ */
+export const variantRelationControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: {
+    id: string
+    name: string
+    label: string
+    value?: string | null
+    variants: RelationOption[]
+    templateId?: string | null
+    required?: boolean
+    allowEmpty?: boolean
+  },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: options.name,
+    ariaLabel: options.label,
+    value: options.value,
+    required: options.required,
+    options: [...(options.allowEmpty ? [{ value: '', label: '—' }] : []), ...options.variants],
+    labels: relationLabels(_, _('product_backend.relation.variants')),
+    manager: {
+      listFunction: 'product.listVariants',
+      ...(options.templateId ? { listInput: { templateId: options.templateId } } : {}),
+      labelField: 'name',
+      descriptionField: 'templateName',
+    },
+  })

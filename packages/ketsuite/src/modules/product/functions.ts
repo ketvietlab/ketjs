@@ -281,10 +281,20 @@ const dropProductUoms = async (
 }
 
 export const functions: Record<string, FnSpec> = {
+  /**
+   * The variants of one template, or of the whole catalogue.
+   *
+   * `templateId` became optional so a relation picker on a sale or purchase line
+   * can search every variant at once — that field holds a variant, not a template,
+   * and the forms were flat-mapping the entire catalogue into a `<select>`.
+   * `search` matches the derived name, the internal reference and the barcode,
+   * which are the three things a person has in front of them.
+   */
   listVariants: defineFn({
-    input: { templateId: 'id' },
+    input: { templateId: 'id?', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
     effects: [
       'read:product.Product',
+      'read:product.Template',
       'read:product.ProductValue',
       'read:product.TemplateAttributeValue',
       'read:product.TemplateAttributeLine',
@@ -292,8 +302,25 @@ export const functions: Record<string, FnSpec> = {
       'read:product.Attribute',
     ],
     agent: true,
-    handler: async (ctx, args) =>
-      describeVariants(ctx, await ctx.db.select('product.Product', { templateId: args.templateId })),
+    handler: async (ctx, args) => {
+      const rows = await ctx.db.select(
+        'product.Product',
+        args.templateId == null ? {} : { templateId: args.templateId },
+      )
+      const live = args.includeArchived === true ? rows : rows.filter((row) => row.active !== false)
+      const described = await describeVariants(ctx, live)
+      // The template's name is what makes a variant recognisable in a list that
+      // spans the catalogue: "Xanh nghiệp vụ" alone says nothing about which
+      // product it belongs to.
+      const templates = new Map(
+        (await ctx.db.select('product.Template')).map((row) => [String(row.id), String(row.name)]),
+      )
+      const labelled = described.map((variant) => ({
+        ...variant,
+        templateName: templates.get(String(variant.templateId)) ?? null,
+      }))
+      return narrow(labelled, args, ['name', 'templateName', 'defaultCode', 'barcode'])
+    },
   }),
 
   getVariant: defineFn({
