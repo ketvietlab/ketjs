@@ -164,7 +164,10 @@ Changesets derive casts from the manifest:
 
 - `int` and `float` accept finite numeric strings when conversion is unambiguous.
 - `decimal` accepts finite numbers or plain decimal strings and normalizes exponent notation for
-  storage.
+  storage. It always reads back as the exact string the column holds, so `12.50` stays `12.50` and a
+  value past the range of a JS number keeps every digit. Coerce where you compute — `Number(row.total)`
+  — and write the result back as a number if that is easier; the write renders it. Reading never
+  rounds, which is what makes `{ ...row, note }` safe on a table that holds money.
 - `bool` accepts booleans, `0`/`1`, and the strings `"false"`/`"true"`.
 - `date` requires a valid `YYYY-MM-DD` calendar date.
 - `datetime` accepts a `Date` or a parseable date-time string.
