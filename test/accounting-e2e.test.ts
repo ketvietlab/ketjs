@@ -524,6 +524,64 @@ test('e2e accounting: a payment term shows the milestones that define it, and th
   assert.equal(Number((after.lines as Row[])[0]!.nbDays), 45)
 })
 
+test('e2e accounting: a figure on a report opens the rows that produced it', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const idOf = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-drill',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+    ),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '1000000',
+  })
+  await call('account.postMove', { id: 'invoice-drill' })
+  await call('account.registerPayment', {
+    id: 'payment-drill',
+    name: 'PAY/1',
+    paymentType: 'inbound',
+    partnerType: 'customer',
+    partnerId: 'customer',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'bank')?.id,
+    ),
+    destinationAccountId: idOf('1311'),
+    amount: '400000',
+  })
+
+  // A total nobody can open is a number to trust blindly. The balance carries its
+  // own date window into the ledger.
+  const trial = await (
+    await e2e.client.get('/admin/accounting/trial-balance?lang=vi&dateFrom=2026-01-01', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(
+    trial,
+    new RegExp(`href="/admin/accounting/general-ledger\\?accountId=${encodeURIComponent(idOf('1311'))}`),
+  )
+  assert.match(trial, /dateFrom=2026-01-01/)
+
+  // A payment reaches the journal entry it wrote.
+  const payments = await (
+    await e2e.client.get('/admin/accounting/payments?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(payments, /href="\/admin\/accounting\/entries\/payment-drill%3Amove/)
+
+  // So does a line on the partner ledger.
+  const ledger = await (
+    await e2e.client.get('/admin/accounting/partner-statement?lang=vi&partnerId=customer', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(ledger, /href="\/admin\/accounting\/entries\/invoice-drill/)
+})
+
 test('e2e accounting: an invoice form no longer asks which accounts to post to', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })

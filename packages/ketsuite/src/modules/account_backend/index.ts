@@ -31,14 +31,7 @@ import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
-import {
-  adminPage,
-  choices,
-  localeQuery,
-  optional,
-  printGroup,
-  selectionLabel,
-} from '../backend/screen.ts'
+import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -1438,6 +1431,8 @@ export default defineModule({
               action: `/admin/accounting/payments${localeQuery(url)}`,
               rows,
               openItems: openItems.length,
+              entryHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               errors: rejected?.messages,
               fields: restore(
                 [
@@ -1540,6 +1535,17 @@ export default defineModule({
               action: `/admin/accounting/trial-balance${localeQuery(url)}`,
               rows,
               currency,
+              // The balance carries its own date window into the ledger, so the
+              // rows opened are the ones that produced the number.
+              ledgerHref: (row) => {
+                const target = new URL('/admin/accounting/general-ledger', url)
+                target.searchParams.set('accountId', String(row.accountId))
+                if (dateFrom) target.searchParams.set('dateFrom', dateFrom)
+                if (dateTo) target.searchParams.set('dateTo', dateTo)
+                const lang = url.searchParams.get('lang')
+                if (lang) target.searchParams.set('lang', lang)
+                return `${target.pathname}${target.search}`
+              },
               fields: [
                 { name: 'dateFrom', label: _('account_backend.field.dateFrom'), value: dateFrom },
                 { name: 'dateTo', label: _('account_backend.field.dateTo'), value: dateTo },
@@ -1631,6 +1637,8 @@ export default defineModule({
               rows,
               currency,
               selected: Boolean(partnerId),
+              entryHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               fields: [
                 {
                   name: 'partnerId',

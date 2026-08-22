@@ -6,6 +6,7 @@ import {
   formatMoney,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -25,6 +26,8 @@ export const partnerLedgerScreen = (
     action: string
     currency: unknown
     selected: boolean
+    /** The document behind a balance, so a partner's ledger is not a dead end. */
+    entryHref?: (row: Row) => string
   },
 ): TemplateResult => {
   const total = (field: 'debit' | 'credit' | 'amountResidual') =>
@@ -43,7 +46,14 @@ export const partnerLedgerScreen = (
         {
           key: 'entry',
           label: _('account_backend.field.entry'),
-          cell: (row) => String((row.move as Row)?.name ?? ''),
+          cell: (row) =>
+            options.entryHref
+              ? linkButton({
+                  label: String((row.move as Row)?.name ?? ''),
+                  href: options.entryHref(row),
+                  variant: 'tertiary',
+                })
+              : String((row.move as Row)?.name ?? ''),
         },
         { key: 'name', label: _('account_backend.field.name'), cell: (row) => String(row.name) },
         {
