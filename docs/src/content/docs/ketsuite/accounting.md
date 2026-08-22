@@ -187,7 +187,10 @@ rather than merely untidy:
   rather than by the raw id it was created under;
 - a payment state is shown only on documents that have one, never on a manual entry;
 - creating a document opens it, because a new invoice or entry is a draft that still
-  needs lines or posting.
+  needs lines or posting;
+- a figure on a report opens the rows that produced it — a trial balance line into
+  the general ledger for that account, carrying the same date window; a payment and
+  a partner-ledger line into the journal entry behind them.
 
 ## Testing
 

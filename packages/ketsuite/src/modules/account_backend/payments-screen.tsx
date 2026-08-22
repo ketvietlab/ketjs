@@ -7,6 +7,7 @@ import {
   formatMoney,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -26,6 +27,8 @@ export const paymentsScreen = (
     rows: Row[]
     action: string
     openItems: number
+    /** Where a payment's own journal entry lives, so the row is not a dead end. */
+    entryHref?: (row: Row) => string
     errors?: string[]
   },
 ): TemplateResult => {
@@ -40,7 +43,10 @@ export const paymentsScreen = (
           key: 'name',
           label: _('account_backend.field.name'),
           priority: 'primary',
-          cell: (row) => String(row.name),
+          cell: (row) =>
+            options.entryHref && row.moveId
+              ? linkButton({ label: String(row.name), href: options.entryHref(row), variant: 'tertiary' })
+              : String(row.name),
         },
         { key: 'date', label: _('account_backend.field.date'), cell: (row) => String(row.date).slice(0, 10) },
         {
