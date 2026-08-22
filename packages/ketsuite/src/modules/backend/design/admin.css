@@ -4195,16 +4195,19 @@
   }
 
   @media (max-width: 47.9375rem) {
+    /* A button sits in a row with the fields it submits, so it is the height of
+       one. The 2.75rem touch target this used to take stood half again as tall
+       as the input above it and read as a banner rather than a control. */
     :where([data-ui="action"], [data-control="action"])[data-size] {
-      min-block-size: 2.75rem;
+      min-block-size: var(--admin-field-height);
     }
     [data-ui="modal-layer"][data-presentation="dialog"]
       [data-ui="relation-dialog-actions"]
       [data-ui="action"][data-size="compact"] {
-      min-block-size: var(--admin-control-height);
+      min-block-size: var(--admin-field-height);
     }
     :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
-      inline-size: 2.75rem;
+      inline-size: var(--admin-field-height);
     }
     [data-ui="section-head"],
     [data-ui="notice"] {

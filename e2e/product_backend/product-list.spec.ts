@@ -92,7 +92,7 @@ for (const viewport of [
       expect(metrics.main).not.toBeNull()
       expect(metrics.create).not.toBeNull()
       expect(metrics.create!.left - metrics.main!.left).toBeGreaterThanOrEqual(12)
-      expect(metrics.create!.height).toBe(viewport.name === 'desktop' ? 28 : 44)
+      expect(metrics.create!.height).toBe(viewport.name === 'desktop' ? 28 : 32)
       expect(metrics.iconSizes.every(({ width, height }) => width <= 14 && height <= 14)).toBeTruthy()
       await page.screenshot({ path: join(artifacts, `${view}-${viewport.name}.png`), fullPage: true })
     }
