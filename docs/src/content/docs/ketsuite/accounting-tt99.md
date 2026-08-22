@@ -60,6 +60,15 @@ backend shows whichever matches the reader's locale, so an English session reads
 `Cash` where a Vietnamese one reads `Tiền mặt`. Accounts a company adds itself have
 only the name they were typed in.
 
+Installation also seeds the accounts a document falls back to, because Circular 99
+answers that the same way for every Vietnamese company: revenue to 511, cost of goods
+sold to 632, trade receivables to 1311, trade payables to 3311. Only fields the company
+has not set itself are filled, and the seeding runs whether or not the catalog changed —
+a company that installed TT99 before defaults existed is already at the current
+checksum and would otherwise never receive them. See
+[Accounting ledger](/ketsuite/accounting/#which-accounts-a-document-posts-to) for how
+a document resolves them.
+
 ## Tax posting
 
 Each non-zero default tax points to its statutory posting account, and invoice creation
