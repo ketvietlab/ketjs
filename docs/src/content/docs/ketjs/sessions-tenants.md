@@ -117,8 +117,8 @@ company switching cannot silently overwrite newer state.
 ```ts
 // File: src/app.ts
 serve: {
-  permissions: async (ctx, userId) => {
-    return loadGrantedFunctionKeys(ctx, userId)
+  permissions: async (ctx, userId, url, req) => {
+    return loadGrantedFunctionKeys(ctx, userId, url, req)
   },
 }
 ```
@@ -126,6 +126,11 @@ serve: {
 Returning an array restricts every function call for that request, including calls made by routes.
 Returning `null` means no restriction. Prefer an explicit role resolver in production rather than
 omitting the callback accidentally.
+
+The request comes with it because answering the question almost always means asking the database, and
+which database that is comes from the request. Pass `url` and `req` straight through to
+`ctx.callUnchecked` — a resolver that invents them can only ever reach the tenant a bare URL happens
+to resolve to, which is the wrong one for every tenant but the default.
 
 Permissions grant operations, not tables. Use `ket permissions --role NAME` to inspect the resulting
 read, write, enqueue, cross-company, and output reach.
