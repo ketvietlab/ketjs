@@ -43,7 +43,10 @@ for (const viewport of [
           .map((control) => control.getBoundingClientRect().height),
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      const fieldHeight = viewport.name === 'desktop' ? 28 : 32
+      expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
       await page.screenshot({
         path: join(artifacts, `forecast-${locale}-${viewport.name}.png`),
         fullPage: true,

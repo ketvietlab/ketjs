@@ -104,6 +104,15 @@
     --admin-sidebar-width: 14rem;
     --admin-topbar-height: 2.75rem;
     --admin-control-height: 1.75rem;
+    /*
+     * The height of something a reader types into or picks from.
+     *
+     * Separate from --admin-control-height, which also sizes icon buttons,
+     * avatars and chips: a field grows on a touch screen because a fingertip is
+     * not a cursor, and those do not. The desktop value is the same, so a form
+     * row keeps its rhythm against the controls beside it.
+     */
+    --admin-field-height: var(--admin-control-height);
     --admin-row-height: 2.25rem;
     --admin-page-max: 100rem;
     --admin-motion-fast: 140ms ease;
@@ -120,5 +129,19 @@
 
   :root[data-theme="dark"] {
     color-scheme: dark;
+  }
+
+  /*
+   * Fields grow on a touch screen. --admin-bp-md, written out because `@media`
+   * cannot take a custom property.
+   *
+   * Nothing else moves: this raises the field token only, so icon buttons and
+   * avatars keep the size they were drawn at, and a submit button keeps the
+   * 2.75rem target it already gets at this width.
+   */
+  @media (max-width: 47.9375rem) {
+    :root {
+      --admin-field-height: 2rem;
+    }
   }
 }

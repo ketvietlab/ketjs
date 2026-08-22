@@ -2909,7 +2909,7 @@
   }
   [data-ui="attachment-input"] {
     inline-size: 100%;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     color: var(--admin-ink);
     font: inherit;
@@ -2935,7 +2935,7 @@
     display: flex;
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     align-items: center;
     justify-content: space-between;
     gap: var(--admin-gap-sm);
@@ -3037,7 +3037,7 @@
   }
   [data-ui="relation-search"] {
     inline-size: calc(100% - var(--admin-gap-sm) * 2);
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     margin: var(--admin-gap-sm);
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--admin-line);
@@ -3316,8 +3316,8 @@
   }
   [data-ui="media-file-label"] {
     display: inline-flex;
-    block-size: var(--admin-control-height);
-    min-block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
     align-items: center;
     justify-content: center;
     padding-inline: 0.625rem;
@@ -3404,7 +3404,7 @@
   [data-ui="form-field"] {
     display: grid;
     min-inline-size: 0;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     gap: 0.125rem;
   }
   [data-ui="form-field"][data-span="full"] {
@@ -3421,7 +3421,7 @@
   }
   [data-ui="form-control"] {
     inline-size: 100%;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--admin-line);
@@ -3436,7 +3436,7 @@
       box-shadow var(--admin-motion-fast);
   }
   :is(input, select)[data-ui="form-control"]:not([type="checkbox"]) {
-    block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
   }
   [data-ui="form-control"]:focus-visible {
     border-color: var(--admin-focus-border);
@@ -3591,8 +3591,8 @@
   }
   [data-ui="date-picker-control"] {
     inline-size: 100%;
-    block-size: var(--admin-control-height);
-    min-block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem 0.25rem 1.75rem;
     border: 1px solid var(--admin-line);

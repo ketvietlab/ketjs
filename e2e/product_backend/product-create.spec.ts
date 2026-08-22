@@ -78,7 +78,9 @@ for (const viewport of [
       })
 
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.input?.height).toBe(28)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      expect(metrics.input?.height).toBe(viewport.name === 'desktop' ? 28 : 32)
       expect(metrics.submitHeight).toBe(viewport.name === 'desktop' ? 28 : 44)
       if (viewport.name === 'desktop') {
         const inputCenter = metrics.input!.y + metrics.input!.height / 2
