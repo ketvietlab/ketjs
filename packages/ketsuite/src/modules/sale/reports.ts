@@ -5,14 +5,14 @@ const template = (title: string) => `<report paper="A4" margin="42">
   <header><row gap="6"><text size="10" weight="bold" tone="accent">{{ company.name }}</text><text size="8" weight="semibold" tone="muted" align="right">KETSUITE · SALES</text></row></header>
   <text size="9" weight="semibold" tone="accent" gap="12">{{ '${title}' | _ }}</text>
   <text size="24" weight="bold" gap="14">{{ name }}</text>
-  <row gap="12"><text size="9" weight="semibold">{{ 'sale.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'sale.report.date' | _ }} · {{ dateOrder }}</text></row>
+  <row gap="12"><text size="9" weight="semibold">{{ 'sale.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'sale.report.date' | _ }} · {{ dateOrder | date }}</text></row>
   <text size="8" weight="semibold" tone="muted" gap="3">{{ 'sale.report.customer' | _ }}</text>
   <text size="12" weight="semibold" gap="18">{{ partner.name }}</text>
   <table><thead><tr><th>{{ 'sale.report.description' | _ }}</th><th>{{ 'sale.report.quantity' | _ }}</th><th>{{ 'sale.report.unitPrice' | _ }}</th><th>{{ 'sale.report.subtotal' | _ }}</th></tr></thead>
-  <tbody>{% for line in lines %}<tr><td>{{ line.name }}</td><td>{{ line.productUomQty }}</td><td>{{ line.priceUnit }}</td><td>{{ line.priceSubtotal }}</td></tr>{% endfor %}</tbody></table>
-  <text size="9" tone="muted" align="right" gap="5">{{ 'sale.report.untaxed' | _ }} · {{ amountUntaxed }} {{ currency }}</text>
-  <text size="9" tone="muted" align="right" gap="7">{{ 'sale.report.tax' | _ }} · {{ amountTax }} {{ currency }}</text>
-  <text size="15" weight="bold" tone="accent" align="right" gap="4">{{ 'sale.report.total' | _ }} · {{ amountTotal }} {{ currency }}</text>
+  <tbody>{% for line in lines %}<tr><td>{{ line.name }}</td><td>{{ line.productUomQty }}</td><td>{{ line.priceUnit | amount: currency }}</td><td>{{ line.priceSubtotal | amount: currency }}</td></tr>{% endfor %}</tbody></table>
+  <text size="9" tone="muted" align="right" gap="5">{{ 'sale.report.untaxed' | _ }} · {{ amountUntaxed | amount: currency }}</text>
+  <text size="9" tone="muted" align="right" gap="7">{{ 'sale.report.tax' | _ }} · {{ amountTax | amount: currency }}</text>
+  <text size="15" weight="bold" tone="accent" align="right" gap="4">{{ 'sale.report.total' | _ }} · {{ amountTotal | amount: currency }}</text>
   <footer><row gap="0"><text size="8" weight="semibold" tone="muted">{{ company.name }}</text><text size="8" tone="muted" align="right">{page} / {pages}</text></row></footer>
 </report>`
 

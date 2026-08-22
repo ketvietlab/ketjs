@@ -816,10 +816,7 @@ export const caseDetailScreen = (
                   ? messages.map((item) => (
                       <Surface
                         padding="compact"
-                        body={stack([
-                          <p data-ui="crm-note-meta">{when(item.createdAt)}</p>,
-                          <p>{String(item.body)}</p>,
-                        ])}
+                        body={stack([when(item.createdAt), String(item.body)], 'compact')}
                       />
                     ))
                   : [empty(_)]),

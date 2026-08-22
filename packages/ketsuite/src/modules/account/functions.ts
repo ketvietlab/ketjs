@@ -470,7 +470,6 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       description: 'text?',
       typeTaxUse: 'text',
-      taxScope: 'text?',
       amountType: 'text',
       amount: 'decimal',
       priceInclude: 'bool?',
@@ -487,8 +486,6 @@ export const functions: Record<string, FnSpec> = {
       if (!TAX_USES.includes(args.typeTaxUse as never)) return invalid('typeTaxUse', 'unsupported tax use')
       if (!TAX_AMOUNT_TYPES.includes(args.amountType as never))
         return invalid('amountType', 'unsupported tax computation')
-      if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope)))
-        return invalid('taxScope', 'tax scope must be service or consu')
       if (args.accountId && !(await accountOf(ctx, args.accountId)))
         return invalid('accountId', 'tax account does not exist')
       const existing = (await ctx.db.select('account.Tax', { id: args.id }))[0]
@@ -506,7 +503,6 @@ export const functions: Record<string, FnSpec> = {
           'name',
           'description',
           'typeTaxUse',
-          'taxScope',
           'amountType',
           'amount',
           'priceInclude',

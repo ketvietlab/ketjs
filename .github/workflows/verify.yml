@@ -50,8 +50,25 @@ jobs:
 
       # Each step separately, so a red build says which contract broke rather
       # than that something did.
+      #
+      # These mirror `npm run verify`, the gate AGENT.md points contributors at.
+      # They used to be a shorter list, so a change that broke formatting, lint or
+      # one of the audits merged green and only turned red on the next
+      # contributor's machine — which is where it was found, twice.
+      - name: formatting is what the formatter would write
+        run: npm run format:check
+
+      - name: lint
+        run: npm run lint
+
+      - name: the words are the ones the glossary settled on
+        run: npm run audit:terminology
+
       - name: dependencies stay where they are declared
         run: npm run audit:zero-dep
+
+      - name: no module writes its own markup
+        run: npm run audit:ui
 
       - name: types check
         run: npm run check

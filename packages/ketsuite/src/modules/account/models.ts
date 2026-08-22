@@ -47,6 +47,12 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       description: 'text?',
       typeTaxUse: 'text',
+      /**
+       * Reserved. Nothing computes with it yet — a tax is chosen on the line, not
+       * derived from what the product is — so it is no longer offered on the form.
+       * The column stays because dropping it is a destructive migration for a value
+       * that costs nothing to keep.
+       */
       taxScope: 'text?',
       amountType: 'text',
       amount: 'decimal',
