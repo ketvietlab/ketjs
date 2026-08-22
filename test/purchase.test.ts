@@ -88,6 +88,88 @@ async function boot() {
   return adapter
 }
 
+test('purchase: a pricelist row prices the order in its own unit', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeFactor: '12', relativeUomId: 'unit' },
+      adapter,
+    )
+    await call('uom.saveUnit', { id: 'kg', name: 'Kg', relativeFactor: '1' }, adapter)
+    // The vendor quotes per piece; the buyer orders in boxes. The fixture row
+    // (80 per unit from 5 units, 5% off) has to match an order of one box —
+    // twelve pieces — and be charged per box, not per piece.
+    await call(
+      'purchase.createOrder',
+      { id: 'po', partnerId: 'vendor', pickingTypeId: 'incoming', dateOrder: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    const line = (
+      await call(
+        'purchase.addLine',
+        { id: 'po:line', orderId: 'po', productId: 'goods-1', productQty: '1', productUomId: 'box' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(line.priceUnit, '960')
+
+    // A row in another measurement tree can never price a line, so it is
+    // refused at save time instead of silently matching nothing.
+    const wrongTree = (
+      await call(
+        'purchase.saveSupplierInfo',
+        { id: 'si-kg', partnerId: 'vendor', productTemplateId: 'goods', productUomId: 'kg', price: '50' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(wrongTree.ok, false)
+    const backwards = (
+      await call(
+        'purchase.saveSupplierInfo',
+        {
+          id: 'si-dates',
+          partnerId: 'vendor',
+          productTemplateId: 'goods',
+          productUomId: 'unit',
+          price: '70',
+          dateStart: '2026-12-01T00:00:00.000Z',
+          dateEnd: '2026-01-01T00:00:00.000Z',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(backwards.ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('purchase: a locked order refuses cancellation until it is unlocked', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'purchase.createOrder',
+      { id: 'po', partnerId: 'vendor', pickingTypeId: 'incoming', dateOrder: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'purchase.addLine',
+      { id: 'po:line', orderId: 'po', productId: 'goods-1', productQty: '1', productUomId: 'unit' },
+      adapter,
+    )
+    await call('purchase.confirmOrder', { id: 'po' }, adapter)
+    await call('purchase.lockOrder', { id: 'po', locked: true }, adapter)
+    const refused = (await call('purchase.cancelOrder', { id: 'po' }, adapter)).value as Row
+    assert.equal(refused.ok, false)
+    await call('purchase.lockOrder', { id: 'po', locked: false }, adapter)
+    const cancelled = (await call('purchase.cancelOrder', { id: 'po' }, adapter)).value as Row
+    assert.equal(cancelled.ok, true)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('purchase: a line is ordered in the vendor unit and received in the product unit', async () => {
   const adapter = await boot()
   try {

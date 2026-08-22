@@ -83,33 +83,52 @@ async function productContext(ctx: Ctx, productId: unknown) {
   return template ? { product, template } : null
 }
 
+/**
+ * The vendor's best matching pricelist row, expressed in the unit the buyer is
+ * ordering in.
+ *
+ * A pricelist row carries its own unit, and both comparisons that use the row
+ * ignored it: `minQty` was compared against the ordered quantity as if the two
+ * numbers shared a unit, and the price was applied per ordered unit as if the
+ * vendor had quoted it that way. Order one box of twelve against "80 per piece
+ * from 5 pieces" and the row did not even match — twelve pieces read as one —
+ * and when a row did match, a per-piece price was charged per box.
+ */
 async function supplierPrice(
   ctx: Ctx,
   partnerId: unknown,
   productId: unknown,
   quantity: number,
+  orderedUomId: unknown,
   at: string,
 ): Promise<Row | null> {
   const product = await productContext(ctx, productId)
   if (!product) return null
-  return (
-    (
-      await ctx.db.select('purchase.SupplierInfo', {
-        partnerId,
-        productTemplateId: product.template.id,
-      })
+  const rows = (
+    await ctx.db.select('purchase.SupplierInfo', {
+      partnerId,
+      productTemplateId: product.template.id,
+    })
+  )
+    .filter((row) => !row.productId || row.productId === productId)
+    .filter(
+      (row) => (!row.dateStart || String(row.dateStart) <= at) && (!row.dateEnd || String(row.dateEnd) >= at),
     )
-      .filter((row) => (!row.productId || row.productId === productId) && n(row.minQty) <= quantity)
-      .filter(
-        (row) =>
-          (!row.dateStart || String(row.dateStart) <= at) && (!row.dateEnd || String(row.dateEnd) >= at),
-      )
-      .sort((a, b) => {
-        const variant = Number(Boolean(b.productId)) - Number(Boolean(a.productId))
-        return (
-          variant || n(a.sequence) - n(b.sequence) || n(b.minQty) - n(a.minQty) || n(a.price) - n(b.price)
-        )
-      })[0] ?? null
+  const matching: Row[] = []
+  for (const row of rows) {
+    const inRowUnit = await inUnit(ctx, quantity, orderedUomId, row.productUomId)
+    if (inRowUnit === null || n(row.minQty) > inRowUnit) continue
+    // One ordered unit holds this many of the row's unit, so the row's price
+    // scales by the same factor: 80 per piece is 960 per box of twelve.
+    const orderedInRow = await inUnit(ctx, 1, orderedUomId, row.productUomId)
+    if (orderedInRow === null) continue
+    matching.push({ ...row, price: decimal(n(row.price) * orderedInRow), minQtyOrdered: inRowUnit })
+  }
+  return (
+    matching.sort((a, b) => {
+      const variant = Number(Boolean(b.productId)) - Number(Boolean(a.productId))
+      return variant || n(a.sequence) - n(b.sequence) || n(b.minQty) - n(a.minQty) || n(a.price) - n(b.price)
+    })[0] ?? null
   )
 }
 
@@ -272,6 +291,7 @@ async function planLine(ctx: Ctx, args: Record<string, unknown>): Promise<Planne
     order.partnerId,
     args.productId,
     n(args.productQty),
+    args.productUomId,
     String(order.dateOrder),
   )
   const priceUnit = args.priceUnit ?? price?.price ?? '0'
@@ -440,6 +460,11 @@ export const functions: Record<string, FnSpec> = {
       }
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
         return invalid('productUomId', 'unit of measure does not exist')
+      // A price per kilogram for a product counted in pieces can never be
+      // applied to an order line, so the row would sit in the pricelist and
+      // silently match nothing.
+      if ((await inUnit(ctx, 1, args.productUomId, template.uomId)) === null)
+        return invalid('productUomId', 'unit does not measure the same thing as the product')
       if (
         n(args.minQty) < 0 ||
         n(args.price) < 0 ||
@@ -448,6 +473,8 @@ export const functions: Record<string, FnSpec> = {
         n(args.delay) < 0
       )
         return invalid('price', 'quantity, price, discount and lead time must be valid non-negative values')
+      if (args.dateStart && args.dateEnd && String(args.dateEnd) < String(args.dateStart))
+        return invalid('dateEnd', 'the validity period ends before it starts')
       const existing = (await ctx.db.select('purchase.SupplierInfo', { id: args.id }))[0]
       const values = {
         ...args,
@@ -630,7 +657,7 @@ export const functions: Record<string, FnSpec> = {
       if (existing) return { ok: true, id: args.id, priceUnit: String(existing.priceUnit), existing: true }
       const planned = await planLine(ctx, args)
       if ('error' in planned) return planned.error
-      await ctx.db.insert('purchase.OrderLine', {
+      const inserted = await ctx.db.insertIfAbsent('purchase.OrderLine', {
         ...planned.values,
         id: args.id,
         orderId: args.orderId,
@@ -638,6 +665,11 @@ export const functions: Record<string, FnSpec> = {
         qtyInvoiced: '0',
         sequence: args.sequence ?? 10,
       })
+      if (!('dryRun' in inserted) && !inserted.inserted) {
+        // A concurrent retry won the insert; report the line it wrote.
+        const raced = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
+        return { ok: true, id: args.id, priceUnit: String(raced?.priceUnit ?? ''), existing: true }
+      }
       await totals(ctx, args.orderId)
       return { ok: true, id: args.id, priceUnit: planned.values.priceUnit, existing: false }
     },
@@ -993,6 +1025,10 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'purchase order does not exist')
+      if (order.state === 'cancel') return { ok: true, id: args.id }
+      // Locking is the operator saying "no more changes"; cancellation is the
+      // largest change there is.
+      if (order.locked) return invalid('state', 'a locked order cannot be cancelled')
       const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
       // Both of these used to read every stock move and every accounting line in
       // the company and filter in memory, which cost the whole ledger to cancel
