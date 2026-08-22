@@ -31,6 +31,7 @@ contain no Customer Care behavior.
 ## Verification
 
 ```bash
+# Run from: /path/to/ketjs
 npm run build
 node --test .build/test/crm-e2e.test.js .build/test/crm-i18n.test.js
 npm run bench:crm

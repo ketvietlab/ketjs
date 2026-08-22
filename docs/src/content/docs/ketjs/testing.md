@@ -11,6 +11,7 @@ HTTP seams.
 ## First end-to-end test
 
 ```ts
+// File: test/order.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createTestApp } from '@ketvietlab/ketjs/testing'
@@ -51,6 +52,7 @@ The harness does not inherit the host process environment by default. A develope
 silently redirect an isolated test to a real database.
 
 ```ts
+// File: test/order.test.ts
 const e2e = await createTestApp(app, {
   env: { KET_QUEUE_NOTIFY: '0' },
   worker: false,
@@ -72,6 +74,7 @@ own the directory; `close()` does not remove caller-owned artifacts.
 - non-2xx parsed calls throw `TestHttpError` with `status`, `response`, and `body`.
 
 ```ts
+// File: test/order.test.ts
 import { TestHttpError } from '@ketvietlab/ketjs/testing'
 
 const response = await e2e.client.get('/health')
@@ -86,6 +89,7 @@ await assert.rejects(
 A function call returns the complete Ket result, including `value`, `writes`, `dryRun`, and `replayed`:
 
 ```ts
+// File: test/order.test.ts
 const preview = await e2e.client.call(
   'order.create',
   { id: 'order-1', customer: 'customer-1' },
@@ -105,6 +109,7 @@ await e2e.client.call('order.create', input, {
 Create immutable client variants for separate request identities:
 
 ```ts
+// File: test/order.test.ts
 const acme = e2e.client.as({
   company: 'acme',
   companies: ['acme', 'subsidiary'],
@@ -120,6 +125,7 @@ const customTenant = e2e.client.as({ tenant: 'acme', tenantHeader: 'x-database' 
 Apps with sessions ignore development company headers. Authenticate through the real route:
 
 ```ts
+// File: test/order.test.ts
 await e2e.client.login({ login: 'admin', password: 'secret' })
 await e2e.client.call('order.privateList')
 await e2e.client.logout()
@@ -129,6 +135,7 @@ The cookie jar captures cookies across same-origin redirects and applies deletio
 another client or save it with file mode `0600`:
 
 ```ts
+// File: test/order.test.ts
 import { CookieJar } from '@ketvietlab/ketjs/testing'
 
 await e2e.client.jar.save('.ket/admin.cookies.json')
@@ -146,6 +153,7 @@ Fixtures are an explicit setup bypass. They call declared Ket functions and reta
 validation, but they do not apply HTTP identity permissions.
 
 ```ts
+// File: test/order.test.ts
 await e2e.fixture.call(
   'user.create',
   { id: 'admin', login: 'admin' },
@@ -159,6 +167,7 @@ integration test rather than an end-to-end test.
 For an invariant with no public read function, inspect the selected tenant adapter:
 
 ```ts
+// File: test/order.test.ts
 await e2e.fixture.withTenant('', async ({ adapter }) => {
   const rows = await adapter.all('SELECT id FROM sales_order')
   assert.equal(rows.length, 1)
@@ -173,6 +182,7 @@ When the app declares worker queues, the harness opens a worker handle against t
 It does not leave a polling loop running. Drain at the point where asynchronous work must settle:
 
 ```ts
+// File: test/order.test.ts
 await e2e.client.call('order.requestExport', {})
 const completed = await e2e.drainJobs()
 assert.equal(completed, 1)
@@ -185,6 +195,7 @@ Set `worker: false` for scenarios that cannot enqueue jobs. Calling `drainJobs()
 `ket test` delegates to Node's test runner and requires emitted JavaScript artifacts:
 
 ```bash
+# Run from: /path/to/example-app
 ket test dist/test
 ket test test/order.test.ts --out-dir dist
 ket test dist/test --test-name-pattern checkout
@@ -201,6 +212,7 @@ Pass additional Node test arguments after `--`.
 `ket call` uses the same HTTP and cookie behavior:
 
 ```bash
+# Run from: /path/to/example-app
 ket call order.list \
   --against http://127.0.0.1:3000 \
   --company acme \

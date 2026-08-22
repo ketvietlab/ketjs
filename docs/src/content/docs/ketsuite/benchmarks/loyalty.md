@@ -27,6 +27,7 @@ a hard pass/fail threshold, and surprising cross-cutting results were repeated a
 ## Commands and fixture
 
 ```sh
+# Run from: /path/to/ketjs
 export PATH=/Users/kieuduy/.nvm/versions/node/v26.7.0/bin:$PATH
 
 # Existing framework/domain/collaboration regression suite, in base then head worktrees.

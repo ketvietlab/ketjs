@@ -8,6 +8,7 @@ roots. The layout resembles an module search paths, but discovering a descriptor
 execute that module.
 
 ```text
+# File: docs/src/content/docs/ketjs/module-discovery.md
 module roots → descriptor catalogue → selected names + dependency closure
              → resolved apps → composition → runtime install state
 ```
@@ -17,6 +18,7 @@ module roots → descriptor catalogue → selected names + dependency closure
 A root contains one direct child per module:
 
 ```text
+# File: custom-addons
 custom-addons/
 ├── sale_discount/
 │   ├── ket.module.json
@@ -36,7 +38,8 @@ subdirectories for descriptors.
 
 `ket.module.json` intentionally contains only discovery metadata:
 
-```json
+```jsonc
+// File: custom-addons/sale_discount/ket.module.jsonc
 {
   "name": "sale_discount",
   "entry": "./dist/index.js"
@@ -55,6 +58,7 @@ out of the descriptor prevents a second manifest from drifting away from executa
 The entry default-exports a normal module:
 
 ```ts
+// File: src/modules/sale_discount/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
@@ -75,6 +79,7 @@ restricted because its entry must export `defineTheme()`.
 Declare roots relative to the workspace artifact or as absolute deployment paths:
 
 ```ts
+// File: ket.workspace.ts
 import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
 import { pricing } from './modules/pricing.ts'
 
@@ -105,6 +110,7 @@ Relative roots resolve from the loaded workspace artifact, not the current shell
 Supplement workspace roots at deployment time:
 
 ```bash
+# Run from: /path/to/example-app
 ket check \
   --workspace dist/ket.workspace.js \
   --module-path /opt/company-addons \
@@ -114,6 +120,7 @@ ket check \
 `--module-path` is repeatable. `KET_MODULE_PATH` uses the platform path separator:
 
 ```bash
+# Run from: /path/to/example-app
 KET_MODULE_PATH=/opt/company-addons:/opt/vendor-addons ket serve
 ```
 
@@ -123,6 +130,7 @@ override mechanism: duplicate module names fail regardless of precedence.
 Inspect the result with:
 
 ```bash
+# Run from: /path/to/example-app
 ket modules --workspace dist/ket.workspace.js
 ```
 
@@ -155,6 +163,7 @@ usually needs its own dependencies, a package-manager link, or a bundled entry.
 Assets stay module-relative:
 
 ```ts
+// File: src/modules/sale_discount/index.ts
 export default defineModule({
   name: 'sale_discount',
   assets: new URL('../assets/', import.meta.url),
@@ -185,6 +194,7 @@ when KetJS can identify one.
 ## Programmatic resolution
 
 ```ts
+// File: ket.workspace.ts
 import { composeWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(workspace, {

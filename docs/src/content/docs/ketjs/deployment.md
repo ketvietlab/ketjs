@@ -10,6 +10,7 @@ over the same composed manifest and datastore.
 ## Release pipeline
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/deployment.md
 flowchart LR
   source["TypeScript source"] --> build["Emit JavaScript"]
   build --> check["ket check"]
@@ -30,6 +31,7 @@ route, job, and tenant provider to paths that remain valid in the deployment art
 An application normally provides project-specific scripts around this sequence:
 
 ```bash
+# Run from: /path/to/example-app
 npm ci
 npm run build
 ket check --workspace dist/ket.workspace.js
@@ -50,6 +52,7 @@ controlled boot migrate before normal replicas start.
 For a tenant fleet, the CLI opens each database and owns the apply step:
 
 ```bash
+# Run from: /path/to/ketjs
 ket migrate --app erp --workspace dist/ket.workspace.js --all --dry-run
 ket migrate --app erp --workspace dist/ket.workspace.js --all
 ```
@@ -61,6 +64,7 @@ many replicas from racing to alter the same schema during rollout. Destructive p
 ## Run separate roles
 
 ```bash
+# Run from: /path/to/example-app
 ket serve --app erp --workspace dist/ket.workspace.js
 ket worker --app erp --workspace dist/ket.workspace.js
 ```
@@ -93,6 +97,7 @@ storage or choose external services.
 Install the optional driver in the application and make adapter ownership explicit:
 
 ```ts
+// File: src/app.ts
 import { defineApp } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
@@ -129,6 +134,7 @@ data between environments.
 Expose a small application route for readiness, for example:
 
 ```ts
+// File: src/app.ts
 serve: {
   routes: () => ({
     '/health': () => json({ ok: true }),

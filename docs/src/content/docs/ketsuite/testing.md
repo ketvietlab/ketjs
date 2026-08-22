@@ -12,6 +12,7 @@ implicit TypeScript loader.
 From the repository root:
 
 ```bash
+# Run from: /path/to/ketjs
 npm ci
 npm run build
 npm run test:one -- test/partner-e2e.test.ts
@@ -23,6 +24,7 @@ After source changes, run `npm run build` again before invoking `node --test` di
 For a KetSuite change, select the smallest relevant set first:
 
 ```bash
+# Run from: /path/to/ketjs
 node --test .build/test/partner-e2e.test.js
 node --test .build/test/channel-api.test.js
 node --test .build/test/backend-ui.test.js
@@ -51,6 +53,7 @@ transactional invariant, and a direct `callFn()` test cannot prove staff authent
 Use framework fixtures only for setup; exercise the behavior under test through the real client:
 
 ```ts
+// File: test/partner-e2e.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createTestApp } from '@ketvietlab/ketjs/testing'

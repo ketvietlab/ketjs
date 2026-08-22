@@ -12,6 +12,7 @@ contracts separate because deployments resolve them in different orders.
 Without `serve.sessions`, the runtime reads company context from headers:
 
 ```text
+# File: docs/src/content/docs/ketjs/sessions-tenants.md
 X-Ket-Company
 X-Ket-Companies
 X-Ket-Current-Branch
@@ -24,6 +25,7 @@ configure sessions and resolve current account state.
 ## Enable sessions
 
 ```ts
+// File: src/app.ts
 const app = defineApp({
   name: 'backoffice',
   modules: [users, sales],
@@ -44,6 +46,7 @@ const app = defineApp({
 Set a stable signing key in every environment:
 
 ```bash
+# Run from: /path/to/example-app
 KET_SECRET='a-long-random-deployment-secret' ket serve
 ```
 
@@ -56,6 +59,7 @@ A login route verifies credentials through an internal function, then uses the r
 manager:
 
 ```ts
+// File: src/app.ts
 const sessions = await ctx.sessionsOf(url, request)
 if (!sessions) return json({ ok: false }, { status: 500 })
 
@@ -86,6 +90,7 @@ Session rows are snapshots. Use `resolveSession` to verify that the account is s
 company/branch memberships before scope and permissions are calculated:
 
 ```ts
+// File: src/app.ts
 resolveSession: async ({ adapter, record }) => {
   const current = await loadIdentity(adapter, record.userId)
   if (!current || current.disabled) return null
@@ -110,6 +115,7 @@ company switching cannot silently overwrite newer state.
 ## Resolve function permissions
 
 ```ts
+// File: src/app.ts
 serve: {
   permissions: async (ctx, userId) => {
     return loadGrantedFunctionKeys(ctx, userId)
@@ -142,6 +148,7 @@ session from the database that has not yet been selected.
 Configure `serve.tenants` when each customer has an independent datastore:
 
 ```ts
+// File: src/app.ts
 const app = defineApp({
   name: 'erp',
   modules: [core, sales],
@@ -171,6 +178,7 @@ cannot evict or close a connection that the first request is still establishing.
 Each tenant database owns its module install state. On every request KetJS resolves:
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/sessions-tenants.md
 sequenceDiagram
   participant Request
   participant Resolver as Tenant resolver

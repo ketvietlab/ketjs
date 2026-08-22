@@ -36,6 +36,7 @@ và không có Partner riêng trong subset này.
 ## Kiến trúc
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/company-branch.md
 flowchart LR
   subgraph Legal["Pháp nhân · company"]
     P["partner.Partner<br/>kind = company"]
@@ -109,6 +110,7 @@ tạo đồng thời.
 Khi tạo Company, service mở transaction:
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/company-branch.md
 sequenceDiagram
   participant Client
   participant Service as company.saveCompany
@@ -169,6 +171,7 @@ Trong app có User, archive phải đi qua `user.archiveCompany` hoặc
 Session phân biệt tập đọc và đích ghi như the domain contract:
 
 ```text
+# File: docs/src/content/docs/ketsuite/company-branch.md
 companies[]  -> các company được đọc
 company      -> đúng một company được ghi
 branches[]   -> các branch được đọc
@@ -180,6 +183,7 @@ thuộc `company`. Engine tự stamp `companyId`/`branchId` cho model
 `company+branch`, không nhận hai field này từ payload.
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/company-branch.md
 sequenceDiagram
   participant Browser
   participant Session as Signed session
@@ -253,6 +257,7 @@ tiếng Việt và tiếng Anh.
 Các test trực tiếp của cụm:
 
 ```sh
+# Run from: /path/to/ketjs
 npm run build
 node --test \
   .build/test/identity.test.js \
@@ -289,6 +294,7 @@ Hai workload live session chỉ có ở code mới: resolve context ở mỗi re
 validate context do User yêu cầu. Benchmark yêu cầu URL PostgreSQL tường minh:
 
 ```sh
+# Run from: /path/to/ketjs
 KET_BENCH_PG=postgres://... npm run bench:company-identity
 ```
 

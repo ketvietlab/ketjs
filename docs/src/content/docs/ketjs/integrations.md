@@ -9,6 +9,7 @@ storage, a provider-neutral outbound transport, bounded multipart parsing, and r
 ## Storage contract
 
 ```ts
+// File: src/modules/integration/index.ts
 type Storage = {
   name: string
   put(
@@ -34,6 +35,7 @@ metadata suffixes are rejected.
 Local disk is the default:
 
 ```bash
+# Run from: /path/to/ketjs
 KET_STORAGE=local
 KET_STORAGE_DIR=.ket/storage
 ```
@@ -41,6 +43,7 @@ KET_STORAGE_DIR=.ket/storage
 Programmatic construction:
 
 ```ts
+// File: src/modules/integration/index.ts
 import { localStorage } from '@ketvietlab/ketjs'
 
 const storage = localStorage({ dir: '.ket/storage' })
@@ -54,6 +57,7 @@ is not replicated across stateless pods.
 Configure S3, MinIO, or a compatible endpoint:
 
 ```bash
+# Run from: /path/to/ketjs
 KET_STORAGE=s3
 KET_S3_ENDPOINT=https://s3.example.com
 KET_S3_REGION=us-east-1
@@ -77,6 +81,7 @@ Override `serve.openStorage` to supply another implementation.
 resolved tenant:
 
 ```ts
+// File: src/modules/integration/index.ts
 const storage = await ctx.storageOf(url, request)
 await storage.put(`attachments/${attachmentId}`, body, {
   type: contentType,
@@ -94,6 +99,7 @@ Job storage is additionally wrapped by `storage:read`, `storage:write`, and `sto
 `multipart()` parses parts sequentially and streams each part body:
 
 ```ts
+// File: src/modules/integration/index.ts
 import { multipart } from '@ketvietlab/ketjs'
 
 const contentType = String(request.headers['content-type'] ?? '')
@@ -122,6 +128,7 @@ Sanitize and store the original filename as metadata; do not use it directly as 
 KetJS defines a provider-neutral delivery contract for email-like messages:
 
 ```ts
+// File: src/modules/integration/index.ts
 type OutboundTransport = {
   name: string
   send(
@@ -135,6 +142,7 @@ type OutboundTransport = {
 The application injects a provider at deployment time:
 
 ```ts
+// File: src/app.ts
 const app = defineApp({
   name: 'erp',
   modules: [mail],
@@ -167,6 +175,7 @@ deployment owns credentials, provider SDKs, retry semantics, and deliverability 
 Streams persist ordered batches for clients that disconnect and resume:
 
 ```ts
+// File: src/modules/integration/index.ts
 import { createStreams, dbStreamStore } from '@ketvietlab/ketjs'
 
 const streams = await createStreams(dbStreamStore(adapter))
@@ -181,6 +190,7 @@ await writer.end({ tokens: 2 })
 Read what arrived since a cursor:
 
 ```ts
+// File: src/modules/integration/index.ts
 const result = await streams.since('generation:42', cursor)
 
 for (const chunk of result.chunks) consume(chunk.data)
@@ -190,6 +200,7 @@ cursor = result.nextSeq
 Or follow a live stream:
 
 ```ts
+// File: src/modules/integration/index.ts
 for await (const chunk of streams.tail('generation:42', cursor, {
   pollMs: 250,
   timeoutMs: 30_000,

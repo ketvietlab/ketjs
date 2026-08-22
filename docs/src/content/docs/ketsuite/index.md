@@ -32,6 +32,7 @@ development branch disagree.
 ## Runtime shape
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/index.md
 flowchart LR
   app["createKetsuiteApp()"] --> manifest["Composed KetJS manifest"]
   domain["Domain modules"] --> app

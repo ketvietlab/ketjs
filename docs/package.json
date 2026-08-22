@@ -12,8 +12,9 @@
     "prebuild": "npm run generate:api",
     "dev": "astro dev",
     "start": "astro dev",
-    "check": "astro check",
-    "build": "astro check && astro build",
+    "check:snippets": "node ../tools/docs-snippet-location-audit.mjs",
+    "check": "npm run check:snippets && astro check",
+    "build": "npm run check:snippets && astro check && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

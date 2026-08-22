@@ -15,6 +15,7 @@ sidebar:
 From the repository root:
 
 ```bash
+# Run from: /path/to/ketjs
 cd docs
 npm install
 npm run dev
@@ -23,6 +24,7 @@ npm run dev
 Alternatively, keep your current working directory:
 
 ```bash
+# Run from: /path/to/ketjs
 npm --prefix docs install
 npm --prefix docs run dev
 ```
@@ -32,6 +34,7 @@ Astro prints the local URL and reloads when the content or theme changes.
 ## Validate a change
 
 ```bash
+# Run from: /path/to/ketjs
 npm --prefix docs run check
 npm --prefix docs run build
 ```
@@ -50,6 +53,7 @@ Create a Markdown or MDX file under `src/content/docs/`. Every page needs at lea
 `description` in its frontmatter:
 
 ```md
+<!-- File: docs/src/content/docs/example.md -->
 ---
 title: Page title
 description: One sentence explaining the problem this page solves.
@@ -69,7 +73,9 @@ Use a fenced `mermaid` block. Diagrams are rendered only on pages that contain o
 follow the current light or dark theme.
 
 ````md
+<!-- File: docs/src/content/docs/example.md -->
 ```mermaid
+%% File: docs/src/content/docs/example.md
 flowchart LR
   declaration["Module declaration"] --> manifest["Composed manifest"]
   manifest --> runtime["Live runtime"]

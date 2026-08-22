@@ -10,6 +10,7 @@ named rendering contracts but cannot call JavaScript.
 ## Define a theme
 
 ```ts
+// File: src/themes/paper/index.ts
 import { defineTheme } from '@ketvietlab/ketjs'
 import { loadTemplates } from '@ketvietlab/ketjs/theme'
 
@@ -39,6 +40,7 @@ normal module but never define one.
 the template name:
 
 ```text
+# File: docs/src/content/docs/ketjs/themes.md
 templates/
 ├── layout.ktl              → layout
 ├── website.page.ktl        → website.page
@@ -56,6 +58,7 @@ location-aware diagnostics.
 ## Output and expressions
 
 ```liquid
+{% comment %} File: src/themes/example/templates/example.ktl {% endcomment %}
 <h1>{{ page.title }}</h1>
 <p>{{ page.summary | default: "No summary" }}</p>
 <strong>{{ amount | money: locale }}</strong>
@@ -78,6 +81,7 @@ boundary. Ordinary module data should never require it.
 ## Conditions and loops
 
 ```liquid
+{% comment %} File: src/themes/example/templates/example.ktl {% endcomment %}
 {% if order.overdue %}
   <span class="status danger">Overdue</span>
 {% else %}
@@ -99,6 +103,7 @@ available. A non-array loop source renders nothing.
 Pass an explicit scope to a partial:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/menu.primary.ktl {% endcomment %}
 <ul>
   {% for item in items %}
     {% render 'menu.item', item: item, compact: true %}
@@ -114,6 +119,7 @@ recursive render chains fail with location-aware diagnostics and a depth limit.
 A region renders another named template with the current scope:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/layout.ktl {% endcomment %}
 <!doctype html>
 <html>
   <body>
@@ -130,6 +136,7 @@ composition error rather than a blank page at runtime.
 Modules publish joints; dependent modules contribute KTL fills; themes choose where the joint appears:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/product.detail.ktl {% endcomment %}
 <article>
   <h1>{{ product.name }}</h1>
   {% joint "product:template.detail.footer" %}
@@ -147,6 +154,7 @@ application object.
 A section is page data with a declared settings schema:
 
 ```ts
+// File: src/themes/paper/index.ts
 sections: {
   'website.hero': {
     title: 'Hero',
@@ -162,6 +170,7 @@ sections: {
 A page template renders its ordered placements:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/website.page.ktl {% endcomment %}
 <article data-path="{{ page.path }}">
   {% sections %}
 </article>
@@ -181,6 +190,7 @@ also receives `page`, which is context rather than one of its settings.
 Place module-owned behavior by name:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/menu.primary.ktl {% endcomment %}
 <nav>
   {% island "website.search" %}
 </nav>
@@ -201,6 +211,7 @@ implicit theme contract.
 Modules expose theme-visible fields through `views`:
 
 ```ts
+// File: src/themes/paper/index.ts
 views: {
   productCard: {
     of: 'product.Template',
@@ -215,6 +226,7 @@ carrying the declared fields and nothing else, with absent fields as `null`. Pas
 therefore safe — the extra columns do not travel.
 
 ```ts
+// File: src/themes/paper/index.ts
 joints: {
   'product.detail.footer': { props: { product: 'product.productCard' } },
 }
@@ -241,6 +253,7 @@ one that composed last.
 `tokensToCss()` performs the conversion to `--ket-*` custom properties and emits the cascade order:
 
 ```text
+# File: docs/src/content/docs/ketjs/themes.md
 ket.reset → ket.theme → ket.app → ket.user
 ```
 

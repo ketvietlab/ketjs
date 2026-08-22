@@ -43,6 +43,7 @@ kind hợp lệ nhưng không được đăng nhập vào backend realm.
 ## Kiến trúc
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/authentication-users.md
 flowchart LR
   subgraph Identity["Identity domain · user"]
     U["User<br/>login · passwordHash?<br/>accessKind · securityVersion"]
@@ -104,6 +105,7 @@ công khi policy thay đổi.
 ## Login và live session resolution
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/authentication-users.md
 sequenceDiagram
   participant Browser
   participant Route as Trusted /login route
@@ -152,6 +154,7 @@ admin archive/reset đóng tất cả. Logout chỉ nhận POST same-origin.
 ## Invitation và password reset
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/authentication-users.md
 sequenceDiagram
   participant Admin
   participant Service as user.issueAuthToken
@@ -226,6 +229,7 @@ login/tên/email/password của admin; toàn bộ JSON chỉ được đọc t�
 `--input -`, vì vậy password không xuất hiện trong argv hoặc command history.
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/authentication-users.md
 sequenceDiagram
   participant Operator
   participant CLI as ket provision
@@ -257,6 +261,7 @@ trên adapter của tenant đã chọn.
 Ví dụ vận hành:
 
 ```sh
+# Run from: /path/to/ketjs
 printf '%s' '{"companyName":"Ket Viet","companyCode":"KET","currency":"VND","adminLogin":"admin@example.com","adminName":"Administrator","adminEmail":"admin@example.com","adminPassword":"..."}' \
   | ket provision user.provisionAdmin --input -
 ```
@@ -356,6 +361,7 @@ request cùng tiêu thụ một token single-use. Correctness assertion tương 
 PostgreSQL integration test; benchmark tập trung vào latency/throughput.
 
 ```sh
+# Run from: /path/to/ketjs
 KET_BENCH_PG=postgres://... npm run bench:user-auth
 ```
 

@@ -14,6 +14,7 @@ owner exposes a versioned contract. This makes API ownership and version skew en
 ## Define a module
 
 ```ts
+// File: src/modules/inventory/index.ts
 import { defineModule, from } from '@ketvietlab/ketjs'
 
 export const inventory = defineModule({
@@ -64,6 +65,7 @@ module creates a new identity and leaves the old installed state as an orphan.
 Modules extend contracts through declared dependencies:
 
 ```ts
+// File: src/modules/stock_forecast/index.ts
 export const stockForecast = defineModule({
   name: 'stock_forecast',
   depends: ['inventory'],
@@ -91,6 +93,7 @@ other modules may change.
 A joint is a named presentation extension point:
 
 ```ts
+// File: src/modules/inventory/index.ts
 const inventory = defineModule({
   name: 'inventory',
   joints: {
@@ -123,6 +126,7 @@ behavior over the preserved data.
 ## Compose the manifest
 
 ```ts
+// File: src/modules/inventory/index.ts
 import { compose } from '@ketvietlab/ketjs'
 
 const manifest = compose([inventory, stockForecast])
@@ -149,6 +153,7 @@ upgrade diffs, generated types, and agent capability inspection.
 Composition includes everything the deployment ships. Runtime module state belongs to a database:
 
 ```ts
+// File: src/modules/inventory/index.ts
 import { createAppRegistry, restrictManifest } from '@ketvietlab/ketjs'
 
 const registry = await createAppRegistry(manifest, adapter)
@@ -166,6 +171,7 @@ would cross the isolation boundary.
 Use the CLI instead of adding a second registry:
 
 ```bash
+# Run from: /path/to/example-app
 ket check --workspace dist/ket.workspace.js
 ket manifest --app backoffice --workspace dist/ket.workspace.js
 ket snapshot --app backoffice --workspace dist/ket.workspace.js
@@ -188,6 +194,7 @@ Small capabilities may live in one file. Larger modules remain easier to review 
 one file and `index.ts` only assembles the declaration:
 
 ```text
+# File: docs/src/content/docs/ketjs/modules.md
 inventory/
 ├── index.ts
 ├── models.ts

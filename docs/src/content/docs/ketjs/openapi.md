@@ -16,6 +16,7 @@ service API, or no public HTTP API at all.
 The object form of a route accepts an `HttpRouteContract`:
 
 ```ts
+// File: src/modules/catalogue_api/index.ts
 import { defineModule, json } from '@ketvietlab/ketjs'
 
 export const catalogueApi = defineModule({
@@ -68,6 +69,7 @@ prefix unless it:
 3. declares a compatible major when the owner exposes a versioned extension contract.
 
 ```ts
+// File: src/modules/catalogue_reviews/index.ts
 export const extension = defineModule({
   name: 'catalogue_reviews',
   depends: ['catalogue_api'],
@@ -85,6 +87,7 @@ An OpenAPI generator receives a composed `Manifest`, selects route entries by `c
 contract metadata without importing individual feature modules:
 
 ```ts
+// File: src/modules/order/routes.ts
 const manifest = compose(app.modules, { headless: true })
 
 for (const [path, route] of Object.entries(manifest.routes)) {

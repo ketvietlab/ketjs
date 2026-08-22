@@ -140,6 +140,7 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 Use the narrow theme entrypoint in presentation packages:
 
 ```ts
+// File: src/theme.ts
 import {
   compileKtl,
   createJoints,
@@ -158,6 +159,7 @@ It also exports `LAYER_ORDER` and the `Compiled`, `Filter`, `Scope`, and `Joints
 ## `@ketvietlab/ketjs/testing`
 
 ```ts
+// File: test/order.test.ts
 import {
   CookieJar,
   TestClient,
@@ -196,7 +198,8 @@ may import any of these names from either one.
 
 TypeScript projects using automatic JSX can configure:
 
-```json
+```jsonc
+// File: tsconfig.json
 {
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -208,6 +211,7 @@ TypeScript projects using automatic JSX can configure:
 ## `@ketvietlab/ketjs-postgres`
 
 ```ts
+// File: src/database.ts
 import { postgresAdapter, type PostgresOptions } from '@ketvietlab/ketjs-postgres'
 ```
 

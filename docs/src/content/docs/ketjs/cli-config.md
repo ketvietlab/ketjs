@@ -36,6 +36,7 @@ Run `ket check` in CI before migrations or deployment. It catches dependency, ex
 queue, theme, model, and function-contract conflicts without starting a server.
 
 ```bash
+# Run from: /path/to/example-app
 ket check --workspace dist/ket.workspace.js
 ket workspace --workspace dist/ket.workspace.js
 ket permissions --app backoffice --grant order.list,order.create
@@ -46,6 +47,7 @@ ket permissions --app backoffice --grant order.list,order.create
 Store a reviewed manifest at a release boundary and compare future composition output:
 
 ```bash
+# Run from: /path/to/example-app
 ket snapshot --app backoffice --workspace dist/ket.workspace.js
 ket diff --app backoffice \
   --workspace dist/ket.workspace.js \
@@ -58,6 +60,7 @@ state belongs to a datastore, not to a JSON snapshot.
 ## Database commands
 
 ```bash
+# Run from: /path/to/ketjs
 ket migrate --app backoffice --workspace dist/ket.workspace.js
 ket migrate --app backoffice --allow-destructive
 ket migrate --app erp --all --dry-run
@@ -71,6 +74,7 @@ app's tenant catalogue and applies each plan unless `--dry-run` is set. Destruct
 ## Runtime commands
 
 ```bash
+# Run from: /path/to/example-app
 ket serve --app backoffice --workspace dist/ket.workspace.js
 ket worker --app backoffice --workspace dist/ket.workspace.js
 ket dev --all --app backoffice --workspace dist/ket.workspace.js
@@ -83,6 +87,7 @@ when new auto-install modules should remain disabled during development.
 Operational commands include:
 
 ```bash
+# Run from: /path/to/example-app
 ket provision bootstrap.admin --input -
 ket call order.list --against http://127.0.0.1:3000 --input '{}'
 ket test dist/test
@@ -98,6 +103,7 @@ require `--tenant KEY` for provisioning and job operations.
 ## Scaffold
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@latest new inventory --dir ./inventory
 cd inventory
 npm install
@@ -159,6 +165,7 @@ Never reuse `KET_SECRET` as a webhook or provider secret.
 Use defaults for embedded runtimes or tests without mutating `process.env`:
 
 ```ts
+// File: ket.workspace.ts
 import { readConfig } from '@ketvietlab/ketjs'
 
 const config = readConfig(process.env, {

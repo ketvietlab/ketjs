@@ -13,6 +13,7 @@ before calling a function or writing data.
 ## Define one schema
 
 ```ts
+// File: src/modules/example/forms.ts
 import { defineFormSchema, validationIssue } from '@ketvietlab/ketjs'
 
 type Signup = {
@@ -57,6 +58,7 @@ Unknown fields are dropped by default, matching the allow-list behavior of chang
 ## Validate and inspect issues
 
 ```ts
+// File: src/modules/example/forms.ts
 import { validateForm, valuesFromFormData } from '@ketvietlab/ketjs-view'
 
 const raw = valuesFromFormData(new FormData(form))
@@ -75,6 +77,7 @@ if (!result.valid) {
 Every issue has a stable transport shape:
 
 ```ts
+// File: src/modules/example/forms.ts
 type ValidationIssue = {
   field: string | null
   code: string
@@ -91,6 +94,7 @@ use `params` for interpolation. Do not branch on translated text.
 `createForm()` adds reactive lifecycle state without owning markup or submission transport:
 
 ```ts
+// File: src/modules/example/forms.ts
 import { createForm } from '@ketvietlab/ketjs-view'
 
 const formState = createForm(signupForm)
@@ -119,6 +123,7 @@ The controller does not intercept DOM events and does not replace native attribu
 Use `assertForm()` when a route should stop immediately on invalid input:
 
 ```ts
+// File: src/modules/example/forms.ts
 import { assertForm, json } from '@ketvietlab/ketjs'
 
 const values = assertForm(signupForm, rawBody)
@@ -132,6 +137,7 @@ return json({ ok: true })
 Use `invalidForm(result)` when a route prefers to return rather than throw:
 
 ```ts
+// File: src/modules/example/forms.ts
 const result = validateForm(signupForm, rawBody)
 if (!result.valid) return invalidForm(result)
 ```
@@ -146,6 +152,7 @@ Form schemas validate presentation input. Changesets still own model casting, ma
 and persistence validation. Convert existing changeset errors when a route needs the shared transport shape:
 
 ```ts
+// File: src/modules/example/forms.ts
 const changes = ctx.change('sales.Order', values).cast(['number']).required(['number'])
 
 if (!changes.valid) {

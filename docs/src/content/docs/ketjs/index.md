@@ -18,6 +18,7 @@ production-ready.
 Create a new SQLite-backed application directly from npm:
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 cd my-app
 npm install
@@ -61,6 +62,7 @@ KetJS is organized around six constraints:
 ## How an application is assembled
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/index.md
 flowchart LR
   roots["Module roots and imports"] --> workspace["Workspace declaration"]
   workspace --> app["Resolved AppSpec"]

@@ -21,6 +21,7 @@ deployment contracts may still change before 1.0.
 Run the `ket` binary from the `@ketvietlab/ketjs` package:
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@latest new notes
 cd notes
 npm install
@@ -32,6 +33,7 @@ names accept lowercase letters, digits, and underscores and must start with a le
 the app identifier from its directory name:
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 ```
 
@@ -44,6 +46,7 @@ the composed schema, installs the bootstrap module, and serves the workspace's f
 The scaffold contains:
 
 ```text
+# File: docs/src/content/docs/ketjs/quick-start.md
 notes/
 ├── ket.workspace.ts
 ├── modules/
@@ -69,6 +72,7 @@ The `0.1.1` scaffold wrote the old unscoped CLI path into `tools/dev.mjs`. Upgra
 `modules/notes.ts` declares its data and callable surface together:
 
 ```ts
+// File: src/modules/notes/index.ts
 import { defineModule, from } from '@ketvietlab/ketjs'
 
 export default defineModule({
@@ -104,6 +108,7 @@ function cannot read another model unless its effects declare that model.
 `ket.workspace.ts` makes the module deployable:
 
 ```ts
+// File: ket.workspace.ts
 import { defineApp, defineWorkspace, json } from '@ketvietlab/ketjs'
 import notes from './modules/notes.ts'
 
@@ -130,12 +135,14 @@ explicitly removed.
 Open the route:
 
 ```bash
+# Run from: /path/to/ketjs
 curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/
 ```
 
 Or call the function transport directly:
 
 ```bash
+# Run from: /path/to/example-app
 npx ket call notes.list \
   --against http://127.0.0.1:3000 \
   --company demo
@@ -149,6 +156,7 @@ request headers. It is a development convenience, not production authentication.
 Build before using production-style CLI commands:
 
 ```bash
+# Run from: /path/to/example-app
 npm run build
 npx ket check --workspace dist/ket.workspace.js
 npx ket manifest --workspace dist/ket.workspace.js
@@ -162,6 +170,7 @@ npx ket permissions --workspace dist/ket.workspace.js
 ## Run the test
 
 ```bash
+# Run from: /path/to/ketjs
 npm test
 ```
 

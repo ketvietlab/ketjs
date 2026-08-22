@@ -35,6 +35,7 @@ versioning but do not promise API stability before 1.0.
 ## Verify locally
 
 ```bash
+# Run from: /path/to/ketjs
 npm ci
 npm run release:check
 ```
@@ -51,6 +52,7 @@ npm run release:check
 To retain inspectable tarballs under `.release/`:
 
 ```bash
+# Run from: /path/to/ketjs
 npm run release:pack
 ```
 
@@ -66,6 +68,7 @@ No publish command is part of either local script.
 6. Run the public smoke path without local tarballs:
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@0.1.3 new public_smoke
 cd public_smoke
 npm install

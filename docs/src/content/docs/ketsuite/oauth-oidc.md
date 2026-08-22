@@ -25,6 +25,7 @@ Source chính:
 ## Ranh giới kiến trúc
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/oauth-oidc.md
 flowchart LR
   Browser[Browser]
 
@@ -72,6 +73,7 @@ protocol code của module.
 ## Mô hình dữ liệu
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/oauth-oidc.md
 erDiagram
   USER_USER ||--o{ OAUTH_EXTERNAL_IDENTITY : owns
   OAUTH_PROVIDER ||--o{ OAUTH_EXTERNAL_IDENTITY : verifies
@@ -127,6 +129,7 @@ HTML, audit hoặc transaction row.
 ## Luồng đăng nhập
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/oauth-oidc.md
 sequenceDiagram
   participant B as Browser
   participant K as KetSuite OAuth route
@@ -225,6 +228,7 @@ trong môi trường của process serve trên mọi pod.
 Chạy test theo phần đang phát triển:
 
 ```sh
+# Run from: /path/to/ketjs
 node tools/build.mjs
 node tools/test-one.mjs test/oauth-protocol.test.ts test/oauth.test.ts test/oauth-e2e.test.ts
 ```
@@ -240,6 +244,7 @@ tranh cùng issuer subject. Mỗi race phải chỉ có đúng một kết quả
 row. Chạy riêng case này bằng:
 
 ```sh
+# Run from: /path/to/ketjs
 KET_TEST_PG=postgres://... node --test \
   --test-name-pattern="OAuth provider" .build/test/pg-live.test.js
 ```
@@ -260,6 +265,7 @@ lúc tạo fixture không nằm trong mẫu. Benchmark báo `p50`, `p95` và thr
 - tám callback đồng thời tranh một state single-use.
 
 ```sh
+# Run from: /path/to/ketjs
 KET_BENCH_PG=postgres://... npm run bench:oauth
 ```
 

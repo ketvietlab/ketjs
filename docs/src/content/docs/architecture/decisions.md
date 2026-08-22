@@ -235,6 +235,7 @@ several-companies states need drawing rather than only the happy one.
 **The hole, as it was found.** With sessions on and no cookie at all:
 
 ```
+# File: docs/src/content/docs/architecture/decisions.md
 TẠO người dùng : {"ok": true, "id": "hack"}
 TẠO vai trò    : {"ok": true, "id": "r"}
 /admin         : 200, rendering the app list
@@ -517,6 +518,7 @@ by nothing, so a function could declare three fields and return eight. Measured 
 a handler that preloads a relation to show a product's name:
 
 ```
+# File: docs/src/content/docs/architecture/decisions.md
 output đã khai : {"id","qty","productName"}
 thực tế trả về : { companyId, id, productId, qty,
                    product: { id, name, cost: 12000, price: 30000 } }
@@ -548,6 +550,7 @@ surprise.
 missing from D31:
 
 ```
+# File: docs/src/content/docs/architecture/decisions.md
 product.listTemplates  reads
                        returns active, categoryId, description, id, name, …
 website_menu.listMenu  reads
@@ -607,6 +610,7 @@ call one. So the reach of a set of functions is the union of their effects. Ther
 is nothing to traverse, which is why the report is thirty lines and exact.
 
 ```
+# File: docs/src/content/docs/architecture/decisions.md
 ket permissions --grant product.listTemplates
 
 models reachable:
@@ -1220,6 +1224,7 @@ as data, and rendered for SQLite and Postgres from one shape. A tagged SQL liter
 gives up all three.
 
 ```ts
+// File: packages/ketjs/src/data/query.ts
 const q = from(P).where(eq(P.active, true)).orderBy(desc(P.priceCents)).limit(20)
 q.touches            // ['catalog.Product'] -> effect check happens here
 q.toSQL('postgres')  // { text, params } -- values always parameterised
@@ -1256,6 +1261,7 @@ data in the manifest, so it arrives and leaves with the code that serves it, and
 `ket check` can refuse a broken one at build time rather than at click time.
 
 ```ts
+// File: packages/ketsuite/src/modules/product_backend/menus.ts
 menus: {
   product: { label: 'menu.app', icon: '📦', sequence: 20 },
   'product.catalogue': { parent: 'product', label: 'menu.catalogue' },
@@ -1341,6 +1347,7 @@ the same overflow behaviour; a column can be turned off without touching markup;
 a module extending another module's list has something to name.
 
 ```ts
+// File: packages/ketsuite/src/modules/product_backend/screens.tsx
 export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   { key: 'name', label: _('…col.name'), cell: (r) => r.name },
   { key: 'variants', label: _('…col.variants'), cell: (r) => String(r.variants), align: 'end' },
