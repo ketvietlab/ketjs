@@ -740,7 +740,6 @@ export default defineModule({
                 name: form.name ?? '',
                 ...optional(form, 'description'),
                 typeTaxUse: form.typeTaxUse ?? 'sale',
-                ...optional(form, 'taxScope'),
                 amountType: form.amountType ?? 'percent',
                 amount: form.amount || '0',
                 priceInclude: form.priceInclude === '1',
@@ -785,12 +784,6 @@ export default defineModule({
                     label: _('account_backend.field.typeTaxUse'),
                     type: 'select',
                     options: optionsOf(_, 'taxUse', TAX_USES),
-                  },
-                  {
-                    name: 'taxScope',
-                    label: _('account_backend.field.taxScope'),
-                    type: 'select',
-                    options: [{ value: '', label: '—' }, ...optionsOf(_, 'taxScope', ['service', 'consu'])],
                   },
                   {
                     name: 'amountType',

@@ -21,7 +21,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { KetError } from '@ketvietlab/ketjs'
 import { compileReportTemplate, interFontUrl, renderPdf, renderReportHtml } from '@ketvietlab/ketjs/pdf'
-import { report } from '@ketvietlab/ketsuite'
+import { account, report, REPORT_FILTERS } from '@ketvietlab/ketsuite'
 
 const source = defineModule({
   name: 'orders',
@@ -227,4 +227,55 @@ test('report HTTP route generates synchronously and reuses the 30-day cache', as
     await server.close()
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('report filters print an amount and a date the way a document should', () => {
+  const vi = REPORT_FILTERS('vi')
+  const en = REPORT_FILTERS('en')
+
+  // A ledger amount is stored in major units beside its own currency. Printing the
+  // raw column put `1358024 VND` on the invoice that goes to the customer.
+  assert.equal(vi.amount('1358024', 'VND').replace(/ /g, ' '), '1.358.024 ₫')
+  assert.equal(en.amount('1358024', 'VND').replace(/ /g, ' '), '₫1,358,024')
+  // Two decimals where the currency has them, and none where it does not.
+  assert.equal(en.amount('1234.5', 'USD').replace(/ /g, ' '), '$1,234.50')
+
+  // The shared `money` filter reads cents and is fixed to VND, so a report using it
+  // would be wrong by a factor of a hundred. These are not that filter.
+  assert.notEqual(vi.amount('1358024', 'VND'), vi.amount('135802400', 'VND'))
+
+  // A stored timestamp is not a date on a printed document.
+  assert.equal(vi.date('2026-01-10T00:00:00.000Z'), '2026-01-10')
+  assert.equal(vi.date(null), '')
+})
+
+test('the customer invoice prints amounts and dates a customer can read', () => {
+  const template = (account as { reports: Record<string, { template: string }> }).reports.customerInvoice
+    .template
+  const data = {
+    name: 'SAL/2026/00001',
+    invoiceDate: '2026-01-10T00:00:00.000Z',
+    currency: 'VND',
+    amountUntaxed: '1234567',
+    amountTax: '123457',
+    amountTotal: '1358024',
+    company: { name: 'ACME' },
+    partner: { name: 'Khách hàng' },
+    lines: [{ name: 'Dịch vụ', quantity: '1', priceUnit: '1234567', balance: '1234567' }],
+  }
+  const html = renderReportHtml(
+    compileReportTemplate(template, {
+      name: 'account.customerInvoice',
+      translate: (key: string) => key,
+      filters: REPORT_FILTERS('vi'),
+    }).render(data),
+  ).replace(/[   ]/g, ' ')
+
+  // This is the document that reaches the customer. It used to carry the raw
+  // column — `1358024 VND` — and a full ISO timestamp.
+  assert.match(html, /1\.358\.024 ₫/)
+  assert.match(html, /1\.234\.567 ₫/)
+  assert.equal(html.includes('1358024'), false)
+  assert.match(html, /2026-01-10/)
+  assert.equal(html.includes('2026-01-10T00:00:00.000Z'), false)
 })
