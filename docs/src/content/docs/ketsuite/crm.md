@@ -165,6 +165,10 @@ The owning module answers for those rows through its own functions and screens. 
 it needs to write one: `crmSaveCase`, `crmCaseAudience`, `crmCanReadCase`, `crmVisibleCases`,
 `crmSerializeCaseList`, `crmSeededId` and `crmAddTimeline`.
 
+`receiveAttachment` is exported for the same reason: an extension whose records carry photographs
+should not reimplement streaming, upload limits, checksums and object keys — that is what `storage`
+is for.
+
 ## Scope boundary
 
 The OSS modules do not contain support tickets, SLA, complaints, knowledge base, canned responses,
