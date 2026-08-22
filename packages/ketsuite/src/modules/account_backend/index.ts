@@ -5,6 +5,7 @@ import type { FormField, Frame } from '../../ui/index.ts'
 import { actionGroup, formatMoney, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountOptions, accountRelationControl } from './relation-control.ts'
+import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
@@ -128,11 +129,14 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
-const moveFields = (
+const moveFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
-): FormField[] => [
+): Promise<FormField[]> => [
   {
     name: 'journalId',
     label: _('account_backend.field.journalId'),
@@ -153,6 +157,13 @@ const moveFields = (
     label: _('account_backend.field.partnerId'),
     type: 'select',
     options: choices(data.partners, true),
+    control: await partnerRelationControl(ctx, url, req, _, {
+      id: 'move-partner',
+      partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+      fieldLabel: _('account_backend.field.partnerId'),
+      title: _('account_backend.relation.partners'),
+      allowEmpty: true,
+    }),
   },
 ]
 
@@ -199,6 +210,13 @@ const invoiceFields = async (
       label: _('account_backend.field.partnerId'),
       type: 'select',
       options: choices(data.partners),
+      control: await partnerRelationControl(ctx, url, req, _, {
+        id: 'invoice-partner',
+        partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+        fieldLabel: _('account_backend.field.partnerId'),
+        title: _('account_backend.relation.partners'),
+        required: true,
+      }),
       required: true,
     },
     { name: 'invoiceDate', label: _('account_backend.field.invoiceDate'), type: 'date' },
@@ -986,11 +1004,11 @@ export default defineModule({
         )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.entries.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             journalEntriesScreen(_, {
               frame: frame,
               action: `/admin/accounting/entries${localeQuery(url)}`,
-              fields: moveFields(_, data, ['entry']),
+              fields: await moveFields(ctx, url, req, _, data, ['entry']),
               rows,
               locale: localeQuery(url),
               errors:
@@ -1439,6 +1457,7 @@ const vi: Record<string, string> = {
   'vendorBill.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải trả.',
   'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
   'relation.accounts': 'Hệ thống tài khoản',
+  'relation.partners': 'Danh bạ đối tác',
   'payments.title': 'Thanh toán',
   'payment.kicker': 'Ngân hàng và tiền mặt',
   'payment.subtitle': 'Ghi nhận tiền thu, tiền chi và đối soát công nợ mở.',
@@ -1723,6 +1742,7 @@ const en: Record<string, string> = {
   'vendorBill.emptyHint': 'Create the first bill to start tracking accounts payable.',
   'error.invalid': 'The form is invalid. Check required fields and try again.',
   'relation.accounts': 'Chart of accounts',
+  'relation.partners': 'Partner directory',
   'payments.title': 'Payments',
   'payment.kicker': 'Bank and cash',
   'payment.subtitle': 'Record receipts, disbursements, and reconciliation against open items.',
