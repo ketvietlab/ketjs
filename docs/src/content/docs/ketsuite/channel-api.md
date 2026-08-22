@@ -28,6 +28,8 @@ incompatible version.
 The facade runs before the handler and settles everything the contract declares: the caller is resolved and
 rejected against `auth`, a cookie caller proves intent on mutations, and the request body is validated against
 the published schema. A handler receives the result as its fifth argument and never repeats those checks.
+The framework routes on path alone, so one path is one operation — `routesOf()` refuses two contributions
+that claim the same path rather than letting the later one silently win.
 
 ```ts
 // File: packages/ketsuite/src/modules/booking_extension/index.ts
@@ -103,6 +105,39 @@ Mutating operations that advertise idempotency require `Idempotency-Key`. Reusin
 request body returns `409 channel_api.idempotencyConflict` instead of replaying the wrong result, and reusing
 it while the first attempt is still running returns `409 channel_api.idempotencyInFlight` with
 `retryable: true`. Invalid media types, oversized bodies, and invalid JSON are rejected at the HTTP boundary.
+
+## Retail storefront
+
+`website_retail` publishes the shopping half of the Customer profile under `/api/customer/v1/retail/`:
+`storefront`, `products`, the cart routes, `checkout`, and the shopper's own orders.
+
+A cart is held by an opaque token sent as `X-Cart-Token`, so a visitor can fill one before there is anything
+to sign in to. `POST retail/cart/claim` attaches that cart to the account that just signed in and folds in
+whatever the account already had open, because the alternative — two carts, one of them silently discarded —
+loses items the shopper chose. A claimed cart no longer opens on its token alone.
+
+`POST retail/checkout` turns the cart into a real `sale.Order` by composing Sale's own commands in one
+transaction. Nothing about the order is computed in the storefront: the number, the prices, the taxes and the
+totals all come from the functions a salesperson's quotation goes through, so an online order and a desk order
+cannot drift apart. **A price is never accepted from the caller** — every line is re-priced from the store's
+pricelist on the way in.
+
+Checkout needs facts no shopper can supply, so they are configured once per site with
+`website_retail.saveStoreSettings`:
+
+| Setting | Why |
+| --- | --- |
+| `warehouseId` | Which warehouse ships the order. Required by `sale.createOrder`. |
+| `pricelistId` | Prices the catalogue and the order. Absent falls back to the product list price. |
+| `defaultUomId` | The unit for a product whose template never declared one. |
+| `orderPolicy` | `quotation` leaves the order in draft for a human; `confirm` commits stock. |
+
+A site with no settings row still browses and still builds a cart. `retail/storefront` reports
+`ordering: false` and checkout answers `409 website_retail.orderingUnavailable`, rather than pretending an
+order was taken.
+
+Money and quantities cross the boundary as strings. A JSON number cannot hold every decimal the ledger can,
+and a storefront that rounds a total in transit is worse than one that never showed it.
 
 ## OpenAPI and Starlight
 

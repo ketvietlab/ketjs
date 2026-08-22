@@ -1,7 +1,7 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
 import type { ChannelIdentity } from '../channel_api/core.ts'
-import '../channel_api/customer.ts'
+import { channelRealmContext } from '../channel_api/customer.ts'
 
 type Req = Parameters<Route>[1]
 type Issue = { field?: string; code?: string; messageKey?: string; params?: Record<string, unknown> }
@@ -125,15 +125,7 @@ const siteOf = async (
   identity: ChannelIdentity | null,
 ): Promise<string | null> => {
   if (identity?.siteId) return identity.siteId
-  const bootstrap = (await ctx.callUnchecked(
-    'website.resolveSite',
-    { host: String(req.headers.host ?? '').split(':')[0] },
-    url,
-    req,
-  )) as {
-    id?: string
-  } | null
-  return bootstrap?.id ? String(bootstrap.id) : null
+  return (await channelRealmContext(ctx, url, req))?.siteId ?? null
 }
 const missing = (ctx: ServeContext, url: URL, req: Req) => ({
   status: 404,
