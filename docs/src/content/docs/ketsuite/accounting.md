@@ -91,6 +91,18 @@ export or a report asks for everything and gets it, rather than a silently trunc
 list that reads as complete. `countMoves` answers the totals a dashboard needs without
 fetching the rows.
 
+## Refusals
+
+Every function answers a rejected call with `{ ok: false, errors: [{ field, code,
+message }] }`. The `code` is a message key this module owns — the rule belongs to the
+ledger, so the wording does too, and a screen renders it in the reader's language. The
+`message` is the same reason in English, for an API client or a log with no translator.
+
+A backend screen re-renders the form it was given rather than redirecting: the reason
+appears against the field that caused it, and the values the user typed are still
+there. A long invoice form is not worth re-keying because one account was the wrong
+type.
+
 ## Configuration is editable
 
 Accounts, journals, taxes and payment terms are corrected in place from their own list
@@ -100,8 +112,26 @@ selection lists while leaving every entry that already references it intact. Arc
 rows stay visible on the configuration screen, with an `Archived` badge, so the change
 can be undone.
 
+A payment term's milestones are listed and edited the same way, through `?editLine=`.
+A term is defined by them — a percentage, a due-date rule and a number of days — so
+counting them without showing them left the screen unable to say what "30 days" meant.
+
 The `save*` functions take the same shape for a correction as for a creation: an id
 that already exists updates, an id that does not creates.
+
+## What the screens promise
+
+A few things the backend guarantees, because getting them wrong makes a screen unusable
+rather than merely untidy:
+
+- a picker only offers values the function will accept — a payment's destination lists
+  receivable and payable accounts, not all 216;
+- a dashboard card counts exactly the list it opens;
+- a draft has no journal number yet, so lists and titles name it by its kind and date
+  rather than by the raw id it was created under;
+- a payment state is shown only on documents that have one, never on a manual entry;
+- creating a document opens it, because a new invoice or entry is a draft that still
+  needs lines or posting.
 
 ## Testing
 
