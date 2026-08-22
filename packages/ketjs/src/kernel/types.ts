@@ -46,7 +46,7 @@ const TS: Record<FieldBase, string> = {
   bool: 'boolean',
   json: 'unknown',
   date: 'string',
-  datetime: 'Date',
+  datetime: 'string',
   ref: 'string',
 }
 export const tsTypeOf = (t: ParsedType): string => TS[t.base] + (t.optional ? ' | null' : '')

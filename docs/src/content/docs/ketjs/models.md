@@ -74,7 +74,7 @@ Append `?` to make a field optional.
 | `bool` | `boolean` | Boolean value. |
 | `json` | `unknown` | JSON-compatible data. |
 | `date` | `string` | Calendar date in `YYYY-MM-DD`, without timezone. |
-| `datetime` | `Date` in generated types | Instant represented through ISO-compatible values at boundaries. |
+| `datetime` | `string` | Instant as ISO-8601 UTC text; normalised on write, identical on SQLite and Postgres. |
 | `ref:module.Model` | `string` | Identifier referencing another model contract. |
 
 SQLite stores decimals as text because numeric affinity cannot preserve arbitrary decimal text.
