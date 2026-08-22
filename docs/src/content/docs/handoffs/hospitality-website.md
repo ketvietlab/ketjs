@@ -22,6 +22,7 @@ Trạng thái: sẵn sàng để team Website tích hợp BFF. Hospitality khôn
 Input:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/catalog.ts
 {
   propertyIds?: string[]
   active?: boolean
@@ -39,6 +40,7 @@ Input: `{ id: string }`.
 Output: `PropertyCatalog | null`. Chỉ trả cơ sở đang hoạt động.
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/catalog.ts
 type CatalogImage = {
   attachmentId: string
   category: string
@@ -82,6 +84,7 @@ type PropertyCatalog = {
 Input:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/catalog.ts
 {
   propertyId: string
   roomTypeIds?: string[]
@@ -101,6 +104,7 @@ Input: `{ id: string }`.
 Output: `RoomTypeCatalog | null`. Loại phòng và cơ sở đều phải đang hoạt động; loại phòng phải published.
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/catalog.ts
 type RoomTypeCatalog = {
   id: string
   companyId: string
@@ -136,6 +140,7 @@ Catalog chỉ trả attachment ID và metadata an toàn. BFF dùng Storage contr
 Input:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 {
   propertyId: string
   roomTypeId?: string
@@ -152,6 +157,7 @@ Input:
 Không có trường giá ở input. Giá, currency, sức chứa, restriction và inventory đều được tính lại phía server.
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 type QuoteResult =
   | {
       ok: true
@@ -188,6 +194,7 @@ Giới hạn hiện tại: đặt trước tối đa 366 ngày, tối đa 90 đ�
 Input:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 {
   id: string             // ID ổn định do BFF sinh
   requestKey: string     // idempotency key ổn định của checkout
@@ -209,6 +216,7 @@ Input:
 Output:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 type CreateReservationResult =
   | {
       ok: true
@@ -239,6 +247,7 @@ Cùng `requestKey` và cùng nội dung trả bản ghi cũ với `existing: tru
 Input:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 {
   partnerId: string
   propertyIds?: string[]
@@ -259,6 +268,7 @@ Input: `{ id: string; partnerId: string }`.
 Output: `{ ok: true; reservation: PartnerReservation; errors: [] }` hoặc lỗi ownership.
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 type PartnerReservation = {
   id: string
   companyId: string
@@ -285,6 +295,7 @@ Input: `{ id: string; partnerId: string; reason?: string; at?: string }`.
 Output:
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 type CancelReservationResult =
   | { ok: true; id: string; state: 'cancelled'; existing: boolean; errors: [] }
   | { ok: false; errors: BookingIssue[] }
@@ -295,6 +306,7 @@ Hủy chỉ áp dụng cho reservation `confirmed`, trước check-in và còn t
 ## Lỗi ổn định và i18n
 
 ```ts
+// File: packages/ketsuite/src/modules/hospitality_core/online-booking.ts
 type BookingIssue = {
   field: string
   code: string

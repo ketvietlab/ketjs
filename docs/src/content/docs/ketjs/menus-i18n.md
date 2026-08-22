@@ -10,6 +10,7 @@ function grants.
 ## Declare navigation
 
 ```ts
+// File: src/modules/sales/index.ts
 export const sales = defineModule({
   name: 'sales',
   menus: {
@@ -52,6 +53,7 @@ Unknown parents, duplicate IDs, dependency violations, and invalid depths are co
 Build navigation for one viewer:
 
 ```ts
+// File: src/modules/example/index.ts
 import { activeApp, buildMenu } from '@ketvietlab/ketjs'
 
 const tree = buildMenu(liveManifest, {
@@ -87,6 +89,7 @@ and do not store SVG markup in the manifest.
 Message keys are local in the module declaration and qualified during composition:
 
 ```ts
+// File: src/modules/example/index.ts
 messages: {
   en: {
     'app.title': 'Sales',
@@ -114,6 +117,7 @@ Messages may be strings or plural-category maps using `Intl.PluralRules` categor
 ## Translate
 
 ```ts
+// File: src/modules/example/index.ts
 import { translator } from '@ketvietlab/ketjs'
 
 const t = translator(manifest, 'en', {
@@ -139,6 +143,7 @@ may be observed without breaking the build.
 When the theme runtime has a translator, KTL exposes it as the `_` filter:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/example.ktl {% endcomment %}
 <h1>{{ 'sales.app.title' | _ }}</h1>
 <span>{{ 'sales.order.count' | _: count }}</span>
 ```
@@ -148,6 +153,7 @@ The filter is used instead of putting a function in template scope. KTL scope re
 ## Find missing messages
 
 ```ts
+// File: src/modules/example/index.ts
 import { formatMissing, missingMessages } from '@ketvietlab/ketjs'
 
 console.log(formatMissing(missingMessages(manifest, ['en', 'vi', 'fr'])))
@@ -161,6 +167,7 @@ tooling as a report; incomplete optional locales should not make application com
 Use `PSEUDO_LOCALE` (`qps`) to expand and bracket strings:
 
 ```ts
+// File: src/modules/example/index.ts
 const pseudo = translator(manifest, PSEUDO_LOCALE, { fallback: 'en' })
 ```
 
@@ -172,6 +179,7 @@ language text. Test both left-to-right expansion and your actual longest support
 Runtime defaults come from:
 
 ```bash
+# Run from: /path/to/ketjs
 KET_LOCALE=en
 KET_FALLBACK_LOCALE=en
 ```

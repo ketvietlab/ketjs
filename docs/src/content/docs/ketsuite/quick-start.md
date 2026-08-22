@@ -11,6 +11,7 @@ package boundaries available to third-party modules.
 Clone the repository, switch to the development branch, and install the locked dependencies:
 
 ```bash
+# Run from: /path/to/ketjs
 git clone https://github.com/ketvietlab/ketjs.git
 cd ketjs
 git switch develop
@@ -21,6 +22,7 @@ npm run build
 Start the composed repository application with file watching:
 
 ```bash
+# Run from: /path/to/ketjs
 npm run dev
 ```
 
@@ -31,6 +33,7 @@ serves on `127.0.0.1:3000` unless `HOST` or `PORT` overrides it. The packaged SQ
 Run a focused test after the first build:
 
 ```bash
+# Run from: /path/to/ketjs
 npm run test:one -- test/partner-e2e.test.ts
 ```
 
@@ -41,6 +44,7 @@ See [Testing KetSuite](/ketsuite/testing/) before running the full verification 
 The public app entry exposes the same composition used by the KetSuite CLI:
 
 ```ts
+// File: ket.workspace.ts
 import { createKetsuiteApp, ketsuite } from '@ketvietlab/ketsuite/app'
 ```
 
@@ -53,6 +57,7 @@ sessions, queues, and pages.
 To test KetSuite as a package consumer rather than modify the monorepo, scaffold a standalone app:
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketsuite@latest new my_suite
 cd my_suite
 npm install
@@ -76,6 +81,7 @@ with a strong credential, pipe the provisioning payload through standard input s
 not appear in the process list:
 
 ```bash
+# Run from: /path/to/ketjs
 npm run provision <<'JSON'
 {
   "companyName": "Example Company",

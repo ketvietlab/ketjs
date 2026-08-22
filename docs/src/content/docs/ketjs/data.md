@@ -9,6 +9,7 @@ inspected before execution; changesets cast and validate untrusted input before 
 ## Build a query
 
 ```ts
+// File: src/modules/order/functions.ts
 import { asc, desc, eq, from, gte, like } from '@ketvietlab/ketjs'
 
 const Orders = ctx.table('sales.Order')
@@ -48,6 +49,7 @@ Values are always parameterized rather than interpolated into SQL.
 ## Execute reads and deletes
 
 ```ts
+// File: src/modules/order/functions.ts
 const one = await ctx.db.one(from(Orders).where(eq(Orders.id, orderId)))
 const count = await ctx.db.count(from(Orders).where(eq(Orders.active, true)))
 const all = await ctx.db.all(from(Orders).preload('customer', 'lines'))
@@ -56,6 +58,7 @@ const all = await ctx.db.all(from(Orders).preload('customer', 'lines'))
 Use a delete query when its condition benefits from the query builder:
 
 ```ts
+// File: src/modules/order/functions.ts
 import { deleteFrom, eq } from '@ketvietlab/ketjs'
 
 await ctx.db.del(deleteFrom(Orders).where(eq(Orders.id, orderId)))
@@ -67,6 +70,7 @@ against the current function or job's declarations before the adapter executes S
 Convenience methods remain available for simple operations:
 
 ```ts
+// File: src/modules/order/functions.ts
 await ctx.db.select('sales.Order', { active: true })
 await ctx.db.insert('sales.Order', row)
 await ctx.db.update('sales.Order', { id }, patch)
@@ -82,6 +86,7 @@ Prefer query values for complex reads and deletes because their complete reach i
 Build a grouped query from the same immutable value and execute it with `ctx.db.group()`:
 
 ```ts
+// File: src/modules/order/functions.ts
 const summary = await ctx.db.group(
   from(Orders)
     .where(eq(Orders.active, true))
@@ -114,6 +119,7 @@ including days shortened or lengthened by daylight-saving transitions.
 ## Build a changeset
 
 ```ts
+// File: src/modules/order/functions.ts
 const changes = ctx
   .change('sales.Order', input)
   .cast(['id', 'number', 'customerId', 'orderedOn', 'total'])
@@ -137,6 +143,7 @@ could not control it.
 Pass a base row for updates:
 
 ```ts
+// File: src/modules/order/functions.ts
 const current = await ctx.db.one(from(Orders).where(eq(Orders.id, input.id)))
 if (!current) return { ok: false, code: 'not_found' }
 
@@ -170,6 +177,7 @@ Inspect `changeset.toJSON()` when returning validation data to a UI or agent.
 Use `insertIfAbsent()` when a declared unique index should settle a race:
 
 ```ts
+// File: src/modules/order/functions.ts
 const result = await ctx.db.insertIfAbsent('sales.Sequence', {
   id: sequenceId,
   key: 'order',
@@ -184,6 +192,7 @@ if (!('dryRun' in result) && !result.inserted) {
 Use `compareAndSet()` for optimistic concurrency:
 
 ```ts
+// File: src/modules/order/functions.ts
 const result = await ctx.db.compareAndSet(
   'sales.Order',
   { id: orderId },
@@ -199,6 +208,7 @@ The returned `matched` flag distinguishes a successful update from stale state.
 Run related writes through `ctx.tx()`:
 
 ```ts
+// File: src/modules/order/functions.ts
 await ctx.tx(async (tx) => {
   await tx.db.commit(orderChanges)
   await tx.db.commit(lineChanges)
@@ -221,6 +231,7 @@ Functions declaring `dryRun: true` may be called with dry-run enabled. Context w
 the intended mutation in `ctx.writes` without committing it:
 
 ```ts
+// File: src/modules/order/functions.ts
 const preview = await client.call('sales.createOrder', input, { dryRun: true })
 console.log(preview.writes)
 ```

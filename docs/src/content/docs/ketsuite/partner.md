@@ -31,6 +31,7 @@ the domain contract không thuộc phạm vi này.
 ## Thiết kế module
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/partner.md
 flowchart LR
   subgraph Partner["partner · domain dùng chung"]
     P["Partner<br/>person | company"]
@@ -110,6 +111,7 @@ phải thuộc catalog đang hoạt động của Country. Khi `isDefault` đư�
 ghi mapping `AddressDefault` trong cùng transaction với Address.
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/partner.md
 sequenceDiagram
   participant Client
   participant Service as partner.saveAddress
@@ -168,7 +170,8 @@ Các function domain chính:
 
 Validation nghiệp vụ trả lỗi có cấu trúc:
 
-```json
+```jsonc
+// File: examples/partner-validation-error.jsonc
 {
   "ok": false,
   "errors": [
@@ -203,6 +206,7 @@ trình duyệt headless thật, cả tiếng Việt và tiếng Anh.
 Khi phát triển cụm này, chạy test đúng phần thay đổi theo `AGENT.md`:
 
 ```sh
+# Run from: /path/to/ketjs
 npm run build
 node --test .build/test/identity.test.js \
   .build/test/partner-e2e.test.js \
@@ -217,6 +221,7 @@ CI khi PR được mở vào `develop`.
 Benchmark riêng của cụm chạy bằng:
 
 ```sh
+# Run from: /path/to/ketjs
 npm run bench:identity
 ```
 

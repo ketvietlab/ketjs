@@ -10,6 +10,7 @@ installed module state controls behavior.
 ## Schema pipeline
 
 ```ts
+// File: src/modules/example/models.ts
 import { planMigration, renderSql, schemaFromManifest, sqliteAdapter } from '@ketvietlab/ketjs'
 
 const next = schemaFromManifest(manifest)
@@ -30,6 +31,7 @@ and declared `hasMany` relation keys; these appear as ordinary non-destructive m
 `planMigration()` refuses data-losing operations unless explicitly allowed:
 
 ```ts
+// File: src/modules/example/models.ts
 const operations = planMigration(previous, next, {
   allowDestructive: true,
 })
@@ -47,6 +49,7 @@ For a single datastore, `ket migrate` compares the current manifest schema to it
 prints SQL, and updates `.ket/schema.<app>.json`:
 
 ```bash
+# Run from: /path/to/ketjs
 ket migrate --app backoffice --workspace dist/ket.workspace.js
 ket migrate --app backoffice --allow-destructive --workspace dist/ket.workspace.js
 ```
@@ -62,6 +65,7 @@ Programmatic code can apply one manifest with `migrateOne(adapter, manifest)`.
 SQLite is built into `@ketvietlab/ketjs` and requires no driver package:
 
 ```ts
+// File: src/modules/example/models.ts
 import { sqliteAdapter } from '@ketvietlab/ketjs'
 
 const adapter = sqliteAdapter('.ket/app.db')
@@ -74,6 +78,7 @@ factory.
 Useful settings:
 
 ```bash
+# Run from: /path/to/example-app
 KET_SQLITE=.ket/orders.db ket serve
 KET_SQLITE=:memory: ket call public.health --isolated
 ```
@@ -86,12 +91,14 @@ to one connection and cannot represent cross-process visibility.
 Install the separate adapter and its optional driver:
 
 ```bash
+# Run from: /path/to/ketjs
 npm install @ketvietlab/ketjs-postgres postgres
 ```
 
 Wire it at the application boundary:
 
 ```ts
+// File: src/app.ts
 import { defineApp } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
@@ -112,6 +119,7 @@ export const app = defineApp({
 Then configure the connection:
 
 ```bash
+# Run from: /path/to/example-app
 DATABASE_URL=postgres://app:secret@db.example/orders ket serve
 ```
 
@@ -124,6 +132,7 @@ leases and polling remain the durability guarantee.
 Custom adapters implement the public `Adapter` interface:
 
 ```ts
+// File: src/modules/example/models.ts
 type Adapter = {
   name: string
   open(): Promise<void>
@@ -148,6 +157,7 @@ only job-delivery guarantee.
 Apps with `serve.tenants` expose a database list and an opener. Migrate every tenant with:
 
 ```bash
+# Run from: /path/to/ketjs
 ket migrate --all --workspace dist/ket.workspace.js
 ket migrate --all --dry-run --workspace dist/ket.workspace.js
 ket migrate --all --allow-destructive --workspace dist/ket.workspace.js

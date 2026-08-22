@@ -22,6 +22,7 @@ Shared capability modules such as `backend`, `mail`, `activity`, `calendar`, `st
 presentation vertical but obey the same dependency rules.
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/architecture.md
 flowchart BT
   partner_backend["partner_backend"] --> partner["partner"]
   partner_backend --> backend["backend"]

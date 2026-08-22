@@ -10,6 +10,7 @@ identities: models and functions become qualified names such as `partner.Partner
 ## Recommended domain layout
 
 ```text
+# File: packages/ketsuite/src/modules/example
 packages/ketsuite/src/modules/example/
 ├── index.ts          # assembly only
 ├── models.ts         # storage contract and scopes
@@ -24,6 +25,7 @@ packages/ketsuite/src/modules/example/
 Small modules may combine files, but `index.ts` should remain readable as the complete declaration:
 
 ```ts
+// File: packages/ketsuite/src/modules/example/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
@@ -67,6 +69,7 @@ Read [Models and scopes](/ketjs/models/) before changing a model used by more th
 A domain function declares input, output, effects, and idempotency before its handler:
 
 ```ts
+// File: packages/ketsuite/src/modules/example/index.ts
 import { defineFn } from '@ketvietlab/ketjs'
 
 export const functions = {
@@ -97,6 +100,7 @@ Use a bridge when a feature depends on two owners. For example, accounting terms
 to `account_partner`; loyalty evaluation at sale confirmation belongs to `loyalty_sale`.
 
 ```ts
+// File: packages/ketsuite/src/modules/example_sale/index.ts
 export default defineModule({
   name: 'example_sale',
   version: '0.1.0',
