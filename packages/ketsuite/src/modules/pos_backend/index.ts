@@ -16,6 +16,23 @@ import {
 import { adminPage, choices, optional } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
@@ -371,6 +388,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return redirect(
             await ctx.call(
@@ -417,6 +435,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result =
               form.action === 'link'
@@ -487,6 +506,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return redirect(
             await ctx.call(
@@ -548,6 +568,7 @@ export default defineModule({
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result =
             form.action === 'open'
@@ -611,6 +632,7 @@ export default defineModule({
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result = (await ctx.call(
               'pos.createOrder',
@@ -685,6 +707,7 @@ export default defineModule({
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           let result: unknown
           if (form.action === 'line')

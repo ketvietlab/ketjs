@@ -13,7 +13,12 @@ const template = (title: string) => `<report paper="A4" margin="42">
 </report>`
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, code: string) {
-  const picking = (await ctx.db.select('stock.Picking', { id }))[0]
+  // `/reports/{report}/{id}` calls a source with only the record id and enforces
+  // nothing itself, so an unnarrowed read here hands a user who holds two
+  // companies the other company's document for any id they can guess.
+  const companyId = ctx.scope.company
+  if (!companyId) return null
+  const picking = (await ctx.db.select('stock.Picking', { id, companyId }))[0]
   if (!picking) return null
   const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
   if (!type || type.code !== code) return null
@@ -28,7 +33,7 @@ async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, code: st
     operationType: type,
     source: (await ctx.db.select('stock.Location', { id: picking.locationId }))[0] ?? { name: '' },
     destination: (await ctx.db.select('stock.Location', { id: picking.locationDestId }))[0] ?? { name: '' },
-    moves: await ctx.db.select('stock.Move', { pickingId: id }),
+    moves: await ctx.db.select('stock.Move', { pickingId: id, companyId }),
   }
 }
 const effects = [

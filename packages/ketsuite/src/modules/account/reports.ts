@@ -17,7 +17,12 @@ const template = (title: string) => `<report paper="A4" margin="42">
 </report>`
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, moveType: string) {
-  const move = (await ctx.db.select('account.Move', { id }))[0]
+  // `/reports/{report}/{id}` calls a source with only the record id and enforces
+  // nothing itself, so an unnarrowed read here hands a user who holds two
+  // companies the other company's document for any id they can guess.
+  const companyId = ctx.scope.company
+  if (!companyId) return null
+  const move = (await ctx.db.select('account.Move', { id, companyId }))[0]
   if (!move || move.moveType !== moveType) return null
   const company = ctx.scope.company
     ? (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
@@ -30,7 +35,9 @@ async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, moveType
     partner: move.partnerId
       ? ((await ctx.db.select('partner.Partner', { id: move.partnerId }))[0] ?? { name: '' })
       : { name: '' },
-    lines: (await ctx.db.select('account.MoveLine', { moveId: id })).filter((line) => !line.displayType),
+    lines: (await ctx.db.select('account.MoveLine', { moveId: id, companyId })).filter(
+      (line) => !line.displayType,
+    ),
   }
 }
 const effects = ['read:account.Move', 'read:account.MoveLine', 'read:company.Company', 'read:partner.Partner']
