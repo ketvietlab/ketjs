@@ -2,6 +2,31 @@ import { KetError } from '../kernel/errors.ts'
 
 export type GroupInterval = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
+/**
+ * The closed set of bucketing intervals.
+ *
+ * `GroupInterval` is only a compile-time type: a value that arrives as JSON — a
+ * `listState.groupBy[].interval` an agent or a form sends — has never been checked
+ * against it by the time it reaches the query builder. The Postgres dialect
+ * interpolates the interval into `DATE_TRUNC('<interval>', …)` (SQLite binds it),
+ * so an unchecked string there is SQL, not data. This is the guard that keeps the
+ * type's promise at runtime, at the one boundary where being wrong is an injection.
+ */
+export const GROUP_INTERVALS: readonly GroupInterval[] = ['day', 'week', 'month', 'quarter', 'year']
+
+export const isGroupInterval = (value: unknown): value is GroupInterval =>
+  typeof value === 'string' && (GROUP_INTERVALS as readonly string[]).includes(value)
+
+export const assertGroupInterval = (value: unknown): GroupInterval => {
+  if (!isGroupInterval(value))
+    throw new KetError({
+      code: 'E_GROUP_INTERVAL',
+      message: `invalid group interval ${JSON.stringify(value)}`,
+      hint: `interval must be one of ${GROUP_INTERVALS.join(', ')}`,
+    })
+  return value
+}
+
 export const isTimezone = (value: string): boolean => {
   try {
     new Intl.DateTimeFormat('en', { timeZone: value }).format()

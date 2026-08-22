@@ -8,7 +8,7 @@ import type { Col, Expr } from './expr.ts'
 import { tableNameFor } from './migrate.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Manifest } from '../types.ts'
-import { assertTimezone } from './time.ts'
+import { assertGroupInterval, assertTimezone } from './time.ts'
 import type { GroupInterval } from './time.ts'
 
 export type Dialect = 'sqlite' | 'postgres'
@@ -131,6 +131,7 @@ export class Query {
           code: 'E_GROUP_MODEL',
           message: `cannot group ${this.model} by ${group.col.model}`,
         })
+      if (group.interval) assertGroupInterval(group.interval)
       if (group.interval && group.timezone) assertTimezone(group.timezone)
     }
     return this.with({ kind: 'group', columns: null, groups: [...this.groups, ...groups] })
@@ -195,18 +196,21 @@ export class Query {
       if (e.op === 'null') return `${colSql(e.col)} IS ${e.negated ? 'NOT ' : ''}NULL`
       if (e.op === 'bucket') {
         const column = colSql(e.col)
+        // Interpolated into DATE_TRUNC below, so it must be a member of the closed
+        // set and nothing else — the value reaches here straight from JSON.
+        const interval = assertGroupInterval(e.interval)
         if (dialect === 'postgres') {
           const format =
-            e.interval === 'quarter'
+            interval === 'quarter'
               ? 'YYYY-"Q"Q'
-              : e.interval === 'year'
+              : interval === 'year'
                 ? 'YYYY'
-                : e.interval === 'month'
+                : interval === 'month'
                   ? 'YYYY-MM'
                   : 'YYYY-MM-DD'
-          return `TO_CHAR(DATE_TRUNC('${e.interval}', ${column} AT TIME ZONE ${bind(e.timezone)}), '${format}') = ${bind(e.value)}`
+          return `TO_CHAR(DATE_TRUNC('${interval}', ${column} AT TIME ZONE ${bind(e.timezone)}), '${format}') = ${bind(e.value)}`
         }
-        return `ket_date_bucket(${column}, ${bind(e.interval)}, ${bind(e.timezone)}) = ${bind(e.value)}`
+        return `ket_date_bucket(${column}, ${bind(interval)}, ${bind(e.timezone)}) = ${bind(e.value)}`
       }
       if (e.op === 'like')
         return `${colSql(e.col)} ${e.insensitive && dialect === 'postgres' ? 'ILIKE' : 'LIKE'} ${bind(e.value)}${e.escape ? ` ESCAPE '\\'` : ''}`
@@ -226,15 +230,17 @@ export class Query {
       const groupSql = this.groups.map((group) => {
         const column = colSql(group.col)
         if (!group.interval) return column
+        // Same boundary as the bucket expression: interpolated into DATE_TRUNC, so
+        // it is validated here rather than trusted from the caller.
+        const interval = assertGroupInterval(group.interval)
         const timezone = group.timezone ?? 'UTC'
         if (dialect === 'postgres') {
-          if (group.interval === 'quarter')
+          if (interval === 'quarter')
             return `TO_CHAR(DATE_TRUNC('quarter', ${column} AT TIME ZONE ${bind(timezone)}), 'YYYY-"Q"Q')`
-          const format =
-            group.interval === 'year' ? 'YYYY' : group.interval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'
-          return `TO_CHAR(DATE_TRUNC('${group.interval}', ${column} AT TIME ZONE ${bind(timezone)}), '${format}')`
+          const format = interval === 'year' ? 'YYYY' : interval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'
+          return `TO_CHAR(DATE_TRUNC('${interval}', ${column} AT TIME ZONE ${bind(timezone)}), '${format}')`
         }
-        return `ket_date_bucket(${column}, ${bind(group.interval)}, ${bind(timezone)})`
+        return `ket_date_bucket(${column}, ${bind(interval)}, ${bind(timezone)})`
       })
       const aggregateSql = this.aggregates.map((aggregate) => {
         if (aggregate.fn === 'count') return `COUNT(*) AS ${q(aggregate.as)}`
