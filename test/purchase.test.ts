@@ -88,6 +88,197 @@ async function boot() {
   return adapter
 }
 
+test('purchase: a line is ordered in the vendor unit and received in the product unit', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeFactor: '12', relativeUomId: 'unit' },
+      adapter,
+    )
+    await call('uom.saveUnit', { id: 'kg', name: 'Kg', relativeFactor: '1' }, adapter)
+    await call(
+      'purchase.createOrder',
+      { id: 'po', partnerId: 'vendor', pickingTypeId: 'incoming', dateOrder: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    // A unit from another measurement tree is not a unit for this product.
+    const wrong = (
+      await call(
+        'purchase.addLine',
+        { id: 'po:wrong', orderId: 'po', productId: 'goods-1', productQty: '5', productUomId: 'kg' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(wrong.ok, false)
+    assert.equal((wrong.errors as Row[])[0]?.field, 'productUomId')
+
+    await call(
+      'purchase.addLine',
+      {
+        id: 'po:line',
+        orderId: 'po',
+        productId: 'goods-1',
+        productQty: '2',
+        productUomId: 'box',
+        priceUnit: '1200',
+      },
+      adapter,
+    )
+    await call('purchase.confirmOrder', { id: 'po' }, adapter)
+    // The warehouse counts pieces, so it is asked for twenty-four, not two.
+    const move = (
+      await adapter.all(
+        'SELECT id, "productUomId", "productUomQty" FROM stock_move WHERE "purchaseLineId" = ?',
+        ['po:line'],
+      )
+    )[0]!
+    assert.equal(move.productUomId, 'unit')
+    assert.equal(Number(move.productUomQty), 24)
+
+    await call('stock.confirmPicking', { id: 'po:receipt' }, adapter)
+    await call('stock.saveMoveLine', { id: 'rl', moveId: move.id, quantity: '24', picked: true }, adapter)
+    await call('stock.completePicking', { id: 'po:receipt' }, adapter)
+    await call('purchase.syncReceipts', { id: 'po' }, adapter)
+    // …and comes back in the unit the buyer ordered.
+    const line = (await adapter.all('SELECT "qtyReceived" FROM purchase_order_line'))[0]!
+    assert.equal(Number(line.qtyReceived), 2)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('purchase: a request line can be corrected and removed until it is confirmed', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'purchase.createOrder',
+      { id: 'po', partnerId: 'vendor', pickingTypeId: 'incoming', dateOrder: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'purchase.addLine',
+      {
+        id: 'po:line',
+        orderId: 'po',
+        productId: 'goods-1',
+        productQty: '5',
+        productUomId: 'unit',
+        priceUnit: '100',
+        discount: '0',
+      },
+      adapter,
+    )
+    // Adding the same id again reports the line as it stands, never a price it
+    // did not write.
+    const repeat = (
+      await call(
+        'purchase.addLine',
+        {
+          id: 'po:line',
+          orderId: 'po',
+          productId: 'goods-1',
+          productQty: '50',
+          productUomId: 'unit',
+          priceUnit: '999',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(repeat.existing, true)
+    assert.equal(repeat.priceUnit, '100')
+
+    const edited = (
+      await call('purchase.updateLine', { id: 'po:line', productQty: '8', priceUnit: '90' }, adapter)
+    ).value as Row
+    assert.equal(edited.ok, true)
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM purchase_order'))[0]!.amountTotal, '720')
+
+    await call('purchase.removeLine', { id: 'po:line' }, adapter)
+    assert.equal((await adapter.all('SELECT id FROM purchase_order_line')).length, 0)
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM purchase_order'))[0]!.amountTotal, '0')
+
+    // A confirmed order is no longer a request.
+    await call(
+      'purchase.addLine',
+      { id: 'po:again', orderId: 'po', productId: 'goods-1', productQty: '1', productUomId: 'unit' },
+      adapter,
+    )
+    await call('purchase.confirmOrder', { id: 'po' }, adapter)
+    const late = (await call('purchase.updateLine', { id: 'po:again', productQty: '3' }, adapter))
+      .value as Row
+    assert.equal(late.ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('purchase: cancelling a vendor bill releases the quantity it billed', async () => {
+  const adapter = await boot()
+  try {
+    await call('purchase.setPurchaseMethod', { templateId: 'goods', purchaseMethod: 'purchase' }, adapter)
+    await call(
+      'purchase.createOrder',
+      { id: 'po', partnerId: 'vendor', pickingTypeId: 'incoming', dateOrder: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'purchase.addLine',
+      {
+        id: 'po:line',
+        orderId: 'po',
+        productId: 'goods-1',
+        productQty: '10',
+        productUomId: 'unit',
+        priceUnit: '100',
+        discount: '0',
+      },
+      adapter,
+    )
+    await call('purchase.confirmOrder', { id: 'po' }, adapter)
+    const billed = (
+      await call(
+        'purchase.createVendorBill',
+        {
+          id: 'bill-1',
+          orderId: 'po',
+          journalId: 'purchase-journal',
+          expenseAccountId: 'expense',
+          payableAccountId: 'payable',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(billed.ok, true)
+    const invoiced = (await call('purchase.getOrder', { id: 'po' }, adapter)).value as Row
+    assert.equal(Number((invoiced.lines as Row[])[0]?.qtyInvoiced), 10)
+    assert.equal(invoiced.invoiceStatus, 'invoiced')
+
+    // A bill drafted by mistake must not lock the order out of being billed.
+    await call('account.cancelMove', { id: 'bill-1' }, adapter)
+    const released = (await call('purchase.getOrder', { id: 'po' }, adapter)).value as Row
+    assert.equal(Number((released.lines as Row[])[0]?.qtyInvoiced), 0)
+    assert.equal(released.invoiceStatus, 'to invoice')
+    const again = (
+      await call(
+        'purchase.createVendorBill',
+        {
+          id: 'bill-2',
+          orderId: 'po',
+          journalId: 'purchase-journal',
+          expenseAccountId: 'expense',
+          payableAccountId: 'payable',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(again.ok, true)
+    assert.equal(again.amountTotal, '1000')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('purchase: supplier price, confirmation and receipt integrate with Stock', async () => {
   const adapter = await boot()
   try {
