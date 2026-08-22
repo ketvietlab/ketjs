@@ -11,6 +11,7 @@ asset, island, and agent endpoints; modules and the app may add routes through d
 Declare reusable routes on the module that owns them:
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineModule, json } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -45,6 +46,7 @@ boundary.
 Routes default to requiring a session. Public endpoints must opt in:
 
 ```ts
+// File: src/modules/order/routes.ts
 routes: {
   '/health': {
     anonymous: true,
@@ -62,6 +64,7 @@ declared `anonymous: true`.
 `serve.routes` is useful for application shell routes that do not belong to a reusable module:
 
 ```ts
+// File: src/app.ts
 import { defineApp, json } from '@ketvietlab/ketjs'
 
 const app = defineApp({
@@ -128,6 +131,7 @@ types so binary APIs cannot accidentally become a markup escape hatch.
 Use `html` from `@ketvietlab/ketjs-view` and `page` or `fragment` from `@ketvietlab/ketjs`:
 
 ```ts
+// File: src/modules/order/routes.ts
 import { page } from '@ketvietlab/ketjs'
 import { html } from '@ketvietlab/ketjs-view'
 
@@ -153,6 +157,7 @@ pass request data to it.
 Use `navigablePage()` when one GET route can return either a complete document or replaceable slots:
 
 ```ts
+// File: src/modules/order/routes.ts
 import { navigablePage } from '@ketvietlab/ketjs'
 
 return navigablePage(request, {
@@ -173,11 +178,13 @@ server does not construct them during internal navigation.
 The protocol is intentionally small:
 
 ```http
+# File: examples/request.http
 X-Ket-Navigation: fragment-v1
 Accept: text/vnd.ket.fragments+html
 ```
 
 ```html
+<!-- File: src/templates/example.html -->
 <ket-fragments data-title="Orders">
   <template data-ket-slot="backend.content">...</template>
 </ket-fragments>
@@ -207,6 +214,7 @@ backward compatible.
 Add response headers without reconstructing the branded object:
 
 ```ts
+// File: src/modules/order/routes.ts
 return withHeaders(json({ ok: true }), {
   'cache-control': 'no-store',
   'set-cookie': cookie,
@@ -220,6 +228,7 @@ Use `withHeaders()` rather than spreading a route result into a new plain object
 Serve an in-memory export:
 
 ```ts
+// File: src/modules/order/routes.ts
 return bytes(csvBytes, {
   type: 'text/csv; charset=utf-8',
   status: 200,
@@ -229,6 +238,7 @@ return bytes(csvBytes, {
 Serve large content with backpressure:
 
 ```ts
+// File: src/modules/order/routes.ts
 const stored = await ctx.storageOf(url, request).get(key)
 if (!stored) return text('Not found', { status: 404 })
 
@@ -244,6 +254,7 @@ The HTTP layer consumes the async iterable chunk by chunk instead of buffering t
 HTTP-exposed functions are callable at:
 
 ```text
+# File: docs/src/content/docs/ketjs/http.md
 POST /_ket/fn/<qualified-function-name>
 Content-Type: application/json
 ```

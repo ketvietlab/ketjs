@@ -14,6 +14,7 @@ cannot silently replay a result for a different body. See [HTTP contracts and Op
 ## Declare a function
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -114,6 +115,7 @@ scope, or effects unrepresentable through the normal API.
 Functions default to authenticated HTTP exposure:
 
 ```ts
+// File: src/modules/order/functions.ts
 functions: {
   publicCatalogue: {
     anonymous: true,
@@ -143,6 +145,7 @@ handling, or response shaping.
 One-shot bootstrap operations must be explicitly internal and opt in with `provision: true`:
 
 ```ts
+// File: src/modules/order/functions.ts
 provisionAdmin: {
   exposure: 'internal',
   provision: true,
@@ -155,6 +158,7 @@ provisionAdmin: {
 The CLI reads secret input from stdin so credentials do not enter shell history:
 
 ```bash
+# Run from: /path/to/ketjs
 printf '%s' '{"login":"admin","password":"..."}' | \
   ket provision user.provisionAdmin --input -
 ```
@@ -169,6 +173,7 @@ dry-run on another function receives `E_NO_DRY_RUN`.
 Declare `idempotent: true` when repeated calls can be keyed:
 
 ```ts
+// File: src/modules/order/functions.ts
 const first = await client.call('sales.createOrder', input, {
   idempotencyKey: 'order:external-4815',
 })
@@ -194,6 +199,7 @@ Company-scoped operations read the current company by default. Set `crossCompany
 operation intentionally designed for consolidation or shared reporting:
 
 ```ts
+// File: src/modules/order/functions.ts
 salesByCompany: {
   crossCompany: true,
   effects: ['read:sales.Order'],
@@ -213,6 +219,7 @@ because both read `sales.Order`.
 Inspect reach before creating a role:
 
 ```bash
+# Run from: /path/to/ketjs
 ket permissions --grant sales.listOrders,sales.createOrder
 ket permissions --module sales
 ket permissions --role sales_manager

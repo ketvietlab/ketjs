@@ -12,6 +12,7 @@ an HTTP role, and a worker role.
 Prefer a default export from `ket.workspace.ts`:
 
 ```ts
+// File: ket.workspace.ts
 import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
 import { catalog, checkout, storefrontTheme } from './modules/index.ts'
 
@@ -68,6 +69,7 @@ contract checks that require all modules.
 same datastore:
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/workspaces.md
 flowchart LR
   storefront["storefront"] --> main["datastore: main"]
   backoffice["backoffice"] --> main
@@ -88,6 +90,7 @@ Set `headless: true` for APIs, workers, administration backends, or integration 
 no themed pages:
 
 ```ts
+// File: src/app.ts
 const api = defineApp({
   name: 'catalog_api',
   modules: [catalog],
@@ -108,6 +111,7 @@ declare models, functions, jobs, storage, sessions, and routes.
 The HTTP server and worker are different process roles of the same app artifact:
 
 ```ts
+// File: src/app.ts
 const app = defineApp({
   name: 'orders',
   modules: [orders],
@@ -127,6 +131,7 @@ Every job queue contributed by the app's modules must appear in `worker.queues`.
 configuration is a composition error. Run the roles separately in production:
 
 ```bash
+# Run from: /path/to/example-app
 ket serve --app orders --workspace dist/ket.workspace.js
 ket worker --app orders --workspace dist/ket.workspace.js
 ```
@@ -138,6 +143,7 @@ Development can run both under one watcher with `ket dev --all`.
 The CLI selects an app with `--app`. If no app is named, commands use the first suitable app:
 
 ```bash
+# Run from: /path/to/example-app
 ket check --workspace dist/ket.workspace.js
 ket manifest --app storefront --workspace dist/ket.workspace.js
 ket serve --app backoffice --workspace dist/ket.workspace.js
@@ -151,6 +157,7 @@ only one app.
 Build tools can use the same boundary as the CLI:
 
 ```ts
+// File: ket.workspace.ts
 import { composeWorkspace, explainWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(declaration, {

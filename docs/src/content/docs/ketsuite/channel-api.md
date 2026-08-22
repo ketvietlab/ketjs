@@ -26,6 +26,7 @@ compatible contract major. Composition fails when a route bypasses the facade or
 incompatible version.
 
 ```ts
+// File: packages/ketsuite/src/modules/booking_extension/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 import { defineChannelRoute } from '@ketvietlab/ketsuite'
 
@@ -64,7 +65,8 @@ Registration is immediately usable in the current phase; email activation is not
 
 Every response uses one envelope:
 
-```json
+```jsonc
+// File: examples/channel-api-response.jsonc
 {
   "data": {},
   "error": null,
@@ -87,6 +89,7 @@ idempotency metadata to OpenAPI 3.1. The checked-in artifact is regenerated from
 before Starlight development and production builds:
 
 ```sh
+# Run from: /path/to/ketjs
 npm run generate:api --prefix docs
 ```
 

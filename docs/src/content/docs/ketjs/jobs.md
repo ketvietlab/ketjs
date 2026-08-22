@@ -9,6 +9,7 @@ business data, and a separate worker process claims jobs with leases. Redis is n
 ## Declare a job
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineJob, defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -51,6 +52,7 @@ The job context extends the normal function context with:
 The producer declares the enqueue effect:
 
 ```ts
+// File: src/modules/export/jobs.ts
 functions: {
   confirmOrder: {
     input: { orderId: 'id' },
@@ -83,6 +85,7 @@ publishes its wake-up notification on the same transaction connection and only a
 `jobs.enqueue()` accepts:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await ctx.jobs.enqueue('billing.issueInvoice', { orderId }, {
   runAt: new Date(Date.now() + 5 * 60_000),
   priority: 10,
@@ -103,6 +106,7 @@ was committed externally before acknowledgement.
 Every shipped queue must be configured on the app:
 
 ```ts
+// File: src/app.ts
 const app = defineApp({
   name: 'erp',
   modules: [sales],
@@ -125,6 +129,7 @@ const app = defineApp({
 Run separate production roles:
 
 ```bash
+# Run from: /path/to/example-app
 ket serve --app erp --workspace dist/ket.workspace.js
 ket worker --app erp --workspace dist/ket.workspace.js
 ```
@@ -132,6 +137,7 @@ ket worker --app erp --workspace dist/ket.workspace.js
 In development:
 
 ```bash
+# Run from: /path/to/ketjs
 ket dev --all --app erp --workspace dist/ket.workspace.js
 ```
 
@@ -141,6 +147,7 @@ Job states are `available`, `scheduled`, `executing`, `retryable`, `completed`, 
 `cancelled`.
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/jobs.md
 stateDiagram-v2
   direction LR
   [*] --> available
@@ -174,6 +181,7 @@ so lost notifications do not lose jobs.
 Observe `ctx.signal` in provider calls and long loops:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await ctx.transport.send(message, { signal: ctx.signal })
 
 for (const item of items) {
@@ -188,6 +196,7 @@ idempotency keys and provider APIs that accept abort signals.
 ## Operator commands
 
 ```bash
+# Run from: /path/to/ketjs
 ket jobs list --state retryable --queue mail --limit 50
 ket jobs retry JOB_ID
 ket jobs cancel JOB_ID
@@ -204,6 +213,7 @@ retention policy for terminal rows.
 loop running. Drain explicitly where the scenario expects asynchronous work to settle:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await e2e.client.call('sales.confirmOrder', { orderId: 'o1' })
 const completed = await e2e.drainJobs()
 assert.equal(completed, 1)

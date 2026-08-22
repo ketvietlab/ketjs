@@ -6,6 +6,7 @@ A standalone documentation application built with [Astro](https://astro.build/) 
 ## Run locally
 
 ```bash
+# Run from: /path/to/ketjs
 cd docs
 npm install
 npm run dev
@@ -14,6 +15,7 @@ npm run dev
 ## Validate and build
 
 ```bash
+# Run from: /path/to/ketjs/docs
 npm run check
 npm run build
 ```

@@ -11,6 +11,7 @@ request, response, or URL.
 ## Request-to-screen flow
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/backend-development.md
 flowchart LR
   request["Admin HTTP request"] --> route["domain_backend route"]
   route -->|"ctx.call()"| fn["Domain function"]
@@ -30,6 +31,7 @@ A route parses the request, calls domain functions, selects locale-aware navigat
 screen. Keep business validation in the domain function.
 
 ```ts
+// File: packages/ketsuite/src/modules/example_backend/routes.ts
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -94,6 +96,7 @@ the input.
 An island declares a validated prop contract, a stable identity key, server view, and client export:
 
 ```ts
+// File: packages/ketsuite/src/modules/example_backend/islands.ts
 export const islands = {
   'example.editor': {
     props: { identity: 'text', recordId: 'id?', lang: 'text?' },

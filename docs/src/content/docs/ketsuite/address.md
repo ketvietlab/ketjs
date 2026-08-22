@@ -25,6 +25,7 @@ Source chính:
 ## Ranh giới thiết kế
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/address.md
 flowchart LR
   Source[JSON nguồn theo quốc gia] -->|build-time normalize| Bundle[data/VN/catalogs/version]
   Bundle -->|explicit install, lazy file I/O| Loader[address loader]
@@ -50,6 +51,7 @@ từ Partner đại diện, không tạo bản sao địa chỉ trên `company.C
 ## Mô hình dữ liệu
 
 ```mermaid
+%% File: docs/src/content/docs/ketsuite/address.md
 erDiagram
   ADDRESS_COUNTRY ||--o{ ADDRESS_CATALOG : has_versions
   ADDRESS_COUNTRY ||--|| ADDRESS_CURRENT_CATALOG : selects
@@ -105,6 +107,7 @@ VN đầu tiên chưa sinh transition vì source chỉ cung cấp trạng thái 
 ## Bundle và lazy loading
 
 ```text
+# File: packages/ketsuite/src/modules/address/data
 packages/ketsuite/src/modules/address/data/
 ├── index.json
 ├── countries.json
@@ -138,6 +141,7 @@ Nguồn nhập là bộ dữ liệu LGPL-3 Vidoo Vietnam Address Core. Bản đ�
 manifest checksum nằm ngay trong module:
 
 ```text
+# File: packages/ketsuite/src/modules/address/data/VN/catalogs/2025-07-01
 packages/ketsuite/src/modules/address/data/VN/catalogs/2025-07-01/
 ```
 
@@ -166,6 +170,7 @@ Checksum source được ghi trong manifest:
 Tạo lại bundle từ source:
 
 ```sh
+# Run from: /path/to/ketjs
 tsx tools/address-data.ts \
   --source /path/to/vidoo_vn_address_core/data \
   --output packages/ketsuite/src/modules/address/data/VN/catalogs/2025-07-01 \
@@ -182,6 +187,7 @@ khu trong cùng đường dẫn. Mã bưu chính không bắt buộc; nếu có 
 số. Định dạng chuẩn hiện tại:
 
 ```text
+# File: docs/src/content/docs/ketsuite/address.md
 12 Nguyễn Huệ
 Phường Ba Đình, Hà Nội
 Việt Nam
@@ -207,6 +213,7 @@ song song trong database.
 Chạy đúng phần đang phát triển:
 
 ```sh
+# Run from: /path/to/ketjs
 npm run test:one -- \
   test/address.test.ts \
   test/address-postgres.test.ts \
@@ -223,6 +230,7 @@ Partner address qua form URL-encoded.
 Benchmark trước commit:
 
 ```sh
+# Run from: /path/to/ketjs
 KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:address
 KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:identity
 ```

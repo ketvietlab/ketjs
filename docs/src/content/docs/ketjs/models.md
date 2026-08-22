@@ -10,6 +10,7 @@ generated declarations from the same model definitions.
 ## Declare a model
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -47,6 +48,7 @@ qualified model name, not depend on the physical naming convention.
 Set `timestamps: true` on a model to add optional `createdAt` and `updatedAt` datetime fields:
 
 ```ts
+// File: src/modules/order/models.ts
 Order: {
   scope: 'company',
   timestamps: true,
@@ -98,6 +100,7 @@ is a composition error.
 KetJS adds and enforces scope columns centrally. A request scope separates reads from writes:
 
 ```ts
+// File: src/modules/order/models.ts
 type Scope = {
   company: string | null       // exactly one company receives new rows
   companies?: string[] | null // companies visible to reads
@@ -116,6 +119,7 @@ afterward: `ctx.db.update()` rejects patches containing `companyId`, or `branchI
 Indexes have stable names local to the model:
 
 ```ts
+// File: src/modules/order/models.ts
 indexes: {
   reference: { fields: ['reference'], unique: true },
   customer_date: { fields: ['customerId', 'orderedOn'] },
@@ -134,6 +138,7 @@ declared `hasMany` preload keys when no authored index already covers that prefi
 A `ref:` field records the target contract. Relations name how queries preload related rows:
 
 ```ts
+// File: src/modules/sales/index.ts
 export const sales = defineModule({
   name: 'sales',
   depends: ['crm'],
@@ -181,6 +186,7 @@ names. For example, `foo.BarBaz` and `foo_bar.Baz` are rejected because both wou
 ## Extend another module's model
 
 ```ts
+// File: src/modules/delivery/index.ts
 export const delivery = defineModule({
   name: 'delivery',
   depends: ['sales'],
@@ -202,6 +208,7 @@ code is a schema change handled by migration policy.
 A view declares the only fields a theme may receive:
 
 ```ts
+// File: src/modules/order/models.ts
 views: {
   orderSummary: {
     of: 'sales.Order',
@@ -218,6 +225,7 @@ They prevent a theme from reaching fields the owning module did not expose.
 Generate app-specific declarations from the composed manifest:
 
 ```bash
+# Run from: /path/to/example-app
 ket types --app backoffice --workspace dist/ket.workspace.js
 ```
 

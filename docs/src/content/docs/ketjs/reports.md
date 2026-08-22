@@ -10,6 +10,7 @@ preview documents, and cache artifacts without importing the business module.
 ## Architecture and ownership
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/reports.md
 flowchart LR
   business["Business module\nmodel + read-only DTO source + default KTL"] --> manifest["Composed manifest\nqualified report declaration"]
   manifest --> runtime["Central report runtime\ntemplate versions + cache"]
@@ -37,6 +38,7 @@ declaration beside the domain source it describes. Create a separate module only
 independently installable cross-domain capability with its own ownership and dependency graph.
 
 ```ts
+// File: src/modules/sale/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
@@ -84,6 +86,7 @@ or JPEG bytes must be supplied through `renderPdf({ images })`; they are never f
 margins. Network resources, scripts, CSS, declarations, and unknown tags or attributes are refused.
 
 ```ts
+// File: src/modules/invoice/reports.ts
 import { readFile } from 'node:fs/promises'
 import {
   compileReportTemplate,
@@ -141,6 +144,7 @@ an artifact can be reused.
 For ordinary business documents, a synchronous route keeps authorization and failure behavior simple:
 
 ```ts
+// File: src/modules/invoice/reports.ts
 routes: {
   '/reports/{report}/{id}': (ctx) => async (url, req, params) => {
     const available = await ctx.reportsOf(url, req, 'sale.Order')

@@ -23,6 +23,7 @@ migration, tạo fixture và 20 lượt warm-up không nằm trong mẫu latency
 | Tải máy tại lần đo cuối | load average `88.53 / 78.67 / 74.15` |
 
 ```sh
+# Run from: /path/to/ketjs
 KET_BENCH_PG=postgres://dev:devpassword@127.0.0.1:5435/ket_address_bench_20260820 \
   npm run bench:address
 KET_BENCH_PG=postgres://dev:devpassword@127.0.0.1:5435/ket_address_bench_20260820 \
