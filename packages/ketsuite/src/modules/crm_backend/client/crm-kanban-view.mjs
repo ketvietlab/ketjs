@@ -8,6 +8,7 @@ const LABELS = {
     open: 'Mở hồ sơ',
     unassigned: 'Chưa phân công',
     loadMore: 'Tải thêm',
+    moveShort: 'Chuyển',
   },
   en: {
     empty: 'No cases in this stage.',
@@ -17,19 +18,26 @@ const LABELS = {
     open: 'Open case',
     unassigned: 'Unassigned',
     loadMore: 'Load more',
+    moveShort: 'Move',
   },
 }
 
-const labelsOf = (props) => LABELS[String(props.lang).toLowerCase().startsWith('en') ? 'en' : 'vi']
+// The board is rendered on the server and rehydrated in the browser, so its
+// wording travels with its data: the route resolves every string through the
+// module catalogue and the map below is only the floor a payload without labels
+// lands on. It used to be the only source, which put a second, untranslatable
+// vocabulary in the module.
 const dataOf = (props) => {
+  const fallback = LABELS[String(props.lang).toLowerCase().startsWith('en') ? 'en' : 'vi']
   try {
     const value = JSON.parse(String(props.data ?? '{}'))
     return {
       rows: Array.isArray(value.rows) ? value.rows : [],
       stages: Array.isArray(value.stages) ? value.stages : [],
+      labels: { ...fallback, ...(value.labels && typeof value.labels === 'object' ? value.labels : {}) },
     }
   } catch {
-    return { rows: [], stages: [] }
+    return { rows: [], stages: [], labels: fallback }
   }
 }
 
@@ -56,8 +64,8 @@ const callMove = async (payload) => {
 
 export function createCrmKanbanView(runtime, props, seed = {}) {
   const { each, html, signal } = runtime
-  const labels = labelsOf(props)
   const initial = dataOf(props)
+  const labels = initial.labels
   const rows = signal(seed.rows ?? initial.rows)
   const busy = signal('')
   const error = signal('')
@@ -90,30 +98,36 @@ export function createCrmKanbanView(runtime, props, seed = {}) {
         const entry = rows().find((row) => row.id === dragId())
         if (entry) move(entry, stage.id)
       }}>
-      <header data-ui="crm-kanban-stage"><h2>${stage.name}</h2><span>${stageRows.length} / ${stage.total ?? stageRows.length}</span></header>
+      <header data-ui="crm-kanban-stage">
+        <h2>${stage.name}</h2>
+        <span>${stageRows.length} / ${stage.total ?? stageRows.length}</span>
+      </header>
       <div data-ui="crm-kanban-cards">
         ${stageRows.length === 0 ? html`<p data-ui="crm-kanban-empty">${labels.empty}</p>` : ''}
         ${each(
           stageRows,
           (entry) => entry.id,
           (entry) => html`<article data-ui="crm-kanban-card" draggable="true"
-          on:dragstart=${() => dragId.set(entry.id)} data-kind=${entry.kind} data-busy=${busy() === entry.id}>
+          on:dragstart=${() => dragId.set(entry.id)} data-kind=${entry.kind} data-priority=${String(entry.priority ?? '1')} data-busy=${busy() === entry.id}>
           <h3><a href=${`/admin/crm/cases/${entry.id}`}>${entry.name}</a></h3>
-          <p>${entry.partnerName ?? entry.contactName ?? '—'}</p>
-          <small>${entry.assigneeName ?? labels.unassigned}</small>
-          <form method="post" action="/admin/crm/pipeline/move">
+          <p data-ui="crm-kanban-party">${entry.partnerName ?? entry.contactName ?? entry.email ?? '—'}</p>
+          <p data-ui="crm-kanban-figures">
+            <strong>${entry.revenue ?? '—'}</strong>
+            <small>${entry.assigneeName ?? labels.unassigned}</small>
+          </p>
+          <form data-ui="crm-kanban-move" method="post" action="/admin/crm/pipeline/move">
             <input type="hidden" name="id" value=${entry.id}>
             <input type="hidden" name="expectedVersion" value=${String(entry.version)}>
             <input type="hidden" name="idempotencyKey" value=${`pipeline:${entry.id}:${entry.version}`}>
-            <label>${labels.move}<select data-ui="form-control" name="stageId" on:change=${(event) => move(entry, event.target.value)} disabled=${busy() === entry.id}>
+            <select data-ui="form-control" name="stageId" aria-label=${labels.move} on:change=${(event) => move(entry, event.target.value)} disabled=${busy() === entry.id}>
               ${each(
                 initial.stages,
                 (option) => option.id,
                 (option) =>
                   html`<option value=${option.id} selected=${option.id === entry.stageId}>${option.name}</option>`,
               )}
-            </select></label>
-            <button type="submit" data-ui="action" data-variant="secondary" data-size="compact" disabled=${busy() === entry.id}>${busy() === entry.id ? labels.moving : labels.move}</button>
+            </select>
+            <button type="submit" data-ui="action" data-variant="tertiary" data-size="compact" title=${labels.move} disabled=${busy() === entry.id}>${busy() === entry.id ? labels.moving : labels.moveShort}</button>
           </form>
         </article>`,
         )}

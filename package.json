@@ -37,6 +37,7 @@
     "visual:hospitality:seed": "npm run build --silent && node .build/tools/hospitality-visual.js",
     "visual:partner:seed": "npm run build --silent && node .build/tools/partner-visual.js",
     "visual:company:seed": "npm run build --silent && node .build/tools/company-visual.js",
+    "visual:crm:seed": "npm run build --silent && node .build/tools/crm-visual.js",
     "visual:user:seed": "npm run build --silent && node .build/tools/user-auth-visual.js",
     "visual:loyalty:seed": "npm run build --silent && node .build/tools/loyalty-visual.js",
     "visual:oauth:seed": "npm run build --silent && node .build/tools/oauth-visual.js",

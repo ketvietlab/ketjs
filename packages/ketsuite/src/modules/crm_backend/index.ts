@@ -6,12 +6,15 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'crm_backend',
   version: '0.1.0',
-  depends: ['crm', 'crm_sale', 'crm_website', 'backend'],
+  // The backend renders leads that arrive from the website but never calls into
+  // that module; the dependency was pulling a public-site concern into the admin
+  // shell for nothing.
+  depends: ['crm', 'crm_sale', 'backend', 'stock', 'activity', 'partner', 'user'],
   install: 'auto',
   app: true,
   title: 'CRM',
   summary: 'Lead, opportunity, pipeline and sales activities.',
-  category: 'Bán hàng',
+  category: 'Sales',
   assets: new URL('./client/', import.meta.url),
   styles: ['crm.css'],
   islands,
@@ -39,6 +42,13 @@ export default defineModule({
       path: '/admin/crm/activities',
       sequence: 35,
       needs: 'crm.activity.schedule',
+    },
+    'crm.leaderboard': {
+      parent: 'crm',
+      label: 'menu.leaderboard',
+      path: '/admin/crm/leaderboard',
+      sequence: 50,
+      needs: 'crm.gamification.list',
     },
     'crm.configuration': {
       parent: 'crm',
