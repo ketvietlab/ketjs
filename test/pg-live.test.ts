@@ -444,9 +444,9 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
           { rootId: 'root' },
           { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
         )
-      ).value as Array<{ id: string; absoluteFactor: number }>
+      ).value as Array<{ id: string; absoluteFactor: string }>
       for (const [i, factor] of awkward.entries()) {
-        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, Number(factor))
+        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, factor)
       }
 
       // And the driver hands NUMERIC over as a string, which is what keeps it exact

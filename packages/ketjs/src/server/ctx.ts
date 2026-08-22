@@ -156,6 +156,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'bool')
       .map(([n]) => n)
 
+  const datetimesOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'datetime')
+      .map(([n]) => n)
+
   const jsonOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'json')
@@ -163,11 +168,27 @@ export function createContext(o: {
 
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
-    if (!cols.length) return row
+    const stamps = datetimesOf(model)
+    if (!cols.length && !stamps.length) return row
     const out: Row = { ...row }
     // decimalText, not String: a raw db.update never passes through a changeset, so
     // this is the only place that can keep "1e-7" out of a decimal column.
     for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
+    /**
+     * One instant, one spelling.
+     *
+     * Postgres normalises a TIMESTAMPTZ to UTC whether or not it is asked, so a
+     * caller passing "+07:00" would leave a different string in SQLite than in
+     * Postgres for the same moment. Normalising here — the one place every write
+     * passes through — keeps the two datastores byte-identical, and makes the
+     * stored text sort chronologically, which is what a range query compares.
+     */
+    for (const c of stamps) {
+      const held = out[c]
+      if (held == null) continue
+      const at = held instanceof Date ? held : new Date(String(held))
+      if (!Number.isNaN(at.getTime())) out[c] = at.toISOString()
+    }
     return out
   }
 

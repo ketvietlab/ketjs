@@ -170,7 +170,10 @@ Changesets derive casts from the manifest:
   rounds, which is what makes `{ ...row, note }` safe on a table that holds money.
 - `bool` accepts booleans, `0`/`1`, and the strings `"false"`/`"true"`.
 - `date` requires a valid `YYYY-MM-DD` calendar date.
-- `datetime` accepts a `Date` or a parseable date-time string.
+- `datetime` accepts a `Date` or a parseable date-time string, and stores it as ISO-8601 UTC. An offset
+  is normalised on the way in, so the same instant is the same text in SQLite and in Postgres — and so
+  the stored text sorts chronologically, which is what a range query compares. It reads back as that
+  text, never as a `Date`; `date` likewise stays `YYYY-MM-DD` on both.
 - `json` accepts objects, including arrays; scalar strings are rejected.
 
 Inspect `changeset.toJSON()` when returning validation data to a UI or agent.

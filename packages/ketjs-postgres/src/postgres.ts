@@ -21,6 +21,27 @@ const SQL: Record<FieldBase, string> = {
   ref: 'TEXT',
 }
 
+/**
+ * Dates come back as text, the way SQLite hands them back.
+ *
+ * The driver parses every date and timestamp column into a JS Date. That is a
+ * reasonable default and the wrong one here, because it makes the same field a
+ * different type depending on which datastore is underneath — and development and
+ * test run on SQLite while production runs on Postgres. A `date` fared worse
+ * still: `2026-08-22` arrived as an instant at UTC midnight, so it stopped being
+ * a calendar date and started being a timestamp that formats to the day before
+ * anywhere west of Greenwich.
+ *
+ * Only `parse` is overridden. Without a `serialize` the driver keeps its own, so
+ * writing a Date still works exactly as before.
+ */
+const TEXT_DATES = {
+  // 1082 DATE — already the calendar text the column holds.
+  ketDate: { from: [1082], parse: (value: string) => value },
+  // 1114 TIMESTAMP, 1184 TIMESTAMPTZ — normalised to the ISO-8601 SQLite stores.
+  ketTimestamp: { from: [1114, 1184], parse: (value: string) => new Date(value).toISOString() },
+}
+
 // Postgres has real booleans and real json, so unlike SQLite there is almost
 // nothing to coerce. Objects still go over as JSON text for JSONB to parse.
 const bind = (v: unknown): unknown => {
@@ -111,7 +132,7 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
       }
       const mod = await import('postgres')
       const factory = (mod.default ?? mod) as unknown as (u: string, o: Record<string, unknown>) => Sql
-      sql = factory(url, { max: opts.max ?? 10, onnotice: () => {} })
+      sql = factory(url, { max: opts.max ?? 10, onnotice: () => {}, types: TEXT_DATES })
     },
 
     async close() {
