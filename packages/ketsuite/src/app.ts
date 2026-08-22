@@ -157,9 +157,9 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
           ? 'customer'
           : 'anonymous'
       },
-      permissions: (ctx, userId) =>
+      permissions: (ctx, userId, url, req) =>
         ctx
-          .callUnchecked('user.permitted', { userId }, new URL('http://x/'), { headers: {} } as never)
+          .callUnchecked('user.permitted', { userId }, url, req)
           .then((result) =>
             (result as { superuser: boolean; functions?: string[] }).superuser
               ? null

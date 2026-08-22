@@ -208,8 +208,18 @@ export type ServeSpec = {
    * Which functions a signed-in user may call. Absent means no restriction, which
    * is what an app without roles is. Returning a list restricts every call the
    * request makes, including the ones a route makes on its behalf.
+   *
+   * The request is handed over because answering the question almost always means
+   * asking the database, and which database that is comes from the request. A
+   * resolver that had to invent one could only reach the tenant a bare URL happens
+   * to resolve to — which is the wrong one for every tenant but the default.
    */
-  permissions?: (ctx: ServeContext, userId: string) => Promise<readonly string[] | null>
+  permissions?: (
+    ctx: ServeContext,
+    userId: string,
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<readonly string[] | null>
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -662,7 +672,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       return anonymousFns // a stranger, not an administrator
     }
     if (!serve.permissions) return null
-    const granted = await serve.permissions(ctx, record.userId)
+    const granted = await serve.permissions(ctx, record.userId, url, req)
     return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
   }
 
