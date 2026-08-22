@@ -16,7 +16,7 @@ export type Column<R> = {
   label: string
   cell: (row: R) => Cell
   align?: 'end'
-  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person'
+  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person' | 'media'
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
   sort?: { href: string; direction?: 'asc' | 'desc' | null; label: string }
