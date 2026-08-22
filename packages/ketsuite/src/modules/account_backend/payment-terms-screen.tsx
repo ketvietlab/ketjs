@@ -1,10 +1,12 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  badge,
   dataTable,
   emptyState,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -23,6 +25,10 @@ export const paymentTermsScreen = (
     lineFields?: FormField[]
     rows: Row[]
     action: string
+    editing?: Row | null
+    submit?: string
+    rowHref?: (row: Row) => string
+    cancelHref?: string
     errors?: string[]
   },
 ): TemplateResult => {
@@ -35,6 +41,7 @@ export const paymentTermsScreen = (
     dataTable(_, {
       rows: options.rows,
       id: (row) => String(row.id),
+      rowHref: options.rowHref,
       columns: [
         {
           key: 'name',
@@ -48,6 +55,16 @@ export const paymentTermsScreen = (
           cell: (row) => String(Array.isArray(row.lines) ? row.lines.length : 0),
         },
         { key: 'note', label: _('account_backend.field.note'), cell: (row) => String(row.note ?? '—') },
+        {
+          key: 'active',
+          label: _('account_backend.field.active'),
+          cell: (row) =>
+            badge(
+              row.active ? _('account_backend.active') : _('account_backend.archived'),
+              row.active ? 'positive' : 'neutral',
+              row.active ? 'active' : 'archived',
+            ),
+        },
       ],
     })
   ) : (
@@ -78,8 +95,19 @@ export const paymentTermsScreen = (
           body={stack(
             [
               <Section
-                title={_('account_backend.term.create.title')}
-                description={_('account_backend.term.create.hint')}
+                title={
+                  options.editing
+                    ? _('account_backend.term.edit.title')
+                    : _('account_backend.term.create.title')
+                }
+                description={
+                  options.editing ? String(options.editing.name) : _('account_backend.term.create.hint')
+                }
+                actions={
+                  options.editing && options.cancelHref
+                    ? linkButton({ label: _('account_backend.action.cancelEdit'), href: options.cancelHref })
+                    : undefined
+                }
                 body={
                   <Surface
                     padding="compact"
@@ -88,7 +116,7 @@ export const paymentTermsScreen = (
                         id="payment-term-create-form"
                         scope="account-payment-term"
                         action={options.action}
-                        submit={_('account_backend.action.createTerm')}
+                        submit={options.submit ?? _('account_backend.action.createTerm')}
                         submitVariant="primary"
                         fields={options.termFields}
                         errors={options.errors}

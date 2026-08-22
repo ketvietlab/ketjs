@@ -142,6 +142,7 @@ export default defineConfig({
                 { label: 'Product', slug: 'ketsuite/product' },
                 { label: 'CRM', slug: 'ketsuite/crm' },
                 { label: 'Loyalty', slug: 'ketsuite/loyalty' },
+                { label: 'Accounting ledger', slug: 'ketsuite/accounting' },
                 { label: 'Vietnam accounting defaults', slug: 'ketsuite/accounting-tt99' },
               ],
             },

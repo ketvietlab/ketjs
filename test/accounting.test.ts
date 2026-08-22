@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
-import { account, company, MOVE_TYPES, partner, product, uom } from '@ketvietlab/ketsuite'
+import { account, company, MOVE_TYPES, partner, product, TAX_AMOUNT_TYPES, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
 const modules = [address, partner, company, uom, product, account]
@@ -246,6 +246,268 @@ test('accounting: reports read posted lines only and preserve stable selection c
       'out_receipt',
       'in_receipt',
     ])
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a VND invoice settles at the amount the ledger shows', async () => {
+  const adapter = await boot()
+  try {
+    // 1,234,567 plus 10% VAT is 1,358,023.7 under two-decimal arithmetic. VND has
+    // no minor unit, so the open item must be a whole number of đồng — otherwise
+    // the amount the screen prints back can never clear it.
+    const created = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'invoice-vnd',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Dich vu',
+          quantity: '1',
+          priceUnit: '1234567',
+          lineAccountId: 'revenue',
+          counterpartAccountId: 'receivable',
+          taxId: 'vat10',
+          taxAccountId: 'tax',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(created.amountTotal, '1358024')
+    await call('account.postMove', { id: 'invoice-vnd' }, adapter)
+
+    const open = (await call('account.listOpenItems', {}, adapter)).value as Row[]
+    assert.equal(open.length, 1)
+    assert.equal(Number(open[0]!.amountResidual), 1358024)
+
+    const paid = (
+      await call(
+        'account.registerPayment',
+        {
+          id: 'payment-vnd',
+          name: 'PAY/1',
+          paymentType: 'inbound',
+          partnerType: 'customer',
+          partnerId: 'customer',
+          journalId: 'bank-journal',
+          destinationAccountId: 'receivable',
+          amount: '1358024',
+          reconcileLineId: open[0]!.id,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(paid.ok, true)
+    assert.equal(
+      ((await call('account.getMove', { id: 'invoice-vnd' }, adapter)).value as Row).paymentState,
+      'paid',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a tax that affects the base compounds into the next one', async () => {
+  const adapter = await boot()
+  try {
+    // With several taxes on a line each one posts to its own account, so both have
+    // to name one — a single `taxAccountId` override would be ambiguous.
+    await call(
+      'account.saveTax',
+      {
+        id: 'vat10',
+        name: 'VAT 10%',
+        typeTaxUse: 'sale',
+        amountType: 'percent',
+        amount: '10',
+        accountId: 'tax',
+        sequence: 10,
+      },
+      adapter,
+    )
+    await call(
+      'account.saveTax',
+      {
+        id: 'import5',
+        name: 'Thue nhap khau 5%',
+        typeTaxUse: 'sale',
+        amountType: 'percent',
+        amount: '5',
+        includeBaseAmount: true,
+        accountId: 'tax',
+        sequence: 5,
+      },
+      adapter,
+    )
+    const created = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'invoice-import',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Hang nhap khau',
+          quantity: '1',
+          priceUnit: '1000000',
+          lineAccountId: 'revenue',
+          counterpartAccountId: 'receivable',
+          taxIds: ['vat10', 'import5'],
+        },
+        adapter,
+      )
+    ).value as Row
+    // Import duty of 5% on 1,000,000 is 50,000 and joins the base, so VAT of 10%
+    // applies to 1,050,000 and is 105,000 rather than 100,000.
+    assert.equal(created.amountTotal, '1155000')
+    const invoice = (await call('account.getMove', { id: 'invoice-import' }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    assert.equal(Number(invoice.amountUntaxed), 1000000)
+    assert.equal(Number(invoice.amountTax), 155000)
+    assert.deepEqual(
+      invoice.lines
+        .filter((line) => line.accountId === 'tax')
+        .map((line) => Number(line.credit))
+        .sort((a, b) => a - b),
+      [50000, 105000],
+    )
+    assert.equal(
+      invoice.lines.reduce((sum, line) => sum + Number(line.debit), 0),
+      invoice.lines.reduce((sum, line) => sum + Number(line.credit), 0),
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a posted entry is corrected by its reversal, not by editing', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.createInvoice',
+      {
+        id: 'invoice-1',
+        journalId: 'sales',
+        moveType: 'out_invoice',
+        partnerId: 'customer',
+        description: 'Wrong amount',
+        quantity: '1',
+        priceUnit: '500',
+        lineAccountId: 'revenue',
+        counterpartAccountId: 'receivable',
+      },
+      adapter,
+    )
+    await call('account.postMove', { id: 'invoice-1' }, adapter)
+    assert.equal(((await call('account.cancelMove', { id: 'invoice-1' }, adapter)).value as Row).ok, false)
+
+    const reversed = (
+      await call('account.reverseMove', { id: 'invoice-1', reversalId: 'reversal-1' }, adapter)
+    ).value as Row
+    assert.equal(reversed.ok, true)
+
+    const reversal = (await call('account.getMove', { id: 'reversal-1' }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    const original = (await call('account.getMove', { id: 'invoice-1' }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    assert.equal(reversal.state, 'posted')
+    // The mirror image: every debit met by a credit of the same amount.
+    assert.equal(
+      reversal.lines.reduce((sum, line) => sum + Number(line.debit), 0),
+      original.lines.reduce((sum, line) => sum + Number(line.credit), 0),
+    )
+    // Nothing is left owed, and the document records why.
+    assert.equal(original.paymentState, 'reversed')
+    assert.equal(
+      original.lines.reduce((sum, line) => sum + Number(line.amountResidual), 0),
+      0,
+    )
+    assert.deepEqual((await call('account.listOpenItems', {}, adapter)).value, [])
+    // Both entries stay in the ledger, and together they net to nothing.
+    assert.equal(
+      ((await call('account.trialBalance', {}, adapter)).value as Row[]).reduce(
+        (sum, row) => sum + Number(row.balance),
+        0,
+      ),
+      0,
+    )
+
+    // Replaying the correction does not post a second one.
+    assert.equal(
+      (
+        (await call('account.reverseMove', { id: 'invoice-1', reversalId: 'reversal-1' }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_move'))[0]!.n, 2)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: posting a manual entry records the total it carries', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveJournal', { id: 'misc', name: 'Misc', code: 'MISC', type: 'general' }, adapter)
+    await call('account.createMove', { id: 'entry-1', journalId: 'misc', moveType: 'entry' }, adapter)
+    for (const [id, account, side] of [
+      ['entry-1:d', 'bank', 'debit'],
+      ['entry-1:c', 'revenue', 'credit'],
+    ] as const)
+      await call(
+        'account.addMoveLine',
+        { id, moveId: 'entry-1', name: id, accountId: account, [side]: '5000000' },
+        adapter,
+      )
+    await call('account.postMove', { id: 'entry-1' }, adapter)
+    const entry = (await call('account.getMove', { id: 'entry-1' }, adapter)).value as Row
+    assert.equal(Number(entry.amountTotal), 5000000)
+    assert.equal(Number(entry.amountUntaxed), 5000000)
+    assert.equal(Number(entry.amountTax), 0)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a journal item id cannot be quietly reused for a different line', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveJournal', { id: 'misc', name: 'Misc', code: 'MISC', type: 'general' }, adapter)
+    await call('account.createMove', { id: 'entry-1', journalId: 'misc', moveType: 'entry' }, adapter)
+    const line = { id: 'line-1', moveId: 'entry-1', name: 'Debit', accountId: 'bank', debit: '10' }
+    assert.equal(((await call('account.addMoveLine', line, adapter)).value as Row).existing, false)
+    // The identical call again is the retry it looks like.
+    assert.equal(((await call('account.addMoveLine', line, adapter)).value as Row).existing, true)
+    // A different line under a taken id is a lost write, not a retry.
+    assert.equal(
+      ((await call('account.addMoveLine', { ...line, debit: '99' }, adapter)).value as Row).ok,
+      false,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a tax computation the ledger cannot apply is refused at save time', async () => {
+  const adapter = await boot()
+  try {
+    assert.deepEqual(TAX_AMOUNT_TYPES, ['fixed', 'percent', 'division'])
+    const refused = (
+      await call(
+        'account.saveTax',
+        { id: 'grouped', name: 'Group', typeTaxUse: 'sale', amountType: 'group', amount: '0' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]!.field, 'amountType')
   } finally {
     await adapter.close()
   }

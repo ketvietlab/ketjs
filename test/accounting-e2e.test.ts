@@ -211,5 +211,101 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     headers: { accept: 'text/html' },
   })
   assert.equal(english.status, 200)
-  assert.match(await english.text(), /Chart of accounts/)
+  const englishHtml = await english.text()
+  assert.match(englishHtml, /Chart of accounts/)
+  // The statutory chart reads in the reader's language, not only in Vietnamese.
+  assert.match(englishHtml, /Cash/)
+  assert.doesNotMatch(englishHtml, /Tiền mặt/)
+})
+
+test('e2e accounting: a chart entry is corrected in place, and archived out of the pickers', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const target = accounts.find((row) => row.code === '111')!
+  const path = '/admin/accounting/accounts'
+
+  // The list is also the editor: following a row prefills the form with that row.
+  const editor = await e2e.client.get(`${path}?edit=${encodeURIComponent(String(target.id))}`, {
+    headers: { accept: 'text/html' },
+  })
+  const editorHtml = await editor.text()
+  assert.equal(editor.status, 200)
+  assert.match(editorHtml, /Sửa tài khoản/)
+  assert.match(editorHtml, /value="111"/)
+
+  const save = await e2e.client.post(
+    `${path}?edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({ code: '111', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash', active: '1' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(save.status, 303)
+  const corrected = (await call<Row[]>('account.listAccounts')).value
+  assert.equal(corrected.find((row) => row.id === target.id)!.name, 'Tiền mặt tại quỹ')
+  // Corrected in place — not duplicated into a second row nobody can remove.
+  assert.equal(corrected.filter((row) => row.code === '111').length, 1)
+  assert.equal(corrected.length, accounts.length)
+
+  const archive = await e2e.client.post(
+    `${path}?edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({ code: '111', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(archive.status, 303)
+  const live = (await call<Row[]>('account.listAccounts')).value
+  assert.equal(
+    live.some((row) => row.id === target.id),
+    false,
+  )
+  assert.equal(
+    (await call<Row[]>('account.listAccounts', { includeArchived: true })).value.some(
+      (row) => row.id === target.id,
+    ),
+    true,
+  )
+})
+
+test('e2e accounting: a posted document is corrected by a reversal reached from its own screen', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+
+  await call('account.createInvoice', {
+    id: 'invoice-9',
+    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Ghi nhầm',
+    quantity: '1',
+    priceUnit: '750000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
+  })
+  await call('account.postMove', { id: 'invoice-9' })
+
+  const detail = await e2e.client.get('/admin/accounting/customer-invoices/invoice-9', {
+    headers: { accept: 'text/html' },
+  })
+  const html = await detail.text()
+  assert.equal(detail.status, 200)
+  // A posted document offers the correction, not a delete.
+  assert.match(html, /Đảo bút toán/)
+  assert.match(html, /name="action" value="reverse"/)
+
+  const reversed = await e2e.client.post(
+    '/admin/accounting/customer-invoices/invoice-9',
+    new URLSearchParams({ action: 'reverse' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(reversed.status, 303)
+  // The reversal is a journal entry of its own, and the reader lands on it.
+  assert.match(String(reversed.headers.get('location')), /^\/admin\/accounting\/entries\//)
+
+  assert.equal((await call<Row>('account.getMove', { id: 'invoice-9' })).value.paymentState, 'reversed')
+  assert.deepEqual((await call<Row[]>('account.listOpenItems', { partnerId: 'customer' })).value, [])
+  assert.equal(
+    (await call<Row[]>('account.trialBalance')).value.reduce((sum, row) => sum + Number(row.balance), 0),
+    0,
+  )
 })

@@ -4,8 +4,10 @@ import {
   code,
   dataTable,
   emptyState,
+  badge,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -25,13 +27,19 @@ export const journalsScreen = (
     rows: Row[]
     accounts: Row[]
     action: string
+    editing?: Row | null
+    submit?: string
+    rowHref?: (row: Row) => string
+    cancelHref?: string
+    displayName?: (row: Row) => string
     errors?: string[]
   },
 ): TemplateResult => {
+  const accountName = options.displayName ?? ((row: Row) => String(row.name))
   const accountLabels = new Map(
     options.accounts.map((account) => [
       String(account.id),
-      `${String(account.code)} · ${String(account.name)}`,
+      `${String(account.code)} · ${accountName(account)}`,
     ]),
   )
   const liquidity = options.rows.filter((row) => ['bank', 'cash'].includes(String(row.type))).length
@@ -39,6 +47,7 @@ export const journalsScreen = (
     dataTable(_, {
       rows: options.rows,
       id: (row) => String(row.id),
+      rowHref: options.rowHref,
       columns: [
         {
           key: 'code',
@@ -56,6 +65,16 @@ export const journalsScreen = (
           key: 'account',
           label: _('account_backend.field.defaultAccountId'),
           cell: (row) => accountLabels.get(String(row.defaultAccountId)) ?? '—',
+        },
+        {
+          key: 'active',
+          label: _('account_backend.field.active'),
+          cell: (row) =>
+            badge(
+              row.active ? _('account_backend.active') : _('account_backend.archived'),
+              row.active ? 'positive' : 'neutral',
+              row.active ? 'active' : 'archived',
+            ),
         },
       ],
     })
@@ -96,8 +115,21 @@ export const journalsScreen = (
           body={stack(
             [
               <Section
-                title={_('account_backend.journal.create.title')}
-                description={_('account_backend.journal.create.hint')}
+                title={
+                  options.editing
+                    ? _('account_backend.journal.edit.title')
+                    : _('account_backend.journal.create.title')
+                }
+                description={
+                  options.editing
+                    ? `${String(options.editing.code)} · ${String(options.editing.name)}`
+                    : _('account_backend.journal.create.hint')
+                }
+                actions={
+                  options.editing && options.cancelHref
+                    ? linkButton({ label: _('account_backend.action.cancelEdit'), href: options.cancelHref })
+                    : undefined
+                }
                 body={
                   <Surface
                     padding="compact"
@@ -106,7 +138,7 @@ export const journalsScreen = (
                         id="journal-create-form"
                         scope="account-journal"
                         action={options.action}
-                        submit={_('account_backend.action.create')}
+                        submit={options.submit ?? _('account_backend.action.create')}
                         submitVariant="primary"
                         fields={options.fields}
                         errors={options.errors}
