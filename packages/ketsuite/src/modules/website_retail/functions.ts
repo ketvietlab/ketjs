@@ -3,26 +3,26 @@ import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canManageStructure } from '../website/access.ts'
 
-const digest = (value: string) => createHash('sha256').update(value).digest('hex')
+export const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
-const page = (limit: unknown, offset: unknown) => ({
+export const page = (limit: unknown, offset: unknown) => ({
   limit: Math.min(Math.max(Number.isInteger(limit) ? Number(limit) : 24, 1), 100),
   offset: Math.min(Math.max(Number.isInteger(offset) ? Number(offset) : 0, 0), 100_000),
 })
 
-const retailSite = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
+export const retailSite = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
   const site = (await ctx.db.select('website.Site', { id }))[0] ?? null
   return site?.active === true && (site.theme === 'theme_retail' || site.siteGroup === 'retail') ? site : null
 }
 
-type Decimal = { units: bigint; scale: number }
-const decimal = (value: unknown, maxScale = 6): Decimal | null => {
+export type Decimal = { units: bigint; scale: number }
+export const decimal = (value: unknown, maxScale = 6): Decimal | null => {
   const match = /^(\d{1,15})(?:\.(\d+))?$/.exec(String(value ?? ''))
   if (!match || (match[2]?.length ?? 0) > maxScale) return null
   const fraction = match[2] ?? ''
   return { units: BigInt(`${match[1]}${fraction}`), scale: fraction.length }
 }
-const cartTotal = (lines: Row[]): string => {
+export const cartTotal = (lines: Row[]): string => {
   const amounts = lines.map((line) => {
     const quantity = decimal(line.quantity) ?? { units: 0n, scale: 0 }
     const price = decimal(line.unitPrice) ?? { units: 0n, scale: 0 }
@@ -36,7 +36,7 @@ const cartTotal = (lines: Row[]): string => {
   return rendered || '0'
 }
 
-const cartOf = async (ctx: Ctx, token: unknown): Promise<Row | null> => {
+export const cartOf = async (ctx: Ctx, token: unknown): Promise<Row | null> => {
   const raw = String(token ?? '')
   if (raw.length < 24 || raw.length > 200) return null
   const Cart = ctx.table('website_retail.Cart')
