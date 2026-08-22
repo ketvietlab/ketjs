@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { json, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
-import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { forecastScreen } from './forecast-screen.tsx'
@@ -41,7 +41,7 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
       : null
 
 import { warehousesScreen } from './warehouses-screen.tsx'
-import { adminPage, frameOf, inLocale } from '../backend/screen.ts'
+import { adminPage, frameOf, inLocale, printGroup } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
@@ -447,17 +447,7 @@ export const routes: Record<string, RouteEntry> = {
               lots: options(data.lots),
               operationOptions,
               backorderPolicy,
-              printActions: printable.length
-                ? actionGroup({
-                    label: 'Print',
-                    actions: printable.map((report) =>
-                      linkButton({
-                        label: _(report.title),
-                        href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(current.id))}${url.search}`,
-                      }),
-                    ),
-                  })
-                : undefined,
+              printActions: printGroup(_, printable, String(current.id), url.search),
               action: here,
               collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
                 resModel: 'stock.Picking',

@@ -513,3 +513,84 @@ test('sale: a cancelled order can be set back to draft', async () => {
     await adapter.close()
   }
 })
+
+test('sale: a printed order carries the terms a customer reads', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.savePaymentTerm', { id: 'net30', name: 'Thanh toán trong 30 ngày' }, adapter)
+    await call(
+      'sale.createOrder',
+      {
+        id: 'so',
+        partnerId: 'customer',
+        warehouseId: 'wh',
+        paymentTermId: 'net30',
+        clientOrderRef: 'KH/2026/01',
+        validityDate: '2026-09-30',
+      },
+      adapter,
+    )
+    await call(
+      'sale.addLine',
+      {
+        id: 'so:line',
+        orderId: 'so',
+        productId: 'goods-1',
+        productUomQty: '2',
+        productUomId: 'unit',
+        priceUnit: '100',
+        discount: '10',
+      },
+      adapter,
+    )
+
+    // The quotation used to print only number, date, party, lines and totals —
+    // no validity, no payment term, no unit, no discount.
+    const quotation = (await call('sale.getQuotationReport', { id: 'so' }, adapter)).value as Row
+    assert.equal(quotation.paymentTermName, 'Thanh toán trong 30 ngày')
+    assert.equal(quotation.clientOrderRef, 'KH/2026/01')
+    assert.equal(String(quotation.validityDate).slice(0, 10), '2026-09-30')
+    const line = (quotation.lines as Row[])[0]!
+    assert.equal(line.uomName, 'Unit')
+    assert.equal(String(line.discount), '10')
+
+    // A pro-forma is only offered once the order is out of draft.
+    assert.equal((await call('sale.getProformaReport', { id: 'so' }, adapter)).value, null)
+    await call('sale.confirmOrder', { id: 'so' }, adapter)
+    assert.equal(((await call('sale.getProformaReport', { id: 'so' }, adapter)).value as Row).id, 'so')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: a cancelled order still prints, and only for its own company', async () => {
+  const adapter = await boot()
+  try {
+    // Someone granted both companies, acting as the second one. A read spans
+    // every company they hold, so only the narrowing keeps the first company's
+    // document out of their hands.
+    const asGlobex = { company: 'globex', companies: ['acme', 'globex'], branches: null }
+    await call('partner.savePartner', { id: 'globex-party', kind: 'company', name: 'Globex' }, adapter)
+    await callAs(
+      'company.saveCompany',
+      { id: 'globex', partnerId: 'globex-party', currency: 'VND' },
+      adapter,
+      bothCompanies,
+    )
+    await call('sale.createOrder', { id: 'so', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+
+    // `/reports/{report}/{id}` passes only the record id and enforces nothing
+    // itself, so the source function is the only thing standing between them and
+    // the other company's document.
+    assert.equal((await callAs('sale.getQuotationReport', { id: 'so' }, adapter, asGlobex)).value, null)
+    assert.equal(((await call('sale.getQuotationReport', { id: 'so' }, adapter)).value as Row).id, 'so')
+
+    // Cancelling used to leave nothing to print, so nothing recorded what was
+    // cancelled. A cancelled order is listed with the quotations and prints as
+    // one.
+    await call('sale.cancelOrder', { id: 'so' }, adapter)
+    assert.equal(((await call('sale.getQuotationReport', { id: 'so' }, adapter)).value as Row).id, 'so')
+  } finally {
+    await adapter.close()
+  }
+})

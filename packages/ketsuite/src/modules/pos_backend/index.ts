@@ -32,12 +32,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
  * records. Refused the way user_backend, company_backend, oauth_backend,
  * product_backend and stock_backend already refuse it.
  */
-const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
-  req.method !== 'POST'
-    ? text(accepts, { status: 405 })
-    : crossSite(req)
-      ? text('Forbidden', { status: 403 })
-      : null
 
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>

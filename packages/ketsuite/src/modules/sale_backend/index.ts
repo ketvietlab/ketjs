@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField } from '../../ui/index.ts'
-import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
@@ -18,7 +18,7 @@ import {
   accountRelationControl,
   taxRelationControl,
 } from '../account_backend/relation-control.ts'
-import { adminPage, choices, frameOf, localeQuery, needs, optional } from '../backend/screen.ts'
+import { adminPage, choices, frameOf, localeQuery, needs, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -37,12 +37,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
  * records. Refused the way user_backend, company_backend, oauth_backend,
  * product_backend and stock_backend already refuse it.
  */
-const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
-  req.method !== 'POST'
-    ? text(accepts, { status: 405 })
-    : crossSite(req)
-      ? text('Forbidden', { status: 403 })
-      : null
 
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
@@ -345,23 +339,19 @@ const detail =
       orderId: params.id,
       locale: localeQuery(url),
     })
-    const reportId = ['draft', 'sent'].includes(String(order.state))
-      ? 'sale.quotation'
-      : order.state === 'sale'
-        ? 'sale.salesOrder'
-        : null
-    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) => report.id === reportId)
-    const printActions = printable.length
-      ? actionGroup({
-          label: 'Print',
-          actions: printable.map((report) =>
-            linkButton({
-              label: _(report.title),
-              href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
-            }),
-          ),
-        })
-      : undefined
+    // A cancelled order used to print nothing at all. It is listed with the
+    // quotations and returns to draft, so that is the document it prints as.
+    const reportIds =
+      {
+        draft: ['sale.quotation'],
+        sent: ['sale.quotation', 'sale.proforma'],
+        sale: ['sale.salesOrder', 'sale.proforma'],
+        cancel: ['sale.quotation'],
+      }[String(order.state)] ?? []
+    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) =>
+      reportIds.includes(report.id),
+    )
+    const printActions = printGroup(_, printable, String(order.id), url.search)
     const canonical = orderPath(order, url)
     const body = orderDetailScreen(
       _,
@@ -784,6 +774,9 @@ export default defineModule({
           body: async (_, shell) =>
             quotationsScreen(_, {
               frame: shell,
+              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                (report) => report.id === 'sale.quotation',
+              ),
               fields: await orderFields(ctx, url, req, _, d),
               rows: rows
                 .filter(
@@ -809,9 +802,12 @@ export default defineModule({
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
-          body: (_, shell) =>
+          body: async (_, shell) =>
             salesOrdersScreen(_, {
               frame: shell,
+              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                (report) => report.id === 'sale.salesOrder',
+              ),
               rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
               detailSuffix,
             }),

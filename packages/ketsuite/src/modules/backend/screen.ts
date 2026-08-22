@@ -14,7 +14,7 @@
 import { isNavigationRequest, isTimezone } from '@ketvietlab/ketjs'
 import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { backendPage } from '../../ui/index.ts'
+import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import type { Extras, Frame, FormField, Viewer } from '../../ui/index.ts'
 
 /** The raw request a route handler is handed. */
@@ -212,6 +212,31 @@ export const choices = (rows: readonly AnyRow[], empty = false) => [
     label: String(row.name ?? row.code ?? row.id),
   })),
 ]
+
+/**
+ * The print group on a record screen.
+ *
+ * Four backends each built this by hand with `label: 'Print'` written in as an
+ * English literal, so the group read "Print" on a Vietnamese screen while the
+ * document names beside it were translated. One helper, one translated label.
+ */
+export const printGroup = (
+  _: Translator,
+  reports: ReadonlyArray<{ id: string; title: string }>,
+  recordId: string,
+  search: string,
+): TemplateResult | undefined =>
+  reports.length
+    ? actionGroup({
+        label: _('backend.print.label'),
+        actions: reports.map((report) =>
+          linkButton({
+            label: _(report.title),
+            href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(recordId)}${search}`,
+          }),
+        ),
+      })
+    : undefined
 
 /**
  * A required select with nothing to select is a dead end.

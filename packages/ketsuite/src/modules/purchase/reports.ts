@@ -17,7 +17,12 @@ const template = (title: string) => `<report paper="A4" margin="42">
 </report>`
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, states: string[]) {
-  const order = (await ctx.db.select('purchase.Order', { id }))[0]
+  // `/reports/{report}/{id}` calls a source with only the record id and enforces
+  // nothing itself, so an unnarrowed read here hands a user who holds two
+  // companies the other company's document for any id they can guess.
+  const companyId = ctx.scope.company
+  if (!companyId) return null
+  const order = (await ctx.db.select('purchase.Order', { id, companyId }))[0]
   if (!order || !states.includes(String(order.state))) return null
   const company = ctx.scope.company
     ? (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
@@ -28,7 +33,7 @@ async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, states: 
       ? ((await ctx.db.select('partner.Partner', { id: company.partnerId }))[0] ?? { name: '' })
       : { name: '' },
     partner: (await ctx.db.select('partner.Partner', { id: order.partnerId }))[0] ?? { name: '' },
-    lines: await ctx.db.select('purchase.OrderLine', { orderId: id }),
+    lines: await ctx.db.select('purchase.OrderLine', { orderId: id, companyId }),
   }
 }
 const effects = [

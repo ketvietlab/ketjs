@@ -2,14 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField } from '../../ui/index.ts'
-import { actionGroup, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
-import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
+import { adminPage, choices, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -28,12 +27,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
  * records. Refused the way user_backend, company_backend, oauth_backend,
  * product_backend and stock_backend already refuse it.
  */
-const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
-  req.method !== 'POST'
-    ? text(accepts, { status: 405 })
-    : crossSite(req)
-      ? text('Forbidden', { status: 403 })
-      : null
 
 type Translator = ReturnType<ServeContext['translate']>
 
@@ -299,17 +292,7 @@ const detailHandler =
           actionPath: path,
           lineFields,
           billFields,
-          printActions: printable.length
-            ? actionGroup({
-                label: 'Print',
-                actions: printable.map((report) =>
-                  linkButton({
-                    label: _(report.title),
-                    href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
-                  }),
-                ),
-              })
-            : undefined,
+          printActions: printGroup(_, printable, String(order.id), url.search),
         }),
     })
   }
