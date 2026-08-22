@@ -24,6 +24,7 @@ import {
   countBadge,
   dataTable,
   datePicker,
+  definitionList,
   emptyState,
   errorState,
   formCluster,
@@ -53,7 +54,6 @@ import {
   recordWorkspace,
   scheduleBoard,
   section,
-  settingsScreen,
   stack,
   surface,
   tabs,
@@ -424,13 +424,18 @@ const everything = [
     { shown: ['id'], colsHref: (keys) => `/admin/pages?cols=${keys.join(',')}` },
   ),
   person('Nguyễn Quản Trị'),
-  settingsScreen(_, { 'color-accent': 'x' }, { menu: MENU }),
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
-  settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
+  pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // The token list, which no admin screen renders any more now that the design-token
+  // dump has left /admin/settings. Modules still reach for it on record detail.
+  definitionList({
+    title: 'Design token',
+    items: [{ key: 'color-accent', term: '--ket-color-accent', value: 'x' }],
+  }),
   errorState('E_X', 'msg', 'hint'),
   // The sign-in screen, in the one state that shows every hook it owns at once.
   loginScreen(_, {
-    next: '/admin/settings',
+    next: '/admin/apps',
     failed: true,
     providers: [{ code: 'google', name: 'Google', href: '/oauth/google' }],
     locales: ['vi', 'en'],
@@ -724,11 +729,6 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
-  assert.match(html, /<a data-ui="sidebar-settings" href="\/admin\/settings">/)
-  assert.ok(
-    html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
-    'Settings belongs below the systray divider',
-  )
 })
 
 test('backend shell: fragment navigation emits only replaceable slots', () => {

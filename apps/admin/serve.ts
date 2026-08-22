@@ -41,7 +41,6 @@ import backend, {
   cataloguePage,
   modalSheet,
   pagesScreen,
-  settingsScreen,
   surface,
 } from '@ketvietlab/ketsuite/backend'
 import { fileURLToPath } from 'node:url'
@@ -145,7 +144,6 @@ const app = await createKetServer({
         <li><a href="/catalogue/modal">Modal primitive</a></li>
         <li><a href="/admin/apps">Apps (real data)</a></li>
         <li><a href="/admin/pages">Pages (real data)</a></li>
-        <li><a href="/admin/settings">Settings (real data)</a></li>
       </ul>
       <p>Switch language with <code>?lang=</code>:
         ${each(
@@ -220,8 +218,6 @@ const app = await createKetServer({
         })),
       )
     }),
-
-    '/admin/settings': route((t) => settingsScreen(t, manifest.tokens)),
   },
 })
 
