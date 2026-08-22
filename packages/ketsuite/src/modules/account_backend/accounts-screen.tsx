@@ -7,6 +7,7 @@ import {
   emptyState,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -25,15 +26,22 @@ export const accountsScreen = (
     fields: FormField[]
     rows: Row[]
     action: string
+    editing?: Row | null
+    submit?: string
+    rowHref?: (row: Row) => string
+    cancelHref?: string
+    displayName?: (row: Row) => string
     errors?: string[]
   },
 ): TemplateResult => {
+  const name = options.displayName ?? ((row: Row) => String(row.name))
   const count = (prefixes: string[]) =>
     options.rows.filter((row) => prefixes.some((prefix) => String(row.accountType).startsWith(prefix))).length
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,
       id: (row) => String(row.id),
+      rowHref: options.rowHref,
       columns: [
         {
           key: 'code',
@@ -41,7 +49,7 @@ export const accountsScreen = (
           priority: 'primary',
           cell: (row) => code(String(row.code)),
         },
-        { key: 'name', label: _('account_backend.field.name'), cell: (row) => String(row.name) },
+        { key: 'name', label: _('account_backend.field.name'), cell: (row) => name(row) },
         {
           key: 'type',
           label: _('account_backend.field.accountType'),
@@ -55,6 +63,16 @@ export const accountsScreen = (
               row.reconcile ? _('account_backend.yes') : _('account_backend.no'),
               row.reconcile ? 'positive' : 'neutral',
               row.reconcile ? 'yes' : 'no',
+            ),
+        },
+        {
+          key: 'active',
+          label: _('account_backend.field.active'),
+          cell: (row) =>
+            badge(
+              row.active ? _('account_backend.active') : _('account_backend.archived'),
+              row.active ? 'positive' : 'neutral',
+              row.active ? 'active' : 'archived',
             ),
         },
       ],
@@ -96,8 +114,21 @@ export const accountsScreen = (
           body={stack(
             [
               <Section
-                title={_('account_backend.account.create.title')}
-                description={_('account_backend.account.create.hint')}
+                title={
+                  options.editing
+                    ? _('account_backend.account.edit.title')
+                    : _('account_backend.account.create.title')
+                }
+                description={
+                  options.editing
+                    ? `${String(options.editing.code)} · ${name(options.editing)}`
+                    : _('account_backend.account.create.hint')
+                }
+                actions={
+                  options.editing && options.cancelHref
+                    ? linkButton({ label: _('account_backend.action.cancelEdit'), href: options.cancelHref })
+                    : undefined
+                }
                 body={
                   <Surface
                     padding="compact"
@@ -106,7 +137,7 @@ export const accountsScreen = (
                         id="account-create-form"
                         scope="account-chart"
                         action={options.action}
-                        submit={_('account_backend.action.create')}
+                        submit={options.submit ?? _('account_backend.action.create')}
                         submitVariant="primary"
                         fields={options.fields}
                         errors={options.errors}

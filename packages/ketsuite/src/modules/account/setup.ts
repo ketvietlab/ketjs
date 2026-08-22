@@ -46,8 +46,6 @@ const put = async (ctx: Ctx, model: string, values: Row): Promise<void> => {
   await ctx.db.insertIfAbsent(model, values)
 }
 
-const installing = new Map<string, Promise<void>>()
-
 async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
@@ -69,15 +67,31 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
     const existingAccounts = await tx.db.select('account.Account')
     const byCode = new Map(existingAccounts.map((row) => [String(row.code), row]))
     for (const account of TT99_ACCOUNTS) {
-      if (byCode.has(account.code)) continue
-      await put(tx, 'account.Account', {
-        id: accountId(companyId, account.code),
-        code: account.code,
-        name: account.name,
-        accountType: account.accountType,
-        reconcile: account.reconcile,
-        active: true,
-      })
+      const catalogId = accountId(companyId, account.code)
+      const held = byCode.get(account.code)
+      if (!held) {
+        await put(tx, 'account.Account', {
+          id: catalogId,
+          code: account.code,
+          name: account.name,
+          nameEn: account.nameEn,
+          accountType: account.accountType,
+          reconcile: account.reconcile,
+          active: true,
+        })
+        continue
+      }
+      // A code the company created itself is theirs to keep. A row this catalog
+      // installed is the catalog's to correct, otherwise a renamed or reclassified
+      // account silently keeps its old definition while the checksum claims the
+      // upgrade landed.
+      if (String(held.id) !== catalogId) continue
+      const patch: Row = {}
+      if (held.name !== account.name) patch.name = account.name
+      if (held.nameEn !== account.nameEn) patch.nameEn = account.nameEn
+      if (held.accountType !== account.accountType) patch.accountType = account.accountType
+      if (held.reconcile !== account.reconcile) patch.reconcile = account.reconcile
+      if (Object.keys(patch).length) await tx.db.update('account.Account', { id: catalogId }, patch)
     }
 
     const accounts = await tx.db.select('account.Account')
@@ -88,21 +102,39 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
       return id
     }
 
-    for (const tax of VIETNAM_TAXES)
-      await put(tx, 'account.Tax', {
-        id: taxId(companyId, tax.key),
+    const existingTaxes = new Map(
+      (await tx.db.select('account.Tax')).map((row) => [String(row.id), row] as const),
+    )
+    for (const tax of VIETNAM_TAXES) {
+      const id = taxId(companyId, tax.key)
+      const values = {
         name: tax.name,
         description: tax.description,
         typeTaxUse: tax.use,
-        taxScope: null,
         amountType: 'percent',
         amount: tax.amount,
-        priceInclude: false,
         includeBaseAmount: tax.includeBaseAmount === true,
         accountId: tax.accountCode ? required(tax.accountCode) : null,
-        sequence: 10,
-        active: true,
-      })
+      }
+      const held = existingTaxes.get(id)
+      if (!held) {
+        await put(tx, 'account.Tax', {
+          id,
+          taxScope: null,
+          priceInclude: false,
+          sequence: 10,
+          active: true,
+          ...values,
+        })
+        continue
+      }
+      // A statutory rate change arrives as a new catalog, and the company's own
+      // taxes are never touched — only the rows this catalog installed.
+      const patch = Object.fromEntries(
+        Object.entries(values).filter(([field, value]) => held[field] !== value),
+      )
+      if (Object.keys(patch).length) await tx.db.update('account.Tax', { id }, patch)
+    }
 
     for (const journal of [
       { key: 'sale', name: 'Bán hàng', code: 'SAL', type: 'sale' },
@@ -170,26 +202,22 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
   })
 }
 
+/**
+ * Install the bundled data pack for the active company, once.
+ *
+ * The guard is the transaction and the checksum on `account.Setup`, not a map in
+ * this process: a company id is only unique within its own database, so a
+ * process-wide cache would let one tenant wait on — and be answered by — another
+ * tenant's install. Concurrent first requests both enter the transaction; the one
+ * that arrives second sees the committed checksum and returns without writing.
+ */
 export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
   const current = (await ctx.db.select('account.Setup'))[0]
   if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) return current
 
-  const active = installing.get(companyId)
-  if (active) {
-    await active
-    const completed = (await ctx.db.select('account.Setup'))[0]
-    if (completed?.sourceChecksum === TT99_CATALOG_CHECKSUM) return completed
-  }
-
-  const task = installCompanyAccounting(ctx).then(() => undefined)
-  installing.set(companyId, task)
-  try {
-    await task
-  } finally {
-    if (installing.get(companyId) === task) installing.delete(companyId)
-  }
+  await installCompanyAccounting(ctx)
   const completed = (await ctx.db.select('account.Setup'))[0]
   if (!completed) throw new Error('account.error.setupIncomplete')
   return completed

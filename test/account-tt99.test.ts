@@ -97,6 +97,61 @@ test('account TT99: catalog upgrade backfills KKKNT for an existing company', as
   }
 })
 
+test('account TT99: a catalog upgrade corrects the rows it installed and leaves the rest alone', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    // Stand in for an older catalog: a stale name, type and rate on rows this
+    // catalog owns, plus one account the company added for itself.
+    await adapter.run(`UPDATE account_account SET name = ?, "accountType" = ? WHERE code = ?`, [
+      'Tiền mặt (bản cũ)',
+      'asset_current',
+      '111',
+    ])
+    await adapter.run(`UPDATE account_tax SET amount = ? WHERE name = ?`, ['8', 'GTGT 10%'])
+    await call(
+      'account.saveAccount',
+      { id: 'own-account', code: '9999', name: 'Tài khoản riêng', accountType: 'asset_current' },
+      adapter,
+    )
+    await adapter.run(`UPDATE account_setup SET "sourceChecksum" = ?`, [TT99_ACCOUNT_CHECKSUM])
+
+    await call('account.initializeCompany', {}, adapter)
+    const accounts = (await call('account.listAccounts', {}, adapter)).value as Row[]
+    const cash = accounts.find((row) => row.code === '111')!
+    assert.equal(cash.name, 'Tiền mặt')
+    assert.equal(cash.accountType, 'asset_cash')
+    // A statutory rate change arrives the same way.
+    const vat = ((await call('account.listTaxes', {}, adapter)).value as Row[]).find(
+      (tax) => tax.name === 'GTGT 10%',
+    )!
+    assert.equal(Number(vat.amount), 10)
+    // Nothing the company owns is touched.
+    const own = accounts.find((row) => row.code === '9999')!
+    assert.equal(own.name, 'Tài khoản riêng')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('account TT99: the installed chart carries the statutory name in both languages', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    const accounts = (await call('account.listAccounts', {}, adapter)).value as Row[]
+    const byCode = new Map(accounts.map((row) => [String(row.code), row]))
+    assert.equal(byCode.get('111')!.name, 'Tiền mặt')
+    assert.equal(byCode.get('111')!.nameEn, 'Cash')
+    // Every catalog account, not just the one this test names.
+    assert.equal(
+      accounts.filter((row) => typeof row.nameEn === 'string' && row.nameEn).length,
+      TT99_ACCOUNTS.length,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('account TT99: an existing account code is preserved and becomes the journal default', async () => {
   const adapter = await boot()
   try {

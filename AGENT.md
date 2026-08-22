@@ -27,7 +27,7 @@
 | KetSuite backend UI, security, data scope, testing | `docs/src/content/docs/ketsuite/{backend-development,security-scope,testing}.md` |
 | KetSuite Channel API and generated customer contract | `docs/src/content/docs/ketsuite/channel-api.md`, `docs/src/content/docs/ketsuite/channel-api-reference.mdx` |
 | KetSuite identity and organization modules | `docs/src/content/docs/ketsuite/{address,partner,company-branch,authentication-users,oauth-oidc}.md` |
-| KetSuite CRM, loyalty, and Vietnam accounting behavior | `docs/src/content/docs/ketsuite/{crm,loyalty,accounting-tt99}.md` |
+| KetSuite CRM, loyalty, and accounting behavior | `docs/src/content/docs/ketsuite/{crm,loyalty,accounting,accounting-tt99}.md` |
 | Cross-cutting architecture decisions and unresolved design questions | `docs/src/content/docs/architecture/{decisions,open-questions}.md` |
 | Operations and benchmark policy | `docs/src/content/docs/operations/{index,benchmarks}.md`, `docs/src/content/docs/ketsuite/benchmarks/` |
 | Team-specific integration contracts | `docs/src/content/docs/handoffs/` |

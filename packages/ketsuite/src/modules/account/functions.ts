@@ -1,5 +1,6 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, eq, from, gte, inArray, lte } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { moneyText, roundMoney, scaleOf, toleranceOf } from './money.ts'
 import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
 
 export const ACCOUNT_TYPES = [
@@ -44,7 +45,12 @@ export const PAYMENT_STATES = [
   'invoicing_legacy',
 ] as const
 export const TAX_USES = ['sale', 'purchase', 'none'] as const
-export const TAX_AMOUNT_TYPES = ['group', 'fixed', 'percent', 'division'] as const
+/**
+ * Group taxes are deliberately absent: a line takes a list of taxes and applies
+ * them in sequence, which is what a group would have expressed anyway. Offering
+ * `group` as a saveable amount type only produced taxes that threw on first use.
+ */
+export const TAX_AMOUNT_TYPES = ['fixed', 'percent', 'division'] as const
 export const PAYMENT_TYPES = ['outbound', 'inbound'] as const
 export const PARTNER_TYPES = ['customer', 'supplier'] as const
 export const PAYMENT_TERM_VALUES = ['percent', 'fixed'] as const
@@ -57,19 +63,90 @@ export const PAYMENT_TERM_DELAY_TYPES = [
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const n = (value: unknown): number => Number(value ?? 0)
-const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
-const decimal = (value: number): string => String(money(value))
 const today = (): string => new Date().toISOString()
 
-async function companyCurrency(ctx: Ctx): Promise<string> {
+/** The currency a ledger write is denominated in, with the scale its arithmetic must use. */
+type Ledger = { currency: string; scale: number }
+
+async function ledgerOf(ctx: Ctx): Promise<Ledger> {
   if (!ctx.scope.company) throw new Error('accounting requires an active company')
   const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
   if (!company) throw new Error(`company ${ctx.scope.company} does not exist`)
-  return String(company.currency)
+  const currency = String(company.currency)
+  return { currency, scale: scaleOf(currency) }
 }
 
 async function accountOf(ctx: Ctx, id: unknown): Promise<Row | null> {
   return (await ctx.db.select('account.Account', { id }))[0] ?? null
+}
+
+/**
+ * Paging is opt-in, never implicit. A screen asks for a page; an export or a
+ * report asks for everything and gets it, rather than a silently truncated list
+ * that reads as complete.
+ */
+const paginate = <Q extends { limit(size: number): Q; offset(start: number): Q }>(
+  q: Q,
+  limit: unknown,
+  offset: unknown,
+): Q => {
+  const size = Math.trunc(n(limit))
+  const start = Math.trunc(n(offset))
+  const limited = size > 0 ? q.limit(size) : q
+  return start > 0 ? limited.offset(start) : limited
+}
+
+const slice = <T>(rows: T[], limit: unknown, offset: unknown): T[] => {
+  const size = Math.trunc(n(limit))
+  const start = Math.max(0, Math.trunc(n(offset)))
+  return size > 0 ? rows.slice(start, start + size) : rows.slice(start)
+}
+
+const moveTypeList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String).filter((type) => MOVE_TYPES.includes(type as never)) : []
+
+/** The ids of every posted move inside an optional date window. */
+async function postedMoves(ctx: Ctx, dateFrom: unknown, dateTo: unknown): Promise<Map<string, Row>> {
+  const M = ctx.table('account.Move')
+  const moves = await ctx.db.all(
+    from(M).where(
+      and(
+        eq(M.state, 'posted'),
+        ...(dateFrom ? [gte(M.date, dateFrom)] : []),
+        ...(dateTo ? [lte(M.date, dateTo)] : []),
+      ),
+    ),
+  )
+  return new Map(moves.map((move) => [String(move.id), move]))
+}
+
+/**
+ * Journal items belonging to the given moves. The ids go into the query so the
+ * database does the narrowing; chunking keeps a long reporting window from
+ * building a parameter list no driver will accept.
+ */
+async function linesOfMoves(ctx: Ctx, moveIds: string[], accountId?: unknown): Promise<Row[]> {
+  if (!moveIds.length) return []
+  const L = ctx.table('account.MoveLine')
+  const rows: Row[] = []
+  for (let at = 0; at < moveIds.length; at += 400) {
+    const chunk = moveIds.slice(at, at + 400)
+    rows.push(
+      ...(await ctx.db.all(
+        from(L).where(and(inArray(L.moveId, chunk), ...(accountId ? [eq(L.accountId, accountId)] : []))),
+      )),
+    )
+  }
+  return rows
+}
+
+/**
+ * Every account of the active company, by id. Callers that classify a whole page
+ * of journal items need this once instead of a lookup per line — a chart of
+ * accounts is bounded (216 rows under TT99) while a ledger is not.
+ */
+async function accountsById(ctx: Ctx): Promise<Map<string, Row>> {
+  return new Map((await ctx.db.select('account.Account')).map((row) => [String(row.id), row]))
 }
 
 async function dueDate(ctx: Ctx, paymentTermId: unknown, date: Date): Promise<string> {
@@ -97,28 +174,76 @@ async function dueDate(ctx: Ctx, paymentTermId: unknown, date: Date): Promise<st
   return latest.toISOString()
 }
 
-function taxAmounts(tax: Row | null, quantity: number, priceUnit: number, discount: number) {
-  const gross = money(quantity * priceUnit * (1 - discount / 100))
-  if (!tax) return { untaxed: gross, tax: 0, total: gross }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported subset')
-  const rate = n(tax.amount) / 100
-  let untaxed = gross
-  let taxAmount = 0
-  if (tax.amountType === 'fixed') {
-    taxAmount = money(n(tax.amount) * quantity)
-    if (tax.priceInclude) untaxed = money(gross - taxAmount)
-  } else if (tax.amountType === 'percent') {
-    if (tax.priceInclude) {
-      untaxed = money(gross / (1 + rate))
-      taxAmount = money(gross - untaxed)
-    } else taxAmount = money(gross * rate)
-  } else if (tax.amountType === 'division') {
-    if (tax.priceInclude) {
-      untaxed = money(gross * (1 - rate))
-      taxAmount = money(gross - untaxed)
-    } else taxAmount = money(gross / (1 - rate) - gross)
+/** One tax's share of a line, carrying where it has to post. */
+export type TaxShare = { taxId: unknown; name: string; accountId: unknown; amount: number }
+export type LineAmounts = { untaxed: number; tax: number; total: number; shares: TaxShare[] }
+
+const taxOrder = (a: Row, b: Row): number =>
+  n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id))
+
+/**
+ * Apply a line's taxes in sequence.
+ *
+ * A tax marked `includeBaseAmount` adds its own amount to the base every later
+ * tax is computed on — this is how import duty compounds into import VAT, which
+ * is the case the bundled TT99 catalog ships data for.
+ */
+function taxAmounts(
+  taxes: readonly Row[],
+  quantity: number,
+  priceUnit: number,
+  discount: number,
+  scale: number,
+): LineAmounts {
+  const gross = roundMoney(quantity * priceUnit * (1 - discount / 100), scale)
+  if (!taxes.length) return { untaxed: gross, tax: 0, total: gross, shares: [] }
+
+  const ordered = [...taxes].sort(taxOrder)
+  const included = ordered.filter((tax) => tax.priceInclude === true)
+  if (included.length && included.length !== ordered.length)
+    throw new Error('a line cannot mix price-included and price-excluded taxes')
+  if (included.length > 1) throw new Error('a line supports at most one price-included tax')
+
+  const share = (tax: Row, base: number): number => {
+    const rate = n(tax.amount) / 100
+    if (tax.amountType === 'fixed') return roundMoney(n(tax.amount) * quantity, scale)
+    if (tax.amountType === 'percent') return roundMoney(base * rate, scale)
+    if (tax.amountType === 'division') {
+      if (rate >= 1) throw new Error('a division tax of 100% or more has no finite base')
+      return roundMoney(base / (1 - rate) - base, scale)
+    }
+    throw new Error(`unsupported tax computation "${String(tax.amountType)}"`)
   }
-  return { untaxed, tax: taxAmount, total: money(untaxed + taxAmount) }
+
+  if (included.length === 1) {
+    const tax = ordered[0]!
+    const rate = n(tax.amount) / 100
+    let untaxed = gross
+    if (tax.amountType === 'fixed') untaxed = roundMoney(gross - share(tax, gross), scale)
+    else if (tax.amountType === 'percent') untaxed = roundMoney(gross / (1 + rate), scale)
+    else if (tax.amountType === 'division') {
+      if (rate >= 1) throw new Error('a division tax of 100% or more has no finite base')
+      untaxed = roundMoney(gross * (1 - rate), scale)
+    } else throw new Error(`unsupported tax computation "${String(tax.amountType)}"`)
+    const amount = roundMoney(gross - untaxed, scale)
+    return {
+      untaxed,
+      tax: amount,
+      total: roundMoney(untaxed + amount, scale),
+      shares: [{ taxId: tax.id, name: String(tax.name), accountId: tax.accountId ?? null, amount }],
+    }
+  }
+
+  const shares: TaxShare[] = []
+  let base = gross
+  let total = 0
+  for (const tax of ordered) {
+    const amount = share(tax, base)
+    shares.push({ taxId: tax.id, name: String(tax.name), accountId: tax.accountId ?? null, amount })
+    total = roundMoney(total + amount, scale)
+    if (tax.includeBaseAmount === true) base = roundMoney(base + amount, scale)
+  }
+  return { untaxed: gross, tax: total, total: roundMoney(gross + total, scale), shares }
 }
 
 async function nextMoveName(ctx: Ctx, journal: Row, date: Date): Promise<string> {
@@ -143,6 +268,7 @@ async function post(ctx: Ctx, id: unknown): Promise<Record<string, unknown>> {
   if (!move) return invalid('id', 'journal entry does not exist')
   if (move.state === 'posted') return { ok: true, id: move.id, name: move.name }
   if (move.state !== 'draft') return invalid('state', 'only a draft entry can be posted')
+  const scale = scaleOf(move.currency)
   const lines = await ctx.db.select('account.MoveLine', { moveId: id })
   if (lines.length < 2) return invalid('lines', 'a journal entry needs at least two lines')
   let debit = 0
@@ -150,35 +276,48 @@ async function post(ctx: Ctx, id: unknown): Promise<Record<string, unknown>> {
   for (const line of lines) {
     if (n(line.debit) < 0 || n(line.credit) < 0 || (n(line.debit) > 0 && n(line.credit) > 0))
       return invalid('lines', 'each line must have a non-negative debit or credit, never both')
-    debit = money(debit + n(line.debit))
-    credit = money(credit + n(line.credit))
+    debit = roundMoney(debit + n(line.debit), scale)
+    credit = roundMoney(credit + n(line.credit), scale)
   }
-  if (Math.abs(debit - credit) > 0.000001)
+  if (Math.abs(debit - credit) > toleranceOf(scale))
     return invalid('lines', `entry is not balanced: debit ${debit}, credit ${credit}`)
   const journal = (await ctx.db.select('account.Journal', { id: move.journalId }))[0]
   if (!journal) return invalid('journalId', 'journal does not exist')
   const postedAt = today()
+  // An invoice already carries the totals its own line builder computed. A manual
+  // entry has none, and a ledger that shows every entry as 0 is not a ledger.
+  const totals =
+    move.moveType === 'entry'
+      ? {
+          amountUntaxed: moneyText(debit, scale),
+          amountTax: moneyText(0, scale),
+          amountTotal: moneyText(debit, scale),
+        }
+      : {}
   const assigned = await ctx.tx(async (tx) => {
     const name = await nextMoveName(tx, journal, new Date(String(move.date)))
-    await tx.db.update('account.Move', { id }, { name, state: 'posted', postedAt })
+    await tx.db.update('account.Move', { id }, { name, state: 'posted', postedAt, ...totals })
     return name
   })
   return { ok: true, id: move.id, name: assigned }
 }
 
-async function updatePaymentState(ctx: Ctx, moveId: unknown): Promise<void> {
+const OPEN_ITEM_TYPES = ['asset_receivable', 'liability_payable']
+
+async function updatePaymentState(ctx: Ctx, moveId: unknown, accounts?: Map<string, Row>): Promise<void> {
   const move = (await ctx.db.select('account.Move', { id: moveId }))[0]
   if (!move || move.moveType === 'entry') return
-  const lines = await ctx.db.select('account.MoveLine', { moveId })
-  const candidates: Row[] = []
-  for (const line of lines) {
-    const account = await accountOf(ctx, line.accountId)
-    if (account?.accountType === 'asset_receivable' || account?.accountType === 'liability_payable')
-      candidates.push(line)
-  }
+  // A reversal settles the document; it must not be relabelled by the residual math.
+  if (move.paymentState === 'reversed') return
+  const byId = accounts ?? (await accountsById(ctx))
+  const candidates = (await ctx.db.select('account.MoveLine', { moveId })).filter((line) =>
+    OPEN_ITEM_TYPES.includes(String(byId.get(String(line.accountId))?.accountType)),
+  )
+  const scale = scaleOf(move.currency)
   const original = candidates.reduce((sum, line) => sum + Math.abs(n(line.balance)), 0)
   const residual = candidates.reduce((sum, line) => sum + Math.abs(n(line.amountResidual)), 0)
-  const paymentState = residual < 0.000001 ? 'paid' : residual < original ? 'partial' : 'not_paid'
+  const slack = toleranceOf(scale)
+  const paymentState = residual < slack ? 'paid' : residual < original - slack ? 'partial' : 'not_paid'
   await ctx.db.update('account.Move', { id: moveId }, { paymentState })
 }
 
@@ -242,15 +381,15 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listJournals: defineFn({
-    input: { type: 'text?' },
+    input: { type: 'text?', includeArchived: 'bool?' },
     effects: ['read:account.Journal', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx, args) => {
       await ensureCompanyAccounting(ctx)
-      return ctx.db.select(
-        'account.Journal',
-        args.type ? { type: args.type, active: true } : { active: true },
-      )
+      return ctx.db.select('account.Journal', {
+        ...(args.type ? { type: args.type } : {}),
+        ...(args.includeArchived ? {} : { active: true }),
+      })
     },
   }),
   saveJournal: defineFn({
@@ -282,15 +421,16 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listTaxes: defineFn({
-    input: { typeTaxUse: 'text?' },
+    input: { typeTaxUse: 'text?', includeArchived: 'bool?' },
     effects: ['read:account.Tax', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx, args) => {
       await ensureCompanyAccounting(ctx)
-      return ctx.db.select(
-        'account.Tax',
-        args.typeTaxUse ? { typeTaxUse: args.typeTaxUse, active: true } : { active: true },
-      )
+      const rows = await ctx.db.select('account.Tax', {
+        ...(args.typeTaxUse ? { typeTaxUse: args.typeTaxUse } : {}),
+        ...(args.includeArchived ? {} : { active: true }),
+      })
+      return rows.sort(taxOrder)
     },
   }),
   saveTax: defineFn({
@@ -351,13 +491,14 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listPaymentTerms: defineFn({
-    input: {},
+    input: { includeArchived: 'bool?' },
     effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
       await ensureCompanyAccounting(ctx)
       const T = ctx.table('account.PaymentTerm')
-      return ctx.db.all(from(T).where(eq(T.active, true)).orderBy(asc(T.name)).preload('lines'))
+      const q = from(T).orderBy(asc(T.name)).preload('lines')
+      return ctx.db.all(args.includeArchived ? q : q.where(eq(T.active, true)))
     },
   }),
   savePaymentTerm: defineFn({
@@ -414,36 +555,86 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listMoves: defineFn({
-    input: { moveType: 'text?', state: 'text?', partnerId: 'id?' },
+    input: {
+      moveType: 'text?',
+      moveTypes: 'json?',
+      state: 'text?',
+      partnerId: 'id?',
+      dateFrom: 'datetime?',
+      dateTo: 'datetime?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:account.Move'],
     agent: true,
-    handler: (ctx, args) =>
-      ctx.db.select('account.Move', {
-        ...(args.moveType ? { moveType: args.moveType } : {}),
-        ...(args.state ? { state: args.state } : {}),
-        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
-      }),
+    handler: (ctx, args) => {
+      const M = ctx.table('account.Move')
+      const where = [
+        ...(args.moveType ? [eq(M.moveType, args.moveType)] : []),
+        ...(moveTypeList(args.moveTypes).length ? [inArray(M.moveType, moveTypeList(args.moveTypes))] : []),
+        ...(args.state ? [eq(M.state, args.state)] : []),
+        ...(args.partnerId ? [eq(M.partnerId, args.partnerId)] : []),
+        ...(args.dateFrom ? [gte(M.date, args.dateFrom)] : []),
+        ...(args.dateTo ? [lte(M.date, args.dateTo)] : []),
+      ]
+      const q = (where.length ? from(M).where(and(...where)) : from(M)).orderBy(asc(M.date), asc(M.id))
+      return ctx.db.all(paginate(q, args.limit, args.offset))
+    },
+  }),
+  countMoves: defineFn({
+    input: {
+      moveType: 'text?',
+      moveTypes: 'json?',
+      state: 'text?',
+      paymentState: 'text?',
+      partnerId: 'id?',
+    },
+    output: { count: 'int' },
+    effects: ['read:account.Move'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const M = ctx.table('account.Move')
+      const where = [
+        ...(args.moveType ? [eq(M.moveType, args.moveType)] : []),
+        ...(moveTypeList(args.moveTypes).length ? [inArray(M.moveType, moveTypeList(args.moveTypes))] : []),
+        ...(args.state ? [eq(M.state, args.state)] : []),
+        ...(args.paymentState ? [eq(M.paymentState, args.paymentState)] : []),
+        ...(args.partnerId ? [eq(M.partnerId, args.partnerId)] : []),
+      ]
+      return { count: await ctx.db.count(where.length ? from(M).where(and(...where)) : from(M)) }
+    },
   }),
   listOpenItems: defineFn({
-    input: { partnerId: 'id?', accountId: 'id?' },
+    input: { partnerId: 'id?', accountId: 'id?', limit: 'int?', offset: 'int?' },
     effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine'],
     agent: true,
     handler: async (ctx, args) => {
+      const byId = await accountsById(ctx)
+      const reconcilable = [...byId.values()].filter((row) => row.reconcile === true).map((row) => row.id)
+      if (!reconcilable.length) return []
       const posted = new Map(
         (await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]),
       )
-      const rows: Row[] = []
-      for (const line of await ctx.db.select('account.MoveLine', {
-        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
-        ...(args.accountId ? { accountId: args.accountId } : {}),
-      })) {
-        const move = posted.get(String(line.moveId))
-        if (!move || line.reconciled || n(line.amountResidual) <= 0) continue
-        const account = await accountOf(ctx, line.accountId)
-        if (!account?.reconcile) continue
-        rows.push({ ...line, move })
-      }
-      return rows.sort((a, b) => String((a.move as Row).date).localeCompare(String((b.move as Row).date)))
+      if (!posted.size) return []
+      const L = ctx.table('account.MoveLine')
+      const lines = await ctx.db.all(
+        from(L).where(
+          and(
+            eq(L.reconciled, false),
+            inArray(L.accountId, args.accountId ? [args.accountId] : reconcilable),
+            ...(args.partnerId ? [eq(L.partnerId, args.partnerId)] : []),
+          ),
+        ),
+      )
+      const rows = lines
+        .filter((line) => posted.has(String(line.moveId)) && n(line.amountResidual) > 0)
+        .map((line): Row & { move: Row } => ({ ...line, move: posted.get(String(line.moveId))! }))
+        .sort(
+          (a, b) =>
+            String(a.move.date).localeCompare(String(b.move.date)) ||
+            String(a.id).localeCompare(String(b.id)),
+        )
+      return slice(rows, args.limit, args.offset)
     },
   }),
   getMove: defineFn({
@@ -471,7 +662,9 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:account.Journal',
       'read:account.Move',
+      'read:account.PaymentTerm',
       'read:account.PaymentTermLine',
+      'read:partner.Partner',
       'read:company.Company',
       'write:account.Move',
     ],
@@ -482,8 +675,13 @@ export const functions: Record<string, FnSpec> = {
       if (!journal) return invalid('journalId', 'journal does not exist')
       const moveType = String(args.moveType ?? 'entry')
       if (!MOVE_TYPES.includes(moveType as never)) return invalid('moveType', 'unsupported move type')
+      if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
+        return invalid('partnerId', 'partner does not exist')
+      if (args.paymentTermId && !(await ctx.db.select('account.PaymentTerm', { id: args.paymentTermId }))[0])
+        return invalid('paymentTermId', 'payment term does not exist')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id }
+      const { currency, scale } = await ledgerOf(ctx)
       const date = String(args.date ?? today())
       await ctx.db.insert('account.Move', {
         id: args.id,
@@ -502,10 +700,10 @@ export const functions: Record<string, FnSpec> = {
             : null),
         paymentTermId: args.paymentTermId ?? null,
         paymentState: moveType === 'entry' ? 'paid' : 'not_paid',
-        currency: await companyCurrency(ctx),
-        amountUntaxed: '0',
-        amountTax: '0',
-        amountTotal: '0',
+        currency,
+        amountUntaxed: moneyText(0, scale),
+        amountTax: moneyText(0, scale),
+        amountTotal: moneyText(0, scale),
         postedAt: null,
       })
       return { ok: true, id: args.id }
@@ -530,8 +728,14 @@ export const functions: Record<string, FnSpec> = {
       displayType: 'text?',
       sequence: 'int?',
     },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:account.Move', 'read:account.Account', 'write:account.MoveLine'],
+    output: { ok: 'bool', id: 'id?', existing: 'bool?', errors: 'json?' },
+    effects: [
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.Account',
+      'read:account.Tax',
+      'write:account.MoveLine',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -539,11 +743,14 @@ export const functions: Record<string, FnSpec> = {
       if (move?.state !== 'draft') return invalid('moveId', 'lines can only be added to a draft entry')
       const account = await accountOf(ctx, args.accountId)
       if (!account) return invalid('accountId', 'account does not exist')
-      const debit = money(n(args.debit)),
-        credit = money(n(args.credit))
+      if (args.taxId && !(await ctx.db.select('account.Tax', { id: args.taxId }))[0])
+        return invalid('taxId', 'tax does not exist')
+      const scale = scaleOf(move.currency)
+      const debit = roundMoney(n(args.debit), scale),
+        credit = roundMoney(n(args.credit), scale)
       if (debit < 0 || credit < 0 || (debit > 0 && credit > 0))
         return invalid('debit', 'a line may have debit or credit, never both')
-      const inserted = await ctx.db.insertIfAbsent('account.MoveLine', {
+      const row = {
         id: args.id,
         moveId: args.moveId,
         name: args.name,
@@ -555,16 +762,29 @@ export const functions: Record<string, FnSpec> = {
         priceUnit: args.priceUnit ?? '0',
         discount: args.discount ?? '0',
         taxId: args.taxId ?? null,
-        debit: decimal(debit),
-        credit: decimal(credit),
-        balance: decimal(debit - credit),
+        debit: moneyText(debit, scale),
+        credit: moneyText(credit, scale),
+        balance: moneyText(debit - credit, scale),
         dateMaturity: args.dateMaturity ?? null,
         displayType: args.displayType ?? null,
         reconciled: false,
-        amountResidual: account.reconcile ? decimal(Math.abs(debit - credit)) : '0',
+        amountResidual: account.reconcile ? moneyText(Math.abs(debit - credit), scale) : moneyText(0, scale),
         sequence: args.sequence ?? 10,
-      })
-      return { ok: true, id: args.id, existing: !('dryRun' in inserted) && !inserted.inserted }
+      }
+      const inserted = await ctx.db.insertIfAbsent('account.MoveLine', row)
+      if ('dryRun' in inserted) return { ok: true, id: args.id, existing: false }
+      if (inserted.inserted) return { ok: true, id: args.id, existing: false }
+      // A retry of the same call is a success. A different line under an id that is
+      // already taken is not, and reporting it as one loses a write silently.
+      const held = (await ctx.db.select('account.MoveLine', { id: args.id }))[0]
+      const differs =
+        held &&
+        (String(held.moveId) !== String(row.moveId) ||
+          String(held.accountId) !== String(row.accountId) ||
+          n(held.debit) !== debit ||
+          n(held.credit) !== credit)
+      if (differs) return invalid('id', 'a different journal item already uses this id')
+      return { ok: true, id: args.id, existing: true }
     },
   }),
   createInvoice: defineFn({
@@ -585,6 +805,7 @@ export const functions: Record<string, FnSpec> = {
       lineAccountId: 'id',
       counterpartAccountId: 'id',
       taxId: 'id?',
+      taxIds: 'json?',
       taxAccountId: 'id?',
     },
     output: { ok: 'bool', id: 'id?', amountTotal: 'decimal?', errors: 'json?' },
@@ -619,24 +840,46 @@ export const functions: Record<string, FnSpec> = {
       const expectedCounterpart = customerDocument ? 'asset_receivable' : 'liability_payable'
       if (counterpart.accountType !== expectedCounterpart)
         return invalid('counterpartAccountId', `counterpart account must be ${expectedCounterpart}`)
-      const tax = args.taxId ? ((await ctx.db.select('account.Tax', { id: args.taxId }))[0] ?? null) : null
-      if (tax && ![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
-        return invalid('taxId', 'tax use does not match the invoice direction')
-      let amounts: ReturnType<typeof taxAmounts>
-      try {
-        amounts = taxAmounts(tax, n(args.quantity), n(args.priceUnit), n(args.discount))
-      } catch (error) {
-        return invalid('taxId', (error as Error).message)
+
+      // `taxId` stays accepted so existing callers keep working; `taxIds` is how a
+      // line carries the sequence of taxes that compound into one another.
+      const wanted = [
+        ...(Array.isArray(args.taxIds) ? args.taxIds.map(String) : []),
+        ...(args.taxId ? [String(args.taxId)] : []),
+      ].filter((id, at, all) => all.indexOf(id) === at)
+      const taxes: Row[] = []
+      for (const id of wanted) {
+        const tax = (await ctx.db.select('account.Tax', { id }))[0]
+        if (!tax) return invalid('taxIds', `tax ${id} does not exist`)
+        if (![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
+          return invalid('taxIds', `tax ${String(tax.name)} does not match the invoice direction`)
+        taxes.push(tax)
       }
-      const taxAccountId = args.taxAccountId ?? tax?.accountId
-      if (amounts.tax && (!taxAccountId || !(await accountOf(ctx, taxAccountId))))
-        return invalid('taxAccountId', 'a valid tax account is required when tax is non-zero')
+
+      const { currency, scale } = await ledgerOf(ctx)
+      let amounts: LineAmounts
+      try {
+        amounts = taxAmounts(taxes, n(args.quantity), n(args.priceUnit), n(args.discount), scale)
+      } catch (error) {
+        return invalid('taxIds', (error as Error).message)
+      }
+      // Each tax posts to its own account. A single override stays meaningful only
+      // while there is one tax to override.
+      const posting: Array<TaxShare & { accountId: unknown }> = []
+      for (const held of amounts.shares) {
+        if (!held.amount) continue
+        const accountId = (amounts.shares.length === 1 ? args.taxAccountId : null) ?? held.accountId
+        if (!accountId || !(await accountOf(ctx, accountId)))
+          return invalid('taxAccountId', `tax "${held.name}" needs a valid posting account`)
+        posting.push({ ...held, accountId })
+      }
+
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
       const invoiceDate = String(args.invoiceDate ?? today())
-      const currency = await companyCurrency(ctx)
       const mainDebit = ['in_invoice', 'in_receipt', 'out_refund'].includes(String(args.moveType))
       await ctx.tx(async (tx) => {
+        const due = await dueDate(tx, args.paymentTermId, new Date(invoiceDate))
         await tx.db.insert('account.Move', {
           id: args.id,
           name: String(args.id),
@@ -647,13 +890,13 @@ export const functions: Record<string, FnSpec> = {
           journalId: args.journalId,
           partnerId: args.partnerId,
           invoiceDate,
-          invoiceDateDue: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)),
+          invoiceDateDue: due,
           paymentTermId: args.paymentTermId ?? null,
           paymentState: 'not_paid',
           currency,
-          amountUntaxed: decimal(amounts.untaxed),
-          amountTax: decimal(amounts.tax),
-          amountTotal: decimal(amounts.total),
+          amountUntaxed: moneyText(amounts.untaxed, scale),
+          amountTax: moneyText(amounts.tax, scale),
+          amountTotal: moneyText(amounts.total, scale),
           postedAt: null,
         })
         const line = async (
@@ -674,16 +917,16 @@ export const functions: Record<string, FnSpec> = {
             productId: null,
             productUomId: null,
             quantity: '1',
-            priceUnit: decimal(amount),
+            priceUnit: moneyText(amount, scale),
             discount: '0',
             taxId: null,
-            debit: debitSide ? decimal(amount) : '0',
-            credit: debitSide ? '0' : decimal(amount),
-            balance: decimal(debitSide ? amount : -amount),
+            debit: debitSide ? moneyText(amount, scale) : moneyText(0, scale),
+            credit: debitSide ? moneyText(0, scale) : moneyText(amount, scale),
+            balance: moneyText(debitSide ? amount : -amount, scale),
             dateMaturity: null,
             displayType: null,
             reconciled: false,
-            amountResidual: reconcilable ? decimal(amount) : '0',
+            amountResidual: moneyText(reconcilable ? amount : 0, scale),
             sequence: 10,
             ...extra,
           })
@@ -700,18 +943,20 @@ export const functions: Record<string, FnSpec> = {
             quantity: String(args.quantity),
             priceUnit: String(args.priceUnit),
             discount: String(args.discount ?? 0),
-            taxId: args.taxId ?? null,
+            taxId: taxes[0]?.id ?? null,
           },
         )
-        if (amounts.tax)
+        for (const [at, held] of posting.entries())
           await line(
-            `${String(args.id)}:tax`,
-            taxAccountId,
-            amounts.tax,
+            // The first tax line keeps the historical id so an existing document
+            // reprocessed by id lands on the same rows.
+            at === 0 ? `${String(args.id)}:tax` : `${String(args.id)}:tax:${String(held.taxId)}`,
+            held.accountId,
+            held.amount,
             mainDebit,
-            String(tax?.name ?? 'Tax'),
+            held.name,
             false,
-            { sequence: 20 },
+            { taxId: held.taxId, sequence: 20 + at },
           )
         await line(
           `${String(args.id)}:counterpart`,
@@ -720,10 +965,10 @@ export const functions: Record<string, FnSpec> = {
           !mainDebit,
           String(args.ref ?? args.description),
           true,
-          { dateMaturity: await dueDate(tx, args.paymentTermId, new Date(invoiceDate)), sequence: 30 },
+          { dateMaturity: due, sequence: 30 + posting.length },
         )
       })
-      return { ok: true, id: args.id, amountTotal: decimal(amounts.total) }
+      return { ok: true, id: args.id, amountTotal: moneyText(amounts.total, scale) }
     },
   }),
   postMove: defineFn({
@@ -750,16 +995,150 @@ export const functions: Record<string, FnSpec> = {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'journal entry does not exist')
       if (move.state === 'posted')
-        return invalid('state', 'posted entries must be reversed; direct cancellation is unsupported')
+        return invalid('state', 'a posted entry is corrected with account.reverseMove, not cancelled')
       await ctx.db.update('account.Move', { id: args.id }, { state: 'cancel' })
       return { ok: true, id: args.id }
     },
   }),
+  /**
+   * Post the mirror image of an entry that is already in the books.
+   *
+   * A posted entry is never edited or deleted — the correction is a second entry
+   * whose debits and credits are the first one's, swapped. Where the original
+   * opened an item on a reconcilable account, the reversal closes it against the
+   * original, so the document stops showing up as owed.
+   */
+  reverseMove: defineFn({
+    input: { id: 'id', reversalId: 'id', date: 'datetime?', ref: 'text?', journalId: 'id?' },
+    output: { ok: 'bool', id: 'id?', reversalId: 'id?', name: 'text?', errors: 'json?' },
+    effects: [
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.Account',
+      'read:account.Journal',
+      'read:account.PartialReconcile',
+      'read:company.Company',
+      'write:account.Journal',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'write:account.PartialReconcile',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
+      if (!move) return invalid('id', 'journal entry does not exist')
+      if (move.state !== 'posted') return invalid('state', 'only a posted entry can be reversed')
+
+      const already = (await ctx.db.select('account.Move', { id: args.reversalId }))[0]
+      if (already) return { ok: true, id: args.id, reversalId: args.reversalId, name: already.name }
+
+      const lines = (await ctx.db.select('account.MoveLine', { moveId: args.id })).sort(
+        (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
+      )
+      if (!lines.length) return invalid('lines', 'the entry has no journal items to reverse')
+      const journalId = args.journalId ?? move.journalId
+      if (!(await ctx.db.select('account.Journal', { id: journalId }))[0])
+        return invalid('journalId', 'journal does not exist')
+
+      const scale = scaleOf(move.currency)
+      const byId = await accountsById(ctx)
+      const date = String(args.date ?? today())
+      const reversalId = String(args.reversalId)
+
+      await ctx.tx(async (tx) => {
+        await tx.db.insert('account.Move', {
+          id: reversalId,
+          name: reversalId,
+          // The reference is the document being corrected, not a sentence about it:
+          // this module has no translator, and a ledger read in Vietnamese must not
+          // grow English prose.
+          ref: args.ref ?? move.name,
+          date,
+          moveType: 'entry',
+          state: 'draft',
+          journalId,
+          partnerId: move.partnerId ?? null,
+          invoiceDate: null,
+          invoiceDateDue: null,
+          paymentTermId: null,
+          paymentState: 'paid',
+          currency: move.currency,
+          amountUntaxed: move.amountUntaxed,
+          amountTax: move.amountTax,
+          amountTotal: move.amountTotal,
+          postedAt: null,
+        })
+        for (const line of lines) {
+          const debit = n(line.credit)
+          const credit = n(line.debit)
+          const reconcilable = byId.get(String(line.accountId))?.reconcile === true
+          await tx.db.insert('account.MoveLine', {
+            id: `${reversalId}:${String(line.id)}`,
+            moveId: reversalId,
+            name: line.name,
+            accountId: line.accountId,
+            partnerId: line.partnerId ?? null,
+            productId: line.productId ?? null,
+            productUomId: line.productUomId ?? null,
+            quantity: line.quantity,
+            priceUnit: line.priceUnit,
+            discount: line.discount,
+            taxId: line.taxId ?? null,
+            debit: moneyText(debit, scale),
+            credit: moneyText(credit, scale),
+            balance: moneyText(debit - credit, scale),
+            dateMaturity: null,
+            displayType: line.displayType ?? null,
+            reconciled: false,
+            amountResidual: moneyText(reconcilable ? Math.abs(debit - credit) : 0, scale),
+            sequence: line.sequence,
+          })
+        }
+      })
+
+      const posted = await post(ctx, reversalId)
+      if (posted.ok !== true) return posted
+
+      // Close what the original left open, as far as each side still allows.
+      for (const line of lines) {
+        if (byId.get(String(line.accountId))?.reconcile !== true) continue
+        const mirror = (
+          await ctx.db.select('account.MoveLine', { id: `${reversalId}:${String(line.id)}` })
+        )[0]
+        const fresh = (await ctx.db.select('account.MoveLine', { id: line.id }))[0]
+        if (!mirror || !fresh) continue
+        const amount = Math.min(n(fresh.amountResidual), n(mirror.amountResidual))
+        if (amount <= 0) continue
+        const debitFirst = n(fresh.balance) > 0
+        const result = await functions.reconcile!.handler(ctx, {
+          id: `${reversalId}:reconcile:${String(line.id)}`,
+          debitMoveId: debitFirst ? fresh.id : mirror.id,
+          creditMoveId: debitFirst ? mirror.id : fresh.id,
+          amount: moneyText(amount, scale),
+          date,
+        })
+        if ((result as Row).ok !== true) return result as Record<string, unknown>
+      }
+
+      if (move.moveType !== 'entry')
+        await ctx.db.update('account.Move', { id: args.id }, { paymentState: 'reversed' })
+      return { ok: true, id: args.id, reversalId, name: posted.name }
+    },
+  }),
   listPayments: defineFn({
-    input: {},
+    input: { partnerId: 'id?', state: 'text?', limit: 'int?', offset: 'int?' },
     effects: ['read:account.Payment'],
     agent: true,
-    handler: (ctx) => ctx.db.select('account.Payment'),
+    handler: (ctx, args) => {
+      const P = ctx.table('account.Payment')
+      const where = [
+        ...(args.partnerId ? [eq(P.partnerId, args.partnerId)] : []),
+        ...(args.state ? [eq(P.state, args.state)] : []),
+      ]
+      const q = (where.length ? from(P).where(and(...where)) : from(P)).orderBy(asc(P.date), asc(P.id))
+      return ctx.db.all(paginate(q, args.limit, args.offset))
+    },
   }),
   registerPayment: defineFn({
     input: {
@@ -798,7 +1177,10 @@ export const functions: Record<string, FnSpec> = {
         return invalid('paymentType', 'payment type must be inbound or outbound')
       if (!PARTNER_TYPES.includes(args.partnerType as never))
         return invalid('partnerType', 'partner type must be customer or supplier')
-      if (!(n(args.amount) > 0)) return invalid('amount', 'payment amount must be positive')
+      const { currency, scale } = await ledgerOf(ctx)
+      const amount = roundMoney(n(args.amount), scale)
+      const slack = toleranceOf(scale)
+      if (!(amount > 0)) return invalid('amount', 'payment amount must be positive')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
       if (!journal?.defaultAccountId)
         return invalid('journalId', 'payment journal needs a default liquidity account')
@@ -832,7 +1214,7 @@ export const functions: Record<string, FnSpec> = {
           (!expectedDebit && n(reconcileTarget.balance) >= 0)
         )
           return invalid('reconcileLineId', 'open item has the wrong debit or credit direction')
-        if (n(args.amount) - n(reconcileTarget.amountResidual) > 0.000001)
+        if (amount - n(reconcileTarget.amountResidual) > slack)
           return invalid('amount', 'payment amount exceeds the selected open item')
       }
       const reconcilePayment = async (paymentMoveId: string) => {
@@ -842,7 +1224,7 @@ export const functions: Record<string, FnSpec> = {
           id: `${String(args.id)}:reconcile:${String(reconcileTarget.id)}`,
           debitMoveId: args.paymentType === 'inbound' ? reconcileTarget.id : counterpartId,
           creditMoveId: args.paymentType === 'inbound' ? counterpartId : reconcileTarget.id,
-          amount: args.amount,
+          amount: moneyText(amount, scale),
           date: args.date ?? today(),
         })
         return (result as Row).ok === true ? null : result
@@ -853,7 +1235,6 @@ export const functions: Record<string, FnSpec> = {
       }
       const moveId = `${String(args.id)}:move`,
         date = String(args.date ?? today()),
-        currency = await companyCurrency(ctx),
         inbound = args.paymentType === 'inbound'
       await ctx.tx(async (tx) => {
         await tx.db.insert('account.Move', {
@@ -870,9 +1251,9 @@ export const functions: Record<string, FnSpec> = {
           paymentTermId: null,
           paymentState: 'paid',
           currency,
-          amountUntaxed: '0',
-          amountTax: '0',
-          amountTotal: String(args.amount),
+          amountUntaxed: moneyText(0, scale),
+          amountTax: moneyText(0, scale),
+          amountTotal: moneyText(amount, scale),
           postedAt: null,
         })
         const add = (id: string, accountId: unknown, debitSide: boolean, reconcilable: boolean) =>
@@ -885,16 +1266,16 @@ export const functions: Record<string, FnSpec> = {
             productId: null,
             productUomId: null,
             quantity: '1',
-            priceUnit: String(args.amount),
+            priceUnit: moneyText(amount, scale),
             discount: '0',
             taxId: null,
-            debit: debitSide ? String(args.amount) : '0',
-            credit: debitSide ? '0' : String(args.amount),
-            balance: decimal(debitSide ? n(args.amount) : -n(args.amount)),
+            debit: moneyText(debitSide ? amount : 0, scale),
+            credit: moneyText(debitSide ? 0 : amount, scale),
+            balance: moneyText(debitSide ? amount : -amount, scale),
             dateMaturity: null,
             displayType: null,
             reconciled: false,
-            amountResidual: reconcilable ? String(args.amount) : '0',
+            amountResidual: moneyText(reconcilable ? amount : 0, scale),
             sequence: debitSide ? 10 : 20,
           })
         await add(`${moveId}:liquidity`, journal.defaultAccountId, inbound, false)
@@ -907,7 +1288,7 @@ export const functions: Record<string, FnSpec> = {
           partnerId: args.partnerId ?? null,
           journalId: args.journalId,
           destinationAccountId: args.destinationAccountId,
-          amount: args.amount,
+          amount: moneyText(amount, scale),
           date,
           memo: args.memo ?? null,
           paymentReference: args.paymentReference ?? null,
@@ -932,6 +1313,7 @@ export const functions: Record<string, FnSpec> = {
       'read:account.MoveLine',
       'read:account.Account',
       'read:account.PartialReconcile',
+      'read:company.Company',
       'write:account.Move',
       'write:account.MoveLine',
       'write:account.PartialReconcile',
@@ -939,7 +1321,9 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const amount = money(n(args.amount))
+      const { scale } = await ledgerOf(ctx)
+      const slack = toleranceOf(scale)
+      const amount = roundMoney(n(args.amount), scale)
       if (!(amount > 0)) return invalid('amount', 'reconciliation amount must be positive')
       if ((await ctx.db.select('account.PartialReconcile', { id: args.id }))[0])
         return { ok: true, id: args.id }
@@ -960,29 +1344,29 @@ export const functions: Record<string, FnSpec> = {
             throw new Error('only posted journal items can be reconciled')
           const account = await accountOf(tx, debit.accountId)
           if (!account?.reconcile) throw new Error('account does not allow reconciliation')
-          if (amount - n(debit.amountResidual) > 0.000001 || amount - n(credit.amountResidual) > 0.000001)
+          if (amount - n(debit.amountResidual) > slack || amount - n(credit.amountResidual) > slack)
             throw new Error('amount exceeds a residual balance')
           const held = await tx.db.insertIfAbsent('account.PartialReconcile', {
             id: args.id,
             debitMoveId: args.debitMoveId,
             creditMoveId: args.creditMoveId,
-            amount: decimal(amount),
+            amount: moneyText(amount, scale),
             date: args.date ?? today(),
           })
           if (!('dryRun' in held) && !held.inserted) return [debit.moveId, credit.moveId]
-          const debitResidual = money(n(debit.amountResidual) - amount)
-          const creditResidual = money(n(credit.amountResidual) - amount)
+          const debitResidual = roundMoney(n(debit.amountResidual) - amount, scale)
+          const creditResidual = roundMoney(n(credit.amountResidual) - amount, scale)
           const debitWrite = await tx.db.compareAndSet(
             'account.MoveLine',
             { id: debit.id },
             { amountResidual: debit.amountResidual },
-            { amountResidual: decimal(debitResidual), reconciled: debitResidual === 0 },
+            { amountResidual: moneyText(debitResidual, scale), reconciled: debitResidual <= slack },
           )
           const creditWrite = await tx.db.compareAndSet(
             'account.MoveLine',
             { id: credit.id },
             { amountResidual: credit.amountResidual },
-            { amountResidual: decimal(creditResidual), reconciled: creditResidual === 0 },
+            { amountResidual: moneyText(creditResidual, scale), reconciled: creditResidual <= slack },
           )
           if (
             (!('dryRun' in debitWrite) && !debitWrite.matched) ||
@@ -995,32 +1379,28 @@ export const functions: Record<string, FnSpec> = {
         return invalid('lines', (error as Error).message)
       }
       if (moveIds) {
-        await updatePaymentState(ctx, moveIds[0])
-        await updatePaymentState(ctx, moveIds[1])
+        const accounts = await accountsById(ctx)
+        await updatePaymentState(ctx, moveIds[0], accounts)
+        await updatePaymentState(ctx, moveIds[1], accounts)
       }
       return { ok: true, id: args.id }
     },
   }),
   trialBalance: defineFn({
     input: { dateFrom: 'datetime?', dateTo: 'datetime?' },
-    effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine'],
+    effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine', 'read:company.Company'],
     agent: true,
     handler: async (ctx, args) => {
-      const accounts = await ctx.db.select('account.Account'),
-        moves = new Map(
-          (await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]),
-        )
+      const { scale } = await ledgerOf(ctx)
+      const accounts = await ctx.db.select('account.Account')
+      // The date window belongs to the move, so it narrows the move query and the
+      // journal items are then fetched for those moves alone.
+      const moves = await postedMoves(ctx, args.dateFrom, args.dateTo)
       const result = new Map<string, { debit: number; credit: number }>()
-      for (const line of await ctx.db.select('account.MoveLine')) {
-        const move = moves.get(String(line.moveId))
-        if (!move) continue
-        const at = new Date(String(move.date)).getTime(),
-          from = args.dateFrom ? new Date(String(args.dateFrom)).getTime() : -Infinity,
-          to = args.dateTo ? new Date(String(args.dateTo)).getTime() : Infinity
-        if (at < from || at > to) continue
+      for (const line of await linesOfMoves(ctx, [...moves.keys()])) {
         const held = result.get(String(line.accountId)) ?? { debit: 0, credit: 0 }
-        held.debit = money(held.debit + n(line.debit))
-        held.credit = money(held.credit + n(line.credit))
+        held.debit = roundMoney(held.debit + n(line.debit), scale)
+        held.credit = roundMoney(held.credit + n(line.credit), scale)
         result.set(String(line.accountId), held)
       }
       return accounts
@@ -1030,59 +1410,67 @@ export const functions: Record<string, FnSpec> = {
             accountId: account.id,
             code: account.code,
             name: account.name,
-            debit: decimal(held.debit),
-            credit: decimal(held.credit),
-            balance: decimal(held.debit - held.credit),
+            debit: moneyText(held.debit, scale),
+            credit: moneyText(held.credit, scale),
+            balance: moneyText(held.debit - held.credit, scale),
           }
         })
         .filter((row) => n(row.debit) || n(row.credit))
     },
   }),
   generalLedger: defineFn({
-    input: { accountId: 'id?', dateFrom: 'datetime?', dateTo: 'datetime?' },
+    input: {
+      accountId: 'id?',
+      dateFrom: 'datetime?',
+      dateTo: 'datetime?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:account.Move', 'read:account.MoveLine'],
     agent: true,
     handler: async (ctx, args) => {
-      const moves = new Map(
-        (await ctx.db.select('account.Move', { state: 'posted' })).map((move) => [String(move.id), move]),
-      )
-      const rows: Array<Row & { move: Row }> = []
-      for (const line of await ctx.db.select(
-        'account.MoveLine',
-        args.accountId ? { accountId: args.accountId } : {},
-      )) {
-        const move = moves.get(String(line.moveId))
-        if (!move) continue
-        const at = new Date(String(move.date)).getTime()
-        if (at < (args.dateFrom ? new Date(String(args.dateFrom)).getTime() : -Infinity)) continue
-        if (at > (args.dateTo ? new Date(String(args.dateTo)).getTime() : Infinity)) continue
-        rows.push({ ...line, move })
-      }
-      return rows.sort(
-        (a, b) => String(a.move.date).localeCompare(String(b.move.date)) || n(a.sequence) - n(b.sequence),
-      )
+      const moves = await postedMoves(ctx, args.dateFrom, args.dateTo)
+      const rows = (await linesOfMoves(ctx, [...moves.keys()], args.accountId))
+        .map((line): Row & { move: Row } => ({ ...line, move: moves.get(String(line.moveId))! }))
+        .sort(
+          (a, b) =>
+            String(a.move.date).localeCompare(String(b.move.date)) ||
+            String(a.moveId).localeCompare(String(b.moveId)) ||
+            n(a.sequence) - n(b.sequence),
+        )
+      return slice(rows, args.limit, args.offset)
     },
   }),
   partnerStatement: defineFn({
-    input: { partnerId: 'id' },
+    input: { partnerId: 'id', limit: 'int?', offset: 'int?' },
     effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Account'],
     agent: true,
     handler: async (ctx, args) => {
+      const byId = await accountsById(ctx)
+      const control = [...byId.values()]
+        .filter((row) => OPEN_ITEM_TYPES.includes(String(row.accountType)))
+        .map((row) => row.id)
+      if (!control.length) return []
       const moves = new Map(
-          (await ctx.db.select('account.Move', { state: 'posted', partnerId: args.partnerId })).map(
-            (move) => [String(move.id), move],
-          ),
-        ),
-        rows: Row[] = []
-      for (const line of await ctx.db.select('account.MoveLine', { partnerId: args.partnerId })) {
-        const account = await accountOf(ctx, line.accountId)
-        if (
-          moves.has(String(line.moveId)) &&
-          ['asset_receivable', 'liability_payable'].includes(String(account?.accountType))
+        (await ctx.db.select('account.Move', { state: 'posted', partnerId: args.partnerId })).map((move) => [
+          String(move.id),
+          move,
+        ]),
+      )
+      if (!moves.size) return []
+      const L = ctx.table('account.MoveLine')
+      const lines = await ctx.db.all(
+        from(L).where(and(eq(L.partnerId, args.partnerId), inArray(L.accountId, control))),
+      )
+      const rows = lines
+        .filter((line) => moves.has(String(line.moveId)))
+        .map((line): Row & { move: Row } => ({ ...line, move: moves.get(String(line.moveId))! }))
+        .sort(
+          (a, b) =>
+            String(a.move.date).localeCompare(String(b.move.date)) ||
+            String(a.id).localeCompare(String(b.id)),
         )
-          rows.push({ ...line, move: moves.get(String(line.moveId)) })
-      }
-      return rows
+      return slice(rows, args.limit, args.offset)
     },
   }),
 }
