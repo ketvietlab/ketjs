@@ -179,13 +179,15 @@ Hai bề mặt dùng cùng token, focus contract và density với phần backen
 
 | Selector | Là gì |
 |---|---|
-| `[data-ui="login"]` | khung ngoài, chiếm cả trang |
+| `[data-ui="login"]` | khung ngoài, chiếm cả trang; nền có một lớp wash indigo rất nhạt |
+| `[data-ui="login-panel"]` | cột giữa: lockup, card, đổi ngôn ngữ |
+| `[data-ui="login-brand"]`, `[data-ui="login-logo"]` | lockup KetSuite. `<picture>` đổi bản sáng/tối theo `prefers-color-scheme`; file nằm ở `design/brand/`, cỡ đặt bằng `block-size` chứ không phải `inline-size` |
 | `[data-ui="login-form"]` | form, `method="post"` |
-| `[data-ui="login-title"]` | tiêu đề |
+| `[data-ui="login-heading"]`, `[data-ui="login-title"]`, `[data-ui="login-subtitle"]` | tiêu đề và câu dẫn |
 | `[data-ui="login-error"]` | thông báo sai mật khẩu, `role="alert"`, chỉ hiện khi có lỗi |
 | `[data-ui="field"]`, `[data-ui="field-label"]`, `[data-ui="field-input"]` | một ô nhập; dùng lại được ở form khác |
 | `[data-ui="login-submit"]` | nút gửi |
-| `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, chỉ hiện khi có nhiều hơn một |
+| `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, nằm ngoài form vì đó là điều hướng; chỉ hiện khi có nhiều hơn một |
 | `[data-ui="login-providers"]`, `[data-ui="login-provider"]` | các OIDC provider đang hoạt động; không render logo hoặc request ngoài |
 | `[data-ui="login-divider"]` | ngăn cách đăng nhập mật khẩu và OIDC |
 

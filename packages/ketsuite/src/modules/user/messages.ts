@@ -1,6 +1,8 @@
 export const messages = {
   vi: {
     'login.title': 'Đăng nhập',
+    'login.subtitle': 'Đăng nhập để tiếp tục vào KetSuite.',
+    'login.brand': 'KetSuite — Extensible Open ERP',
     'login.login': 'Tên đăng nhập',
     'login.password': 'Mật khẩu',
     'login.submit': 'Đăng nhập',
@@ -58,6 +60,8 @@ export const messages = {
   },
   en: {
     'login.title': 'Sign in',
+    'login.subtitle': 'Sign in to continue to KetSuite.',
+    'login.brand': 'KetSuite — Extensible Open ERP',
     'login.login': 'Login',
     'login.password': 'Password',
     'login.submit': 'Sign in',
