@@ -523,3 +523,99 @@ test('e2e accounting: a payment term shows the milestones that define it, and th
   assert.equal((after.lines as Row[]).length, 1)
   assert.equal(Number((after.lines as Row[])[0]!.nbDays), 45)
 })
+
+test('e2e accounting: an invoice form no longer asks which accounts to post to', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+
+  // The install decides the statutory answer once, so the company starts configured.
+  const defaults = (await call<Row>('account.getDefaults')).value
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const codeOf = (id: unknown) => String(accounts.find((row) => String(row.id) === String(id))?.code)
+  assert.equal(codeOf(defaults.incomeAccountId), '511')
+  assert.equal(codeOf(defaults.receivableAccountId), '1311')
+
+  // Neither account field is required, and each says where its value comes from.
+  const form = await (
+    await e2e.client.get('/admin/accounting/customer-invoices?lang=vi', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  const required = (name: string) =>
+    new RegExp(`name="${name}"[^>]*\\srequired`).test(form.replace(/<!--[^>]*-->/g, ''))
+  assert.equal(required('lineAccountId'), false)
+  assert.equal(required('counterpartAccountId'), false)
+  assert.match(form, /Để trống để lấy theo nhóm sản phẩm/)
+
+  // Posting the form without them produces a complete, balanced invoice.
+  const created = await e2e.client.post(
+    '/admin/accounting/customer-invoices?lang=vi',
+    new URLSearchParams({
+      journalId: String(
+        (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+      ),
+      moveType: 'out_invoice',
+      partnerId: 'customer',
+      description: 'Dịch vụ',
+      quantity: '1',
+      priceUnit: '1000000',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(created.status, 303)
+  const id = String(created.headers.get('location')).split('/').pop()?.split('?')[0]
+  const invoice = (await call<Row>('account.getMove', { id })).value as Row & { lines: Row[] }
+  assert.equal(codeOf(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId), '511')
+  assert.equal(
+    codeOf(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId),
+    '1311',
+  )
+})
+
+test('e2e accounting: a product category posts to the accounts it was given', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const idOf = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' })
+
+  const saved = await e2e.client.post(
+    '/admin/accounting/defaults?lang=vi',
+    new URLSearchParams({ action: 'category', categoryId: 'services', incomeAccountId: idOf('515') }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(saved.status, 303)
+
+  const screen = await (
+    await e2e.client.get('/admin/accounting/defaults?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(screen, /Dịch vụ/)
+  assert.match(screen, /515 · Doanh thu hoạt động tài chính/)
+
+  await call('product.saveTemplate', {
+    id: 'consulting',
+    name: 'Tư vấn',
+    type: 'service',
+    categoryId: 'services',
+    listPrice: '0',
+  })
+  await call('product.saveVariant', { id: 'consulting-1', templateId: 'consulting' })
+  await call('account.createInvoice', {
+    id: 'invoice-category',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+    ),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    productId: 'consulting-1',
+    description: 'Tư vấn',
+    quantity: '1',
+    priceUnit: '1000000',
+  })
+  const invoice = (await call<Row>('account.getMove', { id: 'invoice-category' })).value as Row & {
+    lines: Row[]
+  }
+  // The category is narrower than the company, so it decides the revenue account.
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId, idOf('515'))
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId, idOf('1311'))
+})

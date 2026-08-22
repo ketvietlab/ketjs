@@ -495,6 +495,117 @@ test('accounting: a journal item id cannot be quietly reused for a different lin
   }
 })
 
+test('accounting: an invoice takes its accounts from the configuration, narrowest first', async () => {
+  const adapter = await boot()
+  try {
+    // The chart answers "which account" the same way every time, so the document
+    // should not be asking. Nothing configured beyond the company defaults yet.
+    await call(
+      'account.saveDefaults',
+      { incomeAccountId: 'revenue', receivableAccountId: 'receivable' },
+      adapter,
+    )
+    const line = {
+      journalId: 'sales',
+      moveType: 'out_invoice',
+      partnerId: 'customer',
+      description: 'Dịch vụ',
+      quantity: '1',
+      priceUnit: '1000000',
+    }
+    const accountsOf = async (id: string) =>
+      Object.fromEntries(
+        ((await call('account.getMove', { id }, adapter)).value as Row & { lines: Row[] }).lines.map(
+          (row) => [String(row.id).split(':').pop(), row.accountId],
+        ),
+      )
+
+    await call('account.createInvoice', { id: 'inv-company', ...line }, adapter)
+    assert.deepEqual(await accountsOf('inv-company'), {
+      base: 'revenue',
+      counterpart: 'receivable',
+    })
+
+    // A product category is narrower than the company, so it wins for the line.
+    await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' }, adapter)
+    await call(
+      'product.saveTemplate',
+      { id: 'consulting', name: 'Tư vấn', type: 'service', categoryId: 'services', listPrice: '0' },
+      adapter,
+    )
+    await call('product.saveVariant', { id: 'consulting-1', templateId: 'consulting' }, adapter)
+    await call(
+      'account.saveAccount',
+      { id: 'other-revenue', code: '515', name: 'Tài chính', accountType: 'income' },
+      adapter,
+    )
+    await call(
+      'account.saveCategoryAccount',
+      { categoryId: 'services', incomeAccountId: 'other-revenue' },
+      adapter,
+    )
+    await call('account.createInvoice', { id: 'inv-category', productId: 'consulting-1', ...line }, adapter)
+    assert.deepEqual(await accountsOf('inv-category'), {
+      base: 'other-revenue',
+      counterpart: 'receivable',
+    })
+
+    // An explicit choice still wins over every default.
+    await call(
+      'account.createInvoice',
+      { id: 'inv-explicit', productId: 'consulting-1', lineAccountId: 'revenue', ...line },
+      adapter,
+    )
+    assert.deepEqual(await accountsOf('inv-explicit'), {
+      base: 'revenue',
+      counterpart: 'receivable',
+    })
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: an invoice with nothing to fall back on says so instead of guessing', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveDefaults', {}, adapter)
+    const refused = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'inv-undecided',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Dịch vụ',
+          quantity: '1',
+          priceUnit: '1000',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]!.field, 'lineAccountId')
+    assert.equal((refused.errors as Row[])[0]!.code, 'account.error.lineAccountUndecided')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a default that the ledger would later refuse cannot be saved', async () => {
+  const adapter = await boot()
+  try {
+    // 'bank' is asset_cash — a receivable default has to be a receivable account,
+    // or every invoice using it fails at posting time instead of here.
+    const refused = (await call('account.saveDefaults', { receivableAccountId: 'bank' }, adapter))
+      .value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]!.field, 'receivableAccountId')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('accounting: a tax computation the ledger cannot apply is refused at save time', async () => {
   const adapter = await boot()
   try {

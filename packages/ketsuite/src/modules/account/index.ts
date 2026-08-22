@@ -6,9 +6,10 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
-  // 0.4.0: currency-scaled amounts, several taxes per line, reverseMove, `group`
-  // removed from TAX_AMOUNT_TYPES, and refusals that carry a translatable code.
-  version: '0.4.0',
+  // 0.5.0: currency-scaled amounts, several taxes per line, reverseMove, `group`
+  // removed from TAX_AMOUNT_TYPES, refusals that carry a translatable code, and
+  // invoice accounts resolved from category, partner and company defaults.
+  version: '0.5.0',
   depends: ['company', 'partner', 'product', 'uom'],
   app: true,
   title: 'Kế toán',
@@ -83,6 +84,12 @@ export default defineModule({
       'error.invoiceTypeRequired':
         'Chức năng này cần loại chứng từ là hoá đơn, hoá đơn trả lại hoặc biên lai.',
       'error.invoiceAccountsMissing': 'Tài khoản trên hoá đơn không tồn tại.',
+      'error.lineAccountUndecided':
+        'Chưa chọn tài khoản doanh thu/chi phí, mà nhóm sản phẩm lẫn công ty đều chưa đặt mặc định.',
+      'error.counterpartAccountUndecided':
+        'Chưa chọn tài khoản phải thu/phải trả, mà đối tác lẫn công ty đều chưa đặt mặc định.',
+      'error.categoryMissing': 'Nhóm sản phẩm không tồn tại.',
+      'error.defaultAccountType': 'Loại tài khoản này không dùng làm mặc định cho mục đích đó được.',
       'error.counterpartMustBeReceivable': 'Tài khoản đối ứng phải là tài khoản phải thu.',
       'error.counterpartMustBePayable': 'Tài khoản đối ứng phải là tài khoản phải trả.',
 
@@ -167,6 +174,12 @@ export default defineModule({
 
       'error.invoiceTypeRequired': 'This needs an invoice, refund, or receipt document type.',
       'error.invoiceAccountsMissing': 'The accounts on this invoice do not exist.',
+      'error.lineAccountUndecided':
+        'No revenue or expense account was given, and neither the product category nor the company has a default.',
+      'error.counterpartAccountUndecided':
+        'No receivable or payable account was given, and neither the partner nor the company has a default.',
+      'error.categoryMissing': 'The product category does not exist.',
+      'error.defaultAccountType': 'That account type cannot serve as this default.',
       'error.counterpartMustBeReceivable': 'The counterpart account must be a receivable account.',
       'error.counterpartMustBePayable': 'The counterpart account must be a payable account.',
 
