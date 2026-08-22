@@ -1,7 +1,9 @@
 import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { resolveAddress, validateAddress } from '../address/format.ts'
+import { addCalendarDays, dateKeyIn } from './calendar.ts'
 import { appendContentChange } from './content.ts'
+import { recordInventoryChange, syncLedgerCapacity } from './inventory.ts'
 import {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
@@ -11,6 +13,31 @@ import {
   ROOM_STATUSES,
   ROOM_VIEW_TYPES,
 } from './types.ts'
+
+/**
+ * Room configuration changed, so the sellable count for its room type did too.
+ * The ledger follows every future date it still owns, and one durable signal
+ * goes out so a channel adapter learns the capacity moved.
+ */
+const followRoomCapacity = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  roomTypeId: unknown,
+): Promise<{ date: string; committed: number; total: number }[]> => {
+  const Property = ctx.table('hospitality_core.Property')
+  const property = await ctx.db.one(from(Property).where(eq(Property.id, propertyId)))
+  const today = dateKeyIn(new Date(), String(property?.timezone ?? 'UTC'))
+  const synced = await syncLedgerCapacity(ctx, propertyId, roomTypeId, today)
+  if (synced.changed)
+    await recordInventoryChange(ctx, {
+      propertyId,
+      roomTypeId,
+      kind: 'availability',
+      dateFrom: today,
+      dateTo: addCalendarDays(today, 365),
+    })
+  return synced.overcommitted
+}
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
 
@@ -136,7 +163,12 @@ const save = async (
   defaults: Record<string, unknown> = {},
 ) => {
   const existing = await record(ctx, model, args.id)
-  let changes = ctx.change(model, args, existing).cast(fields)
+  // An optional field that was not supplied is absent, not invalid. Casting an
+  // explicit `undefined` failed the whole write, so leaving one blank in an
+  // admin form rejected the record instead of leaving the column alone.
+  // `null` still means "clear it".
+  const supplied = Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined))
+  let changes = ctx.change(model, supplied, existing).cast(fields)
   if (!existing)
     for (const [key, value] of Object.entries(defaults))
       if (!(key in args) || args[key] == null) changes = changes.put(key, value)
@@ -205,6 +237,9 @@ const writable = (name: string): string[] =>
       'defaultCheckIn',
       'defaultCheckOut',
       'enforceTimes',
+      'allowHourly',
+      'allowWeekly',
+      'allowMonthly',
       'longStayBillOnCheckIn',
       'starRating',
       'street1',
@@ -240,6 +275,10 @@ const writable = (name: string): string[] =>
       'sizeSqm',
       'viewType',
       'sharedBathroom',
+      'allowHourly',
+      'allowWeekly',
+      'allowMonthly',
+      'minHourlyHours',
       'baseRate',
       'color',
       'cancellationPolicyId',
@@ -326,6 +365,9 @@ export const functions: Record<string, FnSpec> = {
       defaultCheckIn: 'text',
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
+      allowHourly: 'bool',
+      allowWeekly: 'bool',
+      allowMonthly: 'bool',
       longStayBillOnCheckIn: 'bool?',
       starRating: 'int',
       street1: 'text?',
@@ -396,6 +438,9 @@ export const functions: Record<string, FnSpec> = {
       defaultCheckIn: 'text?',
       defaultCheckOut: 'text?',
       enforceTimes: 'bool?',
+      allowHourly: 'bool?',
+      allowWeekly: 'bool?',
+      allowMonthly: 'bool?',
       longStayBillOnCheckIn: 'bool?',
       starRating: 'int?',
       street: 'text?',
@@ -498,6 +543,12 @@ export const functions: Record<string, FnSpec> = {
       return ctx.tx(async (tx) => {
         const result = await save(tx, 'hospitality_core.Property', args, writable('Property'), {
           enforceTimes: true,
+          // Nightly and hourly are what a hotel sells by default. A weekly or
+          // monthly stay is a different contract with its own billing cycle, so
+          // the property opts into it rather than discovering it was on.
+          allowHourly: true,
+          allowWeekly: false,
+          allowMonthly: false,
           longStayBillOnCheckIn: true,
           childrenStayFree: false,
           active: true,
@@ -852,6 +903,10 @@ export const functions: Record<string, FnSpec> = {
       sizeSqm: 'decimal?',
       viewType: 'text?',
       sharedBathroom: 'bool',
+      allowHourly: 'bool',
+      allowWeekly: 'bool',
+      allowMonthly: 'bool',
+      minHourlyHours: 'int',
       baseRate: 'decimal',
       published: 'bool',
       active: 'bool',
@@ -886,6 +941,10 @@ export const functions: Record<string, FnSpec> = {
       sizeSqm: 'decimal?',
       viewType: 'text?',
       sharedBathroom: 'bool',
+      allowHourly: 'bool',
+      allowWeekly: 'bool',
+      allowMonthly: 'bool',
+      minHourlyHours: 'int',
       baseRate: 'decimal',
       color: 'text?',
       cancellationPolicyId: 'id?',
@@ -932,6 +991,10 @@ export const functions: Record<string, FnSpec> = {
       sizeSqm: 'decimal?',
       viewType: 'text?',
       sharedBathroom: 'bool?',
+      allowHourly: 'bool?',
+      allowWeekly: 'bool?',
+      allowMonthly: 'bool?',
+      minHourlyHours: 'int?',
       baseRate: 'decimal?',
       color: 'text?',
       cancellationPolicyId: 'id?',
@@ -957,6 +1020,7 @@ export const functions: Record<string, FnSpec> = {
         maxChildren: Number(raw.maxChildren ?? 0),
         maxInfants: Number(raw.maxInfants ?? 0),
         maxExtraBeds: Number(raw.maxExtraBeds ?? 0),
+        minHourlyHours: Number(raw.minHourlyHours ?? current?.minHourlyHours ?? 2),
         baseRate: String(raw.baseRate ?? '0'),
       })
       const errors: Issue[] = []
@@ -988,6 +1052,8 @@ export const functions: Record<string, FnSpec> = {
       if (args.viewType && !isOneOf(ROOM_VIEW_TYPES, args.viewType))
         errors.push(issue('viewType', 'view_type'))
       if (args.color && !/^#[0-9a-f]{6}$/i.test(String(args.color))) errors.push(issue('color', 'color'))
+      if (!Number.isInteger(args.minHourlyHours) || args.minHourlyHours < 1)
+        errors.push(issue('minHourlyHours', 'positive'))
       if (
         await duplicate(ctx, 'hospitality_core.RoomType', 'code', args.code, args.id, [
           'propertyId',
@@ -999,6 +1065,10 @@ export const functions: Record<string, FnSpec> = {
       return ctx.tx(async (tx) => {
         const result = await save(tx, 'hospitality_core.RoomType', args, writable('RoomType'), {
           sharedBathroom: false,
+          allowHourly: true,
+          allowWeekly: false,
+          allowMonthly: false,
+          minHourlyHours: 2,
           published: false,
           active: true,
         })
@@ -1104,6 +1174,10 @@ export const functions: Record<string, FnSpec> = {
       'write:hospitality_core.Building',
       'write:hospitality_core.Floor',
       'write:hospitality_core.Room',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
     ],
     idempotent: true,
     agent: true,
@@ -1162,11 +1236,18 @@ export const functions: Record<string, FnSpec> = {
         const configuration = { ...args }
         delete configuration.status
         delete configuration.note
-        return save(tx, 'hospitality_core.Room', configuration, writable('Room'), {
+        const saved = await save(tx, 'hospitality_core.Room', configuration, writable('Room'), {
           status: 'available',
           note: null,
           active: true,
         })
+        if (saved.ok !== true) return saved
+        // A new room, or one that moved between types, changes the sellable
+        // count on both sides of the move.
+        const affected = new Set([String(args.roomTypeId)])
+        if (current?.roomTypeId) affected.add(String(current.roomTypeId))
+        for (const roomTypeId of affected) await followRoomCapacity(tx, args.propertyId, roomTypeId)
+        return saved
       }),
   }),
 
@@ -1184,6 +1265,9 @@ export const functions: Record<string, FnSpec> = {
       'write:hospitality_core.Building',
       'write:hospitality_core.Floor',
       'write:hospitality_core.Room',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
     ],
     idempotent: true,
     agent: true,
@@ -1224,6 +1308,7 @@ export const functions: Record<string, FnSpec> = {
             )
             if (!('matched' in restored) || !restored.matched)
               return failure(issue('id', 'transition_conflict'))
+            await followRoomCapacity(tx, room.propertyId, room.roomTypeId)
             return success(args.id)
           }
 
@@ -1249,6 +1334,19 @@ export const functions: Record<string, FnSpec> = {
               .limit(1),
           )
           if (activeTask) throw new RoomLifecycleGuard(issue('id', 'room_has_open_task'))
+          // Retiring a room shrinks what the room type can sell. Refusing is the
+          // only honest answer while future nights are already committed against it.
+          const overcommitted = await followRoomCapacity(tx, room.propertyId, room.roomTypeId)
+          const first = overcommitted[0]
+          if (first)
+            throw new RoomLifecycleGuard(
+              issue('id', 'room_archive_would_oversell', {
+                date: first.date,
+                committed: first.committed,
+                total: first.total,
+                count: overcommitted.length,
+              }),
+            )
           return success(args.id)
         })
       } catch (error) {
@@ -1260,12 +1358,16 @@ export const functions: Record<string, FnSpec> = {
 
   setRoomStatus: defineFn({
     input: { id: 'id', expectedStatus: 'text?', status: 'text', note: 'text?' },
-    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', status: 'text?', overcommitted: 'json?', errors: 'json?' },
     effects: [
       'read:hospitality_core.Room',
       'read:hospitality_core.Stay',
       'read:hospitality_core.CleaningTask',
       'write:hospitality_core.Room',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
     ],
     idempotent: true,
     agent: true,
@@ -1316,7 +1418,17 @@ export const functions: Record<string, FnSpec> = {
               .limit(1),
           )
           if (activeTask) throw new RoomStatusGuard(issue('status', 'room_task_open'))
-          return { ok: true, id: args.id, status: args.status, errors: [] }
+          // A burst pipe does not wait for the booking calendar, so taking a room
+          // out of service is never refused. It does shrink capacity, and any date
+          // that is now oversold comes back for the front desk to resolve.
+          const overcommitted = await followRoomCapacity(tx, room.propertyId, room.roomTypeId)
+          return {
+            ok: true,
+            id: args.id,
+            status: args.status,
+            overcommitted: overcommitted.map((entry) => entry.date),
+            errors: [],
+          }
         })
       } catch (error) {
         if (error instanceof RoomStatusGuard) return failure(error.problem)
