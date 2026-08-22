@@ -70,8 +70,8 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.deepEqual(
     units.map((row) => [row.id, row.absoluteFactor]),
     [
-      ['unit', 1],
-      ['dozen', 12],
+      ['unit', '1'],
+      ['dozen', '12'],
     ],
   )
 
@@ -539,7 +539,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   ).value
   assert.ok(completion.backorderId)
   const quant = (await call<Row[]>('stock.listQuants', { productId: 'p1', locationId: 'wh:stock' })).value[0]!
-  assert.deepEqual([quant.quantity, quant.reservedQuantity], [5, 0])
+  assert.deepEqual([quant.quantity, quant.reservedQuantity], ['5', '0'])
   assert.equal(
     (await call<Row>('stock.forecast', { productId: 'p1', warehouseId: 'wh' })).value.forecast,
     '2',
@@ -990,12 +990,12 @@ test('product-stock-e2e: serial reservation keeps one unit on each move line', a
   const picking = (await call<Row>('stock.getPicking', { id: 'serial-pick' })).value
   const lines = (picking.moves as Row[])[0]!.lines as Row[]
   assert.deepEqual(lines.map((line) => [line.lotId, line.quantity]).sort(), [
-    ['s1', 1],
-    ['s2', 1],
+    ['s1', '1'],
+    ['s2', '1'],
   ])
   await call('stock.completePicking', { id: 'serial-pick' })
   const quants = (await call<Row[]>('stock.listQuants', { productId: 'p1', locationId: 'wh:stock' })).value
-  assert.ok(quants.every((quant) => quant.quantity === 0 && quant.reservedQuantity === 0))
+  assert.ok(quants.every((quant) => Number(quant.quantity) === 0 && Number(quant.reservedQuantity) === 0))
 
   for (const path of [
     '/admin/stock/lots',
@@ -1039,8 +1039,8 @@ test('product-stock-e2e: forecast, routes and replenishment remain warehouse-loc
       .filter((row) => row.locationId === 'wh-a:stock' || row.locationId === 'wh-b:stock')
       .map((row) => [row.locationId, row.quantity]),
     [
-      ['wh-a:stock', 9],
-      ['wh-b:stock', 3],
+      ['wh-a:stock', '9'],
+      ['wh-b:stock', '3'],
     ],
   )
   assert.equal(

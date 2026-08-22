@@ -136,10 +136,16 @@ export function createContext(o: {
 
   // ── decimal columns ────────────────────────────────────────────────────────
   //
-  // Both adapters store and return a decimal as a string, which is what keeps it
-  // exact across the round trip. Arithmetic still happens on numbers, as it does in
-  // the domain contract — the conversion is here, in the one place that knows both the model and
-  // the row, rather than in the adapter, which sees only untyped columns.
+  // Both adapters store and return a decimal as a string, and it stays one all the
+  // way out. A write may hand in a number — arithmetic happens on numbers — and
+  // encodeRow renders it; a read never converts.
+  //
+  // It used to convert, and that quietly rewrote stored data. `{ ...row, note }`
+  // is how everyone edits one field, and it carries every other column along with
+  // it. With the decimal decoded to a number, an edit that never mentioned the
+  // amount wrote it back rounded: 12.50 became 12.5, and 1234567890123456.78
+  // became …6.8. Nothing failed. The column simply held a different number
+  // afterwards, which is the worst way for a ledger to be wrong.
   const decimalsOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'decimal')
@@ -166,10 +172,8 @@ export function createContext(o: {
   }
 
   const decodeRows = (model: string, rows: Row[]): Row[] => {
-    const cols = decimalsOf(model)
     const bools = booleansOf(model)
     const json = dialect === 'sqlite' ? jsonOf(model) : []
-    for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
     for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
     for (const row of rows)
       for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)

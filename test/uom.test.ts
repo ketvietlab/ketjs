@@ -47,9 +47,9 @@ test('uom: roots have factor one, descendants derive factor and parent path', as
     const rows = (await callFn('uom.listUnits', { rootId: 'kg' }, { adapter, manifest })).value as Row[]
     assert.equal(rows.length, 3)
     const mg = rows.find((row) => row.id === 'mg')!
-    assert.equal(mg.absoluteFactor, 0.000001)
+    assert.equal(mg.absoluteFactor, '0.000001')
     assert.equal(mg.parentPath, 'kg/g/mg/')
-    assert.equal(mg.rounding, 0.01)
+    assert.equal(mg.rounding, '0.01')
   } finally {
     await adapter.close()
   }
@@ -94,7 +94,7 @@ test('uom: Product Unit precision is singleton and immutable after units exist',
     })
     await save(adapter, 'unit', '1')
     const units = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
-    assert.equal(units[0]!.rounding, 0.001)
+    assert.equal(units[0]!.rounding, '0.001')
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM uom_precision'))[0]!.n, 1)
     const changed = await callFn('uom.savePrecision', { digits: 4 }, { adapter, manifest })
     assert.equal((changed.value as Row).ok, false)
@@ -114,7 +114,7 @@ test('uom: an ancestor cannot change after a descendant conversion identity is u
     const changed = await save(adapter, 'box', '12', 'unit')
     assert.equal((changed.value as Row).ok, false)
     const rows = (await callFn('uom.listUnits', {}, { adapter, manifest })).value as Row[]
-    assert.equal(rows.find((row) => row.id === 'pallet')!.absoluteFactor, 50)
+    assert.equal(rows.find((row) => row.id === 'pallet')!.absoluteFactor, '50')
   } finally {
     await adapter.close()
   }
