@@ -216,8 +216,11 @@ test('terms: the same shared party carries different terms per legal entity', as
   await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', creditLimit: '3000' }, { company: 'c1' })
   await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', creditLimit: '0' }, { company: 'c2' })
 
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit, 3000)
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, 0)
+  assert.equal(
+    (await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit,
+    '3000',
+  )
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, '0')
   // And the party itself is one row, seen identically from both.
   assert.equal((await call(o, 'partner.getPartner', { id: 'p1' }, { company: 'c2' })).name, 'Acme')
   await o.adapter.close()

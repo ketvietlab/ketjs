@@ -70,7 +70,7 @@ Append `?` to make a field optional.
 | `text` | `string` | General text. |
 | `int` | `number` | Finite integer. |
 | `float` | `number` | Binary floating-point value. |
-| `decimal` | `number` after read | Exact decimal storage; use for money and quantities. |
+| `decimal` | `string` | Exact decimal, unchanged across the round trip; use for money and quantities. |
 | `bool` | `boolean` | Boolean value. |
 | `json` | `unknown` | JSON-compatible data. |
 | `date` | `string` | Calendar date in `YYYY-MM-DD`, without timezone. |
