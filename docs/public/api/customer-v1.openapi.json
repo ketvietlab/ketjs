@@ -503,6 +503,46 @@
         "x-ket-idempotent": false
       }
     },
+    "/hospitality/properties/{id}/rate-plans": {
+      "get": {
+        "operationId": "customer.hospitality.rate_plans.list",
+        "summary": "List the sellable rate plans for a published property.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.rate_plans",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
     "/hospitality/availability/search": {
       "post": {
         "operationId": "customer.hospitality.availability.search",
@@ -600,6 +640,45 @@
         "x-ket-idempotent": true
       }
     },
+    "/hospitality/my-bookings": {
+      "get": {
+        "operationId": "customer.hospitality.bookings.list",
+        "summary": "List the bookings owned by the signed-in customer.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.bookings",
+          "action": "read"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": false
+      }
+    },
     "/hospitality/bookings/{id}": {
       "get": {
         "operationId": "customer.hospitality.bookings.get",
@@ -636,6 +715,55 @@
         },
         "x-ket-auth": "customer",
         "x-ket-idempotent": false
+      }
+    },
+    "/hospitality/bookings/{id}/cancel": {
+      "post": {
+        "operationId": "customer.hospitality.bookings.cancel",
+        "summary": "Cancel a booking the signed-in customer owns.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.bookings",
+          "action": "cancel"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": true
       }
     },
     "/retail/storefront": {
