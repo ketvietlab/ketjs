@@ -28,6 +28,8 @@ export type FormField = {
   control?: JSXChild
   type?:
     | 'text'
+    | 'email'
+    | 'tel'
     | 'password'
     | 'number'
     | 'decimal'

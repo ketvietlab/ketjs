@@ -23,6 +23,9 @@ const vi = {
   'error.leadConversion': 'Chỉ tiềm năng mới được chuyển thành cơ hội.',
   'error.invalidVisibility': 'Phạm vi trao đổi không hợp lệ.',
   'error.providerNotConfigured': 'Nhà cung cấp chưa được cấu hình.',
+  'error.alreadyMerged': 'Hồ sơ này đã được hợp nhất hoặc lưu trữ.',
+  'error.duplicateName': 'Tên này đã được dùng.',
+  'error.notTeamMember': 'Người này không thuộc đội đã chọn. Hãy thêm họ vào đội trong phần cấu hình.',
   'timeline.created': 'Đã tạo hồ sơ',
   'timeline.stage': 'Đã chuyển giai đoạn',
   'timeline.assigned': 'Đã phân công',
@@ -30,6 +33,12 @@ const vi = {
   'timeline.merged': 'Đã hợp nhất hồ sơ trùng',
   'timeline.won': 'Đã đánh dấu thành công',
   'timeline.lost': 'Đã đánh dấu thất bại',
+  'timeline.message': 'Ghi chú nội bộ',
+  'timeline.quotation_created': 'Đã tạo báo giá',
+  'timeline.activity_scheduled': 'Đã đặt lịch hoạt động',
+  'timeline.activity_completed': 'Đã hoàn thành hoạt động',
+  'timeline.activity_cancelled': 'Đã hủy hoạt động',
+  'timeline.plan_applied': 'Đã áp dụng kế hoạch',
 } as const
 
 const en: Record<keyof typeof vi, string> = {
@@ -57,6 +66,10 @@ const en: Record<keyof typeof vi, string> = {
   'error.leadConversion': 'Only a lead can be converted to an opportunity.',
   'error.invalidVisibility': 'The message visibility is invalid.',
   'error.providerNotConfigured': 'The provider is not configured.',
+  'error.alreadyMerged': 'This record was already merged or archived.',
+  'error.duplicateName': 'That name is already in use.',
+  'error.notTeamMember':
+    'That person is not on the selected team. Add them to the team in configuration first.',
   'timeline.created': 'Record created',
   'timeline.stage': 'Stage changed',
   'timeline.assigned': 'Record assigned',
@@ -64,6 +77,12 @@ const en: Record<keyof typeof vi, string> = {
   'timeline.merged': 'Duplicate record merged',
   'timeline.won': 'Marked won',
   'timeline.lost': 'Marked lost',
+  'timeline.message': 'Internal note',
+  'timeline.quotation_created': 'Quotation created',
+  'timeline.activity_scheduled': 'Activity scheduled',
+  'timeline.activity_completed': 'Activity completed',
+  'timeline.activity_cancelled': 'Activity cancelled',
+  'timeline.plan_applied': 'Plan applied',
 }
 
 export const messages = { vi, en }

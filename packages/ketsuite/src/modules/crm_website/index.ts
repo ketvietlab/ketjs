@@ -10,7 +10,7 @@ export default defineModule({
   depends: ['crm', 'website', 'user'],
   app: true,
   title: 'CRM Website',
-  summary: 'Thu thập tiềm năng từ website.',
+  summary: 'Lead capture from the public website.',
   category: 'Website',
   models,
   functions,
