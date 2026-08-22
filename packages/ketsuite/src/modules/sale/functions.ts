@@ -1,4 +1,4 @@
-import { defineFn } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -417,6 +417,51 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, priceUnit: String(priceUnit) }
     },
   }),
+  removeLine: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', orderId: 'id?', errors: 'json?' },
+    effects: [
+      'read:sale.Order',
+      'read:sale.OrderLine',
+      'write:sale.OrderLine',
+      'write:sale.Order',
+      'read:account.Tax',
+    ],
+    idempotent: true,
+    agent: true,
+    // A line could be added and never taken back. A quotation with the wrong
+    // product on it had to be abandoned and raised again under a new number,
+    // because nothing in `sale` — function or route — could remove a line.
+    handler: async (ctx, args) => {
+      const line = (await ours(ctx, 'sale.OrderLine', { id: args.id }))[0]
+      if (!line) return { ok: true, id: args.id }
+      const order = (await ours(ctx, 'sale.Order', { id: line.orderId }))[0]
+      if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
+        return invalid('id', 'lines can only be removed from an unlocked quotation')
+      const L = ctx.table('sale.OrderLine')
+      await ctx.db.del(deleteFrom(L).where(eq(L.id, String(args.id))))
+      await recompute(ctx, line.orderId)
+      return { ok: true, id: args.id, orderId: line.orderId }
+    },
+  }),
+  resetOrder: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:sale.Order', 'write:sale.Order'],
+    idempotent: true,
+    agent: true,
+    // Cancelling was terminal: a cancelled order rendered no actions at all, so
+    // one mis-click spent an order number and stranded its lines forever. Only a
+    // cancelled order comes back, and it comes back as a draft — a confirmed
+    // order has deliveries behind it and must be cancelled first.
+    handler: async (ctx, args) => {
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'sales order does not exist')
+      if (order.state !== 'cancel') return invalid('state', 'only a cancelled order can return to draft')
+      await ctx.db.update('sale.Order', { id: args.id }, { state: 'draft', locked: false })
+      return { ok: true, id: args.id }
+    },
+  }),
   sendQuotation: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -564,102 +609,102 @@ export const functions: Record<string, FnSpec> = {
           untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0))
           tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0))
           total = money(untaxed + tax)
-        await tx.db.insert('account.Move', {
-          id: args.id,
-          name: String(args.id),
-          ref: order.name,
-          date: invoiceDate,
-          moveType: 'out_invoice',
-          state: 'draft',
-          journalId: args.journalId,
-          partnerId: order.partnerId,
-          invoiceDate,
-          invoiceDateDue: due,
-          paymentTermId: order.paymentTermId,
-          paymentState: 'not_paid',
-          currency: order.currency,
-          amountUntaxed: decimal(untaxed),
-          amountTax: decimal(tax),
-          amountTotal: decimal(total),
-          postedAt: null,
-        })
-        let sequence = 10
-        for (const item of billable) {
-          const baseId = `${String(args.id)}:${String(item.line.id)}`
-          await tx.db.insert('account.MoveLine', {
-            id: baseId,
-            moveId: args.id,
-            name: item.line.name,
-            accountId: args.revenueAccountId,
+          await tx.db.insert('account.Move', {
+            id: args.id,
+            name: String(args.id),
+            ref: order.name,
+            date: invoiceDate,
+            moveType: 'out_invoice',
+            state: 'draft',
+            journalId: args.journalId,
             partnerId: order.partnerId,
-            productId: item.line.productId,
-            productUomId: item.line.productUomId,
-            quantity: decimal(item.quantity),
-            priceUnit: item.line.priceUnit,
-            discount: item.line.discount,
-            taxId: item.line.taxId,
-            debit: '0',
-            credit: decimal(item.subtotal),
-            balance: decimal(-item.subtotal),
-            dateMaturity: null,
-            displayType: null,
-            reconciled: false,
-            amountResidual: '0',
-            sequence,
-            saleLineId: item.line.id,
+            invoiceDate,
+            invoiceDateDue: due,
+            paymentTermId: order.paymentTermId,
+            paymentState: 'not_paid',
+            currency: order.currency,
+            amountUntaxed: decimal(untaxed),
+            amountTax: decimal(tax),
+            amountTotal: decimal(total),
+            postedAt: null,
           })
-          sequence += 10
-          if (item.taxAmount)
+          let sequence = 10
+          for (const item of billable) {
+            const baseId = `${String(args.id)}:${String(item.line.id)}`
             await tx.db.insert('account.MoveLine', {
-              id: `${baseId}:tax`,
+              id: baseId,
               moveId: args.id,
-              name: item.tax?.name ?? 'Tax',
-              accountId: args.taxAccountId,
+              name: item.line.name,
+              accountId: args.revenueAccountId,
               partnerId: order.partnerId,
-              productId: null,
-              productUomId: null,
-              quantity: '1',
-              priceUnit: decimal(item.taxAmount),
-              discount: '0',
-              taxId: null,
+              productId: item.line.productId,
+              productUomId: item.line.productUomId,
+              quantity: decimal(item.quantity),
+              priceUnit: item.line.priceUnit,
+              discount: item.line.discount,
+              taxId: item.line.taxId,
               debit: '0',
-              credit: decimal(item.taxAmount),
-              balance: decimal(-item.taxAmount),
+              credit: decimal(item.subtotal),
+              balance: decimal(-item.subtotal),
               dateMaturity: null,
               displayType: null,
               reconciled: false,
               amountResidual: '0',
-              sequence: sequence++,
+              sequence,
               saleLineId: item.line.id,
             })
-          await tx.db.update(
-            'sale.OrderLine',
-            { id: item.line.id },
-            { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
-          )
-        }
-        await tx.db.insert('account.MoveLine', {
-          id: `${String(args.id)}:counterpart`,
-          moveId: args.id,
-          name: order.name,
-          accountId: args.receivableAccountId,
-          partnerId: order.partnerId,
-          productId: null,
-          productUomId: null,
-          quantity: '1',
-          priceUnit: decimal(total),
-          discount: '0',
-          taxId: null,
-          debit: decimal(total),
-          credit: '0',
-          balance: decimal(total),
-          dateMaturity: due,
-          displayType: null,
-          reconciled: false,
-          amountResidual: decimal(total),
-          sequence: sequence + 10,
-          saleLineId: null,
-        })
+            sequence += 10
+            if (item.taxAmount)
+              await tx.db.insert('account.MoveLine', {
+                id: `${baseId}:tax`,
+                moveId: args.id,
+                name: item.tax?.name ?? 'Tax',
+                accountId: args.taxAccountId,
+                partnerId: order.partnerId,
+                productId: null,
+                productUomId: null,
+                quantity: '1',
+                priceUnit: decimal(item.taxAmount),
+                discount: '0',
+                taxId: null,
+                debit: '0',
+                credit: decimal(item.taxAmount),
+                balance: decimal(-item.taxAmount),
+                dateMaturity: null,
+                displayType: null,
+                reconciled: false,
+                amountResidual: '0',
+                sequence: sequence++,
+                saleLineId: item.line.id,
+              })
+            await tx.db.update(
+              'sale.OrderLine',
+              { id: item.line.id },
+              { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
+            )
+          }
+          await tx.db.insert('account.MoveLine', {
+            id: `${String(args.id)}:counterpart`,
+            moveId: args.id,
+            name: order.name,
+            accountId: args.receivableAccountId,
+            partnerId: order.partnerId,
+            productId: null,
+            productUomId: null,
+            quantity: '1',
+            priceUnit: decimal(total),
+            discount: '0',
+            taxId: null,
+            debit: decimal(total),
+            credit: '0',
+            balance: decimal(total),
+            dateMaturity: due,
+            displayType: null,
+            reconciled: false,
+            amountResidual: decimal(total),
+            sequence: sequence + 10,
+            saleLineId: null,
+          })
         })
       } catch (error) {
         if (error instanceof Refused) return error.result

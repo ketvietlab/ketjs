@@ -321,6 +321,31 @@ async function updatePaymentState(ctx: Ctx, moveId: unknown, accounts?: Map<stri
   await ctx.db.update('account.Move', { id: moveId }, { paymentState })
 }
 
+/**
+ * The slice of a list a picker actually needs.
+ *
+ * A relation picker sends `search` on every keystroke and `limit` to keep the
+ * response small; `validateInput` rejects inputs a function does not declare, so
+ * a list without them cannot back a picker at all. `product` and `uom` carry the
+ * same helper for the same reason.
+ */
+const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields: string[]): Row[] => {
+  const needle = String(args.search ?? '')
+    .trim()
+    .toLocaleLowerCase()
+  const matched = needle
+    ? rows.filter((row) =>
+        fields.some((field) =>
+          String(row[field] ?? '')
+            .toLocaleLowerCase()
+            .includes(needle),
+        ),
+      )
+    : rows
+  const limit = Number(args.limit)
+  return Number.isInteger(limit) && limit > 0 ? matched.slice(0, limit) : matched
+}
+
 export const functions: Record<string, FnSpec> = {
   initializeCompany: defineFn({
     input: {},
@@ -452,7 +477,7 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listTaxes: defineFn({
-    input: { typeTaxUse: 'text?', includeArchived: 'bool?' },
+    input: { typeTaxUse: 'text?', includeArchived: 'bool?', search: 'text?', limit: 'int?' },
     effects: ['read:account.Tax', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx, args) => {
@@ -461,7 +486,7 @@ export const functions: Record<string, FnSpec> = {
         ...(args.typeTaxUse ? { typeTaxUse: args.typeTaxUse } : {}),
         ...(args.includeArchived ? {} : { active: true }),
       })
-      return rows.sort(taxOrder)
+      return narrow(rows.sort(taxOrder), args, ['name'])
     },
   }),
   saveTax: defineFn({

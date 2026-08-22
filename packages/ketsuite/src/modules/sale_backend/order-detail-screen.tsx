@@ -10,6 +10,7 @@ import {
   Framed,
   icon,
   linkButton,
+  RecordActions,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -88,6 +89,11 @@ const actionForms = (_: Translator, order: AnyRow, action: string): TemplateResu
       />,
     )
   }
+  // A cancelled order rendered no actions at all, so one mis-click was final.
+  if (state === 'cancel')
+    actions.push(
+      <ActionForm action={action} value="reset" label={_('sale_backend.action.reset')} variant="primary" />,
+    )
   if (state !== 'cancel')
     actions.push(
       <ActionForm
@@ -112,6 +118,8 @@ export const orderDetailScreen = (
   const moves = (order.moves as AnyRow[] | undefined) ?? []
   const invoices = (order.invoices as AnyRow[] | undefined) ?? []
   const actions = actionForms(_, order, options.action)
+  // Lines were add-only: a wrong product could not be taken off a quotation.
+  const editable = (state === 'draft' || state === 'sent') && !order.locked
   const lineTable = lines.length
     ? dataTable(_, {
         rows: lines,
@@ -158,6 +166,28 @@ export const orderDetailScreen = (
             align: 'end',
             kind: 'currency',
           },
+          ...(editable
+            ? [
+                {
+                  key: 'actions',
+                  label: _('sale_backend.field.actions'),
+                  align: 'end' as const,
+                  cell: (row: AnyRow) => (
+                    <RecordActions
+                      action={options.action}
+                      hidden={{ action: 'remove-line', lineId: String(row.id) }}
+                      actions={[
+                        {
+                          value: 'remove-line',
+                          label: _('sale_backend.action.removeLine'),
+                          variant: 'destructive' as const,
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]
+            : []),
         ],
       })
     : emptyState(_('sale_backend.lines.empty'), _('sale_backend.lines.emptyHint'), {
@@ -265,7 +295,7 @@ export const orderDetailScreen = (
             description={_('sale_backend.lines.hint')}
             body={lineTable}
           />,
-          (state === 'draft' || state === 'sent') && !order.locked ? (
+          editable ? (
             <Section
               title={_('sale_backend.lines.add')}
               description={_('sale_backend.lines.addHint')}

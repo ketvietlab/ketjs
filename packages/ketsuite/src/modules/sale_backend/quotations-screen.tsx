@@ -28,7 +28,8 @@ export type QuotationsScreenOptions = {
   errors?: string[]
 }
 
-const stateTone = (state: unknown): 'neutral' | 'info' => (state === 'sent' ? 'info' : 'neutral')
+const stateTone = (state: unknown): 'neutral' | 'info' | 'danger' =>
+  state === 'sent' ? 'info' : state === 'cancel' ? 'danger' : 'neutral'
 
 const columns = (_: Translator, detailSuffix: string): Array<Column<QuotationRow>> => [
   {
@@ -75,6 +76,7 @@ const columns = (_: Translator, detailSuffix: string): Array<Column<QuotationRow
 export const quotationsScreen = (_: Translator, options: QuotationsScreenOptions): TemplateResult => {
   const draft = options.rows.filter((row) => row.state === 'draft').length
   const sent = options.rows.filter((row) => row.state === 'sent').length
+  const cancelled = options.rows.filter((row) => row.state === 'cancel').length
   const table = options.rows.length ? (
     dataTable(_, {
       columns: columns(_, options.detailSuffix),
@@ -105,6 +107,7 @@ export const quotationsScreen = (_: Translator, options: QuotationsScreenOptions
             { id: 'total', label: _('sale_backend.quotation.summary.total'), value: options.rows.length },
             { id: 'draft', label: _('sale_backend.quotation.summary.draft'), value: draft },
             { id: 'sent', label: _('sale_backend.quotation.summary.sent'), value: sent },
+            { id: 'cancelled', label: _('sale_backend.quotation.summary.cancelled'), value: cancelled },
           ]}
           body={stack(
             [

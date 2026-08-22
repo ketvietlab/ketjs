@@ -15,7 +15,7 @@ import { isNavigationRequest, isTimezone } from '@ketvietlab/ketjs'
 import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { backendPage } from '../../ui/index.ts'
-import type { Extras, Frame, Viewer } from '../../ui/index.ts'
+import type { Extras, Frame, FormField, Viewer } from '../../ui/index.ts'
 
 /** The raw request a route handler is handed. */
 export type Req = Parameters<Route>[1]
@@ -212,6 +212,20 @@ export const choices = (rows: readonly AnyRow[], empty = false) => [
     label: String(row.name ?? row.code ?? row.id),
   })),
 ]
+
+/**
+ * A required select with nothing to select is a dead end.
+ *
+ * The browser refuses to submit an empty required dropdown and says only
+ * "please select an item in the list" — it cannot say that the tenant has no
+ * warehouse yet, or no sales journal, or no income account. The form looks
+ * broken and the screen offers no way out. Naming what is missing, and where to
+ * create it, turns a dead end back into a next step.
+ */
+export const needs = (field: FormField, hint: string): FormField =>
+  (field.options ?? []).some((option) => option.value !== '')
+    ? field
+    : { ...field, disabled: true, help: hint }
 
 /** A field the domain should not see at all when the form left it blank. */
 export const optional = (form: Record<string, string>, name: string) =>

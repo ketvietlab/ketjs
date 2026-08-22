@@ -60,3 +60,48 @@ export const accountOptions = (rows: ReadonlyArray<Record<string, unknown>>): Re
     label: `${String(row.code)} · ${String(row.name)}`,
     description: String(row.accountType ?? ''),
   }))
+
+/**
+ * A tax, chosen the same way.
+ *
+ * A tenant's tax list runs to dozens once it carries both sides of VAT and the
+ * withholding rates. `typeTaxUse` keeps the dialog to the side the form is on —
+ * a sales line refuses a purchase tax, so it should never be offered one.
+ */
+export const taxRelationControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: {
+    id: string
+    name: string
+    label: string
+    value?: string | null
+    taxes: RelationOption[]
+    required?: boolean
+    allowEmpty?: boolean
+    typeTaxUse?: string
+  },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: options.name,
+    ariaLabel: options.label,
+    value: options.value,
+    required: options.required,
+    options: [...(options.allowEmpty ? [{ value: '', label: '—' }] : []), ...options.taxes],
+    labels: relationLabels(_, options.label),
+    manager: {
+      listFunction: 'account.listTaxes',
+      ...(options.typeTaxUse ? { listInput: { typeTaxUse: options.typeTaxUse } } : {}),
+      saveFunction: 'account.saveTax',
+      saveDefaults: {
+        amountType: 'percent',
+        ...(options.typeTaxUse ? { typeTaxUse: options.typeTaxUse } : {}),
+      },
+      fields: [
+        { name: 'name', label: _('account_backend.field.name'), required: true },
+        { name: 'amount', label: _('account_backend.field.amount'), required: true },
+      ],
+    },
+  })

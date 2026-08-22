@@ -323,3 +323,65 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   assert.equal(confirmedPartial.headers.get('x-ket-location'), '/admin/sales/orders/so-ui?lang=vi')
   assert.match(await confirmedPartial.text(), /Đơn bán hàng/)
 })
+
+test('sale-e2e: a quotation can lose a line and come back from cancelled', async (t) => {
+  const { e2e, call } = await bootSale(t)
+  const post = (path: string, body: Record<string, string>) =>
+    e2e.client.post(path, new URLSearchParams(body), {
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-ket-partial': 'sale-order' },
+    })
+  await call('sale.createOrder', { id: 'so-ux', partnerId: 'customer', warehouseId: 'wh' })
+  for (const id of ['so-ux:a', 'so-ux:b'])
+    await call('sale.addLine', {
+      id,
+      orderId: 'so-ux',
+      productId: 'chair',
+      productUomQty: '1',
+      productUomId: 'unit',
+    })
+
+  // The line table offers a way back out, not just a way in.
+  const detail = await e2e.client.get('/admin/sales/quotations/so-ux?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const detailHtml = await detail.text()
+  assert.match(detailHtml, /name="lineId" value="so-ux:a"/)
+  assert.match(detailHtml, /Thao tác/)
+  assert.doesNotMatch(detailHtml, /sale_backend\.[A-Za-z]/)
+
+  const removed = await post('/admin/sales/quotations/so-ux?lang=vi', {
+    action: 'remove-line',
+    lineId: 'so-ux:a',
+  })
+  assert.equal(removed.status, 200)
+  const afterRemoval = (await call<Row>('sale.getOrder', { id: 'so-ux' })).value
+  assert.deepEqual(
+    ((afterRemoval.lines as Row[]) ?? []).map((line) => line.id),
+    ['so-ux:b'],
+  )
+
+  // Cancelling used to be the end of the road: no action on the screen, and the
+  // order on neither list.
+  const cancelled = await post('/admin/sales/quotations/so-ux?lang=vi', { action: 'cancel' })
+  assert.equal(cancelled.status, 200)
+  const listed = await e2e.client.get('/admin/sales/quotations?lang=vi', { headers: { accept: 'text/html' } })
+  const listedHtml = await listed.text()
+  assert.match(listedHtml, /so-ux/)
+  assert.match(listedHtml, /Đã huỷ/)
+  assert.doesNotMatch(listedHtml, /sale_backend\.[A-Za-z]/)
+
+  const cancelledDetail = await e2e.client.get('/admin/sales/quotations/so-ux?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await cancelledDetail.text(), /Đưa về nháp/)
+
+  const reset = await post('/admin/sales/quotations/so-ux?lang=vi', { action: 'reset' })
+  assert.equal(reset.status, 200)
+  const back = await e2e.client.get('/admin/sales/quotations/so-ux?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const backHtml = await back.text()
+  assert.match(backHtml, /Add line/)
+  assert.doesNotMatch(backHtml, /Set to draft/)
+  assert.doesNotMatch(backHtml, /sale_backend\.[A-Za-z]/)
+})

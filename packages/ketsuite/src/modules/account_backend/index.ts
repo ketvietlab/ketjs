@@ -55,7 +55,6 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
       ? text('Forbidden', { status: 403 })
       : null
 
-
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
