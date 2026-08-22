@@ -139,6 +139,7 @@ export default defineConfig({
               label: 'Business domains',
               collapsed: true,
               items: [
+                { label: 'Product', slug: 'ketsuite/product' },
                 { label: 'CRM', slug: 'ketsuite/crm' },
                 { label: 'Loyalty', slug: 'ketsuite/loyalty' },
                 { label: 'Vietnam accounting defaults', slug: 'ketsuite/accounting-tt99' },
