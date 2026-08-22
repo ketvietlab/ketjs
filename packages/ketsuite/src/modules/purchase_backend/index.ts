@@ -5,6 +5,7 @@ import type { FormField } from '../../ui/index.ts'
 import { actionGroup, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
+import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
 import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
@@ -164,6 +165,13 @@ const detailHandler =
         type: 'select',
         options: variants,
         required: true,
+        control: await variantRelationControl(ctx, url, req, _, {
+          id: 'purchase-line-product',
+          name: 'productId',
+          label: _('purchase_backend.field.product'),
+          variants,
+          required: true,
+        }),
       },
       {
         name: 'productQty',
@@ -621,6 +629,13 @@ export default defineModule({
             type: 'select',
             options: choices(data.templates),
             required: true,
+            control: await templateRelationControl(ctx, url, req, _, {
+              id: 'purchase-vendor-price-template',
+              name: 'productTemplateId',
+              label: _('purchase_backend.field.template'),
+              templates: choices(data.templates),
+              required: true,
+            }),
           },
           {
             name: 'productId',
@@ -664,6 +679,13 @@ export default defineModule({
             type: 'select',
             options: choices(data.templates),
             required: true,
+            control: await templateRelationControl(ctx, url, req, _, {
+              id: 'purchase-policy-template',
+              name: 'templateId',
+              label: _('purchase_backend.field.template'),
+              templates: choices(data.templates),
+              required: true,
+            }),
           },
           {
             name: 'purchaseMethod',

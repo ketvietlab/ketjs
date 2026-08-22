@@ -5,6 +5,7 @@ import type { FormField } from '../../ui/index.ts'
 import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
+import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
@@ -201,6 +202,13 @@ const detail =
         type: 'select',
         options: variants,
         required: true,
+        control: await variantRelationControl(ctx, url, req, _, {
+          id: 'sale-line-product',
+          name: 'productId',
+          label: _('sale_backend.field.product'),
+          variants,
+          required: true,
+        }),
       },
       {
         name: 'productUomQty',
@@ -734,7 +742,7 @@ export default defineModule({
           _ = ctx.translate(ctx.localeOf(url, req))
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
-          body: (_, shell) =>
+          body: async (_, shell) =>
             invoicingPoliciesScreen(_, {
               frame: shell,
               action: `/admin/sales/invoicing-policies${localeQuery(url)}`,
@@ -746,6 +754,13 @@ export default defineModule({
                   type: 'select',
                   options: choices(rows),
                   required: true,
+                  control: await templateRelationControl(ctx, url, req, _, {
+                    id: 'sale-invoicing-template',
+                    name: 'templateId',
+                    label: _('sale_backend.field.product'),
+                    templates: choices(rows),
+                    required: true,
+                  }),
                 },
                 {
                   name: 'invoicePolicy',
