@@ -32,6 +32,30 @@ import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
 
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
+
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
@@ -350,6 +374,7 @@ const accountMoveRoute =
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
     if (req.method === 'POST') {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const result =
         form.action === 'post'
@@ -575,6 +600,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
@@ -648,6 +674,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
@@ -731,6 +758,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
@@ -843,6 +871,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result =
             form.action === 'line'
@@ -969,6 +998,7 @@ export default defineModule({
       async (url, req) => {
         const data = await common(ctx, url, req)
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
@@ -1078,6 +1108,7 @@ export default defineModule({
           ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
         ])
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(

@@ -28,6 +28,30 @@ import {
 import { adminPage, choices, inLocale, localeQuery, optional } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
+
 type Translator = ReturnType<ServeContext['translate']>
 
 const bool = (value: string | undefined) => value === '1' || value === 'true' || value === 'on'
@@ -284,6 +308,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     (ctx): Route =>
     async (url, req) => {
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'loyalty.program.save',
@@ -313,6 +338,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     async (url, req, params) => {
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         let result: unknown
         if (form.action === 'save-program')
@@ -392,6 +418,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const data = await dataFor(ctx, url, req)
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const id = randomUUID()
         const result = await ctx.call(
@@ -452,6 +479,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     async (url, req, params) => {
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'loyalty.wallet.adjust',
@@ -521,6 +549,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       )
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result =
           form.action === 'tier'
@@ -647,6 +676,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const prefix = params.channel === 'sale' ? 'loyalty_sale' : 'loyalty_pos'
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         let result: unknown
         if (form.action === 'code')

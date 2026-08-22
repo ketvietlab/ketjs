@@ -2,6 +2,7 @@ import { asc, defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addTimeline, canReadCase, commandKey, invalid, issue, normalized, now } from '../crm/index.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'
+import { ours } from '../sale/scope.ts'
 
 export const quotationEffects = [
   'read:crm.Case',
@@ -87,64 +88,86 @@ export async function createQuotationForCase(
   // call this without any products at all, so every quotation it created was
   // empty; refusing here is what makes the form ask for one.
   if (!products.length) return invalid(issue('products', 'crm_sale.error.productRequired'))
-  return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    // Reading the case is the same permission everywhere else in the CRM asks
-    // for; quoting one used to skip it entirely.
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
-    if (held.kind !== 'opportunity') return invalid(issue('caseId', 'crm_sale.error.opportunityRequired'))
-    if (!held.partnerId) return invalid(issue('partnerId', 'crm_sale.error.partnerRequired'))
-    const existing = (
-      await tx.db.select('crm_sale.OpportunityQuotation', {
-        salesOrderId: input.id,
-      })
-    )[0]
-    if (existing) {
-      if (existing.caseId !== input.caseId) return invalid(issue('id', 'crm.error.idempotencyRequired'))
-      const order = (await tx.db.select('sale.Order', { id: input.id }))[0]
-      return { ok: true, id: input.id, name: order?.name }
+  // A soft error returned from inside a transaction commits it: `adapter.tx`
+  // rolls back only on a throw. Returning on a bad product left the order and the
+  // lines before it written, with no OpportunityQuotation link and no timeline
+  // entry — a sales order nobody meant to create, and a sequence number spent.
+  class Refused extends Error {
+    result: Row
+    constructor(result: Row) {
+      super('refused')
+      this.result = result
     }
-    const created = (await saleFunctions.createOrder!.handler(tx, {
-      id: input.id,
-      partnerId: held.partnerId,
-      warehouseId: input.warehouseId,
-      ...(input.pricelistId ? { pricelistId: input.pricelistId } : {}),
-      ...(input.paymentTermId ? { paymentTermId: input.paymentTermId } : {}),
-      ...(input.validityDate ? { validityDate: input.validityDate } : {}),
-      notes: input.notes ?? `CRM opportunity ${input.caseId}`,
-      clientOrderRef: `CRM:${input.caseId}`,
-    })) as Row
-    if (created.ok !== true) return created
-    for (const [index, product] of products.entries()) {
-      const line = (await saleFunctions.addLine!.handler(tx, {
-        id: product.id ?? `${input.id}:line:${index + 1}`,
-        orderId: input.id,
-        productId: product.productId,
-        productUomId: product.productUomId,
-        productUomQty: product.quantity,
-        ...(product.name ? { name: product.name } : {}),
-        ...(product.priceUnit != null ? { priceUnit: product.priceUnit } : {}),
-        ...(product.discount != null ? { discount: product.discount } : {}),
-        ...(product.taxId ? { taxId: product.taxId } : {}),
-        sequence: (index + 1) * 10,
+  }
+  const refuse = (result: Row): never => {
+    throw new Refused(result)
+  }
+  try {
+    return await ctx.tx(async (tx) => {
+      const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
+      // Reading the case is the same permission everywhere else in the CRM asks
+      // for; quoting one used to skip it entirely.
+      if (!held || !(await canReadCase(tx, held)))
+        return refuse(invalid(issue('caseId', 'crm.error.notFound')) as Row)
+      if (held.kind !== 'opportunity')
+        return refuse(invalid(issue('caseId', 'crm_sale.error.opportunityRequired')) as Row)
+      if (!held.partnerId) return refuse(invalid(issue('partnerId', 'crm_sale.error.partnerRequired')) as Row)
+      const existing = (
+        await tx.db.select('crm_sale.OpportunityQuotation', {
+          salesOrderId: input.id,
+        })
+      )[0]
+      if (existing) {
+        if (existing.caseId !== input.caseId)
+          return refuse(invalid(issue('id', 'crm.error.idempotencyRequired')) as Row)
+        const order = (await ours(tx, 'sale.Order', { id: input.id }))[0]
+        return { ok: true, id: input.id, name: order?.name }
+      }
+      const created = (await saleFunctions.createOrder!.handler(tx, {
+        id: input.id,
+        partnerId: held.partnerId,
+        warehouseId: input.warehouseId,
+        ...(input.pricelistId ? { pricelistId: input.pricelistId } : {}),
+        ...(input.paymentTermId ? { paymentTermId: input.paymentTermId } : {}),
+        ...(input.validityDate ? { validityDate: input.validityDate } : {}),
+        notes: input.notes ?? `CRM opportunity ${input.caseId}`,
+        clientOrderRef: `CRM:${input.caseId}`,
       })) as Row
-      if (line.ok !== true) return line
-    }
-    await tx.db.insert('crm_sale.OpportunityQuotation', {
-      id: `crm-quotation:${input.id}`,
-      caseId: input.caseId,
-      salesOrderId: input.id,
-      createdAt: now(),
+      if (created.ok !== true) return refuse(created)
+      for (const [index, product] of products.entries()) {
+        const line = (await saleFunctions.addLine!.handler(tx, {
+          id: product.id ?? `${input.id}:line:${index + 1}`,
+          orderId: input.id,
+          productId: product.productId,
+          productUomId: product.productUomId,
+          productUomQty: product.quantity,
+          ...(product.name ? { name: product.name } : {}),
+          ...(product.priceUnit != null ? { priceUnit: product.priceUnit } : {}),
+          ...(product.discount != null ? { discount: product.discount } : {}),
+          ...(product.taxId ? { taxId: product.taxId } : {}),
+          sequence: (index + 1) * 10,
+        })) as Row
+        if (line.ok !== true) return refuse(line)
+      }
+      await tx.db.insert('crm_sale.OpportunityQuotation', {
+        id: `crm-quotation:${input.id}`,
+        caseId: input.caseId,
+        salesOrderId: input.id,
+        createdAt: now(),
+      })
+      await addTimeline(tx, {
+        id: `timeline:${input.caseId}:quotation:${input.id}`,
+        caseId: input.caseId,
+        eventType: 'quotation_created',
+        body: String(created.name ?? input.id),
+        metadata: { salesOrderId: input.id },
+      })
+      return { ok: true, id: input.id, name: created.name }
     })
-    await addTimeline(tx, {
-      id: `timeline:${input.caseId}:quotation:${input.id}`,
-      caseId: input.caseId,
-      eventType: 'quotation_created',
-      body: String(created.name ?? input.id),
-      metadata: { salesOrderId: input.id },
-    })
-    return { ok: true, id: input.id, name: created.name }
-  })
+  } catch (error) {
+    if (error instanceof Refused) return error.result
+    throw error
+  }
 }
 
 /**

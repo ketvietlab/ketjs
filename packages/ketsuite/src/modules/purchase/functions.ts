@@ -19,11 +19,20 @@ async function currency(ctx: Ctx): Promise<string> {
   return String(company.currency)
 }
 
+/**
+ * The next order number for this company.
+ *
+ * Keyed by the company because `id` is a tenant-wide primary key: the constant
+ * `'purchase'` gave the whole tenant one row, so only the first company to raise
+ * an order could ever own it. See sale.nextName, which had the same defect.
+ */
 async function nextName(ctx: Ctx): Promise<string> {
-  const id = 'purchase'
+  if (!ctx.scope.company) throw new Error('purchase requires an active company')
+  const id = `${ctx.scope.company}:purchase`
   await ctx.db.insertIfAbsent('purchase.Sequence', { id, nextNumber: 1 })
   for (let attempt = 0; attempt < 32; attempt += 1) {
-    const row = (await ctx.db.select('purchase.Sequence', { id }))[0]!
+    const row = (await ctx.db.select('purchase.Sequence', { id, companyId: ctx.scope.company }))[0]
+    if (!row) throw new Error('purchase sequence row disappeared while assigning a number')
     const current = n(row.nextNumber)
     const changed = await ctx.db.compareAndSet(
       'purchase.Sequence',

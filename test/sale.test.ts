@@ -224,3 +224,217 @@ test('sale: service orders invoice ordered quantities without an empty delivery'
     await adapter.close()
   }
 })
+
+/** A session that reads two companies but writes to one — the scope that tells narrowing apart. */
+const bothCompanies = { company: 'acme', companies: ['acme', 'globex'], branches: null }
+const callAs = (
+  name: string,
+  args: Record<string, unknown>,
+  adapter: Adapter,
+  as: { company: string; companies?: string[]; branches: null } = scope,
+) => callFn(name, args, { adapter, manifest, scope: as })
+
+test('sale: a second company can raise its own orders', async () => {
+  const adapter = await boot()
+  try {
+    const globex = { company: 'globex', branches: null }
+    await call('partner.savePartner', { id: 'globex-party', kind: 'company', name: 'Globex' }, adapter)
+    await callAs(
+      'company.saveCompany',
+      { id: 'globex', partnerId: 'globex-party', currency: 'VND' },
+      adapter,
+      bothCompanies,
+    )
+    await callAs('stock.saveWarehouse', { id: 'wh-g', name: 'Globex', code: 'WH' }, adapter, globex)
+
+    const first = await call(
+      'sale.createOrder',
+      { id: 'so-acme', partnerId: 'customer', warehouseId: 'wh' },
+      adapter,
+    )
+    assert.equal((first.value as Row).ok, true)
+
+    // The sequence row used to be keyed by the constant 'sale', a tenant-wide
+    // primary key — so this call either threw on an undefined row or span out
+    // against a row it could never write.
+    const second = await callAs(
+      'sale.createOrder',
+      { id: 'so-globex', partnerId: 'customer', warehouseId: 'wh-g' },
+      adapter,
+      globex,
+    )
+    assert.equal((second.value as Row).ok, true, JSON.stringify(second.value))
+    assert.equal((second.value as Row).name, 'S00001', 'numbering restarts per company')
+
+    // And neither company's list shows the other's order.
+    const mine = (await call('sale.listOrders', {}, adapter)).value as Row[]
+    assert.deepEqual(
+      mine.map((row) => row.id),
+      ['so-acme'],
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: an order line refuses a unit the product cannot measure', async () => {
+  const adapter = await boot()
+  try {
+    await call('uom.saveUnit', { id: 'kg', name: 'Kilogram', relativeFactor: '1' }, adapter)
+    const order = await call(
+      'sale.createOrder',
+      { id: 'so-1', partnerId: 'customer', warehouseId: 'wh' },
+      adapter,
+    )
+    assert.equal((order.value as Row).ok, true)
+
+    // No pricelist and an explicit price: the path that never reached
+    // pricing.priceFor, which was the only thing validating the unit.
+    const foreign = await call(
+      'sale.addLine',
+      {
+        id: 'line-kg',
+        orderId: 'so-1',
+        productId: 'goods-1',
+        productUomId: 'kg',
+        productUomQty: '2',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    assert.equal((foreign.value as Row).ok, false)
+    assert.equal(((foreign.value as Row).errors as Row[])[0]!.field, 'productUomId')
+
+    const missing = await call(
+      'sale.addLine',
+      {
+        id: 'line-x',
+        orderId: 'so-1',
+        productId: 'goods-1',
+        productUomId: 'does-not-exist',
+        productUomQty: '2',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    assert.equal((missing.value as Row).ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: an invoice falls due on its payment term, not on the day it is raised', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.savePaymentTerm', { id: 'net30', name: 'Net 30' }, adapter)
+    await call(
+      'account.savePaymentTermLine',
+      {
+        id: 'net30-1',
+        paymentId: 'net30',
+        value: 'percent',
+        valueAmount: '100',
+        nbDays: 30,
+        delayType: 'days_after',
+      },
+      adapter,
+    )
+    await call(
+      'sale.createOrder',
+      { id: 'so-1', partnerId: 'customer', warehouseId: 'wh', paymentTermId: 'net30' },
+      adapter,
+    )
+    await call(
+      'sale.addLine',
+      {
+        id: 'line-1',
+        orderId: 'so-1',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        productUomQty: '1',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    await call('sale.confirmOrder', { id: 'so-1' }, adapter)
+    const invoice = await call(
+      'sale.createInvoice',
+      {
+        id: 'inv-1',
+        orderId: 'so-1',
+        journalId: 'sales-journal',
+        revenueAccountId: 'revenue',
+        receivableAccountId: 'receivable',
+        invoiceDate: '2026-01-10T00:00:00.000Z',
+      },
+      adapter,
+    )
+    assert.equal((invoice.value as Row).ok, true, JSON.stringify(invoice.value))
+    const move = (
+      await adapter.all('SELECT "invoiceDate", "invoiceDateDue" FROM account_move WHERE id = ?', ['inv-1'])
+    )[0]!
+    assert.equal(String(move.invoiceDate).slice(0, 10), '2026-01-10')
+    assert.equal(String(move.invoiceDateDue).slice(0, 10), '2026-02-09', 'thirty days after the invoice date')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: a refused quotation line leaves no order behind', async (t) => {
+  const { createTestApp } = await import('@ketvietlab/ketjs/testing')
+  const { ketsuite } = await import('../apps/ketsuite/app.ts')
+  const app = await createTestApp(ketsuite, { worker: false })
+  t.after(() => app.close())
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope, actor: 'user-1' })
+
+  await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
+  await fixture('partner.savePartner', { id: 'customer', kind: 'company', name: 'Customer' })
+  await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await fixture('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' })
+  await fixture('product.saveTemplate', {
+    id: 'goods',
+    name: 'Goods',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '100',
+    saleOk: true,
+  })
+  await fixture('product.saveVariant', { id: 'goods-1', templateId: 'goods', combinationKey: '' })
+  await fixture('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' })
+  // A purchase-only tax, which addLine refuses on a sales line.
+  await fixture('account.saveTax', {
+    id: 'vat-in',
+    name: 'VAT in',
+    typeTaxUse: 'purchase',
+    amountType: 'percent',
+    amount: '10',
+  })
+  await fixture('crm.bootstrap.defaults', { idempotencyKey: 'crm-defaults' })
+  await fixture('crm.case.save', {
+    id: 'opp-1',
+    kind: 'opportunity',
+    name: 'Opportunity',
+    partnerId: 'customer',
+    idempotencyKey: 'seed-opp',
+  })
+
+  const result = await fixture('crm_sale.sale.createQuotation', {
+    id: 'so-crm',
+    caseId: 'opp-1',
+    warehouseId: 'wh',
+    idempotencyKey: 'quotation-1',
+    products: [
+      { productId: 'goods-1', productUomId: 'unit', quantity: '1', priceUnit: '100' },
+      // Refused, after the first line has already been written.
+      { productId: 'goods-1', productUomId: 'unit', quantity: '1', priceUnit: '100', taxId: 'vat-in' },
+    ],
+  })
+  // fixture.call answers with an envelope; the domain's own answer is inside it.
+  const answer = (result as unknown as { value: Row }).value
+  assert.equal(answer.ok, false, JSON.stringify(result))
+
+  // Nothing may survive: not the order, not the line that did succeed.
+  const listed = (await fixture('sale.listOrders', {})) as unknown as { value: Row[] }
+  assert.deepEqual(listed.value, [], 'a refused quotation rolls its order back')
+})
