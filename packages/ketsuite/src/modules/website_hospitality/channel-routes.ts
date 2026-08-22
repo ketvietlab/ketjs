@@ -79,6 +79,17 @@ const roomTypeView = (room: Record<string, unknown>) => ({
   amenities: room.amenities ?? [],
   beds: room.beds ?? [],
 })
+const ratePlanView = (plan: Record<string, unknown>) => ({
+  id: String(plan.id),
+  roomTypeId: String(plan.roomTypeId),
+  code: plan.code,
+  name: plan.name,
+  amount: String(plan.amount),
+  mealPlan: plan.mealPlan ?? null,
+  isDefault: plan.isDefault === true,
+  minStay: Number(plan.minStay ?? 0) || null,
+  maxStay: Number(plan.maxStay ?? 0) || null,
+})
 const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
   const issues = Array.isArray((result as { errors?: unknown })?.errors)
     ? ((result as { errors: Issue[] }).errors ?? [])
@@ -215,6 +226,36 @@ export const channelRoutes = routesOf(
   }),
   defineChannelRoute({
     profile: 'customer',
+    method: 'GET',
+    path: 'hospitality/properties/{id}/rate-plans',
+    operationId: 'customer.hospitality.rate_plans.list',
+    summary: 'List the sellable rate plans for a published property.',
+    auth: 'optional-customer',
+    capability: { key: 'website_hospitality.rate_plans', action: 'read' },
+    responses: { '200': envelope },
+    handler: async (ctx, url, req, params, request) => {
+      const siteId = await siteOf(ctx, url, req, request.identity)
+      if (!(await linksFor(ctx, url, req, siteId)).some((link) => link.propertyId === params.id))
+        return missing(ctx, url, req)
+      // Quotes hand back a ratePlanId, so a client that cannot enumerate plans
+      // can only ever take the default one.
+      const plans = (await ctx.callUnchecked(
+        'hospitality_core.listRatePlans',
+        { propertyId: params.id, active: true },
+        url,
+        req,
+      )) as Array<Record<string, unknown>>
+      const roomTypeId = url.searchParams.get('roomTypeId')
+      return {
+        data: plans
+          .filter((plan) => plan.rateType === 'nightly')
+          .filter((plan) => !roomTypeId || String(plan.roomTypeId) === roomTypeId)
+          .map(ratePlanView),
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
     method: 'POST',
     path: 'hospitality/availability/search',
     operationId: 'customer.hospitality.availability.search',
@@ -297,6 +338,43 @@ export const channelRoutes = routesOf(
   defineChannelRoute({
     profile: 'customer',
     method: 'GET',
+    // channel_api keys routes by path alone, so a GET cannot share
+    // "hospitality/bookings" with the create route. A distinct path is the
+    // contained fix; method-aware routing belongs to channel_api, not here.
+    path: 'hospitality/my-bookings',
+    operationId: 'customer.hospitality.bookings.list',
+    summary: 'List the bookings owned by the signed-in customer.',
+    auth: 'customer',
+    capability: { key: 'website_hospitality.bookings', action: 'read' },
+    responses: { '200': envelope },
+    handler: async (ctx, url, req, _params, request) => {
+      const identity = request.identity!
+      const limit = positive(url.searchParams.get('limit'), 24, 200)
+      const offset = offsetOf(url.searchParams.get('cursor'))
+      const links = await linksFor(ctx, url, req, identity.siteId)
+      // A customer session belongs to one site, so their history is scoped to
+      // the properties that site publishes rather than the whole company.
+      const rows = (await ctx.callUnchecked(
+        'hospitality_core.listPartnerReservations',
+        {
+          partnerId: identity.account.partnerId,
+          propertyIds: links.map((link) => link.propertyId),
+          state: url.searchParams.get('state') || null,
+          limit: limit + 1,
+          offset,
+        },
+        url,
+        req,
+      )) as Array<Record<string, unknown>>
+      return {
+        data: rows.slice(0, limit),
+        nextCursor: rows.length > limit ? cursorOf(offset + limit) : null,
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'GET',
     path: 'hospitality/bookings/{id}',
     operationId: 'customer.hospitality.bookings.get',
     auth: 'customer',
@@ -311,6 +389,36 @@ export const channelRoutes = routesOf(
         req,
       )) as { ok?: boolean }
       return result.ok ? { data: result } : domainFailure(ctx, url, req, result, 404)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'POST',
+    path: 'hospitality/bookings/{id}/cancel',
+    operationId: 'customer.hospitality.bookings.cancel',
+    summary: 'Cancel a booking the signed-in customer owns.',
+    auth: 'customer',
+    capability: { key: 'website_hospitality.bookings', action: 'cancel' },
+    request: { body: object },
+    responses: { '200': envelope },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const identity = request.identity!
+      const result = (await ctx.callUnchecked(
+        'hospitality_core.cancelPartnerReservation',
+        {
+          id: params.id,
+          partnerId: identity.account.partnerId,
+          reason: request.body?.reason || null,
+        },
+        url,
+        req,
+      )) as { ok?: boolean; errors?: Issue[] }
+      if (result.ok) return { data: result }
+      // Not owning the booking and no longer being allowed to cancel it are
+      // different answers; collapsing both to 409 hides which one happened.
+      const notOwned = result.errors?.some((issue) => issue.code === 'reservationNotOwned')
+      return domainFailure(ctx, url, req, result, notOwned ? 404 : 409)
     },
   }),
 )

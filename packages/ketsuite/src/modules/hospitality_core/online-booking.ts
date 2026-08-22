@@ -1,6 +1,7 @@
 import { asc, defineFn, eq, from, gte, inArray, lte, localDateTimeToUtc } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn } from './calendar.ts'
+import { cancellationTerms } from './operations.ts'
 import {
   defaultRatePlan,
   InventoryConflict,
@@ -318,57 +319,106 @@ const planQuote = async (ctx: Ctx, args: Record<string, unknown>): Promise<Quote
   }
 }
 
-const onlineReservationOutput = (row: Row, existing: boolean) => ({
-  ok: true,
-  id: String(row.id),
-  companyId: String(row.companyId),
-  propertyId: String(row.propertyId),
-  roomTypeId: String(row.roomTypeId),
-  folioId: String(row.folioId),
-  stayId: row.stayId == null ? null : String(row.stayId),
-  code: String(row.code),
-  state: String(row.state),
-  rate: String(row.rate),
-  quantity: Number(row.roomQuantity ?? 1),
-  amountTotal: String(row.amountTotal),
-  currency: String(row.currency ?? 'VND'),
-  existing,
-  errors: [],
-})
+/**
+ * A checkout for N rooms is N reservations. Unit zero keeps the caller's own id,
+ * request key and code, so a single-room booking — which is nearly all of them —
+ * produces exactly the records and identifiers it always did.
+ */
+const unitSuffix = (index: number): string => (index === 0 ? '' : `#${index + 1}`)
+const unitReservationId = (id: unknown, index: number): string => `${String(id)}${unitSuffix(index)}`
+const unitCode = (base: string, index: number): string =>
+  index === 0 ? base : `${base}-${String(index + 1)}`
+const unitRequestKey = (key: string, index: number): string => `${key}${unitSuffix(index)}`
 
-const sameOnlineRequest = (row: Row, args: Record<string, unknown>): boolean =>
-  row.provider === 'website' &&
-  row.requestKey === args.requestKey &&
-  row.propertyId === args.propertyId &&
-  row.roomTypeId === args.roomTypeId &&
-  row.partnerId === args.partnerId &&
-  (args.ratePlanId == null || row.ratePlanId === args.ratePlanId) &&
-  String(row.checkIn).slice(0, 10) === String(args.checkIn) &&
-  String(row.checkOut).slice(0, 10) === String(args.checkOut) &&
-  Number(row.adults) === Number(args.adults ?? 1) &&
-  Number(row.children) === Number(args.children ?? 0) &&
-  Number(row.infants ?? 0) === Number(args.infants ?? 0) &&
-  Number(row.roomQuantity ?? 1) === Number(args.quantity ?? 1)
+const onlineReservationOutput = (group: Row[], existing: boolean) => {
+  const first = group[0]!
+  return {
+    ok: true,
+    id: String(first.id),
+    companyId: String(first.companyId),
+    propertyId: String(first.propertyId),
+    roomTypeId: String(first.roomTypeId),
+    folioId: String(first.folioId),
+    stayId: first.stayId == null ? null : String(first.stayId),
+    code: String(first.code),
+    state: String(first.state),
+    rate: String(first.rate),
+    quantity: group.length,
+    amountTotal: money(group.reduce((total, row) => total + Number(row.amountTotal ?? 0), 0)),
+    currency: String(first.currency ?? 'VND'),
+    // One row per room, so the desk has something to assign each guest to.
+    units: group.map((row) => ({
+      reservationId: String(row.id),
+      stayId: row.stayId == null ? null : String(row.stayId),
+      code: String(row.code),
+      amountTotal: String(row.amountTotal),
+    })),
+    existing,
+    errors: [],
+  }
+}
 
-const existingOnlineReservation = async (ctx: Ctx, args: Record<string, unknown>): Promise<Row | null> => {
-  const Reservation = ctx.table('hospitality_core.Reservation')
-  const byId = await ctx.db.one(from(Reservation).where(eq(Reservation.id, args.id)))
-  if (byId) return byId
-  return ctx.db.one(
-    from(Reservation).where(eq(Reservation.provider, 'website'), eq(Reservation.requestKey, args.requestKey)),
+const sameOnlineRequest = (group: Row[], args: Record<string, unknown>): boolean => {
+  const row = group[0]
+  return (
+    !!row &&
+    row.provider === 'website' &&
+    row.propertyId === args.propertyId &&
+    row.roomTypeId === args.roomTypeId &&
+    row.partnerId === args.partnerId &&
+    (args.ratePlanId == null || row.ratePlanId === args.ratePlanId) &&
+    String(row.checkIn).slice(0, 10) === String(args.checkIn) &&
+    String(row.checkOut).slice(0, 10) === String(args.checkOut) &&
+    Number(row.adults) === Number(args.adults ?? 1) &&
+    Number(row.children) === Number(args.children ?? 0) &&
+    Number(row.infants ?? 0) === Number(args.infants ?? 0) &&
+    group.length === Number(args.quantity ?? 1)
   )
 }
 
-const customerProjection = async (ctx: Ctx, row: Row, at = new Date()): Promise<Row> => {
-  const property = await record(ctx, 'hospitality_core.Property', row.propertyId)
-  const roomType = await record(ctx, 'hospitality_core.RoomType', row.roomTypeId)
-  const policyId = roomType?.cancellationPolicyId ?? property?.defaultCancellationPolicyId
-  const policy = policyId ? await record(ctx, 'hospitality_core.CancellationPolicy', policyId) : null
+const orderedGroup = (rows: Row[]): Row[] =>
+  [...rows].sort((left, right) => String(left.id).localeCompare(String(right.id)))
+
+/** Every reservation belonging to one checkout, oldest identifier first. */
+export const reservationGroup = async (ctx: Ctx, row: Row): Promise<Row[]> => {
+  if (!row.groupKey) return [row]
+  const Reservation = ctx.table('hospitality_core.Reservation')
+  const rows = await ctx.db.all(
+    from(Reservation).where(eq(Reservation.provider, row.provider), eq(Reservation.groupKey, row.groupKey)),
+  )
+  return rows.length ? orderedGroup(rows) : [row]
+}
+
+const existingOnlineGroup = async (ctx: Ctx, args: Record<string, unknown>): Promise<Row[]> => {
+  const Reservation = ctx.table('hospitality_core.Reservation')
+  const byGroup = await ctx.db.all(
+    from(Reservation).where(eq(Reservation.provider, 'website'), eq(Reservation.groupKey, String(args.id))),
+  )
+  if (byGroup.length) return orderedGroup(byGroup)
+  const byId = await ctx.db.one(from(Reservation).where(eq(Reservation.id, args.id)))
+  if (byId) return reservationGroup(ctx, byId)
+  const byKey = await ctx.db.one(
+    from(Reservation).where(eq(Reservation.provider, 'website'), eq(Reservation.requestKey, args.requestKey)),
+  )
+  return byKey ? reservationGroup(ctx, byKey) : []
+}
+
+const customerProjection = async (ctx: Ctx, row: Row, at = new Date(), group?: Row[]): Promise<Row> => {
+  // The terms the guest booked under, not whatever the policy says today.
+  const terms = row.cancellationPolicyType
+    ? row
+    : await cancellationTerms(ctx, row.propertyId, row.roomTypeId)
   const beforeCheckIn = at.getTime() < new Date(String(row.checkIn)).getTime()
   const cutoff =
-    new Date(String(row.checkIn)).getTime() - Number(policy?.freeCancellationHours ?? 0) * 3_600_000
+    new Date(String(row.checkIn)).getTime() - Number(terms.freeCancellationHours ?? 0) * 3_600_000
   const cancellationAllowed =
-    row.state === 'confirmed' && beforeCheckIn && policy?.type !== 'non_refundable' && at.getTime() <= cutoff
+    row.state === 'confirmed' &&
+    beforeCheckIn &&
+    terms.cancellationPolicyType !== 'non_refundable' &&
+    at.getTime() <= cutoff
+  // A three-room checkout is three reservations but one thing the guest bought,
+  // so the customer view reports the purchase, not its units.
+  const rooms = group ?? (await reservationGroup(ctx, row))
   return {
     id: row.id,
     companyId: row.companyId,
@@ -379,7 +429,8 @@ const customerProjection = async (ctx: Ctx, row: Row, at = new Date()): Promise<
     checkOut: row.checkOut,
     adults: row.adults,
     children: row.children,
-    amountTotal: row.amountTotal,
+    rooms: rooms.length,
+    amountTotal: money(rooms.reduce((total, unit) => total + Number(unit.amountTotal ?? 0), 0)),
     currency: row.currency ?? 'VND',
     state: row.state,
     cancellationAllowed,
@@ -399,6 +450,8 @@ const quoteEffects = [
 const bookingEffects = [
   ...quoteEffects,
   'read:partner.Partner',
+  // The cancellation terms are snapshotted onto the reservation at creation.
+  'read:hospitality_core.CancellationPolicy',
   'read:hospitality_core.Reservation',
   'write:hospitality_core.Folio',
   'write:hospitality_core.Reservation',
@@ -490,6 +543,7 @@ export const onlineBooking: Record<string, FnSpec> = {
       quantity: 'decimal?',
       amountTotal: 'decimal?',
       currency: 'text?',
+      units: 'json?',
       existing: 'bool?',
       errors: 'json?',
     },
@@ -499,8 +553,8 @@ export const onlineBooking: Record<string, FnSpec> = {
       const requestKey = String(args.requestKey ?? '').trim()
       if (!requestKey) return failure(problem('requestKey', 'requestConflict'))
       const normalized = { ...args, requestKey }
-      const existing = await existingOnlineReservation(ctx, normalized)
-      if (existing)
+      const existing = await existingOnlineGroup(ctx, normalized)
+      if (existing.length)
         return sameOnlineRequest(existing, normalized)
           ? onlineReservationOutput(existing, true)
           : failure(problem('requestKey', 'requestConflict'))
@@ -513,9 +567,12 @@ export const onlineBooking: Record<string, FnSpec> = {
       const item = planned.items[0]!
       const now = args.createdAt ? new Date(String(args.createdAt)) : new Date()
       const createdAt = Number.isFinite(now.getTime()) ? now.toISOString() : new Date().toISOString()
-      const code = `WEB-${String(args.id).toUpperCase()}`
-      const folioId = `${String(args.id)}:folio`
-      const stayId = `${String(args.id)}:stay`
+      const terms = await cancellationTerms(ctx, args.propertyId, args.roomTypeId)
+      const groupKey = String(args.id)
+      const baseCode = `WEB-${groupKey.toUpperCase()}`
+      const folioId = `${groupKey}:folio`
+      // Each room carries its own nights; the folio carries what was bought.
+      const unitAmount = money(Number(item.unitRate) * planned.nights)
       const inventoryDates = occupancyDates(
         planned.checkInAt,
         planned.checkOutAt,
@@ -523,8 +580,8 @@ export const onlineBooking: Record<string, FnSpec> = {
       )
       try {
         return await ctx.tx(async (tx) => {
-          const raced = await existingOnlineReservation(tx, normalized)
-          if (raced)
+          const raced = await existingOnlineGroup(tx, normalized)
+          if (raced.length)
             return sameOnlineRequest(raced, normalized)
               ? onlineReservationOutput(raced, true)
               : failure(problem('requestKey', 'requestConflict'))
@@ -539,7 +596,7 @@ export const onlineBooking: Record<string, FnSpec> = {
           })
           await tx.db.insert('hospitality_core.Folio', {
             id: folioId,
-            code: `F-${code}`,
+            code: `F-${baseCode}`,
             propertyId: args.propertyId,
             partnerId: args.partnerId,
             state: 'open',
@@ -547,99 +604,94 @@ export const onlineBooking: Record<string, FnSpec> = {
             version: 0,
             openedAt: createdAt,
           })
-          await tx.db.insert('hospitality_core.Reservation', {
-            id: args.id,
-            code,
-            propertyId: args.propertyId,
-            roomTypeId: args.roomTypeId,
-            ratePlanId: item.ratePlanId ?? undefined,
-            folioId,
-            stayId,
-            partnerId: args.partnerId,
-            provider: 'website',
-            requestKey,
-            channelRef: args.channelRef,
-            bookingType: 'nightly',
-            checkIn: planned.checkInAt,
-            checkOut: planned.checkOutAt,
-            adults: planned.adults,
-            children: planned.children,
-            infants: planned.infants,
-            roomQuantity: planned.quantity,
-            rate: item.unitRate,
-            quantity: String(planned.nights),
-            billingMode: 'upfront',
-            amountTotal: item.amountTotal,
-            currency: item.currency,
-            state: 'confirmed',
-            createdAt,
-            updatedAt: createdAt,
-          })
-          await tx.db.insert('hospitality_core.Stay', {
-            id: stayId,
-            code: `S-${code}`,
-            folioId,
-            reservationId: args.id,
-            partnerId: args.partnerId,
-            propertyId: args.propertyId,
-            roomTypeId: args.roomTypeId,
-            bookingType: 'nightly',
-            checkIn: planned.checkInAt,
-            checkOut: planned.checkOutAt,
-            adults: planned.adults,
-            children: planned.children,
-            infants: planned.infants,
-            roomQuantity: planned.quantity,
-            billingMode: 'upfront',
-            rate: item.unitRate,
-            state: 'draft',
-          })
-          await tx.db.insert('hospitality_core.StayGuest', {
-            id: `${String(args.id)}:guest`,
-            stayId,
-            propertyId: args.propertyId,
-            partnerId: args.partnerId,
-            displayName: partner.name,
-            primary: true,
-            primaryKey: 'primary',
-          })
-          await tx.db.insert('hospitality_core.Charge', {
-            id: `${String(args.id)}:room`,
-            folioId,
-            stayId,
-            description: `room:${String(args.roomTypeId)}`,
-            type: 'room',
-            quantity: String(planned.nights * planned.quantity),
-            unitPrice: item.unitRate,
-            amount: item.amountTotal,
-            occurredAt: createdAt,
-            sourceKey: `reservation:${String(args.id)}:room`,
-            state: 'active',
-          })
-          return onlineReservationOutput(
-            {
-              id: args.id,
-              companyId: planned.property.companyId,
+          const written: Row[] = []
+          for (let index = 0; index < planned.quantity; index++) {
+            const reservationId = unitReservationId(groupKey, index)
+            const code = unitCode(baseCode, index)
+            const stayId = `${reservationId}:stay`
+            const values = {
+              id: reservationId,
+              code,
               propertyId: args.propertyId,
               roomTypeId: args.roomTypeId,
+              ratePlanId: item.ratePlanId ?? undefined,
               folioId,
               stayId,
-              code,
-              state: 'confirmed',
+              partnerId: args.partnerId,
+              ...terms,
+              provider: 'website',
+              requestKey: unitRequestKey(requestKey, index),
+              groupKey,
+              channelRef: args.channelRef,
+              bookingType: 'nightly',
+              checkIn: planned.checkInAt,
+              checkOut: planned.checkOutAt,
+              adults: planned.adults,
+              children: planned.children,
+              infants: planned.infants,
+              roomQuantity: 1,
               rate: item.unitRate,
-              roomQuantity: planned.quantity,
-              amountTotal: item.amountTotal,
+              quantity: String(planned.nights),
+              billingMode: 'upfront',
+              amountTotal: unitAmount,
               currency: item.currency,
-            },
-            false,
-          )
+              state: 'confirmed',
+              createdAt,
+              updatedAt: createdAt,
+            }
+            await tx.db.insert('hospitality_core.Reservation', values)
+            await tx.db.insert('hospitality_core.Stay', {
+              id: stayId,
+              code: `S-${code}`,
+              folioId,
+              reservationId,
+              partnerId: args.partnerId,
+              propertyId: args.propertyId,
+              roomTypeId: args.roomTypeId,
+              bookingType: 'nightly',
+              checkIn: planned.checkInAt,
+              checkOut: planned.checkOutAt,
+              adults: planned.adults,
+              children: planned.children,
+              infants: planned.infants,
+              roomQuantity: 1,
+              billingMode: 'upfront',
+              rate: item.unitRate,
+              state: 'draft',
+            })
+            await tx.db.insert('hospitality_core.StayGuest', {
+              id: `${reservationId}:guest`,
+              stayId,
+              propertyId: args.propertyId,
+              partnerId: args.partnerId,
+              displayName: partner.name,
+              primary: true,
+              primaryKey: 'primary',
+            })
+            await tx.db.insert('hospitality_core.Charge', {
+              id: `${reservationId}:room`,
+              folioId,
+              stayId,
+              description: `room:${String(args.roomTypeId)}`,
+              type: 'room',
+              quantity: String(planned.nights),
+              unitPrice: item.unitRate,
+              amount: unitAmount,
+              occurredAt: createdAt,
+              sourceKey: `reservation:${reservationId}:room`,
+              state: 'active',
+            })
+            written.push({ ...values, companyId: planned.property.companyId })
+          }
+          return onlineReservationOutput(written, false)
         })
       } catch (error) {
         if (error instanceof InventoryConflict)
           return failure(problem('roomTypeId', 'inventoryUnavailable', error.problem.params))
         if (/unique|duplicate/i.test(String((error as Error)?.message ?? error))) {
-          const raced = await existingOnlineReservation(ctx, normalized)
-          if (raced && sameOnlineRequest(raced, normalized)) return onlineReservationOutput(raced, true)
+          const raced = await existingOnlineGroup(ctx, normalized)
+          if (raced.length && sameOnlineRequest(raced, normalized))
+            return onlineReservationOutput(raced, true)
           return failure(problem('requestKey', 'requestConflict'))
         }
         throw error
@@ -668,6 +720,7 @@ export const onlineBooking: Record<string, FnSpec> = {
       checkOut: 'datetime',
       adults: 'int',
       children: 'int',
+      rooms: 'int',
       amountTotal: 'decimal',
       currency: 'text',
       state: 'text',
@@ -690,9 +743,32 @@ export const onlineBooking: Record<string, FnSpec> = {
           (fromAt == null || new Date(String(row.checkOut)).getTime() > fromAt) &&
           (toAt == null || new Date(String(row.checkIn)).getTime() < toAt),
       )
+      // Group siblings are one purchase to the guest, so only the unit that
+      // carries the group identity is listed, with the whole group behind it.
+      const groups = new Map<string, Row[]>()
+      const purchases: Row[] = []
+      for (const row of rows) {
+        if (!row.groupKey) {
+          purchases.push(row)
+          continue
+        }
+        const key = `${String(row.provider)}\u0000${String(row.groupKey)}`
+        const seen = groups.get(key)
+        if (seen) {
+          seen.push(row)
+          continue
+        }
+        groups.set(key, [row])
+        purchases.push(row)
+      }
       const offset = Math.max(0, Number(args.offset ?? 0))
       const limit = Math.min(200, Math.max(1, Number(args.limit ?? 50)))
-      return Promise.all(rows.slice(offset, offset + limit).map((row) => customerProjection(ctx, row)))
+      return Promise.all(
+        purchases.slice(offset, offset + limit).map((row) => {
+          const key = `${String(row.provider)}\u0000${String(row.groupKey)}`
+          return customerProjection(ctx, row, new Date(), row.groupKey ? groups.get(key) : [row])
+        }),
+      )
     },
   }),
 
@@ -715,7 +791,7 @@ export const onlineBooking: Record<string, FnSpec> = {
   cancelPartnerReservation: defineFn({
     exposure: 'internal',
     input: { id: 'id', partnerId: 'id', reason: 'text?', at: 'datetime?' },
-    output: { ok: 'bool', id: 'id?', state: 'text?', existing: 'bool?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', rooms: 'int?', existing: 'bool?', errors: 'json?' },
     effects: [
       ...customerReadEffects,
       'read:hospitality_core.Charge',
@@ -748,31 +824,36 @@ export const onlineBooking: Record<string, FnSpec> = {
         reservation.checkOut,
         String(property?.timezone ?? 'UTC'),
       )
+      // "Cancel my booking" means the whole purchase. Cancelling one room of a
+      // three-room checkout would leave a folio the guest never agreed to.
+      const group = await reservationGroup(ctx, reservation)
+      const open = group.filter((unit) => unit.state !== 'cancelled')
       try {
         return await ctx.tx(async (tx) => {
-          const claimed = await tx.db.compareAndSet(
-            'hospitality_core.Reservation',
-            { id: reservation.id },
-            { state: 'confirmed', updatedAt: reservation.updatedAt },
-            {
-              state: 'cancelled',
-              cancelReason: String(args.reason ?? '').trim() || 'customer',
-              updatedAt: at.toISOString(),
-            },
-          )
-          if (!('matched' in claimed) || !claimed.matched) {
-            const current = await record(tx, 'hospitality_core.Reservation', reservation.id)
-            if (current?.state === 'cancelled')
-              return { ok: true, id: String(current.id), state: 'cancelled', existing: true, errors: [] }
-            return failure(problem('state', 'requestConflict'))
-          }
-          if (reservation.stayId)
-            await tx.db.compareAndSet(
-              'hospitality_core.Stay',
-              { id: reservation.stayId },
-              { state: 'draft' },
-              { state: 'cancelled' },
+          for (const unit of open) {
+            const claimed = await tx.db.compareAndSet(
+              'hospitality_core.Reservation',
+              { id: unit.id },
+              { state: 'confirmed', updatedAt: unit.updatedAt },
+              {
+                state: 'cancelled',
+                cancelReason: String(args.reason ?? '').trim() || 'customer',
+                updatedAt: at.toISOString(),
+              },
             )
+            if (!('matched' in claimed) || !claimed.matched) {
+              const current = await record(tx, 'hospitality_core.Reservation', unit.id)
+              if (current?.state === 'cancelled') continue
+              return failure(problem('state', 'requestConflict'))
+            }
+            if (unit.stayId)
+              await tx.db.compareAndSet(
+                'hospitality_core.Stay',
+                { id: unit.stayId },
+                { state: 'draft' },
+                { state: 'cancelled' },
+              )
+          }
           const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
           await tx.db.update(
             'hospitality_core.Folio',
@@ -790,14 +871,10 @@ export const onlineBooking: Record<string, FnSpec> = {
           )
           for (const charge of charges)
             await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
-          await releaseInventory(
-            tx,
-            reservation.propertyId,
-            reservation.roomTypeId,
-            dates,
-            Number(reservation.roomQuantity ?? 1),
-          )
-          if (dates.length)
+          const released = open.reduce((total, unit) => total + Number(unit.roomQuantity ?? 1), 0)
+          if (released)
+            await releaseInventory(tx, reservation.propertyId, reservation.roomTypeId, dates, released)
+          if (dates.length && released)
             await recordInventoryChange(tx, {
               propertyId: reservation.propertyId,
               roomTypeId: reservation.roomTypeId,
@@ -806,7 +883,14 @@ export const onlineBooking: Record<string, FnSpec> = {
               dateTo: dates.at(-1)!,
               aggregateId: reservation.id,
             })
-          return { ok: true, id: String(reservation.id), state: 'cancelled', existing: false, errors: [] }
+          return {
+            ok: true,
+            id: String(reservation.id),
+            state: 'cancelled',
+            rooms: group.length,
+            existing: false,
+            errors: [],
+          }
         })
       } catch (error) {
         if (error instanceof InventoryConflict) return failure(problem('state', 'requestConflict'))

@@ -53,13 +53,23 @@ const seedLongStay = async (adapter: Adapter): Promise<void> => {
       name: 'Két Hotel',
       accommodationType: 'hotel',
       timezone: 'UTC',
+      allowMonthly: true,
+      allowWeekly: true,
       longStayBillOnCheckIn: true,
     },
     adapter,
   )
   await call(
     'hospitality_core.saveRoomType',
-    { id: 'studio', propertyId: 'hotel', code: 'STD', name: 'Studio', baseRate: '300' },
+    {
+      id: 'studio',
+      propertyId: 'hotel',
+      code: 'STD',
+      name: 'Studio',
+      baseRate: '300',
+      allowMonthly: true,
+      allowWeekly: true,
+    },
     adapter,
   )
   await call(
@@ -284,13 +294,21 @@ test('hospitality night audit: a property can defer the first long-stay charge t
         name: 'Hà Nội Hotel',
         accommodationType: 'hotel',
         timezone: 'UTC',
+        allowWeekly: true,
         longStayBillOnCheckIn: false,
       },
       adapter,
     )
     await call(
       'hospitality_core.saveRoomType',
-      { id: 'weekly', propertyId: 'hotel', code: 'WK', name: 'Weekly', baseRate: '70' },
+      {
+        id: 'weekly',
+        propertyId: 'hotel',
+        code: 'WK',
+        name: 'Weekly',
+        baseRate: '70',
+        allowWeekly: true,
+      },
       adapter,
     )
     await call(
