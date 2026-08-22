@@ -16,6 +16,7 @@ export const menus: Record<string, MenuDef> = {
   // The apps screen is the way back in, so it needs no heading above it.
   'admin.apps': { parent: 'admin', label: 'menu.apps', path: '/admin', sequence: 10 },
 
+  // A heading other modules hang their configuration screens on: companies,
+  // users, roles, sign-in providers, address data, print templates.
   'admin.config': { parent: 'admin', label: 'menu.config', sequence: 90 },
-  'admin.settings': { parent: 'admin.config', label: 'menu.settings', path: '/admin/settings', sequence: 10 },
 }

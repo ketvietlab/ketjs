@@ -37,7 +37,6 @@ export const HOOKS = [
   'menu-section-children',
   'sidebar-foot',
   'sidebar-tools',
-  'sidebar-settings',
   'indicators',
   'indicator',
   'indicator-icon',
@@ -267,10 +266,6 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
           </details>
         )}
       </div>
-
-      <a data-ui="sidebar-settings" href="/admin/settings">
-        {_('backend.nav.settings')}
-      </a>
     </div>
   )
 }

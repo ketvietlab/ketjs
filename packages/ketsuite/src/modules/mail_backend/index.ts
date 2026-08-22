@@ -18,7 +18,7 @@ export default defineModule({
   menus: {
     mail: {
       label: 'menu.app',
-      icon: 'message-circle',
+      icon: 'bell',
       path: '/admin/inbox',
       sequence: 15,
       needs: 'mail.listInbox',
@@ -32,7 +32,7 @@ export default defineModule({
       'app.title': 'Thảo luận trong quản trị',
       'app.summary': 'Chatter trên bản ghi và hộp thư thông báo.',
       'app.category': 'Năng suất',
-      'menu.app': 'Thảo luận',
+      'menu.app': 'Thông báo',
       'inbox.title': 'Hộp thư thông báo',
       'inbox.empty': 'Không có thông báo chưa đọc.',
       'inbox.emptyHint': 'Tin nhắn mới từ các bản ghi bạn theo dõi sẽ xuất hiện tại đây.',
@@ -43,7 +43,7 @@ export default defineModule({
       'app.title': 'Discuss in admin',
       'app.summary': 'Record chatter and the notification inbox.',
       'app.category': 'Productivity',
-      'menu.app': 'Discuss',
+      'menu.app': 'Notifications',
       'inbox.title': 'Notification inbox',
       'inbox.empty': 'No unread notifications.',
       'inbox.emptyHint': 'New messages from records you follow will appear here.',

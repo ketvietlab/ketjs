@@ -12,17 +12,7 @@
 
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  AppCard,
-  badge,
-  CardGroups,
-  code,
-  dataTable,
-  DefinitionList,
-  emptyState,
-  Framed,
-  shell,
-} from '../../ui/index.ts'
+import { AppCard, badge, CardGroups, code, dataTable, emptyState, Framed, shell } from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
 
 export type AppRow = {
@@ -37,7 +27,7 @@ export type AppRow = {
 
 export type PageRow = { id: string; path: string; title: string; published: boolean }
 
-export type Screen = 'apps' | 'pages' | 'settings'
+export type Screen = 'apps' | 'pages'
 
 /**
  * An app's name, summary and category are declared as plain strings so a module
@@ -182,22 +172,4 @@ export const pagesScreen = (
   />
 )
 
-export const settingsScreen = (
-  _: Translator,
-  tokens: Record<string, string>,
-  frame: Frame = {},
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('backend.settings.title')}
-    frame={frame}
-    body={
-      <DefinitionList
-        title={_('backend.settings.tokens')}
-        items={Object.entries(tokens).map(([k, v]) => ({ key: k, term: `--ket-${k}`, value: v }))}
-      />
-    }
-  />
-)
-
-export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState }
+export const screens = { appsScreen, pagesScreen, emptyState }

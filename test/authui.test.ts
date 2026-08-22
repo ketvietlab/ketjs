@@ -65,9 +65,9 @@ test('login: something that is not a browser still gets JSON, not a page', async
 
 test('login: signing in lands where you were going', async () => {
   const { b, at } = await setup()
-  const r = await form(at, { login: 'admin', password: 'correct horse', next: '/admin/settings' })
+  const r = await form(at, { login: 'admin', password: 'correct horse', next: '/admin/apps' })
   assert.equal(r.status, 303)
-  assert.equal(r.headers.get('location'), '/admin/settings')
+  assert.equal(r.headers.get('location'), '/admin/apps')
   assert.ok(r.headers.get('set-cookie'))
   await b.close()
 })
@@ -114,9 +114,9 @@ test('login: already signed in, the form is skipped rather than shown twice', as
 
 test('backend: a browser is sent to sign in, carrying where it was going', async () => {
   const { b, at } = await setup()
-  const r = await fetch(`${at}/admin/settings`, { headers: HTML, redirect: 'manual' })
+  const r = await fetch(`${at}/admin/apps`, { headers: HTML, redirect: 'manual' })
   assert.equal(r.status, 303)
-  assert.equal(r.headers.get('location'), '/login?next=%2Fadmin%2Fsettings')
+  assert.equal(r.headers.get('location'), '/login?next=%2Fadmin%2Fapps')
   await b.close()
 })
 

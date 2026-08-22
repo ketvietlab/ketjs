@@ -1,6 +1,6 @@
 import { html, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { appsScreen, pagesScreen, settingsScreen } from './screens.tsx'
+import { appsScreen, pagesScreen } from './screens.tsx'
 import {
   actionGroup,
   badge,
@@ -131,7 +131,7 @@ const MENU: MenuNode[] = [
       node('admin.apps', 'Ứng dụng', { icon: 'layout-grid', path: '/admin', active: true }),
       node('admin.config', 'Cấu hình', {
         icon: 'settings',
-        children: [node('admin.settings', 'Cài đặt', { path: '/admin/settings' })],
+        children: [node('admin.users', 'Người dùng', { path: '/admin/users' })],
       }),
     ],
   }),
@@ -683,22 +683,6 @@ export const CASES: Array<{
           },
         ],
       }),
-  },
-  {
-    id: 'settings',
-    label: 'Cài đặt — token',
-    note: 'Danh sách token đang áp dụng.',
-    render: (_) =>
-      settingsScreen(
-        _,
-        {
-          'color-accent': 'oklch(0.55 0.18 268)',
-          radius: '0.75rem',
-          'page-max-width': '68rem',
-          'section-gap': '4rem',
-        },
-        { menu: MENU },
-      ),
   },
   {
     id: 'state-empty',

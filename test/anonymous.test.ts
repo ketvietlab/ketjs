@@ -70,7 +70,7 @@ test('anonymous: may read a published page, because a storefront is public', asy
 
 test('routes: the backend is closed to a stranger, and says so rather than rendering', async () => {
   const b = await boot()
-  for (const p of ['/admin', '/admin/apps', '/admin/settings']) {
+  for (const p of ['/admin', '/admin/apps']) {
     const r = await fetch(`http://127.0.0.1:${b.port}${p}`)
     assert.equal(r.status, 401, p)
     assert.ok(!(await r.text()).includes('data-ui="app-grid"'), `${p} rendered the screen anyway`)

@@ -12,14 +12,13 @@ export const messages: Record<string, Record<string, Message>> = {
   vi: {
     signOut: 'Đăng xuất',
     'app.title': 'Quản trị',
-    'app.summary': 'Màn hình quản lý ứng dụng, trang và cài đặt.',
+    'app.summary': 'Màn hình quản lý ứng dụng và cấu hình hệ thống.',
     'app.category': 'Hệ thống',
 
     'nav.apps': 'Ứng dụng',
     'nav.search': 'Tìm ứng dụng, menu…',
     'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
     'nav.pages': 'Trang',
-    'nav.settings': 'Cài đặt',
     brand: 'KetSuite',
     'context.rootBranch': 'Chi nhánh gốc',
 
@@ -70,7 +69,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'menu.content': 'Nội dung',
     'menu.pages': 'Trang',
     'menu.config': 'Cấu hình',
-    'menu.settings': 'Cài đặt',
 
     'apps.title': 'Ứng dụng',
     'apps.depends': 'Phụ thuộc',
@@ -90,21 +88,17 @@ export const messages: Record<string, Record<string, Message>> = {
     'pages.empty.message': 'Chưa có trang nào.',
     'pages.empty.hint': 'Tạo trang đầu tiên để bắt đầu.',
     'pages.count': { one: '{count} trang', other: '{count} trang' },
-
-    'settings.title': 'Cài đặt',
-    'settings.tokens': 'Design token đang áp dụng',
   },
   en: {
     signOut: 'Sign out',
     'app.title': 'Administration',
-    'app.summary': 'Manage apps, pages and settings.',
+    'app.summary': 'Manage apps and system configuration.',
     'app.category': 'System',
 
     'nav.apps': 'Apps',
     'nav.search': 'Search apps and menus…',
     'nav.noMatch': 'No app or menu matches.',
     'nav.pages': 'Pages',
-    'nav.settings': 'Settings',
     brand: 'KetSuite',
     'context.rootBranch': 'Root branch',
 
@@ -155,7 +149,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'menu.content': 'Content',
     'menu.pages': 'Pages',
     'menu.config': 'Configuration',
-    'menu.settings': 'Settings',
 
     'apps.title': 'Apps',
     'apps.depends': 'Requires',
@@ -175,8 +168,5 @@ export const messages: Record<string, Record<string, Message>> = {
     'pages.empty.message': 'No pages yet.',
     'pages.empty.hint': 'Create your first page to get started.',
     'pages.count': { one: '{count} page', other: '{count} pages' },
-
-    'settings.title': 'Settings',
-    'settings.tokens': 'Design tokens in effect',
   },
 }
