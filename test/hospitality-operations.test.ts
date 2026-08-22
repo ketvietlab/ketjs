@@ -828,7 +828,7 @@ test('hospitality operations: charges are idempotent and guest lists do not expo
         amountTotal: (voided.value as Row).amountTotal,
         existing: (voided.value as Row).existing,
       },
-      { ok: true, amount: 25, amountTotal: '200', existing: false },
+      { ok: true, amount: '25', amountTotal: '200', existing: false },
     )
     assert.equal((voidRetry.value as Row).existing, true)
     const storedCharge = (
