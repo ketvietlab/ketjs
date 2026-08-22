@@ -13,6 +13,7 @@
 
 | Change area | Documentation owner |
 | --- | --- |
+| Repository overview, onboarding links, and top-level developer commands | `README.md` |
 | Documentation application, Starlight navigation, local docs workflow | `docs/README.md`, `docs/src/content/docs/getting-started.md` |
 | Documentation landing page and guide discovery | `docs/src/content/docs/index.mdx` |
 | Repository boundary and documentation architecture | `docs/src/content/docs/foundation/app-boundary.md`, `docs/src/content/docs/architecture/index.md` |
