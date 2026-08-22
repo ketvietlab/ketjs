@@ -65,15 +65,36 @@ Use supported package exports instead of reaching into `src/`:
 An internal file becoming convenient to import is not enough reason to deep-import it. Export the
 smallest stable contract from the package entry point and cover that contract with a test.
 
-## Choose a development path
+## Make a KetSuite change in five steps
 
-- Start with [Local development](/ketsuite/quick-start/) to run and test the repository.
-- Read [Application architecture](/ketsuite/architecture/) before changing the app composition.
-- Use [Module development](/ketsuite/module-development/) to place domain, backend, and bridge code.
-- Use [Backend UI development](/ketsuite/backend-development/) for admin routes, screens, forms, and islands.
-- Review [Security and data scope](/ketsuite/security-scope/) before adding an operation or external route.
-- Finish with [Testing KetSuite](/ketsuite/testing/) and the relevant business-module guide.
+1. **Run the repository.** Use [Local development](/ketsuite/quick-start/) to build the workspace,
+   start the packaged app, and select a focused test.
+2. **Find the owner.** Read [Application architecture](/ketsuite/architecture/) for the layer and
+   [Module development](/ketsuite/module-development/) for domain, backend, and bridge placement.
+3. **Choose the delivery surface.** Use [Backend UI development](/ketsuite/backend-development/)
+   for trusted staff screens or [Channel API architecture](/ketsuite/channel-api/) for external
+   profiles and generated contracts.
+4. **Review boundaries.** Apply [Security and data scope](/ketsuite/security-scope/) before exposing
+   a route, function, model projection, company scope, or branch scope.
+5. **Prove the behavior.** Follow [Testing KetSuite](/ketsuite/testing/) and the owning business
+   guide. Add benchmark evidence only when the change makes or modifies a performance claim.
 
-Framework primitives are documented separately. The most relevant references are
-[Modules and manifest](/ketjs/modules/), [Models and scopes](/ketjs/models/),
-[Functions and effects](/ketjs/functions/), and [Testing](/ketjs/testing/).
+## Find the guide from the code you touched
+
+| Change | Start here | Then verify |
+| --- | --- | --- |
+| App composition or bootstrap policy | [Application architecture](/ketsuite/architecture/) | [Security and data scope](/ketsuite/security-scope/) |
+| Domain model, function, job, or relation | [Module development](/ketsuite/module-development/) | [Testing KetSuite](/ketsuite/testing/) |
+| Admin route, form, screen, menu, or island | [Backend UI development](/ketsuite/backend-development/) | [Form validation](/ketjs/form-validation/) |
+| Customer, website, mobile, POS, or integration endpoint | [Channel API architecture](/ketsuite/channel-api/) | [Customer API reference](/ketsuite/channel-api-reference/) |
+| CRM behavior | [CRM modules](/ketsuite/crm/) | [Testing KetSuite](/ketsuite/testing/) |
+| Loyalty behavior | [Loyalty](/ketsuite/loyalty/) | [Loyalty benchmark evidence](/ketsuite/benchmarks/loyalty/) |
+| Vietnam accounting defaults | [Vietnam accounting defaults](/ketsuite/accounting-tt99/) | [Testing KetSuite](/ketsuite/testing/) |
+
+## Framework prerequisites
+
+KetSuite guides explain application policy and ownership. They link into KetJS when the behavior is a
+framework contract. The most useful framework references are [Modules and manifest](/ketjs/modules/),
+[Models and scopes](/ketjs/models/), [Functions and effects](/ketjs/functions/),
+[Sessions and tenants](/ketjs/sessions-tenants/), and [Testing](/ketjs/testing/). Read those pages on
+demand; changing KetSuite does not require reading the complete framework manual first.

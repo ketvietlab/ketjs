@@ -1,4 +1,4 @@
-# KetSuite Docs
+# Ket Developer Docs
 
 A standalone documentation application built with [Astro](https://astro.build/) and
 [Starlight](https://starlight.astro.build/).
