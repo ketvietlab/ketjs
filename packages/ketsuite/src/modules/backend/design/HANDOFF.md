@@ -34,7 +34,6 @@ npm run design
 |---|---|
 | `http://127.0.0.1:4000/catalogue` | **mọi màn hình, mọi trạng thái** — đây là chỗ làm việc chính |
 | `http://127.0.0.1:4000/admin/apps` | màn hình thật, dữ liệu thật |
-| `http://127.0.0.1:4000/admin/settings` | |
 
 Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Cài app, gỡ app, làm hỏng
 thoải mái — khởi động lại là sạch. Không có gì ở đây chạm vào hệ thống thật.
@@ -210,7 +209,6 @@ cần JavaScript:
 | `[data-ui="viewer-company"]` | công ty đang chọn — **chỉ hiện khi tài khoản thuộc nhiều hơn một công ty** |
 | `[data-ui="signout"]` | form POST tới `/logout` |
 | `[data-ui="signout-button"]` | nút bên trong nó |
-| `[data-ui="sidebar-settings"]` | link thật tới `/admin/settings`, nằm dưới divider |
 
 Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
 

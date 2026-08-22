@@ -2196,26 +2196,6 @@
     min-inline-size: 0;
   }
 
-  [data-ui="sidebar-settings"] {
-    display: flex;
-    min-block-size: 2rem;
-    align-items: center;
-    padding-inline: var(--admin-gap-sm);
-    border-radius: var(--admin-radius-sm);
-    color: var(--admin-ink-muted);
-    font-size: var(--admin-size-sm);
-    font-weight: 500;
-    text-decoration: none;
-    transition:
-      background-color var(--admin-motion-fast),
-      color var(--admin-motion-fast);
-  }
-
-  [data-ui="sidebar-settings"]:hover {
-    background: var(--admin-surface-hover);
-    color: var(--admin-ink);
-  }
-
   /* Named in the screen contract but never given a rule, so it inherited nothing
    and sat flush against its sibling. */
   [data-ui="app-meta-value"][data-kind="depends"] {

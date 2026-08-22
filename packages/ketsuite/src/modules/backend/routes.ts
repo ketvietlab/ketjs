@@ -8,7 +8,7 @@
 // The frame these sit in belongs to `screen.ts`, which every other module uses too.
 
 import type { ServeContext, Route } from '@ketvietlab/ketjs'
-import { appsScreen, settingsScreen } from './screens.tsx'
+import { appsScreen } from './screens.tsx'
 import { adminPage } from './screen.ts'
 import type { Req } from './screen.ts'
 
@@ -44,12 +44,6 @@ const apps =
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
   '/admin': apps,
   '/admin/apps': apps,
-  '/admin/settings': (ctx) => async (url, req: Req) =>
-    adminPage(ctx, url, req, {
-      title: 'KetSuite',
-      translate: false,
-      body: (_, frame) => settingsScreen(_, ctx.manifest.tokens, frame),
-    }),
 }
 
 export { frameOf, timezoneOf, viewerOf } from './screen.ts'

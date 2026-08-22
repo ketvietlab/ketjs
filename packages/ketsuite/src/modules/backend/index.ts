@@ -22,7 +22,7 @@ export default defineModule({
   version: '0.1.0',
   app: true,
   title: 'Quản trị',
-  summary: 'Màn hình quản lý ứng dụng, trang và cài đặt.',
+  summary: 'Màn hình quản lý ứng dụng và cấu hình hệ thống.',
   category: 'Hệ thống',
   // The screen you would use to put something back. A deployment that let you
   // remove it would let you remove your way out of ever fixing it.
@@ -43,7 +43,7 @@ export default defineModule({
 })
 
 // The screens this module owns: data assembly, no markup.
-export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.tsx'
+export { appsScreen, pagesScreen, pageColumns } from './screens.tsx'
 export type { AppRow, PageRow, Screen } from './screens.tsx'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'

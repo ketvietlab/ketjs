@@ -542,7 +542,6 @@ try {
       const footer = await evaluate<{
         ordered: boolean
         aligned: boolean
-        settingsBelow: boolean
         accountMenuVisible: boolean
         accountMenuContained: boolean
         signoutPost: boolean
@@ -550,10 +549,8 @@ try {
         cdp,
         `(() => {
           const sidebar = document.querySelector('[data-ui="sidebar"]')
-          const tools = document.querySelector('[data-ui="sidebar-tools"]')
           const mail = document.querySelector('[data-ui="mail-indicator"]')
           const activity = document.querySelector('[data-ui="activity-indicator"]')
-          const settings = document.querySelector('[data-ui="sidebar-settings"]')
           const viewer = document.querySelector('[data-ui="viewer"]')
           viewer.open = true
           const sidebarBox = sidebar.getBoundingClientRect()
@@ -564,7 +561,6 @@ try {
             ordered: mailBox.left < activityBox.left,
             aligned: Math.abs(mailBox.top - activityBox.top) <= 1 &&
               Math.abs(mailBox.height - activityBox.height) <= 1,
-            settingsBelow: settings.getBoundingClientRect().top >= tools.getBoundingClientRect().bottom,
             accountMenuVisible: menuBox.width > 0 && menuBox.height > 0,
             accountMenuContained: menuBox.left >= sidebarBox.left && menuBox.right <= sidebarBox.right,
             signoutPost: viewer.querySelector('[data-ui="signout"]')?.method === 'post'
@@ -576,7 +572,6 @@ try {
       assert.deepEqual(footer, {
         ordered: true,
         aligned: true,
-        settingsBelow: true,
         accountMenuVisible: true,
         accountMenuContained: true,
         signoutPost: true,
@@ -3218,7 +3213,7 @@ try {
             'record activity island scheduled and completed an activity through real browser HTTP',
             'My Activities rendered the actor due list and sidebar counter',
             'My Activities kept inputs, date pickers and semantic actions on one contained baseline',
-            'KétViệt sidebar systray order, divider, account menu and settings link stayed functional',
+            'KétViệt sidebar systray order, divider and account menu stayed functional',
             'Agenda, week and month calendar views hydrated with bounded occurrence expansion',
             'calendar date-time pickers kept equal dimensions and stayed inside their form grid',
             'calendar event creation crossed real browser HTTP and remained visible after reload',
