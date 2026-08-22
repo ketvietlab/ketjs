@@ -61,7 +61,110 @@ export const PAYMENT_TERM_DELAY_TYPES = [
   'days_end_of_month_on_the',
 ] as const
 
-const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+/**
+ * Every way this module can say no, in one place.
+ *
+ * A refusal travels as a code, because the words belong to whoever is reading:
+ * a backend screen translates it, and a ledger read in Vietnamese must not grow
+ * English prose. The sentence here is the same reason for an API client or a log
+ * that has no translator, and `{name}` placeholders are filled from `params`.
+ */
+const REFUSALS = {
+  moveMissing: 'journal entry does not exist',
+  moveDraftOnly: 'only a draft entry can be posted',
+  movePostedOnly: 'only a posted entry can be reversed',
+  moveNotCancellable: 'a posted entry is corrected with account.reverseMove, not cancelled',
+  moveTypeUnsupported: 'unsupported move type',
+  linesTooFew: 'a journal entry needs at least two lines',
+  lineSideBoth: 'each line must have a non-negative debit or credit, never both',
+  entryUnbalanced: 'entry is not balanced: debit {debit}, credit {credit}',
+  reversalNoLines: 'the entry has no journal items to reverse',
+  lineDraftOnly: 'lines can only be added to a draft entry',
+  lineIdTaken: 'a different journal item already uses this id',
+
+  accountMissing: 'account does not exist',
+  accountTypeUnsupported: 'unsupported account type',
+  accountCodeFormat: 'account code may contain only letters, numbers, and dots',
+  offBalanceReconcile: 'off-balance accounts cannot be reconciled',
+  defaultAccountMissing: 'default account does not exist',
+
+  journalMissing: 'journal does not exist',
+  journalTypeUnsupported: 'unsupported journal type',
+  journalCodeFormat: 'journal code must be alphanumeric',
+  journalMustBeSale: 'a customer document requires a sale journal',
+  journalMustBePurchase: 'a vendor document requires a purchase journal',
+  journalLiquidityMissing: 'payment journal needs a default liquidity account',
+  journalNotLiquidity: 'payments require a bank or cash journal',
+
+  taxMissing: 'tax does not exist',
+  taxUseUnsupported: 'unsupported tax use',
+  taxComputationUnsupported: 'unsupported tax computation',
+  taxScopeUnsupported: 'tax scope must be service or consu',
+  taxAccountMissing: 'tax account does not exist',
+  taxDirectionMismatch: 'tax "{name}" does not match the invoice direction',
+  taxPostingAccountMissing: 'tax "{name}" needs a valid posting account',
+  taxMixedPriceInclude: 'a line cannot mix price-included and price-excluded taxes',
+  taxManyPriceInclude: 'a line supports at most one price-included tax',
+  taxDivisionFull: 'a division tax of 100% or more has no finite base',
+
+  partnerMissing: 'partner does not exist',
+  paymentTermMissing: 'payment term does not exist',
+  termValueUnsupported: 'value must be percent or fixed',
+  termDelayUnsupported: 'unsupported delay type',
+  termPercentRange: 'percentage must be between 0 and 100',
+
+  invoiceTypeRequired: 'createInvoice requires an invoice, refund, or receipt type',
+  invoiceAccountsMissing: 'invoice accounts do not exist',
+  counterpartMustBeReceivable: 'the counterpart account must be a receivable account',
+  counterpartMustBePayable: 'the counterpart account must be a payable account',
+
+  paymentTypeUnsupported: 'payment type must be inbound or outbound',
+  partnerTypeUnsupported: 'partner type must be customer or supplier',
+  amountPositive: 'payment amount must be positive',
+  destinationMissing: 'destination account does not exist',
+  destinationMustBeReceivable: 'a customer payment must settle a receivable account',
+  destinationMustBePayable: 'a supplier payment must settle a payable account',
+  openItemMissing: 'open item does not exist',
+  openItemAccountMismatch: 'open item uses another destination account',
+  openItemDirection: 'open item has the wrong debit or credit direction',
+  amountExceedsOpenItem: 'payment amount exceeds the selected open item',
+
+  reconcileAmountPositive: 'reconciliation amount must be positive',
+  reconcileSides: 'reconciliation needs one debit and one credit line',
+  reconcileAccountMismatch: 'reconciled lines must use the same account',
+  reconcilePostedOnly: 'only posted journal items can be reconciled',
+  reconcileNotAllowed: 'this account does not allow reconciliation',
+  reconcileAmountExceeds: 'amount exceeds a residual balance',
+  reconcileConcurrent: 'residual balance changed concurrently; retry reconciliation',
+} as const
+
+type RefusalCode = keyof typeof REFUSALS
+
+const fill = (sentence: string, params?: Record<string, unknown>): string =>
+  params ? sentence.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`)) : sentence
+
+const invalid = (field: string, code: RefusalCode, params?: Record<string, unknown>) => ({
+  ok: false,
+  errors: [{ field, code: `account.error.${code}`, message: fill(REFUSALS[code], params), params }],
+})
+
+/** A refusal raised from inside a helper or a transaction, carrying its code out. */
+class Refusal extends Error {
+  code: RefusalCode
+  params?: Record<string, unknown>
+  constructor(code: RefusalCode, params?: Record<string, unknown>) {
+    super(fill(REFUSALS[code], params))
+    this.code = code
+    this.params = params
+  }
+}
+
+/** Turn whatever a guarded block threw into a refusal the caller can act on. */
+const refused = (field: string, error: unknown) =>
+  error instanceof Refusal
+    ? invalid(field, error.code, error.params)
+    : { ok: false, errors: [{ field, message: (error as Error).message }] }
+
 const n = (value: unknown): number => Number(value ?? 0)
 const today = (): string => new Date().toISOString()
 
@@ -200,19 +303,18 @@ function taxAmounts(
 
   const ordered = [...taxes].sort(taxOrder)
   const included = ordered.filter((tax) => tax.priceInclude === true)
-  if (included.length && included.length !== ordered.length)
-    throw new Error('a line cannot mix price-included and price-excluded taxes')
-  if (included.length > 1) throw new Error('a line supports at most one price-included tax')
+  if (included.length && included.length !== ordered.length) throw new Refusal('taxMixedPriceInclude')
+  if (included.length > 1) throw new Refusal('taxManyPriceInclude')
 
   const share = (tax: Row, base: number): number => {
     const rate = n(tax.amount) / 100
     if (tax.amountType === 'fixed') return roundMoney(n(tax.amount) * quantity, scale)
     if (tax.amountType === 'percent') return roundMoney(base * rate, scale)
     if (tax.amountType === 'division') {
-      if (rate >= 1) throw new Error('a division tax of 100% or more has no finite base')
+      if (rate >= 1) throw new Refusal('taxDivisionFull')
       return roundMoney(base / (1 - rate) - base, scale)
     }
-    throw new Error(`unsupported tax computation "${String(tax.amountType)}"`)
+    throw new Refusal('taxComputationUnsupported')
   }
 
   if (included.length === 1) {
@@ -222,9 +324,9 @@ function taxAmounts(
     if (tax.amountType === 'fixed') untaxed = roundMoney(gross - share(tax, gross), scale)
     else if (tax.amountType === 'percent') untaxed = roundMoney(gross / (1 + rate), scale)
     else if (tax.amountType === 'division') {
-      if (rate >= 1) throw new Error('a division tax of 100% or more has no finite base')
+      if (rate >= 1) throw new Refusal('taxDivisionFull')
       untaxed = roundMoney(gross * (1 - rate), scale)
-    } else throw new Error(`unsupported tax computation "${String(tax.amountType)}"`)
+    } else throw new Refusal('taxComputationUnsupported')
     const amount = roundMoney(gross - untaxed, scale)
     return {
       untaxed,
@@ -265,24 +367,24 @@ async function nextMoveName(ctx: Ctx, journal: Row, date: Date): Promise<string>
 
 async function post(ctx: Ctx, id: unknown): Promise<Record<string, unknown>> {
   const move = (await ctx.db.select('account.Move', { id }))[0]
-  if (!move) return invalid('id', 'journal entry does not exist')
+  if (!move) return invalid('id', 'moveMissing')
   if (move.state === 'posted') return { ok: true, id: move.id, name: move.name }
-  if (move.state !== 'draft') return invalid('state', 'only a draft entry can be posted')
+  if (move.state !== 'draft') return invalid('state', 'moveDraftOnly')
   const scale = scaleOf(move.currency)
   const lines = await ctx.db.select('account.MoveLine', { moveId: id })
-  if (lines.length < 2) return invalid('lines', 'a journal entry needs at least two lines')
+  if (lines.length < 2) return invalid('lines', 'linesTooFew')
   let debit = 0
   let credit = 0
   for (const line of lines) {
     if (n(line.debit) < 0 || n(line.credit) < 0 || (n(line.debit) > 0 && n(line.credit) > 0))
-      return invalid('lines', 'each line must have a non-negative debit or credit, never both')
+      return invalid('lines', 'lineSideBoth')
     debit = roundMoney(debit + n(line.debit), scale)
     credit = roundMoney(credit + n(line.credit), scale)
   }
   if (Math.abs(debit - credit) > toleranceOf(scale))
-    return invalid('lines', `entry is not balanced: debit ${debit}, credit ${credit}`)
+    return invalid('lines', 'entryUnbalanced', { debit, credit })
   const journal = (await ctx.db.select('account.Journal', { id: move.journalId }))[0]
-  if (!journal) return invalid('journalId', 'journal does not exist')
+  if (!journal) return invalid('journalId', 'journalMissing')
   const postedAt = today()
   // An invoice already carries the totals its own line builder computed. A manual
   // entry has none, and a ledger that shows every entry as 0 is not a ledger.
@@ -418,13 +520,11 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       if (!ACCOUNT_TYPES.includes(args.accountType as never))
-        return invalid('accountType', 'unsupported account type')
-      if (!/^[A-Za-z0-9.]+$/.test(String(args.code)))
-        return invalid('code', 'account code may contain only letters, numbers, and dots')
+        return invalid('accountType', 'accountTypeUnsupported')
+      if (!/^[A-Za-z0-9.]+$/.test(String(args.code))) return invalid('code', 'accountCodeFormat')
       const forced = ['asset_receivable', 'liability_payable'].includes(String(args.accountType))
       const reconcile = forced || args.reconcile === true
-      if (args.accountType === 'off_balance' && reconcile)
-        return invalid('reconcile', 'off-balance accounts cannot be reconciled')
+      if (args.accountType === 'off_balance' && reconcile) return invalid('reconcile', 'offBalanceReconcile')
       const existing = (await ctx.db.select('account.Account', { id: args.id }))[0]
       const values = { ...args, reconcile, active: args.active ?? true }
       const cs = ctx
@@ -455,11 +555,10 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!JOURNAL_TYPES.includes(args.type as never)) return invalid('type', 'unsupported journal type')
-      if (!/^[A-Za-z0-9]+$/.test(String(args.code)))
-        return invalid('code', 'journal code must be alphanumeric')
+      if (!JOURNAL_TYPES.includes(args.type as never)) return invalid('type', 'journalTypeUnsupported')
+      if (!/^[A-Za-z0-9]+$/.test(String(args.code))) return invalid('code', 'journalCodeFormat')
       if (args.defaultAccountId && !(await accountOf(ctx, args.defaultAccountId)))
-        return invalid('defaultAccountId', 'default account does not exist')
+        return invalid('defaultAccountId', 'defaultAccountMissing')
       const existing = (await ctx.db.select('account.Journal', { id: args.id }))[0]
       const values = {
         ...args,
@@ -508,11 +607,13 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!TAX_USES.includes(args.typeTaxUse as never)) return invalid('typeTaxUse', 'unsupported tax use')
+      if (!TAX_USES.includes(args.typeTaxUse as never)) return invalid('typeTaxUse', 'taxUseUnsupported')
       if (!TAX_AMOUNT_TYPES.includes(args.amountType as never))
-        return invalid('amountType', 'unsupported tax computation')
+        return invalid('amountType', 'taxComputationUnsupported')
+      if (args.taxScope && !['service', 'consu'].includes(String(args.taxScope)))
+        return invalid('taxScope', 'taxScopeUnsupported')
       if (args.accountId && !(await accountOf(ctx, args.accountId)))
-        return invalid('accountId', 'tax account does not exist')
+        return invalid('accountId', 'taxAccountMissing')
       const existing = (await ctx.db.select('account.Tax', { id: args.id }))[0]
       const values = {
         ...args,
@@ -588,13 +689,12 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       if (!(await ctx.db.select('account.PaymentTerm', { id: args.paymentId }))[0])
-        return invalid('paymentId', 'payment term does not exist')
-      if (!PAYMENT_TERM_VALUES.includes(args.value as never))
-        return invalid('value', 'value must be percent or fixed')
+        return invalid('paymentId', 'paymentTermMissing')
+      if (!PAYMENT_TERM_VALUES.includes(args.value as never)) return invalid('value', 'termValueUnsupported')
       if (!PAYMENT_TERM_DELAY_TYPES.includes(args.delayType as never))
-        return invalid('delayType', 'unsupported delay type')
+        return invalid('delayType', 'termDelayUnsupported')
       if (args.value === 'percent' && (n(args.valueAmount) < 0 || n(args.valueAmount) > 100))
-        return invalid('valueAmount', 'percentage must be between 0 and 100')
+        return invalid('valueAmount', 'termPercentRange')
       const existing = (await ctx.db.select('account.PaymentTermLine', { id: args.id }))[0]
       const values = { ...args, sequence: args.sequence ?? 10 }
       const cs = ctx
@@ -724,13 +824,13 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
-      if (!journal) return invalid('journalId', 'journal does not exist')
+      if (!journal) return invalid('journalId', 'journalMissing')
       const moveType = String(args.moveType ?? 'entry')
-      if (!MOVE_TYPES.includes(moveType as never)) return invalid('moveType', 'unsupported move type')
+      if (!MOVE_TYPES.includes(moveType as never)) return invalid('moveType', 'moveTypeUnsupported')
       if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
-        return invalid('partnerId', 'partner does not exist')
+        return invalid('partnerId', 'partnerMissing')
       if (args.paymentTermId && !(await ctx.db.select('account.PaymentTerm', { id: args.paymentTermId }))[0])
-        return invalid('paymentTermId', 'payment term does not exist')
+        return invalid('paymentTermId', 'paymentTermMissing')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id }
       const { currency, scale } = await ledgerOf(ctx)
@@ -792,16 +892,15 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.moveId }))[0]
-      if (move?.state !== 'draft') return invalid('moveId', 'lines can only be added to a draft entry')
+      if (move?.state !== 'draft') return invalid('moveId', 'lineDraftOnly')
       const account = await accountOf(ctx, args.accountId)
-      if (!account) return invalid('accountId', 'account does not exist')
+      if (!account) return invalid('accountId', 'accountMissing')
       if (args.taxId && !(await ctx.db.select('account.Tax', { id: args.taxId }))[0])
-        return invalid('taxId', 'tax does not exist')
+        return invalid('taxId', 'taxMissing')
       const scale = scaleOf(move.currency)
       const debit = roundMoney(n(args.debit), scale),
         credit = roundMoney(n(args.credit), scale)
-      if (debit < 0 || credit < 0 || (debit > 0 && credit > 0))
-        return invalid('debit', 'a line may have debit or credit, never both')
+      if (debit < 0 || credit < 0 || (debit > 0 && credit > 0)) return invalid('debit', 'lineSideBoth')
       const row = {
         id: args.id,
         moveId: args.moveId,
@@ -835,7 +934,7 @@ export const functions: Record<string, FnSpec> = {
           String(held.accountId) !== String(row.accountId) ||
           n(held.debit) !== debit ||
           n(held.credit) !== credit)
-      if (differs) return invalid('id', 'a different journal item already uses this id')
+      if (differs) return invalid('id', 'lineIdTaken')
       return { ok: true, id: args.id, existing: true }
     },
   }),
@@ -879,19 +978,20 @@ export const functions: Record<string, FnSpec> = {
           String(args.moveType),
         )
       )
-        return invalid('moveType', 'createInvoice requires an invoice, refund, or receipt type')
+        return invalid('moveType', 'invoiceTypeRequired')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
-      if (!journal) return invalid('journalId', 'journal does not exist')
+      if (!journal) return invalid('journalId', 'journalMissing')
       const customerDocument = ['out_invoice', 'out_refund', 'out_receipt'].includes(String(args.moveType))
-      const expectedJournal = customerDocument ? 'sale' : 'purchase'
-      if (journal.type !== expectedJournal)
-        return invalid('journalId', `${String(args.moveType)} requires a ${expectedJournal} journal`)
+      if (journal.type !== (customerDocument ? 'sale' : 'purchase'))
+        return invalid('journalId', customerDocument ? 'journalMustBeSale' : 'journalMustBePurchase')
       const lineAccount = await accountOf(ctx, args.lineAccountId),
         counterpart = await accountOf(ctx, args.counterpartAccountId)
-      if (!lineAccount || !counterpart) return invalid('accountId', 'invoice accounts do not exist')
-      const expectedCounterpart = customerDocument ? 'asset_receivable' : 'liability_payable'
-      if (counterpart.accountType !== expectedCounterpart)
-        return invalid('counterpartAccountId', `counterpart account must be ${expectedCounterpart}`)
+      if (!lineAccount || !counterpart) return invalid('accountId', 'invoiceAccountsMissing')
+      if (counterpart.accountType !== (customerDocument ? 'asset_receivable' : 'liability_payable'))
+        return invalid(
+          'counterpartAccountId',
+          customerDocument ? 'counterpartMustBeReceivable' : 'counterpartMustBePayable',
+        )
 
       // `taxId` stays accepted so existing callers keep working; `taxIds` is how a
       // line carries the sequence of taxes that compound into one another.
@@ -902,9 +1002,9 @@ export const functions: Record<string, FnSpec> = {
       const taxes: Row[] = []
       for (const id of wanted) {
         const tax = (await ctx.db.select('account.Tax', { id }))[0]
-        if (!tax) return invalid('taxIds', `tax ${id} does not exist`)
+        if (!tax) return invalid('taxIds', 'taxMissing')
         if (![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
-          return invalid('taxIds', `tax ${String(tax.name)} does not match the invoice direction`)
+          return invalid('taxIds', 'taxDirectionMismatch', { name: tax.name })
         taxes.push(tax)
       }
 
@@ -913,7 +1013,7 @@ export const functions: Record<string, FnSpec> = {
       try {
         amounts = taxAmounts(taxes, n(args.quantity), n(args.priceUnit), n(args.discount), scale)
       } catch (error) {
-        return invalid('taxIds', (error as Error).message)
+        return refused('taxIds', error)
       }
       // Each tax posts to its own account. A single override stays meaningful only
       // while there is one tax to override.
@@ -922,7 +1022,7 @@ export const functions: Record<string, FnSpec> = {
         if (!held.amount) continue
         const accountId = (amounts.shares.length === 1 ? args.taxAccountId : null) ?? held.accountId
         if (!accountId || !(await accountOf(ctx, accountId)))
-          return invalid('taxAccountId', `tax "${held.name}" needs a valid posting account`)
+          return invalid('taxAccountId', 'taxPostingAccountMissing', { name: held.name })
         posting.push({ ...held, accountId })
       }
 
@@ -1045,9 +1145,8 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
-      if (!move) return invalid('id', 'journal entry does not exist')
-      if (move.state === 'posted')
-        return invalid('state', 'a posted entry is corrected with account.reverseMove, not cancelled')
+      if (!move) return invalid('id', 'moveMissing')
+      if (move.state === 'posted') return invalid('state', 'moveNotCancellable')
       await ctx.db.update('account.Move', { id: args.id }, { state: 'cancel' })
       return { ok: true, id: args.id }
     },
@@ -1079,8 +1178,8 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
-      if (!move) return invalid('id', 'journal entry does not exist')
-      if (move.state !== 'posted') return invalid('state', 'only a posted entry can be reversed')
+      if (!move) return invalid('id', 'moveMissing')
+      if (move.state !== 'posted') return invalid('state', 'movePostedOnly')
 
       const already = (await ctx.db.select('account.Move', { id: args.reversalId }))[0]
       if (already) return { ok: true, id: args.id, reversalId: args.reversalId, name: already.name }
@@ -1088,10 +1187,10 @@ export const functions: Record<string, FnSpec> = {
       const lines = (await ctx.db.select('account.MoveLine', { moveId: args.id })).sort(
         (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
       )
-      if (!lines.length) return invalid('lines', 'the entry has no journal items to reverse')
+      if (!lines.length) return invalid('lines', 'reversalNoLines')
       const journalId = args.journalId ?? move.journalId
       if (!(await ctx.db.select('account.Journal', { id: journalId }))[0])
-        return invalid('journalId', 'journal does not exist')
+        return invalid('journalId', 'journalMissing')
 
       const scale = scaleOf(move.currency)
       const byId = await accountsById(ctx)
@@ -1226,23 +1325,24 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       if (!PAYMENT_TYPES.includes(args.paymentType as never))
-        return invalid('paymentType', 'payment type must be inbound or outbound')
+        return invalid('paymentType', 'paymentTypeUnsupported')
       if (!PARTNER_TYPES.includes(args.partnerType as never))
-        return invalid('partnerType', 'partner type must be customer or supplier')
+        return invalid('partnerType', 'partnerTypeUnsupported')
       const { currency, scale } = await ledgerOf(ctx)
       const amount = roundMoney(n(args.amount), scale)
       const slack = toleranceOf(scale)
-      if (!(amount > 0)) return invalid('amount', 'payment amount must be positive')
+      if (!(amount > 0)) return invalid('amount', 'amountPositive')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
-      if (!journal?.defaultAccountId)
-        return invalid('journalId', 'payment journal needs a default liquidity account')
-      if (!['bank', 'cash'].includes(String(journal.type)))
-        return invalid('journalId', 'payments require a bank or cash journal')
+      if (!journal?.defaultAccountId) return invalid('journalId', 'journalLiquidityMissing')
+      if (!['bank', 'cash'].includes(String(journal.type))) return invalid('journalId', 'journalNotLiquidity')
       const destination = await accountOf(ctx, args.destinationAccountId)
-      if (!destination) return invalid('destinationAccountId', 'destination account does not exist')
-      const expectedDestination = args.partnerType === 'customer' ? 'asset_receivable' : 'liability_payable'
-      if (destination.accountType !== expectedDestination)
-        return invalid('destinationAccountId', `destination account must be ${expectedDestination}`)
+      if (!destination) return invalid('destinationAccountId', 'destinationMissing')
+      const forCustomer = args.partnerType === 'customer'
+      if (destination.accountType !== (forCustomer ? 'asset_receivable' : 'liability_payable'))
+        return invalid(
+          'destinationAccountId',
+          forCustomer ? 'destinationMustBeReceivable' : 'destinationMustBePayable',
+        )
       const existing = (await ctx.db.select('account.Payment', { id: args.id }))[0]
       if (
         existing &&
@@ -1257,17 +1357,17 @@ export const functions: Record<string, FnSpec> = {
       let reconcileTarget: Row | null = null
       if (args.reconcileLineId) {
         reconcileTarget = (await ctx.db.select('account.MoveLine', { id: args.reconcileLineId }))[0] ?? null
-        if (!reconcileTarget) return invalid('reconcileLineId', 'open item does not exist')
+        if (!reconcileTarget) return invalid('reconcileLineId', 'openItemMissing')
         if (reconcileTarget.accountId !== args.destinationAccountId)
-          return invalid('reconcileLineId', 'open item uses another destination account')
+          return invalid('reconcileLineId', 'openItemAccountMismatch')
         const expectedDebit = args.paymentType === 'inbound'
         if (
           (expectedDebit && n(reconcileTarget.balance) <= 0) ||
           (!expectedDebit && n(reconcileTarget.balance) >= 0)
         )
-          return invalid('reconcileLineId', 'open item has the wrong debit or credit direction')
+          return invalid('reconcileLineId', 'openItemDirection')
         if (amount - n(reconcileTarget.amountResidual) > slack)
-          return invalid('amount', 'payment amount exceeds the selected open item')
+          return invalid('amount', 'amountExceedsOpenItem')
       }
       const reconcilePayment = async (paymentMoveId: string) => {
         if (!reconcileTarget) return null
@@ -1376,7 +1476,7 @@ export const functions: Record<string, FnSpec> = {
       const { scale } = await ledgerOf(ctx)
       const slack = toleranceOf(scale)
       const amount = roundMoney(n(args.amount), scale)
-      if (!(amount > 0)) return invalid('amount', 'reconciliation amount must be positive')
+      if (!(amount > 0)) return invalid('amount', 'reconcileAmountPositive')
       if ((await ctx.db.select('account.PartialReconcile', { id: args.id }))[0])
         return { ok: true, id: args.id }
       let moveIds: [unknown, unknown] | null = null
@@ -1385,19 +1485,18 @@ export const functions: Record<string, FnSpec> = {
           const debit = (await tx.db.select('account.MoveLine', { id: args.debitMoveId }))[0]
           const credit = (await tx.db.select('account.MoveLine', { id: args.creditMoveId }))[0]
           if (!debit || !credit || n(debit.balance) <= 0 || n(credit.balance) >= 0)
-            throw new Error('reconciliation needs one debit and one credit line')
-          if (debit.accountId !== credit.accountId)
-            throw new Error('reconciled lines must use the same account')
+            throw new Refusal('reconcileSides')
+          if (debit.accountId !== credit.accountId) throw new Refusal('reconcileAccountMismatch')
           const [debitMove, creditMove] = await Promise.all([
             tx.db.select('account.Move', { id: debit.moveId }),
             tx.db.select('account.Move', { id: credit.moveId }),
           ])
           if (debitMove[0]?.state !== 'posted' || creditMove[0]?.state !== 'posted')
-            throw new Error('only posted journal items can be reconciled')
+            throw new Refusal('reconcilePostedOnly')
           const account = await accountOf(tx, debit.accountId)
-          if (!account?.reconcile) throw new Error('account does not allow reconciliation')
+          if (!account?.reconcile) throw new Refusal('reconcileNotAllowed')
           if (amount - n(debit.amountResidual) > slack || amount - n(credit.amountResidual) > slack)
-            throw new Error('amount exceeds a residual balance')
+            throw new Refusal('reconcileAmountExceeds')
           const held = await tx.db.insertIfAbsent('account.PartialReconcile', {
             id: args.id,
             debitMoveId: args.debitMoveId,
@@ -1424,11 +1523,11 @@ export const functions: Record<string, FnSpec> = {
             (!('dryRun' in debitWrite) && !debitWrite.matched) ||
             (!('dryRun' in creditWrite) && !creditWrite.matched)
           )
-            throw new Error('residual balance changed concurrently; retry reconciliation')
+            throw new Refusal('reconcileConcurrent')
           return [debit.moveId, credit.moveId]
         })
       } catch (error) {
-        return invalid('lines', (error as Error).message)
+        return refused('lines', error)
       }
       if (moveIds) {
         const accounts = await accountsById(ctx)

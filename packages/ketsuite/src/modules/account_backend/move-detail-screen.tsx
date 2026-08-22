@@ -9,6 +9,7 @@ import {
   FormCluster,
   Framed,
   icon,
+  Notice,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -16,7 +17,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.tsx'
+import { labelOf, moveTitle } from './screens.tsx'
 
 type Row = Record<string, unknown>
 
@@ -29,10 +30,15 @@ export const moveDetailScreen = (
   action: string,
   collaboration: JSXChild,
   printActions?: JSXChild,
+  errors?: string[],
 ): TemplateResult => {
   const draft = move.state === 'draft'
   const accountLabels = new Map(accountOptions.map((option) => [option.value, option.label]))
   const residual = lines.reduce((total, line) => total + Number(line.amountResidual ?? 0), 0)
+  const title = moveTitle(_, move)
+  // Payment state is a property of a document that someone owes money on. A manual
+  // journal entry has none, and labelling every draft entry "paid" said nothing.
+  const showsPaymentState = move.moveType !== 'entry'
   const actionForms = draft
     ? [
         <RecordForm
@@ -115,12 +121,12 @@ export const moveDetailScreen = (
   return (
     <Framed
       translator={_}
-      title={String(move.name)}
+      title={title}
       frame={frame}
       body={
         <RecordWorkspace
           kicker={_('account_backend.move.kicker')}
-          title={String(move.name)}
+          title={title}
           subtitle={String(move.ref ?? move.partnerId ?? '')}
           imageFallback={icon('banknote')}
           badges={[
@@ -129,10 +135,14 @@ export const moveDetailScreen = (
               move.state === 'posted' ? 'positive' : 'neutral',
               String(move.state),
             ),
-            badge(
-              labelOf(_, 'paymentState', move.paymentState),
-              move.paymentState === 'paid' ? 'positive' : 'warning',
-            ),
+            ...(showsPaymentState
+              ? [
+                  badge(
+                    labelOf(_, 'paymentState', move.paymentState),
+                    move.paymentState === 'paid' ? 'positive' : 'warning',
+                  ),
+                ]
+              : []),
           ]}
           summary={[
             {
@@ -153,6 +163,12 @@ export const moveDetailScreen = (
           ]}
           body={stack(
             [
+              // Posting and reversing both refuse for concrete reasons — an
+              // unbalanced entry, a document already in the books. The reader has to
+              // be told which, whether or not this document still shows a line form.
+              errors?.length ? (
+                <Notice tone="danger" title={_('account_backend.move.refused')} message={errors.join(' ')} />
+              ) : null,
               actionForms.length ? (
                 <FormCluster forms={actionForms} label={_('account_backend.move.actions')} />
               ) : null,
@@ -195,6 +211,7 @@ export const moveDetailScreen = (
                               value: 0,
                             },
                           ]}
+                          errors={errors}
                         />
                       }
                     />
