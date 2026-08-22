@@ -948,3 +948,360 @@ test('multi-warehouse: stock, forecast, reservation and default routes stay ware
     await adapter.close()
   }
 })
+
+/**
+ * A session that can read two companies but writes to one. Stock reads span the
+ * readable set unless a function narrows them, and every stock model is company
+ * scoped — so this is the scope that tells narrowing apart from its absence.
+ */
+const bothCompanies = { company: 'acme', companies: ['acme', 'globex'], branches: null }
+
+const callAs = (
+  name: string,
+  args: Record<string, unknown>,
+  adapter: Adapter,
+  as: { company: string; companies?: string[]; branches: null } = scope,
+) => callFn(name, args, { adapter, manifest, scope: as })
+
+/**
+ * A warehouse and the locations saveWarehouse derives from it. The id is the
+ * caller's, and it is a tenant-wide primary key, so two companies each get their
+ * own — which is what the admin does with randomUUID().
+ */
+const seedWarehouse = async (adapter: Adapter, as = scope, id = 'wh') => {
+  await callAs('stock.saveWarehouse', { id, name: 'Kho', code: 'WH' }, adapter, as)
+  return {
+    warehouseId: id,
+    stockId: `${id}:stock`,
+    inventoryId: `${id}:inventory`,
+    supplierId: `${id}:supplier`,
+    customerId: `${id}:customer`,
+    outgoingId: `${id}:outgoing`,
+  }
+}
+
+test('stock: a picked move line keeps one reservation however often it is saved', async () => {
+  const adapter = await boot()
+  try {
+    const { stockId, customerId } = await seedWarehouse(adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true }, adapter)
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'count-1',
+        productId: 'p1',
+        locationId: stockId,
+        inventoryLocationId: 'wh:inventory',
+        countedQuantity: '10',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    await call('stock.createPicking', { id: 'out-1', name: 'OUT/1', pickingTypeId: 'wh:outgoing' }, adapter)
+    await call(
+      'stock.addMove',
+      {
+        id: 'move-1',
+        name: 'move',
+        pickingId: 'out-1',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '5',
+        locationId: stockId,
+        locationDestId: customerId,
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'out-1' }, adapter)
+    await call('stock.reserveMove', { id: 'move-1' }, adapter)
+
+    const lines = (await call('stock.getPicking', { id: 'out-1' }, adapter)).value as Row
+    const line = ((lines.moves as Row[])[0]!.lines as Row[])[0]!
+    const reservedAfter = async () =>
+      Number(
+        (
+          (await callAs('stock.listQuants', { productId: 'p1', locationId: stockId }, adapter)).value as Row[]
+        )[0]!.reservedQuantity,
+      )
+    assert.equal(await reservedAfter(), 5)
+
+    // Pressing the pick button, then pressing it again. The second save must not
+    // add the line's quantity to the quant a second time.
+    for (let press = 0; press < 2; press++)
+      await call(
+        'stock.saveMoveLine',
+        { id: line.id, moveId: 'move-1', quantity: '5', picked: true },
+        adapter,
+      )
+    assert.equal(await reservedAfter(), 5, 'a picked line still holds exactly its own reservation')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: an inventory count below what is reserved is refused as a field error', async () => {
+  const adapter = await boot()
+  try {
+    const { stockId, customerId } = await seedWarehouse(adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true }, adapter)
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'count-1',
+        productId: 'p1',
+        locationId: stockId,
+        inventoryLocationId: 'wh:inventory',
+        countedQuantity: '10',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    await call('stock.createPicking', { id: 'out-1', name: 'OUT/1', pickingTypeId: 'wh:outgoing' }, adapter)
+    await call(
+      'stock.addMove',
+      {
+        id: 'move-1',
+        name: 'move',
+        pickingId: 'out-1',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '8',
+        locationId: stockId,
+        locationDestId: customerId,
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'out-1' }, adapter)
+    await call('stock.reserveMove', { id: 'move-1' }, adapter)
+
+    // Eight of the ten are reserved. Counting five used to reach mutateQuant and
+    // throw, which surfaced as a server error naming neither the reservation nor
+    // the transfer holding it.
+    const counted = await call(
+      'stock.adjustInventory',
+      {
+        id: 'count-2',
+        productId: 'p1',
+        locationId: stockId,
+        inventoryLocationId: 'wh:inventory',
+        countedQuantity: '5',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    const result = counted.value as { ok: boolean; errors?: Array<{ field: string }> }
+    assert.equal(result.ok, false)
+    assert.equal(result.errors?.[0]?.field, 'countedQuantity')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: re-parenting a location moves the paths of everything under it', async () => {
+  const adapter = await boot()
+  try {
+    await seedWarehouse(adapter)
+    await call('stock.saveLocation', { id: 'a', name: 'A', usage: 'view' }, adapter)
+    await call('stock.saveLocation', { id: 'd', name: 'D', usage: 'view' }, adapter)
+    await call('stock.saveLocation', { id: 'b', name: 'B', usage: 'internal', parentId: 'a' }, adapter)
+    await call('stock.saveLocation', { id: 'c', name: 'C', usage: 'internal', parentId: 'b' }, adapter)
+
+    const pathOf = async (id: string) =>
+      String(
+        ((await call('stock.listLocations', {}, adapter)).value as Row[]).find(
+          (location) => location.id === id,
+        )!.parentPath,
+      )
+    assert.equal(await pathOf('c'), 'a/b/c/')
+
+    await call('stock.saveLocation', { id: 'b', name: 'B', usage: 'internal', parentId: 'd' }, adapter)
+    assert.equal(await pathOf('b'), 'd/b/')
+    assert.equal(await pathOf('c'), 'd/b/c/', 'a descendant follows its parent to the new tree')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: an open outgoing move counts against the forecast even when fully reserved', async () => {
+  const adapter = await boot()
+  try {
+    const { stockId, customerId } = await seedWarehouse(adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true }, adapter)
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'count-1',
+        productId: 'p1',
+        locationId: stockId,
+        inventoryLocationId: 'wh:inventory',
+        countedQuantity: '10',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    await call('stock.createPicking', { id: 'out-1', name: 'OUT/1', pickingTypeId: 'wh:outgoing' }, adapter)
+    await call(
+      'stock.addMove',
+      {
+        id: 'move-1',
+        name: 'move',
+        pickingId: 'out-1',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '10',
+        locationId: stockId,
+        locationDestId: customerId,
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'out-1' }, adapter)
+    await call('stock.reserveMove', { id: 'move-1' }, adapter)
+
+    const forecast = (await call('stock.forecast', { productId: 'p1', warehouseId: 'wh' }, adapter))
+      .value as Row
+    // Everything on hand is committed and about to leave: available and forecast
+    // have to agree rather than reading 0 beside 10.
+    assert.equal(Number(forecast.onHand), 10)
+    assert.equal(Number(forecast.available), 0)
+    assert.equal(Number(forecast.outgoing), 10)
+    assert.equal(Number(forecast.forecast), 0)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: a move reserves from the sub-locations of the source it names', async () => {
+  const adapter = await boot()
+  try {
+    const { stockId, customerId } = await seedWarehouse(adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true }, adapter)
+    await call(
+      'stock.saveLocation',
+      { id: 'shelf', name: 'Shelf 1', usage: 'internal', parentId: stockId, warehouseId: 'wh' },
+      adapter,
+    )
+    // The stock sits on the shelf; the move is written against the parent, which
+    // is what an orderpoint and the forecast both anchor on.
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'count-1',
+        productId: 'p1',
+        locationId: 'shelf',
+        inventoryLocationId: 'wh:inventory',
+        countedQuantity: '7',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    await call('stock.createPicking', { id: 'out-1', name: 'OUT/1', pickingTypeId: 'wh:outgoing' }, adapter)
+    await call(
+      'stock.addMove',
+      {
+        id: 'move-1',
+        name: 'move',
+        pickingId: 'out-1',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '4',
+        locationId: stockId,
+        locationDestId: customerId,
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'out-1' }, adapter)
+    const reserved = await call('stock.reserveMove', { id: 'move-1' }, adapter)
+    const outcome = reserved.value as { reserved: string; state: string }
+    assert.equal(Number(outcome.reserved), 4, 'stock one level down is still stock')
+    assert.equal(outcome.state, 'assigned')
+
+    // And completing it takes the goods off the shelf they were reserved from.
+    await call('stock.completePicking', { id: 'out-1' }, adapter)
+    const onShelf = (
+      (await call('stock.listQuants', { productId: 'p1', locationId: 'shelf' }, adapter)).value as Row[]
+    )[0]!
+    assert.equal(Number(onShelf.quantity), 3)
+    assert.equal(Number(onShelf.reservedQuantity), 0)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: reads and repairs stay inside the company being written to', async () => {
+  const adapter = await boot()
+  try {
+    await call('partner.savePartner', { id: 'globex-party', kind: 'company', name: 'Globex' }, adapter)
+    await callAs(
+      'company.saveCompany',
+      { id: 'globex', partnerId: 'globex-party', currency: 'VND' },
+      adapter,
+      bothCompanies,
+    )
+    const globex = { company: 'globex', branches: null }
+    await seedWarehouse(adapter)
+    const theirs = await seedWarehouse(adapter, globex, 'wh-globex')
+
+    // A session that reads both companies still sees only the one it writes to.
+    const warehouses = (await callAs('stock.listWarehouses', {}, adapter, bothCompanies)).value as Row[]
+    assert.deepEqual(
+      warehouses.map((row) => row.companyId),
+      ['acme'],
+      'a picker offers only warehouses this session can write against',
+    )
+
+    // Globex holds a reservation of its own.
+    await callAs('stock.configureProduct', { templateId: 'tpl', isStorable: true }, adapter, globex)
+    await callAs(
+      'stock.adjustInventory',
+      {
+        id: 'g-count',
+        productId: 'p1',
+        locationId: theirs.stockId,
+        inventoryLocationId: theirs.inventoryId,
+        countedQuantity: '6',
+        productUomId: 'unit',
+      },
+      adapter,
+      globex,
+    )
+    await callAs(
+      'stock.createPicking',
+      { id: 'g-out', name: 'OUT/G', pickingTypeId: theirs.outgoingId },
+      adapter,
+      globex,
+    )
+    await callAs(
+      'stock.addMove',
+      {
+        id: 'g-move',
+        name: 'move',
+        pickingId: 'g-out',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '6',
+        locationId: theirs.stockId,
+        locationDestId: theirs.customerId,
+      },
+      adapter,
+      globex,
+    )
+    await callAs('stock.confirmPicking', { id: 'g-out' }, adapter, globex)
+    await callAs('stock.reserveMove', { id: 'g-move' }, adapter, globex)
+    // adjustInventory writes both sides, so name the location rather than taking
+    // whichever quant comes back first.
+    const globexReserved = async () =>
+      Number(
+        (
+          (await callAs('stock.listQuants', { productId: 'p1', locationId: theirs.stockId }, adapter, globex))
+            .value as Row[]
+        )[0]!.reservedQuantity,
+      )
+    assert.equal(await globexReserved(), 6)
+
+    // Running the repair tool from acme must not touch it.
+    await callAs('stock.reconcileReservations', {}, adapter, bothCompanies)
+    assert.equal(await globexReserved(), 6, "a repair in one company leaves another company's ledger alone")
+  } finally {
+    await adapter.close()
+  }
+})

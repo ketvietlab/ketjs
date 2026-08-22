@@ -15,6 +15,31 @@ import { stockRouteDetailScreen } from './stock-route-screen.tsx'
 import { stockRoutesScreen } from './stock-routes-screen.tsx'
 import { transferDetailScreen } from './transfer-screen.tsx'
 import { transfersScreen } from './transfers-screen.tsx'
+
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in operator's session cookie without
+ * their intent, and every write here moves stock or rewrites the configuration
+ * that governs it — completing a transfer, cancelling one and releasing its
+ * reservations, re-parenting a location. Refused the way user_backend,
+ * company_backend, oauth_backend and product_backend already refuse it.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
 import { warehousesScreen } from './warehouses-screen.tsx'
 import { adminPage, frameOf, inLocale } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
@@ -135,6 +160,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.adjustInventory',
@@ -222,6 +248,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const id = randomUUID()
         const result = await ctx.call(
@@ -282,6 +309,7 @@ export const routes: Record<string, RouteEntry> = {
       let moves = Array.isArray(current.moves) ? (current.moves as AnyRow[]) : []
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isStockPartial(req)
         const form = await readForm(req)
         let result: unknown
@@ -454,6 +482,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.saveWarehouse',
@@ -498,6 +527,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.saveLocation',
@@ -548,6 +578,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.savePickingType',
@@ -606,6 +637,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.createLot',
@@ -689,6 +721,7 @@ export const routes: Record<string, RouteEntry> = {
       let current = lots.find((row) => String(row.id) === params.id)
       if (!current) return text(_('stock_backend.lot.error.notFound'), { status: 404 })
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = req.headers['x-ket-partial'] === 'stock-lot'
         const form = await readForm(req)
         const values = {
@@ -809,6 +842,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const id = randomUUID()
         const result = await ctx.call(
@@ -859,6 +893,7 @@ export const routes: Record<string, RouteEntry> = {
       const route = routes.find((row) => row.id === params.id)
       if (!route) return text('Route not found', { status: 404 })
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         if (form.intent === 'route') {
           const displayName = localizedGeneratedRouteName(ctx.translate(ctx.localeOf(url, req)), route)
@@ -952,6 +987,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const result = await ctx.call(
           'stock.saveOrderpoint',
@@ -1062,7 +1098,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/stock/replenishment/{id}/run':
     (ctx): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const result = await ctx.call(
         'stock.runOrderpoint',
         { id: params.id, moveId: `${params.id}:${randomUUID()}` },
