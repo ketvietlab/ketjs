@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from, like } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, like, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
 import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
@@ -165,6 +165,11 @@ export const functions: Record<string, FnSpec> = {
       role: 'text?',
       kind: 'text?',
       search: 'text?',
+      // Exactly these partners, for screens that already know who they need.
+      // A list of orders wants the names behind its five hundred partnerIds,
+      // and loading every partner in the tenant to build that map does not
+      // survive a customer base imported from a chat-commerce channel.
+      ids: 'json?',
       includeArchived: 'bool?',
       limit: 'int?',
       offset: 'int?',
@@ -186,6 +191,10 @@ export const functions: Record<string, FnSpec> = {
       if (a.includeArchived !== true) q = q.where(eq(P.active, true))
       if (a.kind) q = q.where(eq(P.kind, a.kind))
       if (a.search) q = q.where(like(P.name, `%${String(a.search)}%`))
+      if (Array.isArray(a.ids)) {
+        if (!a.ids.length) return []
+        q = q.where(inArray(P.id, a.ids.slice(0, 2_000).map(String)))
+      }
       if (!a.role) {
         if (typeof a.limit === 'number') q = q.limit(a.limit)
         if (typeof a.offset === 'number') q = q.offset(a.offset)

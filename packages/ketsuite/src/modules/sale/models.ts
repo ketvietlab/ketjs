@@ -23,7 +23,15 @@ export const models: Record<string, ModelDef> = {
       amountTotal: 'decimal',
       notes: 'text?',
     },
-    indexes: { company_name: { fields: ['companyId', 'name'], unique: true } },
+    indexes: {
+      company_name: { fields: ['companyId', 'name'], unique: true },
+      // What the two list screens actually ask: this state (or these states),
+      // newest first. Without it, a tenant with an imported history scans the
+      // whole table for every page of quotations.
+      state_date: { fields: ['companyId', 'state', 'dateOrder'] },
+      partner: { fields: ['companyId', 'partnerId'] },
+      invoice_status: { fields: ['companyId', 'invoiceStatus'] },
+    },
   },
   OrderLine: {
     scope: 'company',

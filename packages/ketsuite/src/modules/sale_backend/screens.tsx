@@ -30,7 +30,15 @@ const pathOf = (order: AnyRow) =>
     : `/admin/sales/orders/${String(order.id)}`
 const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_backend.emptyHint'))
 
-export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, locale = ''): TemplateResult => (
+export const dashboard = (
+  _: Translator,
+  // Counted in the database rather than loaded and counted here: at import
+  // scale the dashboard was materialising the whole order table for four
+  // numbers, and once the list is bounded, counting a page would be wrong.
+  counts: { draft: number; sent: number; sale: number; toInvoice: number },
+  frame: Frame,
+  locale = '',
+): TemplateResult => (
   <Framed
     translator={_}
     title={_('sale_backend.dashboard.title')}
@@ -48,25 +56,25 @@ export const dashboard = (_: Translator, rows: AnyRow[], frame: Frame, locale = 
           {
             id: 'draft',
             title: _('sale_backend.dashboard.draft'),
-            value: rows.filter((r) => r.state === 'draft').length,
+            value: counts.draft,
             href: localized('/admin/sales/quotations?state=draft', locale),
           },
           {
             id: 'sent',
             title: _('sale_backend.dashboard.sent'),
-            value: rows.filter((r) => r.state === 'sent').length,
+            value: counts.sent,
             href: localized('/admin/sales/quotations?state=sent', locale),
           },
           {
             id: 'orders',
             title: _('sale_backend.menu.orders'),
-            value: rows.filter((r) => r.state === 'sale').length,
+            value: counts.sale,
             href: localized('/admin/sales/orders', locale),
           },
           {
             id: 'invoice',
             title: _('sale_backend.dashboard.toInvoice'),
-            value: rows.filter((r) => r.invoiceStatus === 'to invoice').length,
+            value: counts.toInvoice,
             href: localized('/admin/sales/orders', locale),
           },
         ]}
