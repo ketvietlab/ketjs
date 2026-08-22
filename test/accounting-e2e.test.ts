@@ -325,3 +325,201 @@ test('e2e accounting: a posted document is corrected by a reversal reached from 
     0,
   )
 })
+
+test('e2e accounting: a refused form says which rule it broke and keeps what was typed', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'supplier', kind: 'company', name: 'Nhà cung cấp ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const receivable = String(accounts.find((row) => row.code === '1311')?.id)
+
+  const form = new URLSearchParams({
+    name: 'PAY/CHI/001',
+    paymentType: 'outbound',
+    // A supplier payment must settle a payable, so a receivable is the wrong one.
+    partnerType: 'supplier',
+    partnerId: 'supplier',
+    journalId: String(journals.find((row) => row.type === 'bank')?.id),
+    destinationAccountId: receivable,
+    amount: '750000',
+    memo: 'Thanh toán đợt 1',
+  })
+  const refused = await e2e.client.post('/admin/accounting/payments?lang=vi', form, {
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    redirect: 'manual',
+  })
+  const html = await refused.text()
+  // The form comes back rendered, not a redirect to a page that says only "invalid".
+  assert.equal(refused.status, 200)
+  assert.doesNotMatch(html, /invalid=1/)
+  // The reason names the rule, in the reader's language.
+  assert.match(html, /phải tất toán một tài khoản phải trả/)
+  assert.doesNotMatch(html, /account\.error\./)
+  // Everything typed is still there, so the correction is one control away.
+  assert.match(html, /value="PAY\/CHI\/001"/)
+  assert.match(html, /value="750000"/)
+  assert.match(html, /value="Thanh toán đợt 1"/)
+  // Nothing was written.
+  assert.deepEqual((await call<Row[]>('account.listPayments')).value, [])
+})
+
+test('e2e accounting: a payment can only be pointed at an account it could settle', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const response = await e2e.client.get('/admin/accounting/payments?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const html = await response.text()
+  const options = [...html.matchAll(/<select[^>]*name="destinationAccountId"[^>]*>([\s\S]*?)<\/select>/g)]
+    .flatMap((match) => [...match[1]!.matchAll(/value="([^"]*)"/g)])
+    .map((match) => match[1]!)
+    .filter(Boolean)
+  assert.ok(options.length > 0)
+  // Offering all 216 accounts made the default selection a guaranteed refusal.
+  const offered = accounts.filter((row) => options.includes(String(row.id)))
+  assert.equal(offered.length, options.length)
+  assert.ok(
+    offered.every((row) => ['asset_receivable', 'liability_payable'].includes(String(row.accountType))),
+    offered.map((row) => `${String(row.code)}:${String(row.accountType)}`).join(', '),
+  )
+})
+
+test('e2e accounting: every dashboard count is the list its card opens', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-count',
+    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '100000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
+  })
+  await call('account.createMove', {
+    id: 'entry-count',
+    journalId: String(journals.find((row) => row.type === 'general')?.id),
+    moveType: 'entry',
+  })
+
+  const dashboard = (
+    await (await e2e.client.get('/admin/accounting?lang=vi', { headers: { accept: 'text/html' } })).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  // Card titles repeat in the sidebar menu, so read each card's own block.
+  const cards = [...dashboard.matchAll(/<article data-ui="content-card"[\s\S]*?<\/article>/g)].map(
+    (match) => match[0],
+  )
+  const cardValue = (title: string) => {
+    const card = cards.find((held) => held.includes(title))
+    assert.ok(card, title)
+    return Number(/data-ui="metric-value"[^>]*>([^<]*)</.exec(card)?.[1] ?? NaN)
+  }
+  // The customer-invoice card used to show the unpaid count under a "records"
+  // label, and the entries card counted every move of every type.
+  assert.equal(cardValue('Hoá đơn khách hàng'), 1)
+  assert.equal(cardValue('Bút toán'), 1)
+  assert.equal(cardValue('Hoá đơn nhà cung cấp'), 0)
+  assert.equal((await call<Row[]>('account.listMoves', { moveType: 'entry' })).value.length, 1)
+})
+
+test('e2e accounting: the ledger names the account, and a draft is not titled by its id', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-ledger',
+    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '100000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
+  })
+  await call('account.postMove', { id: 'invoice-ledger' })
+  await call('account.createMove', {
+    id: 'draft-ledger',
+    journalId: String(journals.find((row) => row.type === 'general')?.id),
+    moveType: 'entry',
+  })
+
+  // A general ledger with no account column is a list of amounts.
+  const ledger = await (
+    await e2e.client.get('/admin/accounting/general-ledger?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(ledger, /511 · Doanh thu/)
+  assert.match(ledger, /1311 · Phải thu/)
+
+  // A draft carries no journal number yet, so `name` still holds its raw id. The
+  // id belongs in the link, never in what the reader is shown.
+  const entries = (
+    await (
+      await e2e.client.get('/admin/accounting/entries?lang=vi', { headers: { accept: 'text/html' } })
+    ).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  assert.match(entries, /Bút toán nháp/)
+  assert.match(entries, /href="\/admin\/accounting\/entries\/draft-ledger/)
+  assert.doesNotMatch(entries, />[^<]*draft-ledger[^<]*</)
+
+  const detail = (
+    await (
+      await e2e.client.get('/admin/accounting/entries/draft-ledger?lang=vi', {
+        headers: { accept: 'text/html' },
+      })
+    ).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  assert.match(detail, /Bút toán nháp/)
+  assert.doesNotMatch(detail, />[^<]*draft-ledger[^<]*</)
+  // A manual entry has no payment state, so it must not claim to be paid.
+  assert.doesNotMatch(detail, /Đã thanh toán/)
+})
+
+test('e2e accounting: a payment term shows the milestones that define it, and they are editable', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const terms = (await call<Row[]>('account.listPaymentTerms')).value
+  const net30 = terms.find((row) => row.name === '30 ngày')!
+  const line = (net30.lines as Row[])[0]!
+
+  const listed = await (
+    await e2e.client.get('/admin/accounting/terms?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  // Counting the milestones and hiding them left the screen unable to say what
+  // "30 ngày" actually means.
+  assert.match(listed, /Số ngày sau ngày hoá đơn/)
+  assert.match(listed, new RegExp(`editLine=${encodeURIComponent(String(line.id)).replace(/%/g, '%')}`))
+
+  const editing = await (
+    await e2e.client.get(`/admin/accounting/terms?lang=vi&editLine=${encodeURIComponent(String(line.id))}`, {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(editing, /Sửa mốc đến hạn/)
+  assert.match(editing, /value="30"/)
+
+  const saved = await e2e.client.post(
+    `/admin/accounting/terms?lang=vi&editLine=${encodeURIComponent(String(line.id))}`,
+    new URLSearchParams({
+      action: 'line',
+      paymentId: String(net30.id),
+      value: 'percent',
+      valueAmount: '100',
+      delayType: 'days_after',
+      nbDays: '45',
+      sequence: '10',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(saved.status, 303)
+  const after = (await call<Row[]>('account.listPaymentTerms')).value.find((row) => row.id === net30.id)!
+  // Corrected in place, not duplicated into a second milestone.
+  assert.equal((after.lines as Row[]).length, 1)
+  assert.equal(Number((after.lines as Row[])[0]!.nbDays), 45)
+})
