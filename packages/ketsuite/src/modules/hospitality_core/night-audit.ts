@@ -1,7 +1,8 @@
-import { asc, defineFn, defineJob, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, defineFn, defineJob, desc, eq, from, inArray, lte } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, JobContext, JobSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from './calendar.ts'
 import { occupancyDates } from './inventory.ts'
+import { applyNoShow } from './operations.ts'
 import { postCharge } from './services.ts'
 
 type AuditContext = Ctx & { signal?: AbortSignal }
@@ -11,6 +12,7 @@ type AuditResult = {
   servicePosted: number
   rentPosted: number
   existingCount: number
+  noShowPosted: number
   totalAmount: string
 }
 
@@ -65,6 +67,33 @@ const beginRunAttempt = async (ctx: Ctx, runId: string): Promise<number> => {
     if ('dryRun' in changed || changed.matched) return attempt
   }
   throw new Error(`night audit run "${runId}" could not acquire an attempt`)
+}
+
+/**
+ * Arrivals that never happened. Closing the business date is the moment a
+ * confirmed reservation with no check-in stops being an expected guest and
+ * becomes a released room-night; leaving it open held inventory for the whole
+ * stay window and told nobody.
+ */
+const missedArrivals = async (ctx: Ctx, property: Row, auditDate: string): Promise<Row[]> => {
+  const Reservation = ctx.table('hospitality_core.Reservation')
+  const timezone = String(property.timezone ?? 'UTC')
+  const rows = await ctx.db.all(
+    from(Reservation).where(
+      eq(Reservation.propertyId, property.id),
+      eq(Reservation.state, 'confirmed'),
+      lte(Reservation.checkIn, zonedMidnight(addCalendarDays(auditDate, 1), timezone).toISOString()),
+    ),
+  )
+  const missed: Row[] = []
+  for (const reservation of rows) {
+    if (dateKeyIn(new Date(String(reservation.checkIn)), timezone) > auditDate) continue
+    const stay = reservation.stayId ? await one(ctx, 'hospitality_core.Stay', reservation.stayId) : null
+    // A stay that reached any other state was handled by a human already.
+    if (stay && stay.state !== 'draft') continue
+    missed.push(reservation)
+  }
+  return missed
 }
 
 const checkedInStays = async (ctx: Ctx, propertyId: string): Promise<Row[]> => {
@@ -205,9 +234,21 @@ export const executeNightAudit = async (
       servicePosted: 0,
       rentPosted: 0,
       existingCount: 0,
+      noShowPosted: 0,
       totalAmount: '0',
     }
     const timezone = String(property.timezone ?? 'UTC')
+
+    for (const reservation of await missedArrivals(ctx, property, args.auditDate)) {
+      abortIfRequested(ctx)
+      const closed = await applyNoShow(
+        ctx,
+        reservation,
+        'night_audit',
+        zonedMidnight(addCalendarDays(args.auditDate, 1), timezone),
+      )
+      if (closed.ok === true) result.noShowPosted += 1
+    }
 
     for (const item of snapshot.services) {
       abortIfRequested(ctx)
@@ -298,6 +339,7 @@ const runOutput = {
   servicePosted: 'int',
   rentPosted: 'int',
   existingCount: 'int',
+  noShowPosted: 'int',
   totalAmount: 'decimal',
   attempt: 'int',
   requestedAt: 'datetime',
@@ -404,6 +446,7 @@ export const nightAuditFunctions: Record<string, FnSpec> = {
             servicePosted: 0,
             rentPosted: 0,
             existingCount: 0,
+            noShowPosted: 0,
             totalAmount: '0',
             attempt: 0,
             requestedAt,
@@ -440,6 +483,12 @@ export const nightAuditJobs: Record<string, JobSpec> = {
       'write:hospitality_core.Charge',
       'read:hospitality_core.NightAuditRun',
       'write:hospitality_core.NightAuditRun',
+      'read:hospitality_core.Reservation',
+      'write:hospitality_core.Reservation',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.AvailabilityLedger',
+      'write:hospitality_core.InventoryChange',
       'read:product.Product',
       'read:product.Template',
       'read:product.ProductUom',

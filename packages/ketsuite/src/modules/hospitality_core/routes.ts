@@ -454,6 +454,9 @@ const defaultPropertyValues = (id: string): PropertyFormValues => ({
   defaultCheckIn: '14:00',
   defaultCheckOut: '12:00',
   enforceTimes: true,
+  allowHourly: true,
+  allowWeekly: false,
+  allowMonthly: false,
   longStayBillOnCheckIn: true,
   starRating: 0,
   description: null,
@@ -478,6 +481,9 @@ const propertyFormValues = (
   defaultCheckIn: form.defaultCheckIn?.trim() ?? current?.defaultCheckIn ?? '14:00',
   defaultCheckOut: form.defaultCheckOut?.trim() ?? current?.defaultCheckOut ?? '12:00',
   enforceTimes: form.enforceTimes === '1',
+  allowHourly: form.allowHourly === '1',
+  allowWeekly: form.allowWeekly === '1',
+  allowMonthly: form.allowMonthly === '1',
   longStayBillOnCheckIn: form.longStayBillOnCheckIn === '1',
   starRating: integer(form.starRating, current?.starRating ?? 0),
   description: form.description?.trim() || null,
@@ -551,6 +557,10 @@ const defaultRoomTypeValues = (id: string, propertyId: string): RoomTypeFormValu
   sizeSqm: null,
   viewType: null,
   sharedBathroom: false,
+  allowHourly: true,
+  allowWeekly: false,
+  allowMonthly: false,
+  minHourlyHours: 2,
   baseRate: '0',
   color: '#2563eb',
   cancellationPolicyId: null,
@@ -576,6 +586,10 @@ const roomTypeFormValues = (
   sizeSqm: form.sizeSqm?.trim() || null,
   viewType: form.viewType?.trim() || null,
   sharedBathroom: form.sharedBathroom === '1',
+  allowHourly: form.allowHourly === '1',
+  allowWeekly: form.allowWeekly === '1',
+  allowMonthly: form.allowMonthly === '1',
+  minHourlyHours: integer(form.minHourlyHours, current?.minHourlyHours ?? 2),
   baseRate: form.baseRate?.trim() ?? String(current?.baseRate ?? '0'),
   color: form.color?.trim() || null,
   cancellationPolicyId: form.cancellationPolicyId?.trim() || null,
@@ -859,6 +873,11 @@ export const routes: Record<string, RouteEntry> = {
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
       const range = calendarRange(url.searchParams.get('date'), 1, timezone)
+      // The landing screen is where a new deployment starts. Five zeroes and
+      // "nothing needs attention" is a true statement and useless advice when
+      // the property itself has not been created yet.
+      const configured = ((await ctx.call('hospitality_core.listProperties', {}, url, req)) as unknown[])
+        .length
       const [stays, inHouseStays, openFolios] = (await Promise.all([
         ctx.call('hospitality_core.listStays', { propertyId, from: range.from, to: range.to }, url, req),
         ctx.call('hospitality_core.listStays', { propertyId, state: 'checked_in' }, url, req),
@@ -888,6 +907,7 @@ export const routes: Record<string, RouteEntry> = {
             lang,
             timezone,
             frame,
+            configured > 0,
           ),
       })
     },
@@ -2541,24 +2561,62 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/amenities':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
-      const rows = (await ctx.call('hospitality_core.listAmenities', {}, url, req)) as AmenityRow[]
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'save-amenity') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.saveAmenity',
+          {
+            id: randomUUID(),
+            code: form.code ?? '',
+            name: form.name ?? '',
+            scope: form.scope ?? 'property',
+            categoryId: form.categoryId || undefined,
+            sequence: integer(form.sequence),
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        return redirected(url, result.ok ? 'saved' : 'invalid')
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const [rows, categories] = (await Promise.all([
+        ctx.call('hospitality_core.listAmenities', {}, url, req),
+        ctx.call('hospitality_core.listAmenityCategories', {}, url, req),
+      ])) as [AmenityRow[], Array<{ id: string; name: string }>]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.amenities.title',
-        body: (_, frame) => amenitiesScreen(_, rows, frame),
+        body: (_, frame) => amenitiesScreen(_, rows, categories, frame, url.searchParams.get('status')),
       })
     },
 
   '/admin/hospitality/policies':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'save-policy') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.saveCancellationPolicy',
+          {
+            id: randomUUID(),
+            code: form.code ?? '',
+            name: form.name ?? '',
+            type: form.type ?? 'flexible',
+            description: form.description || undefined,
+            freeCancellationHours: integer(form.freeCancellationHours),
+            penaltyPercent: form.penaltyPercent ?? '0',
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        return redirected(url, result.ok ? 'saved' : 'invalid')
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('hospitality_core.listCancellationPolicies', {}, url, req)) as PolicyRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.policies.title',
-        body: (_, frame) => policiesScreen(_, rows, frame),
+        body: (_, frame) => policiesScreen(_, rows, frame, url.searchParams.get('status')),
       })
     },
 }
