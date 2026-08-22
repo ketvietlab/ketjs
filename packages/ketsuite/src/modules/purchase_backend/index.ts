@@ -5,6 +5,7 @@ import type { FormField } from '../../ui/index.ts'
 import { actionGroup, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
+import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
 import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
@@ -210,6 +211,14 @@ const detailHandler =
         type: 'select',
         options: choices(expenses),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'purchase-expense-account',
+          name: 'expenseAccountId',
+          label: _('purchase_backend.field.expenseAccount'),
+          accounts: accountOptions(expenses),
+          accountTypes: ['expense*'],
+          required: true,
+        }),
       },
       {
         name: 'payableAccountId',
@@ -217,12 +226,27 @@ const detailHandler =
         type: 'select',
         options: choices(payable),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'purchase-payable-account',
+          name: 'payableAccountId',
+          label: _('purchase_backend.field.payableAccount'),
+          accounts: accountOptions(payable),
+          accountTypes: ['liability_payable'],
+          required: true,
+        }),
       },
       {
         name: 'taxAccountId',
         label: _('purchase_backend.field.taxAccount'),
         type: 'select',
         options: choices(data.accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'purchase-tax-account',
+          name: 'taxAccountId',
+          label: _('purchase_backend.field.taxAccount'),
+          accounts: accountOptions(data.accounts),
+          allowEmpty: true,
+        }),
       },
       { name: 'invoiceDate', label: _('purchase_backend.field.invoiceDate'), type: 'date' },
     ]
