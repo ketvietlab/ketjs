@@ -9,6 +9,7 @@ import {
   withHeaders,
 } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import { formatMoney } from '../../ui/format.ts'
 
 const stable = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
@@ -37,6 +38,24 @@ const collect = async (body: AsyncIterable<Uint8Array>) => {
 async function* one(value: Uint8Array) {
   yield value
 }
+/**
+ * What a document needs to print a number a person can read.
+ *
+ * A report is compiled, translated and cached per locale, so its amounts follow
+ * the same locale its labels do. Without these a template printed the raw column
+ * — `1358024 VND`, and an invoice date as a full ISO timestamp — on the document
+ * that goes to the customer.
+ *
+ * The shared `money` filter is deliberately not reused: it reads cents and is
+ * fixed to VND, which is right for a catalogue price and wrong by a factor of a
+ * hundred for a ledger amount stored in major units.
+ */
+export const REPORT_FILTERS = (locale: string) => ({
+  amount: (value: unknown, currency?: unknown) => formatMoney({ locale }, value, currency),
+  // The calendar date, the way every admin table already shows one.
+  date: (value: unknown) => String(value ?? '').slice(0, 10),
+})
+
 const safeName = (value: unknown) =>
   String(value ?? 'document')
     .replaceAll('Đ', 'D')
@@ -96,9 +115,11 @@ export const reportRoute =
       }
     }
     const translate = ctx.translate(locale)
-    const document = compileReportTemplate(template.published, { name: reportId, translate }).render(
-      data as Record<string, unknown>,
-    )
+    const document = compileReportTemplate(template.published, {
+      name: reportId,
+      translate,
+      filters: REPORT_FILTERS(locale),
+    }).render(data as Record<string, unknown>)
     const layout = (template.layout && typeof template.layout === 'object' ? template.layout : {}) as Record<
       string,
       unknown

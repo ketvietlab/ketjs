@@ -85,6 +85,21 @@ Supported markup includes `report`, `header`, `footer`, `section`, `stack`, `row
 or JPEG bytes must be supplied through `renderPdf({ images })`; they are never fetched as URLs. Page attributes accept A4/A5, portrait/landscape, and point-based
 margins. Network resources, scripts, CSS, declarations, and unknown tags or attributes are refused.
 
+### Printing numbers and dates
+
+KetSuite's print route supplies two filters bound to the locale the document is
+being rendered in, because a report is compiled, translated and cached per locale
+and its amounts should follow the same locale its labels do:
+
+- `{{ amountTotal | amount: currency }}` — a business amount in major units, with
+  the currency passed as the argument. VND prints without decimals, USD with two.
+- `{{ invoiceDate | date }}` — the calendar date, without the stored timestamp.
+
+Do not reach for the shared `money` filter in a report. It reads **cents** and is
+fixed to VND, which is right for a catalogue price and wrong by a factor of a
+hundred for a ledger amount. A template that printed the raw column instead put
+`1358024 VND` and a full ISO timestamp on the document that reaches the customer.
+
 ```ts
 // File: src/modules/invoice/reports.ts
 import { readFile } from 'node:fs/promises'
