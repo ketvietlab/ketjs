@@ -41,6 +41,8 @@ export {
   n,
   normalized,
   now,
+  ownedKinds,
+  ownsKind,
   saveCase,
   seededId,
   serializeCaseList,
