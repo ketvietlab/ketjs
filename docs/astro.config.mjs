@@ -20,8 +20,8 @@ export default defineConfig({
       },
     }),
     starlight({
-      title: 'KetSuite Docs',
-      description: 'Architecture, operations, and development documentation for the KetJS framework.',
+      title: 'Ket Developer Docs',
+      description: 'Developer guides for the KetJS framework and the KetSuite application.',
       favicon: '/favicon.svg',
       logo: {
         light: './src/assets/ketsuite-logo-light.png',
@@ -49,7 +49,7 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Start here',
-          items: [{ label: 'Documentation overview', slug: '' }],
+          items: [{ label: 'Choose a development path', slug: '' }],
         },
         {
           label: 'KetJS framework',
@@ -57,17 +57,17 @@ export default defineConfig({
             { label: 'Framework overview', slug: 'ketjs' },
             { label: 'Quick start', slug: 'ketjs/quick-start' },
             {
-              label: 'Application model',
-              collapsed: true,
+              label: 'Compose an application',
+              collapsed: false,
               items: [
                 { label: 'Workspaces and apps', slug: 'ketjs/workspaces' },
-                { label: 'Application lifecycle', slug: 'ketjs/app-lifecycle' },
                 { label: 'Modules and manifest', slug: 'ketjs/modules' },
                 { label: 'Module discovery', slug: 'ketjs/module-discovery' },
+                { label: 'Application lifecycle', slug: 'ketjs/app-lifecycle' },
               ],
             },
             {
-              label: 'Data and operations',
+              label: 'Model data and behavior',
               collapsed: true,
               items: [
                 { label: 'Models and scopes', slug: 'ketjs/models' },
@@ -77,7 +77,7 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Server runtime',
+              label: 'Serve and integrate',
               collapsed: true,
               items: [
                 { label: 'HTTP routes and responses', slug: 'ketjs/http' },
@@ -88,24 +88,25 @@ export default defineConfig({
               ],
             },
             {
-              label: 'UI and presentation',
+              label: 'Build UI and documents',
               collapsed: true,
               items: [
                 { label: 'Form validation', slug: 'ketjs/form-validation' },
                 { label: 'Rendering and islands', slug: 'ketjs/rendering' },
                 { label: 'Themes and KTL', slug: 'ketjs/themes' },
                 { label: 'Menus and localization', slug: 'ketjs/menus-i18n' },
+                { label: 'Reports and PDF', slug: 'ketjs/reports' },
               ],
             },
             {
-              label: 'Tooling and delivery',
+              label: 'Verify and deliver',
               collapsed: true,
               items: [
                 { label: 'Testing', slug: 'ketjs/testing' },
                 { label: 'CLI and configuration', slug: 'ketjs/cli-config' },
                 { label: 'Deployment', slug: 'ketjs/deployment' },
-                { label: 'Publishing packages', slug: 'ketjs/releasing' },
                 { label: 'Public API', slug: 'ketjs/api' },
+                { label: 'Publishing packages', slug: 'ketjs/releasing' },
               ],
             },
           ],
@@ -116,26 +117,26 @@ export default defineConfig({
             { label: 'Developer guide', slug: 'ketsuite' },
             { label: 'Local development', slug: 'ketsuite/quick-start' },
             {
-              label: 'Architecture and development',
+              label: 'Develop KetSuite',
               collapsed: false,
               items: [
                 { label: 'Application architecture', slug: 'ketsuite/architecture' },
                 { label: 'Module development', slug: 'ketsuite/module-development' },
-                { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
                 { label: 'Security and data scope', slug: 'ketsuite/security-scope' },
                 { label: 'Testing KetSuite', slug: 'ketsuite/testing' },
               ],
             },
             {
-              label: 'Channel API',
+              label: 'Build interfaces',
               collapsed: true,
               items: [
-                { label: 'Architecture', slug: 'ketsuite/channel-api' },
+                { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
+                { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
                 { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
               ],
             },
             {
-              label: 'Business modules',
+              label: 'Business domains',
               collapsed: true,
               items: [
                 { label: 'CRM', slug: 'ketsuite/crm' },
@@ -146,21 +147,27 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Architecture & internals',
+          label: 'Engineering reference',
           collapsed: true,
           items: [
-            { label: 'Architecture overview', slug: 'architecture' },
-            { label: 'Architecture decisions', slug: 'architecture/decisions' },
-            { label: 'Open questions', slug: 'architecture/open-questions' },
-          ],
-        },
-        {
-          label: 'Operations & migration',
-          collapsed: true,
-          items: [
-            { label: 'Operations overview', slug: 'operations' },
-            { label: 'Benchmarks', slug: 'operations/benchmarks' },
-            { label: 'Loyalty benchmarks', slug: 'ketsuite/benchmarks/loyalty' },
+            {
+              label: 'Operate and measure',
+              collapsed: false,
+              items: [
+                { label: 'Operations reading map', slug: 'operations' },
+                { label: 'Performance benchmarks', slug: 'operations/benchmarks' },
+                { label: 'Loyalty benchmark evidence', slug: 'ketsuite/benchmarks/loyalty' },
+              ],
+            },
+            {
+              label: 'Design records',
+              collapsed: true,
+              items: [
+                { label: 'How to use design records', slug: 'architecture' },
+                { label: 'Architecture decisions', slug: 'architecture/decisions' },
+                { label: 'Open questions', slug: 'architecture/open-questions' },
+              ],
+            },
           ],
         },
         {
