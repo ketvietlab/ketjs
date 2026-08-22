@@ -25,13 +25,19 @@ export type QuotationsScreenOptions = {
   frame: Frame
   action: string
   detailSuffix: string
+  /** The quotation document, when it is installed and published. */
+  printReport?: { id: string; title: string } | undefined
   errors?: string[]
 }
 
 const stateTone = (state: unknown): 'neutral' | 'info' | 'danger' =>
   state === 'sent' ? 'info' : state === 'cancel' ? 'danger' : 'neutral'
 
-const columns = (_: Translator, detailSuffix: string): Array<Column<QuotationRow>> => [
+const columns = (
+  _: Translator,
+  detailSuffix: string,
+  printReport: { id: string; title: string } | undefined,
+): Array<Column<QuotationRow>> => [
   {
     key: 'name',
     label: _('sale_backend.field.name'),
@@ -71,6 +77,22 @@ const columns = (_: Translator, detailSuffix: string): Array<Column<QuotationRow
     align: 'end',
     kind: 'currency',
   },
+  // Printing meant opening the record first, one at a time.
+  ...(printReport
+    ? [
+        {
+          key: 'print',
+          label: _('backend.print.label'),
+          align: 'end' as const,
+          cell: (row: QuotationRow) =>
+            linkButton({
+              label: _('backend.print.label'),
+              href: `/reports/${encodeURIComponent(printReport.id)}/${encodeURIComponent(String(row.id))}${detailSuffix}`,
+              variant: 'tertiary',
+            }),
+        },
+      ]
+    : []),
 ]
 
 export const quotationsScreen = (_: Translator, options: QuotationsScreenOptions): TemplateResult => {
@@ -79,7 +101,7 @@ export const quotationsScreen = (_: Translator, options: QuotationsScreenOptions
   const cancelled = options.rows.filter((row) => row.state === 'cancel').length
   const table = options.rows.length ? (
     dataTable(_, {
-      columns: columns(_, options.detailSuffix),
+      columns: columns(_, options.detailSuffix, options.printReport),
       rows: options.rows,
       id: (row) => String(row.id),
     })

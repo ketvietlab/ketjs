@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { actionGroup, formatMoney, linkButton } from '../../ui/index.ts'
+import { formatMoney } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountOptions, accountRelationControl } from './relation-control.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
@@ -30,7 +30,7 @@ import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
-import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
+import { adminPage, choices, localeQuery, optional, printGroup } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -48,12 +48,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
  * records. Refused the way user_backend, company_backend, oauth_backend,
  * product_backend and stock_backend already refuse it.
  */
-const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
-  req.method !== 'POST'
-    ? text(accepts, { status: 405 })
-    : crossSite(req)
-      ? text('Forbidden', { status: 403 })
-      : null
 
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
@@ -436,17 +430,7 @@ const accountMoveRoute =
           accountChoices(_, accounts),
           `${url.pathname}${localeQuery(url)}`,
           collaboration,
-          printable.length
-            ? actionGroup({
-                label: 'Print',
-                actions: printable.map((report) =>
-                  linkButton({
-                    label: _(report.title),
-                    href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(move.id))}${url.search}`,
-                  }),
-                ),
-              })
-            : undefined,
+          printGroup(_, printable, String(move.id), url.search),
         ),
     })
   }

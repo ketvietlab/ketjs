@@ -25,7 +25,7 @@ import {
   walletDetailScreen,
   walletsScreen,
 } from './screens.tsx'
-import { adminPage, choices, inLocale, localeQuery, optional } from '../backend/screen.ts'
+import { adminPage, choices, inLocale, optional } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -44,12 +44,6 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
  * records. Refused the way user_backend, company_backend, oauth_backend,
  * product_backend and stock_backend already refuse it.
  */
-const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
-  req.method !== 'POST'
-    ? text(accepts, { status: 405 })
-    : crossSite(req)
-      ? text('Forbidden', { status: 403 })
-      : null
 
 type Translator = ReturnType<ServeContext['translate']>
 
