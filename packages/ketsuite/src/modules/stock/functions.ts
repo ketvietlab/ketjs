@@ -2,6 +2,7 @@ import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
+import { company, ours } from './scope.ts'
 
 export const RECEPTION_STEPS = ['one_step', 'two_steps', 'three_steps'] as const
 export const DELIVERY_STEPS = ['ship_only', 'pick_ship', 'pick_pack_ship'] as const
@@ -28,10 +29,6 @@ export const PICKING_STATES = ['draft', 'waiting', 'confirmed', 'assigned', 'don
 export const TRACKING = ['none', 'lot', 'serial'] as const
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
-const company = (ctx: Ctx): string => {
-  if (!ctx.scope.company) throw new Error('stock operation requires a company in scope')
-  return ctx.scope.company
-}
 const lotKey = (lotId: unknown): string => (lotId == null ? '' : String(lotId))
 const quantId = (ctx: Ctx, productId: unknown, locationId: unknown, lotId: unknown): string =>
   `${company(ctx)}:${String(productId)}:${String(locationId)}:${lotKey(lotId) || '_'}`
@@ -56,7 +53,7 @@ async function mutateQuant(
 ): Promise<Row> {
   const id = quantId(ctx, args.productId, args.locationId, args.lotId)
   for (let attempt = 0; attempt < 8; attempt++) {
-    const current = (await ctx.db.select('stock.Quant', { id }))[0]
+    const current = (await ours(ctx, 'stock.Quant', { id }))[0]
     if (!current) {
       // the domain contract keeps the other side of completed moves on supplier, customer and
       // inventory locations as well. Those virtual locations legitimately carry
@@ -88,7 +85,7 @@ async function mutateQuant(
           reservedQuantity: args.reserved,
           version: 0,
         }
-      if (inserted.inserted) return (await ctx.db.select('stock.Quant', { id }))[0]!
+      if (inserted.inserted) return (await ours(ctx, 'stock.Quant', { id }))[0]!
       continue
     }
     const quantity = Number(current.quantity) + args.quantity
@@ -123,17 +120,44 @@ async function reservedOn(
   lotId: unknown,
 ): Promise<number> {
   const id = quantId(ctx, productId, locationId, lotId)
-  const quant = (await ctx.db.select('stock.Quant', { id }))[0]
+  const quant = (await ours(ctx, 'stock.Quant', { id }))[0]
   return quant ? Number(quant.reservedQuantity) : 0
 }
 
+/**
+ * The locations a move may draw from: the one it names, and everything beneath it.
+ *
+ * `forecast` already rolls a location up through `parentPath` — the replenishment
+ * screen asks it for an orderpoint's location, which is a parent with the real
+ * shelves under it. Reserving only from the named location meant that stock was
+ * reported as available and then refused, leaving the move `confirmed` with no
+ * reason given. The named location comes first so a move still empties the shelf
+ * it was written against before reaching into the children.
+ */
+async function sourcesUnder(ctx: Ctx, locationId: unknown): Promise<string[]> {
+  const locations = await ours(ctx, 'stock.Location')
+  const anchor = locations.find((location) => String(location.id) === String(locationId))
+  if (!anchor) return [String(locationId)]
+  const path = String(anchor.parentPath)
+  return [
+    String(anchor.id),
+    ...locations
+      .filter(
+        (location) =>
+          String(location.id) !== String(anchor.id) && String(location.parentPath).startsWith(path),
+      )
+      .sort((a, b) => String(a.parentPath).localeCompare(String(b.parentPath)))
+      .map((location) => String(location.id)),
+  ]
+}
+
 async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
-  const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]
+  const picking = (await ours(ctx, 'stock.Picking', { id: pickingId }))[0]
   // draft belongs to confirmPicking and cancel is terminal. Deriving a state from the
   // moves and writing it unconditionally let a reservation confirm a draft transfer
   // and resurrect a cancelled one.
   if (!picking || picking.state === 'draft' || picking.state === 'cancel') return
-  const moves = await ctx.db.select('stock.Move', { pickingId })
+  const moves = await ours(ctx, 'stock.Move', { pickingId })
   const live = moves.filter((move) => move.state !== 'cancel')
   let state = 'confirmed'
   if (moves.length && !live.length) state = 'cancel'
@@ -200,29 +224,29 @@ export const functions: Record<string, FnSpec> = {
     input: {},
     effects: ['read:stock.Warehouse'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.Warehouse', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.Warehouse', { active: true }),
   }),
   listPickings: defineFn({
     input: { state: 'text?' },
     effects: ['read:stock.Picking'],
     agent: true,
     handler: async (ctx, args) =>
-      args.state ? ctx.db.select('stock.Picking', { state: args.state }) : ctx.db.select('stock.Picking'),
+      args.state ? ours(ctx, 'stock.Picking', { state: args.state }) : ours(ctx, 'stock.Picking'),
   }),
   getPicking: defineFn({
     input: { id: 'id' },
     effects: ['read:stock.Picking', 'read:stock.Move', 'read:stock.MoveLine'],
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return null
-      const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
+      const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
       return {
         ...picking,
         moves: await Promise.all(
           moves.map(async (move) => ({
             ...move,
-            lines: await ctx.db.select('stock.MoveLine', { moveId: move.id }),
+            lines: await ours(ctx, 'stock.MoveLine', { moveId: move.id }),
           })),
         ),
       }
@@ -233,26 +257,26 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:stock.Location'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('stock.Location', args.warehouseId ? { warehouseId: args.warehouseId } : {}),
+      ours(ctx, 'stock.Location', args.warehouseId ? { warehouseId: args.warehouseId } : {}),
   }),
   listPickingTypes: defineFn({
     input: {},
     effects: ['read:stock.PickingType'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.PickingType', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.PickingType', { active: true }),
   }),
   listLots: defineFn({
     input: { productId: 'id?' },
     effects: ['read:stock.Lot'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('stock.Lot', args.productId ? { productId: args.productId } : {}),
+    handler: (ctx, args) => ours(ctx, 'stock.Lot', args.productId ? { productId: args.productId } : {}),
   }),
   listQuants: defineFn({
     input: { productId: 'id?', locationId: 'id?' },
     effects: ['read:stock.Quant'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('stock.Quant', {
+      ours(ctx, 'stock.Quant', {
         ...(args.productId ? { productId: args.productId } : {}),
         ...(args.locationId ? { locationId: args.locationId } : {}),
       }),
@@ -284,7 +308,7 @@ export const functions: Record<string, FnSpec> = {
         return invalid('receptionSteps', `phải là: ${RECEPTION_STEPS.join(', ')}`)
       if (!DELIVERY_STEPS.includes(deliverySteps as never))
         return invalid('deliverySteps', `phải là: ${DELIVERY_STEPS.join(', ')}`)
-      const existing = (await ctx.db.select('stock.Warehouse', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Warehouse', { id: args.id }))[0]
       const values = { ...args, receptionSteps, deliverySteps, active: true }
       const cs = ctx
         .change('stock.Warehouse', values, existing ?? null)
@@ -345,7 +369,7 @@ export const functions: Record<string, FnSpec> = {
             warehouseId: args.id,
             active: location.active,
           }
-          const found = (await tx.db.select('stock.Location', { id }))[0]
+          const found = (await ours(tx, 'stock.Location', { id }))[0]
           if (found) await tx.db.update('stock.Location', { id }, values)
           else await tx.db.insert('stock.Location', { id, ...values })
         }
@@ -422,7 +446,7 @@ export const functions: Record<string, FnSpec> = {
             createBackorder: 'ask',
             active: type.active ?? true,
           }
-          const found = (await tx.db.select('stock.PickingType', { id: type.id }))[0]
+          const found = (await ours(tx, 'stock.PickingType', { id: type.id }))[0]
           if (found) await tx.db.update('stock.PickingType', { id: type.id }, values)
           else await tx.db.insert('stock.PickingType', { id: type.id, ...values })
         }
@@ -435,7 +459,7 @@ export const functions: Record<string, FnSpec> = {
           { id: deliveryRouteId, name: `${String(args.name)}: ${deliverySteps}`, sequence: 60 },
         ]
         for (const route of routes) {
-          const found = (await tx.db.select('stock.Route', { id: route.id }))[0]
+          const found = (await ours(tx, 'stock.Route', { id: route.id }))[0]
           const values = { name: route.name, sequence: route.sequence, active: true }
           if (found) await tx.db.update('stock.Route', { id: route.id }, values)
           else await tx.db.insert('stock.Route', { id: route.id, ...values })
@@ -555,7 +579,7 @@ export const functions: Record<string, FnSpec> = {
             procureMethod: rule.procureMethod ?? 'make_to_order',
             active: rule.active,
           }
-          const found = (await tx.db.select('stock.Rule', { id: rule.id }))[0]
+          const found = (await ours(tx, 'stock.Rule', { id: rule.id }))[0]
           if (found) await tx.db.update('stock.Rule', { id: rule.id }, values)
           else await tx.db.insert('stock.Rule', { id: rule.id, ...values })
         }
@@ -576,20 +600,39 @@ export const functions: Record<string, FnSpec> = {
       if (args.parentId === args.id) return invalid('parentId', 'location không thể là cha của chính nó')
       let parentPath = `${String(args.id)}/`
       if (args.parentId) {
-        const parent = (await ctx.db.select('stock.Location', { id: args.parentId }))[0]
+        const parent = (await ours(ctx, 'stock.Location', { id: args.parentId }))[0]
         if (!parent) return invalid('parentId', 'location cha không tồn tại')
         if (String(parent.parentPath).split('/').includes(String(args.id)))
           return invalid('parentId', 'cây location có vòng lặp')
         parentPath = `${String(parent.parentPath)}${String(args.id)}/`
       }
-      const existing = (await ctx.db.select('stock.Location', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Location', { id: args.id }))[0]
       const values = { ...args, parentPath, active: true }
       const cs = ctx
         .change('stock.Location', values, existing ?? null)
         .cast(['id', 'name', 'usage', 'parentId', 'parentPath', 'warehouseId', 'active'])
         .required(['name', 'usage'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
-      await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
+      // Re-parenting moves a whole subtree, and every row under it stores the path
+      // it reaches the root by. Writing only this row left descendants pointing
+      // through the old ancestor, and `forecast` anchors on exactly that path — so
+      // one location was counted inside its old warehouse and outside its new one.
+      // uom.saveUnit rebuilds its tree for the same reason.
+      const moved = existing ? String(existing.parentPath) !== parentPath : false
+      await ctx.tx(async (tx) => {
+        await tx.db.commit(cs, existing ? { id: args.id } : undefined)
+        if (!moved) return
+        const previous = String(existing!.parentPath)
+        for (const descendant of await ours(tx, 'stock.Location')) {
+          const path = String(descendant.parentPath)
+          if (descendant.id === args.id || !path.startsWith(previous)) continue
+          await tx.db.update(
+            'stock.Location',
+            { id: descendant.id },
+            { parentPath: `${parentPath}${path.slice(previous.length)}` },
+          )
+        }
+      })
       return { ok: true, id: args.id }
     },
   }),
@@ -614,7 +657,7 @@ export const functions: Record<string, FnSpec> = {
       const createBackorder = String(args.createBackorder ?? 'ask')
       if (!['ask', 'always', 'never'].includes(createBackorder))
         return invalid('createBackorder', 'phải là ask, always hoặc never')
-      const existing = (await ctx.db.select('stock.PickingType', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.PickingType', { id: args.id }))[0]
       const values = { ...args, createBackorder, active: true }
       const cs = ctx
         .change('stock.PickingType', values, existing ?? null)
@@ -667,7 +710,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const type = (await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0]
+      const type = (await ours(ctx, 'stock.PickingType', { id: args.pickingTypeId }))[0]
       if (!type) return invalid('pickingTypeId', 'operation type không tồn tại')
       const locationId = args.locationId ?? type.defaultLocationSrcId
       const locationDestId = args.locationDestId ?? type.defaultLocationDestId
@@ -711,9 +754,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const picking = args.pickingId
-        ? (await ctx.db.select('stock.Picking', { id: args.pickingId }))[0]
-        : null
+      const picking = args.pickingId ? (await ours(ctx, 'stock.Picking', { id: args.pickingId }))[0] : null
       if (args.pickingId && !picking) return invalid('pickingId', 'transfer không tồn tại')
       if (picking && ['done', 'cancel'].includes(String(picking.state)))
         return invalid('pickingId', 'không thể thêm move vào transfer đã kết thúc')
@@ -755,12 +796,12 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
       if (picking.state === 'done' || picking.state === 'cancel')
         return invalid('state', 'transfer đã kết thúc')
       await ctx.db.update('stock.Picking', { id: args.id }, { state: 'confirmed' })
-      for (const move of await ctx.db.select('stock.Move', { pickingId: args.id }))
+      for (const move of await ours(ctx, 'stock.Move', { pickingId: args.id }))
         if (move.state === 'draft') await ctx.db.update('stock.Move', { id: move.id }, { state: 'confirmed' })
       return { ok: true, id: args.id }
     },
@@ -778,27 +819,36 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.MoveLine',
       'read:stock.Quant',
       'write:stock.Quant',
+      // sourcesUnder walks the location tree to find the sub-locations this move
+      // may draw from.
+      'read:stock.Location',
       'read:product.Product',
       'read:product.Template',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const move = (await ctx.db.select('stock.Move', { id: args.id }))[0]
+      const move = (await ours(ctx, 'stock.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'move không tồn tại')
       if (!(await isStorable(ctx, move.productId)))
         return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
       if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
       if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
       const demand = Number(move.productUomQty)
-      let reserved = (await ctx.db.select('stock.MoveLine', { moveId: move.id }))
+      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id }))
         .filter((line) => !line.picked)
         .reduce((sum, line) => sum + Number(line.quantity), 0)
       let state = 'confirmed'
       const tracking = await trackingOf(ctx, move.productId)
-      const quants = (
-        await ctx.db.select('stock.Quant', { productId: move.productId, locationId: move.locationId })
-      ).sort((a, b) => String(a.lotKey).localeCompare(String(b.lotKey)))
+      const sources = await sourcesUnder(ctx, move.locationId)
+      const order = new Map(sources.map((id, index) => [id, index]))
+      const quants = (await ours(ctx, 'stock.Quant', { productId: move.productId }))
+        .filter((quant) => order.has(String(quant.locationId)))
+        .sort(
+          (a, b) =>
+            order.get(String(a.locationId))! - order.get(String(b.locationId))! ||
+            String(a.lotKey).localeCompare(String(b.lotKey)),
+        )
       await ctx.tx(async (tx) => {
         for (const quant of quants) {
           if (reserved >= demand) break
@@ -812,13 +862,13 @@ export const functions: Record<string, FnSpec> = {
           )
           await mutateQuant(tx, {
             productId: move.productId,
-            locationId: move.locationId,
+            locationId: quant.locationId,
             lotId: quant.lotId,
             quantity: 0,
             reserved: take,
           })
           const lineId = `${String(move.id)}:reserve:${String(quant.id)}`
-          const line = (await tx.db.select('stock.MoveLine', { id: lineId }))[0]
+          const line = (await ours(tx, 'stock.MoveLine', { id: lineId }))[0]
           if (line)
             await tx.db.update(
               'stock.MoveLine',
@@ -834,7 +884,9 @@ export const functions: Record<string, FnSpec> = {
               productUomId: move.productUomId,
               quantity: String(take),
               quantityProductUom: String(take),
-              locationId: move.locationId,
+              // Where the goods actually sit, which is the sub-location the quant
+              // was drawn from rather than the parent the move names.
+              locationId: quant.locationId,
               locationDestId: move.locationDestId,
               lotId: quant.lotId,
               picked: false,
@@ -874,7 +926,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const move = (await ctx.db.select('stock.Move', { id: args.moveId }))[0]
+      const move = (await ours(ctx, 'stock.Move', { id: args.moveId }))[0]
       if (!move) return invalid('moveId', 'move không tồn tại')
       if (['done', 'cancel'].includes(String(move.state)))
         return invalid('moveId', 'không thể sửa dòng của move đã kết thúc')
@@ -887,11 +939,11 @@ export const functions: Record<string, FnSpec> = {
       if (tracking === 'serial' && args.picked && compareQty(Number(args.quantity), 1, 0.000001) !== 0)
         return invalid('quantity', 'serial đã pick phải có quantity đúng 1')
       if (args.lotId) {
-        const lot = (await ctx.db.select('stock.Lot', { id: args.lotId }))[0]
+        const lot = (await ours(ctx, 'stock.Lot', { id: args.lotId }))[0]
         if (!lot || lot.productId !== move.productId)
           return invalid('lotId', 'lot/serial không thuộc sản phẩm')
       }
-      const existing = (await ctx.db.select('stock.MoveLine', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.MoveLine', { id: args.id }))[0]
       const values = {
         id: args.id,
         moveId: move.id,
@@ -923,9 +975,16 @@ export const functions: Record<string, FnSpec> = {
         .required(['moveId', 'productId', 'productUomId', 'quantity', 'locationId', 'locationDestId'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.tx(async (tx) => {
-        const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]
+        const source = (await ours(tx, 'stock.Location', { id: move.locationId }))[0]
         if (source && ['internal', 'transit'].includes(String(source.usage))) {
-          const oldQuantity = existing && !existing.picked ? Number(existing.quantity) : 0
+          // A picked line still holds its reservation — completePicking and
+          // cancelPicking both release it on the way out — so what the row holds
+          // today is its quantity whether or not it has been picked. Excluding a
+          // picked line here made re-saving one add its quantity to the quant a
+          // second time: pressing the pick button twice reserved ten for a line
+          // of five, or threw `cannot become over-reserved` when the quant had
+          // nothing left to give.
+          const oldQuantity = existing ? Number(existing.quantity) : 0
           const newQuantity = Number(args.quantity)
           if (existing && lotKey(existing.lotId) !== lotKey(args.lotId) && oldQuantity)
             await mutateQuant(tx, {
@@ -979,7 +1038,7 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
       if (picking.state === 'done') return { ok: true, id: args.id }
       if (picking.state === 'cancel') return invalid('state', 'transfer đã hủy')
@@ -987,22 +1046,26 @@ export const functions: Record<string, FnSpec> = {
       if (Array.isArray(args.quantities))
         for (const entry of args.quantities as Array<{ moveLineId: string; quantity: number }>)
           requested.set(String(entry.moveLineId), Number(entry.quantity))
-      const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
+      const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
       const remaining: Array<{ move: Row; quantity: number }> = []
       await ctx.tx(async (tx) => {
         for (const move of moves) {
           const tracking = await trackingOf(tx, move.productId)
-          const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]!
-          const destination = (await tx.db.select('stock.Location', { id: move.locationDestId }))[0]!
-          const lines = await tx.db.select('stock.MoveLine', { moveId: move.id })
+          const destination = (await ours(tx, 'stock.Location', { id: move.locationDestId }))[0]!
+          const lines = await ours(tx, 'stock.MoveLine', { moveId: move.id })
           let done = 0
           for (const line of lines) {
+            // A line records the location its goods actually sit in, which is the
+            // sub-location reserveMove drew them from rather than the parent the
+            // move names. Releasing and deducting at the move's location would
+            // touch a quant the line never held.
+            const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]!
             const reserved = Number(line.quantity)
             if (args.pickedOnly && !line.picked) {
               if ((source.usage === 'internal' || source.usage === 'transit') && reserved)
                 await mutateQuant(tx, {
                   productId: move.productId,
-                  locationId: move.locationId,
+                  locationId: line.locationId,
                   lotId: line.lotId,
                   quantity: 0,
                   reserved: -reserved,
@@ -1026,14 +1089,16 @@ export const functions: Record<string, FnSpec> = {
             if (tracking === 'serial' && quantity > 0 && compareQty(quantity, 1, 0.000001) !== 0)
               throw new Error('serial picked move line quantity must equal 1')
             if (source.usage === 'internal' || source.usage === 'transit') {
-              // Release only what this line actually holds. A line written by
-              // saveMoveLine never incremented the quant's reservedQuantity, so
-              // releasing its full quantity drove the mirror negative and threw —
-              // leaving the transfer impossible to complete by any later call.
-              const held = await reservedOn(tx, move.productId, move.locationId, line.lotId)
+              // Release what this line holds, capped at what the quant has left to
+              // release. Both reserveMove and saveMoveLine reserve as they write a
+              // line, so the two agree in normal operation; the cap is a floor
+              // against a ledger already off, where releasing the full quantity
+              // would drive the mirror negative and throw, leaving the transfer
+              // impossible to complete by any later call.
+              const held = await reservedOn(tx, move.productId, line.locationId, line.lotId)
               await mutateQuant(tx, {
                 productId: move.productId,
-                locationId: move.locationId,
+                locationId: line.locationId,
                 lotId: line.lotId,
                 quantity: -quantity,
                 reserved: -Math.min(reserved, held),
@@ -1041,7 +1106,7 @@ export const functions: Record<string, FnSpec> = {
             } else {
               await mutateQuant(tx, {
                 productId: move.productId,
-                locationId: move.locationId,
+                locationId: line.locationId,
                 lotId: line.lotId,
                 quantity: -quantity,
                 reserved: 0,
@@ -1080,7 +1145,7 @@ export const functions: Record<string, FnSpec> = {
         )
       })
 
-      const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
+      const type = (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
       const shouldBackorder =
         remaining.length > 0 && (args.createBackorder ?? type?.createBackorder !== 'never')
       let backorderId: string | null = null
@@ -1157,12 +1222,12 @@ export const functions: Record<string, FnSpec> = {
       if (tracking === 'serial' && compareQty(Number(args.countedQuantity), 1, 0.000001) > 0)
         return invalid('countedQuantity', 'mỗi serial chỉ có thể có số lượng 0 hoặc 1')
       if (args.lotId) {
-        const lot = (await ctx.db.select('stock.Lot', { id: args.lotId }))[0]
+        const lot = (await ours(ctx, 'stock.Lot', { id: args.lotId }))[0]
         if (!lot || lot.productId !== args.productId)
           return invalid('lotId', 'lot/serial không thuộc sản phẩm')
       }
       const current = (
-        await ctx.db.select('stock.Quant', {
+        await ours(ctx, 'stock.Quant', {
           productId: args.productId,
           locationId: args.locationId,
           lotKey: lotKey(args.lotId),
@@ -1170,6 +1235,17 @@ export const functions: Record<string, FnSpec> = {
       )[0]
       const difference = Number(args.countedQuantity) - Number(current?.quantity ?? 0)
       if (Math.abs(difference) < 1e-12) return { ok: true, moveId: args.id, difference: '0' }
+      // Counting below what is reserved is a real thing to want to say — the shelf
+      // is short and a transfer is holding stock that is not there — but it is not
+      // something this function can carry out. mutateQuant would refuse it by
+      // throwing, which reached the operator as a server error naming neither the
+      // reservation nor the transfer holding it. Say so as a field error instead.
+      const reserved = Number(current?.reservedQuantity ?? 0)
+      if (reserved - Number(args.countedQuantity) > 1e-12)
+        return invalid(
+          'countedQuantity',
+          `không thể kiểm kê xuống dưới ${String(reserved)} đang được reserve; hủy hoặc hoàn tất transfer giữ số này trước`,
+        )
       const incoming = difference > 0
       const source = incoming ? args.inventoryLocationId : args.locationId
       const destination = incoming ? args.locationId : args.inventoryLocationId
@@ -1261,7 +1337,7 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:stock.Quant', 'read:stock.Move', 'read:stock.Location'],
     agent: true,
     handler: async (ctx, args) => {
-      const locations = await ctx.db.select('stock.Location')
+      const locations = await ours(ctx, 'stock.Location')
       const anchor = args.locationId ? locations.find((location) => location.id === args.locationId) : null
       const inside = new Set(
         locations
@@ -1273,18 +1349,25 @@ export const functions: Record<string, FnSpec> = {
           })
           .map((location) => String(location.id)),
       )
-      const quants = (await ctx.db.select('stock.Quant', { productId: args.productId })).filter((quant) =>
+      const quants = (await ours(ctx, 'stock.Quant', { productId: args.productId })).filter((quant) =>
         inside.has(String(quant.locationId)),
       )
       const onHand = quants.reduce((sum, quant) => sum + Number(quant.quantity), 0)
       const reserved = quants.reduce((sum, quant) => sum + Number(quant.reservedQuantity), 0)
-      const moves = (await ctx.db.select('stock.Move', { productId: args.productId })).filter(
+      const moves = (await ours(ctx, 'stock.Move', { productId: args.productId })).filter(
         (move) => !['done', 'cancel', 'draft'].includes(String(move.state)),
       )
       let incoming = 0,
         outgoing = 0
       for (const move of moves) {
-        const remaining = Math.max(0, Number(move.productUomQty) - Number(move.quantity))
+        // The whole demand of an open move is still to come. `move.quantity` is
+        // what has been reserved, not what has shipped — completePicking is the
+        // only writer that turns it into a done quantity, and it sets state to
+        // `done` in the same update, which this filter has already excluded. Using
+        // it as progress made a fully reserved outgoing move count for nothing, so
+        // the screen reported `available 0` beside `forecast 10` for the same
+        // product, and replenishment never saw the committed demand.
+        const remaining = Number(move.productUomQty)
         const sourceInside = inside.has(String(move.locationId))
         const destinationInside = inside.has(String(move.locationDestId))
         if (!sourceInside && destinationInside) incoming += remaining
@@ -1321,9 +1404,9 @@ functions.savePicking = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const type = (await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0]
+    const type = (await ours(ctx, 'stock.PickingType', { id: args.pickingTypeId }))[0]
     if (!type) return invalid('pickingTypeId', 'operation type không tồn tại')
-    const existing = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const existing = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     const values = {
       ...args,
       locationId: args.locationId ?? type.defaultLocationSrcId,
@@ -1374,9 +1457,9 @@ functions.saveLot = defineFn({
   handler: async (ctx, args) => {
     if (!(await ctx.db.select('product.Product', { id: args.productId }))[0])
       return invalid('productId', 'biến thể không tồn tại')
-    const existing = (await ctx.db.select('stock.Lot', { id: args.id }))[0]
+    const existing = (await ours(ctx, 'stock.Lot', { id: args.id }))[0]
     if (existing && existing.productId !== args.productId) {
-      const moveLines = await ctx.db.select('stock.MoveLine', { lotId: args.id })
+      const moveLines = await ours(ctx, 'stock.MoveLine', { lotId: args.id })
       if (moveLines.length)
         return invalid(
           'productId',
@@ -1397,36 +1480,26 @@ functions.saveLot = defineFn({
 functions.assignPicking = defineFn({
   input: { id: 'id' },
   output: { ok: 'bool', state: 'text?', allocations: 'json?', shortages: 'json?', errors: 'json?' },
-  effects: [
-    'read:stock.Picking',
-    'write:stock.Picking',
-    'read:stock.Move',
-    'write:stock.Move',
-    'read:stock.MoveLine',
-    'write:stock.MoveLine',
-    'read:stock.Quant',
-    'write:stock.Quant',
-    'read:product.Product',
-    'read:product.Template',
-  ],
+  // It reserves every move of the transfer, so it needs what reserveMove needs.
+  effects: [...(functions.reserveMove!.effects ?? []), 'read:stock.Picking', 'write:stock.Picking'],
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
     if (picking.state === 'draft') return invalid('state', 'xác nhận transfer trước khi giữ hàng')
     if (picking.state === 'done' || picking.state === 'cancel')
       return invalid('state', 'transfer đã kết thúc')
     const allocations: Row[] = []
     const shortages: Row[] = []
-    for (const move of await ctx.db.select('stock.Move', { pickingId: args.id })) {
+    for (const move of await ours(ctx, 'stock.Move', { pickingId: args.id })) {
       const result = (await functions.reserveMove!.handler(ctx, { id: move.id })) as Row
       const reserved = Number(result.reserved ?? 0)
-      allocations.push(...(await ctx.db.select('stock.MoveLine', { moveId: move.id })))
+      allocations.push(...(await ours(ctx, 'stock.MoveLine', { moveId: move.id })))
       const shortage = Math.max(0, Number(move.productUomQty) - reserved)
       if (shortage) shortages.push({ moveId: move.id, quantity: String(shortage) })
     }
-    const updated = (await ctx.db.select('stock.Picking', { id: args.id }))[0]!
+    const updated = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]!
     return { ok: true, state: updated.state, allocations, shortages }
   },
 })
@@ -1448,17 +1521,19 @@ functions.cancelPicking = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
     if (picking.state === 'done') return invalid('state', 'transfer đã hoàn thành')
     await ctx.tx(async (tx) => {
-      for (const move of await tx.db.select('stock.Move', { pickingId: args.id })) {
-        const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]
-        for (const line of await tx.db.select('stock.MoveLine', { moveId: move.id })) {
+      for (const move of await ours(tx, 'stock.Move', { pickingId: args.id })) {
+        for (const line of await ours(tx, 'stock.MoveLine', { moveId: move.id })) {
+          // Per line, for the same reason completePicking works per line: the
+          // goods sit where the line says, not where the move does.
+          const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]
           if (!line.picked && source && ['internal', 'transit'].includes(String(source.usage)))
             await mutateQuant(tx, {
               productId: move.productId,
-              locationId: move.locationId,
+              locationId: line.locationId,
               lotId: line.lotId,
               quantity: 0,
               reserved: -Number(line.quantity),
@@ -1490,12 +1565,17 @@ functions.reconcileReservations = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const moves = new Map((await ctx.db.select('stock.Move')).map((move) => [String(move.id), move]))
+    // Every read here is narrowed to the company being written to, and quantId
+    // keys on that same company. Read across the whole readable set instead — as
+    // an unnarrowed select does — and another company's lines land under keys no
+    // quant of theirs carries: their expectation reads as zero and this function
+    // strips reservations it was asked to repair.
+    const moves = new Map((await ours(ctx, 'stock.Move')).map((move) => [String(move.id), move]))
     const locations = new Map(
-      (await ctx.db.select('stock.Location')).map((location) => [String(location.id), location]),
+      (await ours(ctx, 'stock.Location')).map((location) => [String(location.id), location]),
     )
     const wanted = new Map<string, number>()
-    for (const line of await ctx.db.select('stock.MoveLine')) {
+    for (const line of await ours(ctx, 'stock.MoveLine')) {
       const move = moves.get(String(line.moveId))
       const location = locations.get(String(line.locationId))
       if (
@@ -1512,7 +1592,7 @@ functions.reconcileReservations = defineFn({
       wanted.set(id, (wanted.get(id) ?? 0) + Number(line.quantity))
     }
     let changed = 0
-    for (const quant of await ctx.db.select('stock.Quant')) {
+    for (const quant of await ours(ctx, 'stock.Quant')) {
       if (args.productId && quant.productId !== args.productId) continue
       if (args.locationId && quant.locationId !== args.locationId) continue
       const expected = wanted.get(String(quant.id)) ?? 0
@@ -1538,13 +1618,13 @@ functions.validatePicking = defineFn({
   effects: functions.completePicking!.effects,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
-    const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
-    const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
+    const type = (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
+    const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
     let hasRemaining = false
     for (const move of moves) {
-      const done = (await ctx.db.select('stock.MoveLine', { moveId: move.id }))
+      const done = (await ours(ctx, 'stock.MoveLine', { moveId: move.id }))
         .filter((line) => line.picked)
         .reduce((sum, line) => sum + Number(line.quantity), 0)
       if (done + 1e-12 < Number(move.productUomQty)) hasRemaining = true
