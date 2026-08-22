@@ -51,7 +51,6 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
       ? text('Forbidden', { status: 403 })
       : null
 
-
 type Translator = ReturnType<ServeContext['translate']>
 
 const bool = (value: string | undefined) => value === '1' || value === 'true' || value === 'on'

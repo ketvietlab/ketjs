@@ -438,3 +438,78 @@ test('sale: a refused quotation line leaves no order behind', async (t) => {
   const listed = (await fixture('sale.listOrders', {})) as unknown as { value: Row[] }
   assert.deepEqual(listed.value, [], 'a refused quotation rolls its order back')
 })
+
+test('sale: a line can be taken back off a quotation', async () => {
+  const adapter = await boot()
+  try {
+    await call('sale.createOrder', { id: 'so', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+    for (const [id, qty] of [
+      ['so:a', '2'],
+      ['so:b', '3'],
+    ])
+      await call(
+        'sale.addLine',
+        {
+          id,
+          orderId: 'so',
+          productId: 'goods-1',
+          productUomQty: qty,
+          productUomId: 'unit',
+          priceUnit: '100',
+        },
+        adapter,
+      )
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '500')
+
+    // Lines used to be add-only: a wrong product meant abandoning the quotation.
+    const removed = (await call('sale.removeLine', { id: 'so:a' }, adapter)).value as Row
+    assert.equal(removed.ok, true)
+    assert.deepEqual(
+      (await adapter.all('SELECT id FROM sale_order_line')).map((row) => row.id),
+      ['so:b'],
+    )
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '300')
+
+    // A confirmed order is settled: its lines back deliveries and cannot vanish.
+    await call('sale.confirmOrder', { id: 'so' }, adapter)
+    const refused = (await call('sale.removeLine', { id: 'so:b' }, adapter)).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((await adapter.all('SELECT COUNT(*) c FROM sale_order_line'))[0]!.c, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: a cancelled order can be set back to draft', async () => {
+  const adapter = await boot()
+  try {
+    await call('sale.createOrder', { id: 'so', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+    await call(
+      'sale.addLine',
+      { id: 'so:line', orderId: 'so', productId: 'goods-1', productUomQty: '1', productUomId: 'unit' },
+      adapter,
+    )
+
+    // Cancelling was terminal: the detail screen rendered no actions at all, so
+    // one mis-click spent an order number and stranded its lines for good.
+    const early = (await call('sale.resetOrder', { id: 'so' }, adapter)).value as Row
+    assert.equal(early.ok, false, 'only a cancelled order comes back')
+
+    await call('sale.cancelOrder', { id: 'so' }, adapter)
+    assert.equal((await call('sale.resetOrder', { id: 'so' }, adapter)).value !== null, true)
+    const order = (await adapter.all('SELECT state, locked FROM sale_order'))[0]!
+    assert.equal(order.state, 'draft')
+
+    // Back in draft it is a working quotation again, not a husk.
+    const line = (
+      await call(
+        'sale.addLine',
+        { id: 'so:two', orderId: 'so', productId: 'goods-1', productUomQty: '1', productUomId: 'unit' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(line.ok, true)
+  } finally {
+    await adapter.close()
+  }
+})
