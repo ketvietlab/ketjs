@@ -2,15 +2,31 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField } from '../../ui/index.ts'
-import { actionGroup, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
 import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
-import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
+import { adminPage, choices, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
+
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
 
 type Translator = ReturnType<ServeContext['translate']>
 
@@ -89,6 +105,7 @@ const detailHandler =
   async (url, req, params) => {
     const path = `${url.pathname}${url.search}`
     if (req.method === 'POST') {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       let result: unknown
       if (form.action === 'add-line')
@@ -275,17 +292,7 @@ const detailHandler =
           actionPath: path,
           lineFields,
           billFields,
-          printActions: printable.length
-            ? actionGroup({
-                label: 'Print',
-                actions: printable.map((report) =>
-                  linkButton({
-                    label: _(report.title),
-                    href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
-                  }),
-                ),
-              })
-            : undefined,
+          printActions: printGroup(_, printable, String(order.id), url.search),
         }),
     })
   }
@@ -532,6 +539,7 @@ export default defineModule({
       async (url, req) => {
         const rfqPath = `/admin/purchase/rfqs${localeQuery(url)}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result = await ctx.call(
             'purchase.createOrder',
@@ -599,6 +607,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result =
             form.action === 'method'

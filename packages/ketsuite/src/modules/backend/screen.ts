@@ -14,8 +14,8 @@
 import { isNavigationRequest, isTimezone } from '@ketvietlab/ketjs'
 import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { backendPage } from '../../ui/index.ts'
-import type { Extras, Frame, Viewer } from '../../ui/index.ts'
+import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
+import type { Extras, Frame, FormField, Viewer } from '../../ui/index.ts'
 
 /** The raw request a route handler is handed. */
 export type Req = Parameters<Route>[1]
@@ -212,6 +212,45 @@ export const choices = (rows: readonly AnyRow[], empty = false) => [
     label: String(row.name ?? row.code ?? row.id),
   })),
 ]
+
+/**
+ * The print group on a record screen.
+ *
+ * Four backends each built this by hand with `label: 'Print'` written in as an
+ * English literal, so the group read "Print" on a Vietnamese screen while the
+ * document names beside it were translated. One helper, one translated label.
+ */
+export const printGroup = (
+  _: Translator,
+  reports: ReadonlyArray<{ id: string; title: string }>,
+  recordId: string,
+  search: string,
+): TemplateResult | undefined =>
+  reports.length
+    ? actionGroup({
+        label: _('backend.print.label'),
+        actions: reports.map((report) =>
+          linkButton({
+            label: _(report.title),
+            href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(recordId)}${search}`,
+          }),
+        ),
+      })
+    : undefined
+
+/**
+ * A required select with nothing to select is a dead end.
+ *
+ * The browser refuses to submit an empty required dropdown and says only
+ * "please select an item in the list" — it cannot say that the tenant has no
+ * warehouse yet, or no sales journal, or no income account. The form looks
+ * broken and the screen offers no way out. Naming what is missing, and where to
+ * create it, turns a dead end back into a next step.
+ */
+export const needs = (field: FormField, hint: string): FormField =>
+  (field.options ?? []).some((option) => option.value !== '')
+    ? field
+    : { ...field, disabled: true, help: hint }
 
 /** A field the domain should not see at all when the form left it blank. */
 export const optional = (form: Record<string, string>, name: string) =>

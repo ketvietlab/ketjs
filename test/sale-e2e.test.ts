@@ -323,3 +323,110 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   assert.equal(confirmedPartial.headers.get('x-ket-location'), '/admin/sales/orders/so-ui?lang=vi')
   assert.match(await confirmedPartial.text(), /Đơn bán hàng/)
 })
+
+test('sale-e2e: a quotation can lose a line and come back from cancelled', async (t) => {
+  const { e2e, call } = await bootSale(t)
+  const post = (path: string, body: Record<string, string>) =>
+    e2e.client.post(path, new URLSearchParams(body), {
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-ket-partial': 'sale-order' },
+    })
+  await call('sale.createOrder', { id: 'so-ux', partnerId: 'customer', warehouseId: 'wh' })
+  for (const id of ['so-ux:a', 'so-ux:b'])
+    await call('sale.addLine', {
+      id,
+      orderId: 'so-ux',
+      productId: 'chair',
+      productUomQty: '1',
+      productUomId: 'unit',
+    })
+
+  // The line table offers a way back out, not just a way in.
+  const detail = await e2e.client.get('/admin/sales/quotations/so-ux?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const detailHtml = await detail.text()
+  assert.match(detailHtml, /name="lineId" value="so-ux:a"/)
+  assert.match(detailHtml, /Thao tác/)
+  assert.doesNotMatch(detailHtml, /sale_backend\.[A-Za-z]/)
+
+  const removed = await post('/admin/sales/quotations/so-ux?lang=vi', {
+    action: 'remove-line',
+    lineId: 'so-ux:a',
+  })
+  assert.equal(removed.status, 200)
+  const afterRemoval = (await call<Row>('sale.getOrder', { id: 'so-ux' })).value
+  assert.deepEqual(
+    ((afterRemoval.lines as Row[]) ?? []).map((line) => line.id),
+    ['so-ux:b'],
+  )
+
+  // Cancelling used to be the end of the road: no action on the screen, and the
+  // order on neither list.
+  const cancelled = await post('/admin/sales/quotations/so-ux?lang=vi', { action: 'cancel' })
+  assert.equal(cancelled.status, 200)
+  const listed = await e2e.client.get('/admin/sales/quotations?lang=vi', { headers: { accept: 'text/html' } })
+  const listedHtml = await listed.text()
+  assert.match(listedHtml, /so-ux/)
+  assert.match(listedHtml, /Đã huỷ/)
+  assert.doesNotMatch(listedHtml, /sale_backend\.[A-Za-z]/)
+
+  const cancelledDetail = await e2e.client.get('/admin/sales/quotations/so-ux?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await cancelledDetail.text(), /Đưa về nháp/)
+
+  const reset = await post('/admin/sales/quotations/so-ux?lang=vi', { action: 'reset' })
+  assert.equal(reset.status, 200)
+  const back = await e2e.client.get('/admin/sales/quotations/so-ux?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const backHtml = await back.text()
+  assert.match(backHtml, /Add line/)
+  assert.doesNotMatch(backHtml, /Set to draft/)
+  assert.doesNotMatch(backHtml, /sale_backend\.[A-Za-z]/)
+})
+
+test('sale-e2e: the print group is translated and reaches the lists', async (t) => {
+  const { e2e, call } = await bootSale(t)
+  await call('sale.createOrder', { id: 'so-print', partnerId: 'customer', warehouseId: 'wh' })
+  await call('sale.addLine', {
+    id: 'so-print:line',
+    orderId: 'so-print',
+    productId: 'chair',
+    productUomQty: '1',
+    productUomId: 'unit',
+  })
+
+  // The print group's label was the English literal 'Print', written in by hand
+  // in four backends while the document names beside it were translated.
+  const detail = await e2e.client.get('/admin/sales/quotations/so-print?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const detailHtml = await detail.text()
+  assert.match(detailHtml, /href="\/reports\/sale\.quotation\/so-print/)
+  assert.doesNotMatch(detailHtml, />Print</)
+  assert.doesNotMatch(detailHtml, /backend\.print/)
+
+  // Printing meant opening each record first.
+  const quotations = await e2e.client.get('/admin/sales/quotations?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(await quotations.text(), /href="\/reports\/sale\.quotation\/so-print/)
+
+  // A confirmed order offers the pro-forma beside its own document, and the
+  // orders list prints too.
+  await call('sale.confirmOrder', { id: 'so-print' })
+  const order = await e2e.client.get('/admin/sales/orders/so-print?lang=en', {
+    headers: { accept: 'text/html' },
+  })
+  const orderHtml = await order.text()
+  assert.match(orderHtml, /href="\/reports\/sale\.salesOrder\/so-print/)
+  assert.match(orderHtml, /href="\/reports\/sale\.proforma\/so-print/)
+  assert.match(orderHtml, /PRO-FORMA INVOICE/)
+  const orders = await e2e.client.get('/admin/sales/orders?lang=en', { headers: { accept: 'text/html' } })
+  assert.match(await orders.text(), /href="\/reports\/sale\.salesOrder\/so-print/)
+
+  // And the document itself renders, carrying the unit beside the quantity.
+  const pdf = await e2e.client.get('/reports/sale.salesOrder/so-print?lang=vi')
+  assert.equal(pdf.status, 200)
+})

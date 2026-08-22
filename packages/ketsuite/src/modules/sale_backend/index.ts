@@ -2,10 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField } from '../../ui/index.ts'
-import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
-import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
@@ -14,8 +13,30 @@ import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
 import { dashboard, labelOf } from './screens.tsx'
-import { adminPage, choices, frameOf, localeQuery, optional } from '../backend/screen.ts'
+import {
+  accountOptions,
+  accountRelationControl,
+  taxRelationControl,
+} from '../account_backend/relation-control.ts'
+import { adminPage, choices, frameOf, localeQuery, needs, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
+
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
 
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
@@ -29,7 +50,7 @@ const callIfInstalled = async (
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
 const orderPath = (order: AnyRow, url: URL) =>
-  `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeQuery(url)}`
+  `${['draft', 'sent', 'cancel'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeQuery(url)}`
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, warehouses, pricelists, taxes, journals, accounts, terms] =
     await Promise.all([
@@ -86,13 +107,16 @@ const orderFields = async (
     required: true,
   },
   { name: 'clientOrderRef', label: _('sale_backend.field.clientOrderRef') },
-  {
-    name: 'warehouseId',
-    label: _('sale_backend.field.warehouse'),
-    type: 'select',
-    options: choices(d.warehouses, true),
-    required: true,
-  },
+  needs(
+    {
+      name: 'warehouseId',
+      label: _('sale_backend.field.warehouse'),
+      type: 'select',
+      options: choices(d.warehouses, true),
+      required: true,
+    },
+    _('sale_backend.setup.warehouse'),
+  ),
   {
     name: 'pricelistId',
     label: _('sale_backend.field.pricelist'),
@@ -114,6 +138,7 @@ const detail =
     const partial = req.headers['x-ket-partial'] === 'sale-order'
     let savedPartial = false
     if (req.method === 'POST') {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       let result: unknown
       if (form.action === 'add-line')
@@ -132,6 +157,10 @@ const detail =
           url,
           req,
         )
+      else if (form.action === 'remove-line')
+        result = await ctx.call('sale.removeLine', { id: form.lineId ?? '' }, url, req)
+      else if (form.action === 'reset')
+        result = await ctx.call('sale.resetOrder', { id: params.id }, url, req)
       else if (form.action === 'send')
         result = await ctx.call('sale.sendQuotation', { id: params.id }, url, req)
       else if (form.action === 'confirm')
@@ -218,13 +247,16 @@ const detail =
         value: 1,
         required: true,
       },
-      {
-        name: 'productUomId',
-        label: _('sale_backend.field.uom'),
-        type: 'select',
-        options: choices(d.units),
-        required: true,
-      },
+      needs(
+        {
+          name: 'productUomId',
+          label: _('sale_backend.field.uom'),
+          type: 'select',
+          options: choices(d.units),
+          required: true,
+        },
+        _('sale_backend.setup.uom'),
+      ),
       {
         name: 'priceUnit',
         label: _('sale_backend.field.priceUnit'),
@@ -232,16 +264,32 @@ const detail =
         help: _('sale_backend.help.pricelist'),
       },
       { name: 'discount', label: _('sale_backend.field.discount'), type: 'decimal' },
-      { name: 'taxId', label: _('sale_backend.field.tax'), type: 'select', options: choices(d.taxes, true) },
+      {
+        name: 'taxId',
+        label: _('sale_backend.field.tax'),
+        type: 'select',
+        options: choices(d.taxes, true),
+        control: await taxRelationControl(ctx, url, req, _, {
+          id: 'sale-line-tax',
+          name: 'taxId',
+          label: _('sale_backend.field.tax'),
+          taxes: choices(d.taxes),
+          allowEmpty: true,
+          typeTaxUse: 'sale',
+        }),
+      },
     ]
     const invoiceFields: FormField[] = [
-      {
-        name: 'journalId',
-        label: _('sale_backend.field.journal'),
-        type: 'select',
-        options: choices(d.journals),
-        required: true,
-      },
+      needs(
+        {
+          name: 'journalId',
+          label: _('sale_backend.field.journal'),
+          type: 'select',
+          options: choices(d.journals),
+          required: true,
+        },
+        _('sale_backend.setup.journal'),
+      ),
       {
         name: 'revenueAccountId',
         label: _('sale_backend.field.revenueAccount'),
@@ -291,23 +339,19 @@ const detail =
       orderId: params.id,
       locale: localeQuery(url),
     })
-    const reportId = ['draft', 'sent'].includes(String(order.state))
-      ? 'sale.quotation'
-      : order.state === 'sale'
-        ? 'sale.salesOrder'
-        : null
-    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) => report.id === reportId)
-    const printActions = printable.length
-      ? actionGroup({
-          label: 'Print',
-          actions: printable.map((report) =>
-            linkButton({
-              label: _(report.title),
-              href: `/reports/${encodeURIComponent(report.id)}/${encodeURIComponent(String(order.id))}${url.search}`,
-            }),
-          ),
-        })
-      : undefined
+    // A cancelled order used to print nothing at all. It is listed with the
+    // quotations and returns to draft, so that is the document it prints as.
+    const reportIds =
+      {
+        draft: ['sale.quotation'],
+        sent: ['sale.quotation', 'sale.proforma'],
+        sale: ['sale.salesOrder', 'sale.proforma'],
+        cancel: ['sale.quotation'],
+      }[String(order.state)] ?? []
+    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) =>
+      reportIds.includes(report.id),
+    )
+    const printActions = printGroup(_, printable, String(order.id), url.search)
     const canonical = orderPath(order, url)
     const body = orderDetailScreen(
       _,
@@ -372,6 +416,11 @@ const vi = {
   'quotation.title': 'Báo giá',
   'quotation.subtitle': 'Soạn, gửi và theo dõi báo giá trước khi xác nhận thành đơn bán hàng.',
   'quotation.summary.total': 'Tổng báo giá',
+  'setup.account': 'Chưa có tài khoản phù hợp. Tạo trong Kế toán › Hệ thống tài khoản.',
+  'setup.journal': 'Chưa có sổ nhật ký bán hàng. Tạo trong Kế toán › Sổ nhật ký.',
+  'setup.uom': 'Chưa có đơn vị tính. Tạo trong Cấu hình › Đơn vị tính.',
+  'setup.warehouse': 'Chưa có kho. Tạo trong Kho vận › Kho.',
+  'quotation.summary.cancelled': 'Đã huỷ',
   'quotation.summary.draft': 'Bản nháp',
   'quotation.summary.sent': 'Đã gửi',
   'quotation.create.title': 'Tạo báo giá',
@@ -428,6 +477,8 @@ const vi = {
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
   'action.create': 'Tạo báo giá',
   'action.addLine': 'Thêm dòng',
+  'action.removeLine': 'Xoá',
+  'action.reset': 'Đưa về nháp',
   'action.send': 'Đánh dấu đã gửi',
   'action.confirm': 'Xác nhận',
   'action.sync': 'Đồng bộ giao hàng',
@@ -460,6 +511,7 @@ const vi = {
   'field.priceUnit': 'Đơn giá',
   'field.discount': 'Chiết khấu',
   'field.tax': 'Thuế bán hàng',
+  'field.actions': 'Thao tác',
   'field.subtotal': 'Thành tiền',
   'field.invoicePolicy': 'Cơ sở lập hoá đơn',
   'field.journal': 'Sổ nhật ký bán hàng',
@@ -500,6 +552,11 @@ const en = {
   'quotation.title': 'Quotations',
   'quotation.subtitle': 'Draft, send and track quotations before confirming a sales order.',
   'quotation.summary.total': 'Total quotations',
+  'setup.account': 'No matching account yet. Create one in Accounting \u203a Chart of accounts.',
+  'setup.journal': 'No sales journal yet. Create one in Accounting \u203a Journals.',
+  'setup.uom': 'No unit of measure yet. Create one in Configuration \u203a Units of measure.',
+  'setup.warehouse': 'No warehouse yet. Create one in Inventory \u203a Warehouses.',
+  'quotation.summary.cancelled': 'Cancelled',
   'quotation.summary.draft': 'Draft',
   'quotation.summary.sent': 'Sent',
   'quotation.create.title': 'Create quotation',
@@ -556,6 +613,8 @@ const en = {
   emptyHint: 'Create the first record to get started.',
   'action.create': 'Create Quotation',
   'action.addLine': 'Add line',
+  'action.removeLine': 'Remove',
+  'action.reset': 'Set to draft',
   'action.send': 'Mark as Sent',
   'action.confirm': 'Confirm',
   'action.sync': 'Sync Deliveries',
@@ -588,6 +647,7 @@ const en = {
   'field.priceUnit': 'Unit Price',
   'field.discount': 'Discount',
   'field.tax': 'Sales Tax',
+  'field.actions': 'Actions',
   'field.subtotal': 'Subtotal',
   'field.invoicePolicy': 'Invoicing Policy',
   'field.journal': 'Sales Journal',
@@ -683,6 +743,7 @@ export default defineModule({
           : ''
         const quotationPath = `/admin/sales/quotations${detailSuffix}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result = await ctx.call(
               'sale.createOrder',
@@ -713,9 +774,15 @@ export default defineModule({
           body: async (_, shell) =>
             quotationsScreen(_, {
               frame: shell,
+              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                (report) => report.id === 'sale.quotation',
+              ),
               fields: await orderFields(ctx, url, req, _, d),
               rows: rows
-                .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
+                .filter(
+                  (r) =>
+                    ['draft', 'sent', 'cancel'].includes(String(r.state)) && (!state || r.state === state),
+                )
                 .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
               action: quotationPath,
               detailSuffix,
@@ -735,9 +802,12 @@ export default defineModule({
           names = new Map(d.partners.map((r) => [String(r.id), r.name]))
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
-          body: (_, shell) =>
+          body: async (_, shell) =>
             salesOrdersScreen(_, {
               frame: shell,
+              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                (report) => report.id === 'sale.salesOrder',
+              ),
               rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
               detailSuffix,
             }),
@@ -749,6 +819,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const target = `/admin/sales/invoicing-policies${localeQuery(url)}`
           return redirect(

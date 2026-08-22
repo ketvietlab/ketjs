@@ -1,7 +1,8 @@
-import { defineFn } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
+import { company, companyKey, ours } from './scope.ts'
 
 export const SALE_STATES = ['draft', 'sent', 'sale', 'cancel'] as const
 export const SALE_INVOICE_STATUSES = ['upselling', 'invoiced', 'to invoice', 'no'] as const
@@ -13,19 +14,31 @@ const decimal = (value: number) => String(money(value))
 const now = () => new Date().toISOString()
 
 async function companyCurrency(ctx: Ctx) {
-  if (!ctx.scope.company) throw new Error('sale requires an active company')
-  const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
-  if (!company) throw new Error(`company ${ctx.scope.company} does not exist`)
-  return String(company.currency)
+  const row = (await ctx.db.select('company.Company', { id: company(ctx) }))[0]
+  if (!row) throw new Error(`company ${company(ctx)} does not exist`)
+  return String(row.currency)
 }
+/**
+ * The next order number for this company.
+ *
+ * The sequence row is keyed by the company because `id` is a tenant-wide primary
+ * key: keyed by the constant `'sale'`, the first company to raise an order owned
+ * the only row there could ever be, and every other company either read a row it
+ * could never write — the update pins the active company, so it matched nothing
+ * and span out blaming concurrency — or found none at all and dereferenced
+ * undefined. Numbers stay per-company, which the `(companyId, name)` index on
+ * Order already assumed.
+ */
 async function nextName(ctx: Ctx) {
-  await ctx.db.insertIfAbsent('sale.Sequence', { id: 'sale', nextNumber: 1 })
+  const id = companyKey(ctx, 'sale')
+  await ctx.db.insertIfAbsent('sale.Sequence', { id, nextNumber: 1 })
   for (let attempt = 0; attempt < 32; attempt += 1) {
-    const row = (await ctx.db.select('sale.Sequence', { id: 'sale' }))[0]!
+    const row = (await ours(ctx, 'sale.Sequence', { id }))[0]
+    if (!row) throw new Error('sale sequence row disappeared while assigning a number')
     const current = n(row.nextNumber)
     const changed = await ctx.db.compareAndSet(
       'sale.Sequence',
-      { id: 'sale' },
+      { id },
       { nextNumber: row.nextNumber },
       { nextNumber: current + 1 },
     )
@@ -33,6 +46,40 @@ async function nextName(ctx: Ctx) {
   }
   throw new Error('sale sequence did not settle after concurrent updates')
 }
+/**
+ * When an invoice on this payment term falls due.
+ *
+ * `account` computes the same thing for the invoices it raises (its `dueDate`),
+ * walking the term's lines and taking the latest maturity. Sale used to write the
+ * invoice date into both date fields while still storing the term on the move,
+ * so a thirty-day term produced an invoice that was overdue on the day it was
+ * issued.
+ */
+async function paymentTermDue(ctx: Ctx, paymentTermId: unknown, date: Date): Promise<string> {
+  if (!paymentTermId) return date.toISOString()
+  const lines = (await ctx.db.select('account.PaymentTermLine', { paymentId: paymentTermId })).sort(
+    (a, b) => n(a.sequence) - n(b.sequence),
+  )
+  let latest = new Date(date)
+  for (const line of lines) {
+    const due = new Date(date)
+    const days = n(line.nbDays)
+    if (line.delayType === 'days_after') due.setUTCDate(due.getUTCDate() + days)
+    else if (line.delayType === 'days_after_end_of_month') {
+      due.setUTCMonth(due.getUTCMonth() + 1, 0)
+      due.setUTCDate(due.getUTCDate() + days)
+    } else if (line.delayType === 'days_after_end_of_next_month') {
+      due.setUTCMonth(due.getUTCMonth() + 2, 0)
+      due.setUTCDate(due.getUTCDate() + days)
+    } else {
+      due.setUTCDate(due.getUTCDate() + days)
+      due.setUTCMonth(due.getUTCMonth() + 1, Math.max(1, Math.min(31, n(line.daysNextMonth) || 1)))
+    }
+    if (due > latest) latest = due
+  }
+  return latest.toISOString()
+}
+
 async function contextOf(ctx: Ctx, productId: unknown) {
   const product = (await ctx.db.select('product.Product', { id: productId }))[0]
   if (!product) return null
@@ -65,7 +112,7 @@ function taxAmounts(tax: Row | null, gross: number, quantity: number) {
 async function recompute(ctx: Ctx, orderId: unknown) {
   let untaxed = 0,
     tax = 0
-  for (const line of await ctx.db.select('sale.OrderLine', { orderId })) {
+  for (const line of await ours(ctx, 'sale.OrderLine', { orderId })) {
     const held = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
     const gross = money(n(line.productUomQty) * n(line.priceUnit) * (1 - n(line.discount) / 100))
     const amounts = taxAmounts(held, gross, n(line.productUomQty))
@@ -79,12 +126,12 @@ async function recompute(ctx: Ctx, orderId: unknown) {
   )
 }
 async function statusOf(ctx: Ctx, orderId: unknown) {
-  const order = (await ctx.db.select('sale.Order', { id: orderId }))[0]
+  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
   if (order?.state !== 'sale') return 'no'
   let billable = 0,
     invoiced = 0,
     ordered = 0
-  for (const line of await ctx.db.select('sale.OrderLine', { orderId })) {
+  for (const line of await ours(ctx, 'sale.OrderLine', { orderId })) {
     const context = await contextOf(ctx, line.productId)
     const policy = String(context?.template.invoicePolicy ?? 'order')
     ordered += n(line.productUomQty)
@@ -112,12 +159,12 @@ const confirmEffects = [
   'write:stock.Move',
 ] as const
 async function confirm(ctx: Ctx, id: unknown) {
-  const order = (await ctx.db.select('sale.Order', { id }))[0]
+  const order = (await ours(ctx, 'sale.Order', { id }))[0]
   if (!order) return invalid('id', 'sales order does not exist')
   if (order.state === 'sale') return { ok: true, id, state: 'sale' }
   if (!['draft', 'sent'].includes(String(order.state)))
     return invalid('state', 'only a quotation can be confirmed')
-  const lines = await ctx.db.select('sale.OrderLine', { orderId: id })
+  const lines = await ours(ctx, 'sale.OrderLine', { orderId: id })
   if (!lines.length) return invalid('lines', 'a quotation needs at least one product line')
   const goods: Row[] = []
   for (const line of lines) {
@@ -181,7 +228,7 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:sale.Order'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('sale.Order', {
+      ours(ctx, 'sale.Order', {
         ...(args.state ? { state: args.state } : {}),
         ...(args.partnerId ? { partnerId: args.partnerId } : {}),
       }),
@@ -197,9 +244,9 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.id }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return null
-      const lines = await ctx.db.select('sale.OrderLine', { orderId: args.id })
+      const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
       const moves = (await ctx.db.select('stock.Move')).filter((move) =>
         lines.some((line) => line.id === move.saleLineId),
       )
@@ -242,7 +289,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = (await ctx.db.select('sale.Order', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, name: existing.name }
       if (!(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
         return invalid('partnerId', 'customer does not exist')
@@ -305,12 +352,25 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.orderId }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.orderId }))[0]
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('orderId', 'lines can only be added to an unlocked quotation')
       if (!(n(args.productUomQty) > 0)) return invalid('productUomQty', 'ordered quantity must be positive')
       const context = await contextOf(ctx, args.productId)
       if (!context?.template.saleOk) return invalid('productId', 'product is not sellable')
+      // The unit was never checked: the effect was declared and the read never
+      // made, so only pricelist pricing validated it — and that path is skipped
+      // whenever the caller supplies a price or the order has no pricelist. An
+      // unchecked unit is carried onto the stock move and the invoice line, where
+      // a quantity in kilograms bills against a product measured in units.
+      const unit = (await ctx.db.select('uom.Unit', { id: args.productUomId }))[0]
+      if (!unit) return invalid('productUomId', 'unit of measure does not exist')
+      if (context.template.uomId) {
+        const base = (await ctx.db.select('uom.Unit', { id: context.template.uomId }))[0]
+        const rootOf = (row: Row) => String(row.parentPath).split('/').filter(Boolean)[0] ?? ''
+        if (!base || rootOf(base) !== rootOf(unit))
+          return invalid('productUomId', 'unit of measure is not in the product\u2019s measurement tree')
+      }
       let priceUnit: unknown = args.priceUnit
       if (priceUnit === undefined && order.pricelistId) {
         const priced = (await pricingFunctions.priceFor!.handler(ctx, {
@@ -337,7 +397,7 @@ export const functions: Record<string, FnSpec> = {
       } catch (error) {
         return invalid('taxId', (error as Error).message)
       }
-      if (!(await ctx.db.select('sale.OrderLine', { id: args.id }))[0])
+      if (!(await ours(ctx, 'sale.OrderLine', { id: args.id }))[0])
         await ctx.db.insert('sale.OrderLine', {
           id: args.id,
           orderId: args.orderId,
@@ -357,6 +417,51 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, priceUnit: String(priceUnit) }
     },
   }),
+  removeLine: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', orderId: 'id?', errors: 'json?' },
+    effects: [
+      'read:sale.Order',
+      'read:sale.OrderLine',
+      'write:sale.OrderLine',
+      'write:sale.Order',
+      'read:account.Tax',
+    ],
+    idempotent: true,
+    agent: true,
+    // A line could be added and never taken back. A quotation with the wrong
+    // product on it had to be abandoned and raised again under a new number,
+    // because nothing in `sale` — function or route — could remove a line.
+    handler: async (ctx, args) => {
+      const line = (await ours(ctx, 'sale.OrderLine', { id: args.id }))[0]
+      if (!line) return { ok: true, id: args.id }
+      const order = (await ours(ctx, 'sale.Order', { id: line.orderId }))[0]
+      if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
+        return invalid('id', 'lines can only be removed from an unlocked quotation')
+      const L = ctx.table('sale.OrderLine')
+      await ctx.db.del(deleteFrom(L).where(eq(L.id, String(args.id))))
+      await recompute(ctx, line.orderId)
+      return { ok: true, id: args.id, orderId: line.orderId }
+    },
+  }),
+  resetOrder: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:sale.Order', 'write:sale.Order'],
+    idempotent: true,
+    agent: true,
+    // Cancelling was terminal: a cancelled order rendered no actions at all, so
+    // one mis-click spent an order number and stranded its lines forever. Only a
+    // cancelled order comes back, and it comes back as a draft — a confirmed
+    // order has deliveries behind it and must be cancelled first.
+    handler: async (ctx, args) => {
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'sales order does not exist')
+      if (order.state !== 'cancel') return invalid('state', 'only a cancelled order can return to draft')
+      await ctx.db.update('sale.Order', { id: args.id }, { state: 'draft', locked: false })
+      return { ok: true, id: args.id }
+    },
+  }),
   sendQuotation: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -364,7 +469,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.id }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order || !['draft', 'sent'].includes(String(order.state)))
         return invalid('state', 'only a draft quotation can be sent')
       await ctx.db.update('sale.Order', { id: args.id }, { state: 'sent' })
@@ -394,9 +499,9 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!(await ctx.db.select('sale.Order', { id: args.id }))[0])
+      if (!(await ours(ctx, 'sale.Order', { id: args.id }))[0])
         return invalid('id', 'sales order does not exist')
-      for (const line of await ctx.db.select('sale.OrderLine', { orderId: args.id })) {
+      for (const line of await ours(ctx, 'sale.OrderLine', { orderId: args.id })) {
         const moves = await ctx.db.select('stock.Move', { saleLineId: line.id, state: 'done' })
         await ctx.db.update(
           'sale.OrderLine',
@@ -429,6 +534,8 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Journal',
       'read:account.Account',
       'read:account.Tax',
+      // paymentTermDue walks the term's lines to work out when this falls due.
+      'read:account.PaymentTermLine',
       'read:account.Move',
       'read:company.Company',
       'write:account.Move',
@@ -437,7 +544,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.orderId }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.orderId }))[0]
       if (order?.state !== 'sale') return invalid('orderId', 'only a confirmed sales order can be invoiced')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
@@ -456,126 +563,153 @@ export const functions: Record<string, FnSpec> = {
         tax: Row | null
         taxAmount: number
       }> = []
-      for (const line of await ctx.db.select('sale.OrderLine', { orderId: args.orderId })) {
-        const context = await contextOf(ctx, line.productId),
-          policy = String(context?.template.invoicePolicy ?? 'order')
-        const basis = policy === 'delivery' ? n(line.qtyDelivered) : n(line.productUomQty),
-          quantity = money(basis - n(line.qtyInvoiced))
-        if (quantity <= 0) continue
-        const gross = money(quantity * n(line.priceUnit) * (1 - n(line.discount) / 100)),
-          tax = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-        const amounts = taxAmounts(tax, gross, quantity)
-        if (
-          amounts.tax &&
-          (!args.taxAccountId || !(await ctx.db.select('account.Account', { id: args.taxAccountId }))[0])
-        )
-          return invalid('taxAccountId', 'a valid tax account is required')
-        billable.push({ line, quantity, subtotal: amounts.untaxed, tax, taxAmount: amounts.tax })
+      // A soft error raised once the transaction has started writing has to
+      // unwind it: `adapter.tx` commits on a normal return and rolls back only on
+      // a throw, so returning the error would leave a half-written invoice behind.
+      class Refused extends Error {
+        result: Record<string, unknown>
+        constructor(result: Record<string, unknown>) {
+          super('refused')
+          this.result = result
+        }
       }
-      if (!billable.length)
-        return invalid('lines', 'there is no ordered or delivered quantity left to invoice')
-      const untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0)),
-        tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0)),
-        total = money(untaxed + tax),
-        invoiceDate = String(args.invoiceDate ?? now())
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('account.Move', {
-          id: args.id,
-          name: String(args.id),
-          ref: order.name,
-          date: invoiceDate,
-          moveType: 'out_invoice',
-          state: 'draft',
-          journalId: args.journalId,
-          partnerId: order.partnerId,
-          invoiceDate,
-          invoiceDateDue: invoiceDate,
-          paymentTermId: order.paymentTermId,
-          paymentState: 'not_paid',
-          currency: order.currency,
-          amountUntaxed: decimal(untaxed),
-          amountTax: decimal(tax),
-          amountTotal: decimal(total),
-          postedAt: null,
-        })
-        let sequence = 10
-        for (const item of billable) {
-          const baseId = `${String(args.id)}:${String(item.line.id)}`
-          await tx.db.insert('account.MoveLine', {
-            id: baseId,
-            moveId: args.id,
-            name: item.line.name,
-            accountId: args.revenueAccountId,
+      const build = async (tx: Ctx) => {
+        billable.length = 0
+        for (const line of await ours(tx, 'sale.OrderLine', { orderId: args.orderId })) {
+          const context = await contextOf(tx, line.productId),
+            policy = String(context?.template.invoicePolicy ?? 'order')
+          const basis = policy === 'delivery' ? n(line.qtyDelivered) : n(line.productUomQty),
+            quantity = money(basis - n(line.qtyInvoiced))
+          if (quantity <= 0) continue
+          const gross = money(quantity * n(line.priceUnit) * (1 - n(line.discount) / 100)),
+            tax = line.taxId ? ((await tx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
+          const amounts = taxAmounts(tax, gross, quantity)
+          if (
+            amounts.tax &&
+            (!args.taxAccountId || !(await tx.db.select('account.Account', { id: args.taxAccountId }))[0])
+          )
+            throw new Refused(invalid('taxAccountId', 'a valid tax account is required'))
+          billable.push({ line, quantity, subtotal: amounts.untaxed, tax, taxAmount: amounts.tax })
+        }
+        if (!billable.length)
+          throw new Refused(invalid('lines', 'there is no ordered or delivered quantity left to invoice'))
+      }
+      const invoiceDate = String(args.invoiceDate ?? now())
+      // The payment term decides when this is due; `account` computes it the same
+      // way for the invoices it raises itself. Writing the invoice date into both
+      // fields made every order-sourced invoice due on the day it was issued, so
+      // ageing showed it overdue from the start.
+      const due = await paymentTermDue(ctx, order.paymentTermId, new Date(invoiceDate))
+      let untaxed = 0,
+        tax = 0,
+        total = 0
+      try {
+        await ctx.tx(async (tx) => {
+          await build(tx)
+          untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0))
+          tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0))
+          total = money(untaxed + tax)
+          await tx.db.insert('account.Move', {
+            id: args.id,
+            name: String(args.id),
+            ref: order.name,
+            date: invoiceDate,
+            moveType: 'out_invoice',
+            state: 'draft',
+            journalId: args.journalId,
             partnerId: order.partnerId,
-            productId: item.line.productId,
-            productUomId: item.line.productUomId,
-            quantity: decimal(item.quantity),
-            priceUnit: item.line.priceUnit,
-            discount: item.line.discount,
-            taxId: item.line.taxId,
-            debit: '0',
-            credit: decimal(item.subtotal),
-            balance: decimal(-item.subtotal),
-            dateMaturity: null,
-            displayType: null,
-            reconciled: false,
-            amountResidual: '0',
-            sequence,
-            saleLineId: item.line.id,
+            invoiceDate,
+            invoiceDateDue: due,
+            paymentTermId: order.paymentTermId,
+            paymentState: 'not_paid',
+            currency: order.currency,
+            amountUntaxed: decimal(untaxed),
+            amountTax: decimal(tax),
+            amountTotal: decimal(total),
+            postedAt: null,
           })
-          sequence += 10
-          if (item.taxAmount)
+          let sequence = 10
+          for (const item of billable) {
+            const baseId = `${String(args.id)}:${String(item.line.id)}`
             await tx.db.insert('account.MoveLine', {
-              id: `${baseId}:tax`,
+              id: baseId,
               moveId: args.id,
-              name: item.tax?.name ?? 'Tax',
-              accountId: args.taxAccountId,
+              name: item.line.name,
+              accountId: args.revenueAccountId,
               partnerId: order.partnerId,
-              productId: null,
-              productUomId: null,
-              quantity: '1',
-              priceUnit: decimal(item.taxAmount),
-              discount: '0',
-              taxId: null,
+              productId: item.line.productId,
+              productUomId: item.line.productUomId,
+              quantity: decimal(item.quantity),
+              priceUnit: item.line.priceUnit,
+              discount: item.line.discount,
+              taxId: item.line.taxId,
               debit: '0',
-              credit: decimal(item.taxAmount),
-              balance: decimal(-item.taxAmount),
+              credit: decimal(item.subtotal),
+              balance: decimal(-item.subtotal),
               dateMaturity: null,
               displayType: null,
               reconciled: false,
               amountResidual: '0',
-              sequence: sequence++,
+              sequence,
               saleLineId: item.line.id,
             })
-          await tx.db.update(
-            'sale.OrderLine',
-            { id: item.line.id },
-            { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
-          )
-        }
-        await tx.db.insert('account.MoveLine', {
-          id: `${String(args.id)}:counterpart`,
-          moveId: args.id,
-          name: order.name,
-          accountId: args.receivableAccountId,
-          partnerId: order.partnerId,
-          productId: null,
-          productUomId: null,
-          quantity: '1',
-          priceUnit: decimal(total),
-          discount: '0',
-          taxId: null,
-          debit: decimal(total),
-          credit: '0',
-          balance: decimal(total),
-          dateMaturity: invoiceDate,
-          displayType: null,
-          reconciled: false,
-          amountResidual: decimal(total),
-          sequence: sequence + 10,
-          saleLineId: null,
+            sequence += 10
+            if (item.taxAmount)
+              await tx.db.insert('account.MoveLine', {
+                id: `${baseId}:tax`,
+                moveId: args.id,
+                name: item.tax?.name ?? 'Tax',
+                accountId: args.taxAccountId,
+                partnerId: order.partnerId,
+                productId: null,
+                productUomId: null,
+                quantity: '1',
+                priceUnit: decimal(item.taxAmount),
+                discount: '0',
+                taxId: null,
+                debit: '0',
+                credit: decimal(item.taxAmount),
+                balance: decimal(-item.taxAmount),
+                dateMaturity: null,
+                displayType: null,
+                reconciled: false,
+                amountResidual: '0',
+                sequence: sequence++,
+                saleLineId: item.line.id,
+              })
+            await tx.db.update(
+              'sale.OrderLine',
+              { id: item.line.id },
+              { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
+            )
+          }
+          await tx.db.insert('account.MoveLine', {
+            id: `${String(args.id)}:counterpart`,
+            moveId: args.id,
+            name: order.name,
+            accountId: args.receivableAccountId,
+            partnerId: order.partnerId,
+            productId: null,
+            productUomId: null,
+            quantity: '1',
+            priceUnit: decimal(total),
+            discount: '0',
+            taxId: null,
+            debit: decimal(total),
+            credit: '0',
+            balance: decimal(total),
+            dateMaturity: due,
+            displayType: null,
+            reconciled: false,
+            amountResidual: decimal(total),
+            sequence: sequence + 10,
+            saleLineId: null,
+          })
         })
-      })
+      } catch (error) {
+        if (error instanceof Refused) return error.result
+        throw error
+      }
       await refreshStatus(ctx, args.orderId)
       return { ok: true, id: args.id, amountTotal: decimal(total) }
     },
@@ -587,7 +721,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.id }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (order?.state !== 'sale') return invalid('state', 'only a sales order can be locked')
       await ctx.db.update('sale.Order', { id: args.id }, { locked: args.locked })
       return { ok: true, id: args.id }
@@ -609,9 +743,9 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('sale.Order', { id: args.id }))[0]
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'sales order does not exist')
-      const lines = await ctx.db.select('sale.OrderLine', { orderId: args.id }),
+      const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id }),
         moves = (await ctx.db.select('stock.Move')).filter((move) =>
           lines.some((line) => line.id === move.saleLineId),
         )

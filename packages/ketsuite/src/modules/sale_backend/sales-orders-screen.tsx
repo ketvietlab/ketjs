@@ -22,12 +22,18 @@ export type SalesOrdersScreenOptions = {
   rows: SalesOrderRow[]
   frame: Frame
   detailSuffix: string
+  /** The sales-order document, when it is installed and published. */
+  printReport?: { id: string; title: string } | undefined
 }
 
 const invoiceTone = (status: unknown) =>
   status === 'to invoice' ? 'warning' : status === 'invoiced' ? 'positive' : 'neutral'
 
-const columns = (_: Translator, detailSuffix: string): Array<Column<SalesOrderRow>> => [
+const columns = (
+  _: Translator,
+  detailSuffix: string,
+  printReport: { id: string; title: string } | undefined,
+): Array<Column<SalesOrderRow>> => [
   {
     key: 'name',
     label: _('sale_backend.field.name'),
@@ -76,6 +82,22 @@ const columns = (_: Translator, detailSuffix: string): Array<Column<SalesOrderRo
     align: 'end',
     kind: 'currency',
   },
+  // Printing meant opening the record first, one at a time.
+  ...(printReport
+    ? [
+        {
+          key: 'print',
+          label: _('backend.print.label'),
+          align: 'end' as const,
+          cell: (row: SalesOrderRow) =>
+            linkButton({
+              label: _('backend.print.label'),
+              href: `/reports/${encodeURIComponent(printReport.id)}/${encodeURIComponent(String(row.id))}${detailSuffix}`,
+              variant: 'tertiary',
+            }),
+        },
+      ]
+    : []),
 ]
 
 export const salesOrdersScreen = (_: Translator, options: SalesOrdersScreenOptions): TemplateResult => {
@@ -84,7 +106,7 @@ export const salesOrdersScreen = (_: Translator, options: SalesOrdersScreenOptio
   const locked = options.rows.filter((row) => row.locked).length
   const table = options.rows.length ? (
     dataTable(_, {
-      columns: columns(_, options.detailSuffix),
+      columns: columns(_, options.detailSuffix, options.printReport),
       rows: options.rows,
       id: (row) => String(row.id),
     })

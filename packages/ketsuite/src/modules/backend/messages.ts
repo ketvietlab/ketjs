@@ -25,6 +25,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'table.columns': 'Chọn cột',
     'table.id': 'Mã',
 
+    'print.label': 'In',
+
     'relation.choose': 'Chọn một bản ghi',
     'relation.search': 'Tìm kiếm…',
     'relation.more': 'Xem thêm…',
@@ -104,6 +106,8 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'table.columns': 'Columns',
     'table.id': 'Id',
+
+    'print.label': 'Print',
 
     'relation.choose': 'Select a record',
     'relation.search': 'Search…',
