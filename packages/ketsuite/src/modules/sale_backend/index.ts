@@ -5,6 +5,7 @@ import type { FormField } from '../../ui/index.ts'
 import { actionGroup, backendPage, linkButton } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
+import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
@@ -247,6 +248,14 @@ const detail =
         type: 'select',
         options: choices(d.accounts.filter((r) => String(r.accountType).startsWith('income'))),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-revenue-account',
+          name: 'revenueAccountId',
+          label: _('sale_backend.field.revenueAccount'),
+          accounts: accountOptions(d.accounts.filter((r) => String(r.accountType).startsWith('income'))),
+          accountTypes: ['income*'],
+          required: true,
+        }),
       },
       {
         name: 'receivableAccountId',
@@ -254,12 +263,27 @@ const detail =
         type: 'select',
         options: choices(d.accounts.filter((r) => r.accountType === 'asset_receivable')),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-receivable-account',
+          name: 'receivableAccountId',
+          label: _('sale_backend.field.receivableAccount'),
+          accounts: accountOptions(d.accounts.filter((r) => r.accountType === 'asset_receivable')),
+          accountTypes: ['asset_receivable'],
+          required: true,
+        }),
       },
       {
         name: 'taxAccountId',
         label: _('sale_backend.field.taxAccount'),
         type: 'select',
         options: choices(d.accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-tax-account',
+          name: 'taxAccountId',
+          label: _('sale_backend.field.taxAccount'),
+          accounts: accountOptions(d.accounts),
+          allowEmpty: true,
+        }),
       },
       { name: 'invoiceDate', label: _('sale_backend.field.invoiceDate'), type: 'date' },
     ]
