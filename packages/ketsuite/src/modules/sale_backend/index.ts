@@ -17,6 +17,30 @@ import { dashboard, labelOf } from './screens.tsx'
 import { adminPage, choices, frameOf, localeQuery, optional } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
+
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
@@ -114,6 +138,7 @@ const detail =
     const partial = req.headers['x-ket-partial'] === 'sale-order'
     let savedPartial = false
     if (req.method === 'POST') {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       let result: unknown
       if (form.action === 'add-line')
@@ -683,6 +708,7 @@ export default defineModule({
           : ''
         const quotationPath = `/admin/sales/quotations${detailSuffix}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result = await ctx.call(
               'sale.createOrder',
@@ -749,6 +775,7 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const target = `/admin/sales/invoicing-policies${localeQuery(url)}`
           return redirect(

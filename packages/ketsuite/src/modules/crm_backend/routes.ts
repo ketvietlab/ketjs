@@ -366,6 +366,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const id = randomUUID()
         const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
@@ -430,6 +431,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const held = (await ctx.call('crm.case.get', { id: params.id }, url, req)) as AnyRow | null
         if (!held) return text('not found', { status: 404 })
@@ -647,6 +649,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const call = (name: string, input: Record<string, unknown>) =>
           ctx.call(name, input, url, req) as Promise<AnyRow>
@@ -763,6 +766,7 @@ export const routes: Record<string, RouteEntry> = {
       const back = `/admin/crm/configuration?tab=${tab}`
       let errors: string[] = []
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const call = (name: string, input: Record<string, unknown>) =>
           ctx.call(name, input, url, req) as Promise<AnyRow>
