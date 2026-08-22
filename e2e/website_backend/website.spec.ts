@@ -219,6 +219,28 @@ test('customer Channel API supports isolated browser and bearer sessions', async
   })
   expect(browserLogin.status()).toBe(200)
 
+  // The cookie rides along on any mutation the browser is talked into making, so
+  // the facade asks every one of them for the token only this origin can read.
+  const forgedBooking = await page.request.post('/api/customer/v1/hospitality/bookings', {
+    headers: { Origin: origin, 'Idempotency-Key': 'customer-e2e-forged-1' },
+    data: { propertyId: 'anything' },
+  })
+  expect(forgedBooking.status()).toBe(403)
+  expect((await forgedBooking.json()).error.code).toBe('channel_api.csrf')
+
+  const offContract = await page.request.post('/api/customer/v1/auth/session/register', {
+    headers: { Origin: origin },
+    data: { displayName: 'Ai Đó', email: 'other.e2e@example.test', superuser: true },
+  })
+  expect(offContract.status()).toBe(422)
+  const contractError = (await offContract.json()).error as {
+    code: string
+    fieldErrors: Record<string, { messageKey: string }>
+  }
+  expect(contractError.code).toBe('channel_api.invalidRequest')
+  expect(contractError.fieldErrors.password.messageKey).toBe('channel_api.error.fieldRequired')
+  expect(contractError.fieldErrors.superuser.messageKey).toBe('channel_api.error.fieldUnknown')
+
   const tokenLogin = await page.request.post('/api/customer/v1/auth/token', {
     headers: { 'X-Channel-Realm': 'site:default:hospitality-site' },
     data: { email, password: 'customer-password-old' },
