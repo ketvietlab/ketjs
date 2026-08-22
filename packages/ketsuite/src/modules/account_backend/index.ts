@@ -4,6 +4,8 @@ import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { actionGroup, formatMoney, linkButton } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { accountOptions, accountRelationControl } from './relation-control.ts'
+import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
@@ -127,11 +129,14 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
-const moveFields = (
+const moveFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
-): FormField[] => [
+): Promise<FormField[]> => [
   {
     name: 'journalId',
     label: _('account_backend.field.journalId'),
@@ -152,14 +157,24 @@ const moveFields = (
     label: _('account_backend.field.partnerId'),
     type: 'select',
     options: choices(data.partners, true),
+    control: await partnerRelationControl(ctx, url, req, _, {
+      id: 'move-partner',
+      partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+      fieldLabel: _('account_backend.field.partnerId'),
+      title: _('account_backend.relation.partners'),
+      allowEmpty: true,
+    }),
   },
 ]
 
-const invoiceFields = (
+const invoiceFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
-): FormField[] => {
+): Promise<FormField[]> => {
   const customer = types.every((type) => type.startsWith('out_'))
   const journals = data.journals.filter((journal) => journal.type === (customer ? 'sale' : 'purchase'))
   const lineTypes = customer
@@ -195,6 +210,13 @@ const invoiceFields = (
       label: _('account_backend.field.partnerId'),
       type: 'select',
       options: choices(data.partners),
+      control: await partnerRelationControl(ctx, url, req, _, {
+        id: 'invoice-partner',
+        partners: data.partners as Array<{ id: string; name: string; ref?: string | null }>,
+        fieldLabel: _('account_backend.field.partnerId'),
+        title: _('account_backend.relation.partners'),
+        required: true,
+      }),
       required: true,
     },
     { name: 'invoiceDate', label: _('account_backend.field.invoiceDate'), type: 'date' },
@@ -239,6 +261,14 @@ const invoiceFields = (
       type: 'select',
       options: accountChoices(_, lineAccounts),
       required: true,
+      control: await accountRelationControl(ctx, url, req, _, {
+        id: `invoice-line-account:${types.join('-')}`,
+        name: 'lineAccountId',
+        label: _('account_backend.field.lineAccountId'),
+        accounts: accountOptions(lineAccounts),
+        accountTypes: customer ? ['income*'] : ['expense*'],
+        required: true,
+      }),
     },
     {
       name: 'counterpartAccountId',
@@ -246,6 +276,14 @@ const invoiceFields = (
       type: 'select',
       options: accountChoices(_, counterpartAccounts),
       required: true,
+      control: await accountRelationControl(ctx, url, req, _, {
+        id: `invoice-counterpart:${types.join('-')}`,
+        name: 'counterpartAccountId',
+        label: _('account_backend.field.counterpartAccountId'),
+        accounts: accountOptions(counterpartAccounts),
+        accountTypes: [customer ? 'asset_receivable' : 'liability_payable'],
+        required: true,
+      }),
     },
     { name: 'taxId', label: _('account_backend.field.taxId'), type: 'select', options: choices(taxes, true) },
     {
@@ -262,6 +300,13 @@ const invoiceFields = (
       label: _('account_backend.field.taxAccountId'),
       type: 'select',
       options: accountChoices(_, data.accounts, true),
+      control: await accountRelationControl(ctx, url, req, _, {
+        id: `invoice-tax-account:${types.join('-')}`,
+        name: 'taxAccountId',
+        label: _('account_backend.field.taxAccountId'),
+        accounts: accountOptions(data.accounts),
+        allowEmpty: true,
+      }),
       help: _('account_backend.field.taxAccountIdHint'),
     },
   ]
@@ -633,7 +678,7 @@ export default defineModule({
         const editing = editTarget(journals, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.journals.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             journalsScreen(_, {
               frame: frame,
               action: configAction(url, '/admin/accounting/journals'),
@@ -661,6 +706,13 @@ export default defineModule({
                     label: _('account_backend.field.defaultAccountId'),
                     type: 'select',
                     options: accountChoices(_, data.accounts, true),
+                    control: await accountRelationControl(ctx, url, req, _, {
+                      id: 'journal-default-account',
+                      name: 'defaultAccountId',
+                      label: _('account_backend.field.defaultAccountId'),
+                      accounts: accountOptions(data.accounts),
+                      allowEmpty: true,
+                    }),
                   },
                   {
                     name: 'active',
@@ -710,7 +762,7 @@ export default defineModule({
         const editing = editTarget(taxes, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.taxes.title',
-          body: (_, frame) => {
+          body: async (_, frame) => {
             const currency = currencyOf(data.companies, frame)
             return taxesScreen(_, {
               frame: frame,
@@ -758,6 +810,13 @@ export default defineModule({
                     label: _('account_backend.field.accountId'),
                     type: 'select',
                     options: accountChoices(_, data.accounts, true),
+                    control: await accountRelationControl(ctx, url, req, _, {
+                      id: 'tax-account',
+                      name: 'accountId',
+                      label: _('account_backend.field.accountId'),
+                      accounts: accountOptions(data.accounts),
+                      allowEmpty: true,
+                    }),
                   },
                   { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
                   {
@@ -945,11 +1004,11 @@ export default defineModule({
         )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.entries.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             journalEntriesScreen(_, {
               frame: frame,
               action: `/admin/accounting/entries${localeQuery(url)}`,
-              fields: moveFields(_, data, ['entry']),
+              fields: await moveFields(ctx, url, req, _, data, ['entry']),
               rows,
               locale: localeQuery(url),
               errors:
@@ -972,11 +1031,15 @@ export default defineModule({
         )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.customerInvoices.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             customerInvoicesScreen(_, {
               frame: frame,
               action: `/admin/accounting/customer-invoices${localeQuery(url)}`,
-              fields: invoiceFields(_, data, ['out_invoice', 'out_refund', 'out_receipt']),
+              fields: await invoiceFields(ctx, url, req, _, data, [
+                'out_invoice',
+                'out_refund',
+                'out_receipt',
+              ]),
               rows,
               locale: localeQuery(url),
               errors:
@@ -999,11 +1062,11 @@ export default defineModule({
         )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.vendorBills.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             vendorBillsScreen(_, {
               frame: frame,
               action: `/admin/accounting/vendor-bills${localeQuery(url)}`,
-              fields: invoiceFields(_, data, ['in_invoice', 'in_refund', 'in_receipt']),
+              fields: await invoiceFields(ctx, url, req, _, data, ['in_invoice', 'in_refund', 'in_receipt']),
               rows,
               locale: localeQuery(url),
               errors:
@@ -1050,7 +1113,7 @@ export default defineModule({
         const rows = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.payments.title',
-          body: (_, frame) =>
+          body: async (_, frame) =>
             paymentsScreen(_, {
               frame: frame,
               action: `/admin/accounting/payments${localeQuery(url)}`,
@@ -1093,6 +1156,13 @@ export default defineModule({
                   type: 'select',
                   options: choices(data.accounts),
                   required: true,
+                  control: await accountRelationControl(ctx, url, req, _, {
+                    id: 'payment-destination-account',
+                    name: 'destinationAccountId',
+                    label: _('account_backend.field.destinationAccountId'),
+                    accounts: accountOptions(data.accounts),
+                    required: true,
+                  }),
                 },
                 {
                   name: 'amount',
@@ -1173,7 +1243,7 @@ export default defineModule({
         )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.generalLedger.title',
-          body: (_, frame) => {
+          body: async (_, frame) => {
             const currency = currencyOf(data.companies, frame)
             return generalLedgerScreen(_, {
               frame: frame,
@@ -1187,6 +1257,14 @@ export default defineModule({
                   type: 'select',
                   value: accountId,
                   options: choices(data.accounts, true),
+                  control: await accountRelationControl(ctx, url, req, _, {
+                    id: 'general-ledger-account',
+                    name: 'accountId',
+                    label: _('account_backend.field.accountId'),
+                    value: accountId,
+                    accounts: accountOptions(data.accounts),
+                    allowEmpty: true,
+                  }),
                 },
                 {
                   name: 'dateFrom',
@@ -1378,6 +1456,8 @@ const vi: Record<string, string> = {
   'vendorBill.empty': 'Chưa có hoá đơn nhà cung cấp',
   'vendorBill.emptyHint': 'Tạo hoá đơn đầu tiên để bắt đầu theo dõi công nợ phải trả.',
   'error.invalid': 'Dữ liệu chưa hợp lệ. Kiểm tra các trường bắt buộc và thử lại.',
+  'relation.accounts': 'Hệ thống tài khoản',
+  'relation.partners': 'Danh bạ đối tác',
   'payments.title': 'Thanh toán',
   'payment.kicker': 'Ngân hàng và tiền mặt',
   'payment.subtitle': 'Ghi nhận tiền thu, tiền chi và đối soát công nợ mở.',
@@ -1661,6 +1741,8 @@ const en: Record<string, string> = {
   'vendorBill.empty': 'No vendor bills yet',
   'vendorBill.emptyHint': 'Create the first bill to start tracking accounts payable.',
   'error.invalid': 'The form is invalid. Check required fields and try again.',
+  'relation.accounts': 'Chart of accounts',
+  'relation.partners': 'Partner directory',
   'payments.title': 'Payments',
   'payment.kicker': 'Bank and cash',
   'payment.subtitle': 'Record receipts, disbursements, and reconciliation against open items.',

@@ -139,6 +139,22 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.match(html, /data-island="mail\.chatter"/)
       assert.match(html, /data-island="activity\.record"/)
     }
+    // Every field that names an account reaches the whole chart — over two hundred
+    // rows once the TT99 pack is installed — so each is a picker with a search
+    // dialog rather than a select the reader scrolls.
+    if (
+      [
+        '/admin/accounting/customer-invoices',
+        '/admin/accounting/vendor-bills',
+        '/admin/accounting/journals',
+        '/admin/accounting/taxes',
+        '/admin/accounting/payments',
+        '/admin/accounting/general-ledger',
+      ].includes(path)
+    ) {
+      assert.match(html, /data-island="backend\.relation-select"/, path)
+      assert.match(html, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/, path)
+    }
     if (path === '/admin/accounting') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /Nghiệp vụ hằng ngày/)
