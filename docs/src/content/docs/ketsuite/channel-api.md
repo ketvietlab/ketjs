@@ -25,6 +25,10 @@ A vertical contributes routes with `defineChannelRoute()`, depends on `channel_a
 compatible contract major. Composition fails when a route bypasses the facade or an extension targets an
 incompatible version.
 
+The facade runs before the handler and settles everything the contract declares: the caller is resolved and
+rejected against `auth`, a cookie caller proves intent on mutations, and the request body is validated against
+the published schema. A handler receives the result as its fifth argument and never repeats those checks.
+
 ```ts
 // File: packages/ketsuite/src/modules/booking_extension/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
@@ -41,8 +45,14 @@ export default defineModule({
       path: 'bookings/{id}',
       operationId: 'customer.bookings.get',
       responses: { '200': { type: 'object' } },
-      handler: async (ctx, url, request, params) => ({
-        data: await ctx.callUnchecked('booking_extension.getPublicBooking', { id: params.id }, url, request),
+      auth: 'customer',
+      handler: async (ctx, url, request, params, channel) => ({
+        data: await ctx.callUnchecked(
+          'booking_extension.getPublicBooking',
+          { id: params.id, accountId: channel.identity!.accountId },
+          url,
+          request,
+        ),
       }),
     }),
   ]),
@@ -58,6 +68,13 @@ can be selected from the website host or explicitly with `X-Channel-Realm` for n
 - Headless and mobile clients use short-lived Bearer access tokens and rotating refresh tokens.
 - Refresh grants are stored as digests, can be revoked, and are invalidated after password changes.
 - A customer credential cannot be used against the generic `/_ket/fn` staff transport.
+
+The CSRF check follows how the caller proved who they are rather than which route they reached: a cookie is
+attached by the browser whether or not the caller meant to send it, a Bearer token is not. So every unsafe
+method on a cookie session requires a same origin and the `X-CSRF-Token` returned at sign-in, and a Bearer
+client is never asked for one. Which profile supplies identities is registered with
+`registerChannelIdentity()`; a contract declaring `auth` on a profile with no resolver fails the request
+rather than serving it open.
 
 Registration is immediately usable in the current phase; email activation is not required.
 
@@ -78,9 +95,14 @@ Every response uses one envelope:
 }
 ```
 
-Errors carry a stable code and localized message metadata. Mutating operations that advertise idempotency
-require `Idempotency-Key`; reusing a key with a different request body returns a conflict instead of replaying
-the wrong result. Invalid media types, oversized bodies, and invalid JSON are rejected at the HTTP boundary.
+Errors carry a stable code and localized message metadata. A body that does not match its declared schema is
+answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published schema
+is the check, so the generated document cannot claim more than the server enforces.
+
+Mutating operations that advertise idempotency require `Idempotency-Key`. Reusing a key with a different
+request body returns `409 channel_api.idempotencyConflict` instead of replaying the wrong result, and reusing
+it while the first attempt is still running returns `409 channel_api.idempotencyInFlight` with
+`retryable: true`. Invalid media types, oversized bodies, and invalid JSON are rejected at the HTTP boundary.
 
 ## OpenAPI and Starlight
 
