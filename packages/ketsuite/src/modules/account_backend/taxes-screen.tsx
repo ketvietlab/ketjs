@@ -7,6 +7,7 @@ import {
   formatMoney,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -27,6 +28,10 @@ export const taxesScreen = (
     accounts: Row[]
     action: string
     currency: unknown
+    editing?: Row | null
+    submit?: string
+    rowHref?: (row: Row) => string
+    cancelHref?: string
     errors?: string[]
   },
 ): TemplateResult => {
@@ -35,6 +40,7 @@ export const taxesScreen = (
     dataTable(_, {
       rows: options.rows,
       id: (row) => String(row.id),
+      rowHref: options.rowHref,
       columns: [
         {
           key: 'name',
@@ -58,9 +64,7 @@ export const taxesScreen = (
           cell: (row) =>
             row.amountType === 'fixed'
               ? formatMoney(_, row.amount, options.currency)
-              : row.amountType === 'group'
-                ? '—'
-                : `${String(row.amount)}%`,
+              : `${String(row.amount)}%`,
           align: 'end',
           kind: 'number',
         },
@@ -77,6 +81,27 @@ export const taxesScreen = (
               row.priceInclude ? _('account_backend.yes') : _('account_backend.no'),
               row.priceInclude ? 'positive' : 'neutral',
               row.priceInclude ? 'yes' : 'no',
+            ),
+        },
+        {
+          key: 'base',
+          // The field label spells the rule out; a column header only has to name it.
+          label: _('account_backend.column.includeBaseAmount'),
+          cell: (row) =>
+            badge(
+              row.includeBaseAmount ? _('account_backend.yes') : _('account_backend.no'),
+              row.includeBaseAmount ? 'positive' : 'neutral',
+              row.includeBaseAmount ? 'yes' : 'no',
+            ),
+        },
+        {
+          key: 'active',
+          label: _('account_backend.field.active'),
+          cell: (row) =>
+            badge(
+              row.active ? _('account_backend.active') : _('account_backend.archived'),
+              row.active ? 'positive' : 'neutral',
+              row.active ? 'active' : 'archived',
             ),
         },
       ],
@@ -122,8 +147,19 @@ export const taxesScreen = (
           body={stack(
             [
               <Section
-                title={_('account_backend.tax.create.title')}
-                description={_('account_backend.tax.create.hint')}
+                title={
+                  options.editing
+                    ? _('account_backend.tax.edit.title')
+                    : _('account_backend.tax.create.title')
+                }
+                description={
+                  options.editing ? String(options.editing.name) : _('account_backend.tax.create.hint')
+                }
+                actions={
+                  options.editing && options.cancelHref
+                    ? linkButton({ label: _('account_backend.action.cancelEdit'), href: options.cancelHref })
+                    : undefined
+                }
                 body={
                   <Surface
                     padding="compact"
@@ -132,7 +168,7 @@ export const taxesScreen = (
                         id="tax-create-form"
                         scope="account-tax"
                         action={options.action}
-                        submit={_('account_backend.action.create')}
+                        submit={options.submit ?? _('account_backend.action.create')}
                         submitVariant="primary"
                         fields={options.fields}
                         errors={options.errors}

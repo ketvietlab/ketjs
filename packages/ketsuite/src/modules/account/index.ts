@@ -6,7 +6,9 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
-  version: '0.2.1',
+  // 0.3.0: currency-scaled amounts, several taxes per line, reverseMove, and
+  // `group` removed from TAX_AMOUNT_TYPES.
+  version: '0.3.0',
   depends: ['company', 'partner', 'product', 'uom'],
   app: true,
   title: 'Kế toán',

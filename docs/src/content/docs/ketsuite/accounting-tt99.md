@@ -39,29 +39,81 @@ own bank or cash account before opening Accounting. A non-Vietnam company is rej
 clearly; KetSuite must not silently install Vietnam rules based on an unrelated
 currency or country.
 
-The catalog checksum also supports additive upgrades. When a newer bundled catalog is
-available, the next Accounting request inserts missing defaults and updates the setup
-audit row without overwriting company-owned records. The KKKNT addition uses this path,
-so an existing TT99 company does not need its database recreated.
+The catalog checksum also drives upgrades. When a newer bundled catalog is available,
+the next Accounting request inserts the defaults that are missing and corrects the ones
+it installed before, then updates the setup audit row. The KKKNT addition uses this
+path, so an existing TT99 company does not need its database recreated.
+
+An upgrade distinguishes rows by who owns them, using the deterministic id the catalog
+assigns:
+
+- a row the catalog installed is the catalog's to correct, so a renamed account, a
+  reclassified account type and a changed statutory rate all land on the next request;
+- a row the company created — including one that took a catalog code first — is never
+  touched, in name, type or rate.
+
+Without that split the checksum would advance while the definitions stayed stale, and
+the audit row would claim an upgrade that never reached the data.
+
+Every catalog account carries its statutory name in Vietnamese and in English. The
+backend shows whichever matches the reader's locale, so an English session reads
+`Cash` where a Vietnamese one reads `Tiền mặt`. Accounts a company adds itself have
+only the name they were typed in.
 
 ## Tax posting
 
-Each non-zero default tax points to its statutory posting account. Invoice creation
-uses that account automatically when the caller does not explicitly supply one:
+Each non-zero default tax points to its statutory posting account, and invoice creation
+posts to it automatically:
 
 - deductible purchase VAT uses account 1331;
 - output sale VAT uses account 33311;
-- import tax uses account 33331 and participates in the tax base.
+- import tax uses account 33331.
 
 `KCT` and `KKKNT` are separate zero-amount classifications. KCT means the goods or
 services are not subject to VAT. KKKNT means the transaction is not declared or used
-to calculate VAT payable. Both sale and purchase scopes are bundled because KetSuite,
-like the domain contract, keeps those selectable tax directions separate. Neither creates a tax
-posting line or points to a tax account.
+to calculate VAT payable. Both sale and purchase scopes are bundled because KetSuite
+keeps those selectable tax directions separate. Neither creates a tax posting line or
+points to a tax account.
 
-The technical classification of account 411121 is `liability_current`. This corrects
-an the domain contract localization mapping that labels the account as a liability but classifies
-it as equity.
+### Several taxes on one line
+
+An invoice line takes a list of taxes through `taxIds`, applied in ascending `sequence`
+order. A tax marked `includeBaseAmount` adds its own amount to the base that every
+later tax is computed on.
+
+Import duty is the case this exists for. Duty of 5% and import VAT of 10% on a
+1,000,000 base give 50,000 of duty, which joins the base, so VAT applies to 1,050,000
+and is 105,000 rather than 100,000. Each tax posts its own journal item to its own
+account: the duty to 33331 and the VAT to 1331.
+
+```ts
+// File: examples/accounting/import-invoice.ts
+await ctx.call('account.createInvoice', {
+  id: invoiceId,
+  journalId: purchaseJournalId,
+  moveType: 'in_invoice',
+  partnerId: supplierId,
+  description: 'Hàng nhập khẩu',
+  quantity: '1',
+  priceUnit: '1000000',
+  lineAccountId: expenseAccountId,
+  counterpartAccountId: payableAccountId,
+  taxIds: [importDutyTaxId, importVatTaxId],
+})
+```
+
+The single `taxId` input still works and is equivalent to a one-element `taxIds`. The
+`taxAccountId` override only applies when the line carries exactly one tax; with
+several, each tax posts to the account it is configured with, because one override
+cannot name two destinations.
+
+A line may carry at most one price-included tax, and may not mix price-included with
+price-excluded taxes — the base a mixed set should unwind from is ambiguous, and both
+combinations are refused rather than guessed.
+
+The technical classification of account 411121 is `liability_current`. This corrects a
+localization mapping that labels the account as a liability but classifies it as
+equity.
 
 ## Verification
 

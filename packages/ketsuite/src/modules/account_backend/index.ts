@@ -33,6 +33,9 @@ import { adminPage, choices, localeQuery, optional } from '../backend/screen.ts'
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
+/** How many rows an admin list renders before the reader has to narrow it down. */
+const LIST_PAGE = 200
+
 const resultRedirect = (result: unknown, ok: string, fail = ok) =>
   (result as { ok?: boolean }).ok
     ? seeOther(ok)
@@ -40,6 +43,64 @@ const resultRedirect = (result: unknown, ok: string, fail = ok) =>
 
 const currencyOf = (companies: AnyRow[], shell: Frame): unknown =>
   companies.find((company) => company.id === shell.viewer?.company)?.currency
+
+/**
+ * A configuration list is also its own editor. `?edit=<id>` prefills the create
+ * form with that row and posts back to the same id, so a mistyped account code or
+ * a changed tax rate is a correction rather than a second row nobody can remove.
+ */
+const editingId = (url: URL): string => url.searchParams.get('edit') ?? ''
+
+const editTarget = (rows: AnyRow[], url: URL): AnyRow | null => {
+  const id = editingId(url)
+  return id ? (rows.find((row) => String(row.id) === id) ?? null) : null
+}
+
+/** The form target for a config screen, carrying the edited id and the locale. */
+const configAction = (url: URL, path: string): string => {
+  const target = new URL(path, url)
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  const id = editingId(url)
+  if (id) target.searchParams.set('edit', id)
+  return `${target.pathname}${target.search}`
+}
+
+const editHref = (url: URL, path: string, id: unknown): string => {
+  const target = new URL(path, url)
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('edit', String(id))
+  return `${target.pathname}${target.search}`
+}
+
+/** The value a field should show: what the row holds when editing, the default otherwise. */
+const prefill = (fields: FormField[], row: AnyRow | null): FormField[] =>
+  row
+    ? fields.map((field) => {
+        const held = row[field.name]
+        if (held === undefined) return field
+        if (field.type === 'checkbox') return { ...field, value: held === true }
+        return { ...field, value: held === null ? '' : String(held) }
+      })
+    : fields
+
+/** The id a config POST writes to: the edited row, or a fresh one. */
+const targetId = (url: URL): string => editingId(url) || randomUUID()
+
+/**
+ * The account name in the reader's language.
+ *
+ * A bundled chart carries the statutory name in both languages; anything the
+ * company added itself has only the one it was typed in.
+ */
+const accountName = (_: Translator, account: AnyRow): string =>
+  String((_.locale.startsWith('en') && account.nameEn) || account.name)
+
+const accountChoices = (_: Translator, rows: AnyRow[], empty = false) => [
+  ...(empty ? [{ value: '', label: '—' }] : []),
+  ...rows.map((row) => ({ value: String(row.id), label: `${String(row.code)} · ${accountName(_, row)}` })),
+]
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   await ctx.call('account.initializeCompany', {}, url, req)
@@ -176,28 +237,43 @@ const invoiceFields = (
       name: 'lineAccountId',
       label: _('account_backend.field.lineAccountId'),
       type: 'select',
-      options: choices(lineAccounts),
+      options: accountChoices(_, lineAccounts),
       required: true,
     },
     {
       name: 'counterpartAccountId',
       label: _('account_backend.field.counterpartAccountId'),
       type: 'select',
-      options: choices(counterpartAccounts),
+      options: accountChoices(_, counterpartAccounts),
       required: true,
     },
     { name: 'taxId', label: _('account_backend.field.taxId'), type: 'select', options: choices(taxes, true) },
     {
+      // Import duty and import VAT are two taxes on one line: the duty carries
+      // `includeBaseAmount`, so the VAT is computed on the base plus the duty.
+      name: 'secondTaxId',
+      label: _('account_backend.field.secondTaxId'),
+      type: 'select',
+      options: choices(taxes, true),
+      help: _('account_backend.field.secondTaxIdHint'),
+    },
+    {
       name: 'taxAccountId',
       label: _('account_backend.field.taxAccountId'),
       type: 'select',
-      options: choices(data.accounts, true),
+      options: accountChoices(_, data.accounts, true),
+      help: _('account_backend.field.taxAccountIdHint'),
     },
   ]
 }
 
 const createInvoice = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], redirect: string) => {
   const form = await readForm(req)
+  // The taxes apply in their configured sequence, not in the order the two
+  // selects happen to sit on the page.
+  const taxIds = [form.taxId, form.secondTaxId].filter(
+    (id, at, all): id is string => Boolean(id) && all.indexOf(id) === at,
+  )
   const result = await ctx.call(
     'account.createInvoice',
     {
@@ -216,7 +292,7 @@ const createInvoice = async (ctx: ServeContext, url: URL, req: Parameters<Route>
       discount: form.discount || '0',
       lineAccountId: form.lineAccountId ?? '',
       counterpartAccountId: form.counterpartAccountId ?? '',
-      ...optional(form, 'taxId'),
+      ...(taxIds.length ? { taxIds } : {}),
       ...optional(form, 'taxAccountId'),
     },
     url,
@@ -235,20 +311,28 @@ const accountMoveRoute =
           ? await ctx.call('account.postMove', { id: params.id }, url, req)
           : form.action === 'cancel'
             ? await ctx.call('account.cancelMove', { id: params.id }, url, req)
-            : await ctx.call(
-                'account.addMoveLine',
-                {
-                  id: randomUUID(),
-                  moveId: params.id,
-                  name: form.name ?? '',
-                  accountId: form.accountId ?? '',
-                  ...optional(form, 'partnerId'),
-                  debit: form.debit || '0',
-                  credit: form.credit || '0',
-                },
-                url,
-                req,
-              )
+            : form.action === 'reverse'
+              ? await ctx.call('account.reverseMove', { id: params.id, reversalId: randomUUID() }, url, req)
+              : await ctx.call(
+                  'account.addMoveLine',
+                  {
+                    id: randomUUID(),
+                    moveId: params.id,
+                    name: form.name ?? '',
+                    accountId: form.accountId ?? '',
+                    ...optional(form, 'partnerId'),
+                    debit: form.debit || '0',
+                    credit: form.credit || '0',
+                  },
+                  url,
+                  req,
+                )
+      // A reversal is a journal entry of its own, so the user lands on it rather
+      // than on the document they just corrected.
+      if (form.action === 'reverse' && (result as { ok?: boolean }).ok)
+        return seeOther(
+          `/admin/accounting/entries/${encodeURIComponent(String((result as { reversalId: unknown }).reversalId))}${localeQuery(url)}`,
+        )
       return resultRedirect(result, `${url.pathname}${localeQuery(url)}`)
     }
     if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -280,7 +364,7 @@ const accountMoveRoute =
           move,
           (move.lines as AnyRow[]) ?? [],
           frame,
-          choices(accounts),
+          accountChoices(_, accounts),
           `${url.pathname}${localeQuery(url)}`,
           collaboration,
           printable.length
@@ -302,7 +386,9 @@ const MESSAGES: Record<string, Record<string, string>> = { vi: {}, en: {} }
 
 export default defineModule({
   name: 'account_backend',
-  version: '0.1.0',
+  // 0.2.0: configuration screens edit and archive in place, a posted document can
+  // be reversed, and account labels follow the reader's locale.
+  version: '0.2.0',
   depends: ['account', 'backend'],
   install: 'auto',
   app: true,
@@ -413,12 +499,16 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         await ctx.call('account.initializeCompany', {}, url, req)
-        const [accounts, journals, moves, setup] = (await Promise.all([
+        // Counting in the database rather than fetching every move to measure the
+        // list: a dashboard must not get slower as the ledger grows.
+        const [accounts, journals, draft, posted, unpaid, setup] = (await Promise.all([
           ctx.call('account.listAccounts', {}, url, req),
           ctx.call('account.listJournals', {}, url, req),
-          ctx.call('account.listMoves', {}, url, req),
+          ctx.call('account.countMoves', { state: 'draft' }, url, req),
+          ctx.call('account.countMoves', { state: 'posted' }, url, req),
+          ctx.call('account.countMoves', { state: 'posted', paymentState: 'not_paid' }, url, req),
           ctx.call('account.getSetup', {}, url, req),
-        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow]
+        ])) as [AnyRow[], AnyRow[], AnyRow, AnyRow, AnyRow, AnyRow]
         return adminPage(ctx, url, req, {
           title: 'account_backend.dashboard.title',
           body: (_, frame) =>
@@ -426,9 +516,9 @@ export default defineModule({
               counts: {
                 accounts: accounts.length,
                 journals: journals.length,
-                draft: moves.filter((move) => move.state === 'draft').length,
-                posted: moves.filter((move) => move.state === 'posted').length,
-                unpaid: moves.filter((move) => move.paymentState === 'not_paid').length,
+                draft: Number(draft.count),
+                posted: Number(posted.count),
+                unpaid: Number(unpaid.count),
               },
               frame: frame,
               locale: localeQuery(url),
@@ -445,108 +535,156 @@ export default defineModule({
             await ctx.call(
               'account.saveAccount',
               {
-                id: randomUUID(),
+                id: targetId(url),
                 code: form.code ?? '',
                 name: form.name ?? '',
                 accountType: form.accountType ?? '',
                 reconcile: form.reconcile === '1',
-                active: true,
+                active: form.active === '1',
               },
               url,
               req,
             ),
             `/admin/accounting/accounts${localeQuery(url)}`,
+            configAction(url, '/admin/accounting/accounts'),
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listAccounts', {}, url, req)) as AnyRow[]
+        const rows = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(rows, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.accounts.title',
           body: (_, frame) =>
             accountsScreen(_, {
               frame: frame,
-              action: `/admin/accounting/accounts${localeQuery(url)}`,
+              action: configAction(url, '/admin/accounting/accounts'),
               rows,
+              editing,
+              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+              rowHref: (row) => editHref(url, '/admin/accounting/accounts', row.id),
+              cancelHref: `/admin/accounting/accounts${localeQuery(url)}`,
+              displayName: (row) => accountName(_, row),
               errors:
                 url.searchParams.get('invalid') === '1' ? [_('account_backend.error.invalid')] : undefined,
-              fields: [
-                { name: 'code', label: _('account_backend.field.code'), required: true },
-                { name: 'name', label: _('account_backend.field.name'), required: true },
-                {
-                  name: 'accountType',
-                  label: _('account_backend.field.accountType'),
-                  type: 'select',
-                  options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
-                },
-                { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
-              ],
+              fields: prefill(
+                [
+                  { name: 'code', label: _('account_backend.field.code'), required: true },
+                  {
+                    name: 'name',
+                    label: _('account_backend.field.name'),
+                    required: true,
+                    // A bundled account reads under its English name in an English
+                    // session, so say which name this field is editing.
+                    help: editing?.nameEn
+                      ? `${_('account_backend.field.nameEn')}: ${String(editing.nameEn)}`
+                      : undefined,
+                  },
+                  {
+                    name: 'accountType',
+                    label: _('account_backend.field.accountType'),
+                    type: 'select',
+                    options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
+                  },
+                  { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
+                  {
+                    name: 'active',
+                    label: _('account_backend.field.active'),
+                    type: 'checkbox',
+                    value: true,
+                    help: _('account_backend.field.activeHint'),
+                  },
+                ],
+                editing,
+              ),
             }),
         })
       },
     '/admin/accounting/journals':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         if (req.method === 'POST') {
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
               'account.saveJournal',
               {
-                id: randomUUID(),
+                id: targetId(url),
                 name: form.name ?? '',
                 code: form.code ?? '',
                 type: form.type ?? '',
                 ...optional(form, 'defaultAccountId'),
-                active: true,
+                active: form.active === '1',
               },
               url,
               req,
             ),
             `/admin/accounting/journals${localeQuery(url)}`,
+            configAction(url, '/admin/accounting/journals'),
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const journals = (await ctx.call(
+          'account.listJournals',
+          { includeArchived: true },
+          url,
+          req,
+        )) as AnyRow[]
+        const editing = editTarget(journals, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.journals.title',
           body: (_, frame) =>
             journalsScreen(_, {
               frame: frame,
-              action: `/admin/accounting/journals${localeQuery(url)}`,
-              rows: data.journals,
+              action: configAction(url, '/admin/accounting/journals'),
+              rows: journals,
               accounts: data.accounts,
+              editing,
+              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+              rowHref: (row) => editHref(url, '/admin/accounting/journals', row.id),
+              cancelHref: `/admin/accounting/journals${localeQuery(url)}`,
+              displayName: (row) => accountName(_, row),
               errors:
                 url.searchParams.get('invalid') === '1' ? [_('account_backend.error.invalid')] : undefined,
-              fields: [
-                { name: 'name', label: _('account_backend.field.name'), required: true },
-                { name: 'code', label: _('account_backend.field.code'), required: true },
-                {
-                  name: 'type',
-                  label: _('account_backend.field.type'),
-                  type: 'select',
-                  options: optionsOf(_, 'journalType', JOURNAL_TYPES),
-                },
-                {
-                  name: 'defaultAccountId',
-                  label: _('account_backend.field.defaultAccountId'),
-                  type: 'select',
-                  options: choices(data.accounts, true),
-                },
-              ],
+              fields: prefill(
+                [
+                  { name: 'name', label: _('account_backend.field.name'), required: true },
+                  { name: 'code', label: _('account_backend.field.code'), required: true },
+                  {
+                    name: 'type',
+                    label: _('account_backend.field.type'),
+                    type: 'select',
+                    options: optionsOf(_, 'journalType', JOURNAL_TYPES),
+                  },
+                  {
+                    name: 'defaultAccountId',
+                    label: _('account_backend.field.defaultAccountId'),
+                    type: 'select',
+                    options: accountChoices(_, data.accounts, true),
+                  },
+                  {
+                    name: 'active',
+                    label: _('account_backend.field.active'),
+                    type: 'checkbox',
+                    value: true,
+                    help: _('account_backend.field.activeHint'),
+                  },
+                ],
+                editing,
+              ),
             }),
         })
       },
     '/admin/accounting/taxes':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         if (req.method === 'POST') {
           const form = await readForm(req)
           return resultRedirect(
             await ctx.call(
               'account.saveTax',
               {
-                id: randomUUID(),
+                id: targetId(url),
                 name: form.name ?? '',
                 ...optional(form, 'description'),
                 typeTaxUse: form.typeTaxUse ?? 'sale',
@@ -557,69 +695,94 @@ export default defineModule({
                 includeBaseAmount: form.includeBaseAmount === '1',
                 ...optional(form, 'accountId'),
                 sequence: Number(form.sequence || 10),
-                active: true,
+                active: form.active === '1',
               },
               url,
               req,
             ),
             `/admin/accounting/taxes${localeQuery(url)}`,
+            configAction(url, '/admin/accounting/taxes'),
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const taxes = (await ctx.call('account.listTaxes', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(taxes, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.taxes.title',
           body: (_, frame) => {
             const currency = currencyOf(data.companies, frame)
             return taxesScreen(_, {
               frame: frame,
-              action: `/admin/accounting/taxes${localeQuery(url)}`,
-              rows: data.taxes,
+              action: configAction(url, '/admin/accounting/taxes'),
+              rows: taxes,
               accounts: data.accounts,
               currency,
+              editing,
+              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+              rowHref: (row) => editHref(url, '/admin/accounting/taxes', row.id),
+              cancelHref: `/admin/accounting/taxes${localeQuery(url)}`,
               errors:
                 url.searchParams.get('invalid') === '1' ? [_('account_backend.error.invalid')] : undefined,
-              fields: [
-                { name: 'name', label: _('account_backend.field.name'), required: true },
-                { name: 'description', label: _('account_backend.field.description') },
-                {
-                  name: 'typeTaxUse',
-                  label: _('account_backend.field.typeTaxUse'),
-                  type: 'select',
-                  options: optionsOf(_, 'taxUse', TAX_USES),
-                },
-                {
-                  name: 'taxScope',
-                  label: _('account_backend.field.taxScope'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...optionsOf(_, 'taxScope', ['service', 'consu'])],
-                },
-                {
-                  name: 'amountType',
-                  label: _('account_backend.field.amountType'),
-                  type: 'select',
-                  options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
-                },
-                {
-                  name: 'amount',
-                  label: _('account_backend.field.amount'),
-                  type: 'decimal',
-                  value: 0,
-                  required: true,
-                },
-                {
-                  name: 'accountId',
-                  label: _('account_backend.field.accountId'),
-                  type: 'select',
-                  options: choices(data.accounts, true),
-                },
-                { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
-                {
-                  name: 'includeBaseAmount',
-                  label: _('account_backend.field.includeBaseAmount'),
-                  type: 'checkbox',
-                },
-                { name: 'sequence', label: _('account_backend.field.sequence'), type: 'number', value: 10 },
-              ],
+              fields: prefill(
+                [
+                  { name: 'name', label: _('account_backend.field.name'), required: true },
+                  { name: 'description', label: _('account_backend.field.description') },
+                  {
+                    name: 'typeTaxUse',
+                    label: _('account_backend.field.typeTaxUse'),
+                    type: 'select',
+                    options: optionsOf(_, 'taxUse', TAX_USES),
+                  },
+                  {
+                    name: 'taxScope',
+                    label: _('account_backend.field.taxScope'),
+                    type: 'select',
+                    options: [{ value: '', label: '—' }, ...optionsOf(_, 'taxScope', ['service', 'consu'])],
+                  },
+                  {
+                    name: 'amountType',
+                    label: _('account_backend.field.amountType'),
+                    type: 'select',
+                    options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
+                  },
+                  {
+                    name: 'amount',
+                    label: _('account_backend.field.amount'),
+                    type: 'decimal',
+                    value: 0,
+                    required: true,
+                  },
+                  {
+                    name: 'accountId',
+                    label: _('account_backend.field.accountId'),
+                    type: 'select',
+                    options: accountChoices(_, data.accounts, true),
+                  },
+                  { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
+                  {
+                    name: 'includeBaseAmount',
+                    label: _('account_backend.field.includeBaseAmount'),
+                    type: 'checkbox',
+                    help: _('account_backend.field.includeBaseAmountHint'),
+                  },
+                  {
+                    name: 'sequence',
+                    label: _('account_backend.field.sequence'),
+                    type: 'number',
+                    value: 10,
+                    help: _('account_backend.field.sequenceHint'),
+                  },
+                  {
+                    name: 'active',
+                    label: _('account_backend.field.active'),
+                    type: 'checkbox',
+                    value: true,
+                    help: _('account_backend.field.activeHint'),
+                  },
+                ],
+                editing,
+              ),
             })
           },
         })
@@ -648,27 +811,56 @@ export default defineModule({
                 )
               : await ctx.call(
                   'account.savePaymentTerm',
-                  { id: randomUUID(), name: form.name ?? '', ...optional(form, 'note'), active: true },
+                  {
+                    id: targetId(url),
+                    name: form.name ?? '',
+                    ...optional(form, 'note'),
+                    active: form.active === '1',
+                  },
                   url,
                   req,
                 )
-          return resultRedirect(result, `/admin/accounting/terms${localeQuery(url)}`)
+          return resultRedirect(
+            result,
+            `/admin/accounting/terms${localeQuery(url)}`,
+            configAction(url, '/admin/accounting/terms'),
+          )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listPaymentTerms', {}, url, req)) as AnyRow[]
+        const rows = (await ctx.call(
+          'account.listPaymentTerms',
+          { includeArchived: true },
+          url,
+          req,
+        )) as AnyRow[]
+        const editing = editTarget(rows, url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.terms.title',
           body: (_, frame) =>
             paymentTermsScreen(_, {
               frame: frame,
-              action: `/admin/accounting/terms${localeQuery(url)}`,
+              action: configAction(url, '/admin/accounting/terms'),
               rows,
+              editing,
+              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+              rowHref: (row) => editHref(url, '/admin/accounting/terms', row.id),
+              cancelHref: `/admin/accounting/terms${localeQuery(url)}`,
               errors:
                 url.searchParams.get('invalid') === '1' ? [_('account_backend.error.invalid')] : undefined,
-              termFields: [
-                { name: 'name', label: _('account_backend.field.name'), required: true },
-                { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
-              ],
+              termFields: prefill(
+                [
+                  { name: 'name', label: _('account_backend.field.name'), required: true },
+                  { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
+                  {
+                    name: 'active',
+                    label: _('account_backend.field.active'),
+                    type: 'checkbox',
+                    value: true,
+                    help: _('account_backend.field.activeHint'),
+                  },
+                ],
+                editing,
+              ),
               lineFields: rows.length
                 ? [
                     {
@@ -747,7 +939,7 @@ export default defineModule({
         const state = url.searchParams.get('state')
         const rows = (await ctx.call(
           'account.listMoves',
-          { moveType: 'entry', ...(state ? { state } : {}) },
+          { moveType: 'entry', ...(state ? { state } : {}), limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
@@ -772,10 +964,12 @@ export default defineModule({
         if (req.method === 'POST')
           return createInvoice(ctx, url, req, `/admin/accounting/customer-invoices${localeQuery(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
-        const rows = all.filter((move) =>
-          ['out_invoice', 'out_refund', 'out_receipt'].includes(String(move.moveType)),
-        )
+        const rows = (await ctx.call(
+          'account.listMoves',
+          { moveTypes: ['out_invoice', 'out_refund', 'out_receipt'], limit: LIST_PAGE },
+          url,
+          req,
+        )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.customerInvoices.title',
           body: (_, frame) =>
@@ -797,10 +991,12 @@ export default defineModule({
         if (req.method === 'POST')
           return createInvoice(ctx, url, req, `/admin/accounting/vendor-bills${localeQuery(url)}`)
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const all = (await ctx.call('account.listMoves', {}, url, req)) as AnyRow[]
-        const rows = all.filter((move) =>
-          ['in_invoice', 'in_refund', 'in_receipt'].includes(String(move.moveType)),
-        )
+        const rows = (await ctx.call(
+          'account.listMoves',
+          { moveTypes: ['in_invoice', 'in_refund', 'in_receipt'], limit: LIST_PAGE },
+          url,
+          req,
+        )) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.vendorBills.title',
           body: (_, frame) =>
@@ -823,7 +1019,7 @@ export default defineModule({
       async (url, req) => {
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
-          ctx.call('account.listOpenItems', {}, url, req) as Promise<AnyRow[]>,
+          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
         ])
         if (req.method === 'POST') {
           const form = await readForm(req)
@@ -851,7 +1047,7 @@ export default defineModule({
           )
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listPayments', {}, url, req)) as AnyRow[]
+        const rows = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.payments.title',
           body: (_, frame) =>
@@ -970,6 +1166,7 @@ export default defineModule({
             ...(accountId ? { accountId } : {}),
             ...(dateFrom ? { dateFrom } : {}),
             ...(dateTo ? { dateTo } : {}),
+            limit: LIST_PAGE,
           },
           url,
           req,
@@ -1010,7 +1207,12 @@ export default defineModule({
         const data = await common(ctx, url, req)
         const partnerId = url.searchParams.get('partnerId') ?? ''
         const rows = partnerId
-          ? ((await ctx.call('account.partnerStatement', { partnerId }, url, req)) as AnyRow[])
+          ? ((await ctx.call(
+              'account.partnerStatement',
+              { partnerId, limit: LIST_PAGE },
+              url,
+              req,
+            )) as AnyRow[])
           : []
         return adminPage(ctx, url, req, {
           title: 'account_backend.partnerStatement.title',
@@ -1234,15 +1436,28 @@ const vi: Record<string, string> = {
   'move.collaboration': 'Trao đổi và hoạt động của chứng từ',
   'terms.lines': 'Số mốc thanh toán',
   'action.create': 'Tạo mới',
+  'action.save': 'Lưu thay đổi',
+  'action.cancelEdit': 'Thôi sửa',
   'action.createTerm': 'Tạo điều khoản',
   'action.addTermLine': 'Thêm mốc thanh toán',
   'action.addLine': 'Thêm dòng',
   'action.post': 'Ghi sổ',
   'action.cancel': 'Huỷ',
+  'action.reverse': 'Đảo bút toán',
   'action.registerPayment': 'Ghi nhận thanh toán',
   'action.calculate': 'Tính báo cáo',
+  active: 'Đang dùng',
+  archived: 'Đã lưu trữ',
+  'column.includeBaseAmount': 'Cộng vào cơ sở',
+  'account.edit.title': 'Sửa tài khoản',
+  'journal.edit.title': 'Sửa sổ nhật ký',
+  'tax.edit.title': 'Sửa thuế',
+  'term.edit.title': 'Sửa điều khoản thanh toán',
   'field.code': 'Mã',
   'field.name': 'Tên',
+  'field.nameEn': 'Tên tiếng Anh theo chế độ kế toán',
+  'field.active': 'Đang sử dụng',
+  'field.activeHint': 'Bỏ chọn để lưu trữ. Bản ghi đã lưu trữ không còn xuất hiện trong danh sách chọn.',
   'field.accountType': 'Loại tài khoản',
   'field.reconcile': 'Cho phép đối soát',
   'field.type': 'Loại',
@@ -1256,6 +1471,9 @@ const vi: Record<string, string> = {
   'field.paymentAmount': 'Số tiền',
   'field.priceInclude': 'Đã gồm trong giá',
   'field.includeBaseAmount': 'Cộng vào cơ sở tính thuế',
+  'field.includeBaseAmountHint':
+    'Số thuế này được cộng vào cơ sở tính của các thuế đứng sau nó. Dùng cho thuế nhập khẩu, khi thuế GTGT hàng nhập khẩu tính trên giá đã gồm thuế nhập khẩu.',
+  'field.sequenceHint': 'Thuế trên cùng một dòng được áp dụng theo thứ tự tăng dần của số này.',
   'field.note': 'Ghi chú',
   'field.journalId': 'Sổ nhật ký',
   'field.moveType': 'Loại chứng từ',
@@ -1279,7 +1497,11 @@ const vi: Record<string, string> = {
   'field.lineAccountId': 'Tài khoản doanh thu / chi phí',
   'field.counterpartAccountId': 'Tài khoản phải thu / phải trả',
   'field.taxId': 'Thuế',
+  'field.secondTaxId': 'Thuế thứ hai',
+  'field.secondTaxIdHint': 'Để trống nếu dòng chỉ chịu một loại thuế.',
   'field.taxAccountId': 'Tài khoản thuế',
+  'field.taxAccountIdHint':
+    'Chỉ dùng khi dòng có đúng một loại thuế. Với nhiều thuế, mỗi thuế hạch toán vào tài khoản đã cấu hình của nó.',
   'field.paymentType': 'Loại thanh toán',
   'field.partnerType': 'Loại đối tác',
   'field.destinationAccountId': 'Tài khoản đối ứng',
@@ -1497,15 +1719,28 @@ const en: Record<string, string> = {
   'move.collaboration': 'Document conversation and activities',
   'terms.lines': 'Due milestones',
   'action.create': 'Create',
+  'action.save': 'Save changes',
+  'action.cancelEdit': 'Stop editing',
   'action.createTerm': 'Create term',
   'action.addTermLine': 'Add due milestone',
   'action.addLine': 'Add line',
   'action.post': 'Post',
   'action.cancel': 'Cancel',
+  'action.reverse': 'Reverse entry',
   'action.registerPayment': 'Register payment',
   'action.calculate': 'Calculate',
+  active: 'Active',
+  archived: 'Archived',
+  'account.edit.title': 'Edit account',
+  'column.includeBaseAmount': 'Affects base',
+  'journal.edit.title': 'Edit journal',
+  'tax.edit.title': 'Edit tax',
+  'term.edit.title': 'Edit payment term',
   'field.code': 'Code',
   'field.name': 'Name',
+  'field.nameEn': 'Statutory English name',
+  'field.active': 'In use',
+  'field.activeHint': 'Clear to archive. An archived record no longer appears in selection lists.',
   'field.accountType': 'Account type',
   'field.reconcile': 'Allow reconciliation',
   'field.type': 'Type',
@@ -1519,6 +1754,9 @@ const en: Record<string, string> = {
   'field.paymentAmount': 'Amount',
   'field.priceInclude': 'Included in price',
   'field.includeBaseAmount': 'Affects tax base',
+  'field.includeBaseAmountHint':
+    'This tax is added to the base every later tax is computed on. Import duty uses it, so import VAT applies to the price plus the duty.',
+  'field.sequenceHint': 'Taxes on one line apply in ascending order of this number.',
   'field.note': 'Note',
   'field.journalId': 'Journal',
   'field.moveType': 'Document type',
@@ -1542,7 +1780,11 @@ const en: Record<string, string> = {
   'field.lineAccountId': 'Income / expense account',
   'field.counterpartAccountId': 'Receivable / payable account',
   'field.taxId': 'Tax',
+  'field.secondTaxId': 'Second tax',
+  'field.secondTaxIdHint': 'Leave empty when the line carries a single tax.',
   'field.taxAccountId': 'Tax account',
+  'field.taxAccountIdHint':
+    'Only used when the line carries exactly one tax. With several, each tax posts to its own configured account.',
   'field.paymentType': 'Payment type',
   'field.partnerType': 'Partner type',
   'field.destinationAccountId': 'Counterpart account',

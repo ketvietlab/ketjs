@@ -31,6 +31,7 @@ export const moveDetailScreen = (
   printActions?: JSXChild,
 ): TemplateResult => {
   const draft = move.state === 'draft'
+  const accountLabels = new Map(accountOptions.map((option) => [option.value, option.label]))
   const residual = lines.reduce((total, line) => total + Number(line.amountResidual ?? 0), 0)
   const actionForms = draft
     ? [
@@ -53,7 +54,21 @@ export const moveDetailScreen = (
           fields={[]}
         />,
       ]
-    : []
+    : // A posted entry is never edited or deleted. The correction is its mirror
+      // image, posted as a second entry.
+      move.state === 'posted'
+      ? [
+          <RecordForm
+            scope="account-move"
+            action={action}
+            submit={_('account_backend.action.reverse')}
+            submitVariant="destructive"
+            layout="inline"
+            hidden={{ action: 'reverse' }}
+            fields={[]}
+          />,
+        ]
+      : []
   const table = lines.length
     ? dataTable(_, {
         rows: lines,
@@ -67,8 +82,10 @@ export const moveDetailScreen = (
           },
           {
             key: 'account',
+            // The account a line posts to, by the label the pickers use. A raw id
+            // is not something a reader can check a journal entry against.
             label: _('account_backend.field.accountId'),
-            cell: (line) => code(String(line.accountId)),
+            cell: (line) => code(accountLabels.get(String(line.accountId)) ?? String(line.accountId)),
           },
           {
             key: 'debit',

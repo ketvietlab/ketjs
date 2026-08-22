@@ -19,6 +19,8 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       code: 'text',
       name: 'text',
+      /** The statutory English name, when the account came from a bundled catalog. */
+      nameEn: 'text?',
       accountType: 'text',
       reconcile: 'bool',
       active: 'bool',
