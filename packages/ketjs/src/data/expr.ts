@@ -4,6 +4,7 @@
 // query you can inspect can be checked against a function's declared effects before
 // it runs, handed to an agent as data, and rendered for two dialects from one shape.
 
+import { assertGroupInterval } from './time.ts'
 import type { GroupInterval } from './time.ts'
 
 export type Col = { readonly model: string; readonly name: string }
@@ -72,7 +73,9 @@ export const isNotNull = (c: Col): Expr => ({ op: 'null', col: col(c), negated: 
 export const bucketEq = (c: Col, interval: GroupInterval, timezone: string, value: string): Expr => ({
   op: 'bucket',
   col: col(c),
-  interval,
+  // Rejected at construction as well as at toSQL: the type says GroupInterval, but
+  // a value arriving as JSON has not been through the compiler.
+  interval: assertGroupInterval(interval),
   timezone,
   value,
 })
