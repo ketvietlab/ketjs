@@ -343,15 +343,46 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx) => (await ctx.db.select('account.Setup'))[0] ?? null,
   }),
+  /**
+   * The chart of accounts, narrowed the way a picker asks for it.
+   *
+   * `search` and `limit` are what a relation picker sends on every keystroke, and
+   * an unknown input is a hard error — so a chart of two hundred accounts is only
+   * reachable through a search dialog once they are part of the signature.
+   * `accountTypes` moves a restriction the forms were applying after the fact
+   * into the query, so the dialog offers nothing the field would reject.
+   */
   listAccounts: defineFn({
-    input: { includeArchived: 'bool?' },
+    input: { includeArchived: 'bool?', accountTypes: 'json?', search: 'text?', limit: 'int?' },
     effects: ['read:account.Account', ...ACCOUNT_SETUP_EFFECTS],
     agent: true,
     handler: async (ctx, args) => {
       await ensureCompanyAccounting(ctx)
       const A = ctx.table('account.Account')
       const q = from(A).orderBy(asc(A.code))
-      return ctx.db.all(args.includeArchived ? q : q.where(eq(A.active, true)))
+      const rows = await ctx.db.all(args.includeArchived ? q : q.where(eq(A.active, true)))
+      const types = Array.isArray(args.accountTypes) ? args.accountTypes.map(String) : []
+      const wanted = types.length
+        ? rows.filter((row) =>
+            types.some((type) =>
+              // A prefix so a field can ask for every income account without
+              // naming income_other alongside income.
+              type.endsWith('*')
+                ? String(row.accountType).startsWith(type.slice(0, -1))
+                : String(row.accountType) === type,
+            ),
+          )
+        : rows
+      const needle = String(args.search ?? '')
+        .trim()
+        .toLocaleLowerCase()
+      const matched = needle
+        ? wanted.filter((row) =>
+            `${String(row.code)} ${String(row.name)}`.toLocaleLowerCase().includes(needle),
+          )
+        : wanted
+      const limit = Number(args.limit)
+      return Number.isInteger(limit) && limit > 0 ? matched.slice(0, limit) : matched
     },
   }),
   saveAccount: defineFn({
