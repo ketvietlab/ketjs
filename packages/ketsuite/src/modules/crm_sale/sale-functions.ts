@@ -1,10 +1,12 @@
-import { defineFn } from '@ketvietlab/ketjs'
+import { asc, defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { addTimeline, commandKey, invalid, issue, now } from '../crm/index.ts'
+import { addTimeline, canReadCase, commandKey, invalid, issue, normalized, now } from '../crm/index.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'
 
 export const quotationEffects = [
   'read:crm.Case',
+  'read:crm.TeamMember',
+  'read:user.User',
   'read:crm.SalesDetail',
   'read:crm_sale.OpportunityQuotation',
   'write:crm_sale.OpportunityQuotation',
@@ -81,10 +83,17 @@ export async function createQuotationForCase(
     return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   const products = productsOf(input.products)
   if (!products) return invalid(issue('products', 'crm.error.required'))
+  // An order with no lines is a quotation nobody can send. The backend used to
+  // call this without any products at all, so every quotation it created was
+  // empty; refusing here is what makes the form ask for one.
+  if (!products.length) return invalid(issue('products', 'crm_sale.error.productRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    if (held?.kind !== 'opportunity' || !held.partnerId)
-      return invalid(issue('caseId', 'crm_sale.error.opportunityRequired'))
+    // Reading the case is the same permission everywhere else in the CRM asks
+    // for; quoting one used to skip it entirely.
+    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (held.kind !== 'opportunity') return invalid(issue('caseId', 'crm_sale.error.opportunityRequired'))
+    if (!held.partnerId) return invalid(issue('partnerId', 'crm_sale.error.partnerRequired'))
     const existing = (
       await tx.db.select('crm_sale.OpportunityQuotation', {
         salesOrderId: input.id,
@@ -138,7 +147,106 @@ export async function createQuotationForCase(
   })
 }
 
+/**
+ * What a quotation may be written for, as picker rows.
+ *
+ * `sale.addLine` takes a variant and a unit, so the picker lists variants and
+ * carries the unit its template defaults to — otherwise the form would ask a
+ * salesperson to name a unit of measure before they can quote anything.
+ */
 export const saleFunctionsPublic: Record<string, FnSpec> = {
+  'sale.listQuotableProducts': defineFn({
+    input: { search: 'text?', limit: 'int?' },
+    output: { id: 'id', name: 'text', ref: 'text?', uomId: 'id?', listPrice: 'decimal' },
+    effects: ['read:product.Product', 'read:product.Template', 'read:uom.Unit'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const T = ctx.table('product.Template')
+      const templates = await ctx.db.all(
+        from(T).where(eq(T.active, true), eq(T.saleOk, true)).orderBy(asc(T.name)).limit(200),
+      )
+      if (!templates.length) return []
+      const byTemplate = new Map(templates.map((row) => [String(row.id), row]))
+      const P = ctx.table('product.Product')
+      const variants = await ctx.db.all(
+        from(P)
+          .where(eq(P.active, true), inArray(P.templateId, [...byTemplate.keys()]))
+          .orderBy(asc(P.templateId), asc(P.combinationKey), asc(P.id)),
+      )
+      const needle = normalized(args.search)
+      return variants
+        .map((variant) => {
+          const template = byTemplate.get(String(variant.templateId))
+          const suffix = String(variant.combinationKey ?? '').trim()
+          return {
+            id: variant.id,
+            name: [String(template?.name ?? variant.id), suffix].filter(Boolean).join(' · '),
+            ref: variant.defaultCode ? String(variant.defaultCode) : null,
+            uomId: template?.uomId ?? null,
+            listPrice: template?.listPrice ?? '0',
+          }
+        })
+        .filter(
+          (row) => !needle || normalized(row.name).includes(needle) || normalized(row.ref).includes(needle),
+        )
+        .slice(0, Math.max(1, Math.min(200, Number(args.limit ?? 80) || 80)))
+    },
+  }),
+
+  /**
+   * The quotations already written for a case.
+   *
+   * `OpportunityQuotation` was written on every quotation and read by nothing,
+   * so the sales tab could offer to create a quotation but never showed one.
+   */
+  'sale.listQuotations': defineFn({
+    input: { caseId: 'id' },
+    output: {
+      id: 'id',
+      name: 'text',
+      state: 'text',
+      amountUntaxed: 'decimal',
+      amountTotal: 'decimal',
+      currency: 'text',
+      createdAt: 'datetime',
+    },
+    effects: [
+      'read:crm.Case',
+      'read:crm.TeamMember',
+      'read:user.User',
+      'read:crm_sale.OpportunityQuotation',
+      'read:sale.Order',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const held = (await ctx.db.select('crm.Case', { id: args.caseId }))[0]
+      if (!held || !(await canReadCase(ctx, held))) return []
+      const links = await ctx.db.select('crm_sale.OpportunityQuotation', { caseId: args.caseId })
+      if (!links.length) return []
+      const O = ctx.table('sale.Order')
+      const orders = await ctx.db.all(
+        from(O)
+          .where(
+            inArray(
+              O.id,
+              links.map((link) => link.salesOrderId),
+            ),
+          )
+          .orderBy(desc(O.dateOrder), asc(O.id)),
+      )
+      const createdBy = new Map(links.map((link) => [String(link.salesOrderId), link.createdAt]))
+      return orders.map((order) => ({
+        id: order.id,
+        name: order.name,
+        state: order.state,
+        amountUntaxed: order.amountUntaxed,
+        amountTotal: order.amountTotal,
+        currency: order.currency,
+        createdAt: createdBy.get(String(order.id)) ?? order.dateOrder,
+      }))
+    },
+  }),
+
   'sale.createQuotation': defineFn({
     input: {
       id: 'id',

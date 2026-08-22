@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
 import { roleFunctions } from './roles.ts'
@@ -214,7 +214,10 @@ export const functions: Record<string, FnSpec> = {
   ...roleFunctions,
 
   listUsers: defineFn({
-    input: { includeArchived: 'bool?' },
+    // `search` and `limit` are what a relational picker sends on every
+    // keystroke; without them the field could only ever be a plain select over
+    // every user in the tenant.
+    input: { includeArchived: 'bool?', search: 'text?', limit: 'int?' },
     output: {
       id: 'id',
       login: 'text',
@@ -235,8 +238,14 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
-      const q = from(U).orderBy(asc(U.login))
-      const rows = await ctx.db.all(a.includeArchived === true ? q : q.where(eq(U.active, true)))
+      let q = from(U).orderBy(asc(U.login))
+      if (a.includeArchived !== true) q = q.where(eq(U.active, true))
+      if (a.search) {
+        const needle = `%${String(a.search).trim()}%`
+        q = q.where(or(like(U.name, needle), like(U.login, needle)))
+      }
+      if (typeof a.limit === 'number') q = q.limit(Math.max(1, Math.min(500, a.limit)))
+      const rows = await ctx.db.all(q)
       return rows.map((row) => ({ ...row, passwordReady: Boolean(row.passwordHash) }))
     },
   }),
