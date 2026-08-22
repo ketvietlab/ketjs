@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
+import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestApp } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/app.ts'
@@ -399,6 +400,89 @@ test('crm backend: the leaderboard is reachable and refreshes', async (t) => {
   assert.equal(page.status, 200)
   assert.match(html, /Leaderboard/)
   assert.match(html, /Administrator/)
+})
+
+test('crm: a case kind another module owns stays out of the CRM screens', async (t) => {
+  const { app, call } = await boot(t)
+  await call('crm.case.save', {
+    id: 'crm-lead',
+    kind: 'lead',
+    name: 'A CRM lead',
+    email: 'shared@example.test',
+    idempotencyKey: 'save-crm-lead-1',
+  })
+  /**
+   * `crm.Case` is a shared header: a module built on the CRM may store its own
+   * `kind` there, the way the private customer-care module stores tickets. That
+   * row used to appear in the CRM list under a raw kind, open a detail screen
+   * whose save refused it, and be offered as a merge candidate.
+   */
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    const columns = [
+      'companyId',
+      'id',
+      'kind',
+      'name',
+      'email',
+      'stageId',
+      'priority',
+      'terminalState',
+      'active',
+      'version',
+      'score',
+      'threadId',
+      'createdAt',
+      'updatedAt',
+    ]
+    await adapter.run(
+      `INSERT INTO ${adapter.quoteIdent(tableNameFor('crm.Case'))} (${columns
+        .map((name) => adapter.quoteIdent(name))
+        .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      [
+        'acme',
+        'foreign-ticket',
+        'ticket',
+        'A support ticket',
+        'shared@example.test',
+        'crm-stage-new',
+        '1',
+        'open',
+        1,
+        1,
+        '0',
+        'thread:crm.Case:crm-lead',
+        '2026-08-22T00:00:00.000Z',
+        '2026-08-22T00:00:00.000Z',
+      ],
+    )
+  })
+
+  const listed = await call<Row>('crm.case.list', { limit: 50 })
+  assert.equal(
+    (listed.rows as Row[]).some((row) => row.id === 'foreign-ticket'),
+    false,
+    'the CRM list shows only the kinds the CRM owns',
+  )
+  assert.equal((await call<Row>('crm.case.count', {})).count, 1)
+  assert.equal(await call<Row | null>('crm.case.get', { id: 'foreign-ticket' }), null)
+
+  const page = await app.client.get('/admin/crm/cases/foreign-ticket?lang=en')
+  assert.equal(page.status, 404, 'and its detail screen does not claim the record')
+
+  // A duplicate hunt on the shared email must not offer to merge the two.
+  const duplicates = await call<Row>('crm.case.detectDuplicates', { email: 'shared@example.test' })
+  assert.equal(
+    (duplicates.rows as Row[]).some((row) => row.id === 'foreign-ticket'),
+    false,
+  )
+  // The owning module still reaches its own row through its own query.
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    const found = await adapter.all(
+      `SELECT id FROM ${adapter.quoteIdent(tableNameFor('crm.Case'))} WHERE kind = ?`,
+      ['ticket'],
+    )
+    assert.equal(found.length, 1)
+  })
 })
 
 test('crm backend: a cross-origin POST is refused', async (t) => {

@@ -82,6 +82,8 @@ export {
   activeStage as crmActiveStage,
   addCaseMessage as crmAddCaseMessage,
   addTimeline as crmAddTimeline,
+  canReadCase as crmCanReadCase,
+  caseAudience as crmCaseAudience,
   caseDetail as crmCaseDetail,
   commandKey as crmCommandKey,
   ensureCrmDefaults,
@@ -89,9 +91,14 @@ export {
   invalid as crmInvalid,
   issue as crmIssue,
   n as crmNumber,
+  normalized as crmNormalized,
   now as crmNow,
+  ownedKinds as crmOwnedKinds,
+  ownsKind as crmOwnsKind,
   saveCase as crmSaveCase,
+  seededId as crmSeededId,
   serializeCaseList as crmSerializeCaseList,
+  visibleCases as crmVisibleCases,
 } from './modules/crm/index.ts'
 export {
   APPLICATION_STATES,
