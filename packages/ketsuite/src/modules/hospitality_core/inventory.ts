@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, defineFn, eq, from, gt, gte, lte, or } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, eq, from, gt, gte, inArray, lte, not, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn } from './calendar.ts'
-import { MEAL_PLANS, RATE_TYPES } from './types.ts'
+import { MEAL_PLANS, OUT_OF_SERVICE_ROOM_STATUSES, RATE_TYPES } from './types.ts'
 
 export type InventoryIssue = {
   field: string
@@ -103,12 +103,26 @@ export const recordInventoryChange = async (ctx: Ctx, values: InventoryChangeInp
   })
 }
 
-const physicalTotal = async (ctx: Ctx, propertyId: unknown, roomTypeId: unknown): Promise<number> => {
+/**
+ * Rooms a room type can actually sell tonight: active, and not withdrawn from
+ * service. Occupied and dirty rooms stay in the pool because they are sold or
+ * about to be; maintenance and out-of-order rooms cannot be handed to a guest,
+ * so counting them is what let a reservation be taken against a room the front
+ * desk can never assign.
+ */
+export const sellableRooms = async (ctx: Ctx, propertyId: unknown, roomTypeId: unknown): Promise<number> => {
   const Room = ctx.table('hospitality_core.Room')
   return ctx.db.count(
-    from(Room).where(eq(Room.propertyId, propertyId), eq(Room.roomTypeId, roomTypeId), eq(Room.active, true)),
+    from(Room).where(
+      eq(Room.propertyId, propertyId),
+      eq(Room.roomTypeId, roomTypeId),
+      eq(Room.active, true),
+      not(inArray(Room.status, [...OUT_OF_SERVICE_ROOM_STATUSES])),
+    ),
   )
 }
+
+const physicalTotal = sellableRooms
 
 /** Read-only availability used by quotes. The final reservation still claims with compare-and-set. */
 export const quoteAvailability = async (
@@ -163,6 +177,7 @@ const ensureLedgerRows = async (
       roomTypeId,
       date,
       total,
+      totalManual: false,
       sold: 0,
       blocked: 0,
       available: total,
@@ -170,7 +185,97 @@ const ensureLedgerRows = async (
     })
 }
 
-type LedgerPatch = (current: Row) => { total: number; sold: number; blocked: number } | InventoryIssue
+/**
+ * Bring every unclaimed future ledger row back in line with the sellable room
+ * count, and report the dates that are now committed beyond capacity so the
+ * caller can refuse the change or warn the operator.
+ *
+ * Rows an operator set by hand are left alone: an allotment is a decision, not
+ * a cache of the room table. Past dates are history and are never rewritten.
+ */
+export const syncLedgerCapacity = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  roomTypeId: unknown,
+  today: string,
+): Promise<{ changed: number; overcommitted: Array<{ date: string; committed: number; total: number }> }> => {
+  const total = await sellableRooms(ctx, propertyId, roomTypeId)
+  const Ledger = ctx.table('hospitality_core.AvailabilityLedger')
+  const rows = await ctx.db.all(
+    from(Ledger).where(
+      eq(Ledger.propertyId, propertyId),
+      eq(Ledger.roomTypeId, roomTypeId),
+      eq(Ledger.totalManual, false),
+      gte(Ledger.date, today),
+    ),
+  )
+  const overcommitted: Array<{ date: string; committed: number; total: number }> = []
+  let changed = 0
+  for (const row of rows) {
+    const committed = Number(row.sold) + Number(row.blocked)
+    if (committed > total) overcommitted.push({ date: String(row.date), committed, total })
+    if (Number(row.total) === total) continue
+    const version = Number(row.version)
+    const applied = await ctx.db.compareAndSet(
+      'hospitality_core.AvailabilityLedger',
+      { id: row.id },
+      { version },
+      { total, available: total - Number(row.sold) - Number(row.blocked), version: version + 1 },
+    )
+    if ('dryRun' in applied || applied.matched) changed += 1
+  }
+  return { changed, overcommitted }
+}
+
+/**
+ * Rooms free for an hourly stay. Hourly bookings never touch the date ledger —
+ * a room resold at 18:00 is not a second room-night — so concurrency is read
+ * from the reservations themselves: the peak of overlapping arrivals is what a
+ * new booking has to fit under.
+ */
+export const hourlyAvailable = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  roomTypeId: unknown,
+  from_: unknown,
+  to: unknown,
+  excludeReservationId?: unknown,
+): Promise<number> => {
+  const start = new Date(String(from_ ?? '')).getTime()
+  const end = new Date(String(to ?? '')).getTime()
+  const total = await sellableRooms(ctx, propertyId, roomTypeId)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return total
+  const Reservation = ctx.table('hospitality_core.Reservation')
+  const rows = await ctx.db.all(
+    from(Reservation).where(
+      eq(Reservation.propertyId, propertyId),
+      eq(Reservation.roomTypeId, roomTypeId),
+      inArray(Reservation.state, ['draft', 'confirmed', 'checked_in']),
+    ),
+  )
+  const events: Array<[number, number]> = []
+  for (const row of rows) {
+    if (excludeReservationId != null && row.id === excludeReservationId) continue
+    const rowStart = new Date(String(row.checkIn)).getTime()
+    const rowEnd = new Date(String(row.checkOut)).getTime()
+    if (!Number.isFinite(rowStart) || !Number.isFinite(rowEnd)) continue
+    if (rowStart >= end || rowEnd <= start) continue
+    const quantity = Math.max(1, Number(row.roomQuantity ?? 1))
+    events.push([rowStart, quantity], [rowEnd, -quantity])
+  }
+  events.sort((left, right) => left[0] - right[0] || left[1] - right[1])
+  let running = 0
+  let peak = 0
+  for (const [, delta] of events) {
+    running += delta
+    peak = Math.max(peak, running)
+  }
+  return Math.max(total - peak, 0)
+}
+
+type LedgerPatch = (
+  current: Row,
+) => { total: number; sold: number; blocked: number; totalManual?: boolean } | InventoryIssue
 
 const changeLedger = async (
   ctx: Ctx,
@@ -477,6 +582,7 @@ export const inventory: Record<string, FnSpec> = {
       roomTypeId: 'id',
       date: 'date',
       total: 'int',
+      totalManual: 'bool',
       sold: 'int',
       blocked: 'int',
       available: 'int',
@@ -532,6 +638,7 @@ export const inventory: Record<string, FnSpec> = {
           roomTypeId: args.roomTypeId,
           date,
           total: Number(row?.total ?? total),
+          totalManual: row?.totalManual === true,
           sold: Number(row?.sold ?? 0),
           blocked: Number(row?.blocked ?? 0),
           available: Number(row?.available ?? total),
@@ -554,6 +661,7 @@ export const inventory: Record<string, FnSpec> = {
       to: 'date',
       total: 'int?',
       blocked: 'int?',
+      followRooms: 'bool?',
     },
     output: { ok: 'bool', count: 'int?', errors: 'json?' },
     effects: [
@@ -574,23 +682,44 @@ export const inventory: Record<string, FnSpec> = {
       if (!property) errors.push(issue('propertyId', 'property_missing'))
       if (!roomType) errors.push(issue('roomTypeId', 'room_type_missing'))
       else if (roomType.propertyId !== args.propertyId) errors.push(issue('roomTypeId', 'property_mismatch'))
-      if (args.total === undefined && args.blocked === undefined)
+      if (args.total === undefined && args.blocked === undefined && args.followRooms !== true)
         errors.push(issue('total', 'inventory_change_required'))
+      if (args.total !== undefined && args.followRooms === true)
+        errors.push(issue('total', 'inventory_total_conflict'))
       if (args.total !== undefined && !isNatural(args.total)) errors.push(issue('total', 'non_negative'))
       if (args.blocked !== undefined && !isNatural(args.blocked))
         errors.push(issue('blocked', 'non_negative'))
       if (errors.length) return failure(...errors)
+      const roomCount = await sellableRooms(ctx, args.propertyId, args.roomTypeId)
       try {
         return await ctx.tx(async (tx) => {
           await ensureLedgerRows(tx, args.propertyId, args.roomTypeId, range.dates)
           for (const date of range.dates)
             await changeLedger(tx, args.propertyId, args.roomTypeId, date, (current) => {
+              if (args.followRooms === true) {
+                const sold = Number(current.sold)
+                const blocked = args.blocked === undefined ? Number(current.blocked) : natural(args.blocked)
+                if (sold + blocked > roomCount)
+                  return issue('total', 'inventory_capacity', {
+                    date,
+                    total: roomCount,
+                    committed: sold + blocked,
+                  })
+                return { total: roomCount, sold, blocked, totalManual: false }
+              }
               const total = args.total === undefined ? Number(current.total) : natural(args.total)
               const sold = Number(current.sold)
               const blocked = args.blocked === undefined ? Number(current.blocked) : natural(args.blocked)
               if (sold + blocked > total)
                 return issue('total', 'inventory_capacity', { date, total, committed: sold + blocked })
-              return { total, sold, blocked }
+              return {
+                total,
+                sold,
+                blocked,
+                // Naming a total is an allotment decision; it must survive the
+                // next room the property opens or closes.
+                ...(args.total === undefined ? {} : { totalManual: true }),
+              }
             })
           await recordInventoryChange(tx, {
             propertyId: args.propertyId,

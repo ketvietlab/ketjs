@@ -73,6 +73,9 @@ export type PropertyDetail = {
   defaultCheckIn: string
   defaultCheckOut: string
   enforceTimes: boolean
+  allowHourly?: boolean | null
+  allowWeekly?: boolean | null
+  allowMonthly?: boolean | null
   longStayBillOnCheckIn?: boolean | null
   starRating: number
   street1?: string | null
@@ -112,6 +115,9 @@ export type PropertyFormValues = Pick<
   | 'defaultCheckIn'
   | 'defaultCheckOut'
   | 'enforceTimes'
+  | 'allowHourly'
+  | 'allowWeekly'
+  | 'allowMonthly'
   | 'longStayBillOnCheckIn'
   | 'starRating'
   | 'description'
@@ -248,6 +254,10 @@ export type RoomTypeDetail = Omit<
   maxExtraBeds: number
   viewType?: string | null
   sharedBathroom: boolean
+  allowHourly?: boolean | null
+  allowWeekly?: boolean | null
+  allowMonthly?: boolean | null
+  minHourlyHours?: number | null
   color?: string | null
   cancellationPolicyId?: string | null
   property?: { id?: string; code?: string; name?: string } | null
@@ -273,6 +283,10 @@ export type RoomTypeFormValues = Pick<
   | 'sizeSqm'
   | 'viewType'
   | 'sharedBathroom'
+  | 'allowHourly'
+  | 'allowWeekly'
+  | 'allowMonthly'
+  | 'minHourlyHours'
   | 'baseRate'
   | 'color'
   | 'cancellationPolicyId'
@@ -1143,6 +1157,27 @@ const propertyFormFields = (
       help: _('hospitality_core.property.field.enforceTimesHint'),
     },
     {
+      name: 'allowHourly',
+      label: _('hospitality_core.property.field.allowHourly'),
+      type: 'checkbox',
+      value: values.allowHourly !== false,
+      help: _('hospitality_core.property.field.allowHourlyHint'),
+    },
+    {
+      name: 'allowWeekly',
+      label: _('hospitality_core.property.field.allowWeekly'),
+      type: 'checkbox',
+      value: values.allowWeekly === true,
+      help: _('hospitality_core.property.field.allowWeeklyHint'),
+    },
+    {
+      name: 'allowMonthly',
+      label: _('hospitality_core.property.field.allowMonthly'),
+      type: 'checkbox',
+      value: values.allowMonthly === true,
+      help: _('hospitality_core.property.field.allowMonthlyHint'),
+    },
+    {
       name: 'longStayBillOnCheckIn',
       label: _('hospitality_core.property.field.longStayBillOnCheckIn'),
       type: 'checkbox',
@@ -1793,6 +1828,12 @@ export const roomsScreen = (
               : emptyState(
                   _('hospitality_core.screen.rooms.empty'),
                   _('hospitality_core.screen.rooms.emptyHint'),
+                  {
+                    actions: setupAction(
+                      _('hospitality_core.room.action.create'),
+                      '/admin/hospitality/rooms/new',
+                    ),
+                  },
                 )
           }
         />,
@@ -3152,6 +3193,32 @@ const roomTypeFormFields = (
     value: values.sharedBathroom,
   },
   {
+    name: 'allowHourly',
+    label: _('hospitality_core.roomType.field.allowHourly'),
+    type: 'checkbox',
+    value: values.allowHourly !== false,
+    help: _('hospitality_core.roomType.field.allowHourlyHint'),
+  },
+  {
+    name: 'minHourlyHours',
+    label: _('hospitality_core.roomType.field.minHourlyHours'),
+    type: 'number',
+    value: values.minHourlyHours ?? 2,
+    step: '1',
+  },
+  {
+    name: 'allowWeekly',
+    label: _('hospitality_core.roomType.field.allowWeekly'),
+    type: 'checkbox',
+    value: values.allowWeekly === true,
+  },
+  {
+    name: 'allowMonthly',
+    label: _('hospitality_core.roomType.field.allowMonthly'),
+    type: 'checkbox',
+    value: values.allowMonthly === true,
+  },
+  {
     name: 'baseRate',
     label: _('hospitality_core.roomType.field.baseRate'),
     type: 'decimal',
@@ -3274,6 +3341,10 @@ export const roomTypesScreen = (
             title={_('hospitality_core.roomType.empty.noProperty')}
             message={_('hospitality_core.roomType.empty.noPropertyHint')}
             tone="warning"
+            actions={setupAction(
+              _('hospitality_core.property.action.create'),
+              '/admin/hospitality/properties/new',
+            )}
           />
         ),
         <CardGrid
@@ -3495,35 +3566,134 @@ export const roomTypeDetailScreen = (
   )
 }
 
-export const amenitiesScreen = (_: Translator, rows: AmenityRow[], frame: Frame): TemplateResult => (
+/**
+ * An empty screen that names the missing prerequisite should also open it.
+ * Telling an operator "create a property first" and then leaving them to find
+ * the menu is how a set-up flow turns into a scavenger hunt.
+ */
+const setupAction = (label: string, href: string): TemplateResult =>
+  linkButton({ label, href, variant: 'primary' })
+
+export const amenitiesScreen = (
+  _: Translator,
+  rows: AmenityRow[],
+  categories: Choice[],
+  frame: Frame,
+  state?: string | null,
+): TemplateResult => (
   <Framed
     translator={_}
     title={_('hospitality_core.screen.amenities.title')}
     frame={frame}
-    body={
+    body={stack([
+      feedback(_, state),
+      <Section
+        title={_('hospitality_core.screen.amenities.create')}
+        description={_('hospitality_core.screen.amenities.createHint')}
+        body={
+          <RecordForm
+            action="/admin/hospitality/amenities"
+            method="post"
+            submit={_('hospitality_core.action.saveAmenity')}
+            submitVariant="primary"
+            hidden={{ operation: 'save-amenity' }}
+            fields={[
+              { name: 'code', label: _('hospitality_core.col.code'), required: true },
+              { name: 'name', label: _('hospitality_core.col.name'), required: true },
+              {
+                name: 'scope',
+                label: _('hospitality_core.col.scope'),
+                type: 'select',
+                value: 'property',
+                options: ['property', 'room'].map((value) => ({
+                  value,
+                  label: _(`hospitality_core.amenityScope.${value}`),
+                })),
+                required: true,
+              },
+              {
+                name: 'categoryId',
+                label: _('hospitality_core.col.category'),
+                type: 'select',
+                options: [{ value: '', label: '—' }, ...choices(categories)],
+              },
+              { name: 'sequence', label: _('hospitality_core.field.sequence'), type: 'number', value: 10 },
+            ]}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
         : emptyState(
             _('hospitality_core.screen.amenities.empty'),
             _('hospitality_core.screen.amenities.emptyHint'),
-          )
-    }
+          ),
+    ])}
   />
 )
 
-export const policiesScreen = (_: Translator, rows: PolicyRow[], frame: Frame): TemplateResult => (
+export const policiesScreen = (
+  _: Translator,
+  rows: PolicyRow[],
+  frame: Frame,
+  state?: string | null,
+): TemplateResult => (
   <Framed
     translator={_}
     title={_('hospitality_core.screen.policies.title')}
     frame={frame}
-    body={
+    body={stack([
+      feedback(_, state),
+      <Section
+        title={_('hospitality_core.screen.policies.create')}
+        description={_('hospitality_core.screen.policies.createHint')}
+        body={
+          <RecordForm
+            action="/admin/hospitality/policies"
+            method="post"
+            submit={_('hospitality_core.action.savePolicy')}
+            submitVariant="primary"
+            hidden={{ operation: 'save-policy' }}
+            fields={[
+              { name: 'code', label: _('hospitality_core.col.code'), required: true },
+              { name: 'name', label: _('hospitality_core.col.name'), required: true },
+              {
+                name: 'type',
+                label: _('hospitality_core.col.policyType'),
+                type: 'select',
+                value: 'flexible',
+                options: ['flexible', 'moderate', 'strict', 'non_refundable'].map((value) => ({
+                  value,
+                  label: _(`hospitality_core.policy.${value}`),
+                })),
+                required: true,
+              },
+              {
+                name: 'freeCancellationHours',
+                label: _('hospitality_core.col.freeCancellation'),
+                type: 'number',
+                value: 24,
+                help: _('hospitality_core.field.freeCancellationHint'),
+              },
+              {
+                name: 'penaltyPercent',
+                label: _('hospitality_core.col.penalty'),
+                type: 'decimal',
+                value: '0',
+                help: _('hospitality_core.field.penaltyHint'),
+              },
+              { name: 'description', label: _('hospitality_core.field.description'), type: 'textarea' },
+            ]}
+          />
+        }
+      />,
       rows.length
         ? dataTable(_, { columns: policyColumns(_), rows, id: (row) => row.id })
         : emptyState(
             _('hospitality_core.screen.policies.empty'),
             _('hospitality_core.screen.policies.emptyHint'),
-          )
-    }
+          ),
+    ])}
   />
 )
 
@@ -3622,6 +3792,12 @@ export const contentScreen = (
           emptyState(
             _('hospitality_core.screen.content.noProperty'),
             _('hospitality_core.screen.content.noPropertyHint'),
+            {
+              actions: setupAction(
+                _('hospitality_core.property.action.create'),
+                '/admin/hospitality/properties/new',
+              ),
+            },
           )
         ),
         ...(property
@@ -4812,6 +4988,12 @@ export const ratePlansScreen = (
             emptyState(
               _('hospitality_core.screen.ratePlans.noRoomTypes'),
               _('hospitality_core.screen.ratePlans.noRoomTypesHint'),
+              {
+                actions: setupAction(
+                  _('hospitality_core.roomType.action.create'),
+                  '/admin/hospitality/room-types/new',
+                ),
+              },
             )
           )
         }
@@ -5291,6 +5473,7 @@ export const frontDeskScreen = (
   locale: string,
   timezone: string,
   frame: Frame,
+  configured = true,
 ): TemplateResult => (
   <Framed
     translator={_}
@@ -5323,10 +5506,21 @@ export const frontDeskScreen = (
       ) : null,
       rows.length
         ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
-        : emptyState(
-            _('hospitality_core.screen.frontDesk.empty'),
-            _('hospitality_core.screen.frontDesk.emptyHint'),
-          ),
+        : configured
+          ? emptyState(
+              _('hospitality_core.screen.frontDesk.empty'),
+              _('hospitality_core.screen.frontDesk.emptyHint'),
+            )
+          : emptyState(
+              _('hospitality_core.screen.frontDesk.setup'),
+              _('hospitality_core.screen.frontDesk.setupHint'),
+              {
+                actions: setupAction(
+                  _('hospitality_core.property.action.create'),
+                  '/admin/hospitality/properties/new',
+                ),
+              },
+            ),
     ])}
   />
 )
@@ -6820,6 +7014,9 @@ export const tapeChartScreen = (
           empty={emptyState(
             _('hospitality_core.screen.tapeChart.empty'),
             _('hospitality_core.screen.tapeChart.emptyHint'),
+            {
+              actions: setupAction(_('hospitality_core.room.action.create'), '/admin/hospitality/rooms/new'),
+            },
           )}
         />
       }

@@ -220,25 +220,45 @@ Output:
 type CreateReservationResult =
   | {
       ok: true
-      id: string
+      id: string            // unit đầu tiên; bằng đúng `id` mà BFF gửi lên
       companyId: string
       propertyId: string
       roomTypeId: string
-      folioId: string
-      stayId: string | null
+      folioId: string       // một folio cho cả lần checkout
+      stayId: string | null // stay của unit đầu tiên
       code: string
       state: string
-      rate: string
-      quantity: number
-      amountTotal: string
+      rate: string          // giá một phòng một đêm
+      quantity: number      // số phòng đã mua
+      amountTotal: string   // tổng cả lần checkout
       currency: string
+      units: Array<{
+        reservationId: string
+        stayId: string | null
+        code: string
+        amountTotal: string // tiền của riêng phòng đó
+      }>
       existing: boolean
       errors: []
     }
   | { ok: false; errors: BookingIssue[] }
 ```
 
-Cùng `requestKey` và cùng nội dung trả bản ghi cũ với `existing: true`. Cùng key nhưng nội dung khác trả `requestConflict`. Không retry bằng key mới khi client chưa biết kết quả lần trước.
+**Một lần checkout `quantity` phòng tạo ra `quantity` reservation.** Mỗi reservation là một phòng
+để lễ tân gán, một `Stay` để check-in, một `StayGuest` và một room `Charge`; tất cả dùng chung một
+`Folio`. Trước đây một lần checkout nhiều phòng chỉ tạo một `Stay`, nên lễ tân không thể giao đủ số
+phòng khách đã trả tiền.
+
+Unit đầu tiên giữ nguyên `id`, `requestKey` và `code` mà BFF gửi lên; các unit sau dùng hậu tố
+`#2`, `#3`. Vì vậy **đặt một phòng — tuyệt đại đa số trường hợp — không đổi gì**: cùng `id`, cùng
+`folioId`, cùng `stayId`, cùng contract như trước.
+
+Các unit của một lần checkout dùng chung `groupKey` (bằng `id` BFF gửi lên). Đó là thứ khiến chúng
+được xem là một lần mua ở phía khách.
+
+Cùng `requestKey` và cùng nội dung trả nguyên bộ unit cũ với `existing: true`. Cùng key nhưng khác
+nội dung — kể cả chỉ khác số phòng — trả `requestConflict`. Không retry bằng key mới khi client chưa
+biết kết quả lần trước.
 
 ## Contract self-service reservation
 
@@ -279,7 +299,8 @@ type PartnerReservation = {
   checkOut: string
   adults: number
   children: number
-  amountTotal: string
+  rooms: number        // số phòng của lần checkout này
+  amountTotal: string  // tổng cả lần checkout
   currency: string
   state: string
   cancellationAllowed: boolean
@@ -287,6 +308,9 @@ type PartnerReservation = {
 ```
 
 Projection này cố ý không trả giấy tờ, contact PII nội bộ, charge detail hoặc field vận hành.
+
+Một lần checkout nhiều phòng chỉ hiện **một** dòng trong `listPartnerReservations`, với `rooms` là số
+phòng và `amountTotal` là tổng tiền. Khách mua một lần thì nhìn thấy một booking, không phải ba.
 
 ### `hospitality_core.cancelPartnerReservation`
 
@@ -301,7 +325,15 @@ type CancelReservationResult =
   | { ok: false; errors: BookingIssue[] }
 ```
 
-Hủy chỉ áp dụng cho reservation `confirmed`, trước check-in và còn trong cửa sổ hủy miễn phí; chính sách `non_refundable` luôn bị từ chối. Retry sau khi đã hủy trả `existing: true`.
+Hủy chỉ áp dụng cho reservation `confirmed`, trước check-in và còn trong cửa sổ hủy miễn phí; chính
+sách `non_refundable` luôn bị từ chối. Retry sau khi đã hủy trả `existing: true`.
+
+Hủy một unit là **hủy cả lần checkout**: mọi reservation cùng `groupKey` chuyển sang `cancelled`,
+toàn bộ room-night được trả lại và output trả thêm `rooms` là số phòng đã hủy. Hủy lẻ từng phòng
+chưa được hỗ trợ.
+
+Điều khoản hủy được snapshot lên reservation lúc tạo, nên sửa `CancellationPolicy` về sau không
+thay đổi quyền lợi của khách đã đặt.
 
 ## Lỗi ổn định và i18n
 
@@ -345,10 +377,10 @@ BFF nên trả `code`, `messageKey` và `params`, còn Website dịch tại pres
 
 Một booking thành công tạo trong cùng một transaction:
 
-- một `Folio` mở;
-- một `Reservation` confirmed, provider `website`;
-- một `Stay` draft và một `StayGuest` chính;
-- một room `Charge`;
+- một `Folio` mở cho cả lần checkout;
+- `quantity` `Reservation` confirmed, provider `website`, cùng `groupKey`;
+- `quantity` `Stay` draft và `StayGuest` chính tương ứng;
+- `quantity` room `Charge`, mỗi charge là số đêm của một phòng;
 - inventory ledger và `InventoryChange` tương ứng cho toàn bộ số phòng và đêm.
 
 Inventory được reserve bằng compare-and-set. Hai request tranh phòng cuối chỉ có một request thắng trên cả SQLite và PostgreSQL. Nếu transaction lỗi, không có folio/reservation/stay/charge/inventory dở dang. Unique key `(companyId, provider, requestKey)` xử lý retry qua nhiều replica. Hủy dùng compare-and-set, void charge và trả đúng `roomQuantity` vào inventory trong cùng transaction.
@@ -374,8 +406,10 @@ Các số trên dùng để bắt regression và kiểm chứng multi-database, 
 ## Thay đổi và giới hạn cần biết
 
 - Schema thay đổi theo hướng additive: `Reservation` có thêm `ratePlanId`, `requestKey`, `infants`, `roomQuantity`, `currency`; `Stay` có thêm `infants`, `roomQuantity`.
-- `BOOKING_PROVIDERS` có thêm `website`.
+- `BOOKING_PROVIDERS` có thêm `website`; `Reservation` có thêm `groupKey` và snapshot điều khoản hủy.
 - Không có public Website API/route trong phạm vi bàn giao này; team Website vẫn phải viết BFF transport, customer-session mapping và URL ảnh Storage.
 - Chưa bao gồm payment capture/refund, kế toán/hóa đơn, promo code, dynamic pricing theo ngày, package hoặc tax breakdown.
-- Cancellation dùng policy hiện tại của room type/property; chưa snapshot policy vào reservation.
+- Cancellation snapshot điều khoản lên reservation lúc tạo; sửa policy về sau không hồi tố.
+- Một lần checkout nhiều phòng tạo nhiều reservation dùng chung `groupKey` và một folio. Hủy lẻ từng
+  phòng chưa được hỗ trợ.
 - Currency lấy từ company, fallback `VND`; mọi số tiền trả dưới dạng decimal string.
