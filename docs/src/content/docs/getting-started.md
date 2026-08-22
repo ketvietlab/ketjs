@@ -1,6 +1,6 @@
 ---
 title: Develop the docs
-description: Install, run, and validate KetSuite Docs independently from the main monorepo.
+description: Install, run, and validate the Ket developer documentation independently from the main monorepo.
 sidebar:
   order: 1
 ---
@@ -46,6 +46,23 @@ plugins to the root `package.json` or `package-lock.json`.
 
 All published content, frontmatter, navigation labels, image descriptions, and diagrams must be in
 English. Translate legacy documents before moving them into the Starlight content collection.
+
+## Place content by reader task
+
+Do not organize a page around the pull request that introduced it. Organize it around the task a
+future developer needs to complete, and link it from the hub that owns that journey.
+
+| Content | Location | Reader entry point |
+| --- | --- | --- |
+| Framework contracts and usage | `src/content/docs/ketjs/` | [KetJS framework](/ketjs/) |
+| KetSuite ownership and application behavior | `src/content/docs/ketsuite/` | [KetSuite developer guide](/ketsuite/) |
+| Deployment, migration, workers, storage, and measurements | Owning KetJS guide plus `operations/` evidence | [Operations reading map](/operations/) |
+| Accepted cross-cutting choices and unresolved design work | `src/content/docs/architecture/` | [Design records](/architecture/) |
+| Team-specific integration notes | `src/content/docs/handoffs/` | Contributing sidebar only; exclude from search when appropriate. |
+
+One concept should have one owning guide. Add links from related pages instead of copying the same
+contract into several sections. Every published page must be reachable from the explicit sidebar or
+from a hub page; drafts stay out of public navigation until they are translated and reviewed.
 
 ## Add a page
 

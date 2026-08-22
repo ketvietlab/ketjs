@@ -83,18 +83,33 @@ The deployment decides which modules it ships. Each database decides which shipp
 modules are enabled. Installing or removing a module changes behavior, not schema; migrations are
 planned from the complete deployment manifest.
 
-## Choose a path
+## Read the framework in dependency order
 
-- Start with [Quick start](/ketjs/quick-start/) to scaffold and run a minimal application.
-- Read [Workspaces and apps](/ketjs/workspaces/) when one repository serves multiple processes or
-  applications.
-- Read [Modules and manifest](/ketjs/modules/) before creating reusable business capabilities.
-- Continue with [Models and scopes](/ketjs/models/), [Queries and changesets](/ketjs/data/), and
-  [Functions and effects](/ketjs/functions/) for the core server model.
-- Use [Form validation](/ketjs/form-validation/), [Rendering and islands](/ketjs/rendering/), and
-  [Themes and KTL](/ketjs/themes/) for UI work.
-- Use [Reports and PDF](/ketjs/reports/) for printable business documents.
-- Finish with [Testing](/ketjs/testing/) and [Deployment](/ketjs/deployment/) before shipping an app.
+The guides are organized by what depends on what. A new contributor should follow this sequence;
+an experienced contributor can enter at the stage that owns the change.
+
+1. **Compose the application.** Start with [Quick start](/ketjs/quick-start/), then learn
+   [Workspaces and apps](/ketjs/workspaces/), [Modules and manifest](/ketjs/modules/), and
+   [Module discovery](/ketjs/module-discovery/). [Application lifecycle](/ketjs/app-lifecycle/)
+   explains what changes after composition.
+2. **Model data and behavior.** Read [Models and scopes](/ketjs/models/),
+   [Queries and changesets](/ketjs/data/), [Functions and effects](/ketjs/functions/), and
+   [Migrations and adapters](/ketjs/migrations/) in that order.
+3. **Serve and integrate.** Use [HTTP routes and responses](/ketjs/http/),
+   [HTTP contracts and OpenAPI](/ketjs/openapi/), [Sessions and tenants](/ketjs/sessions-tenants/),
+   [Durable jobs and workers](/ketjs/jobs/), and [Storage, transport, and streams](/ketjs/integrations/).
+4. **Build presentation.** Begin with [Form validation](/ketjs/form-validation/) and
+   [Rendering and islands](/ketjs/rendering/), then add [Themes and KTL](/ketjs/themes/),
+   [Menus and localization](/ketjs/menus-i18n/), or [Reports and PDF](/ketjs/reports/).
+5. **Verify and deliver.** Finish with [Testing](/ketjs/testing/),
+   [CLI and configuration](/ketjs/cli-config/), and [Deployment](/ketjs/deployment/).
+   [Public API](/ketjs/api/) and [Publishing packages](/ketjs/releasing/) are references for library
+   and release work rather than prerequisites for an application.
+
+:::tip[Changing KetSuite instead?]
+KetSuite applies these contracts but adds its own module ownership and security rules. Start with the
+[KetSuite developer guide](/ketsuite/) instead of reading the complete framework guide first.
+:::
 
 ## Current runtime requirements
 
