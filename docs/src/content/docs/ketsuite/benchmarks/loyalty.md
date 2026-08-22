@@ -1,3 +1,8 @@
+---
+title: Loyalty benchmark evidence
+description: Reproducible benchmark notes for KetSuite Loyalty workloads.
+---
+
 # Loyalty benchmark evidence
 
 Generated on 2026-08-20 immediately before the implementation commit.

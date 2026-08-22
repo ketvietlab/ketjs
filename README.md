@@ -142,7 +142,7 @@ the `tsx` development path additionally permits TypeScript source entries.
 resolved module, the apps that ship it and its concrete source path.
 
 The full packaging, resolution, deployment and error contract is documented in
-[Module discovery](docs/06-module-discovery.md).
+[Module discovery](docs/src/content/docs/ketjs/module-discovery.md).
 
 ## Headless end-to-end tests
 
@@ -166,7 +166,7 @@ try {
 Use `ket call FUNCTION --against http://localhost:3000` for a manual smoke call,
 and `ket test dist/test --watch` to run emitted headless tests. Full API, isolation,
 authentication, multi-tenant and worker examples are in
-[the headless E2E guide](docs/05-headless-e2e.md).
+[the headless E2E guide](docs/src/content/docs/ketjs/testing.md).
 
 Framework apps may either configure session authentication with `resolveSession` or use the
 development-only `X-Ket-Company` fallback. KetSuite configures cookie-backed user sessions and
@@ -196,7 +196,7 @@ safely.
 ## Reference benchmark snapshot
 
 These are development-machine snapshots, not capacity claims or guarantees. Full dated methodology
-and caveats are in [docs/03-benchmarks.md](docs/03-benchmarks.md); rerun the benchmark commands on
+and caveats are in [the benchmark guide](docs/src/content/docs/operations/benchmarks.md); rerun the benchmark commands on
 the revision and hardware you care about.
 
 | | KetJS | best competitor |
@@ -264,7 +264,7 @@ Biome is the repository-wide formatter and linter. `npm run format` normalises a
 supported source/config files; `npm run verify` refuses unformatted or lint-invalid
 changes before building and testing.
 
-See [docs/00-decisions.md](docs/00-decisions.md) for the reasoning behind each choice.
+See [the architecture decisions](docs/src/content/docs/architecture/decisions.md) for the reasoning behind each choice.
 
 ## License
 

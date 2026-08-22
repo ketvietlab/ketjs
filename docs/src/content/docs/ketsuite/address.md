@@ -1,3 +1,9 @@
+---
+title: Address and Vietnam administrative data
+description: KetSuite address boundaries, versioned country catalogs, validation, and evidence.
+draft: true
+---
+
 # Address và dữ liệu địa giới Việt Nam
 
 KetSuite port hành vi địa chỉ cần thiết từ the domain contract nhưng không sao chép schema
@@ -196,8 +202,6 @@ và `divisionId`; list trả `addressLine` đã format. Input text cũ còn đư
 field canonical trong giai đoạn chuyển tiếp, nhưng không còn cột `city/state/country`
 song song trong database.
 
-Evidence từ trình duyệt thật được lưu tại [docs/screenshots/address](screenshots/address/README.md).
-
 ## Kiểm thử và vận hành
 
 Chạy đúng phần đang phát triển:
@@ -223,5 +227,5 @@ KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:address
 KET_BENCH_PG=postgres://.../ket_address_bench npm run bench:identity
 ```
 
-Kết quả và phương pháp đo nằm tại [docs/benchmarks/address.md](benchmarks/address.md).
+Kết quả và phương pháp đo nằm tại [Address benchmark evidence](../benchmarks/address/).
 Full suite chỉ chạy trên CI khi PR được mở vào `develop`.

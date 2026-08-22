@@ -1,3 +1,9 @@
+---
+title: Partner domain
+description: KetSuite Partner domain boundaries, public contracts, and verification notes.
+draft: true
+---
+
 # Partner domain
 
 Tài liệu này mô tả subset Partner được port từ the domain contract vào KetSuite, các điểm chủ
@@ -191,12 +197,6 @@ tiếng Việt hardcode.
 được cài. Toàn bộ link nội bộ giữ query `lang`, nên người dùng không mất locale khi
 đổi màn hình. Giao diện đã được kiểm tra ở desktop 1440×900 và mobile 390×844 bằng
 trình duyệt headless thật, cả tiếng Việt và tiếng Anh.
-
-Ảnh kiểm tra hiện nằm tại:
-
-- `docs/screenshots/partner-directory-vi-desktop.png`;
-- `docs/screenshots/partner-detail-en-mobile.png`;
-- `docs/screenshots/partner-accounting-vi-mobile.png`.
 
 ## Kiểm thử thay đổi liên quan
 

@@ -1,3 +1,8 @@
+---
+title: Application lifecycle behavior
+description: Tested install, removal, schema, rendering, deployment, and multi-tenant application behavior.
+---
+
 # App lifecycle: every edge, and what actually happens
 
 "Install at build, switch on at run" (D21) is easy to state and full of corners. Each

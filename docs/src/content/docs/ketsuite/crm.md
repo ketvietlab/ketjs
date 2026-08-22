@@ -1,3 +1,8 @@
+---
+title: CRM modules
+description: KetSuite CRM module boundaries, shared UI behavior, and scope.
+---
+
 # CRM modules
 
 KetSuite CRM is an open-source sales application for leads and opportunities.
@@ -37,9 +42,4 @@ configuration, locale rendering and website lead UI. The benchmark measures list
 pipeline pages, record detail and scoring across 20,000 CRM records on SQLite or PostgreSQL.
 
 The backend design harness exposes the neutral extension primitives at `/catalogue/attachments` and
-`/catalogue/modal`. Browser evidence covers the long-content desktop and mobile states:
-
-- [`screenshots/crm-ui-primitives/attachments-desktop.png`](screenshots/crm-ui-primitives/attachments-desktop.png)
-- [`screenshots/crm-ui-primitives/attachments-mobile.png`](screenshots/crm-ui-primitives/attachments-mobile.png)
-- [`screenshots/crm-ui-primitives/modal-desktop.png`](screenshots/crm-ui-primitives/modal-desktop.png)
-- [`screenshots/crm-ui-primitives/modal-mobile.png`](screenshots/crm-ui-primitives/modal-mobile.png)
+`/catalogue/modal` for long-content desktop and mobile acceptance checks.

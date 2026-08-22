@@ -1,3 +1,8 @@
+---
+title: Loyalty
+description: KetSuite Loyalty modules, invariants, integrations, and test evidence.
+---
+
 # Loyalty
 
 KetSuite Loyalty is split by responsibility while keeping one public business contract:
@@ -57,8 +62,7 @@ A separate live PostgreSQL test races two connections against one wallet and ver
 winner, non-negative balance and idempotent finalization. The repository gate also runs build,
 TypeScript, i18n parity, zero-dependency audit, UI audit and type proofs.
 
-Visual evidence is generated from seeded application data, not mocks. The inventory and embedded
-images are in [the Loyalty screen manifest](./screenshots/loyalty/README.md).
+Visual acceptance uses seeded application data rather than mocks.
 
 ## Deliberate non-scope
 

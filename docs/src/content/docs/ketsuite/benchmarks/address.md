@@ -1,3 +1,9 @@
+---
+title: Address benchmark evidence
+description: Reproducible benchmark notes for the KetSuite Address module.
+draft: true
+---
+
 # Address benchmark evidence
 
 Đo ngày 2026-08-20 trên working tree `feat/address-vn`, ngay trước commit triển
@@ -65,5 +71,4 @@ nên kết quả này chỉ chứng minh không thấy hồi quy theo ngưỡng 
   Company/Branch, Hospitality và joint contract.
 - Type check và format check pass; lint phần Address/Partner/Hospitality pass.
 - Full suite không chạy local theo `AGENT.md`; CI chạy khi PR target `develop`.
-- Browser evidence desktop/mobile, vi/en nằm tại
-  [docs/screenshots/address](../screenshots/address/README.md).
+- Browser acceptance covers desktop/mobile layouts in Vietnamese and English.

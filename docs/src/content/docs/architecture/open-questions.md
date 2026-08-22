@@ -1,3 +1,8 @@
+---
+title: Open questions
+description: Known gaps, unsettled design questions, and weak spots in the current implementation.
+---
+
 # Open questions
 
 Honest list of what is not settled or not built.
