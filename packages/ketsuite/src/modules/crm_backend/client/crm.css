@@ -44,16 +44,41 @@
   [data-ui="crm-kanban-card"] p {
     margin: 0;
   }
-  [data-ui="crm-kanban-card"] form {
-    display: grid;
+  [data-ui="crm-kanban-card"] h3 {
+    font-size: var(--admin-size-base);
+  }
+  /* The priority is a stripe rather than a word: a column is scanned, not read. */
+  [data-ui="crm-kanban-card"][data-priority="2"] {
+    border-inline-start: 3px solid var(--admin-accent);
+  }
+  [data-ui="crm-kanban-card"][data-priority="3"] {
+    border-inline-start: 3px solid var(--admin-danger);
+  }
+  [data-ui="crm-kanban-party"] {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="crm-kanban-figures"] {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
     gap: var(--admin-gap-sm);
   }
-  [data-ui="crm-kanban-card"] label {
-    display: grid;
+  [data-ui="crm-kanban-figures"] small {
+    color: var(--admin-ink-muted);
+  }
+  /*
+   * The move control sits on one line with the card, not above it: as a stacked
+   * label-plus-select-plus-button it took more room than everything it was
+   * attached to and turned the board into a column of forms.
+   */
+  [data-ui="crm-kanban-move"] {
+    display: flex;
+    align-items: center;
     gap: var(--admin-gap-xs);
   }
-  [data-ui="crm-kanban-card"] select {
-    inline-size: 100%;
+  [data-ui="crm-kanban-move"] select {
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
   [data-ui="crm-kanban-error"] {
     margin-block-end: var(--admin-gap);

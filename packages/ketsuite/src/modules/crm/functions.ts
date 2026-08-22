@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, isNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   activeStage,
@@ -9,22 +9,29 @@ import {
   applyCasePlan,
   assignCase,
   cancelCaseActivity,
+  canReadCase,
   caseDetail,
+  closedAtFor,
+  duplicateCases,
   commandKey,
   completeCaseActivity,
   ensureCrmDefaults,
   firstStage,
+  gamificationProfile,
   invalid,
   issue,
   groupCases,
   listCases,
   moveCase,
   n,
+  normalized,
   now,
   refreshCaseScore,
   saveCase,
   scheduleCaseActivity,
   serializeCaseList,
+  stageKinds,
+  visibleCases,
 } from './operations.ts'
 import { ASSIGNMENT_MODES, CASE_KINDS, TERMINAL_STATES } from './types.ts'
 
@@ -65,6 +72,7 @@ export const caseWriteEffects = [
   'write:crm.TimelineEntry',
   'read:mail.Thread',
   'write:mail.Thread',
+  'enqueue:crm.score',
 ] as const
 
 const activityEffects = [
@@ -99,6 +107,31 @@ const command = (ctx: Ctx, key: unknown) => {
 const ensureCase = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
   (await ctx.db.select('crm.Case', { id }))[0] ?? null
 
+/**
+ * One shape for the small configuration lists the pickers read: active first,
+ * filtered by name, capped so a keystroke never pulls a whole table.
+ */
+const optionRows = async (
+  ctx: Ctx,
+  model: string,
+  args: Record<string, unknown>,
+  order?: (a: Row, b: Row) => number,
+): Promise<Row[]> => {
+  const rows = await ctx.db.select(model, args.includeArchived === true ? {} : { active: true })
+  const needle = normalized(args.search)
+  return rows
+    .filter(
+      (row) => !needle || normalized(row.name).includes(needle) || normalized(row.code).includes(needle),
+    )
+    .sort(
+      (a, b) =>
+        (order ? order(a, b) : 0) ||
+        String(a.name ?? '').localeCompare(String(b.name ?? '')) ||
+        String(a.id).localeCompare(String(b.id)),
+    )
+    .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+}
+
 async function moveToTerminal(
   ctx: Ctx,
   input: {
@@ -113,7 +146,7 @@ async function moveToTerminal(
   if (error) return error
   return ctx.tx(async (tx) => {
     const held = await ensureCase(tx, input.id)
-    if (!held) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     if (held.kind !== 'opportunity') return invalid(issue('kind', 'crm.error.leadConversion'))
     const stages = (await tx.db.select('crm.Stage', { active: true })).filter(
       (stage) =>
@@ -141,7 +174,7 @@ async function moveToTerminal(
         active: true,
         version: n(held.version) + 1,
         updatedAt: timestamp,
-        closedAt: held.closedAt,
+        closedAt: closedAtFor(held, input.terminal, timestamp),
       },
     )
     if (!('dryRun' in changed) && !changed.matched)
@@ -153,7 +186,14 @@ async function moveToTerminal(
       eventType: event,
       body: `crm.timeline.${event}`,
       customerVisible: false,
+      occurredAt: timestamp,
     })
+    if (held.assigneeUserId)
+      await tx.jobs.enqueue(
+        'crm.gamification',
+        { userId: held.assigneeUserId },
+        { uniqueKey: `crm.gamification:${String(held.assigneeUserId)}` },
+      )
     return { ok: true, id: input.id, version: n(held.version) + 1, terminalState: input.terminal }
   })
 }
@@ -318,6 +358,7 @@ export const functions: Record<string, FnSpec> = {
       'read:crm.TeamMember',
       'read:user.User',
       'write:crm.TimelineEntry',
+      'enqueue:crm.gamification',
     ],
     idempotent: true,
     agent: true,
@@ -383,7 +424,7 @@ export const functions: Record<string, FnSpec> = {
       if (error) return error
       return ctx.tx(async (tx) => {
         const held = await ensureCase(tx, args.id)
-        if (!held) return invalid(issue('id', 'crm.error.notFound'))
+        if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
         if (held.kind !== 'lead') {
           if (held.kind === 'opportunity') return { ok: true, id: held.id, version: held.version }
           return invalid(issue('kind', 'crm.error.leadConversion'))
@@ -433,7 +474,14 @@ export const functions: Record<string, FnSpec> = {
       'write:crm.Message',
       'read:crm.ActivityLink',
       'write:crm.ActivityLink',
+      'read:crm.CalendarLink',
+      'write:crm.CalendarLink',
+      'read:crm.SalesDetail',
+      'write:crm.SalesDetail',
+      'read:crm.TimelineEntry',
       'write:crm.TimelineEntry',
+      'read:crm.TeamMember',
+      'read:user.User',
     ],
     idempotent: true,
     agent: true,
@@ -447,12 +495,22 @@ export const functions: Record<string, FnSpec> = {
           ensureCase(tx, args.sourceId),
         ])
         if (!target || !source) return invalid(issue('id', 'crm.error.notFound'))
+        if (!(await canReadCase(tx, target))) return invalid(issue('targetId', 'crm.error.notFound'))
+        if (!(await canReadCase(tx, source))) return invalid(issue('sourceId', 'crm.error.notFound'))
         if (target.kind !== source.kind) return invalid(issue('sourceId', 'crm.error.invalidKind'))
+        // Merging a record that is already folded into a third one would strand
+        // the history it carries, and merging into an archived target hides the
+        // result the moment it is written.
+        if (source.mergedIntoId || source.active === false)
+          return invalid(issue('sourceId', 'crm.error.alreadyMerged'))
+        if (target.mergedIntoId || target.active === false)
+          return invalid(issue('targetId', 'crm.error.alreadyMerged'))
+        const timestamp = now()
         const changed = await tx.db.compareAndSet(
           'crm.Case',
           { id: args.targetId },
           { version: args.expectedTargetVersion },
-          { version: n(target.version) + 1, updatedAt: now() },
+          { version: n(target.version) + 1, updatedAt: timestamp },
         )
         if (!('dryRun' in changed) && !changed.matched)
           return invalid(issue('version', 'crm.error.stageConflict', { current: target.version }))
@@ -462,10 +520,42 @@ export const functions: Record<string, FnSpec> = {
             caseId: args.targetId,
             tagId: join.tagId,
           })
-        for (const message of await tx.db.select('crm.Message', { caseId: args.sourceId }))
-          await tx.db.update('crm.Message', { id: message.id }, { caseId: args.targetId })
-        for (const link of await tx.db.select('crm.ActivityLink', { caseId: args.sourceId }))
-          await tx.db.update('crm.ActivityLink', { id: link.id }, { caseId: args.targetId })
+        // Everything the source carries moves with it. A merge that left the
+        // timeline and the meetings behind buried them on an archived record
+        // nobody opens again.
+        for (const model of ['crm.Message', 'crm.ActivityLink', 'crm.TimelineEntry'] as const)
+          for (const row of await tx.db.select(model, { caseId: args.sourceId }))
+            await tx.db.update(model, { id: row.id }, { caseId: args.targetId })
+        for (const link of await tx.db.select('crm.CalendarLink', { caseId: args.sourceId })) {
+          const held = (
+            await tx.db.select('crm.CalendarLink', { caseId: args.targetId, eventId: link.eventId })
+          )[0]
+          if (held)
+            await tx.db.del(
+              deleteFrom(tx.table('crm.CalendarLink')).where(eq(tx.table('crm.CalendarLink').id, link.id)),
+            )
+          else await tx.db.update('crm.CalendarLink', { id: link.id }, { caseId: args.targetId })
+        }
+        const [targetDetail, sourceDetail] = await Promise.all([
+          tx.db.select('crm.SalesDetail', { caseId: args.targetId }),
+          tx.db.select('crm.SalesDetail', { caseId: args.sourceId }),
+        ])
+        const kept = targetDetail[0]
+        const dropped = sourceDetail[0]
+        // The target's own figures win; the source only fills a blank, which is
+        // what makes merging a bare duplicate into a qualified record safe.
+        if (kept && dropped) {
+          const carried: Row = {}
+          if (!Number(kept.expectedRevenue) && Number(dropped.expectedRevenue))
+            carried.expectedRevenue = dropped.expectedRevenue
+          if (!Number(kept.recurringRevenue) && Number(dropped.recurringRevenue))
+            carried.recurringRevenue = dropped.recurringRevenue
+          if (!Number(kept.probability) && Number(dropped.probability))
+            carried.probability = dropped.probability
+          if (!kept.expectedClosing && dropped.expectedClosing)
+            carried.expectedClosing = dropped.expectedClosing
+          if (Object.keys(carried).length) await tx.db.update('crm.SalesDetail', { id: kept.id }, carried)
+        }
         await tx.db.update(
           'crm.Case',
           { id: args.sourceId },
@@ -473,9 +563,9 @@ export const functions: Record<string, FnSpec> = {
             active: false,
             terminalState: source.terminalState,
             mergedIntoId: args.targetId,
-            closedAt: now(),
+            closedAt: (source.closedAt as string | null) ?? timestamp,
             version: n(source.version) + 1,
-            updatedAt: now(),
+            updatedAt: timestamp,
           },
         )
         await addTimeline(tx, {
@@ -483,7 +573,8 @@ export const functions: Record<string, FnSpec> = {
           caseId: String(args.targetId),
           eventType: 'merged',
           body: 'crm.timeline.merged',
-          metadata: { sourceId: args.sourceId },
+          metadata: { sourceId: args.sourceId, sourceName: source.name },
+          occurredAt: timestamp,
         })
         return { ok: true, id: args.targetId, version: n(target.version) + 1 }
       })
@@ -493,7 +584,15 @@ export const functions: Record<string, FnSpec> = {
   'case.markWon': defineFn({
     input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', terminalState: 'text?', errors: 'json?' },
-    effects: ['read:crm.Case', 'write:crm.Case', 'read:crm.Stage', 'write:crm.TimelineEntry'],
+    effects: [
+      'read:crm.Case',
+      'write:crm.Case',
+      'read:crm.Stage',
+      'write:crm.TimelineEntry',
+      'read:crm.TeamMember',
+      'read:user.User',
+      'enqueue:crm.gamification',
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -515,6 +614,9 @@ export const functions: Record<string, FnSpec> = {
       'read:crm.SalesDetail',
       'write:crm.SalesDetail',
       'write:crm.TimelineEntry',
+      'read:crm.TeamMember',
+      'read:user.User',
+      'enqueue:crm.gamification',
     ],
     idempotent: true,
     agent: true,
@@ -529,33 +631,26 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'case.detectDuplicates': defineFn({
-    input: { id: 'id?', email: 'text?', phone: 'text?', name: 'text?' },
+    input: { id: 'id?', email: 'text?', phone: 'text?', name: 'text?', limit: 'int?' },
     output: { rows: 'json' },
     effects: [...caseReadEffects],
-    handler: async (ctx, args) => {
-      const all = await listCases(ctx, { includeArchived: false, limit: 10_000 })
-      const email = String(args.email ?? '')
-        .trim()
-        .toLowerCase()
-      const phone = String(args.phone ?? '').replace(/\D/g, '')
-      const name = String(args.name ?? '')
-        .trim()
-        .toLowerCase()
-      const rows = all.rows.filter(
-        (row) =>
-          row.id !== args.id &&
-          ((email && String(row.email ?? '').toLowerCase() === email) ||
-            (phone && String(row.phone ?? '').replace(/\D/g, '') === phone) ||
-            (name && String(row.name ?? '').toLowerCase() === name)),
-      )
-      return { rows }
-    },
+    agent: true,
+    handler: async (ctx, args) => ({
+      rows: await duplicateCases(ctx, args, n(args.limit ?? 20) || 20),
+    }),
   }),
 
   'case.addMessage': defineFn({
     input: { id: 'id', caseId: 'id', body: 'text', visibility: 'text', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:crm.Case', 'read:crm.Message', 'write:crm.Message', 'write:crm.TimelineEntry'],
+    effects: [
+      'read:crm.Case',
+      'read:crm.Message',
+      'write:crm.Message',
+      'write:crm.TimelineEntry',
+      'read:crm.TeamMember',
+      'read:user.User',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -579,12 +674,92 @@ export const functions: Record<string, FnSpec> = {
       'read:crm.ScoreRule',
       'read:crm.ScoreHistory',
       'write:crm.ScoreHistory',
+      'read:crm.TeamMember',
+      'read:user.User',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const error = command(ctx, args.idempotencyKey)
       return error ?? refreshCaseScore(ctx, String(args.id), String(args.idempotencyKey))
+    },
+  }),
+
+  /**
+   * The CRM's own activity list.
+   *
+   * The planner used to read `activity.listMy`, which answers with every
+   * activity the user owns anywhere in the suite — a stock transfer, a purchase
+   * order, an invoice — and carries no way back to the record it belongs to. So
+   * the CRM planner showed work from other apps and, for its own rows, showed a
+   * summary the user could not navigate from. This one is scoped to cases the
+   * actor may see and names the case on every row.
+   */
+  'activity.listMine': defineFn({
+    input: { today: 'date?', includeDone: 'bool?', mine: 'bool?', limit: 'int?' },
+    output: {
+      id: 'id',
+      summary: 'text',
+      dueDate: 'date',
+      doneAt: 'datetime?',
+      canceledAt: 'datetime?',
+      assigneeUserId: 'id?',
+      caseId: 'id',
+      caseName: 'text',
+      state: 'text',
+    },
+    effects: [
+      'read:crm.ActivityLink',
+      'read:crm.Case',
+      'read:crm.TeamMember',
+      'read:activity.Activity',
+      'read:user.User',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const links = await ctx.db.select('crm.ActivityLink')
+      if (!links.length) return []
+      const A = ctx.table('activity.Activity')
+      let query = from(A).where(
+        inArray(
+          A.id,
+          links.map((link) => link.activityId),
+        ),
+      )
+      if (args.mine !== false && ctx.actor) query = query.where(eq(A.assigneeUserId, ctx.actor))
+      if (args.includeDone !== true) query = query.where(eq(A.active, true), isNull(A.doneAt))
+      const activities = await ctx.db.all(query.orderBy(asc(A.dueDate), asc(A.id)))
+      if (!activities.length) return []
+      const caseIds = [...new Set(links.map((link) => String(link.caseId)))]
+      const C = ctx.table('crm.Case')
+      const cases = await ctx.db.all(from(C).where(inArray(C.id, caseIds)))
+      // The same audience filter every other CRM read uses, so the planner
+      // cannot become a way to see cases the list screen hides.
+      const visible = new Map((await visibleCases(ctx, cases)).map((row) => [String(row.id), row]))
+      const caseByActivity = new Map(links.map((link) => [String(link.activityId), String(link.caseId)]))
+      // `today` dates the row rather than filtering it, which is how
+      // `activity.listMy` reads it too: a planner that hid tomorrow's calls
+      // would not be a planner.
+      const today = String(args.today ?? '')
+      const stateOf = (activity: Row): string =>
+        activity.doneAt
+          ? 'done'
+          : activity.canceledAt
+            ? 'cancelled'
+            : !today
+              ? 'planned'
+              : String(activity.dueDate) < today
+                ? 'overdue'
+                : String(activity.dueDate) === today
+                  ? 'today'
+                  : 'planned'
+      return activities
+        .flatMap((activity) => {
+          const caseId = caseByActivity.get(String(activity.id))
+          const held = caseId ? visible.get(caseId) : undefined
+          return held ? [{ ...activity, caseId, caseName: held.name, state: stateOf(activity) }] : []
+        })
+        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 100))))
     },
   }),
 
@@ -700,12 +875,11 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'gamification.refresh': defineFn({
-    input: { userId: 'id?', idempotencyKey: 'text' },
+    input: { userId: 'id?', limit: 'int?', idempotencyKey: 'text' },
     output: { ok: 'bool', profiles: 'json?', errors: 'json?' },
     effects: [
       'read:user.User',
       'read:crm.Case',
-      'read:crm.ActivityLink',
       'read:activity.Activity',
       'read:crm.GamificationProfile',
       'write:crm.GamificationProfile',
@@ -717,47 +891,20 @@ export const functions: Record<string, FnSpec> = {
       if (error) return error
       const users = args.userId
         ? await ctx.db.select('user.User', { id: args.userId, active: true })
-        : await ctx.db.select('user.User', { active: true })
-      const [cases, links, activities] = await Promise.all([
-        ctx.db.select('crm.Case'),
-        ctx.db.select('crm.ActivityLink'),
-        ctx.db.select('activity.Activity'),
-      ])
-      const caseBy = new Map(cases.map((held) => [String(held.id), held]))
-      const linkByActivity = new Map(links.map((link) => [String(link.activityId), link]))
-      const existingProfiles = new Map(
-        (await ctx.db.select('crm.GamificationProfile')).map((profile) => [String(profile.id), profile]),
-      )
-      const completedByUser = new Map<string, number>()
-      for (const activity of activities) {
-        if (!activity.doneAt) continue
-        const link = linkByActivity.get(String(activity.id))
-        if (!link || !caseBy.has(String(link.caseId))) continue
-        const userId = String(activity.assigneeUserId)
-        completedByUser.set(userId, n(completedByUser.get(userId)) + 1)
-      }
+        : (await ctx.db.select('user.User', { active: true })).slice(
+            0,
+            Math.max(1, Math.min(500, n(args.limit ?? 200))),
+          )
+      /**
+       * Counted per user rather than by loading the pipeline into memory.
+       *
+       * The previous shape read every case, every activity and every link on
+       * every refresh, so the leaderboard grew a full-table scan per company as
+       * the pipeline grew. Each figure is now a counting query the
+       * `(companyId, assigneeUserId, …)` indexes already serve.
+       */
       const profiles: Row[] = []
-      for (const user of users) {
-        const owned = cases.filter((held) => held.assigneeUserId === user.id)
-        const won = owned.filter((held) => held.terminalState === 'won').length
-        const lost = owned.filter((held) => held.terminalState === 'lost').length
-        const activitiesDone = completedByUser.get(String(user.id)) ?? 0
-        const points = won * 100 + activitiesDone * 10 + Math.max(0, owned.length - lost) * 2
-        const id = `gamification:${String(user.id)}`
-        const row = {
-          userId: user.id,
-          points,
-          assigned: owned.length,
-          won,
-          lost,
-          activitiesDone,
-          streak: won ? Math.min(won, 30) : 0,
-          refreshedAt: now(),
-        }
-        if (existingProfiles.has(id)) await ctx.db.update('crm.GamificationProfile', { id }, row)
-        else await ctx.db.insert('crm.GamificationProfile', { id, ...row })
-        profiles.push({ id, ...row, userName: user.name })
-      }
+      for (const user of users) profiles.push(await gamificationProfile(ctx, user))
       return {
         ok: true,
         profiles: profiles.sort(
@@ -781,6 +928,166 @@ export const functions: Record<string, FnSpec> = {
           userName: users.get(String(profile.userId))?.name ?? profile.userId,
         }))
       return { profiles }
+    },
+  }),
+
+  /**
+   * The lists the relational pickers page through.
+   *
+   * Each one takes the `search` and `limit` the picker sends on every keystroke
+   * and returns a plain array, which is the shape `backend:relation.select`
+   * reads. They exist so a user filling in a case never has to leave the form to
+   * find a team, a stage or a tag.
+   */
+  'team.list': defineFn({
+    input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    output: { id: 'id', code: 'text', name: 'text', assignmentMode: 'text', active: 'bool' },
+    effects: ['read:crm.Team'],
+    agent: true,
+    handler: (ctx, args) => optionRows(ctx, 'crm.Team', args),
+  }),
+
+  'stage.list': defineFn({
+    input: { search: 'text?', limit: 'int?', kind: 'text?', includeArchived: 'bool?' },
+    output: {
+      id: 'id',
+      code: 'text',
+      name: 'text',
+      sequence: 'int',
+      terminalState: 'text',
+      allowedKinds: 'json',
+      active: 'bool',
+    },
+    effects: ['read:crm.Stage'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const rows = await optionRows(ctx, 'crm.Stage', args, (a, b) => n(a.sequence) - n(b.sequence))
+      return args.kind ? rows.filter((row) => stageKinds(row).includes(String(args.kind))) : rows
+    },
+  }),
+
+  'tag.list': defineFn({
+    input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    output: { id: 'id', name: 'text', color: 'text?', active: 'bool' },
+    effects: ['read:crm.Tag'],
+    agent: true,
+    handler: (ctx, args) => optionRows(ctx, 'crm.Tag', args),
+  }),
+
+  /**
+   * Tags were reachable from the data model and from `case.save`, but nothing
+   * could create one — so the field could never hold a value. This is the
+   * missing half, shaped for the picker's inline editor: an id and a name, no
+   * idempotency key, because the picker mints the id itself.
+   */
+  'tag.save': defineFn({
+    input: { id: 'id', name: 'text', color: 'text?', active: 'bool?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:crm.Tag', 'write:crm.Tag'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const name = String(args.name ?? '').trim()
+      if (!name) return invalid(issue('name', 'crm.error.required'))
+      const existing = (await ctx.db.select('crm.Tag', { id: args.id }))[0]
+      const clash = (await ctx.db.select('crm.Tag', { name })).find((row) => row.id !== args.id)
+      if (clash) return invalid(issue('name', 'crm.error.duplicateName'))
+      const values = {
+        name,
+        color: args.color ? String(args.color) : (existing?.color ?? null),
+        active: args.active ?? existing?.active ?? true,
+      }
+      if (existing) await ctx.db.update('crm.Tag', { id: args.id }, values)
+      else await ctx.db.insert('crm.Tag', { id: args.id, ...values })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  'tag.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:crm.Tag', 'write:crm.Tag', 'read:crm.CaseTag', 'write:crm.CaseTag'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('crm.Tag', { id: args.id }))[0]
+      if (!existing) return invalid(issue('id', 'crm.error.notFound'))
+      await ctx.db.update('crm.Tag', { id: args.id }, { active: false })
+      const CT = ctx.table('crm.CaseTag')
+      await ctx.db.del(deleteFrom(CT).where(eq(CT.tagId, args.id)))
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * Cases as picker rows, for the fields that point at another case — today the
+   * merge source. `case.list` answers a paged envelope, which the picker cannot
+   * read, so this returns the array it expects under the same audience filter.
+   */
+  'case.options': defineFn({
+    input: { search: 'text?', limit: 'int?', kind: 'text?', excludeId: 'id?' },
+    output: { id: 'id', name: 'text', ref: 'text?', kind: 'text' },
+    effects: [...caseReadEffects],
+    agent: true,
+    handler: async (ctx, args) => {
+      const found = await listCases(ctx, {
+        ...(args.search ? { search: args.search } : {}),
+        ...(args.kind ? { kind: args.kind } : {}),
+        limit: Math.max(1, Math.min(100, n(args.limit ?? 40))),
+      })
+      return found.rows
+        .filter((row) => !args.excludeId || row.id !== args.excludeId)
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          kind: row.kind,
+          ref: [row.stageName, row.partnerName ?? row.email ?? row.phone].filter(Boolean).join(' · '),
+        }))
+    },
+  }),
+
+  'team.member.list': defineFn({
+    input: { teamId: 'id?', search: 'text?', limit: 'int?' },
+    output: {
+      id: 'id',
+      teamId: 'id',
+      userId: 'id',
+      userName: 'text?',
+      capacity: 'int',
+      sequence: 'int',
+      assignedCount: 'int',
+      active: 'bool',
+    },
+    effects: ['read:crm.TeamMember', 'read:user.User'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const rows = args.teamId
+        ? await ctx.db.select('crm.TeamMember', { teamId: args.teamId })
+        : await ctx.db.select('crm.TeamMember')
+      const users = new Map((await ctx.db.select('user.User')).map((user) => [String(user.id), user]))
+      const needle = normalized(args.search)
+      const named: Row[] = rows.map((row) => ({
+        ...row,
+        userName: users.get(String(row.userId))?.name ?? String(row.userId),
+      }))
+      return named
+        .filter((row) => !needle || normalized(row.userName).includes(needle))
+        .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 100))))
+    },
+  }),
+
+  'team.member.remove': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:crm.TeamMember', 'write:crm.TeamMember'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('crm.TeamMember', { id: args.id }))[0]
+      if (!existing) return invalid(issue('id', 'crm.error.notFound'))
+      await ctx.db.update('crm.TeamMember', { id: args.id }, { active: false })
+      return { ok: true, id: args.id }
     },
   }),
 
