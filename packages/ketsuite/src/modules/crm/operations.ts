@@ -247,6 +247,18 @@ export async function canReadCase(ctx: Ctx, row: Row): Promise<boolean> {
   return audienceHolds(await caseAudience(ctx), row)
 }
 
+/**
+ * `crm.Case` is a shared header, and a module that depends on the CRM may store
+ * its own `kind` on it — a support ticket, a warranty claim, whatever that
+ * module is for. Those rows are not the CRM's to show: its list offers "convert
+ * to opportunity", its detail screen saves through `case.save`, which refuses a
+ * kind it does not know, and its duplicate finder would offer to merge a ticket
+ * into a lead. So every CRM read is scoped to the two kinds this module owns,
+ * and the owning module answers for the rest through its own functions.
+ */
+export const ownedKinds = (): string[] => [...CASE_KINDS]
+export const ownsKind = (kind: unknown): boolean => CASE_KINDS.includes(String(kind) as never)
+
 export async function visibleCases(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const audience = await caseAudience(ctx)
   return audience ? rows.filter((row) => audienceHolds(audience, row)) : rows
@@ -467,7 +479,7 @@ export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
 
 export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
   const row = (await ctx.db.select('crm.Case', { id }))[0]
-  if (!row || !(await canReadCase(ctx, row))) return null
+  if (!row || !ownsKind(row.kind) || !(await canReadCase(ctx, row))) return null
   const [serialized] = await serializeCaseList(ctx, [row])
   const [salesDetail, tags, timeline, messages, activityLinks, calendarLinks, attachments] =
     await Promise.all([
@@ -540,7 +552,9 @@ const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
           : eq(field.col, value),
     )
   }
-  if (args.kind) query = query.where(eq(C.kind, args.kind))
+  query = query.where(
+    args.kind && ownsKind(args.kind) ? eq(C.kind, args.kind) : inArray(C.kind, ownedKinds()),
+  )
   if (args.stageId) query = query.where(eq(C.stageId, args.stageId))
   if (args.teamId) query = query.where(eq(C.teamId, args.teamId))
   if (args.assigneeUserId) query = query.where(eq(C.assigneeUserId, args.assigneeUserId))
@@ -609,7 +623,11 @@ export async function duplicateCases(
   if (name) clauses.push(like(C.name, `%${name}%`))
   if (!clauses.length) return []
   let query = from(C)
-    .where(eq(C.active, true), clauses.length === 1 ? clauses[0]! : or(...clauses))
+    .where(
+      eq(C.active, true),
+      inArray(C.kind, ownedKinds()),
+      clauses.length === 1 ? clauses[0]! : or(...clauses),
+    )
     .orderBy(desc(C.updatedAt), asc(C.id))
   if (input.id) query = query.where(ne(C.id, input.id))
   const audience = await caseAudience(ctx)

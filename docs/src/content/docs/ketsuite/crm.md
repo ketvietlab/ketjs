@@ -152,6 +152,19 @@ small fixed vocabulary — kind, priority, warehouse, activity type, plan — st
 
 Every mutating admin route refuses a cross-origin POST.
 
+## Building on the case
+
+`crm.Case` is a shared header, and a module that depends on the CRM may store its own `kind` on it —
+a support ticket, a warranty claim, whatever that module is for. The CRM's own screens are scoped to
+the kinds it owns: a foreign kind does not appear in the case list, its count, its grouping or the
+duplicate finder, and `case.get` answers `null` for it so the record workspace does not claim a row
+whose `case.save` would refuse it.
+
+The owning module answers for those rows through its own functions and screens. `crmOwnedKinds()` and
+`crmOwnsKind()` are exported so an extension can align with the same boundary, alongside the helpers
+it needs to write one: `crmSaveCase`, `crmCaseAudience`, `crmCanReadCase`, `crmVisibleCases`,
+`crmSerializeCaseList`, `crmSeededId` and `crmAddTimeline`.
+
 ## Scope boundary
 
 The OSS modules do not contain support tickets, SLA, complaints, knowledge base, canned responses,
