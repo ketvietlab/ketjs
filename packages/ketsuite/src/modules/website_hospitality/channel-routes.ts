@@ -1,6 +1,7 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, readJson, routesOf, sha256 } from '../channel_api/core.ts'
-import { customerIdentity } from '../channel_api/customer.ts'
+import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import type { ChannelIdentity } from '../channel_api/core.ts'
+import '../channel_api/customer.ts'
 
 type Req = Parameters<Route>[1]
 type Issue = { field?: string; code?: string; messageKey?: string; params?: Record<string, unknown> }
@@ -105,9 +106,14 @@ const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown, s
     }),
   }
 }
-const contextOf = async (ctx: ServeContext, url: URL, req: Req) => {
-  const identity = await customerIdentity(ctx, url, req)
-  if (identity?.siteId) return { siteId: identity.siteId, identity }
+/** A signed-in caller carries their own site; anyone else gets the one this host serves. */
+const siteOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  identity: ChannelIdentity | null,
+): Promise<string | null> => {
+  if (identity?.siteId) return identity.siteId
   const bootstrap = (await ctx.callUnchecked(
     'website.resolveSite',
     { host: String(req.headers.host ?? '').split(':')[0] },
@@ -116,7 +122,7 @@ const contextOf = async (ctx: ServeContext, url: URL, req: Req) => {
   )) as {
     id?: string
   } | null
-  return { siteId: bootstrap?.id ? String(bootstrap.id) : null, identity }
+  return bootstrap?.id ? String(bootstrap.id) : null
 }
 const missing = (ctx: ServeContext, url: URL, req: Req) => ({
   status: 404,
@@ -132,10 +138,11 @@ export const channelRoutes = routesOf(
     path: 'hospitality/properties',
     operationId: 'customer.hospitality.properties.list',
     summary: 'List the properties published by the resolved customer site.',
+    auth: 'optional-customer',
     capability: { key: 'website_hospitality.properties', action: 'read' },
     responses: { '200': envelope },
-    handler: async (ctx, url, req) => {
-      const { siteId } = await contextOf(ctx, url, req)
+    handler: async (ctx, url, req, _params, request) => {
+      const siteId = await siteOf(ctx, url, req, request.identity)
       const links = await linksFor(ctx, url, req, siteId)
       const limit = positive(url.searchParams.get('limit'), 24, 100)
       const offset = offsetOf(url.searchParams.get('cursor'))
@@ -162,11 +169,12 @@ export const channelRoutes = routesOf(
     method: 'GET',
     path: 'hospitality/properties/{slug}',
     operationId: 'customer.hospitality.properties.get',
+    auth: 'optional-customer',
     capability: { key: 'website_hospitality.properties', action: 'read' },
     request: { params: { type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'] } },
     responses: { '200': envelope },
-    handler: async (ctx, url, req, params) => {
-      const { siteId } = await contextOf(ctx, url, req)
+    handler: async (ctx, url, req, params, request) => {
+      const siteId = await siteOf(ctx, url, req, request.identity)
       const link = (await linksFor(ctx, url, req, siteId)).find((item) => item.slug === params.slug)
       if (!link) return missing(ctx, url, req)
       const property = (await ctx.callUnchecked(
@@ -183,10 +191,11 @@ export const channelRoutes = routesOf(
     method: 'GET',
     path: 'hospitality/properties/{id}/room-types',
     operationId: 'customer.hospitality.room_types.list',
+    auth: 'optional-customer',
     capability: { key: 'website_hospitality.room_types', action: 'read' },
     responses: { '200': envelope },
-    handler: async (ctx, url, req, params) => {
-      const { siteId } = await contextOf(ctx, url, req)
+    handler: async (ctx, url, req, params, request) => {
+      const siteId = await siteOf(ctx, url, req, request.identity)
       if (!(await linksFor(ctx, url, req, siteId)).some((link) => link.propertyId === params.id))
         return missing(ctx, url, req)
       const rooms = (await ctx.callUnchecked(
@@ -209,12 +218,13 @@ export const channelRoutes = routesOf(
     method: 'POST',
     path: 'hospitality/availability/search',
     operationId: 'customer.hospitality.availability.search',
+    auth: 'optional-customer',
     capability: { key: 'website_hospitality.availability', action: 'read' },
     request: { body: object },
     responses: { '200': envelope },
-    handler: async (ctx, url, req) => {
-      const body = await readJson(req)
-      const { siteId } = await contextOf(ctx, url, req)
+    handler: async (ctx, url, req, _params, request) => {
+      const body = request.body
+      const siteId = await siteOf(ctx, url, req, request.identity)
       if (!(await linksFor(ctx, url, req, siteId)).some((link) => link.propertyId === body.propertyId))
         return missing(ctx, url, req)
       const result = (await ctx.callUnchecked(
@@ -246,15 +256,8 @@ export const channelRoutes = routesOf(
     request: { body: object },
     responses: { '201': envelope },
     idempotent: true,
-    handler: async (ctx, url, req) => {
-      const identity = await customerIdentity(ctx, url, req)
-      if (!identity)
-        return {
-          status: 401,
-          error: channelError(ctx, url, req, 'channel_api.unauthenticated', {
-            messageKey: 'channel_api.error.unauthenticated',
-          }),
-        }
+    handler: async (ctx, url, req, _params, request) => {
+      const identity = request.identity!
       const key = String(req.headers['idempotency-key'] ?? '').trim()
       if (!key)
         return {
@@ -263,7 +266,7 @@ export const channelRoutes = routesOf(
             messageKey: 'channel_api.error.idempotencyRequired',
           }),
         }
-      const body = await readJson(req)
+      const body = request.body
       if (
         !(await linksFor(ctx, url, req, identity.siteId)).some((link) => link.propertyId === body.propertyId)
       )
@@ -299,15 +302,8 @@ export const channelRoutes = routesOf(
     auth: 'customer',
     capability: { key: 'website_hospitality.bookings', action: 'read' },
     responses: { '200': envelope },
-    handler: async (ctx, url, req, params) => {
-      const identity = await customerIdentity(ctx, url, req)
-      if (!identity)
-        return {
-          status: 401,
-          error: channelError(ctx, url, req, 'channel_api.unauthenticated', {
-            messageKey: 'channel_api.error.unauthenticated',
-          }),
-        }
+    handler: async (ctx, url, req, params, request) => {
+      const identity = request.identity!
       const result = (await ctx.callUnchecked(
         'hospitality_core.getPartnerReservation',
         { id: params.id, partnerId: identity.account.partnerId },

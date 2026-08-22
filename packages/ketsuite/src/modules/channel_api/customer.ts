@@ -1,24 +1,23 @@
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { bearerOf, channelError, defineChannelRoute, readJson, routesOf, sha256, stableHash } from './core.ts'
+import {
+  CHANNEL_API_VERSION,
+  bearerOf,
+  channelError,
+  csrfTokenFor,
+  defineChannelRoute,
+  hostOf,
+  registerChannelIdentity,
+  routesOf,
+  sameOrigin,
+  sha256,
+  stableHash,
+} from './core.ts'
+import type { ChannelAccount, ChannelIdentity } from './core.ts'
 
 type Req = Parameters<Route>[1]
-type Account = {
-  id: string
-  realmId: string
-  partnerId: string
-  email: string
-  displayName: string
-  securityVersion: number
-}
-type Identity = {
-  account: Account
-  accountId: string
-  realmId: string
-  siteId: string | null
-  token: string
-  presentation: 'cookie' | 'bearer'
-}
+type Account = ChannelAccount
+type Identity = ChannelIdentity
 
 const COOKIE = 'ket_customer_session'
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({
@@ -38,24 +37,11 @@ const registerBody = schema(
 )
 const envelope = schema({ data: {}, error: {}, meta: { type: 'object' } })
 
-const hostOf = (req: Req): string =>
-  String(req.headers.host ?? '')
-    .trim()
-    .toLowerCase()
 const hostnameOf = (req: Req): string => {
   try {
     return new URL(`http://${hostOf(req)}`).hostname.toLowerCase()
   } catch {
     return ''
-  }
-}
-const sameOrigin = (req: Req): boolean => {
-  const origin = String(req.headers.origin ?? '')
-  if (!origin) return true
-  try {
-    return new URL(origin).host.toLowerCase() === hostOf(req)
-  } catch {
-    return false
   }
 }
 const cookieOf = (req: Req): string | null => {
@@ -77,12 +63,6 @@ const cookieHeader = (req: Req, token: string, maxAge: number): string => {
     `Max-Age=${Math.max(0, Math.floor(maxAge))}`,
   ].join('; ')
 }
-const safeEqual = (left: string, right: string): boolean => {
-  const a = Buffer.from(left)
-  const b = Buffer.from(right)
-  return a.length === b.length && timingSafeEqual(a, b)
-}
-const csrf = (token: string): string => sha256(`channel-api-customer-csrf\n${token}`)
 const publicAccount = (account: Account) => ({
   id: account.id,
   displayName: account.displayName,
@@ -141,7 +121,7 @@ const startCookieSession = async (ctx: ServeContext, url: URL, req: Req, account
   )) as { absoluteExpiresAt?: string } | null
   if (!session?.absoluteExpiresAt) return null
   const maxAge = (new Date(session.absoluteExpiresAt).getTime() - Date.now()) / 1000
-  return { token, cookie: cookieHeader(req, token, maxAge), csrfToken: csrf(token) }
+  return { token, cookie: cookieHeader(req, token, maxAge), csrfToken: csrfTokenFor(token) }
 }
 
 const issueTokens = async (ctx: ServeContext, url: URL, req: Req, account: Account) => {
@@ -216,6 +196,8 @@ export const customerIdentity = async (ctx: ServeContext, url: URL, req: Req): P
   }
 }
 
+registerChannelIdentity('customer', customerIdentity)
+
 const authFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
   const errors = Array.isArray((result as { errors?: unknown })?.errors)
     ? ((result as { errors: Array<{ field?: string; message?: string; params?: Record<string, unknown> }> })
@@ -245,10 +227,17 @@ const authFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown, sta
   }
 }
 
+/**
+ * Registration and sign-in mint the cookie, so there is no session for the facade
+ * to key a CSRF check on yet. The origin check is the one that applies here: it
+ * stops a third-party page from silently logging a visitor into an account it
+ * controls.
+ */
 const authenticate = async (
   ctx: ServeContext,
   url: URL,
   req: Req,
+  body: Record<string, unknown>,
   register: boolean,
   presentation: 'cookie' | 'bearer',
 ) => {
@@ -260,7 +249,9 @@ const authenticate = async (
   const context = await realmContext(ctx, url, req)
   if (!context)
     return { status: 404, error: channelError(ctx, url, req, 'website.customer.error.realmUnavailable') }
-  const body = await readJson(req)
+  const rateKey = sha256(
+    `${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`,
+  )
   const result = (await ctx.callUnchecked(
     register ? 'website.registerCustomer' : 'website.authenticateCustomer',
     register
@@ -269,18 +260,9 @@ const authenticate = async (
           displayName: body.displayName,
           email: body.email,
           password: body.password,
-          rateKey: sha256(
-            `${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`,
-          ),
+          rateKey,
         }
-      : {
-          realmId: context.realmId,
-          email: body.email,
-          password: body.password,
-          rateKey: sha256(
-            `${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`,
-          ),
-        },
+      : { realmId: context.realmId, email: body.email, password: body.password, rateKey },
     url,
     req,
   )) as { ok?: boolean; account?: Account; errors?: unknown }
@@ -299,16 +281,6 @@ const authenticate = async (
   return { status: register ? 201 : 200, data: { customer: publicAccount(result.account), ...tokens } }
 }
 
-const authenticated = (ctx: ServeContext, url: URL, req: Req, identity: Identity | null) =>
-  identity
-    ? null
-    : {
-        status: 401,
-        error: channelError(ctx, url, req, 'channel_api.unauthenticated', {
-          messageKey: 'channel_api.error.unauthenticated',
-        }),
-      }
-
 export const customerRoutes = routesOf(
   defineChannelRoute({
     profile: 'customer',
@@ -318,31 +290,36 @@ export const customerRoutes = routesOf(
     summary: 'Resolve the customer channel context and live capabilities.',
     auth: 'optional-customer',
     responses: { '200': envelope },
-    handler: async (ctx, url, req) => {
+    handler: async (ctx, url, req, _params, request) => {
       const context = await realmContext(ctx, url, req)
-      const identity = await customerIdentity(ctx, url, req)
+      const identity = request.identity
       const live = await ctx.live(req)
-      const grouped = new Map<string, { key: string; mode: string; actions: Set<string>; reason?: string }>()
+      const grouped = new Map<string, { actions: Set<string>; blocked: Set<string> }>()
       for (const entry of Object.values(ctx.manifest.routes)) {
         const contract = entry.contract
         if (contract?.profile !== 'customer' || !contract.capability) continue
         const current = grouped.get(contract.capability.key) ?? {
-          key: contract.capability.key,
-          mode: 'enabled',
           actions: new Set<string>(),
+          blocked: new Set<string>(),
         }
-        if (live.disabledModules?.includes(entry.by)) {
-          current.mode = 'blocked'
-          current.reason = 'MODULE_NOT_INSTALLED'
-        } else current.actions.add(contract.capability.action)
-        grouped.set(current.key, current)
+        // A capability can be served by more than one module, so "blocked" is a
+        // property of an action, not of the group: one switched-off module must
+        // not hide what the others still answer.
+        if (live.disabledModules?.includes(entry.by)) current.blocked.add(contract.capability.action)
+        else current.actions.add(contract.capability.action)
+        grouped.set(contract.capability.key, current)
       }
-      const capabilities = [...grouped.values()]
-        .sort((a, b) => a.key.localeCompare(b.key))
-        .map((item) => ({ ...item, actions: [...item.actions].sort() }))
+      const capabilities = [...grouped.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => ({
+          key,
+          mode: item.actions.size ? 'enabled' : 'blocked',
+          actions: [...item.actions].sort(),
+          ...(item.blocked.size ? { reason: 'MODULE_NOT_INSTALLED' } : {}),
+        }))
       return {
         data: {
-          contractVersion: '1.0.0',
+          contractVersion: CHANNEL_API_VERSION,
           clientPolicy: null,
           tenant: {
             realmId: context?.realmId ?? identity?.realmId ?? null,
@@ -362,7 +339,7 @@ export const customerRoutes = routesOf(
     operationId: 'customer.auth.session.register',
     request: { body: registerBody },
     responses: { '201': envelope },
-    handler: (ctx, url, req) => authenticate(ctx, url, req, true, 'cookie'),
+    handler: (ctx, url, req, _params, request) => authenticate(ctx, url, req, request.body, true, 'cookie'),
   }),
   defineChannelRoute({
     profile: 'customer',
@@ -371,7 +348,7 @@ export const customerRoutes = routesOf(
     operationId: 'customer.auth.session.login',
     request: { body: authBody },
     responses: { '200': envelope },
-    handler: (ctx, url, req) => authenticate(ctx, url, req, false, 'cookie'),
+    handler: (ctx, url, req, _params, request) => authenticate(ctx, url, req, request.body, false, 'cookie'),
   }),
   defineChannelRoute({
     profile: 'customer',
@@ -380,7 +357,7 @@ export const customerRoutes = routesOf(
     operationId: 'customer.auth.token.register',
     request: { body: registerBody },
     responses: { '201': envelope },
-    handler: (ctx, url, req) => authenticate(ctx, url, req, true, 'bearer'),
+    handler: (ctx, url, req, _params, request) => authenticate(ctx, url, req, request.body, true, 'bearer'),
   }),
   defineChannelRoute({
     profile: 'customer',
@@ -389,7 +366,7 @@ export const customerRoutes = routesOf(
     operationId: 'customer.auth.token.issue',
     request: { body: authBody },
     responses: { '200': envelope },
-    handler: (ctx, url, req) => authenticate(ctx, url, req, false, 'bearer'),
+    handler: (ctx, url, req, _params, request) => authenticate(ctx, url, req, request.body, false, 'bearer'),
   }),
   defineChannelRoute({
     profile: 'customer',
@@ -399,7 +376,7 @@ export const customerRoutes = routesOf(
     request: { body: schema({ refreshToken: string }, ['refreshToken']) },
     responses: { '200': envelope },
     idempotent: true,
-    handler: async (ctx, url, req) => {
+    handler: async (ctx, url, req, _params, request) => {
       const key = String(req.headers['idempotency-key'] ?? '').trim()
       if (!key)
         return {
@@ -408,8 +385,7 @@ export const customerRoutes = routesOf(
             messageKey: 'channel_api.error.idempotencyRequired',
           }),
         }
-      const body = await readJson(req)
-      const refreshToken = String(body.refreshToken ?? '')
+      const refreshToken = String(request.body.refreshToken ?? '')
       // Deterministic for this old-token/key pair so an ambiguous response can be
       // retried and return credentials matching the domain-level replay record.
       const accessToken = Buffer.from(sha256(`access\n${refreshToken}\n${key}`), 'hex').toString('base64url')
@@ -454,13 +430,9 @@ export const customerRoutes = routesOf(
     operationId: 'customer.auth.logout',
     auth: 'customer',
     responses: { '200': envelope },
-    handler: async (ctx, url, req) => {
-      const identity = await customerIdentity(ctx, url, req)
-      const error = authenticated(ctx, url, req, identity)
-      if (error || !identity) return error!
+    handler: async (ctx, url, req, _params, request) => {
+      const identity = request.identity!
       if (identity.presentation === 'cookie') {
-        if (!sameOrigin(req) || !safeEqual(String(req.headers['x-csrf-token'] ?? ''), csrf(identity.token)))
-          return { status: 403, error: channelError(ctx, url, req, 'website.customer.error.csrf') }
         await ctx.callUnchecked(
           'website.revokeCustomerSession',
           { tokenDigest: sha256(identity.token), reason: 'logout' },
@@ -486,10 +458,8 @@ export const customerRoutes = routesOf(
     auth: 'customer',
     responses: { '200': envelope },
     capability: { key: 'channel_api.customer_account', action: 'read' },
-    handler: async (ctx, url, req) => {
-      const identity = await customerIdentity(ctx, url, req)
-      const error = authenticated(ctx, url, req, identity)
-      return error ?? { data: { customer: publicAccount(identity!.account) } }
-    },
+    handler: (_ctx, _url, _req, _params, request) => ({
+      data: { customer: publicAccount(request.identity!.account) },
+    }),
   }),
 )

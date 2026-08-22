@@ -22,7 +22,14 @@ export default defineModule({
       'error.unauthenticated': 'Bạn cần đăng nhập để tiếp tục.',
       'error.idempotencyRequired': 'Yêu cầu cần khóa chống xử lý lặp.',
       'error.idempotencyConflict': 'Khóa chống xử lý lặp đã được dùng cho một yêu cầu khác.',
+      'error.idempotencyInFlight': 'Yêu cầu trước với khóa này đang được xử lý; hãy thử lại sau giây lát.',
       'error.invalidRefreshToken': 'Refresh token không hợp lệ hoặc đã hết hạn.',
+      'error.originMismatch': 'Nguồn gửi yêu cầu không được phép.',
+      'error.csrf': 'Yêu cầu bảo mật không hợp lệ. Vui lòng tải lại trang.',
+      'error.invalidRequest': 'Nội dung yêu cầu không hợp lệ.',
+      'error.fieldRequired': 'Trường bắt buộc chưa có giá trị.',
+      'error.fieldUnknown': 'Trường này không thuộc hợp đồng của yêu cầu.',
+      'error.fieldInvalid': 'Giá trị của trường không hợp lệ.',
       'unsupportedMediaType.error': 'Nội dung yêu cầu phải dùng application/json.',
       'payloadTooLarge.error': 'Nội dung yêu cầu vượt quá giới hạn cho phép.',
       'invalidBody.error': 'Nội dung JSON của yêu cầu không hợp lệ.',
@@ -36,7 +43,14 @@ export default defineModule({
       'error.unauthenticated': 'Sign in to continue.',
       'error.idempotencyRequired': 'This request requires an idempotency key.',
       'error.idempotencyConflict': 'The idempotency key was already used for another request.',
+      'error.idempotencyInFlight': 'An earlier request with this key is still running; retry shortly.',
       'error.invalidRefreshToken': 'The refresh token is invalid or expired.',
+      'error.originMismatch': 'The request origin is not allowed.',
+      'error.csrf': 'The security token is invalid. Reload the page and try again.',
+      'error.invalidRequest': 'The request body does not match the contract.',
+      'error.fieldRequired': 'This required field is missing.',
+      'error.fieldUnknown': 'This field is not part of the request contract.',
+      'error.fieldInvalid': 'This field has an invalid value.',
       'unsupportedMediaType.error': 'The request content type must be application/json.',
       'payloadTooLarge.error': 'The request body exceeds the allowed size.',
       'invalidBody.error': 'The request body is not valid JSON.',
@@ -44,6 +58,14 @@ export default defineModule({
   },
 })
 
-export { defineChannelRoute, routesOf } from './core.ts'
+export { CHANNEL_API_VERSION, defineChannelRoute, registerChannelIdentity, routesOf } from './core.ts'
 export { openApiDocument } from './openapi.ts'
-export type { ChannelProfile, ChannelRouteSpec } from './core.ts'
+export type {
+  ChannelAccount,
+  ChannelAuth,
+  ChannelIdentity,
+  ChannelIdentityResolver,
+  ChannelProfile,
+  ChannelRequest,
+  ChannelRouteSpec,
+} from './core.ts'
