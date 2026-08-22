@@ -30,13 +30,28 @@ export const paymentTermsScreen = (
     rowHref?: (row: Row) => string
     cancelHref?: string
     errors?: string[]
+    lineErrors?: string[]
+    editingLine?: Row | null
+    lineSubmit?: string
+    lineAction?: string
+    lineHref?: (line: Row) => string
+    lineCancelHref?: string
+    delayLabel?: (line: Row) => string
+    valueLabel?: (line: Row) => string
   },
 ): TemplateResult => {
-  const lineCount = options.rows.reduce(
-    (total, row) => total + (Array.isArray(row.lines) ? row.lines.length : 0),
-    0,
-  )
-  const configured = options.rows.filter((row) => Array.isArray(row.lines) && row.lines.length > 0).length
+  const linesOf = (row: Row): Row[] => (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
+  const lineCount = options.rows.reduce((total, row) => total + linesOf(row).length, 0)
+  const configured = options.rows.filter((row) => linesOf(row).length > 0).length
+  // A term is defined by its milestones. Counting them and hiding them left the
+  // screen unable to answer what "30 days" actually means.
+  const milestones = options.rows
+    .flatMap((row) => linesOf(row).map((line): Row & { term: Row } => ({ ...line, term: row })))
+    .sort(
+      (a, b) =>
+        String(a.term.name).localeCompare(String(b.term.name)) ||
+        Number(a.sequence ?? 0) - Number(b.sequence ?? 0),
+    )
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,
@@ -128,8 +143,20 @@ export const paymentTermsScreen = (
               ...(options.lineFields
                 ? [
                     <Section
-                      title={_('account_backend.term.line.create.title')}
+                      title={
+                        options.editingLine
+                          ? _('account_backend.term.line.edit.title')
+                          : _('account_backend.term.line.create.title')
+                      }
                       description={_('account_backend.term.line.create.hint')}
+                      actions={
+                        options.editingLine && options.lineCancelHref
+                          ? linkButton({
+                              label: _('account_backend.action.cancelEdit'),
+                              href: options.lineCancelHref,
+                            })
+                          : undefined
+                      }
                       body={
                         <Surface
                           padding="compact"
@@ -137,11 +164,12 @@ export const paymentTermsScreen = (
                             <RecordForm
                               id="payment-term-line-form"
                               scope="account-payment-term-line"
-                              action={options.action}
-                              submit={_('account_backend.action.addTermLine')}
+                              action={options.lineAction ?? options.action}
+                              submit={options.lineSubmit ?? _('account_backend.action.addTermLine')}
                               submitVariant="secondary"
                               hidden={{ action: 'line' }}
                               fields={options.lineFields}
+                              errors={options.lineErrors}
                             />
                           }
                         />
@@ -153,6 +181,61 @@ export const paymentTermsScreen = (
                 title={_('account_backend.term.list.title')}
                 description={_('account_backend.term.list.hint')}
                 body={table}
+              />,
+              <Section
+                title={_('account_backend.term.milestones.title')}
+                description={_('account_backend.term.milestones.hint')}
+                body={
+                  milestones.length ? (
+                    dataTable(_, {
+                      rows: milestones,
+                      id: (line) => String(line.id),
+                      rowHref: options.lineHref,
+                      columns: [
+                        {
+                          key: 'term',
+                          label: _('account_backend.field.paymentTermId'),
+                          priority: 'primary',
+                          cell: (line) => String((line.term as Row).name),
+                        },
+                        {
+                          key: 'value',
+                          label: _('account_backend.field.termValue'),
+                          cell: (line) =>
+                            `${String(line.valueAmount)}${line.value === 'percent' ? '%' : ''} · ${options.valueLabel?.(line) ?? String(line.value)}`,
+                        },
+                        {
+                          key: 'delay',
+                          label: _('account_backend.field.delayType'),
+                          cell: (line) => options.delayLabel?.(line) ?? String(line.delayType),
+                        },
+                        {
+                          key: 'days',
+                          label: _('account_backend.field.nbDays'),
+                          cell: (line) => String(line.nbDays ?? 0),
+                          align: 'end',
+                          kind: 'number',
+                        },
+                        {
+                          key: 'dayOfMonth',
+                          label: _('account_backend.field.daysNextMonth'),
+                          cell: (line) => String(line.daysNextMonth ?? '—'),
+                          align: 'end',
+                          kind: 'number',
+                        },
+                      ],
+                    })
+                  ) : (
+                    <Surface
+                      padding="compact"
+                      body={emptyState(
+                        _('account_backend.term.milestones.empty'),
+                        _('account_backend.term.milestones.emptyHint'),
+                        { icon: icon('credit-card') },
+                      )}
+                    />
+                  )
+                }
               />,
             ],
             'loose',
