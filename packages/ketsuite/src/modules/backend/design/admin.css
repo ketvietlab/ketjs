@@ -1812,6 +1812,11 @@
 
    The form is centred rather than full-width: at 1600px a login stretched across
    the viewport reads as an error state.
+
+   The brand lockup sits above the card, in the same centred column. The canvas
+   carries one very soft indigo wash behind it so the page is not a flat field with
+   a box on it — a wash, not a gradient poster: this is the door to an operations
+   tool, not a landing page.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @layer ket.app {
@@ -1820,12 +1825,33 @@
     min-block-size: 100dvh;
     place-items: center;
     padding: var(--admin-gap-lg);
-    background: var(--admin-bg);
+    background:
+      radial-gradient(70rem 40rem at 50% -12rem, var(--admin-accent-soft), transparent 70%), var(--admin-bg);
+  }
+
+  [data-ui="login-panel"] {
+    display: grid;
+    inline-size: min(24rem, 100%);
+    gap: var(--admin-gap-lg);
+    justify-items: center;
+  }
+
+  /* Height, not width, is what keeps the two variants the same size: the light and
+     dark files differ by three pixels of trailing space. */
+  [data-ui="login-brand"] {
+    display: block;
+  }
+
+  [data-ui="login-logo"] {
+    display: block;
+    block-size: 3.25rem;
+    inline-size: auto;
+    max-inline-size: 100%;
   }
 
   [data-ui="login-form"] {
     display: grid;
-    inline-size: min(24rem, 100%);
+    inline-size: 100%;
     gap: var(--admin-gap-md);
     padding: var(--admin-gap-xl);
     border: 1px solid var(--admin-line);
@@ -1835,6 +1861,11 @@
     box-shadow: var(--admin-shadow-float);
   }
 
+  [data-ui="login-heading"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+  }
+
   [data-ui="login-title"] {
     margin: 0;
     color: var(--admin-ink);
@@ -1842,6 +1873,13 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
+  }
+
+  [data-ui="login-subtitle"] {
+    margin: 0;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+    line-height: 1.4;
   }
 
   /* role="alert", so it is announced as well as seen. */
@@ -1956,6 +1994,8 @@
     gap: var(--admin-gap-sm);
     justify-content: center;
     font-size: var(--admin-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   [data-ui="login-locale"] {

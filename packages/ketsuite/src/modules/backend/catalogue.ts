@@ -37,6 +37,13 @@ import {
 import type { AppRow, PageRow } from './screens.tsx'
 import type { ListChrome, Viewer } from '../../ui/index.ts'
 import { loginScreen } from '../user/login.ts'
+
+/**
+ * The harness mounts `design/` at `/design/`, where the running app serves it under
+ * `/_ket/asset/backend/`. Without this the one screen that carries the brand shows
+ * a broken image in the one place the brand is reviewed.
+ */
+const BRAND = '/design/brand'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 
 /**
@@ -172,19 +179,20 @@ export const CASES: Array<{
     id: 'login',
     label: 'Đăng nhập — trống',
     note: 'Trang đầu tiên ai cũng thấy, và là trang duy nhất chạy không cần JavaScript. Chưa có CSS.',
-    render: (_) => loginScreen(_, { locales: ['vi', 'en'], locale: 'vi' }),
+    render: (_) => loginScreen(_, { brand: BRAND, locales: ['vi', 'en'], locale: 'vi' }),
   },
   {
     id: 'login-failed',
     label: 'Đăng nhập — sai mật khẩu',
     note: 'Thông báo lỗi có role="alert". Sai mật khẩu và sai tên đăng nhập cho cùng một câu — đừng tách ra.',
-    render: (_) => loginScreen(_, { failed: true, locales: ['vi', 'en'], locale: 'vi' }),
+    render: (_) => loginScreen(_, { brand: BRAND, failed: true, locales: ['vi', 'en'], locale: 'vi' }),
   },
   {
     id: 'login-next',
     label: 'Đăng nhập — quay lại nơi đang tới',
     note: 'Có ô ẩn "next". Vào /admin/website/pages khi chưa đăng nhập thì sau khi vào phải quay lại đúng đó.',
-    render: (_) => loginScreen(_, { next: '/admin/website/pages', locales: ['vi', 'en'], locale: 'vi' }),
+    render: (_) =>
+      loginScreen(_, { brand: BRAND, next: '/admin/website/pages', locales: ['vi', 'en'], locale: 'vi' }),
   },
   {
     id: 'viewer-one',
