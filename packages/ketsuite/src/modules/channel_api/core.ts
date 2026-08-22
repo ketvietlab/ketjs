@@ -471,7 +471,27 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
   ]
 }
 
-export const routesOf = (...routes: Array<[string, RouteEntry]>): Record<string, RouteEntry> =>
-  Object.fromEntries(routes)
+/**
+ * Collect contributed routes, refusing to let one quietly replace another.
+ *
+ * The framework routes on path alone, so two specs sharing one path are not two
+ * endpoints — the later simply wins and the earlier answers 405 forever. That is
+ * a composition mistake and it should read as one at startup, not as a puzzling
+ * status code much later.
+ */
+export const routesOf = (...routes: Array<[string, RouteEntry]>): Record<string, RouteEntry> => {
+  const named = (entry: RouteEntry): string =>
+    typeof entry === 'function' ? 'an unnamed route' : (entry.contract?.operationId ?? 'an unnamed route')
+  const collected: Record<string, RouteEntry> = {}
+  for (const [path, entry] of routes) {
+    const taken = collected[path]
+    if (taken)
+      throw new Error(
+        `two channel routes claim "${path}": ${named(taken)} and ${named(entry)} — one path is one operation, so give them separate paths`,
+      )
+    collected[path] = entry
+  }
+  return collected
+}
 
 export type { RouteResult }

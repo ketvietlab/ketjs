@@ -69,7 +69,15 @@ const publicAccount = (account: Account) => ({
   email: account.email,
 })
 
-const realmContext = async (ctx: ServeContext, url: URL, req: Req) => {
+/**
+ * Which realm — and so which site — this request belongs to.
+ *
+ * The host answers for a browser. A native client has no meaningful Host, so it
+ * names the realm outright and the realm's primary site answers instead. Both
+ * paths are needed by every profile route that reads site-scoped data, which is
+ * why this is exported rather than kept for authentication.
+ */
+export const channelRealmContext = async (ctx: ServeContext, url: URL, req: Req) => {
   const host = hostnameOf(req)
   if (host) {
     const site = (await ctx.callUnchecked('website.resolveSite', { host }, url, req)) as {
@@ -177,7 +185,7 @@ export const customerIdentity = async (ctx: ServeContext, url: URL, req: Req): P
     }
   }
   const token = cookieOf(req)
-  const context = await realmContext(ctx, url, req)
+  const context = await channelRealmContext(ctx, url, req)
   if (!token || !context?.siteId) return null
   const session = (await ctx.callUnchecked(
     'website.resolveCustomerSession',
@@ -246,7 +254,7 @@ const authenticate = async (
       status: 403,
       error: channelError(ctx, url, req, 'website.customer.error.originMismatch'),
     }
-  const context = await realmContext(ctx, url, req)
+  const context = await channelRealmContext(ctx, url, req)
   if (!context)
     return { status: 404, error: channelError(ctx, url, req, 'website.customer.error.realmUnavailable') }
   const rateKey = sha256(
@@ -291,7 +299,7 @@ export const customerRoutes = routesOf(
     auth: 'optional-customer',
     responses: { '200': envelope },
     handler: async (ctx, url, req, _params, request) => {
-      const context = await realmContext(ctx, url, req)
+      const context = await channelRealmContext(ctx, url, req)
       const identity = request.identity
       const live = await ctx.live(req)
       const grouped = new Map<string, { actions: Set<string>; blocked: Set<string> }>()

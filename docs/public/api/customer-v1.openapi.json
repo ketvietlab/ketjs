@@ -503,6 +503,46 @@
         "x-ket-idempotent": false
       }
     },
+    "/hospitality/properties/{id}/rate-plans": {
+      "get": {
+        "operationId": "customer.hospitality.rate_plans.list",
+        "summary": "List the sellable rate plans for a published property.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.rate_plans",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
     "/hospitality/availability/search": {
       "post": {
         "operationId": "customer.hospitality.availability.search",
@@ -600,6 +640,45 @@
         "x-ket-idempotent": true
       }
     },
+    "/hospitality/my-bookings": {
+      "get": {
+        "operationId": "customer.hospitality.bookings.list",
+        "summary": "List the bookings owned by the signed-in customer.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.bookings",
+          "action": "read"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": false
+      }
+    },
     "/hospitality/bookings/{id}": {
       "get": {
         "operationId": "customer.hospitality.bookings.get",
@@ -632,6 +711,526 @@
         },
         "x-ket-capability": {
           "key": "website_hospitality.bookings",
+          "action": "read"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/hospitality/bookings/{id}/cancel": {
+      "post": {
+        "operationId": "customer.hospitality.bookings.cancel",
+        "summary": "Cancel a booking the signed-in customer owns.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_hospitality.bookings",
+          "action": "cancel"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": true
+      }
+    },
+    "/retail/storefront": {
+      "get": {
+        "operationId": "customer.retail.storefront",
+        "summary": "Resolve the retail store this host serves and whether it can take orders.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.storefront",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/products": {
+      "get": {
+        "operationId": "customer.retail.products.list",
+        "summary": "List the products published by the resolved retail site.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.products",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/products/{id}": {
+      "get": {
+        "operationId": "customer.retail.products.get",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.products",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/carts": {
+      "post": {
+        "operationId": "customer.retail.carts.start",
+        "summary": "Start a cart, or re-issue a token for the signed-in shopper’s open cart.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "currency": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.cart",
+          "action": "write"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/cart": {
+      "get": {
+        "operationId": "customer.retail.cart.get",
+        "summary": "Read the cart named by X-Cart-Token, or the signed-in shopper’s open cart.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.cart",
+          "action": "read"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/cart/lines": {
+      "put": {
+        "operationId": "customer.retail.cart.lines.set",
+        "summary": "Set one product to an absolute quantity; zero removes it.",
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "productId": {
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "type": "string"
+                  }
+                },
+                "required": ["productId", "quantity"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.cart",
+          "action": "write"
+        },
+        "x-ket-auth": "optional-customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/cart/claim": {
+      "post": {
+        "operationId": "customer.retail.cart.claim",
+        "summary": "Attach a guest cart to the signed-in shopper, folding in what they already had.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.cart",
+          "action": "write"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/checkout": {
+      "post": {
+        "operationId": "customer.retail.checkout",
+        "summary": "Turn the claimed cart into a sales order.",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "customerName": {
+                    "type": "string"
+                  },
+                  "customerPhone": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.orders",
+          "action": "create"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": true
+      }
+    },
+    "/retail/orders": {
+      "get": {
+        "operationId": "customer.retail.orders.list",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "customer",
+        "x-ket-idempotent": false
+      }
+    },
+    "/retail/orders/{id}": {
+      "get": {
+        "operationId": "customer.retail.orders.get",
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "customerCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "website_retail.orders",
           "action": "read"
         },
         "x-ket-auth": "customer",
