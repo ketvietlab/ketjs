@@ -17,6 +17,7 @@ import {
   TAX_USES,
 } from '../account/functions.ts'
 import { moveTitle, optionsOf } from './screens.tsx'
+import { accountDefaultsScreen } from './account-defaults-screen.tsx'
 import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
 import { accountsScreen } from './accounts-screen.tsx'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
@@ -342,34 +343,38 @@ const invoiceFields = async (
       required: true,
     },
     { name: 'discount', label: _('account_backend.field.discount'), type: 'decimal', value: 0 },
+    // Both accounts are answers the configuration already has: the product's
+    // category or the company default decides the first, the partner or the
+    // company default the second. The field stays, because an unusual document
+    // still needs to be able to say otherwise — it just no longer has to.
     {
       name: 'lineAccountId',
       label: _('account_backend.field.lineAccountId'),
       type: 'select',
-      options: accountChoices(_, lineAccounts),
-      required: true,
+      options: accountChoices(_, lineAccounts, true),
+      help: _('account_backend.field.lineAccountIdHint'),
       control: await accountRelationControl(ctx, url, req, _, {
         id: `invoice-line-account:${types.join('-')}`,
         name: 'lineAccountId',
         label: _('account_backend.field.lineAccountId'),
         accounts: accountOptions(lineAccounts),
         accountTypes: customer ? ['income*'] : ['expense*'],
-        required: true,
+        allowEmpty: true,
       }),
     },
     {
       name: 'counterpartAccountId',
       label: _('account_backend.field.counterpartAccountId'),
       type: 'select',
-      options: accountChoices(_, counterpartAccounts),
-      required: true,
+      options: accountChoices(_, counterpartAccounts, true),
+      help: _('account_backend.field.counterpartAccountIdHint'),
       control: await accountRelationControl(ctx, url, req, _, {
         id: `invoice-counterpart:${types.join('-')}`,
         name: 'counterpartAccountId',
         label: _('account_backend.field.counterpartAccountId'),
         accounts: accountOptions(counterpartAccounts),
         accountTypes: [customer ? 'asset_receivable' : 'liability_payable'],
-        required: true,
+        allowEmpty: true,
       }),
     },
     { name: 'taxId', label: _('account_backend.field.taxId'), type: 'select', options: choices(taxes, true) },
@@ -427,8 +432,10 @@ const createInvoice = async (
       quantity: form.quantity || '1',
       priceUnit: form.priceUnit || '0',
       discount: form.discount || '0',
-      lineAccountId: form.lineAccountId ?? '',
-      counterpartAccountId: form.counterpartAccountId ?? '',
+      // Left blank, the domain resolves them from the category, the partner and
+      // the company defaults — so blank must arrive as absent, not as ''.
+      ...optional(form, 'lineAccountId'),
+      ...optional(form, 'counterpartAccountId'),
       ...(taxIds.length ? { taxIds } : {}),
       ...optional(form, 'taxAccountId'),
     },
@@ -644,6 +651,13 @@ export default defineModule({
       path: '/admin/accounting/terms',
       needs: 'account.listPaymentTerms',
       sequence: 40,
+    },
+    'accounting.defaults': {
+      parent: 'accounting.configuration',
+      label: 'menu.defaults',
+      path: '/admin/accounting/defaults',
+      needs: 'account.getDefaults',
+      sequence: 50,
     },
   },
   routes: {
@@ -1109,6 +1123,150 @@ export default defineModule({
             }),
         })
       },
+    '/admin/accounting/defaults':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        let rejectedCategory: Rejection | undefined
+        if (req.method === 'POST') {
+          const form = await readForm(req)
+          const category = form.action === 'category'
+          const result = category
+            ? await ctx.call(
+                'account.saveCategoryAccount',
+                {
+                  categoryId: form.categoryId ?? '',
+                  ...optional(form, 'incomeAccountId'),
+                  ...optional(form, 'expenseAccountId'),
+                },
+                url,
+                req,
+              )
+            : await ctx.call(
+                'account.saveDefaults',
+                {
+                  ...optional(form, 'incomeAccountId'),
+                  ...optional(form, 'expenseAccountId'),
+                  ...optional(form, 'receivableAccountId'),
+                  ...optional(form, 'payableAccountId'),
+                },
+                url,
+                req,
+              )
+          if (succeeded(result)) return seeOther(`/admin/accounting/defaults${localeQuery(url)}`)
+          const failure = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          if (category) rejectedCategory = failure
+          else rejected = failure
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
+        const data = await common(ctx, url, req)
+        const [defaults, rows, categories] = (await Promise.all([
+          ctx.call('account.getDefaults', {}, url, req),
+          ctx.call('account.listCategoryAccounts', {}, url, req),
+          ctx.call('product.listCategories', {}, url, req),
+        ])) as [AnyRow, AnyRow[], AnyRow[]]
+        const editingCategory = (() => {
+          const id = url.searchParams.get('editCategory') ?? ''
+          return id ? (rows.find((row) => String(row.categoryId) === id) ?? null) : null
+        })()
+        const income = data.accounts.filter((row) =>
+          ['income', 'income_other'].includes(String(row.accountType)),
+        )
+        const expense = data.accounts.filter((row) =>
+          ['expense', 'expense_other', 'expense_depreciation', 'expense_direct_cost'].includes(
+            String(row.accountType),
+          ),
+        )
+        const receivable = data.accounts.filter((row) => row.accountType === 'asset_receivable')
+        const payable = data.accounts.filter((row) => row.accountType === 'liability_payable')
+        const categoryTarget = (id: unknown) => {
+          const target = new URL('/admin/accounting/defaults', url)
+          const lang = url.searchParams.get('lang')
+          if (lang) target.searchParams.set('lang', lang)
+          if (id) target.searchParams.set('editCategory', String(id))
+          return `${target.pathname}${target.search}`
+        }
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.defaults.title',
+          body: (_, frame) =>
+            accountDefaultsScreen(_, {
+              frame: frame,
+              action: `/admin/accounting/defaults${localeQuery(url)}`,
+              categoryAction: categoryTarget(url.searchParams.get('editCategory')),
+              rows,
+              accountLabel: (id) => accountLabel(_, data.accounts, id),
+              editing: editingCategory,
+              categorySubmit: editingCategory
+                ? _('account_backend.action.save')
+                : _('account_backend.action.create'),
+              categoryHref: (row) => categoryTarget(row.categoryId),
+              cancelHref: `/admin/accounting/defaults${localeQuery(url)}`,
+              errors: rejected?.messages,
+              categoryErrors: rejectedCategory?.messages,
+              defaultsFields: formState(
+                [
+                  {
+                    name: 'incomeAccountId',
+                    label: _('account_backend.field.incomeAccountId'),
+                    type: 'select',
+                    options: accountChoices(_, income, true),
+                    help: _('account_backend.field.incomeAccountIdHint'),
+                  },
+                  {
+                    name: 'expenseAccountId',
+                    label: _('account_backend.field.expenseAccountId'),
+                    type: 'select',
+                    options: accountChoices(_, expense, true),
+                    help: _('account_backend.field.expenseAccountIdHint'),
+                  },
+                  {
+                    name: 'receivableAccountId',
+                    label: _('account_backend.field.receivableAccountId'),
+                    type: 'select',
+                    options: accountChoices(_, receivable, true),
+                    help: _('account_backend.field.receivableAccountIdHint'),
+                  },
+                  {
+                    name: 'payableAccountId',
+                    label: _('account_backend.field.payableAccountId'),
+                    type: 'select',
+                    options: accountChoices(_, payable, true),
+                    help: _('account_backend.field.payableAccountIdHint'),
+                  },
+                ],
+                defaults,
+                rejected,
+              ),
+              categoryFields: categories.length
+                ? formState(
+                    [
+                      {
+                        name: 'categoryId',
+                        label: _('account_backend.field.categoryId'),
+                        type: 'select',
+                        options: choices(categories),
+                        required: true,
+                      },
+                      {
+                        name: 'incomeAccountId',
+                        label: _('account_backend.field.incomeAccountId'),
+                        type: 'select',
+                        options: accountChoices(_, income, true),
+                      },
+                      {
+                        name: 'expenseAccountId',
+                        label: _('account_backend.field.expenseAccountId'),
+                        type: 'select',
+                        options: accountChoices(_, expense, true),
+                      },
+                    ],
+                    editingCategory,
+                    rejectedCategory,
+                  )
+                : undefined,
+            }),
+        })
+      },
     '/admin/accounting/entries':
       (ctx): Route =>
       async (url, req) => {
@@ -1497,6 +1655,20 @@ const vi: Record<string, string> = {
   'menu.journals': 'Sổ nhật ký',
   'menu.taxes': 'Thuế',
   'menu.paymentTerms': 'Điều khoản thanh toán',
+  'menu.defaults': 'Tài khoản mặc định',
+  'defaults.title': 'Tài khoản mặc định',
+  'defaults.kicker': 'Cấu hình hạch toán',
+  'defaults.subtitle': 'Quyết định trước tài khoản cho hoá đơn, để chứng từ khỏi phải hỏi lại mỗi lần.',
+  'defaults.summary.categories': 'Nhóm đã cấu hình',
+  'defaults.company.title': 'Mặc định của công ty',
+  'defaults.company.hint': 'Dùng khi nhóm sản phẩm và đối tác không có cấu hình riêng.',
+  'defaults.category.title': 'Đặt tài khoản cho nhóm sản phẩm',
+  'defaults.category.edit.title': 'Sửa tài khoản của nhóm sản phẩm',
+  'defaults.category.hint': 'Nhóm sản phẩm quyết định tài khoản doanh thu và chi phí cho hàng thuộc nhóm đó.',
+  'defaults.categories.title': 'Nhóm sản phẩm đã cấu hình',
+  'defaults.categories.hint': 'Mở một dòng để sửa. Nhóm không có ở đây sẽ dùng mặc định của công ty.',
+  'defaults.categories.empty': 'Chưa nhóm nào có tài khoản riêng',
+  'defaults.categories.emptyHint': 'Mọi hàng hoá đang hạch toán theo mặc định của công ty.',
   'dashboard.title': 'Tổng quan kế toán',
   'dashboard.kicker': 'Không gian tài chính',
   'dashboard.subtitle': 'Theo dõi chứng từ, công nợ, báo cáo và cấu hình kế toán tại một nơi.',
@@ -1739,6 +1911,17 @@ const vi: Record<string, string> = {
   'field.discount': 'Chiết khấu %',
   'field.lineAccountId': 'Tài khoản doanh thu / chi phí',
   'field.counterpartAccountId': 'Tài khoản phải thu / phải trả',
+  'field.lineAccountIdHint': 'Để trống để lấy theo nhóm sản phẩm, hoặc mặc định của công ty.',
+  'field.counterpartAccountIdHint': 'Để trống để lấy theo đối tác, hoặc mặc định của công ty.',
+  'field.categoryId': 'Nhóm sản phẩm',
+  'field.incomeAccountId': 'Tài khoản doanh thu',
+  'field.incomeAccountIdHint': 'Ghi có khi bán hàng, nếu nhóm sản phẩm không chỉ định khác.',
+  'field.expenseAccountId': 'Tài khoản chi phí',
+  'field.expenseAccountIdHint': 'Ghi nợ khi mua hàng, nếu nhóm sản phẩm không chỉ định khác.',
+  'field.receivableAccountId': 'Tài khoản phải thu',
+  'field.receivableAccountIdHint': 'Công nợ khách hàng, nếu đối tác không chỉ định khác.',
+  'field.payableAccountId': 'Tài khoản phải trả',
+  'field.payableAccountIdHint': 'Công nợ nhà cung cấp, nếu đối tác không chỉ định khác.',
   'field.taxId': 'Thuế',
   'field.secondTaxId': 'Thuế thứ hai',
   'field.secondTaxIdHint': 'Để trống nếu dòng chỉ chịu một loại thuế.',
@@ -1806,6 +1989,20 @@ const en: Record<string, string> = {
   'dashboard.configurationHint': 'Manage the foundations used when posting documents.',
   'dashboard.customerInvoicesHint': 'Sales invoices and outstanding customer balances.',
   'dashboard.vendorBillsHint': 'Purchase documents and supplier obligations.',
+  'menu.defaults': 'Default accounts',
+  'defaults.title': 'Default accounts',
+  'defaults.kicker': 'Posting configuration',
+  'defaults.subtitle': 'Decide the accounts once, so a document stops asking on every line.',
+  'defaults.summary.categories': 'Configured categories',
+  'defaults.company.title': 'Company defaults',
+  'defaults.company.hint': 'Used when neither the product category nor the partner says otherwise.',
+  'defaults.category.title': 'Set the accounts for a product category',
+  'defaults.category.edit.title': 'Edit a product category',
+  'defaults.category.hint': 'A category decides the revenue and expense accounts for what it holds.',
+  'defaults.categories.title': 'Configured categories',
+  'defaults.categories.hint': 'Open a row to change it. A category absent here uses the company defaults.',
+  'defaults.categories.empty': 'No category has its own accounts yet',
+  'defaults.categories.emptyHint': 'Everything posts to the company defaults.',
   'dashboard.entriesHint': 'Draft and posted entries across accounting journals.',
   'dashboard.paymentsHint': 'Inbound, outbound, and reconciled payments.',
   'dashboard.trialBalanceHint': 'Compare total debit and credit movements by account.',
@@ -2046,6 +2243,17 @@ const en: Record<string, string> = {
   'field.memo': 'Memo',
   'field.destinationAccountIdHint':
     'The control account this payment settles: a receivable for a customer, a payable for a supplier.',
+  'field.lineAccountIdHint': 'Leave empty to take it from the product category, or the company default.',
+  'field.counterpartAccountIdHint': 'Leave empty to take it from the partner, or the company default.',
+  'field.categoryId': 'Product category',
+  'field.incomeAccountId': 'Revenue account',
+  'field.incomeAccountIdHint': 'Credited on a sale, unless the product category says otherwise.',
+  'field.expenseAccountId': 'Expense account',
+  'field.expenseAccountIdHint': 'Debited on a purchase, unless the product category says otherwise.',
+  'field.receivableAccountId': 'Receivable account',
+  'field.receivableAccountIdHint': 'Customer balances, unless the partner says otherwise.',
+  'field.payableAccountId': 'Payable account',
+  'field.payableAccountIdHint': 'Supplier balances, unless the partner says otherwise.',
   'field.paymentReference': 'Payment reference',
   'field.reconcileLineId': 'Reconcile with open item',
   'field.termValue': 'Value type',

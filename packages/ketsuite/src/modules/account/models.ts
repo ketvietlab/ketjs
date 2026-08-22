@@ -13,6 +13,41 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { company: { fields: ['companyId'], unique: true } },
   },
+  /**
+   * The accounts a document falls back to when nothing more specific applies.
+   *
+   * One row per company. Without it every invoice asked the person writing it to
+   * name a revenue account and a receivable account out of the whole chart —
+   * a question the chart itself already answers the same way every time.
+   */
+  Defaults: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      incomeAccountId: 'ref:account.Account?',
+      expenseAccountId: 'ref:account.Account?',
+      receivableAccountId: 'ref:account.Account?',
+      payableAccountId: 'ref:account.Account?',
+    },
+    indexes: { company: { fields: ['companyId'], unique: true } },
+  },
+  /**
+   * What a product category posts to, per company.
+   *
+   * The catalogue is shared across every company in the tenant while a chart of
+   * accounts belongs to one, so the mapping cannot live on the category itself —
+   * two companies file the same category against different accounts.
+   */
+  CategoryAccount: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      categoryId: 'ref:product.Category',
+      incomeAccountId: 'ref:account.Account?',
+      expenseAccountId: 'ref:account.Account?',
+    },
+    indexes: { company_category: { fields: ['companyId', 'categoryId'], unique: true } },
+  },
   Account: {
     scope: 'company',
     fields: {

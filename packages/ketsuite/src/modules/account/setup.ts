@@ -5,6 +5,7 @@ import {
   TT99_CATALOG_CHECKSUM,
   TT99_CODE,
   TT99_COUNTRY,
+  TT99_DEFAULT_ACCOUNTS,
   TT99_LEGAL_BASIS,
   VIETNAM_TAXES,
 } from './tt99.ts'
@@ -18,12 +19,14 @@ export const ACCOUNT_SETUP_EFFECTS = [
   'read:account.Journal',
   'read:account.PaymentTerm',
   'read:account.PaymentTermLine',
+  'read:account.Defaults',
   'write:account.Setup',
   'write:account.Account',
   'write:account.Tax',
   'write:account.Journal',
   'write:account.PaymentTerm',
   'write:account.PaymentTermLine',
+  'write:account.Defaults',
 ] as const
 
 const accountId = (company: string, code: string): string => `account:${company}:tt99:${code}`
@@ -31,6 +34,7 @@ const taxId = (company: string, key: string): string => `tax:${company}:vn:${key
 const journalId = (company: string, key: string): string => `journal:${company}:${key}`
 const termId = (company: string, key: string): string => `term:${company}:${key}`
 const setupId = (company: string): string => `account-setup:${company}`
+const defaultsId = (company: string): string => `account-defaults:${company}`
 
 const countryFor = async (ctx: Ctx, company: Row): Promise<string | null> => {
   const addresses = await ctx.db.select('partner.Address', { partnerId: company.partnerId })
@@ -203,6 +207,49 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
 }
 
 /**
+ * Give the company the accounts a document falls back to, if it has none.
+ *
+ * Kept out of the catalog install because it is not versioned with the catalog:
+ * a company that installed TT99 before defaults existed is already at the current
+ * checksum, and would otherwise never receive them. Only unset fields are filled —
+ * a chosen default is a decision, not something to reassert on every request.
+ */
+async function ensureCompanyDefaults(ctx: Ctx, companyId: string): Promise<void> {
+  const held = (await ctx.db.select('account.Defaults'))[0]
+  if (held?.incomeAccountId && held.expenseAccountId && held.receivableAccountId && held.payableAccountId)
+    return
+  const byCode = new Map(
+    (await ctx.db.select('account.Account')).map((row) => [String(row.code), String(row.id)]),
+  )
+  const seeded = Object.fromEntries(
+    (
+      [
+        ['incomeAccountId', TT99_DEFAULT_ACCOUNTS.income],
+        ['expenseAccountId', TT99_DEFAULT_ACCOUNTS.expense],
+        ['receivableAccountId', TT99_DEFAULT_ACCOUNTS.receivable],
+        ['payableAccountId', TT99_DEFAULT_ACCOUNTS.payable],
+      ] as const
+    )
+      .map(([field, code]) => [field, byCode.get(code) ?? null] as const)
+      .filter(([, id]) => id),
+  )
+  if (!Object.keys(seeded).length) return
+  if (!held) {
+    await ctx.db.insertIfAbsent('account.Defaults', {
+      id: defaultsId(companyId),
+      incomeAccountId: null,
+      expenseAccountId: null,
+      receivableAccountId: null,
+      payableAccountId: null,
+      ...seeded,
+    })
+    return
+  }
+  const missing = Object.fromEntries(Object.entries(seeded).filter(([field]) => !held[field]))
+  if (Object.keys(missing).length) await ctx.db.update('account.Defaults', { id: held.id }, missing)
+}
+
+/**
  * Install the bundled data pack for the active company, once.
  *
  * The guard is the transaction and the checksum on `account.Setup`, not a map in
@@ -215,9 +262,13 @@ export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
   const current = (await ctx.db.select('account.Setup'))[0]
-  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) return current
+  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
+    await ensureCompanyDefaults(ctx, companyId)
+    return current
+  }
 
   await installCompanyAccounting(ctx)
+  await ensureCompanyDefaults(ctx, companyId)
   const completed = (await ctx.db.select('account.Setup'))[0]
   if (!completed) throw new Error('account.error.setupIncomplete')
   return completed

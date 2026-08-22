@@ -1530,6 +1530,22 @@ export const TT99_ACCOUNTS: readonly Tt99Account[] = [
 export const TT99_ACCOUNT_CHECKSUM = '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71'
 export const TT99_CATALOG_CHECKSUM = 'c5fa8cb1c165ae56c5137d99df72464914a6f9dc63a2d4cdf807a465f0432da9'
 
+/**
+ * What a document posts to when nothing more specific applies.
+ *
+ * Circular 99 answers this the same way for every Vietnamese company, so the
+ * install answers it once instead of asking on every invoice: revenue to 511,
+ * cost of goods sold to 632, trade receivables to 1311, trade payables to 3311.
+ * A company that files differently changes them on the accounting defaults
+ * screen, and a product category can override the two profit-and-loss ones.
+ */
+export const TT99_DEFAULT_ACCOUNTS = {
+  income: '511',
+  expense: '632',
+  receivable: '1311',
+  payable: '3311',
+} as const
+
 export const TT99_CODE = 'TT99_2025'
 export const TT99_COUNTRY = 'VN'
 export const TT99_LEGAL_BASIS = 'Thông tư 99/2025/TT-BTC ngày 27/10/2025'

@@ -115,6 +115,12 @@ const REFUSALS = {
 
   invoiceTypeRequired: 'createInvoice requires an invoice, refund, or receipt type',
   invoiceAccountsMissing: 'invoice accounts do not exist',
+  lineAccountUndecided:
+    'no revenue or expense account was given, and neither the product category nor the company has a default',
+  counterpartAccountUndecided:
+    'no receivable or payable account was given, and neither the partner nor the company has a default',
+  categoryMissing: 'the product category does not exist',
+  defaultAccountType: 'that account type cannot serve as this default',
   counterpartMustBeReceivable: 'the counterpart account must be a receivable account',
   counterpartMustBePayable: 'the counterpart account must be a payable account',
 
@@ -181,6 +187,102 @@ async function ledgerOf(ctx: Ctx): Promise<Ledger> {
 
 async function accountOf(ctx: Ctx, id: unknown): Promise<Row | null> {
   return (await ctx.db.select('account.Account', { id }))[0] ?? null
+}
+
+/** Reads a company's fallback accounts, whether or not a row has been written yet. */
+async function defaultsOf(ctx: Ctx): Promise<Row> {
+  return (await ctx.db.select('account.Defaults'))[0] ?? {}
+}
+
+/**
+ * The category a variant belongs to, through its template.
+ *
+ * An invoice line names a variant, the catalogue hangs the category off the
+ * template, and the accounts hang off the category — so reaching one from the
+ * other is two hops, not a join this query layer offers.
+ */
+async function categoryOfProduct(ctx: Ctx, productId: unknown): Promise<unknown> {
+  if (!productId) return null
+  const variant = (await ctx.db.select('product.Product', { id: productId }))[0]
+  if (!variant) return null
+  const template = (await ctx.db.select('product.Template', { id: variant.templateId }))[0]
+  return template?.categoryId ?? null
+}
+
+export const ACCOUNT_RESOLUTION_EFFECTS = [
+  'read:account.Account',
+  'read:account.Defaults',
+  'read:account.CategoryAccount',
+  'read:product.Product',
+  'read:product.Template',
+  'read:partner.CompanyTerms',
+] as const
+
+/** Where an invoice line and its counterpart post, and what decided each. */
+export type ResolvedAccounts = {
+  lineAccountId: unknown
+  lineAccountFrom: 'explicit' | 'category' | 'company' | null
+  counterpartAccountId: unknown
+  counterpartAccountFrom: 'explicit' | 'partner' | 'company' | null
+}
+
+/**
+ * Decide which accounts a document posts to.
+ *
+ * Most: an explicit choice wins, then the narrowest configured default, then the
+ * company's. Asking the person writing an invoice to name a revenue account out
+ * of 216 is asking them to re-answer a question the chart already answers the
+ * same way every time — and to get it wrong occasionally.
+ *
+ * The partner's control accounts are read from `partner.CompanyTerms`, whose
+ * account fields the optional `account_partner` module adds. When it is not
+ * installed the fields are simply absent and resolution falls through to the
+ * company default, which is why this reads them rather than depending on it.
+ */
+async function resolveAccounts(
+  ctx: Ctx,
+  args: { moveType: string; partnerId?: unknown; productId?: unknown },
+  explicit: { lineAccountId?: unknown; counterpartAccountId?: unknown } = {},
+): Promise<ResolvedAccounts> {
+  const customer = ['out_invoice', 'out_refund', 'out_receipt'].includes(args.moveType)
+  const defaults = await defaultsOf(ctx)
+
+  let lineAccountId = explicit.lineAccountId ?? null
+  let lineAccountFrom: ResolvedAccounts['lineAccountFrom'] = lineAccountId ? 'explicit' : null
+  if (!lineAccountId) {
+    const categoryId = await categoryOfProduct(ctx, args.productId)
+    const mapped = categoryId
+      ? ((await ctx.db.select('account.CategoryAccount', { categoryId }))[0] ?? null)
+      : null
+    const fromCategory = customer ? mapped?.incomeAccountId : mapped?.expenseAccountId
+    if (fromCategory) {
+      lineAccountId = fromCategory
+      lineAccountFrom = 'category'
+    } else {
+      lineAccountId = (customer ? defaults.incomeAccountId : defaults.expenseAccountId) ?? null
+      lineAccountFrom = lineAccountId ? 'company' : null
+    }
+  }
+
+  let counterpartAccountId = explicit.counterpartAccountId ?? null
+  let counterpartAccountFrom: ResolvedAccounts['counterpartAccountFrom'] = counterpartAccountId
+    ? 'explicit'
+    : null
+  if (!counterpartAccountId) {
+    const terms = args.partnerId
+      ? ((await ctx.db.select('partner.CompanyTerms', { partnerId: args.partnerId }))[0] ?? null)
+      : null
+    const fromPartner = customer ? terms?.receivableAccountId : terms?.payableAccountId
+    if (fromPartner) {
+      counterpartAccountId = fromPartner
+      counterpartAccountFrom = 'partner'
+    } else {
+      counterpartAccountId = (customer ? defaults.receivableAccountId : defaults.payableAccountId) ?? null
+      counterpartAccountFrom = counterpartAccountId ? 'company' : null
+    }
+  }
+
+  return { lineAccountId, lineAccountFrom, counterpartAccountId, counterpartAccountFrom }
 }
 
 /**
@@ -620,6 +722,145 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id }
     },
   }),
+  getDefaults: defineFn({
+    input: {},
+    output: {
+      id: 'id?',
+      incomeAccountId: 'id?',
+      expenseAccountId: 'id?',
+      receivableAccountId: 'id?',
+      payableAccountId: 'id?',
+    },
+    effects: ['read:account.Defaults', ...ACCOUNT_SETUP_EFFECTS],
+    agent: true,
+    handler: async (ctx) => {
+      await ensureCompanyAccounting(ctx)
+      return (await ctx.db.select('account.Defaults'))[0] ?? {}
+    },
+  }),
+  saveDefaults: defineFn({
+    input: {
+      incomeAccountId: 'id?',
+      expenseAccountId: 'id?',
+      receivableAccountId: 'id?',
+      payableAccountId: 'id?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:account.Account', 'read:account.Defaults', 'write:account.Defaults'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      // Each default has a type the ledger will insist on later; refusing here
+      // means the invoice that would have used it never fails in the first place.
+      for (const [field, wanted] of [
+        ['incomeAccountId', ['income', 'income_other']],
+        ['expenseAccountId', ['expense', 'expense_other', 'expense_depreciation', 'expense_direct_cost']],
+        ['receivableAccountId', ['asset_receivable']],
+        ['payableAccountId', ['liability_payable']],
+      ] as const) {
+        const id = args[field]
+        if (!id) continue
+        const account = await accountOf(ctx, id)
+        if (!account) return invalid(field, 'accountMissing')
+        if (!wanted.includes(String(account.accountType) as never))
+          return invalid(
+            field,
+            field === 'receivableAccountId'
+              ? 'counterpartMustBeReceivable'
+              : field === 'payableAccountId'
+                ? 'counterpartMustBePayable'
+                : 'defaultAccountType',
+          )
+      }
+      const held = (await ctx.db.select('account.Defaults'))[0]
+      const values = {
+        incomeAccountId: args.incomeAccountId ?? null,
+        expenseAccountId: args.expenseAccountId ?? null,
+        receivableAccountId: args.receivableAccountId ?? null,
+        payableAccountId: args.payableAccountId ?? null,
+      }
+      if (held) {
+        await ctx.db.update('account.Defaults', { id: held.id }, values)
+        return { ok: true, id: held.id }
+      }
+      const id = `account-defaults:${String(ctx.scope.company ?? '')}`
+      await ctx.db.insert('account.Defaults', { id, ...values })
+      return { ok: true, id }
+    },
+  }),
+  listCategoryAccounts: defineFn({
+    input: {},
+    effects: ['read:account.CategoryAccount', 'read:product.Category'],
+    agent: true,
+    handler: async (ctx) => {
+      const categories = new Map(
+        (await ctx.db.select('product.Category')).map((row) => [String(row.id), row]),
+      )
+      return (await ctx.db.select('account.CategoryAccount')).map((row) => ({
+        ...row,
+        categoryName: categories.get(String(row.categoryId))?.name ?? null,
+      }))
+    },
+  }),
+  saveCategoryAccount: defineFn({
+    input: { categoryId: 'id', incomeAccountId: 'id?', expenseAccountId: 'id?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:account.Account',
+      'read:account.CategoryAccount',
+      'read:product.Category',
+      'write:account.CategoryAccount',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!(await ctx.db.select('product.Category', { id: args.categoryId }))[0])
+        return invalid('categoryId', 'categoryMissing')
+      for (const [field, wanted] of [
+        ['incomeAccountId', ['income', 'income_other']],
+        ['expenseAccountId', ['expense', 'expense_other', 'expense_depreciation', 'expense_direct_cost']],
+      ] as const) {
+        const id = args[field]
+        if (!id) continue
+        const account = await accountOf(ctx, id)
+        if (!account) return invalid(field, 'accountMissing')
+        if (!wanted.includes(String(account.accountType) as never))
+          return invalid(field, 'defaultAccountType')
+      }
+      const values = {
+        incomeAccountId: args.incomeAccountId ?? null,
+        expenseAccountId: args.expenseAccountId ?? null,
+      }
+      const held = (await ctx.db.select('account.CategoryAccount', { categoryId: args.categoryId }))[0]
+      if (held) {
+        await ctx.db.update('account.CategoryAccount', { id: held.id }, values)
+        return { ok: true, id: held.id }
+      }
+      // One row per company and category, so the id can be derived rather than
+      // generated: a second save corrects the first instead of racing it.
+      const id = `category-account:${String(ctx.scope.company ?? '')}:${String(args.categoryId)}`
+      await ctx.db.insert('account.CategoryAccount', { id, categoryId: args.categoryId, ...values })
+      return { ok: true, id }
+    },
+  }),
+  /** What a document would post to, and what decided it. The forms use this to explain themselves. */
+  previewAccounts: defineFn({
+    input: { moveType: 'text', partnerId: 'id?', productId: 'id?' },
+    output: {
+      lineAccountId: 'id?',
+      lineAccountFrom: 'text?',
+      counterpartAccountId: 'id?',
+      counterpartAccountFrom: 'text?',
+    },
+    effects: [...ACCOUNT_RESOLUTION_EFFECTS],
+    agent: true,
+    handler: (ctx, args) =>
+      resolveAccounts(ctx, {
+        moveType: String(args.moveType),
+        partnerId: args.partnerId,
+        productId: args.productId,
+      }),
+  }),
   listPaymentTerms: defineFn({
     input: { includeArchived: 'bool?' },
     effects: ['read:account.PaymentTerm', 'read:account.PaymentTermLine', ...ACCOUNT_SETUP_EFFECTS],
@@ -930,8 +1171,10 @@ export const functions: Record<string, FnSpec> = {
       quantity: 'decimal',
       priceUnit: 'decimal',
       discount: 'decimal?',
-      lineAccountId: 'id',
-      counterpartAccountId: 'id',
+      // Optional: left out, they come from the product's category, the partner,
+      // and the company's defaults, in that order.
+      lineAccountId: 'id?',
+      counterpartAccountId: 'id?',
       taxId: 'id?',
       taxIds: 'json?',
       taxAccountId: 'id?',
@@ -939,11 +1182,11 @@ export const functions: Record<string, FnSpec> = {
     output: { ok: 'bool', id: 'id?', amountTotal: 'decimal?', errors: 'json?' },
     effects: [
       'read:account.Journal',
-      'read:account.Account',
       'read:account.Tax',
       'read:account.Move',
       'read:account.PaymentTermLine',
       'read:company.Company',
+      ...ACCOUNT_RESOLUTION_EFFECTS,
       'write:account.Move',
       'write:account.MoveLine',
     ],
@@ -961,8 +1204,16 @@ export const functions: Record<string, FnSpec> = {
       const customerDocument = ['out_invoice', 'out_refund', 'out_receipt'].includes(String(args.moveType))
       if (journal.type !== (customerDocument ? 'sale' : 'purchase'))
         return invalid('journalId', customerDocument ? 'journalMustBeSale' : 'journalMustBePurchase')
-      const lineAccount = await accountOf(ctx, args.lineAccountId),
-        counterpart = await accountOf(ctx, args.counterpartAccountId)
+      const resolved = await resolveAccounts(
+        ctx,
+        { moveType: String(args.moveType), partnerId: args.partnerId, productId: args.productId },
+        { lineAccountId: args.lineAccountId, counterpartAccountId: args.counterpartAccountId },
+      )
+      if (!resolved.lineAccountId) return invalid('lineAccountId', 'lineAccountUndecided')
+      if (!resolved.counterpartAccountId)
+        return invalid('counterpartAccountId', 'counterpartAccountUndecided')
+      const lineAccount = await accountOf(ctx, resolved.lineAccountId),
+        counterpart = await accountOf(ctx, resolved.counterpartAccountId)
       if (!lineAccount || !counterpart) return invalid('accountId', 'invoiceAccountsMissing')
       if (counterpart.accountType !== (customerDocument ? 'asset_receivable' : 'liability_payable'))
         return invalid(
@@ -1061,7 +1312,7 @@ export const functions: Record<string, FnSpec> = {
           })
         await line(
           `${String(args.id)}:base`,
-          args.lineAccountId,
+          resolved.lineAccountId,
           amounts.untaxed,
           mainDebit,
           String(args.description),
@@ -1089,7 +1340,7 @@ export const functions: Record<string, FnSpec> = {
           )
         await line(
           `${String(args.id)}:counterpart`,
-          args.counterpartAccountId,
+          resolved.counterpartAccountId,
           amounts.total,
           !mainDebit,
           String(args.ref ?? args.description),
