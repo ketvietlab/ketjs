@@ -19,6 +19,7 @@ import {
   stack,
   Surface,
   Tabs,
+  thumbnail,
 } from '../../ui/index.ts'
 import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
@@ -50,6 +51,18 @@ export type TemplateRow = {
   categoryId: string | null
   uomId: string | null
   variants: number
+  /**
+   * The unit and the category as the reader knows them.
+   *
+   * The ids stay on the row because a filter and a link both travel on them, but
+   * a catalogue that prints `workwear` where it means "Đồng phục vận hành" is
+   * showing its own plumbing. Absent names fall back to the id rather than to a
+   * dash: an unresolved reference is worth seeing.
+   */
+  uomName?: string | null
+  categoryName?: string | null
+  /** The primary image, when the product has one. */
+  image?: { src: string; alt: string } | null
 }
 
 /** The two ways to look at the same rows. More can be added; each is a real page. */
@@ -71,6 +84,17 @@ export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
  * everyone else.
  */
 export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
+  {
+    key: 'image',
+    label: _('product_backend.col.image'),
+    // The catalogue is looked at as much as it is read, and a thumbnail is the
+    // fastest way to tell two similar names apart. The placeholder keeps the
+    // column's width steady so rows do not jog as images come and go.
+    cell: (r) =>
+      r.image ? thumbnail({ src: r.image.src, alt: r.image.alt }) : thumbnail({ fallback: icon('package') }),
+    kind: 'media',
+    priority: 'primary',
+  },
   { key: 'name', label: _('product_backend.col.name'), cell: (r) => r.name, priority: 'primary' },
   {
     key: 'type',
@@ -83,8 +107,7 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   {
     key: 'uom',
     label: _('product_backend.col.uom'),
-    cell: (r) => (r.uomId ? code(r.uomId, 'unit') : '—'),
-    kind: 'identifier',
+    cell: (r) => r.uomName || r.uomId || '—',
   },
   {
     key: 'variants',
@@ -96,7 +119,7 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   {
     key: 'category',
     label: _('product_backend.col.category'),
-    cell: (r) => r.categoryId ?? '—',
+    cell: (r) => r.categoryName || r.categoryId || '—',
     priority: 'tertiary',
     optional: true,
   },
@@ -119,9 +142,14 @@ const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): Te
         key={r.id}
         title={r.name}
         href={localized(`/admin/product/templates/${r.id}`, locale)}
+        media={
+          r.image
+            ? thumbnail({ src: r.image.src, alt: r.image.alt, size: 'card' })
+            : thumbnail({ fallback: icon('package'), size: 'card' })
+        }
         meta={inline([
           badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
-          r.uomId ? code(r.uomId, 'unit') : '',
+          r.uomName || r.uomId || '',
         ])}
         note={`${_('product_backend.col.variants')}: ${String(r.variants)}`}
       />
@@ -210,6 +238,7 @@ export const productDetailScreen = (
     categoryId?: string | null
     saleOk?: boolean
     purchaseOk?: boolean
+    active?: boolean
     isStorable?: boolean
     tracking?: string
   },
@@ -218,10 +247,34 @@ export const productDetailScreen = (
     uoms: FormOption[]
     categories: FormOption[]
     attributes: FormOption[]
-    variants: Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
+    variants: Array<{
+      id: string
+      name?: string | null
+      defaultCode?: string | null
+      barcode?: string | null
+      active?: boolean
+    }>
+    /** What the template already carries, so the reader can see and undo it. */
+    attributeLines: Array<{
+      id: string
+      attributeId: string
+      attribute?: string | null
+      values: Array<{ id: string; name: string }>
+    }>
     stockEnabled?: boolean
     errors?: string[]
     editor?: JSXChild
+    /**
+     * Relation pickers, built by the route because they need a request to reach
+     * their joint. Absent ones fall back to the plain select beside them, so this
+     * screen still renders from a bare options list.
+     */
+    controls?: {
+      uom?: JSXChild
+      category?: JSXChild
+      attribute?: JSXChild
+      attributeValues?: JSXChild
+    }
   },
   collaboration: JSXChild,
   frame: Frame = {},
@@ -278,6 +331,7 @@ export const productDetailScreen = (
           type: 'select',
           value: row.uomId,
           options: [{ value: '', label: '—' }, ...management.uoms],
+          ...(management.controls?.uom ? { control: management.controls.uom } : {}),
         },
         {
           name: 'categoryId',
@@ -285,6 +339,7 @@ export const productDetailScreen = (
           type: 'select',
           value: row.categoryId,
           options: [{ value: '', label: '—' }, ...management.categories],
+          ...(management.controls?.category ? { control: management.controls.category } : {}),
         },
         {
           name: 'listPrice',
@@ -317,6 +372,36 @@ export const productDetailScreen = (
     />
   )
 
+  // Archiving is the only way out of the catalogue that keeps the history, and
+  // the list already offers to include archived products — so the screen that
+  // owns the product has to be the one that can archive it.
+  const archived = row.active === false
+  const generalTab = stack(
+    [
+      general,
+      <Section
+        title={_(archived ? 'product_backend.archive.restoreTitle' : 'product_backend.archive.title')}
+        description={_(archived ? 'product_backend.archive.restoreHint' : 'product_backend.archive.hint')}
+        body={
+          <Surface
+            padding="compact"
+            body={
+              <RecordForm
+                action={localized(`/admin/product/templates/${row.id}/archive?tab=general`, locale)}
+                submit={_(archived ? 'product_backend.archive.restore' : 'product_backend.archive.action')}
+                submitVariant={archived ? 'secondary' : 'destructive'}
+                submitSize="compact"
+                hidden={{ active: archived ? '1' : '0' }}
+                fields={[]}
+              />
+            }
+          />
+        }
+      />,
+    ],
+    'loose',
+  )
+
   const variants = stack([
     <Section
       title={_('product_backend.variants.title')}
@@ -336,18 +421,30 @@ export const productDetailScreen = (
               id: (variant) => variant.id,
               columns: [
                 {
-                  key: 'code',
-                  label: _('product_backend.field.defaultCode'),
+                  key: 'variant',
+                  label: _('product_backend.variants.title'),
+                  priority: 'primary',
+                  // A generated variant has no name of its own; what identifies it
+                  // is the combination it stands for. Falling back to the id last
+                  // means the row is only ever unreadable when there is genuinely
+                  // nothing else to say.
                   cell: (variant) =>
                     linkButton({
-                      label: variant.defaultCode || variant.id,
+                      label: variant.name || variant.defaultCode || variant.id,
                       href: localized(`/admin/product/templates/${row.id}/variants/${variant.id}`, locale),
                       variant: 'tertiary',
                     }),
                 },
                 {
+                  key: 'code',
+                  label: _('product_backend.field.defaultCode'),
+                  kind: 'identifier',
+                  cell: (variant) => variant.defaultCode || '—',
+                },
+                {
                   key: 'barcode',
                   label: _('product_backend.field.barcode'),
+                  kind: 'identifier',
                   cell: (variant) => variant.barcode ?? '—',
                 },
                 {
@@ -365,33 +462,91 @@ export const productDetailScreen = (
     <Section
       title={_('product_backend.attributes.lines')}
       description={_('product_backend.attributes.linesHint')}
-      body={
-        <Surface
-          padding="compact"
-          body={
-            <RecordForm
-              action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
-              submit={_('product_backend.action.add')}
-              submitVariant="secondary"
-              fields={[
-                {
-                  name: 'attributeId',
-                  label: _('product_backend.attributes.attribute'),
-                  type: 'select',
-                  options: management.attributes,
-                  required: true,
-                },
-                {
-                  name: 'valueIds',
-                  label: _('product_backend.attributes.values'),
-                  help: _('product_backend.attributes.valuesHint'),
-                  required: true,
-                },
-              ]}
-            />
-          }
-        />
-      }
+      body={stack(
+        [
+          // What is already configured, before the form that adds more. Without
+          // this the reader adds a line and the screen says nothing back — there
+          // was no way to see, let alone undo, what a template already carried.
+          management.attributeLines.length
+            ? dataTable(_, {
+                rows: management.attributeLines,
+                id: (line) => line.id,
+                columns: [
+                  {
+                    key: 'attribute',
+                    label: _('product_backend.attributes.attribute'),
+                    priority: 'primary',
+                    cell: (line) => line.attribute || line.attributeId,
+                  },
+                  {
+                    key: 'values',
+                    label: _('product_backend.attributes.values'),
+                    cell: (line) =>
+                      line.values.length
+                        ? inline(line.values.map((value) => badge(value.name)))
+                        : badge(_('product_backend.attributes.noValues')),
+                  },
+                  {
+                    key: 'remove',
+                    label: _('product_backend.attributes.removeLine'),
+                    align: 'end',
+                    cell: (line) => (
+                      <RecordForm
+                        action={localized(
+                          `/admin/product/templates/${row.id}/attribute-lines/${line.id}/remove?tab=variants`,
+                          locale,
+                        )}
+                        submit={_('product_backend.attributes.removeLine')}
+                        submitVariant="tertiary"
+                        submitSize="compact"
+                        fields={[]}
+                      />
+                    ),
+                  },
+                ],
+              })
+            : emptyState(
+                _('product_backend.attributes.linesEmpty'),
+                _('product_backend.attributes.linesEmptyHint'),
+              ),
+          <Surface
+            padding="compact"
+            body={
+              <RecordForm
+                action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
+                submit={_('product_backend.action.add')}
+                submitVariant="secondary"
+                fields={[
+                  {
+                    name: 'attributeId',
+                    label: _('product_backend.attributes.attribute'),
+                    type: 'select',
+                    // The empty option matters on a required field: without it the
+                    // browser preselects the first attribute, and a reader who
+                    // never opened the control still submits one.
+                    options: [{ value: '', label: '—' }, ...management.attributes],
+                    required: true,
+                    ...(management.controls?.attribute ? { control: management.controls.attribute } : {}),
+                  },
+                  {
+                    name: 'valueIds',
+                    label: _('product_backend.attributes.values'),
+                    help: _('product_backend.attributes.valuesHint'),
+                    required: true,
+                    // Its own row: the chips grow downward, and a half-width
+                    // neighbour would be left centred against a stack of them.
+                    span: 'full' as const,
+                    ...(management.controls?.attributeValues
+                      ? { control: management.controls.attributeValues }
+                      : {}),
+                  },
+                ]}
+              />
+            }
+          />,
+        ],
+        'compact',
+      )}
     />,
   ])
 
@@ -429,6 +584,11 @@ export const productDetailScreen = (
           label: _('product_backend.summary.images'),
           value: images.length,
           href: tabHref('media'),
+        },
+        {
+          id: 'state',
+          label: _('product_backend.col.state'),
+          value: selectionLabel(_, 'state', archived ? 'archived' : 'active'),
         },
         ...(management.stockEnabled
           ? [
@@ -468,7 +628,7 @@ export const productDetailScreen = (
         />
       }
       controller={management.editor}
-      body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : general}
+      body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : generalTab}
       aside={collaboration}
       asideLabel={_('product_backend.collaboration.label')}
       slots={{
@@ -504,6 +664,7 @@ export const variantScreen = (
   editor?: JSXChild,
   activeTab: VariantDetailTab = 'general',
   partial = false,
+  uomControl?: JSXChild,
 ): TemplateResult => {
   const images = media.images ?? []
   const primaryImage = images.find((image) => image.primary) ?? images[0]
@@ -512,10 +673,18 @@ export const variantScreen = (
     : undefined
   const tabHref = (tab: VariantDetailTab) =>
     localized(`/admin/product/templates/${templateId}/variants/${String(row.id)}?tab=${tab}`, locale)
-  const title = String(row.defaultCode || template.name || row.id)
+  // The heading names the variant, not its template: arriving from the variant
+  // list on a page headed with the template's name gives the reader no way to
+  // tell which of the two screens they are on.
+  const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
+  const title = String(row.name || row.defaultCode || row.id)
   const subtitle = [
     `${_('product_backend.variant.template')}: ${template.name}`,
-    row.combinationKey ? `${_('product_backend.variant.combination')}: ${String(row.combinationKey)}` : null,
+    // The combination as attribute and value, not as the key the database stores
+    // it under: "Màu sắc: Đỏ" rather than "color-red".
+    ...values.map((entry) =>
+      entry.attribute ? `${String(entry.attribute)}: ${String(entry.value)}` : String(entry.value),
+    ),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -558,6 +727,7 @@ export const variantScreen = (
           type: 'select',
           value: productUom?.uomId ? String(productUom.uomId) : '',
           options: [{ value: '', label: '—' }, ...uoms],
+          ...(uomControl ? { control: uomControl } : {}),
         },
         {
           name: 'uomBarcode',

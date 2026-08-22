@@ -25,7 +25,15 @@ export function createRelationSelectView(runtime, props) {
   const config = props.config ?? {}
   const labels = config.labels ?? {}
   const manager = config.manager ?? null
-  const selected = signal(string(config.value))
+  // One representation for both modes: an array of chosen ids. Single-select is
+  // the array of length 0 or 1, so nothing downstream has to branch on the mode
+  // except the places where the two genuinely differ — the trigger and the chips.
+  const multiple = config.multiple === true
+  const chosen = signal(
+    multiple ? array(config.values).map(string).filter(Boolean) : [string(config.value)].filter(Boolean),
+  )
+  const selected = () => chosen()[0] ?? ''
+  const isChosen = (value) => chosen().includes(string(value))
   const options = signal(array(config.options))
   const open = signal(false)
   const dialog = signal(false)
@@ -56,18 +64,27 @@ export function createRelationSelectView(runtime, props) {
   }
 
   const choose = (value, label, description = '') => {
-    selected.set(string(value))
-    if (!options().some((entry) => string(entry.value) === string(value)))
-      options.set([
-        ...options(),
-        { value: string(value), label: string(label), description: string(description) },
-      ])
+    const id = string(value)
+    if (!options().some((entry) => string(entry.value) === id))
+      options.set([...options(), { value: id, label: string(label), description: string(description) }])
+    if (multiple) {
+      // Picking is a toggle, and the dialog stays open: choosing several records
+      // one after another is the whole point of a multi-valued field.
+      chosen.set(isChosen(id) ? chosen().filter((held) => held !== id) : [...chosen(), id])
+      return
+    }
+    chosen.set(id ? [id] : [])
     open.set(false)
     dialog.set(false)
     query.set('')
     editor.set(null)
     pendingRemove.set('')
   }
+
+  const unchoose = (value) => chosen.set(chosen().filter((held) => held !== string(value)))
+
+  const labelOf = (value) =>
+    options().find((entry) => string(entry.value) === string(value))?.label || string(value)
 
   const loadRows = async () => {
     if (!manager?.listFunction) return
@@ -126,6 +143,12 @@ export function createRelationSelectView(runtime, props) {
       const label = string(payload[manager.labelField || 'name'])
       if (!editing?.id) {
         choose(id, label)
+        // `choose` closes the dialog for a single value; a multi-valued field
+        // stays open to keep picking, so the editor has to be dismissed here.
+        if (multiple) {
+          editor.set(null)
+          await loadRows()
+        }
         return
       }
       options.set(
@@ -153,7 +176,7 @@ export function createRelationSelectView(runtime, props) {
     error.set('')
     try {
       await callApi(manager.removeFunction, { ...(manager.removeDefaults ?? {}), id })
-      if (selected() === id) selected.set('')
+      unchoose(id)
       options.set(options().filter((entry) => string(entry.value) !== id))
       pendingRemove.set('')
       await loadRows()
@@ -204,13 +227,13 @@ export function createRelationSelectView(runtime, props) {
     const id = rowId(row)
     const description = rowDescription(row)
     return html`
-      <li data-ui="relation-dialog-row">
-        <button data-ui="relation-dialog-main" type="button" on:click=${() => choose(id, rowLabel(row), description)}>
+      <li data-ui="relation-dialog-row" data-selected=${String(isChosen(id))}>
+        <button data-ui="relation-dialog-main" type="button" aria-pressed=${multiple ? String(isChosen(id)) : null} on:click=${() => choose(id, rowLabel(row), description)}>
           <strong>${rowLabel(row)}</strong>
           ${description ? html`<small data-ui="relation-dialog-meta">${description}</small>` : ''}
         </button>
         <div data-ui="relation-dialog-actions">
-          <button data-ui="action" data-size="compact" data-variant="secondary" type="button" on:click=${() => choose(id, rowLabel(row), description)}>${labels.select}</button>
+          <button data-ui="action" data-size="compact" data-variant=${isChosen(id) ? 'primary' : 'secondary'} type="button" on:click=${() => choose(id, rowLabel(row), description)}>${isChosen(id) ? labels.chosen : labels.select}</button>
           ${
             manager?.saveFunction
               ? html`<button data-ui="action" data-size="compact" data-variant="tertiary" type="button" on:click=${() => editor.set({ id, row })}>${labels.edit}</button>`
@@ -278,17 +301,25 @@ export function createRelationSelectView(runtime, props) {
           aria-hidden="true"
           on:invalid=${handleInvalid}
         >
-          <option value="" selected=${!selected()}></option>
-          ${each(
-            options().filter((entry) => string(entry.value)),
-            (entry) => entry.value,
-            (entry) =>
-              html`<option value=${entry.value} selected=${string(entry.value) === selected()}>${entry.label}</option>`,
-          )}
+          <option value="" selected=${!chosen().length}></option>
+          ${
+            multiple
+              ? // One option carrying the joined ids, so `required` still refuses an
+                // empty field and the value survives `readForm` intact.
+                chosen().length
+                ? html`<option value=${chosen().join(',')} selected>${chosen().map(labelOf).join(', ')}</option>`
+                : ''
+              : each(
+                  options().filter((entry) => string(entry.value)),
+                  (entry) => entry.value,
+                  (entry) =>
+                    html`<option value=${entry.value} selected=${string(entry.value) === selected()}>${entry.label}</option>`,
+                )
+          }
         </select>
         <button
           data-ui="relation-trigger"
-          data-empty=${String(!selected())}
+          data-empty=${String(!chosen().length)}
           type="button"
           aria-haspopup="listbox"
           aria-label=${config.ariaLabel}
@@ -298,9 +329,21 @@ export function createRelationSelectView(runtime, props) {
           disabled=${config.disabled === true}
           on:click=${() => open.set(!open())}
         >
-          <span data-ui="relation-value">${selectedLabel()}</span>
+          <span data-ui="relation-value">${multiple ? labels.choose : selectedLabel()}</span>
           <span aria-hidden="true">⌄</span>
         </button>
+        ${
+          multiple && chosen().length
+            ? html`<ul data-ui="relation-chips" aria-label=${labels.chosen}>
+                ${each(
+                  chosen(),
+                  (value) => value,
+                  (value) =>
+                    html`<li data-ui="relation-chip"><span>${labelOf(value)}</span><button data-ui="relation-chip-clear" type="button" aria-label=${`${labels.clear}: ${labelOf(value)}`} title=${labels.clear} disabled=${config.disabled === true} on:click=${() => unchoose(value)}>×</button></li>`,
+                )}
+              </ul>`
+            : ''
+        }
         ${
           open()
             ? html`<div data-ui="relation-menu" id=${`${props.id}-relation-menu`}>
@@ -312,7 +355,7 @@ export function createRelationSelectView(runtime, props) {
                           filteredOptions(),
                           (entry) => entry.value,
                           (entry) =>
-                            html`<button data-ui="relation-option" type="button" role="option" aria-selected=${String(string(entry.value) === selected())} on:click=${() => choose(entry.value, entry.label, entry.description)}><span>${entry.label}</span>${entry.description ? html`<small>${entry.description}</small>` : ''}</button>`,
+                            html`<button data-ui="relation-option" type="button" role="option" data-selected=${String(isChosen(entry.value))} aria-selected=${String(isChosen(entry.value))} on:click=${() => choose(entry.value, entry.label, entry.description)}><span>${entry.label}</span>${entry.description ? html`<small>${entry.description}</small>` : ''}</button>`,
                         )
                       : html`<p data-ui="relation-empty">${labels.noRecords}</p>`
                   }

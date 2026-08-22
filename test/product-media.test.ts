@@ -132,3 +132,52 @@ test('product media: backend retains named integration joints and Product stays 
   assert.equal('product.Media' in manifest.models, false)
   assert.ok(manifest.models['product_media.Media'])
 })
+
+test('product media: re-attaching the same image keeps it primary', async () => {
+  const modules = [address, partner, company, storage, uom, product, productMedia]
+  const manifest = compose(modules, { headless: true })
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions(modules)
+  const scope = { company: 'acme', branches: null }
+  const call = (name: string, args: Record<string, unknown>) =>
+    callFn(name, args, { adapter, manifest, scope })
+  try {
+    await call('partner.savePartner', { id: 'party', kind: 'company', name: 'ACME' })
+    await call('company.saveCompany', { id: 'acme', partnerId: 'party', currency: 'VND' })
+    await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' })
+    await call('product.saveTemplate', { id: 'tpl', name: 'Shirt', type: 'goods', uomId: 'unit' })
+    await call('storage.createAttachment', {
+      id: 'a1',
+      name: 'Front',
+      resModel: 'product.Template',
+      resId: 'tpl',
+      resField: 'media',
+      kind: 'url',
+      url: 'https://cdn.example/a1.png',
+      mimetype: 'image/png',
+      size: 0,
+      public: false,
+      createdAt: new Date().toISOString(),
+    })
+    const attach = () =>
+      call('product_media.attachMedia', { id: 'm:a1', attachmentId: 'a1', templateId: 'tpl' })
+    // The first image of a target becomes its primary. The function is declared
+    // idempotent, so replaying the same call has to leave that decision alone —
+    // counting the row it is itself writing would demote the only primary there is.
+    await attach()
+    await attach()
+    const rows = (await call('product_media.listMedia', { templateId: 'tpl' })).value as Array<{
+      id: string
+      primary: boolean
+      sequence: number
+    }>
+    assert.deepEqual(
+      rows.map((row) => [row.id, row.primary, row.sequence]),
+      [['m:a1', true, 10]],
+    )
+  } finally {
+    await adapter.close()
+  }
+})

@@ -295,7 +295,16 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   const partialSaveHtml = await partialSave.text()
   assert.match(partialSaveHtml, /data-ket-slot="product\.record-header"/)
   assert.match(partialSaveHtml, /data-ket-slot="product\.record-body"/)
-  assert.doesNotMatch(partialSaveHtml, /data-island=|data-ui="sidebar"|<!doctype/)
+  assert.doesNotMatch(partialSaveHtml, /data-ui="sidebar"|<!doctype/)
+  // The chatter, the activity list and the save controller sit outside the two
+  // replaced slots, so a partial must not carry them: they keep their DOM and
+  // their local state across the save.
+  assert.doesNotMatch(partialSaveHtml, /data-island="(?:product\.editor|mail\.chatter|activity\.record)"/)
+  // A relation control is different — it is a field of the record body, so it is
+  // part of what the save replaces. Islands inside a fragment are reconciled by
+  // key rather than rebuilt, which is what keeps the picker interactive after a
+  // partial save.
+  assert.match(partialSaveHtml, /data-island="backend\.relation-select"/)
 
   const variantsPage = await e2e.client.get('/admin/product/templates/tpl?tab=variants&lang=vi', {
     headers: { accept: 'text/html' },
@@ -348,7 +357,12 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.match(variantPartial.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
   const variantPartialHtml = await variantPartial.text()
   assert.match(variantPartialHtml, /AO-UPDATED/)
-  assert.doesNotMatch(variantPartialHtml, /data-island=|data-ui="sidebar"|<!doctype/)
+  assert.doesNotMatch(variantPartialHtml, /data-ui="sidebar"|<!doctype/)
+  assert.doesNotMatch(variantPartialHtml, /data-island="(?:product\.editor|mail\.chatter|activity\.record)"/)
+  // The variant's unit picker is a field of the body, and it is held to the
+  // template's unit tree — so the fragment carries that constraint with it.
+  assert.match(variantPartialHtml, /data-island="backend\.relation-select"/)
+  assert.match(variantPartialHtml, /listInput&quot;:\{&quot;rootId&quot;:&quot;unit&quot;\}/)
 
   const attributesPage = await e2e.client.get('/admin/product/attributes?lang=vi', {
     headers: { accept: 'text/html' },

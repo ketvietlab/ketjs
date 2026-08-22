@@ -4,6 +4,30 @@ import { compareQty, convertQty, roundTo, type Unit, type UomError } from './con
 
 const PRECISION_ID = 'product'
 
+/**
+ * The `search` and `limit` a relation picker sends, applied in memory.
+ *
+ * These lists are small and already fully loaded by the handler, so narrowing
+ * here costs nothing and keeps the picker's contract — a `search` term and a
+ * `limit` on every call — satisfiable without a second query path.
+ */
+const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields: string[]): Row[] => {
+  const needle = String(args.search ?? '')
+    .trim()
+    .toLocaleLowerCase()
+  const matched = needle
+    ? rows.filter((row) =>
+        fields.some((field) =>
+          String(row[field] ?? '')
+            .toLocaleLowerCase()
+            .includes(needle),
+        ),
+      )
+    : rows
+  const limit = Number(args.limit)
+  return Number.isInteger(limit) && limit > 0 ? matched.slice(0, limit) : matched
+}
+
 const asUnit = (row: Row): Unit => ({
   id: String(row.id),
   parentPath: String(row.parentPath),
@@ -67,16 +91,23 @@ function deriveTree(rows: UnitRow[]): { ok: true; rows: UnitRow[] } | { ok: fals
 }
 
 export const functions: Record<string, FnSpec> = {
+  /**
+   * `search` and `limit` are what a relation picker sends on every keystroke, so
+   * they are part of the signature rather than something a caller has to work
+   * around. Both are optional: omitting them still returns the whole tree.
+   */
   listUnits: defineFn({
-    input: { rootId: 'id?' },
+    input: { rootId: 'id?', search: 'text?', limit: 'int?' },
     effects: ['read:uom.Unit'],
     agent: true,
     handler: async (ctx, args) => {
       const U = ctx.table('uom.Unit')
       const rows = await ctx.db.all(from(U).where(eq(U.active, true)).orderBy(asc(U.sequence), asc(U.name)))
-      return args.rootId == null
-        ? rows
-        : rows.filter((row) => String(row.parentPath).split('/').filter(Boolean)[0] === args.rootId)
+      const inTree =
+        args.rootId == null
+          ? rows
+          : rows.filter((row) => String(row.parentPath).split('/').filter(Boolean)[0] === args.rootId)
+      return narrow(inTree, args, ['name'])
     },
   }),
 

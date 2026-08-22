@@ -29,6 +29,7 @@ import {
 } from './screens.tsx'
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
+import { attributeControl, attributeValuesControl, categoryControl, uomControl } from './relation-control.ts'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup } from '../../ui/index.ts'
@@ -63,6 +64,21 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
   }
 }
 
+/**
+ * The two things every mutating route here has to establish before it reads a form.
+ *
+ * The admin authenticates with a session cookie, so a POST that arrives from
+ * another origin carries the signed-in user's credentials without their intent —
+ * which is why every write in this module refuses one, the same way user_backend,
+ * company_backend and oauth_backend do.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
 const productTabOf = (url: URL): ProductDetailTab => {
   const asked = url.searchParams.get('tab')
   return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
@@ -95,10 +111,42 @@ const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]
     ctx.call('product.listAttributes', {}, url, req),
   ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, Array<Record<string, unknown>>]
   return {
+    // Kept raw alongside the options so a caller can reach `parentPath` and work
+    // out which unit tree a template sits in.
+    unitRows: units,
     uoms: units.map((row) => ({ value: String(row.id), label: String(row.name) })),
-    categories: categories.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    categories: categories.map((row) => ({
+      value: String(row.id),
+      label: String(row.name),
+      // The ancestry, so two "Shirts" under different parents stay distinguishable.
+      description: row.path == null ? null : String(row.path),
+    })),
     attributes: attributes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    // Values come nested inside their attribute here, and carry the attribute's
+    // name as their description — the value picker spans every attribute, so
+    // "Đỏ" on its own would not say which attribute it belongs to.
+    attributeValues: attributes.flatMap((attribute) =>
+      (Array.isArray(attribute.values) ? (attribute.values as Array<Record<string, unknown>>) : []).map(
+        (value) => ({
+          value: String(value.id),
+          label: String(value.name),
+          description: String(attribute.name),
+        }),
+      ),
+    ),
   }
+}
+
+/**
+ * The root of the unit tree a template's default unit belongs to.
+ *
+ * A variant's unit is refused unless it shares this root, so the picker is given
+ * the root and offers nothing that would be rejected.
+ */
+const unitRootOf = (units: Array<Record<string, unknown>>, uomId: unknown): string | null => {
+  if (uomId == null) return null
+  const unit = units.find((row) => String(row.id) === String(uomId))
+  return unit ? (String(unit.parentPath).split('/').filter(Boolean)[0] ?? null) : null
 }
 
 const invalidErrors = (url: URL, _: ReturnType<ServeContext['translate']>) =>
@@ -361,7 +409,12 @@ const loadProductGroups = async (
   req: Parameters<Route>[1],
   state: ListState,
   timezone: string,
-  labels: { categories: Map<string, string>; units: Map<string, string> },
+  labels: {
+    categories: Map<string, string>
+    units: Map<string, string>
+    /** Names and thumbnails for a group's rows, batched the same way a page is. */
+    decorate: (rows: ProductListRow[]) => Promise<TemplateRow[]>
+  },
   path: unknown[] = [],
 ): Promise<TableGroup<TemplateRow>[]> => {
   const groups = (await ctx.call(
@@ -400,7 +453,7 @@ const loadProductGroups = async (
           : undefined
       const rows =
         open && path.length + 1 === state.groupBy.length
-          ? (
+          ? await labels.decorate(
               (await ctx.call(
                 'product.listTemplates',
                 {
@@ -413,8 +466,8 @@ const loadProductGroups = async (
                 },
                 url,
                 req,
-              )) as ProductListRow[]
-            ).map(templateRow)
+              )) as ProductListRow[],
+            )
           : undefined
       const pageKey = JSON.stringify(nextPath)
       const page = state.groupPages[pageKey] ?? 1
@@ -567,13 +620,12 @@ export const routes: Record<string, RouteEntry> = {
       const { count } = (await ctx.call('product.countTemplates', { state, timezone }, url, req)) as {
         count: number
       }
+      // The names are needed by every row, not only by a group header: a table
+      // that prints a category id where it means a category name is showing its
+      // own plumbing.
       const [categoryRows, unitRows] = (await Promise.all([
-        state.groupBy.some((group) => group.key === 'categoryId')
-          ? ctx.call('product.listCategories', {}, url, req)
-          : Promise.resolve([]),
-        state.groupBy.some((group) => group.key === 'uomId')
-          ? ctx.call('uom.listUnits', {}, url, req)
-          : Promise.resolve([]),
+        ctx.call('product.listCategories', {}, url, req),
+        ctx.call('uom.listUnits', {}, url, req),
       ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>]
       const categoryMap = new Map<string, string>()
       const collectCategories = (items: Array<Record<string, unknown>>) => {
@@ -583,10 +635,33 @@ export const routes: Record<string, RouteEntry> = {
         }
       }
       collectCategories(categoryRows)
+      const unitMap = new Map(unitRows.map((row) => [String(row.id), String(row.name)]))
+      /** One media call per batch of rows, whether that batch is a page or a group. */
+      const decorate = async (batch: ProductListRow[]): Promise<TemplateRow[]> => {
+        if (!batch.length) return []
+        const media = (await ctx.call(
+          'product_media.listPrimaryMedia',
+          { templateIds: batch.map((row) => row.id) },
+          url,
+          req,
+        )) as Array<Record<string, unknown>>
+        const images = new Map(media.map((row) => [String(row.templateId), String(row.attachmentId)]))
+        return batch.map((row) => {
+          const attachmentId = images.get(String(row.id))
+          return {
+            ...templateRow(row),
+            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
+            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
+          }
+        })
+      }
+      const decoratedRows = await decorate(rows)
       const groups = grouped
         ? await loadProductGroups(ctx, url, req, state, timezone, {
             categories: categoryMap,
-            units: new Map(unitRows.map((row) => [String(row.id), String(row.name)])),
+            units: unitMap,
+            decorate,
           })
         : undefined
 
@@ -596,7 +671,7 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) =>
           productsScreen(
             _,
-            rows.map(templateRow),
+            decoratedRows,
             view,
             {
               ...frame,
@@ -633,9 +708,10 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const form = req.method === 'POST' ? await readForm(req) : null
-      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      // Refused before the body is read, not after.
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = req.method === 'POST' ? await readForm(req) : null
       const rawReturn = form?.returnTo ?? url.searchParams.get('returnTo') ?? '/admin/product/templates'
       const source = new URL(rawReturn, 'http://ket.local')
       const returnTo =
@@ -680,6 +756,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         if (hasStock && !validStockForm(form))
           return seeOther(inLocale(url, '/admin/product/templates/new?invalid=1&count=1'))
@@ -690,8 +767,11 @@ export const routes: Record<string, RouteEntry> = {
             id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
@@ -715,12 +795,19 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
+      const controls = {
+        uom: await uomControl(ctx, url, req, _, { id: 'product-create-uom', units: options.uoms }),
+        category: await categoryControl(ctx, url, req, _, {
+          id: 'product-create-category',
+          categories: options.categories,
+        }),
+      }
       return adminPage(ctx, url, req, {
         title: 'product_backend.create.title',
         body: (_, frame) =>
           newProductScreen(
             _,
-            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
+            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _), controls },
             frame,
             localeQuery(url),
           ),
@@ -732,6 +819,7 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const name = form.name?.trim()
         if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
@@ -762,7 +850,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/attributes/{id}/values':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const name = form.name?.trim()
       if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
@@ -790,6 +879,7 @@ export const routes: Record<string, RouteEntry> = {
       const activeTab = productTabOf(url)
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req)
         const form = await readForm(req)
         if (hasStock && !validStockForm(form)) {
@@ -806,8 +896,11 @@ export const routes: Record<string, RouteEntry> = {
             id: params.id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
@@ -860,9 +953,10 @@ export const routes: Record<string, RouteEntry> = {
         categoryId?: string | null
         saleOk?: boolean
         purchaseOk?: boolean
+        active?: boolean
       } | null
       if (!row) return text('Product not found', { status: 404 })
-      const [mediaRows, variants, options, stockConfig] = await Promise.all([
+      const [mediaRows, variants, options, stockConfig, attributeLines] = await Promise.all([
         mediaFor(ctx, url, req, row.id),
         ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
           Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
@@ -871,6 +965,7 @@ export const routes: Record<string, RouteEntry> = {
         hasStock
           ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
           : Promise.resolve(null),
+        ctx.call('product.listAttributeLines', { templateId: row.id }, url, req),
       ])
       const body = productDetailScreen(
         _,
@@ -923,8 +1018,39 @@ export const routes: Record<string, RouteEntry> = {
         {
           ...options,
           variants,
+          attributeLines: attributeLines as Array<{
+            id: string
+            attributeId: string
+            attribute?: string | null
+            values: Array<{ id: string; name: string }>
+          }>,
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
+          controls: {
+            uom: await uomControl(ctx, url, req, _, {
+              id: `product-uom:${row.id}`,
+              value: row.uomId,
+              units: options.uoms,
+            }),
+            category: await categoryControl(ctx, url, req, _, {
+              id: `product-category:${row.id}`,
+              value: row.categoryId,
+              categories: options.categories,
+            }),
+            attribute: await attributeControl(ctx, url, req, _, {
+              id: `product-attribute:${row.id}`,
+              attributes: options.attributes,
+              required: true,
+            }),
+            // The value picker cannot be scoped to an attribute yet — the two are
+            // separate fields and the attribute is only known once chosen — so it
+            // lists every value, each labelled with the attribute it belongs to.
+            attributeValues: await attributeValuesControl(ctx, url, req, _, {
+              id: `product-attribute-values:${row.id}`,
+              choices: options.attributeValues,
+              required: true,
+            }),
+          },
           editor: savedPartial
             ? ''
             : await ctx.joint(url, req, 'product_backend:template.editor', {
@@ -956,7 +1082,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/generate':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const result = await ctx.call('product.generateVariants', { templateId: params.id }, url, req)
       return (result as { ok?: boolean }).ok
         ? seeProduct(params.id, url)
@@ -965,7 +1092,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/attribute-lines':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const attributeId = form.attributeId ?? ''
       const result = await ctx.call(
@@ -986,6 +1114,33 @@ export const routes: Record<string, RouteEntry> = {
         ? seeProduct(params.id, url)
         : seeOther(inLocale(url, `/admin/product/templates/${params.id}?invalid=1`))
     },
+  '/admin/product/templates/{id}/archive':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      await ctx.call('product.archiveTemplate', { id: params.id, active: form.active === '1' }, url, req)
+      return seeProduct(params.id, url)
+    },
+  '/admin/product/templates/{id}/attribute-lines/{lineId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      // The line has to belong to the template in the path, or a POST could take
+      // an attribute off a product the reader never opened.
+      const lines = (await ctx.call(
+        'product.listAttributeLines',
+        { templateId: params.id },
+        url,
+        req,
+      )) as Array<{ id: string }>
+      if (!lines.some((line) => line.id === params.lineId))
+        return text('Attribute line not found', { status: 404 })
+      await ctx.call('product.removeAttributeLine', { id: params.lineId }, url, req)
+      return seeProduct(params.id, url)
+    },
   '/admin/product/templates/{id}/variants/{variantId}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -999,6 +1154,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!existing || existing.templateId !== params.id) return text('Variant not found', { status: 404 })
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req, 'product-variant')
         const form = await readForm(req)
         const saved = await ctx.call(
@@ -1040,10 +1196,18 @@ export const routes: Record<string, RouteEntry> = {
             inLocale(url, `/admin/product/templates/${params.id}/variants/${params.variantId}?invalid=1`),
           )
         }
-        if (form.uomId) {
+        {
+          // The form's unit is a single select, so the submission replaces what
+          // the variant has rather than adding to it — and an empty selection
+          // clears it. Adding would leave the previous unit in place, and the
+          // form would go on showing it.
           const productUom = await ctx.call(
-            'product.addProductUom',
-            { productId: params.variantId, uomId: form.uomId, barcode: form.uomBarcode || null },
+            'product.setProductUom',
+            {
+              productId: params.variantId,
+              uomId: form.uomId || null,
+              barcode: form.uomBarcode || null,
+            },
             url,
             req,
           )
@@ -1074,12 +1238,27 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('product.getTemplate', { id: params.id }, url, req) as Promise<{
           id: string
           name: string
+          uomId?: string | null
         } | null>,
         optionsFor(ctx, url, req),
         variantMediaFor(ctx, url, req, params.variantId),
       ])
       if (!current || current.templateId !== params.id || !template)
         return text('Variant not found', { status: 404 })
+      // Both the picker and the plain select behind it are held to the template's
+      // unit tree, so a unit that `setProductUom` would refuse is never offered.
+      const unitRoot = unitRootOf(options.unitRows, template.uomId)
+      const treeUnits = unitRoot
+        ? options.uoms.filter((unit) => unitRootOf(options.unitRows, unit.value) === unitRoot)
+        : options.uoms
+      const variantUom = await uomControl(ctx, url, req, _, {
+        id: `variant-uom:${params.variantId}`,
+        value: Array.isArray(current.uoms)
+          ? ((current.uoms[0] as Record<string, unknown> | undefined)?.uomId as string | undefined)
+          : undefined,
+        units: treeUnits,
+        rootId: unitRoot,
+      })
       const body = variantScreen(
         _,
         params.id,
@@ -1103,7 +1282,10 @@ export const routes: Record<string, RouteEntry> = {
           images: mediaRows.map((image, index) => ({
             id: image.id,
             src: `/files/${image.attachmentId}`,
-            alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
+            alt:
+              image.alt ||
+              image.attachment?.name ||
+              String(current.name || current.defaultCode || current.id),
             primary: image.primary,
             actions: {
               primary: inLocale(
@@ -1138,7 +1320,7 @@ export const routes: Record<string, RouteEntry> = {
                 productId: params.variantId,
               }),
         },
-        options.uoms,
+        treeUnits,
         template,
         savedPartial
           ? ''
@@ -1159,19 +1341,21 @@ export const routes: Record<string, RouteEntry> = {
             }),
         activeTab,
         savedPartial,
+        variantUom,
       )
       if (savedPartial)
         return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
-        title: String(current.defaultCode || current.id),
+        title: String(current.name || current.defaultCode || current.id),
         body,
       })
     },
   '/admin/product/templates/{id}/variants/{variantId}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const variant = (await ctx.call('product.getVariant', { id: params.variantId }, url, req)) as AnyVariant
       if (!variant || variant.templateId !== params.id) return text('Variant not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1201,7 +1385,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
@@ -1210,7 +1395,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
@@ -1227,7 +1413,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const template = await ctx.call('product.getTemplate', { id: params.id }, url, req)
       if (!template) return text('Product not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1257,7 +1444,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
@@ -1266,7 +1454,8 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
@@ -1290,7 +1479,8 @@ const move = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await mediaFor(ctx, url, req, templateId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })
@@ -1312,7 +1502,8 @@ const moveVariant = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await variantMediaFor(ctx, url, req, productId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })

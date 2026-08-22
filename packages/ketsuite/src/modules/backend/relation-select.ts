@@ -45,12 +45,24 @@ export type RelationSelectLabels = {
   remove: string
   confirmRemove: string
   retry: string
+  clear: string
+  chosen: string
 }
 
 export type RelationSelectConfig = {
   name: string
   ariaLabel: string
   value?: string | null
+  /**
+   * Several records under one field name, joined by a comma on the way out.
+   *
+   * A repeated form key would not survive `readForm`, which builds a
+   * `Record<string, string>` and keeps only the last value — so a multi-valued
+   * field posts one comma-separated string, which is also what the routes that
+   * take value lists already parse.
+   */
+  multiple?: boolean
+  values?: string[]
   options: RelationOption[]
   required?: boolean
   disabled?: boolean
@@ -85,4 +97,6 @@ export const relationLabels = (_: Translator, dialogTitle: string): RelationSele
   remove: _('backend.relation.remove'),
   confirmRemove: _('backend.relation.confirmRemove'),
   retry: _('backend.relation.retry'),
+  clear: _('backend.relation.clear'),
+  chosen: _('backend.relation.chosen'),
 })

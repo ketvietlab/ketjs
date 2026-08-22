@@ -37,16 +37,22 @@ for (const viewport of [
         const metrics = await page.evaluate(() => ({
           documentWidth: document.documentElement.scrollWidth,
           viewportWidth: window.innerWidth,
+          // A relation field's native <select> is a 1px, opacity-0 value carrier
+          // that only exists so the form submits and validates; the control the
+          // reader actually sees and clicks is its trigger button.
           visibleControls: [
             ...document.querySelectorAll<HTMLElement>(
-              '[data-ui="record-body"] input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="file"]), [data-ui="record-body"] select',
+              '[data-ui="record-body"] input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="file"]), [data-ui="record-body"] select:not([data-ui="relation-native"]), [data-ui="record-body"] [data-ui="relation-trigger"]',
             ),
           ]
             .filter((control) => control.getBoundingClientRect().height > 0)
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+        // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+        // needs the target, a pointer does not.
+        const fieldHeight = viewport.name === 'desktop' ? 28 : 32
+        expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
         await page.screenshot({
           path: join(artifacts, `detail-${tab}-${locale}-${viewport.name}.png`),
           fullPage: true,

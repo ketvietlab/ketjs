@@ -730,6 +730,13 @@
     background: var(--admin-surface);
   }
 
+  /* The card's picture sits above its title and spans the card, so a grid of
+     cards is scanned by image first and by name second. */
+  [data-ui="kanban-media"] {
+    display: block;
+    margin: calc(var(--admin-gap-sm) * -1) calc(var(--admin-gap-sm) * -1) 0;
+  }
+
   [data-ui="kanban-title"] {
     margin: 0;
     color: var(--admin-ink);
@@ -1303,6 +1310,46 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     line-height: 1;
+  }
+
+  /* A record's picture at list size. The empty state is the same box with the
+     same border, so a column of thumbnails reads as one column whether or not
+     every row has an image. */
+  [data-ui="thumbnail"] {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="thumbnail"] img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  [data-ui="thumbnail"] [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  /* A card is scanned from across the screen, so its picture takes the card's
+     width rather than a cell's height. */
+  [data-ui="thumbnail"][data-size="card"] {
+    inline-size: 100%;
+    block-size: 6rem;
+  }
+  [data-ui="thumbnail"][data-size="card"] [data-ui="icon"] {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+  /* The column is only as wide as the picture; the name beside it takes the rest. */
+  [data-ui="table"] :is(th, td)[data-kind="media"] {
+    inline-size: 2rem;
+    padding-inline-end: 0;
   }
 
   /* ── Settings token list ──────────────────────────────────────────────── */
@@ -2909,7 +2956,7 @@
   }
   [data-ui="attachment-input"] {
     inline-size: 100%;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     color: var(--admin-ink);
     font: inherit;
@@ -2935,7 +2982,7 @@
     display: flex;
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     align-items: center;
     justify-content: space-between;
     gap: var(--admin-gap-sm);
@@ -2945,6 +2992,11 @@
     background: var(--admin-surface);
     color: var(--admin-ink);
     font: inherit;
+    /* The same type metrics as [data-ui="form-control"]. Without them the button
+       inherits the body's larger line box and stands 2px taller than every other
+       control on the row. */
+    font-size: 0.8125rem;
+    line-height: 1.3;
     text-align: start;
     cursor: pointer;
   }
@@ -2962,6 +3014,61 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* A multi-valued relation shows what it holds beneath the trigger, so the
+     trigger itself stays an "add another" affordance at a fixed height. */
+  [data-ui="relation-chips"] {
+    display: flex;
+    flex-wrap: wrap;
+    margin: var(--admin-gap-xs) 0 0;
+    padding: 0;
+    gap: var(--admin-gap-xs);
+    list-style: none;
+  }
+  [data-ui="relation-chip"] {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    gap: 0.25rem;
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink);
+  }
+  [data-ui="relation-chip"] > span {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="relation-chip-clear"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    flex: none;
+    padding: 0;
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: transparent;
+    color: var(--admin-ink-muted);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  [data-ui="relation-chip-clear"]:is(:hover, :focus-visible) {
+    color: var(--admin-ink);
+  }
+  [data-ui="relation-chip-clear"]:focus-visible {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 1px;
+  }
+  [data-ui="relation-option"][data-selected="true"]::after,
+  [data-ui="relation-dialog-row"][data-selected="true"] [data-ui="relation-dialog-main"] strong::after {
+    content: " ✓";
+    color: var(--admin-ink-muted);
+  }
   [data-ui="relation-menu"] {
     position: absolute;
     inset-block-start: calc(100% + 0.25rem);
@@ -2977,7 +3084,7 @@
   }
   [data-ui="relation-search"] {
     inline-size: calc(100% - var(--admin-gap-sm) * 2);
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     margin: var(--admin-gap-sm);
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--admin-line);
@@ -3256,8 +3363,8 @@
   }
   [data-ui="media-file-label"] {
     display: inline-flex;
-    block-size: var(--admin-control-height);
-    min-block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
     align-items: center;
     justify-content: center;
     padding-inline: 0.625rem;
@@ -3344,7 +3451,7 @@
   [data-ui="form-field"] {
     display: grid;
     min-inline-size: 0;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     gap: 0.125rem;
   }
   [data-ui="form-field"][data-span="full"] {
@@ -3361,7 +3468,7 @@
   }
   [data-ui="form-control"] {
     inline-size: 100%;
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--admin-line);
@@ -3376,7 +3483,7 @@
       box-shadow var(--admin-motion-fast);
   }
   :is(input, select)[data-ui="form-control"]:not([type="checkbox"]) {
-    block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
   }
   [data-ui="form-control"]:focus-visible {
     border-color: var(--admin-focus-border);
@@ -3531,8 +3638,8 @@
   }
   [data-ui="date-picker-control"] {
     inline-size: 100%;
-    block-size: var(--admin-control-height);
-    min-block-size: var(--admin-control-height);
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem 0.25rem 1.75rem;
     border: 1px solid var(--admin-line);
@@ -3611,7 +3718,13 @@
   [data-ui="record-form"][data-layout="default"]
     > [data-ui="form-grid"]
     > [data-ui="form-field"]:not([data-kind="checkbox"])
-    > :is([data-ui="form-control"], [data-ui="form-options"], [data-ui="form-help"], [data-ui="form-error"]) {
+    > :is(
+      [data-ui="form-control"],
+      [data-ui="form-options"],
+      [data-ui="form-help"],
+      [data-ui="form-error"],
+      ket-island
+    ) {
     grid-column: 2;
   }
 
@@ -3625,6 +3738,25 @@
     > [data-ui="form-grid"]
     > [data-ui="form-field"][data-kind="textarea"]
     > [data-ui="form-label"] {
+    margin-block-start: 0.375rem;
+  }
+
+  /* A relation holding several records grows downward, so its label goes to the
+     top of the control the way a textarea's does. Centring it against a stack of
+     chips leaves the label floating beside the middle of the list. */
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"]) {
+    align-items: start;
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"])
+    > [data-ui="form-label"] {
+    /* The shared label rule sets `align-self: center`, which outranks the
+       container's alignment — so the override has to be on the item too. */
+    align-self: start;
     margin-block-start: 0.375rem;
   }
 
@@ -3674,8 +3806,12 @@
         [data-ui="form-control"],
         [data-ui="form-options"],
         [data-ui="form-help"],
-        [data-ui="form-error"]
+        [data-ui="form-error"],
+        ket-island
       ) {
+      /* The island carrying a relation control belongs in the stack like any
+         other control. Left out, it auto-places into an implicit second column
+         and squeezes the label into a sliver beside it. */
       grid-column: 1;
     }
     [data-ui="record-form"][data-layout="default"]
@@ -4106,16 +4242,19 @@
   }
 
   @media (max-width: 47.9375rem) {
+    /* A button sits in a row with the fields it submits, so it is the height of
+       one. The 2.75rem touch target this used to take stood half again as tall
+       as the input above it and read as a banner rather than a control. */
     :where([data-ui="action"], [data-control="action"])[data-size] {
-      min-block-size: 2.75rem;
+      min-block-size: var(--admin-field-height);
     }
     [data-ui="modal-layer"][data-presentation="dialog"]
       [data-ui="relation-dialog-actions"]
       [data-ui="action"][data-size="compact"] {
-      min-block-size: var(--admin-control-height);
+      min-block-size: var(--admin-field-height);
     }
     :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
-      inline-size: 2.75rem;
+      inline-size: var(--admin-field-height);
     }
     [data-ui="section-head"],
     [data-ui="notice"] {

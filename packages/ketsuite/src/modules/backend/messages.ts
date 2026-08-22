@@ -41,6 +41,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'relation.remove': 'Lưu trữ',
     'relation.confirmRemove': 'Xác nhận lưu trữ',
     'relation.retry': 'Thử lại',
+    'relation.clear': 'Bỏ chọn',
+    'relation.chosen': 'Đã chọn',
 
     'chrome.breadcrumb': 'Đường dẫn',
     'chrome.removeFilter': 'Bỏ bộ lọc',
@@ -124,6 +126,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'relation.remove': 'Archive',
     'relation.confirmRemove': 'Confirm archive',
     'relation.retry': 'Retry',
+    'relation.clear': 'Remove',
+    'relation.chosen': 'Selected',
 
     'chrome.breadcrumb': 'Breadcrumb',
     'chrome.removeFilter': 'Remove filter',

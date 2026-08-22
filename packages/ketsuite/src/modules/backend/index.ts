@@ -103,6 +103,7 @@ export {
   visibleColumns,
   badge,
   avatar,
+  thumbnail,
   person,
   initials,
   icon,

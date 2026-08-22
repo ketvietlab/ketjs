@@ -257,7 +257,13 @@ test('Product Variant form keeps its own Chatter, activities and partial-save wo
     [...partialHtml.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
     ['product.record-header', 'product.record-body'],
   )
-  assert.doesNotMatch(partialHtml, /<!doctype|data-ui="shell"|data-ui="record-aside"|data-island=/)
+  assert.doesNotMatch(partialHtml, /<!doctype|data-ui="shell"|data-ui="record-aside"/)
+  // The chatter and the activity list live outside the replaced slots and keep
+  // their DOM across a partial save, so the fragment must not carry them.
+  assert.doesNotMatch(partialHtml, /data-island="(?:product\.editor|mail\.chatter|activity\.record)"/)
+  // A relation control is a field of the record body, so it is part of what the
+  // save replaces; islands inside a fragment are reconciled by key.
+  assert.match(partialHtml, /data-island="backend\.relation-select"/)
   assert.match(partialHtml, /COLLAB-UPDATED/)
 })
 
