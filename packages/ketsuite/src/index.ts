@@ -78,6 +78,14 @@ export {
   MESSAGE_VISIBILITIES,
   ASSIGNMENT_MODES,
 } from './modules/crm/types.ts'
+/**
+ * Storing an upload is the one piece of an attachment a module cannot sensibly
+ * reimplement — streaming, limits, checksums and object keys all live in
+ * `storage`. An extension that owns records with photographs needs it.
+ */
+export { receiveAttachment } from './modules/storage/routes.ts'
+export type { Attachment as StorageAttachment, UploadDefaults } from './modules/storage/routes.ts'
+
 export {
   actorRequired as crmActorRequired,
   activeStage as crmActiveStage,
