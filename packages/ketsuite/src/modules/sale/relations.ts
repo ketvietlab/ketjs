@@ -10,6 +10,12 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   },
   'sale.OrderLine': {
     order: { belongsTo: 'sale.Order', by: 'orderId' },
+    // Declared for what hasMany brings with it: the framework auto-indexes the
+    // foreign side, and `saleLineId` on both tables was queried by every
+    // delivery sync and every order detail with no index behind it. `extend`
+    // can add a field but not an index; the relation can.
+    moves: { hasMany: 'stock.Move', by: 'saleLineId' },
+    invoiceLines: { hasMany: 'account.MoveLine', by: 'saleLineId' },
     product: { belongsTo: 'product.Product', by: 'productId' },
     uom: { belongsTo: 'uom.Unit', by: 'productUomId' },
     tax: { belongsTo: 'account.Tax', by: 'taxId' },
