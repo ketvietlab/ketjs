@@ -1,11 +1,13 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  code,
   dataTable,
   emptyState,
   formatMoney,
   Framed,
   icon,
+  linkButton,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -24,6 +26,8 @@ export const generalLedgerScreen = (
     rows: Row[]
     action: string
     currency: unknown
+    accountLabel?: (id: unknown) => string
+    entryHref?: (row: Row) => string
   },
 ): TemplateResult => {
   const total = (field: 'debit' | 'credit') =>
@@ -42,7 +46,21 @@ export const generalLedgerScreen = (
         {
           key: 'entry',
           label: _('account_backend.field.entry'),
-          cell: (row) => String((row.move as Row)?.name ?? ''),
+          cell: (row) =>
+            options.entryHref
+              ? linkButton({
+                  label: String((row.move as Row)?.name ?? ''),
+                  href: options.entryHref(row),
+                  variant: 'tertiary',
+                })
+              : String((row.move as Row)?.name ?? ''),
+        },
+        {
+          // A general ledger without the account each line posts to is a list of
+          // amounts. With no filter chosen it is every account at once.
+          key: 'account',
+          label: _('account_backend.field.accountId'),
+          cell: (row) => code(options.accountLabel?.(row.accountId) ?? String(row.accountId)),
         },
         { key: 'name', label: _('account_backend.field.name'), cell: (row) => String(row.name) },
         {

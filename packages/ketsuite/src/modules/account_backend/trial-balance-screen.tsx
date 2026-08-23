@@ -8,6 +8,7 @@ import {
   formatMoney,
   Framed,
   icon,
+  linkButton,
   RecordWorkspace,
   Section,
   stack,
@@ -26,6 +27,8 @@ export const trialBalanceScreen = (
     rows: Row[]
     action: string
     currency: unknown
+    /** The ledger behind a balance. A total nobody can open is a number to trust blindly. */
+    ledgerHref?: (row: Row) => string
   },
 ): TemplateResult => {
   const total = (field: 'debit' | 'credit' | 'balance') =>
@@ -39,7 +42,14 @@ export const trialBalanceScreen = (
           key: 'code',
           label: _('account_backend.field.code'),
           priority: 'primary',
-          cell: (row) => code(String(row.code)),
+          cell: (row) =>
+            options.ledgerHref
+              ? linkButton({
+                  label: String(row.code),
+                  href: options.ledgerHref(row),
+                  variant: 'tertiary',
+                })
+              : code(String(row.code)),
         },
         { key: 'name', label: _('account_backend.field.name'), cell: (row) => String(row.name) },
         {
