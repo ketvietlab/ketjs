@@ -209,6 +209,12 @@ class Part {
       }
     }
 
+    // Only here, never on the fast path above: identical keys in identical places
+    // are the ones the previous render already checked, so re-checking them would
+    // be the one allocation that path exists to avoid. A first render has no
+    // previous keys and so always arrives here.
+    assertUniqueKeys(nextKeys)
+
     // Where each surviving entry used to sit is carried on the instance itself, so
     // this pass needs no Map — and counting the reused ones tells us whether
     // anything was removed at all, so it needs no Set either. Both used to be built
@@ -260,6 +266,36 @@ class Part {
       nextAnchor = (inst as Instance).firstNode() ?? nextAnchor
     }
     this.keys = nextKeys
+  }
+}
+
+/**
+ * A key identifies one entry, so two entries cannot share one.
+ *
+ * The list is reconciled through a Map from key to instance. Two entries with the
+ * same key collide in it: one instance ends up standing for both, the other is
+ * dropped, and the positions the reordering pass reads are positions of a list
+ * that no longer exists. What reaches the screen is a row missing and the rest out
+ * of order — and because the Map keeps the collision, the next render is wrong too.
+ *
+ * None of that announces itself, which is why this does. A duplicate key is always
+ * a mistake in `keyOf`, never something the renderer can interpret.
+ */
+export class DuplicateKeyError extends Error {
+  code = 'E_DUPLICATE_KEY'
+  hint: string
+  constructor(key: unknown) {
+    super(`each() received the key ${JSON.stringify(key) ?? String(key)} twice`)
+    this.name = 'DuplicateKeyError'
+    this.hint = 'keyOf must return a distinct value per item — an id rather than a field several items share'
+  }
+}
+
+function assertUniqueKeys(keys: readonly unknown[]): void {
+  const seen = new Set<unknown>()
+  for (const key of keys) {
+    if (seen.has(key)) throw new DuplicateKeyError(key)
+    seen.add(key)
   }
 }
 
@@ -492,12 +528,18 @@ function hydrateInstance(
       part.kind = 'each'
       part.keyed = new Map()
       part.keys = []
+      // Adopting the server's nodes builds the same Map a client render does, so a
+      // duplicate key collides here exactly as it would there — and the page it
+      // corrupts is one the server had rendered correctly, since SSR walks the
+      // items in order and never consults a key.
       for (let i = 0; i < value.items.length; i++) {
         const item = value.items[i]
         const res = value.render(item, i)
         const r = hydrateInstance(host, res.strings, res.values, part.parent as DomNode, c)
-        part.keyed.set(value.keyOf(item, i), r.instance)
-        part.keys.push(value.keyOf(item, i))
+        const key = value.keyOf(item, i)
+        if (part.keyed.has(key)) throw new DuplicateKeyError(key)
+        part.keyed.set(key, r.instance)
+        part.keys.push(key)
         c = r.cursor
       }
       return

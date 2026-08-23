@@ -23,7 +23,17 @@ export type {
   ReadonlySignal,
   FormController,
 } from './form.ts'
-export { html, each, when, isResult, isEach, createRoot, hydrateRoot, EVENT_PREFIX } from './render.ts'
+export {
+  html,
+  each,
+  when,
+  isResult,
+  isEach,
+  createRoot,
+  hydrateRoot,
+  DuplicateKeyError,
+  EVENT_PREFIX,
+} from './render.ts'
 export type { TemplateResult, EachResult, Renderable, Root } from './render.ts'
 export { mount, mountHydrated } from './mount.ts'
 export type { Mounted } from './mount.ts'
