@@ -623,3 +623,138 @@ test('accounting: a tax computation the ledger cannot apply is refused at save t
     await adapter.close()
   }
 })
+
+test('accounting: reversing a payment stops it reading as received', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.createInvoice',
+      {
+        id: 'invoice-p',
+        journalId: 'sales',
+        moveType: 'out_invoice',
+        partnerId: 'customer',
+        description: 'Consulting',
+        quantity: '1',
+        priceUnit: '1000',
+        lineAccountId: 'revenue',
+        counterpartAccountId: 'receivable',
+      },
+      adapter,
+    )
+    await call('account.postMove', { id: 'invoice-p' }, adapter)
+    const open = (await call('account.listOpenItems', {}, adapter)).value as Row[]
+    const paid = (
+      await call(
+        'account.registerPayment',
+        {
+          id: 'pay-1',
+          name: 'Receipt',
+          paymentType: 'inbound',
+          partnerType: 'customer',
+          partnerId: 'customer',
+          journalId: 'bank-journal',
+          destinationAccountId: 'receivable',
+          amount: '1000',
+          reconcileLineId: open[0]!.id,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(paid.ok, true)
+    assert.equal(((await call('account.listPayments', {}, adapter)).value as Row[])[0]?.state, 'paid')
+
+    // A payment's own move is an `entry`, so the branch that marks an invoice
+    // `reversed` never reached it: the money left the books while the payments
+    // list went on saying the customer had paid.
+    const reversed = (
+      await call('account.reverseMove', { id: paid.moveId, reversalId: 'pay-1-reversal' }, adapter)
+    ).value as Row
+    assert.equal(reversed.ok, true)
+    assert.equal(((await call('account.listPayments', {}, adapter)).value as Row[])[0]?.state, 'reversed')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a payment id cannot be quietly reused for a different amount', async () => {
+  const adapter = await boot()
+  try {
+    const register = (amount: string) =>
+      call(
+        'account.registerPayment',
+        {
+          id: 'pay-dup',
+          name: 'Receipt',
+          paymentType: 'inbound',
+          partnerType: 'customer',
+          partnerId: 'customer',
+          journalId: 'bank-journal',
+          destinationAccountId: 'receivable',
+          amount,
+        },
+        adapter,
+      )
+    assert.equal(((await register('1000')).value as Row).ok, true)
+    // Replaying the same call is a success — the queue retries, and a person
+    // pressing a button twice must not post twice.
+    assert.equal(((await register('1000')).value as Row).ok, true)
+
+    // A different amount under a taken id is not a retry. Accepting it would
+    // leave the recorded move at 1000 while settling an open item for 250.
+    const different = (await register('250')).value as Row
+    assert.equal(different.ok, false)
+    assert.equal((different.errors as Row[])[0]?.code, 'account.error.paymentIdReused')
+    assert.equal(
+      ((await call('account.listPayments', {}, adapter)).value as Row[]).filter((row) => row.id === 'pay-dup')
+        .length,
+      1,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: a price-included fixed tax larger than the line is refused', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveTax',
+      {
+        id: 'stamp',
+        name: 'Stamp duty',
+        typeTaxUse: 'sale',
+        amountType: 'fixed',
+        amount: '5000',
+        priceInclude: true,
+        accountId: 'tax',
+      },
+      adapter,
+    )
+    // Left alone this made the base negative, which posts a credit to revenue as
+    // a debit and reverses the sign of the sale in the ledger.
+    const refused = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'invoice-neg',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Small sale',
+          quantity: '1',
+          priceUnit: '1000',
+          lineAccountId: 'revenue',
+          counterpartAccountId: 'receivable',
+          taxId: 'stamp',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.taxFixedExceedsLine')
+    assert.equal((await call('account.getMove', { id: 'invoice-neg' }, adapter)).value, null)
+  } finally {
+    await adapter.close()
+  }
+})
