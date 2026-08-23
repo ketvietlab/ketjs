@@ -21,7 +21,16 @@ import {
 } from '@ketvietlab/ketjs'
 import type { KetError } from '@ketvietlab/ketjs'
 import { compileReportTemplate, interFontUrl, renderPdf, renderReportHtml } from '@ketvietlab/ketjs/pdf'
-import { account, report, REPORT_FILTERS } from '@ketvietlab/ketsuite'
+import {
+  account,
+  address,
+  company,
+  partner,
+  product,
+  report,
+  REPORT_FILTERS,
+  uom,
+} from '@ketvietlab/ketsuite'
 
 const source = defineModule({
   name: 'orders',
@@ -249,33 +258,117 @@ test('report filters print an amount and a date the way a document should', () =
   assert.equal(vi.date(null), '')
 })
 
-test('the customer invoice prints amounts and dates a customer can read', () => {
-  const template = (account as { reports: Record<string, { template: string }> }).reports.customerInvoice
-    .template
-  const data = {
-    name: 'SAL/2026/00001',
+/**
+ * Print a real invoice, from the ledger the way it is actually posted.
+ *
+ * The previous version of this test built the report data by hand — one line,
+ * positive, no tax posting, no counterpart — and so it agreed with a source that
+ * was printing all three. Going through `createInvoice` and `postMove` is the
+ * whole point: the rows a posted invoice really has are the ones that were wrong.
+ */
+async function postedInvoice(moveType: 'out_invoice' | 'in_invoice') {
+  const modules = [address, partner, company, uom, product, account]
+  const manifest = compose(modules, { headless: true })
+  const scope = { company: 'acme', branches: null }
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await migrateOne(adapter, manifest)
+  registerFunctions(modules)
+  const call = (name: string, args: Record<string, unknown>) =>
+    callFn(name, args, { adapter, manifest, scope })
+
+  await call('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
+  await call('partner.savePartner', { id: 'other', kind: 'company', name: 'Khách hàng' })
+  await call('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  for (const [id, code, name, accountType] of [
+    ['receivable', '131', 'Phải thu', 'asset_receivable'],
+    ['payable', '331', 'Phải trả', 'liability_payable'],
+    ['revenue', '5111', 'Doanh thu', 'income'],
+    ['expense', '6421', 'Chi phí', 'expense'],
+    ['vat', '3331', 'Thuế GTGT phải nộp', 'liability_current'],
+  ] as const)
+    await call('account.saveAccount', { id, code, name, accountType })
+  const customer = moveType === 'out_invoice'
+  await call('account.saveJournal', {
+    id: 'journal',
+    name: 'J',
+    code: customer ? 'SAL' : 'PUR',
+    type: customer ? 'sale' : 'purchase',
+  })
+  await call('account.saveTax', {
+    id: 'vat10',
+    name: 'GTGT 10%',
+    typeTaxUse: customer ? 'sale' : 'purchase',
+    amountType: 'percent',
+    amount: '10',
+    accountId: 'vat',
+  })
+  const created = await call('account.createInvoice', {
+    id: 'inv',
+    journalId: 'journal',
+    moveType,
+    partnerId: 'other',
     invoiceDate: '2026-01-10T00:00:00.000Z',
-    currency: 'VND',
-    amountUntaxed: '1234567',
-    amountTax: '123457',
-    amountTotal: '1358024',
-    company: { name: 'ACME' },
-    partner: { name: 'Khách hàng' },
-    lines: [{ name: 'Dịch vụ', quantity: '1', priceUnit: '1234567', balance: '1234567' }],
-  }
-  const html = renderReportHtml(
-    compileReportTemplate(template, {
-      name: 'account.customerInvoice',
-      translate: (key: string) => key,
-      filters: REPORT_FILTERS('vi'),
-    }).render(data),
+    description: 'Dịch vụ tư vấn',
+    quantity: '1',
+    priceUnit: '1234567',
+    lineAccountId: customer ? 'revenue' : 'expense',
+    counterpartAccountId: customer ? 'receivable' : 'payable',
+    taxId: 'vat10',
+  })
+  assert.equal((created.value as { ok: boolean }).ok, true)
+  assert.equal(((await call('account.postMove', { id: 'inv' })).value as { ok: boolean }).ok, true)
+
+  const source = customer ? 'account.getCustomerInvoiceReport' : 'account.getVendorBillReport'
+  return (await call(source, { id: 'inv' })).value as Record<string, unknown>
+}
+
+const printedInvoice = (report: 'customerInvoice' | 'vendorBill', data: Record<string, unknown>) =>
+  renderReportHtml(
+    compileReportTemplate(
+      (account as { reports: Record<string, { template: string }> }).reports[report].template,
+      { name: `account.${report}`, translate: (key: string) => key, filters: REPORT_FILTERS('vi') },
+    ).render(data),
   ).replace(/[   ]/g, ' ')
 
-  // This is the document that reaches the customer. It used to carry the raw
-  // column — `1358024 VND` — and a full ISO timestamp.
-  assert.match(html, /1\.358\.024 ₫/)
+test('the customer invoice prints what was sold, not the ledger postings', async () => {
+  const data = await postedInvoice('out_invoice')
+  const lines = data.lines as Array<Record<string, unknown>>
+
+  // A posted invoice has three journal items: the revenue, the VAT, and the
+  // receivable that balances them. Only the first is a thing the customer
+  // bought. Printing all three showed the tax twice — once as a line and once in
+  // the tax total — and the amount owed again, as a third product.
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0]?.name, 'Dịch vụ tư vấn')
+
+  const html = printedInvoice('customerInvoice', data)
+  // Revenue is stored as a credit, so its balance is negative. A customer
+  // reading an invoice for 1.234.567 ₫ must not be shown minus that.
   assert.match(html, /1\.234\.567 ₫/)
+  assert.equal(html.includes('-1.234.567'), false)
+  // The receivable was printed as though it were another purchase, so the total
+  // appeared twice: once as a line and once as the total.
+  assert.equal((html.match(/1\.358\.024 ₫/g) ?? []).length, 1)
+  // And the tax had a line of its own beside the tax total.
+  assert.equal(html.includes('GTGT 10%'), false)
+
+  // The totals still print, and still read as money rather than raw columns.
+  assert.match(html, /123\.457 ₫/)
   assert.equal(html.includes('1358024'), false)
   assert.match(html, /2026-01-10/)
   assert.equal(html.includes('2026-01-10T00:00:00.000Z'), false)
+})
+
+test('the vendor bill prints the same way, from the other side of the entry', async () => {
+  const data = await postedInvoice('in_invoice')
+  const lines = data.lines as Array<Record<string, unknown>>
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0]?.name, 'Dịch vụ tư vấn')
+
+  // The expense is a debit, so this line was already positive — which is why the
+  // sign alone was never enough to tell the three kinds of posting apart.
+  const html = printedInvoice('vendorBill', data)
+  assert.match(html, /1\.234\.567 ₫/)
+  assert.equal(html.includes('GTGT 10%'), false)
 })
