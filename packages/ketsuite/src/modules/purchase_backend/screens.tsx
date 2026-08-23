@@ -11,6 +11,7 @@ import {
   inline,
   linkButton,
   Metric,
+  Notice,
   RecordActions,
   RecordForm,
   Section,
@@ -95,6 +96,50 @@ export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale 
   )
 }
 
+/**
+ * A refused action has to say so. Every purchase route redirects on failure, and
+ * until now the screen it redirected to looked exactly like the one the operator
+ * had just submitted.
+ */
+export const rejection = (_: Translator, invalid?: string | null): TemplateResult | null =>
+  invalid ? (
+    <Notice
+      tone="danger"
+      title={_('purchase_backend.feedback.rejected')}
+      message={
+        invalid === '1'
+          ? _('purchase_backend.feedback.rejectedHint')
+          : _('purchase_backend.feedback.rejectedField', { field: invalid })
+      }
+    />
+  ) : null
+
+/** What the app needs configured elsewhere before a request can be raised. */
+export const missingSetup = (
+  _: Translator,
+  o: { pickingTypes: number; vendors: number },
+): TemplateResult | null => {
+  if (o.pickingTypes && o.vendors) return null
+  const missing = [
+    ...(o.vendors ? [] : [_('purchase_backend.setup.vendors')]),
+    ...(o.pickingTypes ? [] : [_('purchase_backend.setup.pickingTypes')]),
+  ]
+  return (
+    <Notice
+      tone="warning"
+      title={_('purchase_backend.setup.title')}
+      message={_('purchase_backend.setup.hint', { missing: missing.join(', ') })}
+      actions={linkButton({
+        label: o.vendors
+          ? _('purchase_backend.setup.openInventory')
+          : _('purchase_backend.setup.openPartners'),
+        href: o.vendors ? '/admin/stock/picking-types' : '/admin/partner/partners',
+        variant: 'primary',
+      })}
+    />
+  )
+}
+
 export const ordersScreen = (
   _: Translator,
   o: {
@@ -103,6 +148,8 @@ export const ordersScreen = (
     rows: AnyRow[]
     createFields?: FormField[]
     createAction?: string
+    invalid?: string | null
+    setup?: { pickingTypes: number; vendors: number }
   },
 ): TemplateResult => (
   <Framed
@@ -110,6 +157,8 @@ export const ordersScreen = (
     title={o.title}
     frame={o.frame}
     body={stack([
+      rejection(_, o.invalid),
+      o.setup ? missingSetup(_, o.setup) : null,
       ...(o.createFields
         ? [
             <Surface
@@ -253,9 +302,11 @@ export const orderDetail = (
     lineFields: FormField[]
     billFields: FormField[]
     printActions?: JSXChild
+    invalid?: string | null
   },
 ): TemplateResult => {
   const path = o.actionPath ?? pathOf(o.order)
+  const editable = ['draft', 'sent'].includes(String(o.order.state)) && !o.order.locked
   const lines = (o.order.lines as AnyRow[] | undefined) ?? []
   const moves = (o.order.moves as AnyRow[] | undefined) ?? []
   const bills = (o.order.bills as AnyRow[] | undefined) ?? []
@@ -287,6 +338,7 @@ export const orderDetail = (
       title={String(o.order.name)}
       frame={o.frame}
       body={stack([
+        rejection(_, o.invalid),
         <CardGrid
           items={[
             {
@@ -365,6 +417,52 @@ export const orderDetail = (
                       align: 'end',
                       kind: 'currency',
                     },
+                    ...(editable
+                      ? [
+                          {
+                            key: 'edit',
+                            label: _('purchase_backend.lines.edit'),
+                            cell: (row: AnyRow) => (
+                              <RecordForm
+                                layout="inline"
+                                action={path}
+                                submit={_('purchase_backend.action.updateLine')}
+                                submitVariant="secondary"
+                                hidden={{ action: 'update-line', lineId: String(row.id) }}
+                                fields={[
+                                  {
+                                    name: 'productQty',
+                                    label: _('purchase_backend.field.productQty'),
+                                    type: 'decimal',
+                                    value: String(row.productQty),
+                                    required: true,
+                                  },
+                                  {
+                                    name: 'priceUnit',
+                                    label: _('purchase_backend.field.priceUnit'),
+                                    type: 'decimal',
+                                    value: String(row.priceUnit),
+                                  },
+                                ]}
+                              />
+                            ),
+                          },
+                          {
+                            key: 'remove',
+                            label: '',
+                            cell: (row: AnyRow) => (
+                              <RecordForm
+                                layout="inline"
+                                action={path}
+                                submit={_('purchase_backend.action.removeLine')}
+                                submitVariant="destructive"
+                                hidden={{ action: 'remove-line', lineId: String(row.id) }}
+                                fields={[]}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
                   ],
                 })
               : empty(_)

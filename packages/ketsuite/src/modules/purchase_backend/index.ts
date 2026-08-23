@@ -30,8 +30,19 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
 
 type Translator = ReturnType<ServeContext['translate']>
 
-const redirect = (result: unknown, ok: string) =>
-  (result as { ok?: boolean }).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+/**
+ * Carry the first rejected field back to the screen. The old redirect set
+ * `invalid=1`, which nothing read, so every refused action — a missing vendor, a
+ * unit that does not fit the product, a bill with nothing left to bill — landed
+ * on an unchanged page with no message at all.
+ */
+const redirect = (result: unknown, ok: string) => {
+  const held = result as { ok?: boolean; errors?: Array<{ field?: string }> }
+  if (held.ok) return seeOther(ok)
+  const field = held.errors?.[0]?.field
+  const query = `invalid=${encodeURIComponent(field ?? '1')}`
+  return seeOther(`${ok}${ok.includes('?') ? '&' : '?'}${query}`)
+}
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, pickingTypes, taxes, journals, accounts] = await Promise.all([
@@ -87,7 +98,11 @@ const orderFields = async (
     options: choices(data.partners),
     required: true,
   },
-  { name: 'partnerRef', label: _('purchase_backend.field.partnerRef'), required: true },
+  {
+    name: 'partnerRef',
+    label: _('purchase_backend.field.partnerRef'),
+    help: _('purchase_backend.field.partnerRefHint'),
+  },
   {
     name: 'pickingTypeId',
     label: _('purchase_backend.field.pickingType'),
@@ -125,6 +140,21 @@ const detailHandler =
           url,
           req,
         )
+      else if (form.action === 'update-line')
+        result = await ctx.call(
+          'purchase.updateLine',
+          {
+            id: form.lineId ?? '',
+            productQty: form.productQty || '0',
+            ...optional(form, 'priceUnit'),
+            ...optional(form, 'discount'),
+            ...optional(form, 'taxId'),
+          },
+          url,
+          req,
+        )
+      else if (form.action === 'remove-line')
+        result = await ctx.call('purchase.removeLine', { id: form.lineId ?? '' }, url, req)
       else if (form.action === 'send')
         result = await ctx.call('purchase.sendRfq', { id: params.id }, url, req)
       else if (form.action === 'confirm')
@@ -293,6 +323,7 @@ const detailHandler =
           lineFields,
           billFields,
           printActions: printGroup(_, printable, String(order.id), url.search),
+          invalid: url.searchParams.get('invalid'),
         }),
     })
   }
@@ -343,6 +374,19 @@ const vi = {
   'field.vendor': 'Nhà cung cấp',
   'relation.vendors': 'Quản lý nhà cung cấp',
   'field.partnerRef': 'Tham chiếu nhà cung cấp',
+  'field.partnerRefHint': 'Số báo giá của nhà cung cấp; điền khi họ phản hồi.',
+  'feedback.rejected': 'Chưa lưu được',
+  'feedback.rejectedHint': 'Kiểm tra lại các trường bắt buộc rồi gửi lại.',
+  'feedback.rejectedField': 'Trường "{field}" chưa hợp lệ.',
+  'setup.title': 'Cần cấu hình trước khi mua hàng',
+  'setup.hint': 'Chưa có: {missing}. Tạo xong mới lập được yêu cầu báo giá.',
+  'setup.vendors': 'nhà cung cấp',
+  'setup.pickingTypes': 'loại phiếu nhập kho',
+  'setup.openInventory': 'Mở cấu hình kho',
+  'setup.openPartners': 'Mở danh bạ đối tác',
+  'action.updateLine': 'Lưu dòng',
+  'action.removeLine': 'Xoá dòng',
+  'lines.edit': 'Sửa',
   'field.state': 'Trạng thái',
   'field.dateOrder': 'Ngày đặt hàng',
   'field.datePlanned': 'Ngày dự kiến nhận',
@@ -432,6 +476,19 @@ const en = {
   'field.vendor': 'Vendor',
   'relation.vendors': 'Manage vendors',
   'field.partnerRef': 'Vendor Reference',
+  'field.partnerRefHint': "The vendor's own quotation number; fill it in when they reply.",
+  'feedback.rejected': 'Not saved',
+  'feedback.rejectedHint': 'Check the required fields and submit again.',
+  'feedback.rejectedField': 'The "{field}" field is not valid.',
+  'setup.title': 'Purchasing needs configuring first',
+  'setup.hint': 'Still missing: {missing}. A request for quotation needs these to exist.',
+  'setup.vendors': 'vendors',
+  'setup.pickingTypes': 'receipt operation types',
+  'setup.openInventory': 'Open inventory setup',
+  'setup.openPartners': 'Open partner directory',
+  'action.updateLine': 'Save line',
+  'action.removeLine': 'Remove line',
+  'lines.edit': 'Edit',
   'field.state': 'Status',
   'field.dateOrder': 'Order Deadline',
   'field.datePlanned': 'Expected Arrival',
@@ -579,6 +636,8 @@ export default defineModule({
               rows,
               createFields: await orderFields(ctx, url, req, _, data),
               createAction: rfqPath,
+              invalid: url.searchParams.get('invalid'),
+              setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
             }),
         })
       },
@@ -598,6 +657,7 @@ export default defineModule({
               title: _('purchase_backend.orders.title'),
               frame: shell,
               rows: orders.map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) })),
+              invalid: url.searchParams.get('invalid'),
             }),
         })
       },
