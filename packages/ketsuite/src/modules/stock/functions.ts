@@ -3,6 +3,7 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
 import { company, ours } from './scope.ts'
+import { toProductUnit } from './units.ts'
 
 export const RECEPTION_STEPS = ['one_step', 'two_steps', 'three_steps'] as const
 export const DELIVERY_STEPS = ['ship_only', 'pick_ship', 'pick_pack_ship'] as const
@@ -750,7 +751,13 @@ export const functions: Record<string, FnSpec> = {
       origin: 'text?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:stock.Picking', 'read:product.Product', 'read:uom.Unit', 'write:stock.Move'],
+    effects: [
+      'read:stock.Picking',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
+      'write:stock.Move',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -763,6 +770,12 @@ export const functions: Record<string, FnSpec> = {
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
         return invalid('productUomId', 'đơn vị không tồn tại')
       if (!(Number(args.productUomQty) > 0)) return invalid('productUomQty', 'phải lớn hơn 0')
+      // The caller may speak in boxes; the ledger does not. Everything behind
+      // this door — quants, reservations, the forecast — compares plain numbers
+      // and is only right when they all share the product's unit.
+      const based = await toProductUnit(ctx, args.productId, args.productUomId, Number(args.productUomQty))
+      if (based === null)
+        return invalid('productUomId', 'đơn vị không cùng hệ đo với đơn vị gốc của sản phẩm')
       const locationId = args.locationId ?? picking?.locationId
       const locationDestId = args.locationDestId ?? picking?.locationDestId
       if (!locationId || !locationDestId) return invalid('locationId', 'cần source và destination location')
@@ -774,8 +787,8 @@ export const functions: Record<string, FnSpec> = {
         name: args.name,
         pickingId: args.pickingId ?? null,
         productId: args.productId,
-        productUomId: args.productUomId,
-        productUomQty: args.productUomQty,
+        productUomId: based.uomId,
+        productUomQty: String(based.quantity),
         quantity: '0',
         locationId,
         locationDestId,
@@ -1208,6 +1221,7 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.MoveLine',
       'read:product.Product',
       'read:product.Template',
+      'read:uom.Unit',
     ],
     idempotent: true,
     agent: true,
@@ -1226,6 +1240,17 @@ export const functions: Record<string, FnSpec> = {
         if (!lot || lot.productId !== args.productId)
           return invalid('lotId', 'lot/serial không thuộc sản phẩm')
       }
+      // The count may be spoken in boxes; the quant it corrects is not.
+      // Comparing them unconverted turned "counted two boxes" into a shortfall
+      // of twenty-two pieces.
+      const counted = await toProductUnit(
+        ctx,
+        args.productId,
+        args.productUomId,
+        Number(args.countedQuantity),
+      )
+      if (counted === null)
+        return invalid('productUomId', 'đơn vị không cùng hệ đo với đơn vị gốc của sản phẩm')
       const current = (
         await ours(ctx, 'stock.Quant', {
           productId: args.productId,
@@ -1233,7 +1258,7 @@ export const functions: Record<string, FnSpec> = {
           lotKey: lotKey(args.lotId),
         })
       )[0]
-      const difference = Number(args.countedQuantity) - Number(current?.quantity ?? 0)
+      const difference = counted.quantity - Number(current?.quantity ?? 0)
       if (Math.abs(difference) < 1e-12) return { ok: true, moveId: args.id, difference: '0' }
       // Counting below what is reserved is a real thing to want to say — the shelf
       // is short and a transfer is holding stock that is not there — but it is not
@@ -1241,7 +1266,7 @@ export const functions: Record<string, FnSpec> = {
       // throwing, which reached the operator as a server error naming neither the
       // reservation nor the transfer holding it. Say so as a field error instead.
       const reserved = Number(current?.reservedQuantity ?? 0)
-      if (reserved - Number(args.countedQuantity) > 1e-12)
+      if (reserved - counted.quantity > 1e-12)
         return invalid(
           'countedQuantity',
           `không thể kiểm kê xuống dưới ${String(reserved)} đang được reserve; hủy hoặc hoàn tất transfer giữ số này trước`,
@@ -1293,7 +1318,7 @@ export const functions: Record<string, FnSpec> = {
           name: 'Inventory adjustment',
           pickingId,
           productId: args.productId,
-          productUomId: args.productUomId,
+          productUomId: counted.uomId,
           productUomQty: String(Math.abs(difference)),
           quantity: String(Math.abs(difference)),
           locationId: source,
@@ -1309,7 +1334,7 @@ export const functions: Record<string, FnSpec> = {
           moveId: args.id,
           pickingId,
           productId: args.productId,
-          productUomId: args.productUomId,
+          productUomId: counted.uomId,
           quantity: String(Math.abs(difference)),
           quantityProductUom: String(Math.abs(difference)),
           locationId: source,
