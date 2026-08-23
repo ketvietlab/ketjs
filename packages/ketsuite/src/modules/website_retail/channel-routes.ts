@@ -6,7 +6,7 @@
 // facade's, so none of it is repeated below.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelCommandId, channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
 import type { ChannelIdentity } from '../channel_api/core.ts'
 import { channelRealmContext } from '../channel_api/customer.ts'
 
@@ -308,7 +308,7 @@ export const channelRoutes = routesOf(
       const result = (await ctx.callUnchecked(
         'website_retail.submitChannelCart',
         {
-          orderId: `channel_${identity.realmId}_${key}`.slice(0, 120),
+          orderId: channelCommandId('channel', identity, key),
           siteId,
           token,
           accountId: identity.accountId,
