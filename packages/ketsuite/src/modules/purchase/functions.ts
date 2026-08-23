@@ -895,9 +895,16 @@ export const functions: Record<string, FnSpec> = {
         const untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0))
         const tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0))
         total = money(untaxed + tax)
+        // Accounting stamps its journal sequence when the bill is posted; until
+        // then a draft showed its raw identifier, so the buyer's own screen
+        // listed a UUID where a document number belongs. An order can be billed
+        // more than once — after a cancellation, or in instalments — and a move
+        // name is unique per journal, so the draft is numbered within its order.
+        const draftNumber =
+          (await tx.db.select('account.Move', { ref: order.name, journalId: args.journalId })).length + 1
         await tx.db.insert('account.Move', {
           id: args.id,
-          name: String(args.id),
+          name: `${String(order.name)}/${String(draftNumber)}`,
           ref: order.name,
           date: invoiceDate,
           moveType: 'in_invoice',
@@ -992,6 +999,25 @@ export const functions: Record<string, FnSpec> = {
       })
       if ((written as Row).ok !== true) return written
       return { ok: true, id: args.id, amountTotal: decimal(total) }
+    },
+  }),
+  resetToDraft: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', errors: 'json?' },
+    effects: ['read:purchase.Order', 'write:purchase.Order'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'purchase order does not exist')
+      if (order.state === 'draft') return { ok: true, id: args.id, state: 'draft' }
+      // An approver who wants the request changed had only one button, and it
+      // destroyed the request. Sending it back is the ordinary answer; a
+      // confirmed order is past that point because a receipt already exists.
+      if (!['sent', 'to approve'].includes(String(order.state)))
+        return invalid('state', 'only a request awaiting sending or approval can go back to draft')
+      await ctx.db.update('purchase.Order', { id: args.id }, { state: 'draft' })
+      return { ok: true, id: args.id, state: 'draft' }
     },
   }),
   lockOrder: defineFn({
