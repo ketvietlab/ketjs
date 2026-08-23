@@ -306,30 +306,26 @@ export const customerRoutes = routesOf(
     handler: async (ctx, url, req, _params, request) => {
       const context = await channelRealmContext(ctx, url, req)
       const identity = request.identity
+      /**
+       * What this tenant serves, not what the deployment ships.
+       *
+       * Enumerating the whole manifest and marking the rest blocked told a
+       * shopper which other verticals exist on the box — capability keys for
+       * apps their tenant never installed. A shopper cannot install one, so the
+       * answer was of no use to them and of some use to everyone else.
+       */
       const live = await ctx.live(req)
-      const grouped = new Map<string, { actions: Set<string>; blocked: Set<string> }>()
-      for (const entry of Object.values(ctx.manifest.routes)) {
+      const grouped = new Map<string, Set<string>>()
+      for (const entry of Object.values(live.routes)) {
         const contract = entry.contract
         if (contract?.profile !== 'customer' || !contract.capability) continue
-        const current = grouped.get(contract.capability.key) ?? {
-          actions: new Set<string>(),
-          blocked: new Set<string>(),
-        }
-        // A capability can be served by more than one module, so "blocked" is a
-        // property of an action, not of the group: one switched-off module must
-        // not hide what the others still answer.
-        if (live.disabledModules?.includes(entry.by)) current.blocked.add(contract.capability.action)
-        else current.actions.add(contract.capability.action)
-        grouped.set(contract.capability.key, current)
+        const actions = grouped.get(contract.capability.key) ?? new Set<string>()
+        actions.add(contract.capability.action)
+        grouped.set(contract.capability.key, actions)
       }
       const capabilities = [...grouped.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => ({
-          key,
-          mode: item.actions.size ? 'enabled' : 'blocked',
-          actions: [...item.actions].sort(),
-          ...(item.blocked.size ? { reason: 'MODULE_NOT_INSTALLED' } : {}),
-        }))
+        .map(([key, actions]) => ({ key, mode: 'enabled', actions: [...actions].sort() }))
       return {
         data: {
           contractVersion: CHANNEL_API_VERSION,

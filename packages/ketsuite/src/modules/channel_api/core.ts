@@ -203,6 +203,22 @@ export const bearerOf = (req: Req): string | null => {
   return match?.[1] && match[1].length >= 32 && match[1].length <= 512 ? match[1] : null
 }
 
+/**
+ * The id a channel command writes under, derived once so no route invents its own.
+ *
+ * An `Idempotency-Key` is chosen by the client and travels in a header, so it is
+ * neither secret nor unique across callers. Two customers are free to send the
+ * same one. Anything derived from it must therefore carry who is asking, or the
+ * two commands collide on a single row — and a domain command that replays an
+ * existing id will hand the second caller the first one's record rather than
+ * fail. Hashing also keeps a caller-supplied string out of a primary key.
+ */
+export const channelCommandId = (
+  prefix: string,
+  identity: Pick<ChannelIdentity, 'realmId' | 'accountId'>,
+  key: string,
+): string => `${prefix}_${sha256(`${identity.realmId}\n${identity.accountId}\n${key}`).slice(0, 32)}`
+
 export const stableHash = (value: unknown): string => {
   const canonical = (held: unknown): string => {
     if (held === null || typeof held !== 'object') return JSON.stringify(held)
@@ -512,6 +528,17 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
             return envelope(await spec.handler(ctx, url, req, params, { requestId, identity, body }))
           } catch (cause) {
             const failure = FAILURES[String((cause as { code?: string }).code ?? '')]
+            /**
+             * A mapped failure is a known answer. Anything else is this server
+             * being wrong, and the caller gets a code that deliberately says
+             * nothing — so unless it is written down here, the only record of it
+             * is a 500 nobody can trace back. The request id is the thread
+             * between the two.
+             */
+            if (!failure)
+              console.error(
+                `[channel_api] ${spec.operationId} ${requestId} ${String((cause as Error)?.stack ?? cause)}`,
+              )
             return envelope({
               status: failure?.status ?? 500,
               error: channelError(ctx, url, req, failure?.code ?? 'channel_api.internalError', {
