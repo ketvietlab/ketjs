@@ -435,3 +435,44 @@ test('retail channel: a shopper cannot place orders faster than the store allows
   assert.equal(refused.body.error?.code, 'channel_api.rateLimited')
   assert.equal(refused.body.error?.message, 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.')
 })
+
+test('retail channel: one idempotency key cannot join two shoppers to one order', async (t) => {
+  const { e2e, seed } = await boot(t)
+  await configure(seed)
+
+  // An Idempotency-Key is chosen by the client and travels in a header, so two
+  // shoppers are free to send the same one. Nothing else about these two
+  // requests is alike.
+  const order = async (email: string, quantity: string) => {
+    const token = await signIn(e2e, email)
+    const started = await channel<{ cartToken: string }>(e2e, 'retail/carts', {
+      method: 'POST',
+      token,
+      body: JSON.stringify({}),
+    })
+    const cart = started.body.data.cartToken
+    await channel(e2e, 'retail/cart/lines', {
+      method: 'PUT',
+      token,
+      cart,
+      body: JSON.stringify({ productId: 'canvas-bag-natural', quantity }),
+    })
+    return channel<{ id: string; amountTotal: string }>(e2e, 'retail/checkout', {
+      method: 'POST',
+      token,
+      cart,
+      key: 'a-key-both-shoppers-picked',
+      body: JSON.stringify({}),
+    })
+  }
+
+  const first = await order('collide.one@example.test', '2')
+  const second = await order('collide.two@example.test', '5')
+  assert.equal(first.status, 201)
+  assert.equal(second.status, 201)
+
+  assert.notEqual(second.body.data.id, first.body.data.id, 'two shoppers landed on one sales order')
+  // And the second shopper got their own basket, not a replay of the first's.
+  assert.equal(first.body.data.amountTotal, '500000')
+  assert.equal(second.body.data.amountTotal, '1250000')
+})

@@ -1,5 +1,5 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import { channelCommandId, channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
 import type { ChannelIdentity } from '../channel_api/core.ts'
 import { channelRealmContext } from '../channel_api/customer.ts'
 
@@ -305,7 +305,7 @@ export const channelRoutes = routesOf(
         !(await linksFor(ctx, url, req, identity.siteId)).some((link) => link.propertyId === body.propertyId)
       )
         return missing(ctx, url, req)
-      const id = `channel_${sha256(`${identity.realmId}\n${identity.accountId}\n${key}`).slice(0, 32)}`
+      const id = channelCommandId('channel', identity, key)
       const input = {
         id,
         requestKey: key,
