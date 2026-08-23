@@ -34,7 +34,13 @@ const pathOf = (order: AnyRow) =>
 
 const empty = (_: Translator) => emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'))
 
-export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale = ''): TemplateResult => {
+export const dashboard = (
+  _: Translator,
+  orders: AnyRow[],
+  frame: Frame,
+  locale = '',
+  setup?: { pickingTypes: number; vendors: number },
+): TemplateResult => {
   const count = (states: string[]) => orders.filter((row) => states.includes(String(row.state))).length
   return (
     <Framed
@@ -42,6 +48,7 @@ export const dashboard = (_: Translator, orders: AnyRow[], frame: Frame, locale 
       title={_('purchase_backend.dashboard.title')}
       frame={frame}
       body={stack([
+        setup ? missingSetup(_, setup) : null,
         inline([
           linkButton({
             label: _('purchase_backend.action.createRfq'),
@@ -150,6 +157,8 @@ export const ordersScreen = (
     createAction?: string
     invalid?: string | null
     setup?: { pickingTypes: number; vendors: number }
+    /** Where a record on this screen comes from, when it is not created here. */
+    originPath?: string
   },
 ): TemplateResult => (
   <Framed
@@ -216,20 +225,40 @@ export const ordersScreen = (
               },
             ],
           })
-        : empty(_),
+        : o.setup && (!o.setup.vendors || !o.setup.pickingTypes)
+          ? null
+          : o.originPath
+            ? emptyState(_('purchase_backend.orders.empty'), _('purchase_backend.orders.emptyHint'), {
+                actions: linkButton({
+                  label: _('purchase_backend.orders.openRequests'),
+                  href: o.originPath,
+                  variant: 'primary',
+                }),
+              })
+            : empty(_),
     ])}
   />
 )
 
 export const supplierInfoScreen = (
   _: Translator,
-  o: { frame: Frame; rows: AnyRow[]; fields: FormField[]; methodFields: FormField[]; currency?: unknown },
+  o: {
+    frame: Frame
+    rows: AnyRow[]
+    fields: FormField[]
+    methodFields: FormField[]
+    currency?: unknown
+    invalid?: string | null
+    setup?: { pickingTypes: number; vendors: number }
+  },
 ): TemplateResult => (
   <Framed
     translator={_}
     title={_('purchase_backend.pricelists.title')}
     frame={o.frame}
     body={stack([
+      rejection(_, o.invalid),
+      o.setup ? missingSetup(_, o.setup) : null,
       <Surface
         body={
           <RecordForm
@@ -288,7 +317,9 @@ export const supplierInfoScreen = (
               { key: 'delay', label: _('purchase_backend.field.delay'), cell: (row) => String(row.delay) },
             ],
           })
-        : empty(_),
+        : o.setup && (!o.setup.vendors || !o.setup.pickingTypes)
+          ? null
+          : empty(_),
     ])}
   />
 )
@@ -323,6 +354,10 @@ export const orderDetail = (
   }
   if (state === 'to approve')
     actions.push({ value: 'approve', label: _('purchase_backend.action.approve'), variant: 'primary' })
+  // Approving is not the only answer to a request under review, and refusing it
+  // should not mean destroying it.
+  if (['sent', 'to approve'].includes(state))
+    actions.push({ value: 'reset', label: _('purchase_backend.action.resetToDraft') })
   if (state === 'purchase') {
     actions.push({ value: 'sync', label: _('purchase_backend.action.syncReceipts'), variant: 'primary' })
     actions.push({
@@ -330,7 +365,9 @@ export const orderDetail = (
       label: o.order.locked ? _('purchase_backend.action.unlock') : _('purchase_backend.action.lock'),
     })
   }
-  if (!['cancel'].includes(state))
+  // A locked order refuses cancellation, so offering the button only produced a
+  // rejection notice.
+  if (state !== 'cancel' && !o.order.locked)
     actions.push({ value: 'cancel', label: _('purchase_backend.action.cancel'), variant: 'destructive' })
   return (
     <Framed
@@ -465,7 +502,7 @@ export const orderDetail = (
                       : []),
                   ],
                 })
-              : empty(_)
+              : emptyState(_('purchase_backend.lines.empty'), _('purchase_backend.lines.emptyHint'))
           }
         />,
         ...(['draft', 'sent'].includes(state) && !o.order.locked
@@ -530,7 +567,7 @@ export const orderDetail = (
                     {
                       key: 'state',
                       label: _('purchase_backend.field.state'),
-                      cell: (row) => String(row.state),
+                      cell: (row) => badge(labelOf(_, 'moveState', row.state), 'neutral'),
                     },
                     {
                       key: 'quantity',
@@ -564,7 +601,7 @@ export const orderDetail = (
                     {
                       key: 'state',
                       label: _('purchase_backend.field.state'),
-                      cell: (row) => String(row.state),
+                      cell: (row) => badge(labelOf(_, 'billState', row.state), 'neutral'),
                     },
                     {
                       key: 'total',

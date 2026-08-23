@@ -163,6 +163,8 @@ const detailHandler =
         result = await ctx.call('purchase.confirmOrder', { id: params.id, requiresApproval: true }, url, req)
       else if (form.action === 'approve')
         result = await ctx.call('purchase.approveOrder', { id: params.id }, url, req)
+      else if (form.action === 'reset')
+        result = await ctx.call('purchase.resetToDraft', { id: params.id }, url, req)
       else if (form.action === 'sync')
         result = await ctx.call('purchase.syncReceipts', { id: params.id }, url, req)
       else if (form.action === 'lock' || form.action === 'unlock')
@@ -387,6 +389,22 @@ const vi = {
   'action.updateLine': 'Lưu dòng',
   'action.removeLine': 'Xoá dòng',
   'lines.edit': 'Sửa',
+  'lines.empty': 'Yêu cầu chưa có dòng nào.',
+  'lines.emptyHint': 'Thêm ít nhất một sản phẩm bên dưới trước khi xác nhận.',
+  'orders.empty': 'Chưa có đơn mua nào.',
+  'orders.emptyHint': 'Đơn mua sinh ra khi một yêu cầu báo giá được xác nhận.',
+  'orders.openRequests': 'Mở yêu cầu báo giá',
+  'action.resetToDraft': 'Trả về nháp',
+  'moveState.draft': 'Nháp',
+  'moveState.waiting': 'Chờ',
+  'moveState.confirmed': 'Đã xác nhận',
+  'moveState.partially_available': 'Có một phần',
+  'moveState.assigned': 'Sẵn sàng',
+  'moveState.done': 'Hoàn tất',
+  'moveState.cancel': 'Đã hủy',
+  'billState.draft': 'Nháp',
+  'billState.posted': 'Đã ghi sổ',
+  'billState.cancel': 'Đã hủy',
   'field.state': 'Trạng thái',
   'field.dateOrder': 'Ngày đặt hàng',
   'field.datePlanned': 'Ngày dự kiến nhận',
@@ -489,6 +507,22 @@ const en = {
   'action.updateLine': 'Save line',
   'action.removeLine': 'Remove line',
   'lines.edit': 'Edit',
+  'lines.empty': 'This request has no lines yet.',
+  'lines.emptyHint': 'Add at least one product below before confirming it.',
+  'orders.empty': 'No purchase orders yet.',
+  'orders.emptyHint': 'A purchase order appears once a request for quotation is confirmed.',
+  'orders.openRequests': 'Open requests for quotation',
+  'action.resetToDraft': 'Reset to draft',
+  'moveState.draft': 'Draft',
+  'moveState.waiting': 'Waiting',
+  'moveState.confirmed': 'Confirmed',
+  'moveState.partially_available': 'Partially available',
+  'moveState.assigned': 'Ready',
+  'moveState.done': 'Done',
+  'moveState.cancel': 'Cancelled',
+  'billState.draft': 'Draft',
+  'billState.posted': 'Posted',
+  'billState.cancel': 'Cancelled',
   'field.state': 'Status',
   'field.dateOrder': 'Order Deadline',
   'field.datePlanned': 'Expected Arrival',
@@ -582,13 +616,16 @@ export default defineModule({
         req.method === 'GET'
           ? adminPage(ctx, url, req, {
               title: 'purchase_backend.dashboard.title',
-              body: async (_, shell) =>
-                dashboard(
-                  _,
-                  (await ctx.call('purchase.listOrders', {}, url, req)) as AnyRow[],
-                  shell,
-                  localeQuery(url),
-                ),
+              body: async (_, shell) => {
+                const [orders, data] = await Promise.all([
+                  ctx.call('purchase.listOrders', {}, url, req) as Promise<AnyRow[]>,
+                  common(ctx, url, req),
+                ])
+                return dashboard(_, orders, shell, localeQuery(url), {
+                  pickingTypes: data.pickingTypes.length,
+                  vendors: data.partners.length,
+                })
+              },
             })
           : text('GET', { status: 405 }),
     '/admin/purchase/rfqs':
@@ -658,6 +695,9 @@ export default defineModule({
               frame: shell,
               rows: orders.map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) })),
               invalid: url.searchParams.get('invalid'),
+              // A purchase order is not raised here; it is a request that was
+              // confirmed. Saying "create the first record" pointed at nothing.
+              originPath: `/admin/purchase/rfqs${localeQuery(url)}`,
             }),
         })
       },
@@ -795,6 +835,8 @@ export default defineModule({
               currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
               fields,
               methodFields,
+              invalid: url.searchParams.get('invalid'),
+              setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
               rows: rows.map((row) => ({
                 ...row,
                 partnerName: vendors.get(String(row.partnerId)),
