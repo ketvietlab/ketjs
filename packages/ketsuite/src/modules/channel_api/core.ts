@@ -78,6 +78,15 @@ export type ChannelRouteSpec = {
   request?: HttpRouteContract['request']
   responses: Record<string, JsonSchema>
   idempotent?: boolean
+  /**
+   * A ceiling on how often one caller may repeat this.
+   *
+   * Keyed by the account when there is one and by the network fingerprint when
+   * there is not, so a signed-in customer cannot spend the whole allowance of
+   * everyone sharing their address, and an anonymous one cannot hide behind a
+   * fresh session.
+   */
+  rateLimit?: { action: string; limit: number; windowMs: number }
   handler: (
     ctx: ServeContext,
     url: URL,
@@ -106,6 +115,21 @@ const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver>()
 
 export const registerChannelIdentity = (profile: ChannelProfile, resolve: ChannelIdentityResolver): void => {
   identityResolvers.set(profile, resolve)
+}
+
+/**
+ * Which realm an unauthenticated request belongs to.
+ *
+ * Registered the same way an identity resolver is, and for the same reason: the
+ * code that knows how to answer is built on this facade, so the facade cannot
+ * import it. A rate limit needs the answer even when nobody is signed in, or an
+ * anonymous caller would share one allowance across every tenant on the box.
+ */
+type ChannelRealmResolver = (ctx: ServeContext, url: URL, req: Req) => Promise<string | null>
+const realmResolvers = new Map<ChannelProfile, ChannelRealmResolver>()
+
+export const registerChannelRealm = (profile: ChannelProfile, resolve: ChannelRealmResolver): void => {
+  realmResolvers.set(profile, resolve)
 }
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{8,128}$/
@@ -433,6 +457,36 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
                 return fail(403, 'channel_api.originMismatch', 'channel_api.error.originMismatch')
               if (!safeEqual(String(req.headers['x-csrf-token'] ?? ''), csrfTokenFor(identity.token)))
                 return fail(403, 'channel_api.csrf', 'channel_api.error.csrf')
+            }
+            if (spec.rateLimit) {
+              const realm = identity?.realmId ?? (await realmResolvers.get(spec.profile)?.(ctx, url, req))
+              // No realm means no site answered for this host, and there is
+              // nothing to meter against; the route below will refuse it anyway.
+              if (realm) {
+                const who =
+                  identity?.accountId ??
+                  `net:${sha256(`${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`)}`
+                const claimed = (await ctx.callUnchecked(
+                  'website.claimChannelRateSlot',
+                  {
+                    realmId: realm,
+                    action: spec.rateLimit.action,
+                    key: who,
+                    limit: spec.rateLimit.limit,
+                    windowMs: spec.rateLimit.windowMs,
+                  },
+                  url,
+                  req,
+                )) as { ok?: boolean } | null
+                if (claimed?.ok !== true)
+                  return envelope({
+                    status: 429,
+                    error: channelError(ctx, url, req, 'channel_api.rateLimited', {
+                      messageKey: 'channel_api.error.rateLimited',
+                      retryable: true,
+                    }),
+                  })
+              }
             }
             let body: Record<string, unknown> = {}
             if (spec.request?.body) {

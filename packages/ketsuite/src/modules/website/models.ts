@@ -244,6 +244,18 @@ export const models: Record<string, ModelDef> = {
       accountId: 'ref:website.CustomerAccount',
       accessDigest: 'text',
       refreshDigest: 'text',
+      /**
+       * The entropy a rotation cannot be predicted without.
+       *
+       * Rotation has to be replayable — a client whose response was lost must be
+       * able to retry and get the same pair back — which is why it is derived
+       * rather than random. Derived from the old token alone it was also
+       * derivable by whoever held that token, so one leak exposed the whole
+       * future chain. This is the part they do not have.
+       */
+      rotationSecret: 'text',
+      /** The digest this grant last rotated away from, so replaying it is visible. */
+      previousRefreshDigest: 'text?',
       securityVersion: 'int',
       version: 'int',
       createdAt: 'datetime',
@@ -256,6 +268,7 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       access: { fields: ['accessDigest'], unique: true },
       refresh: { fields: ['refreshDigest'], unique: true },
+      previous_refresh: { fields: ['previousRefreshDigest'] },
       account_expiry: { fields: ['accountId', 'refreshExpiresAt'] },
     },
   },
