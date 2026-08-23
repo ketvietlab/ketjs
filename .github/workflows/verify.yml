@@ -70,6 +70,13 @@ jobs:
       - name: no module writes its own markup
         run: npm run audit:ui
 
+      # The checked-in document is what SDK generators and external callers read.
+      # Regenerating it was a side effect of building the docs site, so a route
+      # added without one merged green and the document quietly fell behind —
+      # which it had, by three routes, before anyone looked.
+      - name: the published Channel API document matches the server
+        run: npm run check:api
+
       - name: types check
         run: npm run check
 
