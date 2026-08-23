@@ -74,6 +74,9 @@ jobs:
       # Regenerating it was a side effect of building the docs site, so a route
       # added without one merged green and the document quietly fell behind —
       # which it had, by three routes, before anyone looked.
+      - name: staff routes answer within their session's permissions
+        run: npm run audit:staff-channel
+
       - name: the published Channel API document matches the server
         run: npm run check:api
 
