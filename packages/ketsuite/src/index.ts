@@ -9,6 +9,7 @@
 export { default as channelApi } from './modules/channel_api/index.ts'
 export {
   CHANNEL_API_VERSION,
+  channelCommandId,
   defineChannelRoute,
   openApiDocument,
   registerChannelIdentity,

@@ -62,6 +62,7 @@ export default defineModule({
 
 export {
   CHANNEL_API_VERSION,
+  channelCommandId,
   defineChannelRoute,
   registerChannelIdentity,
   registerChannelRealm,
