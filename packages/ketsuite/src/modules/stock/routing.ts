@@ -1,6 +1,7 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { convertQty, type Unit } from '../uom/convert.ts'
+import { toProductUnit } from './units.ts'
 import { company, ours } from './scope.ts'
 
 export const RULE_ACTIONS = ['pull', 'push', 'pull_push'] as const
@@ -142,6 +143,13 @@ async function procure(
 ): Promise<{ ok: true; moveIds: string[]; method: string } | { ok: false; errors: object[] }> {
   const product = (await ctx.db.select('product.Product', { id: args.productId }))[0]
   if (!product) return invalid('productId', 'biến thể không tồn tại')
+  // An orderpoint replenishes in pallets and boxes; the chain of moves it
+  // raises, and every availability check along that chain, is in the product's
+  // unit like the rest of the ledger. Converting here once keeps the recursion
+  // below unit-free.
+  const based = await toProductUnit(ctx, args.productId, args.productUomId, args.quantity)
+  if (based === null) return invalid('productUomId', 'đơn vị không cùng hệ đo với đơn vị gốc của sản phẩm')
+  args = { ...args, productUomId: based.uomId, quantity: based.quantity }
   const destination = (await ours(ctx, 'stock.Location', { id: args.locationId }))[0]
   if (!destination) return invalid('locationId', 'location đích không tồn tại')
   const routeIds = await routesFor(ctx, product, destination, args.routeId)
