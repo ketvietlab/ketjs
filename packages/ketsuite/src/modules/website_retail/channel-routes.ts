@@ -178,6 +178,7 @@ export const channelRoutes = routesOf(
     capability: { key: 'website_retail.cart', action: 'write' },
     request: { body: body({ currency: string }, []) },
     responses: { '201': envelope },
+    rateLimit: { action: 'retail.cart.start', limit: 60, windowMs: 60 * 60_000 },
     handler: async (ctx, url, req, _params, request) => {
       const siteId = await siteOf(ctx, url, req, request.identity)
       if (!siteId) return noSite(ctx, url, req)
@@ -229,6 +230,7 @@ export const channelRoutes = routesOf(
     capability: { key: 'website_retail.cart', action: 'write' },
     request: { body: body({ productId: string, quantity: string }, ['productId', 'quantity']) },
     responses: { '200': envelope },
+    rateLimit: { action: 'retail.cart.write', limit: 240, windowMs: 60 * 60_000 },
     handler: async (ctx, url, req, _params, request) => {
       const siteId = await siteOf(ctx, url, req, request.identity)
       if (!siteId) return noSite(ctx, url, req)
@@ -288,6 +290,7 @@ export const channelRoutes = routesOf(
     },
     responses: { '201': envelope },
     idempotent: true,
+    rateLimit: { action: 'retail.checkout', limit: 20, windowMs: 60 * 60_000 },
     handler: async (ctx, url, req, _params, request) => {
       const identity = request.identity!
       const siteId = await siteOf(ctx, url, req, identity)

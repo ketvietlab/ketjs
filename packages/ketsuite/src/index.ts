@@ -12,6 +12,7 @@ export {
   defineChannelRoute,
   openApiDocument,
   registerChannelIdentity,
+  registerChannelRealm,
   routesOf as channelRoutesOf,
 } from './modules/channel_api/index.ts'
 export type {

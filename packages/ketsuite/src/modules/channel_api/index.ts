@@ -26,6 +26,7 @@ export default defineModule({
       'error.invalidRefreshToken': 'Refresh token không hợp lệ hoặc đã hết hạn.',
       'error.originMismatch': 'Nguồn gửi yêu cầu không được phép.',
       'error.csrf': 'Yêu cầu bảo mật không hợp lệ. Vui lòng tải lại trang.',
+      'error.rateLimited': 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
       'error.invalidRequest': 'Nội dung yêu cầu không hợp lệ.',
       'error.fieldRequired': 'Trường bắt buộc chưa có giá trị.',
       'error.fieldUnknown': 'Trường này không thuộc hợp đồng của yêu cầu.',
@@ -47,6 +48,7 @@ export default defineModule({
       'error.invalidRefreshToken': 'The refresh token is invalid or expired.',
       'error.originMismatch': 'The request origin is not allowed.',
       'error.csrf': 'The security token is invalid. Reload the page and try again.',
+      'error.rateLimited': 'Too many attempts. Please try again later.',
       'error.invalidRequest': 'The request body does not match the contract.',
       'error.fieldRequired': 'This required field is missing.',
       'error.fieldUnknown': 'This field is not part of the request contract.',
@@ -58,7 +60,13 @@ export default defineModule({
   },
 })
 
-export { CHANNEL_API_VERSION, defineChannelRoute, registerChannelIdentity, routesOf } from './core.ts'
+export {
+  CHANNEL_API_VERSION,
+  defineChannelRoute,
+  registerChannelIdentity,
+  registerChannelRealm,
+  routesOf,
+} from './core.ts'
 export { openApiDocument } from './openapi.ts'
 export type {
   ChannelAccount,

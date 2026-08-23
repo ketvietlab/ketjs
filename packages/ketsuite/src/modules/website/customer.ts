@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
@@ -6,6 +6,8 @@ import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } fro
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_ABSOLUTE_SECONDS = 30 * 24 * 60 * 60
 const ACCESS_SECONDS = 15 * 60
+/** How long a lost response may be retried before a spent token reads as theft. */
+const REPLAY_GRACE_MS = 60_000
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -471,6 +473,8 @@ export const customerFunctions: Record<string, FnSpec> = {
         accountId: account.id,
         accessDigest: args.accessDigest,
         refreshDigest: args.refreshDigest,
+        rotationSecret: randomBytes(32).toString('base64url'),
+        previousRefreshDigest: null,
         securityVersion: account.securityVersion,
         version: 1,
         createdAt: now.toISOString(),
@@ -507,35 +511,117 @@ export const customerFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Spend one slot of a named allowance, for callers outside the auth screens.
+   *
+   * The same window the login throttle uses, opened up so the facade can put a
+   * ceiling on anything a signed-in customer can repeat — placing orders, asking
+   * for a fresh token, editing a cart. Registration and sign-in were throttled
+   * from the start; nothing else was, which left every authenticated write as
+   * fast as the client cared to send it.
+   */
+  claimChannelRateSlot: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { realmId: 'id', action: 'text', key: 'text', limit: 'int', windowMs: 'int' },
+    output: { ok: 'bool' },
+    effects: ['read:website.CustomerAuthRateLimit', 'write:website.CustomerAuthRateLimit'],
+    handler: async (ctx: Ctx, args) => ({
+      ok: await claimRateSlot(
+        ctx,
+        String(args.realmId),
+        `channel:${String(args.action).slice(0, 60)}`,
+        String(args.key).slice(0, 256),
+        Math.max(1, Number(args.limit)),
+        Math.max(1_000, Number(args.windowMs)),
+        new Date(),
+      ),
+    }),
+  }),
+
+  /**
+   * Rotate a refresh grant, and notice when a spent one comes back.
+   *
+   * The new pair is derived rather than random because rotation has to be
+   * replayable: a client whose response was lost retries with the same key and
+   * must be handed the same tokens, and the server only keeps digests so it
+   * cannot simply look them up. Derived from the old token alone it was equally
+   * derivable by anyone holding that token, so the secret on the grant is what
+   * makes the chain unguessable from the outside.
+   *
+   * Replaying a spent refresh token is how a stolen one shows up, so the family
+   * is revoked — RFC 9700. A retry inside the grace window is the far likelier
+   * explanation of the same request, and it recomputes to the same pair, so it
+   * is answered rather than punished.
+   */
   rotateCustomerTokenGrant: defineFn({
     anonymous: true,
     exposure: 'internal',
-    input: { refreshDigest: 'text', nextAccessDigest: 'text', nextRefreshDigest: 'text' },
+    input: { refreshDigest: 'text', requestKey: 'text' },
     output: {
       id: 'id',
       realmId: 'id',
-      account: 'json',
-      accessExpiresAt: 'datetime',
-      refreshExpiresAt: 'datetime',
-      version: 'int',
+      account: 'json?',
+      accessToken: 'text?',
+      refreshToken: 'text?',
+      accessExpiresAt: 'datetime?',
+      refreshExpiresAt: 'datetime?',
+      version: 'int?',
+      reused: 'bool?',
     },
     effects: [
       'read:website.CustomerTokenGrant',
       'write:website.CustomerTokenGrant',
       'read:website.CustomerAccount',
     ],
-    idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const Grant = ctx.table('website.CustomerTokenGrant')
-      const grant = await ctx.db.one(from(Grant).where(eq(Grant.refreshDigest, args.refreshDigest)))
       const now = new Date()
-      if (!grant || grant.revokedAt || new Date(String(grant.refreshExpiresAt)) <= now) return null
+      const mint = (grant: Row, purpose: string): string =>
+        createHmac('sha256', String(grant.rotationSecret))
+          .update(`${purpose}\n${args.refreshDigest}\n${args.requestKey}`)
+          .digest('base64url')
+
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.refreshDigest, args.refreshDigest)))
+      if (!grant) {
+        // Nothing holds this digest. If a grant rotated away from it, the token
+        // is spent and someone is presenting it a second time.
+        const spent = await ctx.db.one(from(Grant).where(eq(Grant.previousRefreshDigest, args.refreshDigest)))
+        if (!spent || spent.revokedAt) return null
+        const rotatedAt = new Date(String(spent.lastRotatedAt)).getTime()
+        if (now.getTime() - rotatedAt <= REPLAY_GRACE_MS) {
+          // The lost-response retry: the same inputs recompute the same pair, and
+          // the digests already stored are the ones it hands back.
+          const account = (await ctx.db.select('website.CustomerAccount', { id: spent.accountId }))[0]
+          if (account?.status !== 'active') return null
+          return {
+            id: spent.id,
+            realmId: spent.realmId,
+            account: accountView(account),
+            accessToken: mint(spent, 'access'),
+            refreshToken: mint(spent, 'refresh'),
+            accessExpiresAt: spent.accessExpiresAt,
+            refreshExpiresAt: spent.refreshExpiresAt,
+            version: spent.version,
+          }
+        }
+        await ctx.db.update(
+          'website.CustomerTokenGrant',
+          { id: spent.id },
+          { revokedAt: now.toISOString(), revokeReason: 'refresh-token-reuse' },
+        )
+        return { id: spent.id, realmId: spent.realmId, reused: true }
+      }
+      if (grant.revokedAt || new Date(String(grant.refreshExpiresAt)) <= now) return null
       const account = (await ctx.db.select('website.CustomerAccount', { id: grant.accountId }))[0]
       if (account?.status !== 'active' || Number(account.securityVersion) !== Number(grant.securityVersion))
         return null
+      const accessToken = mint(grant, 'access')
+      const refreshToken = mint(grant, 'refresh')
       const patch = {
-        accessDigest: args.nextAccessDigest,
-        refreshDigest: args.nextRefreshDigest,
+        accessDigest: digest(accessToken),
+        refreshDigest: digest(refreshToken),
+        previousRefreshDigest: String(grant.refreshDigest),
         accessExpiresAt: new Date(now.getTime() + ACCESS_SECONDS * 1000).toISOString(),
         lastRotatedAt: now.toISOString(),
         version: Number(grant.version) + 1,
@@ -547,7 +633,16 @@ export const customerFunctions: Record<string, FnSpec> = {
         patch,
       )
       if (!('dryRun' in changed) && !changed.matched) return null
-      return tokenGrantView({ ...grant, ...patch }, account)
+      return {
+        id: grant.id,
+        realmId: grant.realmId,
+        account: accountView(account),
+        accessToken,
+        refreshToken,
+        accessExpiresAt: patch.accessExpiresAt,
+        refreshExpiresAt: grant.refreshExpiresAt,
+        version: patch.version,
+      }
     },
   }),
 
