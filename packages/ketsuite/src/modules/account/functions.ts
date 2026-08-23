@@ -35,15 +35,16 @@ export const MOVE_TYPES = [
   'in_receipt',
 ] as const
 export const MOVE_STATES = ['draft', 'posted', 'cancel'] as const
-export const PAYMENT_STATES = [
-  'not_paid',
-  'in_payment',
-  'paid',
-  'partial',
-  'reversed',
-  'blocked',
-  'invoicing_legacy',
-] as const
+/**
+ * The four a document can actually be in.
+ *
+ * Three more were carried over from the ERP this vocabulary came from, and
+ * nothing in this ledger ever wrote them — so a filter offering them returned an
+ * empty list however the books were kept. Same reason `group` left
+ * TAX_AMOUNT_TYPES: a choice that cannot be reached only wastes the reader's
+ * time.
+ */
+export const PAYMENT_STATES = ['not_paid', 'paid', 'partial', 'reversed'] as const
 export const TAX_USES = ['sale', 'purchase', 'none'] as const
 /**
  * Group taxes are deliberately absent: a line takes a list of taxes and applies
@@ -106,6 +107,7 @@ const REFUSALS = {
   taxMixedPriceInclude: 'a line cannot mix price-included and price-excluded taxes',
   taxManyPriceInclude: 'a line supports at most one price-included tax',
   taxDivisionFull: 'a division tax of 100% or more has no finite base',
+  taxFixedExceedsLine: 'a price-included fixed tax cannot be larger than the line it is inside',
 
   partnerMissing: 'partner does not exist',
   paymentTermMissing: 'payment term does not exist',
@@ -125,6 +127,7 @@ const REFUSALS = {
   counterpartMustBePayable: 'the counterpart account must be a payable account',
 
   paymentTypeUnsupported: 'payment type must be inbound or outbound',
+  paymentIdReused: 'a different payment already uses this id',
   partnerTypeUnsupported: 'partner type must be customer or supplier',
   amountPositive: 'payment amount must be positive',
   destinationMissing: 'destination account does not exist',
@@ -423,8 +426,13 @@ function taxAmounts(
     const tax = ordered[0]!
     const rate = n(tax.amount) / 100
     let untaxed = gross
-    if (tax.amountType === 'fixed') untaxed = roundMoney(gross - share(tax, gross), scale)
-    else if (tax.amountType === 'percent') untaxed = roundMoney(gross / (1 + rate), scale)
+    if (tax.amountType === 'fixed') {
+      untaxed = roundMoney(gross - share(tax, gross), scale)
+      // A fixed tax said to be inside the price cannot be more than the price.
+      // Left alone it makes the base negative, which posts a credit to revenue
+      // as a debit and reverses the sign of the sale in the ledger.
+      if (untaxed < 0) throw new Refusal('taxFixedExceedsLine')
+    } else if (tax.amountType === 'percent') untaxed = roundMoney(gross / (1 + rate), scale)
     else if (tax.amountType === 'division') {
       if (rate >= 1) throw new Refusal('taxDivisionFull')
       untaxed = roundMoney(gross * (1 - rate), scale)
@@ -1419,11 +1427,13 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Account',
       'read:account.Journal',
       'read:account.PartialReconcile',
+      'read:account.Payment',
       'read:company.Company',
       'write:account.Journal',
       'write:account.Move',
       'write:account.MoveLine',
       'write:account.PartialReconcile',
+      'write:account.Payment',
     ],
     idempotent: true,
     agent: true,
@@ -1525,6 +1535,13 @@ export const functions: Record<string, FnSpec> = {
 
       if (move.moveType !== 'entry')
         await ctx.db.update('account.Move', { id: args.id }, { paymentState: 'reversed' })
+
+      // A payment's own move is an `entry`, so the line above never reaches it
+      // and the payment kept reading `paid` after the money had been reversed
+      // out of the books — the ledger and the payments list disagreeing about
+      // whether a customer had paid.
+      for (const payment of await ctx.db.select('account.Payment', { moveId: args.id }))
+        await ctx.db.update('account.Payment', { id: payment.id }, { state: 'reversed' })
       return { ok: true, id: args.id, reversalId, name: posted.name }
     },
   }),
@@ -1633,6 +1650,17 @@ export const functions: Record<string, FnSpec> = {
         return (result as Row).ok === true ? null : result
       }
       if (existing) {
+        // A retry of the same call is a success. A different payment under an id
+        // that is already taken is not: the stored move is left as it was, and
+        // reconciling it for a newly supplied amount would settle an open item
+        // against money the ledger never recorded.
+        if (
+          roundMoney(n(existing.amount), scale) !== amount ||
+          String(existing.paymentType) !== String(args.paymentType) ||
+          String(existing.journalId) !== String(args.journalId) ||
+          String(existing.destinationAccountId) !== String(args.destinationAccountId)
+        )
+          return invalid('id', 'paymentIdReused')
         const failed = await reconcilePayment(String(existing.moveId))
         return failed ?? { ok: true, id: args.id, moveId: existing.moveId }
       }
