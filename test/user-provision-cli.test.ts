@@ -16,7 +16,11 @@ const runCli = async (
 ): Promise<{ code: number; stdout: string; stderr: string }> => {
   const child = spawn(process.execPath, [cli, ...args], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_NO_WARNINGS: '1', ...env },
+    // DATABASE_URL wins over KET_SQLITE, so inheriting one would send a test that
+    // built itself a private SQLite file into whatever server the suite was
+    // pointed at — and provisioning is exactly the command that refuses to run
+    // twice against the same database.
+    env: { ...process.env, DATABASE_URL: undefined, NODE_NO_WARNINGS: '1', ...env },
   })
   let stdout = ''
   let stderr = ''

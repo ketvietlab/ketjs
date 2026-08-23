@@ -52,7 +52,8 @@ import backend from '@ketvietlab/ketsuite/backend'
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }
 
-const URL = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
+const URL =
+  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)
 
@@ -325,6 +326,12 @@ test('live pg: idempotency is settled by the primary key across concurrent calls
 
 test('live pg: a database per tenant, migrated as a fleet', live, async () => {
   const base = URL.replace(/\/[^/]*$/, '')
+  // Provisioned here rather than assumed. Expecting a developer's own databases
+  // to exist is what kept this one from running anywhere but one laptop.
+  const admin = postgresAdapter(URL, { max: 1 })
+  await admin.open()
+  for (const db of ['ketjs_t1', 'ketjs_t2']) await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
+  await admin.close()
   const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 4 })
   try {
     for (const db of ['ketjs_t1', 'ketjs_t2']) {
