@@ -1,0 +1,111 @@
+// Attendance on the staff channel.
+//
+// The first vertical to answer on /api/staff/v1/, and a thin one on purpose:
+// every route here hands the session's own employee to a function that already
+// existed. Nothing about who the caller is arrives from the client — the
+// framework resolves the actor from the session, and attendance resolves the
+// employee from the actor, so an operator can only ever punch their own clock.
+
+import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
+
+type Req = Parameters<Route>[1]
+type Issue = { field?: string; code?: string }
+
+const envelope = { type: 'object', properties: { data: {}, error: {}, meta: { type: 'object' } } }
+const object = { type: 'object' }
+
+/** A domain refusal, carried out with the key the module already translates. */
+const refused = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
+  const first = ((result as { errors?: Issue[] })?.errors ?? [])[0] ?? {}
+  const messageKey = first.code ?? 'attendance.error.invalid'
+  return {
+    status,
+    error: channelError(ctx, url, req, messageKey, {
+      messageKey,
+      ...(first.field
+        ? { fieldErrors: { [first.field]: { code: messageKey, messageKey, params: {} } } }
+        : {}),
+    }),
+  }
+}
+
+const punch = (expect: 'in' | 'out') => async (ctx: ServeContext, url: URL, req: Req) => {
+  // ctx.call, not callUnchecked: whether this operator may punch at all is the
+  // framework's answer, from the permissions their session carries.
+  const result = (await ctx.call('attendance.punch.self', { expect }, url, req)) as {
+    ok?: boolean
+    kind?: string
+    occurredAt?: string
+    sessionId?: string
+    errors?: Issue[]
+  }
+  return result.ok
+    ? {
+        status: 201,
+        data: { kind: result.kind, occurredAt: result.occurredAt, sessionId: result.sessionId },
+      }
+    : refused(ctx, url, req, result, 409)
+}
+
+export const channelRoutes = routesOf(
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'attendance/status',
+    operationId: 'staff.attendance.status',
+    summary: 'Whether the signed-in operator is on the clock, and since when.',
+    auth: 'required',
+    capability: { key: 'attendance.records', action: 'read' },
+    responses: { '200': envelope },
+    handler: async (ctx, url, req) => ({
+      data: await ctx.call('attendance.clock.mine', {}, url, req),
+    }),
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'attendance/records',
+    operationId: 'staff.attendance.records.list',
+    summary: 'The operator’s own attendance sessions, newest first.',
+    auth: 'required',
+    capability: { key: 'attendance.records', action: 'read' },
+    responses: { '200': envelope },
+    handler: async (ctx, url, req) => {
+      const month = url.searchParams.get('month')
+      const rows = (await ctx.call(
+        'attendance.session.mine',
+        { ...(month ? { month } : {}) },
+        url,
+        req,
+      )) as Array<Record<string, unknown>>
+      return {
+        data: [...rows].sort((a, b) => String(b.startAt).localeCompare(String(a.startAt))),
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'attendance/check-in',
+    operationId: 'staff.attendance.checkIn',
+    summary: 'Start a shift. Refused when one is already open.',
+    auth: 'required',
+    capability: { key: 'attendance.records', action: 'check_in' },
+    request: { body: object },
+    responses: { '201': envelope },
+    handler: (ctx, url, req) => punch('in')(ctx, url, req),
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'attendance/check-out',
+    operationId: 'staff.attendance.checkOut',
+    summary: 'End the open shift. Refused when there is none.',
+    auth: 'required',
+    capability: { key: 'attendance.records', action: 'check_out' },
+    request: { body: object },
+    responses: { '201': envelope },
+    handler: (ctx, url, req) => punch('out')(ctx, url, req),
+  }),
+)
