@@ -1,4 +1,4 @@
-import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -32,7 +32,12 @@ async function companyCurrency(ctx: Ctx) {
 async function nextName(ctx: Ctx) {
   const id = companyKey(ctx, 'sale')
   await ctx.db.insertIfAbsent('sale.Sequence', { id, nextNumber: 1 })
-  for (let attempt = 0; attempt < 32; attempt += 1) {
+  // Every order in the company funnels through this one row, so a bulk import
+  // running in parallel is a stampede by design. Losing the compare-and-set is
+  // normal there; what must not happen is giving up while the row is live —
+  // that turns a perfectly valid order into a spurious failure. Retries back
+  // off with jitter so the herd spreads out instead of colliding again.
+  for (let attempt = 0; attempt < 64; attempt += 1) {
     const row = (await ours(ctx, 'sale.Sequence', { id }))[0]
     if (!row) throw new Error('sale sequence row disappeared while assigning a number')
     const current = n(row.nextNumber)
@@ -43,6 +48,10 @@ async function nextName(ctx: Ctx) {
       { nextNumber: current + 1 },
     )
     if ('dryRun' in changed || changed.matched) return `S${String(current).padStart(5, '0')}`
+    if (attempt >= 2)
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(100, 2 ** (attempt - 2)) * (0.5 + Math.random())),
+      )
   }
   throw new Error('sale sequence did not settle after concurrent updates')
 }
@@ -125,6 +134,26 @@ async function recompute(ctx: Ctx, orderId: unknown) {
     { amountUntaxed: decimal(untaxed), amountTax: decimal(tax), amountTotal: decimal(untaxed + tax) },
   )
 }
+/**
+ * The stock moves and invoice lines behind an order's lines.
+ *
+ * Both used to be found by reading the whole table and filtering in JS. A
+ * tenant that has imported a real order history holds hundreds of thousands of
+ * moves, so an order-detail page was reading the entire ledger to find the
+ * handful of rows that belong to one order. The `saleLineId` relation is
+ * auto-indexed, so these are index lookups now.
+ */
+async function movesOf(ctx: Ctx, lineIds: string[]): Promise<Row[]> {
+  if (!lineIds.length) return []
+  const M = ctx.table('stock.Move')
+  return ctx.db.all(from(M).where(inArray(M.saleLineId, lineIds)))
+}
+async function invoiceLinesOf(ctx: Ctx, lineIds: string[]): Promise<Row[]> {
+  if (!lineIds.length) return []
+  const L = ctx.table('account.MoveLine')
+  return ctx.db.all(from(L).where(inArray(L.saleLineId, lineIds)))
+}
+
 async function statusOf(ctx: Ctx, orderId: unknown) {
   const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
   if (order?.state !== 'sale') return 'no'
@@ -158,6 +187,20 @@ const confirmEffects = [
   'write:stock.Picking',
   'write:stock.Move',
 ] as const
+/**
+ * A refusal thrown so the transaction it happened inside rolls back.
+ *
+ * `adapter.tx` commits on a normal return, so a soft error returned from inside
+ * one would commit the half-built delivery it is refusing over.
+ */
+class ConfirmRefused extends Error {
+  result: Row
+  constructor(result: Row) {
+    super('refused')
+    this.result = result
+  }
+}
+
 async function confirm(ctx: Ctx, id: unknown) {
   const order = (await ours(ctx, 'sale.Order', { id }))[0]
   if (!order) return invalid('id', 'sales order does not exist')
@@ -171,32 +214,47 @@ async function confirm(ctx: Ctx, id: unknown) {
     const context = await contextOf(ctx, line.productId)
     if (context && context.template.type !== 'service') goods.push(line)
   }
+  // One transaction for the picking, its moves, their links and the state
+  // change. Unwrapped, a crash between `addMove` and the `saleLineId` update
+  // left a move with no link back to its line — and `cancelOrder`, which finds
+  // an order's moves by that link, could never cancel it: an orphan demanding
+  // stock forever, on an order still reading draft.
   let pickingId: string | undefined
-  if (goods.length) {
-    pickingId = `${String(id)}:delivery`
-    const created = (await stockFunctions.createPicking!.handler(ctx, {
-      id: pickingId,
-      name: `Delivery ${String(order.name)}`,
-      pickingTypeId: `${String(order.warehouseId)}:outgoing`,
-      scheduledDate: order.dateOrder,
-    })) as Row
-    if (created.ok !== true) return created
-    for (const line of goods) {
-      const moveId = `${String(line.id)}:delivery`
-      const moved = (await stockFunctions.addMove!.handler(ctx, {
-        id: moveId,
-        name: line.name,
-        pickingId,
-        productId: line.productId,
-        productUomId: line.productUomId,
-        productUomQty: line.productUomQty,
-        origin: order.name,
-      })) as Row
-      if (moved.ok !== true) return moved
-      await ctx.db.update('stock.Move', { id: moveId }, { saleLineId: line.id })
-    }
+  try {
+    await ctx.tx(async (tx) => {
+      if (goods.length) {
+        pickingId = `${String(id)}:delivery`
+        const created = (await stockFunctions.createPicking!.handler(tx, {
+          id: pickingId,
+          name: `Delivery ${String(order.name)}`,
+          pickingTypeId: `${String(order.warehouseId)}:outgoing`,
+          scheduledDate: order.dateOrder,
+        })) as Row
+        if (created.ok !== true) throw new ConfirmRefused(created)
+        for (const line of goods) {
+          const moveId = `${String(line.id)}:delivery`
+          const moved = (await stockFunctions.addMove!.handler(tx, {
+            id: moveId,
+            name: line.name,
+            pickingId,
+            productId: line.productId,
+            productUomId: line.productUomId,
+            productUomQty: line.productUomQty,
+            origin: order.name,
+          })) as Row
+          if (moved.ok !== true) throw new ConfirmRefused(moved)
+          await tx.db.update('stock.Move', { id: moveId }, { saleLineId: line.id })
+        }
+      }
+      // The order keeps the date it was raised with. Stamping now() here wrote
+      // migration day onto every imported historical order the moment it was
+      // confirmed, and revenue-by-date was silently wrong from then on.
+      await tx.db.update('sale.Order', { id }, { state: 'sale' })
+    })
+  } catch (error) {
+    if (error instanceof ConfirmRefused) return error.result
+    throw error
   }
-  await ctx.db.update('sale.Order', { id }, { state: 'sale', dateOrder: now() })
   await refreshStatus(ctx, id)
   return { ok: true, id, state: 'sale', ...(pickingId ? { pickingId } : {}) }
 }
@@ -224,14 +282,53 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listOrders: defineFn({
-    input: { state: 'text?', partnerId: 'id?' },
+    input: { state: 'text?', states: 'json?', partnerId: 'id?', limit: 'int?', offset: 'int?' },
     effects: ['read:sale.Order'],
     agent: true,
-    handler: (ctx, args) =>
-      ours(ctx, 'sale.Order', {
-        ...(args.state ? { state: args.state } : {}),
-        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
-      }),
+    // Bounded and newest-first. Unbounded, a tenant with an imported order
+    // history handed the whole table to every caller — the quotations screen
+    // was loading six figures of rows to show a page.
+    handler: async (ctx, args) => {
+      const O = ctx.table('sale.Order')
+      const states = Array.isArray(args.states) ? args.states.map(String) : []
+      const limit = Math.max(1, Math.min(Math.trunc(Number(args.limit) || 500), 2_000))
+      return ctx.db.all(
+        from(O)
+          .where(
+            eq(O.companyId, company(ctx)),
+            ...(args.state ? [eq(O.state, String(args.state))] : []),
+            ...(states.length ? [inArray(O.state, states)] : []),
+            ...(args.partnerId ? [eq(O.partnerId, String(args.partnerId))] : []),
+          )
+          .orderBy(desc(O.dateOrder), desc(O.id))
+          .limit(limit)
+          .offset(Math.max(0, Math.trunc(Number(args.offset) || 0))),
+      )
+    },
+  }),
+  /**
+   * The dashboard's numbers, counted where the rows live.
+   *
+   * The dashboard used to load every order to count four subsets of them. At
+   * import scale that is six figures of rows materialised per view — and once
+   * the list is bounded, counting a page would simply be wrong.
+   */
+  countOrders: defineFn({
+    input: {},
+    output: { draft: 'int', sent: 'int', sale: 'int', toInvoice: 'int' },
+    effects: ['read:sale.Order'],
+    agent: true,
+    handler: async (ctx) => {
+      const O = ctx.table('sale.Order')
+      const mine = eq(O.companyId, company(ctx))
+      const [draft, sent, sale, toInvoice] = await Promise.all([
+        ctx.db.count(from(O).where(mine, eq(O.state, 'draft'))),
+        ctx.db.count(from(O).where(mine, eq(O.state, 'sent'))),
+        ctx.db.count(from(O).where(mine, eq(O.state, 'sale'))),
+        ctx.db.count(from(O).where(mine, eq(O.invoiceStatus, 'to invoice'))),
+      ])
+      return { draft, sent, sale, toInvoice }
+    },
   }),
   getOrder: defineFn({
     input: { id: 'id' },
@@ -247,18 +344,16 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return null
       const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
-      const moves = (await ctx.db.select('stock.Move')).filter((move) =>
-        lines.some((line) => line.id === move.saleLineId),
-      )
-      const invoiceLines = (await ctx.db.select('account.MoveLine')).filter((line) =>
-        lines.some((held) => held.id === line.saleLineId),
-      )
+      const lineIds = lines.map((line) => String(line.id))
+      const moves = await movesOf(ctx, lineIds)
+      const invoiceLines = await invoiceLinesOf(ctx, lineIds)
       const ids = [...new Set(invoiceLines.map((line) => String(line.moveId)))]
+      const A = ctx.table('account.Move')
       return {
         ...order,
         lines,
         moves,
-        invoices: (await ctx.db.select('account.Move')).filter((move) => ids.includes(String(move.id))),
+        invoices: ids.length ? await ctx.db.all(from(A).where(inArray(A.id, ids))) : [],
       }
     },
   }),
@@ -299,7 +394,12 @@ export const functions: Record<string, FnSpec> = {
         return invalid('pricelistId', 'pricelist does not exist')
       const name = await nextName(ctx),
         dateOrder = String(args.dateOrder ?? now())
-      await ctx.db.insert('sale.Order', {
+      // Two callers deciding on the same order at the same moment — a scheduled
+      // import and a webhook delivering the same external order — both pass the
+      // existence check above. The primary key settles it; the loser reads the
+      // winner's row and answers ok, which is what `idempotent` promises. The
+      // loser's sequence number is burned, which is the cheaper casualty.
+      const inserted = await ctx.db.insertIfAbsent('sale.Order', {
         id: args.id,
         name,
         partnerId: args.partnerId,
@@ -318,6 +418,10 @@ export const functions: Record<string, FnSpec> = {
         amountTotal: '0',
         notes: args.notes ?? null,
       })
+      if (!('dryRun' in inserted) && !inserted.inserted) {
+        const winner = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+        return { ok: true, id: args.id, name: winner?.name ?? name }
+      }
       return { ok: true, id: args.id, name }
     },
   }),
@@ -745,17 +849,12 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'sales order does not exist')
-      const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id }),
-        moves = (await ctx.db.select('stock.Move')).filter((move) =>
-          lines.some((line) => line.id === move.saleLineId),
-        )
+      const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
+      const lineIds = lines.map((line) => String(line.id))
+      const moves = await movesOf(ctx, lineIds)
       if (moves.some((move) => move.state === 'done'))
         return invalid('state', 'a delivered order cannot be cancelled')
-      if (
-        (await ctx.db.select('account.MoveLine')).some((line) =>
-          lines.some((held) => held.id === line.saleLineId),
-        )
-      )
+      if ((await invoiceLinesOf(ctx, lineIds)).length)
         return invalid('state', 'an invoiced order cannot be cancelled')
       for (const move of moves) await ctx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
       for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])

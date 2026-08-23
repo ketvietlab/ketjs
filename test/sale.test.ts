@@ -594,3 +594,132 @@ test('sale: a cancelled order still prints, and only for its own company', async
     await adapter.close()
   }
 })
+
+test('sale: confirming keeps the date the order was raised with', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'sale.createOrder',
+      { id: 'so', partnerId: 'customer', warehouseId: 'wh', dateOrder: '2026-03-15T08:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'sale.addLine',
+      { id: 'so:line', orderId: 'so', productId: 'goods-1', productUomQty: '1', productUomId: 'unit' },
+      adapter,
+    )
+    await call('sale.confirmOrder', { id: 'so' }, adapter)
+    // Confirm used to stamp now() over it, so a backfill of historical orders
+    // all appeared ordered on migration day the moment they were confirmed.
+    assert.equal(
+      (await adapter.all('SELECT "dateOrder" FROM sale_order'))[0]!.dateOrder,
+      '2026-03-15T08:00:00.000Z',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: the loser of a same-order race answers ok instead of throwing', async () => {
+  const adapter = await boot()
+  try {
+    // A scheduled import and a webhook delivering the same external order at
+    // the same moment. Every caller must get ok — the declared idempotency —
+    // and exactly one row may exist.
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        call('sale.createOrder', { id: 'so-race', partnerId: 'customer', warehouseId: 'wh' }, adapter),
+      ),
+    )
+    for (const result of results) assert.equal((result.value as Row).ok, true)
+    assert.equal((await adapter.all('SELECT COUNT(*) c FROM sale_order'))[0]!.c, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: a stampede of distinct orders numbers every one of them', async () => {
+  const adapter = await boot()
+  try {
+    // Thirty workers funnel through the one sequence row. The compare-and-set
+    // loses constantly; what must not happen is an order failing over it.
+    const results = await Promise.all(
+      Array.from({ length: 30 }, (_unused, index) =>
+        call('sale.createOrder', { id: `so-${index}`, partnerId: 'customer', warehouseId: 'wh' }, adapter),
+      ),
+    )
+    const names = results.map((result) => String((result.value as Row).name))
+    for (const result of results) assert.equal((result.value as Row).ok, true, names.join(','))
+    assert.equal(new Set(names).size, 30, 'every order got its own number')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: an order detail reads its own rows, not the ledger', async () => {
+  const adapter = await boot()
+  try {
+    for (const id of ['so-a', 'so-b']) {
+      await call('sale.createOrder', { id, partnerId: 'customer', warehouseId: 'wh' }, adapter)
+      await call(
+        'sale.addLine',
+        { id: `${id}:line`, orderId: id, productId: 'goods-1', productUomQty: '1', productUomId: 'unit' },
+        adapter,
+      )
+      await call('sale.confirmOrder', { id }, adapter)
+    }
+    // getOrder used to read the whole stock.Move table and filter in JS; the
+    // narrowed query must still see exactly this order's moves and no other's.
+    const held = (await call('sale.getOrder', { id: 'so-a' }, adapter)).value as Row
+    assert.deepEqual(
+      (held.moves as Row[]).map((move) => move.id),
+      ['so-a:line:delivery'],
+    )
+    assert.deepEqual(held.invoices, [])
+
+    // And cancelling B must not be confused by A's moves.
+    const cancelled = (await call('sale.cancelOrder', { id: 'so-b' }, adapter)).value as Row
+    assert.equal(cancelled.ok, true)
+    assert.equal(
+      (await adapter.all('SELECT state FROM stock_move WHERE "saleLineId" = \'so-a:line\''))[0]!.state,
+      // Still draft — sale.confirmOrder raises the picking, stock.confirmPicking
+      // is what advances it. The point is only that it was not cancelled.
+      'draft',
+      "cancelling one order leaves the other's delivery alone",
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: the order list is bounded and filters where the rows live', async () => {
+  const adapter = await boot()
+  try {
+    for (const [id, send] of [
+      ['so-1', false],
+      ['so-2', true],
+      ['so-3', true],
+    ] as const) {
+      await call(
+        'sale.createOrder',
+        { id, partnerId: 'customer', warehouseId: 'wh', dateOrder: `2026-0${id.slice(-1)}-01T00:00:00.000Z` },
+        adapter,
+      )
+      if (send) await call('sale.sendQuotation', { id }, adapter)
+    }
+    const sent = (await call('sale.listOrders', { states: ['sent'] }, adapter)).value as Row[]
+    assert.deepEqual(sent.map((row) => row.id).sort(), ['so-2', 'so-3'])
+
+    // Newest first, and the limit is a page, not a suggestion.
+    const page = (await call('sale.listOrders', { states: ['sent'], limit: 1 }, adapter)).value as Row[]
+    assert.deepEqual(
+      page.map((row) => row.id),
+      ['so-3'],
+    )
+    const counted = (await call('sale.countOrders', {}, adapter)).value as Row
+    assert.equal(counted.draft, 1)
+    assert.equal(counted.sent, 2)
+  } finally {
+    await adapter.close()
+  }
+})

@@ -54,9 +54,13 @@ const orderPath = (order: AnyRow, url: URL) =>
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, warehouses, pricelists, taxes, journals, accounts, terms] =
     await Promise.all([
-      ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
+      // Capped: these render the <select> fallbacks and seed the pickers, and
+      // the pickers search server-side past the cap. Uncapped, a customer base
+      // imported from a chat channel put every partner in the tenant into
+      // memory on every sale page.
+      ctx.call('partner.listPartners', { limit: 200 }, url, req) as Promise<AnyRow[]>,
       ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('product.listTemplates', { withVariants: true }, url, req) as Promise<AnyRow[]>,
+      ctx.call('product.listTemplates', { withVariants: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
       ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
       ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
       ctx.call('pricing.listPricelists', {}, url, req) as Promise<AnyRow[]>,
@@ -83,6 +87,25 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     accounts,
     terms,
   }
+}
+const partnerNames = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  rows: AnyRow[],
+): Promise<Map<string, unknown>> => {
+  const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
+  if (!ids.length) return new Map()
+  // The picker list is capped, so it can no longer double as a name lookup: a
+  // page of orders names exactly the partners it shows, however many the
+  // tenant holds.
+  const partners = (await ctx.call(
+    'partner.listPartners',
+    { ids, includeArchived: true },
+    url,
+    req,
+  )) as AnyRow[]
+  return new Map(partners.map((r) => [String(r.id), r.name]))
 }
 const orderFields = async (
   ctx: ServeContext,
@@ -729,7 +752,12 @@ export default defineModule({
               body: async (_, shell) =>
                 dashboard(
                   _,
-                  (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
+                  (await ctx.call('sale.countOrders', {}, url, req)) as {
+                    draft: number
+                    sent: number
+                    sale: number
+                    toInvoice: number
+                  },
                   shell,
                   localeQuery(url),
                 ),
@@ -763,12 +791,19 @@ export default defineModule({
           return redirect(result, quotationPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const state = url.searchParams.get('state')
         const [rows, d] = await Promise.all([
-            ctx.call('sale.listOrders', {}, url, req) as Promise<AnyRow[]>,
-            common(ctx, url, req),
-          ]),
-          state = url.searchParams.get('state'),
-          names = new Map(d.partners.map((r) => [String(r.id), r.name]))
+          ctx.call(
+            'sale.listOrders',
+            {
+              ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
+            },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          common(ctx, url, req),
+        ])
+        const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
           body: async (_, shell) =>
@@ -779,10 +814,7 @@ export default defineModule({
               ),
               fields: await orderFields(ctx, url, req, _, d),
               rows: rows
-                .filter(
-                  (r) =>
-                    ['draft', 'sent', 'cancel'].includes(String(r.state)) && (!state || r.state === state),
-                )
+                .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
                 .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
               action: quotationPath,
               detailSuffix,
@@ -795,11 +827,8 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const detailSuffix = localeQuery(url)
-        const [rows, d] = await Promise.all([
-            ctx.call('sale.listOrders', { state: 'sale' }, url, req) as Promise<AnyRow[]>,
-            common(ctx, url, req),
-          ]),
-          names = new Map(d.partners.map((r) => [String(r.id), r.name]))
+        const rows = (await ctx.call('sale.listOrders', { state: 'sale' }, url, req)) as AnyRow[]
+        const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
           body: async (_, shell) =>
