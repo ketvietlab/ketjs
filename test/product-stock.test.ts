@@ -34,6 +34,173 @@ async function boot() {
   return adapter
 }
 
+test('stock: the warehouse counts every move in the product\u2019s own unit', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeFactor: '12', relativeUomId: 'unit' },
+      adapter,
+    )
+    await call('uom.saveUnit', { id: 'kg', name: 'Kg', relativeFactor: '1' }, adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+    await call('stock.saveLocation', { id: 'sup', name: 'Vendors', usage: 'supplier' }, adapter)
+    await call('stock.saveLocation', { id: 'stk', name: 'Stock', usage: 'internal' }, adapter)
+    await call('stock.saveLocation', { id: 'cust', name: 'Customers', usage: 'customer' }, adapter)
+    await call(
+      'stock.savePickingType',
+      {
+        id: 'in',
+        name: 'Receipts',
+        code: 'incoming',
+        defaultLocationSrcId: 'sup',
+        defaultLocationDestId: 'stk',
+        createBackorder: 'always',
+      },
+      adapter,
+    )
+    await call(
+      'stock.savePickingType',
+      {
+        id: 'out',
+        name: 'Deliveries',
+        code: 'outgoing',
+        defaultLocationSrcId: 'stk',
+        defaultLocationDestId: 'cust',
+        createBackorder: 'always',
+      },
+      adapter,
+    )
+
+    // A unit from another measurement tree is refused at the door.
+    await call(
+      'stock.createPicking',
+      { id: 'r1', name: 'R1', pickingTypeId: 'in', scheduledDate: '2026-09-01T00:00:00.000Z' },
+      adapter,
+    )
+    const wrong = (
+      await call(
+        'stock.addMove',
+        { id: 'bad', name: 'x', pickingId: 'r1', productId: 'p1', productUomId: 'kg', productUomQty: '5' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(wrong.ok, false)
+
+    // A receipt raised in boxes is ledgered in pieces: two boxes of twelve put
+    // twenty-four on the shelf, not two.
+    await call(
+      'stock.addMove',
+      { id: 'm1', name: 'G', pickingId: 'r1', productId: 'p1', productUomId: 'box', productUomQty: '2' },
+      adapter,
+    )
+    const move = (
+      await adapter.all('SELECT "productUomId", "productUomQty" FROM stock_move WHERE id=?', ['m1'])
+    )[0]!
+    assert.equal(move.productUomId, 'unit')
+    assert.equal(Number(move.productUomQty), 24)
+    await call('stock.confirmPicking', { id: 'r1' }, adapter)
+    await call('stock.saveMoveLine', { id: 'ml1', moveId: 'm1', quantity: '24', picked: true }, adapter)
+    await call('stock.completePicking', { id: 'r1' }, adapter)
+    const onHand = (await adapter.all('SELECT quantity FROM stock_quant WHERE "locationId"=?', ['stk']))[0]!
+    assert.equal(Number(onHand.quantity), 24)
+
+    // Reserving one box holds twelve pieces, not one.
+    await call(
+      'stock.createPicking',
+      { id: 'd1', name: 'D1', pickingTypeId: 'out', scheduledDate: '2026-09-02T00:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'stock.addMove',
+      { id: 'm2', name: 'G', pickingId: 'd1', productId: 'p1', productUomId: 'box', productUomQty: '1' },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'd1' }, adapter)
+    const reserved = (await call('stock.reserveMove', { id: 'm2' }, adapter)).value as Row
+    assert.equal(reserved.reserved, '12')
+    const quant = (
+      await adapter.all('SELECT "reservedQuantity" FROM stock_quant WHERE "locationId"=?', ['stk'])
+    )[0]!
+    assert.equal(Number(quant.reservedQuantity), 12)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: an inventory count spoken in boxes corrects the shelf in pieces', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeFactor: '12', relativeUomId: 'unit' },
+      adapter,
+    )
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+    await call('stock.saveLocation', { id: 'stk', name: 'Stock', usage: 'internal' }, adapter)
+    await call('stock.saveLocation', { id: 'inv', name: 'Inventory', usage: 'inventory' }, adapter)
+    const counted = (
+      await call(
+        'stock.adjustInventory',
+        {
+          id: 'adj1',
+          productId: 'p1',
+          locationId: 'stk',
+          inventoryLocationId: 'inv',
+          countedQuantity: '2',
+          productUomId: 'box',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(counted.difference, '24')
+    const quant = (await adapter.all('SELECT quantity FROM stock_quant WHERE "locationId"=?', ['stk']))[0]!
+    assert.equal(Number(quant.quantity), 24)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('stock: an orderpoint replenishing in boxes raises its chain in pieces', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeFactor: '12', relativeUomId: 'unit' },
+      adapter,
+    )
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'none' }, adapter)
+    await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, adapter)
+    const internal = ((await call('stock.listLocations', {}, adapter)).value as Row[]).find(
+      (row) => row.usage === 'internal',
+    )!
+    await call(
+      'stock.saveOrderpoint',
+      {
+        id: 'op1',
+        productId: 'p1',
+        warehouseId: 'wh',
+        locationId: internal.id,
+        trigger: 'manual',
+        minQuantity: '10',
+        maxQuantity: '48',
+        replenishmentUomId: 'box',
+      },
+      adapter,
+    )
+    const run = (await call('stock.runOrderpoint', { id: 'op1', moveId: 'rp1' }, adapter)).value as Row
+    // The operator is told boxes; the ledger is kept in pieces.
+    assert.equal(run.quantity, '4')
+    const move = (
+      await adapter.all('SELECT "productUomId", "productUomQty" FROM stock_move WHERE id=?', ['rp1'])
+    )[0]!
+    assert.equal(move.productUomId, 'unit')
+    assert.equal(Number(move.productUomQty), 48)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('product-stock: company cost, UoM links and concurrent-safe variant generation', async () => {
   const adapter = await boot()
   try {
