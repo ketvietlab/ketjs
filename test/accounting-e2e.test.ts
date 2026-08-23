@@ -325,3 +325,355 @@ test('e2e accounting: a posted document is corrected by a reversal reached from 
     0,
   )
 })
+
+test('e2e accounting: a refused form says which rule it broke and keeps what was typed', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'supplier', kind: 'company', name: 'Nhà cung cấp ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const receivable = String(accounts.find((row) => row.code === '1311')?.id)
+
+  const form = new URLSearchParams({
+    name: 'PAY/CHI/001',
+    paymentType: 'outbound',
+    // A supplier payment must settle a payable, so a receivable is the wrong one.
+    partnerType: 'supplier',
+    partnerId: 'supplier',
+    journalId: String(journals.find((row) => row.type === 'bank')?.id),
+    destinationAccountId: receivable,
+    amount: '750000',
+    memo: 'Thanh toán đợt 1',
+  })
+  const refused = await e2e.client.post('/admin/accounting/payments?lang=vi', form, {
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    redirect: 'manual',
+  })
+  const html = await refused.text()
+  // The form comes back rendered, not a redirect to a page that says only "invalid".
+  assert.equal(refused.status, 200)
+  assert.doesNotMatch(html, /invalid=1/)
+  // The reason names the rule, in the reader's language.
+  assert.match(html, /phải tất toán một tài khoản phải trả/)
+  assert.doesNotMatch(html, /account\.error\./)
+  // Everything typed is still there, so the correction is one control away.
+  assert.match(html, /value="PAY\/CHI\/001"/)
+  assert.match(html, /value="750000"/)
+  assert.match(html, /value="Thanh toán đợt 1"/)
+  // Nothing was written.
+  assert.deepEqual((await call<Row[]>('account.listPayments')).value, [])
+})
+
+test('e2e accounting: a payment can only be pointed at an account it could settle', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const response = await e2e.client.get('/admin/accounting/payments?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const html = await response.text()
+  const options = [...html.matchAll(/<select[^>]*name="destinationAccountId"[^>]*>([\s\S]*?)<\/select>/g)]
+    .flatMap((match) => [...match[1]!.matchAll(/value="([^"]*)"/g)])
+    .map((match) => match[1]!)
+    .filter(Boolean)
+  assert.ok(options.length > 0)
+  // Offering all 216 accounts made the default selection a guaranteed refusal.
+  const offered = accounts.filter((row) => options.includes(String(row.id)))
+  assert.equal(offered.length, options.length)
+  assert.ok(
+    offered.every((row) => ['asset_receivable', 'liability_payable'].includes(String(row.accountType))),
+    offered.map((row) => `${String(row.code)}:${String(row.accountType)}`).join(', '),
+  )
+})
+
+test('e2e accounting: every dashboard count is the list its card opens', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-count',
+    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '100000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
+  })
+  await call('account.createMove', {
+    id: 'entry-count',
+    journalId: String(journals.find((row) => row.type === 'general')?.id),
+    moveType: 'entry',
+  })
+
+  const dashboard = (
+    await (await e2e.client.get('/admin/accounting?lang=vi', { headers: { accept: 'text/html' } })).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  // Card titles repeat in the sidebar menu, so read each card's own block.
+  const cards = [...dashboard.matchAll(/<article data-ui="content-card"[\s\S]*?<\/article>/g)].map(
+    (match) => match[0],
+  )
+  const cardValue = (title: string) => {
+    const card = cards.find((held) => held.includes(title))
+    assert.ok(card, title)
+    return Number(/data-ui="metric-value"[^>]*>([^<]*)</.exec(card)?.[1] ?? NaN)
+  }
+  // The customer-invoice card used to show the unpaid count under a "records"
+  // label, and the entries card counted every move of every type.
+  assert.equal(cardValue('Hoá đơn khách hàng'), 1)
+  assert.equal(cardValue('Bút toán'), 1)
+  assert.equal(cardValue('Hoá đơn nhà cung cấp'), 0)
+  assert.equal((await call<Row[]>('account.listMoves', { moveType: 'entry' })).value.length, 1)
+})
+
+test('e2e accounting: the ledger names the account, and a draft is not titled by its id', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const journals = (await call<Row[]>('account.listJournals')).value
+  const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-ledger',
+    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '100000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
+  })
+  await call('account.postMove', { id: 'invoice-ledger' })
+  await call('account.createMove', {
+    id: 'draft-ledger',
+    journalId: String(journals.find((row) => row.type === 'general')?.id),
+    moveType: 'entry',
+  })
+
+  // A general ledger with no account column is a list of amounts.
+  const ledger = await (
+    await e2e.client.get('/admin/accounting/general-ledger?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(ledger, /511 · Doanh thu/)
+  assert.match(ledger, /1311 · Phải thu/)
+
+  // A draft carries no journal number yet, so `name` still holds its raw id. The
+  // id belongs in the link, never in what the reader is shown.
+  const entries = (
+    await (
+      await e2e.client.get('/admin/accounting/entries?lang=vi', { headers: { accept: 'text/html' } })
+    ).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  assert.match(entries, /Bút toán nháp/)
+  assert.match(entries, /href="\/admin\/accounting\/entries\/draft-ledger/)
+  assert.doesNotMatch(entries, />[^<]*draft-ledger[^<]*</)
+
+  const detail = (
+    await (
+      await e2e.client.get('/admin/accounting/entries/draft-ledger?lang=vi', {
+        headers: { accept: 'text/html' },
+      })
+    ).text()
+  ).replace(/<!--[^>]*-->/g, '')
+  assert.match(detail, /Bút toán nháp/)
+  assert.doesNotMatch(detail, />[^<]*draft-ledger[^<]*</)
+  // A manual entry has no payment state, so it must not claim to be paid.
+  assert.doesNotMatch(detail, /Đã thanh toán/)
+})
+
+test('e2e accounting: a payment term shows the milestones that define it, and they are editable', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const terms = (await call<Row[]>('account.listPaymentTerms')).value
+  const net30 = terms.find((row) => row.name === '30 ngày')!
+  const line = (net30.lines as Row[])[0]!
+
+  const listed = await (
+    await e2e.client.get('/admin/accounting/terms?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  // Counting the milestones and hiding them left the screen unable to say what
+  // "30 ngày" actually means.
+  assert.match(listed, /Số ngày sau ngày hoá đơn/)
+  assert.match(listed, new RegExp(`editLine=${encodeURIComponent(String(line.id)).replace(/%/g, '%')}`))
+
+  const editing = await (
+    await e2e.client.get(`/admin/accounting/terms?lang=vi&editLine=${encodeURIComponent(String(line.id))}`, {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(editing, /Sửa mốc đến hạn/)
+  assert.match(editing, /value="30"/)
+
+  const saved = await e2e.client.post(
+    `/admin/accounting/terms?lang=vi&editLine=${encodeURIComponent(String(line.id))}`,
+    new URLSearchParams({
+      action: 'line',
+      paymentId: String(net30.id),
+      value: 'percent',
+      valueAmount: '100',
+      delayType: 'days_after',
+      nbDays: '45',
+      sequence: '10',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(saved.status, 303)
+  const after = (await call<Row[]>('account.listPaymentTerms')).value.find((row) => row.id === net30.id)!
+  // Corrected in place, not duplicated into a second milestone.
+  assert.equal((after.lines as Row[]).length, 1)
+  assert.equal(Number((after.lines as Row[])[0]!.nbDays), 45)
+})
+
+test('e2e accounting: a figure on a report opens the rows that produced it', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const idOf = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('account.createInvoice', {
+    id: 'invoice-drill',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+    ),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    description: 'Dịch vụ',
+    quantity: '1',
+    priceUnit: '1000000',
+  })
+  await call('account.postMove', { id: 'invoice-drill' })
+  await call('account.registerPayment', {
+    id: 'payment-drill',
+    name: 'PAY/1',
+    paymentType: 'inbound',
+    partnerType: 'customer',
+    partnerId: 'customer',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'bank')?.id,
+    ),
+    destinationAccountId: idOf('1311'),
+    amount: '400000',
+  })
+
+  // A total nobody can open is a number to trust blindly. The balance carries its
+  // own date window into the ledger.
+  const trial = await (
+    await e2e.client.get('/admin/accounting/trial-balance?lang=vi&dateFrom=2026-01-01', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(
+    trial,
+    new RegExp(`href="/admin/accounting/general-ledger\\?accountId=${encodeURIComponent(idOf('1311'))}`),
+  )
+  assert.match(trial, /dateFrom=2026-01-01/)
+
+  // A payment reaches the journal entry it wrote.
+  const payments = await (
+    await e2e.client.get('/admin/accounting/payments?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(payments, /href="\/admin\/accounting\/entries\/payment-drill%3Amove/)
+
+  // So does a line on the partner ledger.
+  const ledger = await (
+    await e2e.client.get('/admin/accounting/partner-statement?lang=vi&partnerId=customer', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(ledger, /href="\/admin\/accounting\/entries\/invoice-drill/)
+})
+
+test('e2e accounting: an invoice form no longer asks which accounts to post to', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+
+  // The install decides the statutory answer once, so the company starts configured.
+  const defaults = (await call<Row>('account.getDefaults')).value
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const codeOf = (id: unknown) => String(accounts.find((row) => String(row.id) === String(id))?.code)
+  assert.equal(codeOf(defaults.incomeAccountId), '511')
+  assert.equal(codeOf(defaults.receivableAccountId), '1311')
+
+  // Neither account field is required, and each says where its value comes from.
+  const form = await (
+    await e2e.client.get('/admin/accounting/customer-invoices?lang=vi', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  const required = (name: string) =>
+    new RegExp(`name="${name}"[^>]*\\srequired`).test(form.replace(/<!--[^>]*-->/g, ''))
+  assert.equal(required('lineAccountId'), false)
+  assert.equal(required('counterpartAccountId'), false)
+  assert.match(form, /Để trống để lấy theo nhóm sản phẩm/)
+
+  // Posting the form without them produces a complete, balanced invoice.
+  const created = await e2e.client.post(
+    '/admin/accounting/customer-invoices?lang=vi',
+    new URLSearchParams({
+      journalId: String(
+        (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+      ),
+      moveType: 'out_invoice',
+      partnerId: 'customer',
+      description: 'Dịch vụ',
+      quantity: '1',
+      priceUnit: '1000000',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(created.status, 303)
+  const id = String(created.headers.get('location')).split('/').pop()?.split('?')[0]
+  const invoice = (await call<Row>('account.getMove', { id })).value as Row & { lines: Row[] }
+  assert.equal(codeOf(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId), '511')
+  assert.equal(
+    codeOf(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId),
+    '1311',
+  )
+})
+
+test('e2e accounting: a product category posts to the accounts it was given', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const idOf = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' })
+
+  const saved = await e2e.client.post(
+    '/admin/accounting/defaults?lang=vi',
+    new URLSearchParams({ action: 'category', categoryId: 'services', incomeAccountId: idOf('515') }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(saved.status, 303)
+
+  const screen = await (
+    await e2e.client.get('/admin/accounting/defaults?lang=vi', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(screen, /Dịch vụ/)
+  assert.match(screen, /515 · Doanh thu hoạt động tài chính/)
+
+  await call('product.saveTemplate', {
+    id: 'consulting',
+    name: 'Tư vấn',
+    type: 'service',
+    categoryId: 'services',
+    listPrice: '0',
+  })
+  await call('product.saveVariant', { id: 'consulting-1', templateId: 'consulting' })
+  await call('account.createInvoice', {
+    id: 'invoice-category',
+    journalId: String(
+      (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'sale')?.id,
+    ),
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    productId: 'consulting-1',
+    description: 'Tư vấn',
+    quantity: '1',
+    priceUnit: '1000000',
+  })
+  const invoice = (await call<Row>('account.getMove', { id: 'invoice-category' })).value as Row & {
+    lines: Row[]
+  }
+  // The category is narrower than the company, so it decides the revenue account.
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId, idOf('515'))
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId, idOf('1311'))
+})

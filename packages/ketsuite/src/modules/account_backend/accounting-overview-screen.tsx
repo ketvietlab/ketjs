@@ -15,9 +15,16 @@ import type { Frame } from '../../ui/index.ts'
 type Counts = {
   accounts: number
   journals: number
+  taxes: number
+  terms: number
   draft: number
   posted: number
   unpaid: number
+  /** Documents of each kind, so a card's number is the list it opens. */
+  customerInvoices: number
+  vendorBills: number
+  entries: number
+  payments: number
 }
 
 type OverviewCard = {
@@ -80,26 +87,28 @@ export const accountingOverviewScreen = (
                     title: _('account_backend.menu.customerInvoices'),
                     summary: _('account_backend.dashboard.customerInvoicesHint'),
                     href: '/admin/accounting/customer-invoices',
-                    value: counts.unpaid,
+                    value: counts.customerInvoices,
                   },
                   {
                     id: 'vendor-bills',
                     title: _('account_backend.menu.vendorBills'),
                     summary: _('account_backend.dashboard.vendorBillsHint'),
                     href: '/admin/accounting/vendor-bills',
+                    value: counts.vendorBills,
                   },
                   {
                     id: 'entries',
                     title: _('account_backend.menu.entries'),
                     summary: _('account_backend.dashboard.entriesHint'),
                     href: '/admin/accounting/entries',
-                    value: counts.draft + counts.posted,
+                    value: counts.entries,
                   },
                   {
                     id: 'payments',
                     title: _('account_backend.menu.payments'),
                     summary: _('account_backend.dashboard.paymentsHint'),
                     href: '/admin/accounting/payments',
+                    value: counts.payments,
                   },
                 ])}
               />,
@@ -150,12 +159,14 @@ export const accountingOverviewScreen = (
                     title: _('account_backend.menu.taxes'),
                     summary: _('account_backend.dashboard.taxesHint'),
                     href: '/admin/accounting/taxes',
+                    value: counts.taxes,
                   },
                   {
                     id: 'terms',
                     title: _('account_backend.menu.paymentTerms'),
                     summary: _('account_backend.dashboard.paymentTermsHint'),
                     href: '/admin/accounting/terms',
+                    value: counts.terms,
                   },
                 ])}
               />,

@@ -91,6 +91,74 @@ export or a report asks for everything and gets it, rather than a silently trunc
 list that reads as complete. `countMoves` answers the totals a dashboard needs without
 fetching the rows.
 
+## Which accounts a document posts to
+
+An invoice does not ask. `lineAccountId` and `counterpartAccountId` are optional, and
+when they are absent the ledger resolves them from configuration, narrowest first:
+
+| | Revenue / expense | Receivable / payable |
+| --- | --- | --- |
+| 1 | what the caller passed | what the caller passed |
+| 2 | the product's category | the partner |
+| 3 | the company defaults | the company defaults |
+
+Nothing at any level is a refusal, not a guess: `lineAccountUndecided` and
+`counterpartAccountUndecided` say which one was undecided and where it could have come
+from.
+
+Asking the person writing an invoice to name a revenue account out of 216 is asking
+them to re-answer a question the chart already answers the same way every time — and
+to get it wrong occasionally. The fields remain on the form so an unusual document can
+still say otherwise; they are simply no longer required.
+
+### Where each level lives
+
+- **Company** — `account.Defaults`, one row per company, on **Accounting → Default
+  accounts**. Circular 99 answers this the same way for every Vietnamese company, so
+  installation seeds it: revenue 511, cost of goods sold 632, receivables 1311,
+  payables 3311. Only unset fields are ever seeded, so a company that chose
+  differently keeps its choice.
+- **Product category** — `account.CategoryAccount`, on the same screen. The catalogue
+  is shared across every company in the tenant while a chart of accounts belongs to
+  one, so the mapping cannot live on the category itself: two companies file the same
+  category against different accounts.
+- **Partner** — `partner.CompanyTerms`, on the partner's own accounting screen, added
+  by the optional `account_partner` module. The resolver reads those fields rather
+  than depending on the module: without it they are simply absent and resolution falls
+  through to the company default.
+
+A default is checked when it is saved, not when an invoice fails: a receivable default
+must be a receivable account, a revenue default an income account. `account.saveDefaults`
+and `account.saveCategoryAccount` refuse anything else, and `account.previewAccounts`
+answers what a document *would* post to, and what decided it.
+
+```ts
+// File: examples/accounting/defaults.ts
+// Everything below the journal and the partner is optional.
+await ctx.call('account.createInvoice', {
+  id: invoiceId,
+  journalId: saleJournalId,
+  moveType: 'out_invoice',
+  partnerId,
+  productId,
+  description: 'Tư vấn triển khai',
+  quantity: '1',
+  priceUnit: '3000000',
+})
+```
+
+## Refusals
+
+Every function answers a rejected call with `{ ok: false, errors: [{ field, code,
+message }] }`. The `code` is a message key this module owns — the rule belongs to the
+ledger, so the wording does too, and a screen renders it in the reader's language. The
+`message` is the same reason in English, for an API client or a log with no translator.
+
+A backend screen re-renders the form it was given rather than redirecting: the reason
+appears against the field that caused it, and the values the user typed are still
+there. A long invoice form is not worth re-keying because one account was the wrong
+type.
+
 ## Configuration is editable
 
 Accounts, journals, taxes and payment terms are corrected in place from their own list
@@ -100,8 +168,29 @@ selection lists while leaving every entry that already references it intact. Arc
 rows stay visible on the configuration screen, with an `Archived` badge, so the change
 can be undone.
 
+A payment term's milestones are listed and edited the same way, through `?editLine=`.
+A term is defined by them — a percentage, a due-date rule and a number of days — so
+counting them without showing them left the screen unable to say what "30 days" meant.
+
 The `save*` functions take the same shape for a correction as for a creation: an id
 that already exists updates, an id that does not creates.
+
+## What the screens promise
+
+A few things the backend guarantees, because getting them wrong makes a screen unusable
+rather than merely untidy:
+
+- a picker only offers values the function will accept — a payment's destination lists
+  receivable and payable accounts, not all 216;
+- a dashboard card counts exactly the list it opens;
+- a draft has no journal number yet, so lists and titles name it by its kind and date
+  rather than by the raw id it was created under;
+- a payment state is shown only on documents that have one, never on a manual entry;
+- creating a document opens it, because a new invoice or entry is a draft that still
+  needs lines or posting;
+- a figure on a report opens the rows that produced it — a trial balance line into
+  the general ledger for that account, carrying the same date window; a payment and
+  a partner-ledger line into the journal entry behind them.
 
 ## Testing
 
