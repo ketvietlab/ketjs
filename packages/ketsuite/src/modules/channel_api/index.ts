@@ -1,17 +1,18 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { customerRoutes } from './customer.ts'
+import { staffRoutes } from './staff.ts'
 
 export default defineModule({
   name: 'channel_api',
   version: '1.0.0',
   app: true,
-  depends: ['website'],
+  depends: ['website', 'user'],
   title: 'Channel API',
   summary: 'Contract API ổn định cho website, mobile, POS và tích hợp.',
   category: 'Kỹ thuật',
   removable: false,
   reserves: ['/api/customer/v1/', '/api/staff/v1/', '/api/pos/v1/', '/api/integration/v1/', '/internal/v1/'],
-  routes: customerRoutes,
+  routes: { ...customerRoutes, ...staffRoutes },
   messages: {
     vi: {
       'app.title': 'Channel API',
@@ -71,6 +72,10 @@ export {
 export { openApiDocument } from './openapi.ts'
 export type {
   ChannelAccount,
+  ChannelIdentities,
+  ChannelIdentityFor,
+  CustomerIdentity,
+  StaffIdentity,
   ChannelAuth,
   ChannelIdentity,
   ChannelIdentityResolver,

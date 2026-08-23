@@ -18,6 +18,10 @@ export {
 } from './modules/channel_api/index.ts'
 export type {
   ChannelAccount,
+  ChannelIdentities,
+  ChannelIdentityFor,
+  CustomerIdentity,
+  StaffIdentity,
   ChannelAuth,
   ChannelIdentity,
   ChannelIdentityResolver,
