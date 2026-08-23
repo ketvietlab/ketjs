@@ -152,3 +152,8 @@ npm run generate:api --prefix docs
 
 The [Customer API reference](/ketsuite/channel-api-reference/) renders that artifact directly and offers the raw
 document for SDK generation and external tooling.
+
+Because that regeneration was a side effect of building the docs site, a route could be added without one
+and the document would quietly fall behind — which it had, by three routes, before anyone looked. `npm run
+check:api` compares the checked-in document against the composed server and is part of `npm run verify`,
+so adding a route without regenerating now fails on the way in rather than on somebody's next SDK build.
