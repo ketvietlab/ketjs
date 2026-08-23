@@ -16,7 +16,7 @@ inside them:
 | Profile | Prefix | Intended clients | Status |
 | --- | --- | --- | --- |
 | Customer | `/api/customer/v1/` | Headless websites and customer mobile apps | Available |
-| Staff | `/api/staff/v1/` | Internal staff apps | Reserved |
+| Staff | `/api/staff/v1/` | Internal staff apps | Available |
 | POS | `/api/pos/v1/` | Point-of-sale terminals | Reserved |
 | Integration | `/api/integration/v1/` | Partner systems and webhooks | Reserved |
 | Internal | `/internal/v1/` | Trusted service-to-service traffic | Reserved |
@@ -79,6 +79,37 @@ client is never asked for one. Which profile supplies identities is registered w
 rather than serving it open.
 
 Registration is immediately usable in the current phase; email activation is not required.
+
+## Staff profile
+
+A staff identity is the verified session and nothing else. There is no realm header, no tenant hint in the
+body, no company in the query — the session carries which company the caller writes to and which ones they
+may read, and the framework re-resolves that from live rows on every request. Revoking a membership takes
+effect on the next call rather than whenever a credential expires, and a caller cannot name a company they
+were not already granted.
+
+`auth` is spelled `required` and `optional` on a staff route. Those are the profile-neutral names; the
+customer profile's `customer` and `optional-customer` still work and mean the same thing.
+
+Which identity a profile hands its routes is declared once, in `ChannelIdentities`:
+
+```ts
+// File: packages/ketsuite/src/modules/channel_api/core.ts
+export interface ChannelIdentities {
+  customer: CustomerIdentity
+  staff: StaffIdentity
+  pos: never
+  integration: never
+}
+```
+
+`pos` and `integration` are `never` deliberately. Their prefixes are reserved and their identity is not
+designed, so writing a route for one is a compile error rather than a route that silently trusts whichever
+credential happens to arrive.
+
+A staff route calls `ctx.call`, not `ctx.callUnchecked`. The framework already knows which functions a
+session may invoke, and reaching past that check is how a channel becomes a way around the roles every
+other surface obeys.
 
 ## Contract behavior
 

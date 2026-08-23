@@ -18,7 +18,25 @@ export const profilePrefix = (profile: ChannelProfile): string => `/api/${profil
 type Req = Parameters<Route>[1]
 type Params = Parameters<Route>[2]
 
-export type ChannelAuth = 'public' | 'optional-customer' | 'customer'
+/**
+ * Whether a route needs to know who is calling.
+ *
+ * Profile-neutral, because the facade already knows which profile a route
+ * belongs to and asks that profile's resolver. The first two profiles named the
+ * customer in the value — an accident of being written first, and one that would
+ * have needed a new pair of names per profile. The old spellings still work.
+ */
+export type ChannelAuth =
+  | 'public'
+  | 'optional'
+  | 'required'
+  /** @deprecated spell it `optional` — the profile is already on the route. */
+  | 'optional-customer'
+  /** @deprecated spell it `required` — the profile is already on the route. */
+  | 'customer'
+
+const resolves = (auth: ChannelAuth): boolean => auth !== 'public'
+const demands = (auth: ChannelAuth): boolean => auth === 'required' || auth === 'customer'
 
 export type ChannelAccount = {
   id: string
@@ -29,7 +47,8 @@ export type ChannelAccount = {
   securityVersion: number
 }
 
-export type ChannelIdentity = {
+/** Who a shopper is: an account in a realm, on a site. */
+export type CustomerIdentity = {
   account: ChannelAccount
   accountId: string
   realmId: string
@@ -38,14 +57,53 @@ export type ChannelIdentity = {
   presentation: 'cookie' | 'bearer'
 }
 
+/** The name every customer route already imports. */
+export type ChannelIdentity = CustomerIdentity
+
+/**
+ * Who a member of staff is: entirely the verified session.
+ *
+ * Nothing here comes off the wire. The session is re-resolved from live rows on
+ * every request, so revoking a membership or archiving a company takes effect on
+ * the next call rather than whenever a token happens to expire — and a staff
+ * caller cannot name the company they want to act in, which is the whole point.
+ */
+export type StaffIdentity = {
+  userId: string
+  /** The company writes land in. Null when the session has not chosen one. */
+  companyId: string | null
+  branchId: string | null
+  companies: readonly string[]
+  branches: readonly string[] | null
+  securityVersion: number
+  sessionId: string
+  presentation: 'cookie'
+}
+
+/**
+ * Which identity a profile hands its routes.
+ *
+ * `pos` and `integration` are `never` on purpose: their prefixes are reserved
+ * and their identity is not designed, so writing a route for one is a type
+ * error rather than a route that silently trusts a customer session.
+ */
+export interface ChannelIdentities {
+  customer: CustomerIdentity
+  staff: StaffIdentity
+  pos: never
+  integration: never
+}
+
+export type ChannelIdentityFor<P extends ChannelProfile> = ChannelIdentities[P]
+
 /**
  * What the facade resolved before the handler ran: the caller, and the body it
  * declared. A handler that reads either of these is reading something already
  * checked against its own contract, which is the point of routing through here.
  */
-export type ChannelRequest = {
+export type ChannelRequest<P extends ChannelProfile = 'customer'> = {
   requestId: string
-  identity: ChannelIdentity | null
+  identity: ChannelIdentityFor<P> | null
   body: Record<string, unknown>
 }
 
@@ -67,8 +125,8 @@ export type ChannelOutcome = {
   nextCursor?: string | null
 }
 
-export type ChannelRouteSpec = {
-  profile: ChannelProfile
+export type ChannelRouteSpec<P extends ChannelProfile = 'customer'> = {
+  profile: P
   method: HttpRouteContract['method']
   path: string
   operationId: string
@@ -92,15 +150,15 @@ export type ChannelRouteSpec = {
     url: URL,
     req: Req,
     params: Params,
-    request: ChannelRequest,
+    request: ChannelRequest<P>,
   ) => ChannelOutcome | Promise<ChannelOutcome>
 }
 
-export type ChannelIdentityResolver = (
+export type ChannelIdentityResolver<P extends ChannelProfile = ChannelProfile> = (
   ctx: ServeContext,
   url: URL,
   req: Req,
-) => Promise<ChannelIdentity | null>
+) => Promise<ChannelIdentityFor<P> | null>
 
 /**
  * One resolver per profile, registered by whoever owns that profile's credentials.
@@ -111,10 +169,13 @@ export type ChannelIdentityResolver = (
  * it is enforced nowhere, and a route enforcing nothing is an open route to
  * everyone except the person reading the declaration.
  */
-const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver>()
+const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver<ChannelProfile>>()
 
-export const registerChannelIdentity = (profile: ChannelProfile, resolve: ChannelIdentityResolver): void => {
-  identityResolvers.set(profile, resolve)
+export const registerChannelIdentity = <P extends ChannelProfile>(
+  profile: P,
+  resolve: ChannelIdentityResolver<P>,
+): void => {
+  identityResolvers.set(profile, resolve as ChannelIdentityResolver<ChannelProfile>)
 }
 
 /**
@@ -144,6 +205,19 @@ const privateHeaders = {
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/**
+ * The three things the facade needs from an identity, whichever profile it came
+ * from: the secret only the real caller holds, who they are, and which tenant
+ * they are in. Everything else is the profile's own business.
+ */
+type AnyIdentity = CustomerIdentity | StaffIdentity
+const secretOf = (identity: AnyIdentity): string =>
+  'token' in identity ? identity.token : identity.sessionId
+const subjectOf = (identity: AnyIdentity): string =>
+  'accountId' in identity ? identity.accountId : identity.userId
+const tenantOf = (identity: AnyIdentity): string | null =>
+  'realmId' in identity ? identity.realmId : identity.companyId
 
 export const channelError = (
   ctx: ServeContext,
@@ -377,7 +451,9 @@ const FAILURES: Record<string, { status: number; code: string; messageKey: strin
   },
 }
 
-export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry] => {
+export const defineChannelRoute = <P extends ChannelProfile>(
+  spec: ChannelRouteSpec<P>,
+): [string, RouteEntry] => {
   const prefix = profilePrefix(spec.profile)
   const local = spec.path.replace(/^\/+/, '')
   if (!local || local.includes('..')) throw new Error(`invalid channel route path: ${spec.path}`)
@@ -450,16 +526,16 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
               { allow: spec.method },
             )
           try {
-            let identity: ChannelIdentity | null = null
-            if (auth !== 'public') {
+            let identity: ChannelIdentityFor<P> | null = null
+            if (resolves(auth)) {
               const resolve = identityResolvers.get(spec.profile)
               if (!resolve)
                 throw Object.assign(
                   new Error(`no identity resolver registered for the "${spec.profile}" profile`),
                   { code: 'E_CHANNEL_IDENTITY' },
                 )
-              identity = await resolve(ctx, url, req)
-              if (!identity && auth === 'customer')
+              identity = (await resolve(ctx, url, req)) as ChannelIdentityFor<P> | null
+              if (!identity && demands(auth))
                 return fail(401, 'channel_api.unauthenticated', 'channel_api.error.unauthenticated')
             }
             /**
@@ -471,16 +547,18 @@ export const defineChannelRoute = (spec: ChannelRouteSpec): [string, RouteEntry]
             if (identity?.presentation === 'cookie' && !SAFE_METHODS.has(String(req.method))) {
               if (!sameOrigin(req))
                 return fail(403, 'channel_api.originMismatch', 'channel_api.error.originMismatch')
-              if (!safeEqual(String(req.headers['x-csrf-token'] ?? ''), csrfTokenFor(identity.token)))
+              if (!safeEqual(String(req.headers['x-csrf-token'] ?? ''), csrfTokenFor(secretOf(identity))))
                 return fail(403, 'channel_api.csrf', 'channel_api.error.csrf')
             }
             if (spec.rateLimit) {
-              const realm = identity?.realmId ?? (await realmResolvers.get(spec.profile)?.(ctx, url, req))
+              const realm =
+                (identity ? tenantOf(identity) : null) ??
+                (await realmResolvers.get(spec.profile)?.(ctx, url, req))
               // No realm means no site answered for this host, and there is
               // nothing to meter against; the route below will refuse it anyway.
               if (realm) {
                 const who =
-                  identity?.accountId ??
+                  (identity ? subjectOf(identity) : null) ??
                   `net:${sha256(`${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`)}`
                 const claimed = (await ctx.callUnchecked(
                   'website.claimChannelRateSlot',
