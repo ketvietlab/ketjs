@@ -8,9 +8,11 @@ import {
   each,
   effect,
   html,
+  renderToString,
   signal,
   when,
 } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 
 test('signals: effects track what they read, and a no-op write costs nothing', () => {
   const a = signal(1),
@@ -207,4 +209,131 @@ test('view: an attribute is only written when its value actually changes', () =>
   assert.equal(host.ops.setAttribute, 0)
   root.render(tpl('b'))
   assert.equal(host.ops.setAttribute, 1)
+})
+
+/**
+ * A hole stands for one whole thing. Anywhere else the marker used to survive into
+ * the output, so `class="a ${x}"` shipped a literal U+FFFC to the page — on the
+ * server and in the browser alike, with nothing said about it.
+ */
+test('view: a hole that is not a whole value is refused when the template is parsed', () => {
+  const cases: Array<[string, () => unknown]> = [
+    ['an attribute value mixed with static text', () => html`<div class="a ${'b'}">x</div>`],
+    ['an attribute name', () => html`<div ${'id'}="x">y</div>`],
+    ['an element name', () => html`<${'div'}>y</${'div'}>`],
+  ]
+  for (const [what, build] of cases) {
+    assert.throws(
+      () => renderToString(build() as TemplateResult),
+      (error: { code?: string; hint?: string }) => error.code === 'E_TEMPLATE_HOLE' && !!error.hint,
+      `${what} must be refused`,
+    )
+  }
+  // The shapes that were always meant to work still do.
+  assert.equal(
+    renderToString(html`<div class=${'b'} data-n=${0}>x</div>`),
+    '<div class="b" data-n="0">x</div>',
+  )
+})
+
+/**
+ * Two entries sharing a key collide in the map the list is reconciled through: one
+ * instance stands for both and the other is dropped, so a row vanishes and the rest
+ * arrive out of order — and the collision persists, so the next render is wrong too.
+ */
+test('view: each() refuses two entries that share a key', () => {
+  const rows = (items: Array<{ k: string; v: number }>) =>
+    html`<ul>${each(
+      items,
+      (it) => (it as { k: string }).k,
+      (it) => html`<li>${(it as { v: number }).v}</li>`,
+    )}</ul>`
+  const duplicate = (error: { code?: string }) => error.code === 'E_DUPLICATE_KEY'
+
+  const first = createRoot(countingHost(), countingHost().root())
+  assert.throws(
+    () =>
+      first.render(
+        rows([
+          { k: 'a', v: 1 },
+          { k: 'a', v: 2 },
+        ]),
+      ),
+    duplicate,
+    'on first render',
+  )
+
+  // And on an update, where the previous render was legitimately unique.
+  const later = createRoot(countingHost(), countingHost().root())
+  later.render(
+    rows([
+      { k: 'a', v: 1 },
+      { k: 'b', v: 2 },
+    ]),
+  )
+  assert.throws(
+    () =>
+      later.render(
+        rows([
+          { k: 'a', v: 1 },
+          { k: 'b', v: 2 },
+          { k: 'b', v: 3 },
+        ]),
+      ),
+    duplicate,
+    'on a later render',
+  )
+
+  // Unique keys are untouched: the reorder still reuses every instance.
+  const host = countingHost()
+  const container = host.root()
+  const root = createRoot(host, container)
+  root.render(
+    rows([
+      { k: 'a', v: 1 },
+      { k: 'b', v: 2 },
+      { k: 'c', v: 3 },
+    ]),
+  )
+  host.reset()
+  root.render(
+    rows([
+      { k: 'c', v: 3 },
+      { k: 'a', v: 1 },
+      { k: 'b', v: 2 },
+    ]),
+  )
+  assert.equal(host.text(container), '312')
+  assert.equal(host.ops.createElement, 0, 'a reorder rebuilds nothing')
+})
+
+/**
+ * The unique-key check belongs on the slow path only. Identical keys in identical
+ * places are the ones the previous render already checked, and that path exists
+ * precisely to avoid allocating per render.
+ */
+test('view: an unchanged list still costs no host operation at all', () => {
+  const host = countingHost()
+  const container = host.root()
+  const root = createRoot(host, container)
+  const items = [1, 2, 3, 4, 5].map((n) => ({ k: String(n), v: n }))
+  const rows = () =>
+    html`<ul>${each(
+      items,
+      (it) => (it as { k: string }).k,
+      (it) => html`<li>${(it as { v: number }).v}</li>`,
+    )}</ul>`
+  root.render(rows())
+  host.reset()
+  root.render(rows())
+  assert.deepEqual(host.ops, {
+    createElement: 0,
+    createText: 0,
+    setText: 0,
+    setAttribute: 0,
+    insert: 0,
+    remove: 0,
+    move: 0,
+    listen: 0,
+  })
 })
