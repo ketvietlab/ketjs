@@ -289,6 +289,7 @@ export const channelRoutes = routesOf(
     request: { body: object },
     responses: { '201': envelope },
     idempotent: true,
+    rateLimit: { action: 'hospitality.booking.create', limit: 20, windowMs: 60 * 60_000 },
     handler: async (ctx, url, req, _params, request) => {
       const identity = request.identity!
       const key = String(req.headers['idempotency-key'] ?? '').trim()

@@ -8,6 +8,7 @@ import {
   defineChannelRoute,
   hostOf,
   registerChannelIdentity,
+  registerChannelRealm,
   routesOf,
   sameOrigin,
   sha256,
@@ -205,6 +206,10 @@ export const customerIdentity = async (ctx: ServeContext, url: URL, req: Req): P
 }
 
 registerChannelIdentity('customer', customerIdentity)
+registerChannelRealm(
+  'customer',
+  async (ctx, url, req) => (await channelRealmContext(ctx, url, req))?.realmId ?? null,
+)
 
 const authFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
   const errors = Array.isArray((result as { errors?: unknown })?.errors)
@@ -384,6 +389,7 @@ export const customerRoutes = routesOf(
     request: { body: schema({ refreshToken: string }, ['refreshToken']) },
     responses: { '200': envelope },
     idempotent: true,
+    rateLimit: { action: 'auth.refresh', limit: 60, windowMs: 15 * 60_000 },
     handler: async (ctx, url, req, _params, request) => {
       const key = String(req.headers['idempotency-key'] ?? '').trim()
       if (!key)
@@ -394,25 +400,34 @@ export const customerRoutes = routesOf(
           }),
         }
       const refreshToken = String(request.body.refreshToken ?? '')
-      // Deterministic for this old-token/key pair so an ambiguous response can be
-      // retried and return credentials matching the domain-level replay record.
-      const accessToken = Buffer.from(sha256(`access\n${refreshToken}\n${key}`), 'hex').toString('base64url')
-      const nextRefreshToken = Buffer.from(
-        `${sha256(`refresh:1\n${refreshToken}\n${key}`)}${sha256(`refresh:2\n${refreshToken}\n${key}`)}`,
-        'hex',
-      ).toString('base64url')
+      /**
+       * The tokens are minted by the domain, not here.
+       *
+       * They have to be derived rather than random so a client whose response
+       * was lost can retry and be handed the same pair — the server keeps only
+       * digests and cannot look them up again. Deriving them here meant deriving
+       * them from what the caller already had, which made the entire future
+       * chain computable by anyone who obtained one refresh token. The secret
+       * that makes them unguessable lives on the grant, so the derivation lives
+       * there too.
+       */
       const result = (await ctx.callUnchecked(
         'website.rotateCustomerTokenGrant',
-        {
-          refreshDigest: sha256(refreshToken),
-          nextAccessDigest: sha256(accessToken),
-          nextRefreshDigest: sha256(nextRefreshToken),
-        },
+        { refreshDigest: sha256(refreshToken), requestKey: key },
         url,
         req,
-        { idempotencyKey: key, idempotencyNamespace: `customer:refresh:${sha256(refreshToken)}` },
-      )) as { account?: Account; accessExpiresAt?: string; refreshExpiresAt?: string } | null
-      if (!result?.account)
+      )) as {
+        account?: Account
+        accessToken?: string
+        refreshToken?: string
+        accessExpiresAt?: string
+        refreshExpiresAt?: string
+        reused?: boolean
+      } | null
+      // A spent token coming back is how a stolen one announces itself. The grant
+      // is already revoked by the time we are here; the caller is told the same
+      // thing an expired token is told, and learns nothing from the difference.
+      if (!result?.account || !result.accessToken || !result.refreshToken)
         return {
           status: 401,
           error: channelError(ctx, url, req, 'channel_api.invalidRefreshToken', {
@@ -423,8 +438,8 @@ export const customerRoutes = routesOf(
         data: {
           customer: publicAccount(result.account),
           tokenType: 'Bearer',
-          accessToken,
-          refreshToken: nextRefreshToken,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
           accessExpiresAt: result.accessExpiresAt,
           refreshExpiresAt: result.refreshExpiresAt,
         },

@@ -398,3 +398,40 @@ test('retail channel: the facade guards the cart routes before the domain sees t
   assert.equal(missingKey.status, 400)
   assert.equal(missingKey.body.error?.code, 'channel_api.idempotencyRequired')
 })
+
+test('retail channel: a shopper cannot place orders faster than the store allows', async (t) => {
+  const { e2e, seed } = await boot(t)
+  await configure(seed)
+  const token = await signIn(e2e, 'eager@example.test')
+
+  // Twenty an hour is the declared ceiling. The twenty-first is refused whether
+  // or not it would otherwise have succeeded.
+  const attempt = async (n: number) => {
+    const started = await channel<{ cartToken: string }>(e2e, 'retail/carts', {
+      method: 'POST',
+      token,
+      body: JSON.stringify({}),
+    })
+    const cart = started.body.data.cartToken
+    await channel(e2e, 'retail/cart/lines', {
+      method: 'PUT',
+      token,
+      cart,
+      body: JSON.stringify({ productId: 'canvas-bag-natural', quantity: '1' }),
+    })
+    return channel(e2e, 'retail/checkout', {
+      method: 'POST',
+      token,
+      cart,
+      key: `order-${n}`,
+      body: JSON.stringify({}),
+    })
+  }
+
+  for (let n = 0; n < 20; n += 1) assert.equal((await attempt(n)).status, 201, `order ${n}`)
+
+  const refused = await attempt(20)
+  assert.equal(refused.status, 429)
+  assert.equal(refused.body.error?.code, 'channel_api.rateLimited')
+  assert.equal(refused.body.error?.message, 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.')
+})
