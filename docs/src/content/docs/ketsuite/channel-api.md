@@ -110,7 +110,8 @@ credential happens to arrive.
 A staff route calls `ctx.call`, not `ctx.callUnchecked`. The framework already knows which functions a
 session may invoke, and reaching past that check is how a channel becomes a way around the roles every
 other surface obeys. `npm run audit:staff-channel` fails the build on a staff route that reaches for the
-unchecked call, because nothing about that is visible at a glance in a diff.
+unchecked call, because nothing about that is visible at a glance in a diff. A refused function grant is
+mapped to `403 channel_api.forbidden`, rather than being disguised as an internal failure.
 
 A staff session is a cookie, so the facade asks unsafe methods to prove intent the same way it does for a
 customer one. The customer profile hands the CSRF token over at sign-in; staff sign in through the
@@ -133,13 +134,17 @@ Product lookup applies the same active variant, live UOM, and product-kind rules
 withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
 mobile concurrency and workflow contracts can be represented without guessing.
 
-`crm_staff_channel` contributes the read-only pipeline list and record detail under the mobile capability
-`crm.pipeline`. Both routes call CRM's audience-scoped functions, so a non-superuser sees only records they
+`crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
+mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
+functions, so a non-superuser sees or changes only records they
 created, records assigned to them, or records belonging to one of their active teams. The list accepts only
 the domain's lead/opportunity kinds and open/won/lost outcomes. Detail includes the canonical integer version
 and next pending activity, but deliberately withholds contact fields, timeline entries, messages, attachments,
-configuration options, and every mutation action. CRM commands remain outside the channel until their CSRF,
-idempotency, and optimistic-concurrency contract is published end to end.
+and configuration options. Each command requires the CSRF token from bootstrap, an `Idempotency-Key`, and the
+integer `expectedVersion`; a replay returns the same result, a changed replay or stale aggregate returns `409`,
+and the response carries the refreshed safe projection. Create cannot yet share the list path because the
+current router keys routes by path rather than method. Lost-reason and activity commands remain outside the
+channel because their legacy request shapes do not map one-to-one to the current domain.
 
 ## Contract behavior
 
