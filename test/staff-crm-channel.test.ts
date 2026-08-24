@@ -55,7 +55,14 @@ const boot = async (t: TestContext) => {
     companyId: 'acme',
   })
   await fixture('user.saveRole', { id: 'crm-reader', name: 'CRM reader' })
-  for (const fnKey of ['crm.case.list', 'crm.case.get', 'activity.listTypes'])
+  for (const fnKey of [
+    'crm.case.list',
+    'crm.case.get',
+    'crm.case.move',
+    'crm.case.assign',
+    'crm.case.markWon',
+    'activity.listTypes',
+  ])
     await fixture('user.grantFunction', {
       id: `crm-reader:${fnKey}`,
       roleId: 'crm-reader',
@@ -67,6 +74,21 @@ const boot = async (t: TestContext) => {
     roleId: 'crm-reader',
   })
   await fixture('crm.bootstrap.defaults', { idempotencyKey: 'staff-crm-defaults' }, 'admin')
+  await fixture(
+    'crm.team.save',
+    {
+      values: {
+        id: 'crm-team-sales',
+        code: 'sales',
+        name: 'Sales',
+        leaderUserId: 'admin',
+        assignmentMode: 'manual',
+        expectedVersion: 1,
+      },
+      idempotencyKey: 'staff-crm-team-leader',
+    },
+    'admin',
+  )
 
   const lead = await fixture<Row>(
     'crm.case.save',
@@ -258,4 +280,127 @@ test('staff CRM channel publishes the outcome vocabulary its domain defines', as
     const response = await e2e.client.get(`/api/staff/v1/crm/leads?outcome=${outcome}`)
     assert.equal(response.status, 200, outcome)
   }
+})
+
+const mutationHeaders = (csrfToken: string, key?: string) => ({
+  'content-type': 'application/json',
+  'x-csrf-token': csrfToken,
+  ...(key ? { 'idempotency-key': key } : {}),
+})
+
+test('staff CRM commands enforce CSRF, idempotency, schema and optimistic concurrency', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const path = '/api/staff/v1/crm/leads/lead-a/transition'
+  const body = { stageId: 'crm-stage-qualified', expectedVersion: 1 }
+
+  assert.equal(
+    (
+      await e2e.client.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': 'crm-transition-1' },
+        body: JSON.stringify(body),
+      })
+    ).status,
+    403,
+  )
+  assert.equal(
+    (
+      await e2e.client.request(path, {
+        method: 'POST',
+        headers: mutationHeaders(csrf),
+        body: JSON.stringify(body),
+      })
+    ).status,
+    400,
+  )
+  assert.equal(
+    (
+      await e2e.client.request(path, {
+        method: 'POST',
+        headers: mutationHeaders(csrf, 'crm-transition-invalid'),
+        body: JSON.stringify({ ...body, companyId: 'other' }),
+      })
+    ).status,
+    422,
+  )
+
+  const moved = await e2e.client.request(path, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-transition-1'),
+    body: JSON.stringify(body),
+  })
+  assert.equal(moved.status, 200)
+  assert.equal(moved.headers.get('etag'), '"2"')
+  const movedBody = (await moved.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(movedBody.data.outcome, 'transitioned')
+  assert.equal((movedBody.data.lead.stage as Row).id, 'crm-stage-qualified')
+  assert.equal(movedBody.data.lead.version, 2)
+
+  const replay = await e2e.client.request(path, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-transition-1'),
+    body: JSON.stringify(body),
+  })
+  assert.equal(replay.status, 200)
+  assert.equal(((await replay.json()) as Envelope<{ lead: Row }>).data.lead.version, 2)
+
+  const changedReplay = await e2e.client.request(path, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-transition-1'),
+    body: JSON.stringify({ stageId: 'crm-stage-new', expectedVersion: 2 }),
+  })
+  assert.equal(changedReplay.status, 409)
+  assert.equal(
+    ((await changedReplay.json()) as Envelope<null>).error?.code,
+    'channel_api.idempotencyConflict',
+  )
+
+  const stale = await e2e.client.request(path, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-transition-stale'),
+    body: JSON.stringify(body),
+  })
+  assert.equal(stale.status, 409)
+  assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'crm.error.stageConflict')
+})
+
+test('staff CRM assign and won commands return the refreshed safe projection', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const assigned = await e2e.client.request('/api/staff/v1/crm/leads/lead-a/assign', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-assign-admin'),
+    body: JSON.stringify({ assigneeUserId: 'admin', expectedVersion: 1 }),
+  })
+  assert.equal(assigned.status, 200)
+  const assignedBody = (await assigned.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(assignedBody.data.outcome, 'assigned')
+  assert.deepEqual(assignedBody.data.lead.assignee, { id: 'admin', name: 'Administrator' })
+  assert.equal(assignedBody.data.lead.version, 2)
+  assert.equal('email' in assignedBody.data.lead, false)
+  assert.equal('timeline' in assignedBody.data.lead, false)
+
+  const won = await e2e.client.request('/api/staff/v1/crm/leads/opportunity-open/won', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-opportunity-won'),
+    body: JSON.stringify({ expectedVersion: 1 }),
+  })
+  assert.equal(won.status, 200)
+  const wonBody = (await won.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(wonBody.data.outcome, 'won')
+  assert.equal(wonBody.data.lead.outcome, 'won')
+  assert.equal(wonBody.data.lead.version, 2)
+
+  const hidden = await e2e.client.request('/api/staff/v1/crm/leads/admin-only/transition', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-hidden-transition'),
+    body: JSON.stringify({ stageId: 'crm-stage-qualified', expectedVersion: 1 }),
+  })
+  assert.equal(hidden.status, 404)
 })
