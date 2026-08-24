@@ -35,8 +35,8 @@ export type ChannelAuth =
   /** @deprecated spell it `required` — the profile is already on the route. */
   | 'customer'
 
-const resolves = (auth: ChannelAuth): boolean => auth !== 'public'
-const demands = (auth: ChannelAuth): boolean => auth === 'required' || auth === 'customer'
+export const resolves = (auth: ChannelAuth): boolean => auth !== 'public'
+export const demands = (auth: ChannelAuth): boolean => auth === 'required' || auth === 'customer'
 
 export type ChannelAccount = {
   id: string
@@ -418,6 +418,56 @@ const bodyIssues = (schema: JsonSchema, body: Record<string, unknown>): FieldIss
   return issues
 }
 
+/**
+ * A query string carries no types. Every value arrives as text, so a schema
+ * saying `integer` would reject "20" and the check would be worse than none:
+ * values are coerced to the declared type first, and anything that will not
+ * convert is left as text so the type check is what reports it.
+ *
+ * An empty value counts as absent, because that is already how the handlers
+ * read one — `?state=` means the caller sent no filter, not an invalid one.
+ */
+const queryValue = (schema: JsonSchema, params: URLSearchParams, name: string): unknown => {
+  const expected = schema.type
+  if (expected === 'array') return params.getAll(name).filter((item) => item !== '')
+  const raw = params.get(name)
+  if (raw === null || raw === '') return undefined
+  if (expected === 'integer' || expected === 'number') {
+    const number = Number(raw)
+    return Number.isFinite(number) ? number : raw
+  }
+  if (expected === 'boolean') {
+    if (raw === 'true') return true
+    if (raw === 'false') return false
+  }
+  return raw
+}
+
+const queryIssues = (schema: JsonSchema, url: URL): FieldIssue[] => {
+  const properties = (schema.properties as Record<string, JsonSchema> | undefined) ?? {}
+  const held: Record<string, unknown> = {}
+  for (const name of new Set(url.searchParams.keys())) {
+    const property = properties[name]
+    const value = property
+      ? queryValue(property, url.searchParams, name)
+      : queryValue({}, url.searchParams, name)
+    if (value !== undefined) held[name] = value
+  }
+  const issues: FieldIssue[] = []
+  collectIssues(schema, held, '', issues)
+  return issues
+}
+
+type FieldError = { code: string; messageKey: string; params: Record<string, unknown> }
+
+const fieldErrorsOf = (issues: FieldIssue[]): Record<string, FieldError> =>
+  Object.fromEntries(
+    issues.map((issue) => [
+      issue.path,
+      { code: 'channel_api.invalidField', messageKey: issue.messageKey, params: issue.params },
+    ]),
+  )
+
 // --- failure mapping -------------------------------------------------------
 
 const FAILURES: Record<string, { status: number; code: string; messageKey: string; retryable?: boolean }> = {
@@ -582,6 +632,16 @@ export const defineChannelRoute = <P extends ChannelProfile>(
                   })
               }
             }
+            if (spec.request?.query) {
+              const issues = queryIssues(spec.request.query, url)
+              if (issues.length)
+                return fail(
+                  422,
+                  'channel_api.invalidRequest',
+                  'channel_api.error.invalidRequest',
+                  fieldErrorsOf(issues),
+                )
+            }
             let body: Record<string, unknown> = {}
             if (spec.request?.body) {
               body = await readJson(req)
@@ -591,16 +651,7 @@ export const defineChannelRoute = <P extends ChannelProfile>(
                   422,
                   'channel_api.invalidRequest',
                   'channel_api.error.invalidRequest',
-                  Object.fromEntries(
-                    issues.map((issue) => [
-                      issue.path,
-                      {
-                        code: 'channel_api.invalidField',
-                        messageKey: issue.messageKey,
-                        params: issue.params,
-                      },
-                    ]),
-                  ),
+                  fieldErrorsOf(issues),
                 )
             }
             return envelope(await spec.handler(ctx, url, req, params, { requestId, identity, body }))
