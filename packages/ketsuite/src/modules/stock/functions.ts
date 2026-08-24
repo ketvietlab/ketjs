@@ -848,9 +848,13 @@ export const functions: Record<string, FnSpec> = {
       if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
       if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
       const demand = Number(move.productUomQty)
-      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id }))
-        .filter((line) => !line.picked)
-        .reduce((sum, line) => sum + Number(line.quantity), 0)
+      // Picked lines still hold their reservation until the picking is completed
+      // or cancelled. Counting only unpicked lines makes a later assignment pass
+      // reserve the same demand twice after an operator has marked a line picked.
+      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id })).reduce(
+        (sum, line) => sum + Number(line.quantity),
+        0,
+      )
       let state = 'confirmed'
       const tracking = await trackingOf(ctx, move.productId)
       const sources = await sourcesUnder(ctx, move.locationId)
