@@ -758,3 +758,105 @@ test('accounting: a price-included fixed tax larger than the line is refused', a
     await adapter.close()
   }
 })
+
+test('accounting: an invoice of several lines posts one tax line per rate', async () => {
+  const adapter = await boot()
+  try {
+    // A hotel folio is the case this exists for: nights at one rate, food at
+    // another, on one document the guest signs once.
+    await call(
+      'account.saveTax',
+      { id: 'vat8', name: 'VAT 8%', typeTaxUse: 'sale', amountType: 'percent', amount: '8' },
+      adapter,
+    )
+    const created = await call(
+      'account.createInvoice',
+      {
+        id: 'folio-1',
+        journalId: 'sales',
+        moveType: 'out_invoice',
+        partnerId: 'customer',
+        counterpartAccountId: 'receivable',
+        lines: [
+          {
+            description: 'Phong Deluxe, 2 dem',
+            quantity: '2',
+            priceUnit: '500',
+            lineAccountId: 'revenue',
+            taxId: 'vat8',
+            taxAccountId: 'tax',
+          },
+          {
+            description: 'Minibar',
+            quantity: '1',
+            priceUnit: '100',
+            lineAccountId: 'revenue',
+            taxId: 'vat10',
+            taxAccountId: 'tax',
+          },
+          {
+            description: 'Nha hang',
+            quantity: '1',
+            priceUnit: '200',
+            lineAccountId: 'revenue',
+            taxId: 'vat10',
+            taxAccountId: 'tax',
+          },
+        ],
+      },
+      adapter,
+    )
+    assert.deepEqual(created.value, { ok: true, id: 'folio-1', amountTotal: '1410' })
+
+    const invoice = (await call('account.getMove', { id: 'folio-1' }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    assert.equal(Number(invoice.amountUntaxed), 1300)
+    assert.equal(Number(invoice.amountTax), 110)
+    // Three revenue lines, one tax line per rate — not one per revenue line —
+    // and a single receivable, which is what the guest owes.
+    assert.deepEqual(
+      invoice.lines.map((line) => [String(line.id), Number(line.debit), Number(line.credit)]),
+      [
+        ['folio-1:base', 0, 1000],
+        ['folio-1:base:1', 0, 100],
+        ['folio-1:base:2', 0, 200],
+        ['folio-1:tax', 0, 80],
+        ['folio-1:tax:vat10', 0, 30],
+        ['folio-1:counterpart', 1410, 0],
+      ],
+    )
+    assert.equal(
+      invoice.lines.reduce((sum, line) => sum + Number(line.debit) - Number(line.credit), 0),
+      0,
+    )
+    assert.deepEqual((await call('account.postMove', { id: 'folio-1' }, adapter)).value, {
+      ok: true,
+      id: 'folio-1',
+      name: 'SAL/2026/00001',
+    })
+
+    // Both shapes at once would leave the shorthand's line either dropped or
+    // appended, and neither is visible from the call site.
+    const refused = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'folio-2',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Phong',
+          quantity: '1',
+          priceUnit: '100',
+          lines: [{ description: 'Phong', quantity: '1', priceUnit: '100' }],
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.invoiceLinesAndSingle')
+  } finally {
+    await adapter.close()
+  }
+})
