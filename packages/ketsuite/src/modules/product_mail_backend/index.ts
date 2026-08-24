@@ -23,6 +23,7 @@ const functions = withDeliveryStatus(
 
 export default defineModule({
   name: 'product_mail_backend',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['product_backend', 'mail_backend', 'mail_transport'],
   install: 'auto',

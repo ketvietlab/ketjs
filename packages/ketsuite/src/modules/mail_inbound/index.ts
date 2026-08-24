@@ -7,6 +7,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'mail_inbound',
+  group: 'system',
   version: '0.1.0',
   depends: ['mail', 'mail_transport'],
   app: true,

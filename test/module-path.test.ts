@@ -24,7 +24,7 @@ export default Object.freeze({
   requires: Object.freeze([]), tokens: {}, templates: {}, provides: Object.freeze([]),
   assets: null, styles: Object.freeze([]), routes: {}, menus: {}, omits: Object.freeze([]),
   islands: {}, sections: {}, relations: {}, app: true, title: ${JSON.stringify(name)},
-  summary: '', category: 'Custom', install: 'manual', removable: true, messages: {},
+  summary: '', category: 'Custom', install: 'manual', removable: true, messages: {}, groups: {},
 })
 `
 

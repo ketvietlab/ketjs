@@ -6,6 +6,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'hr',
+  group: 'system',
   version: '0.1.0',
   depends: ['company', 'partner', 'user'],
   app: true,

@@ -320,6 +320,7 @@ const en = {
 
 export default defineModule({
   name: 'pos_backend',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['pos', 'backend'],
   install: 'auto',

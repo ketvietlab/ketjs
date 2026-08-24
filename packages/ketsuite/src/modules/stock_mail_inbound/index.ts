@@ -88,6 +88,7 @@ const functions: Record<string, FnSpec> = {
 
 export default defineModule({
   name: 'stock_mail_inbound',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['stock', 'mail_inbound'],
   install: 'auto',

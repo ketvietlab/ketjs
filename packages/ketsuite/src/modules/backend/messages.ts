@@ -78,6 +78,10 @@ export const messages: Record<string, Record<string, Message>> = {
     'apps.install': 'Cài đặt',
     'apps.uninstall': 'Gỡ',
     'apps.none': '—',
+    'apps.groups': 'Nhóm ứng dụng',
+    'apps.standalone': 'Ứng dụng riêng lẻ',
+    'apps.group.progress': 'Đã cài',
+    'apps.group.dependents': 'Nhóm khác đang dùng',
     'apps.empty.message': 'Bản triển khai này chưa có ứng dụng nào.',
     'apps.empty.hint': 'Ứng dụng phải được đưa vào lúc build trước khi cài được.',
 
@@ -160,6 +164,10 @@ export const messages: Record<string, Record<string, Message>> = {
     'apps.install': 'Install',
     'apps.uninstall': 'Remove',
     'apps.none': '—',
+    'apps.groups': 'App groups',
+    'apps.standalone': 'Standalone apps',
+    'apps.group.progress': 'Installed',
+    'apps.group.dependents': 'Used by other groups',
     'apps.empty.message': 'This deployment ships no apps.',
     'apps.empty.hint': 'An app has to be built in before it can be installed.',
 

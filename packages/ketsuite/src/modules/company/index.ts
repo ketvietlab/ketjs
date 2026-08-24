@@ -8,6 +8,7 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'company',
+  group: 'system',
   version: '0.1.0',
   depends: ['partner'],
   app: true,

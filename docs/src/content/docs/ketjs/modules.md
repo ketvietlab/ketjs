@@ -23,7 +23,7 @@ export const inventory = defineModule({
   app: true,
   title: 'Inventory',
   summary: 'Stock levels and replenishment',
-  category: 'Operations',
+  group: 'commerce',
   install: 'manual',
   models: {
     Warehouse: {
@@ -48,7 +48,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 
 | Concern | Module fields |
 | --- | --- |
-| Identity and lifecycle | `name`, `version`, `depends`, `app`, `title`, `summary`, `category`, `install`, `removable` |
+| Identity and lifecycle | `name`, `version`, `depends`, `app`, `title`, `summary`, `group`, `install`, `removable` |
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
@@ -59,6 +59,42 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 
 Unknown keys fail with `E_MODULE_UNKNOWN_KEY`. Module names must be snake_case and stable; renaming a
 module creates a new identity and leaves the old installed state as an orphan.
+
+## Module groups
+
+`group` is an optional stable identifier declared by each module. The framework does not own a
+fixed vocabulary: an application family ships a metadata-only catalogue with `defineModuleGroups()`.
+Composition validates every grouped module against that catalogue and records both the identifier
+and catalogue provenance in the manifest.
+
+```ts
+// File: src/modules/app_groups/index.ts
+import { defineModuleGroups } from '@ketvietlab/ketjs'
+
+export const appGroups = defineModuleGroups({
+  name: 'app_groups',
+  groups: {
+    system: { title: 'System', sequence: 10, fixed: true },
+    commerce: { title: 'Commerce', sequence: 20 },
+  },
+  messages: {
+    vi: {
+      'group.system.title': 'Hệ thống',
+      'group.commerce.title': 'Thương mại',
+    },
+  },
+})
+```
+
+The identifier is the contract; translated group names follow
+`<catalogue module>.group.<identifier>.title` and `.summary`, with the catalogue literals as
+fallbacks. Modules without `group` remain standalone apps. Grouping affects discovery and
+presentation only: schema still belongs to the AppSpec, while enablement still belongs to each
+database's `ket_app` rows.
+
+A catalogue may mark a baseline group `fixed: true`. The registry enables every member and its
+dependency closure when a database opens, and refuses removal with `E_APP_GROUP_FIXED`. Management
+UIs therefore report that group without offering install/remove controls.
 
 ## Dependencies and extensions
 
@@ -136,7 +172,7 @@ Composition topologically orders modules and produces one manifest:
 
 | Manifest section | Runtime use | Composition checks |
 | --- | --- | --- |
-| `modules`, `order` | Dependency and lifecycle inventory | Missing dependencies and cycles |
+| `modules`, `groups`, `order` | Dependency, group, and lifecycle inventory | Missing dependencies, cycles, unknown or duplicate group identifiers |
 | `models`, `relations` | Schema, queries, generated types | Duplicate models, fields, bad relations |
 | `functions`, `jobs` | HTTP, workers, permissions, agents | Signatures, effects, queue declarations |
 | `joints`, `fills`, `regions` | Extension and theme contracts | Ownership and unpublished targets |

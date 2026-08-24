@@ -6,6 +6,7 @@ import {
   createAppRegistry,
   createTheme,
   defineModule,
+  defineModuleGroups,
   migrateOne,
   registerFunctions,
   restrictManifest,
@@ -26,7 +27,17 @@ import {
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branches: null }
 
-const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
+const groups = defineModuleGroups({
+  name: 'test_app_groups',
+  groups: {
+    system: {
+      title: 'System',
+      summary: 'Shared system capabilities.',
+      sequence: 10,
+    },
+  },
+})
+const mods = [groups, address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme]
 const manifest = compose(mods)
 
 async function boot(): Promise<{ db: Adapter; apps: Awaited<ReturnType<typeof createAppRegistry>> }> {
@@ -57,6 +68,53 @@ test('apps: the list shows what this deployment ships, and what is on', async ()
   const site = list.find((a) => a.name === 'website')!
   assert.equal(site.title, 'Website')
   assert.equal(site.category, 'Website')
+  assert.deepEqual(site.group, {
+    id: 'system',
+    by: 'test_app_groups',
+    title: 'System',
+    summary: 'Shared system capabilities.',
+    sequence: 10,
+    fixed: false,
+  })
+  await db.close()
+})
+
+test('module groups: catalogues validate group identifiers at composition', () => {
+  const groups = defineModuleGroups({
+    name: 'groups',
+    groups: { commerce: { title: 'Commerce' } },
+  })
+  const product = defineModule({ name: 'product_app', app: true, group: 'commerce' })
+  assert.equal(compose([groups, product], { headless: true }).groups.commerce?.by, 'groups')
+
+  const typo = defineModule({ name: 'typo_app', app: true, group: 'comerce' })
+  assert.throws(
+    () => compose([groups, typo], { headless: true }),
+    (error: Error & { items?: Array<{ code: string }> }) =>
+      error.items?.some((diagnostic) => diagnostic.code === 'E_MODULE_GROUP_UNKNOWN') === true,
+  )
+})
+
+test('module groups: fixed groups seed every database and cannot be uninstalled', async () => {
+  const fixedGroups = defineModuleGroups({
+    name: 'fixed_groups',
+    groups: { system: { title: 'System', fixed: true } },
+  })
+  const dependency = defineModule({ name: 'foundation' })
+  const system = defineModule({ name: 'system_app', app: true, group: 'system', depends: ['foundation'] })
+  const fixedManifest = compose([fixedGroups, dependency, system], { headless: true })
+  const db = sqliteAdapter()
+  await db.open()
+  await migrateOne(db, fixedManifest)
+  const registry = await createAppRegistry(fixedManifest, db)
+
+  assert.equal(registry.pristine(), true)
+  assert.deepEqual([...(await registry.enabled())].sort(), ['foundation', 'system_app'])
+  await assert.rejects(
+    () => registry.uninstall('system_app'),
+    (error: Error & { code?: string }) => error.code === 'E_APP_GROUP_FIXED',
+  )
+  assert.equal((await createAppRegistry(fixedManifest, db)).pristine(), false)
   await db.close()
 })
 
@@ -180,6 +238,7 @@ test('restrict: models are never filtered, because rows outlive an install', asy
   assert.deepEqual(restricted.disabledModules!.sort(), [
     'address',
     'partner',
+    'test_app_groups',
     'theme_paper',
     'website_menu',
     'website_search',

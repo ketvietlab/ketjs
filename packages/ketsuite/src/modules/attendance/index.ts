@@ -7,6 +7,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'attendance',
+  group: 'system',
   version: '0.1.0',
   depends: ['hr', 'channel_api'],
   compatible: { channel_api: '^1' },

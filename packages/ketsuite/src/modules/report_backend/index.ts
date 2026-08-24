@@ -3,6 +3,7 @@ import { routes } from './routes.tsx'
 
 export default defineModule({
   name: 'report_backend',
+  group: 'system',
   version: '0.1.0',
   depends: ['report', 'backend'],
   install: 'auto',

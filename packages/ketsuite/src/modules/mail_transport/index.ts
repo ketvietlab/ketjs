@@ -6,6 +6,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'mail_transport',
+  group: 'system',
   version: '0.1.0',
   depends: ['mail'],
   app: true,

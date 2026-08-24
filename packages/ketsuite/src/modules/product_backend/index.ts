@@ -20,6 +20,7 @@ import { menus } from './menus.ts'
  */
 export default defineModule({
   name: 'product_backend',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['product_media', 'backend'],
   install: 'auto',

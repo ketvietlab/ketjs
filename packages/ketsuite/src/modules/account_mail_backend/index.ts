@@ -23,6 +23,7 @@ const functions = withDeliveryStatus(
 
 export default defineModule({
   name: 'account_mail_backend',
+  group: 'accounting',
   version: '0.1.0',
   depends: ['account_backend', 'mail_backend', 'mail_transport'],
   install: 'auto',

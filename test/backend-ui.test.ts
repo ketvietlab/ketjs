@@ -453,6 +453,33 @@ const everything = [
   .map((r) => renderToString(r))
   .join('')
 
+test('apps: grouped modules collapse into one card and ungrouped modules remain visible', () => {
+  const group = {
+    id: 'commerce',
+    by: 'app_groups',
+    title: 'Thương mại',
+    summary: 'Nghiệp vụ thương mại.',
+    sequence: 30,
+    fixed: false,
+  }
+  const system = { ...group, id: 'system', title: 'Hệ thống', sequence: 10, fixed: true }
+  const html = renderToString(
+    appsScreen(_, [
+      app({ name: 'backend', title: 'Backend', group: system, state: 'installed' }),
+      app({ name: 'sale', title: 'Sales', group, state: 'installed' }),
+      app({ name: 'stock', title: 'Inventory', group }),
+      app({ name: 'extension', title: 'Extension', group: null }),
+    ]),
+  )
+
+  assert.match(html, /data-app="group:commerce"/)
+  assert.match(html, /data-state="partial"/)
+  assert.match(html, /data-app="extension"/)
+  assert.doesNotMatch(html, /data-app="sale"|data-app="stock"/)
+  const systemCard = html.match(/<article[^>]*data-app="group:system"[\s\S]*?<\/article>/)?.[0] ?? ''
+  assert.doesNotMatch(systemCard, /data-ui="app-action"/)
+})
+
 test('ui contract: every documented data-ui hook is actually emitted', () => {
   const missing = CONTRACT.filter((name) => !everything.includes(`data-ui="${name}"`))
   assert.deepEqual(missing, [], 'a hook the stylesheet targets went missing')

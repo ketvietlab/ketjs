@@ -5,6 +5,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'activity',
+  group: 'system',
   version: '0.1.0',
   depends: ['mail', 'user', 'storage'],
   app: true,

@@ -33,6 +33,7 @@ all five are now tests in `test/apps.test.ts`.
 | Routes of a removed app | **404**, naming the module | ← was a bug. They stayed mounted, because the app declared them instead of the module. Dispatch now checks the live manifest per request. |
 | Assets and stylesheets of a removed app | **stop being served and stop being linked** | same cause, same fix: the module declares them, `restrictManifest` drops them |
 | Remove a module declaring `removable: false` | `E_APP_NOT_REMOVABLE` | the backend is the screen you would use to put something back |
+| Remove a member of a `fixed` group | `E_APP_GROUP_FIXED` | the group is the AppSpec's baseline for every database, not a tenant choice |
 | Rows belonging to a removed app | **kept, untouched** | turning an app off must never be a way to lose data (D7 one level up) |
 | Re-install after removing | data is where it was | the columns never went anywhere |
 
@@ -69,10 +70,21 @@ all five are now tests in `test/apps.test.ts`.
 | Two databases, one deployment | independent install state | `ket_app` lives in the database |
 | The restricted manifest | **must be computed per request**, from that database's state | caching one globally would serve every tenant the first tenant's app set. This is a usage rule the framework cannot enforce for you — the pool hands you the adapter, and the restriction belongs beside it. |
 
+## Grouped discovery
+
+The Apps screen projects modules through their optional `group` identifier. It shows one aggregate
+card for each declared group and shows only ungrouped apps individually. A partially enabled group
+is reported as partial; its module rows remain the source of truth in `ket_app`. The group catalogue
+owns identifiers, fallback labels, ordering, and translations, but never tenant configuration or
+schema selection.
+
+A `fixed` group is the exception to per-tenant choice: the registry seeds its full dependency
+closure for every database and the Apps screen renders no install/remove control for it.
+
 ## Still open
 
 - **Exactly one storefront theme.** Nothing stops two themes being installed at once,
   and the last one composed wins the template. the domain contract makes installing a theme uninstall
   the previous one. That rule is not written here yet.
-- **Backend UI.** There is none. See the note in `00-decisions.md` on why a backend
-  screen should not be a KTL theme.
+- **Mutation endpoint.** The Apps screen describes install/remove intent, but a command endpoint still
+  needs an explicit authorization and audit contract before those controls may mutate `ket_app`.

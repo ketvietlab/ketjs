@@ -17,6 +17,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'hospitality_core',
+  group: 'hospitality',
   version: '0.1.0',
   depends: ['backend', 'company', 'storage', 'partner', 'address', 'uom', 'product'],
   app: true,
