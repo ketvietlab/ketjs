@@ -1,7 +1,6 @@
 // The navigation tree, as one viewer sees it.
 //
-// Three filters, applied in this order, because each depends on the one before:
-// what the deployment ships, what this database has switched on, and what this
+// Two filters, applied in this order: what the deployment composes and what this
 // viewer may call. The last is the one that matters most — a menu offering what it
 // cannot deliver is a menu that lies, and the 401 arrives after the click rather
 // than instead of it.
@@ -64,7 +63,7 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
    * Sequence first, then the words the reader actually sees.
    *
    * The tie-break used to compare `def.label`, which is the message *key*: every
-   * app declares `menu.app`, so every root with the same sequence compared equal
+   * root often declares the same `menu.app` key, so equal sequences compared equal
    * and the sidebar fell back to the order modules happened to be registered in.
    * Below a heading it was worse — an untranslated key sorts in English, so the
    * Vietnamese Purchasing menu read Đơn mua · RFQ · Bảng giá because `orders` <
@@ -106,7 +105,7 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   return build(undefined, 0)
 }
 
-/** The app a path belongs to: the root whose branch contains it. */
-export function activeApp(tree: MenuNode[]): MenuNode | null {
+/** The root navigation section a path belongs to. */
+export function activeMenuRoot(tree: MenuNode[]): MenuNode | null {
   return tree.find((n) => n.active) ?? null
 }

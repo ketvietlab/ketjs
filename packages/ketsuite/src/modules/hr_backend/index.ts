@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'hr_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['hr', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Nhân sự trong quản trị',
   summary: 'Hồ sơ, ca xoay và nghỉ phép.',
   category: 'Nhân sự',

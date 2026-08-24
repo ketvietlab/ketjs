@@ -30,16 +30,15 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 | API | Purpose |
 | --- | --- |
 | `defineModule`, `defineTheme` | Validate and preserve module/theme declarations. |
-| `defineApp`, `defineWorkspace` | Declare deployable apps and the repository workspace. |
+| `defineDeployment`, `defineWorkspace` | Declare immutable deployments and the repository workspace. |
 | `resolveWorkspace` | Resolve string module references from configured roots. |
-| `compose`, `composeWorkspace` | Build checked manifests for one app or a workspace. |
+| `compose`, `composeWorkspace` | Build checked manifests for one deployment or a workspace. |
 | `explainWorkspace` | Render a workspace composition summary. |
-| `createAppRegistry`, `restrictManifest` | Apply database-owned module install state to a deployment manifest. |
 | `validateLayout`, `formatLayoutErrors` | Validate placement and extension relationships. |
 | `diffManifests`, `formatDiff` | Compare manifest contracts. |
 | `KetError`, `Diagnostics` | Structured framework errors and accumulated diagnostics. |
 
-Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, `AppSpec`,
+Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclaration`, `DeploymentSpec`,
 `WorkspaceDeclaration`, `ResolvedWorkspace`, `Placement`, and `LayoutError`.
 
 ### Operations and HTTP
@@ -50,7 +49,7 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 | `project` | Apply output projection rules. |
 | `defineJob`, `registerJobs` | Declare and register durable job handlers. |
 | `createKetServer` | Create the low-level HTTP server from composed runtime services. |
-| `bootRuntime`, `bootApp`, `serveApp` | Boot datastore/runtime services or a complete HTTP app. |
+| `bootRuntime`, `bootDeployment`, `serveDeployment` | Boot runtime services or a complete HTTP deployment. |
 | `bootWorker`, `serveWorker` | Boot or continuously serve configured durable queues. |
 | `page`, `fragment`, `document` | Create rendered response bodies. |
 | `navigablePage`, `isNavigationRequest` | Negotiate a full document or lazy named navigation slots. |
@@ -62,7 +61,7 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 | `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
-`ServeContext`, `BootedApp`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
+`ServeContext`, `BootedDeployment`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
 `RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 
 ### Sessions, streams, queues, and integration effects
@@ -124,7 +123,7 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 
 | API | Purpose |
 | --- | --- |
-| `buildMenu`, `activeApp` | Resolve visible menu trees and active application context. |
+| `buildMenu`, `activeMenuRoot` | Resolve visible menu trees and the active root section. |
 | `translator`, `missingMessages`, `formatMissing`, `PSEUDO_LOCALE` | Translate catalogs and audit missing messages. |
 | `createTheme`, `compileKtl`, `loadTemplates`, `createJoints` | Compile and execute the theme boundary. |
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
@@ -164,11 +163,11 @@ import {
   CookieJar,
   TestClient,
   TestHttpError,
-  createTestApp,
+  createTestDeployment,
 } from '@ketvietlab/ketjs/testing'
 ```
 
-The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOptions`, `TestIdentity`,
+The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `TestClientOptions`, `TestIdentity`,
 `TestCallOptions`, `TestFixtures`, `TestFixtureCallOptions`, and `TestFixtureTenant`. See
 [Testing](/ketjs/testing/) for the lifecycle and isolation contract.
 

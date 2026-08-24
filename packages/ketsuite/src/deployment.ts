@@ -1,17 +1,16 @@
-// The packaged KetSuite application declaration. Keeping this beside the
-// modules lets both the repository app and the public CLI run the exact same
+// The packaged KetSuite deployment declaration. Keeping this beside the
+// modules lets both the repository entry and the public CLI run the exact same
 // composition instead of maintaining two module lists.
 
-import { defineApp, sqliteStore } from '@ketvietlab/ketjs'
+import { defineDeployment, sqliteStore } from '@ketvietlab/ketjs'
 import type { OpenStore } from '@ketvietlab/ketjs'
 import * as suite from './index.ts'
 import backend from './modules/backend/index.ts'
 
-export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
-  defineApp({
+export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
+  defineDeployment({
     name: 'ketsuite',
     modules: [
-      suite.appGroups,
       suite.website,
       suite.channelApi,
       suite.websiteMenu,
@@ -107,49 +106,6 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
         fallbackLocale: 'vi',
         defaultTimezone: 'Asia/Ho_Chi_Minh',
       },
-      bootstrap: [
-        'website',
-        'channel_api',
-        'website_menu',
-        'website_form',
-        'website_backend',
-        'website_hospitality',
-        'website_retail',
-        'theme_paper',
-        'theme_hospitality',
-        'theme_retail',
-        'backend',
-        'address',
-        'product',
-        'product_media',
-        'pricing',
-        'stock',
-        'account',
-        'purchase',
-        'sale',
-        'pos',
-        'loyalty',
-        'loyalty_sale',
-        'loyalty_pos',
-        'loyalty_backend',
-        'crm',
-        'crm_sale',
-        'crm_website',
-        'crm_backend',
-        'user',
-        'oauth',
-        'user_backend',
-        'oauth_backend',
-        'storage',
-        'hr',
-        'attendance',
-        'hospitality_core',
-        'mail',
-        'mail_transport',
-        'mail_inbound',
-        'activity',
-        'calendar',
-      ],
       sessions: { anonymous: { company: 'default' } },
       resolveSession: suite.resolveUserSession,
       resolveAudience: (_url, req) => {
@@ -177,5 +133,5 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
     },
   })
 
-export const ketsuite = createKetsuiteApp()
-export const apps = [ketsuite]
+export const ketsuite = createKetsuiteDeployment()
+export const deployments = [ketsuite]

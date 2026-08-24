@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 type Envelope<T> = { data: T; error: { code: string; message: string } | null }
 
 const boot = async (t: TestContext) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branch: 'hq', branches: ['hq'] }
   const fixture = (name: string, input: Record<string, unknown>) =>
@@ -50,7 +50,7 @@ const boot = async (t: TestContext) => {
 }
 
 const staff = async <T>(
-  booted: { e2e: Awaited<ReturnType<typeof createTestApp>>; csrfToken: string },
+  booted: { e2e: Awaited<ReturnType<typeof createTestDeployment>>; csrfToken: string },
   path: string,
   init: RequestInit = {},
 ): Promise<{ status: number; body: Envelope<T> }> => {

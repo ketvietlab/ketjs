@@ -34,7 +34,6 @@ export default defineModule({
   name: 'example',
   version: '0.1.0',
   depends: ['partner'],
-  app: true,
   title: 'Example',
   summary: 'Example business capability.',
   category: 'Operations',
@@ -47,8 +46,8 @@ export default defineModule({
 })
 ```
 
-Register the exported module in `packages/ketsuite/src/index.ts`, then add it to the app composition.
-Add it to `serve.bootstrap` only when a blank KetSuite database should enable it by default.
+Register the exported module in `packages/ketsuite/src/index.ts`, then add it to every deployment that
+must run it. The deployment's `modules` list is the only runtime composition list.
 
 ## Model scopes are domain design
 

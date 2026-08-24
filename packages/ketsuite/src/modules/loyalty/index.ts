@@ -9,10 +9,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'loyalty',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['company', 'partner', 'product', 'pricing'],
-  app: true,
   title: 'Khách hàng thân thiết',
   summary: 'Chương trình ưu đãi, ví điểm, hạng thành viên và lịch sử bất biến.',
   category: 'Bán hàng',

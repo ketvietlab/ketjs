@@ -759,11 +759,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
 
 export default defineModule({
   name: 'loyalty_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['loyalty', 'loyalty_sale', 'loyalty_pos', 'sale_backend', 'pos_backend', 'backend', 'user'],
-  install: 'auto',
-  app: true,
   title: 'Khách hàng thân thiết trong quản trị',
   summary: 'Cấu hình, báo cáo, tích hợp đơn hàng và tóm tắt portal Loyalty.',
   category: 'Bán hàng',

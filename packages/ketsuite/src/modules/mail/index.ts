@@ -6,10 +6,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'mail',
-  group: 'system',
   version: '0.1.0',
   depends: ['partner', 'user', 'storage'],
-  app: true,
   title: 'Thảo luận',
   summary: 'Chatter, người theo dõi và hộp thư thông báo nội bộ.',
   category: 'Năng suất',

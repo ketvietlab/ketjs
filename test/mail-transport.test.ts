@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bootWorker, defineApp, defineModule, memoryTransport } from '@ketvietlab/ketjs'
+import { bootWorker, defineDeployment, defineModule, memoryTransport } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row, WorkerLog } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import {
   calendar,
   calendarMailTransport,
@@ -30,7 +30,6 @@ const bridgeEffects = [
 const fixtureBridge = defineModule({
   name: 'mail_transport_fixture',
   depends: ['mail_transport'],
-  app: true,
   functions: {
     seedNotification: {
       effects: ['write:mail.Thread', 'write:mail.Message', 'write:mail.Notification', 'read:partner.Partner'],
@@ -85,7 +84,7 @@ const fixtureBridge = defineModule({
 const scope = { company: 'acme', branches: null }
 const asAdmin = { scope, actor: 'u-admin' }
 
-const seedIdentity = async (e2e: Awaited<ReturnType<typeof createTestApp>>): Promise<void> => {
+const seedIdentity = async (e2e: Awaited<ReturnType<typeof createTestDeployment>>): Promise<void> => {
   for (const [id, name, email] of [
     ['p-company', 'ACME', 'hello@acme.test'],
     ['p-admin', 'Admin', 'admin@acme.test'],
@@ -156,18 +155,17 @@ test('mail transport: transactional snapshots survive edits, retries, accepted-c
       return null
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'mail_transport_e2e',
     modules: [address, partner, company, storage, user, mail, mailTransport, fixtureBridge],
     headless: true,
     worker: { queues: { mail: 1 } },
     serve: {
-      bootstrap: ['mail_transport_fixture'],
       openTransport: () => provider,
       sessions: { anonymous: { company: 'acme' } },
     },
   })
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     await seedIdentity(e2e)
     await e2e.fixture.call('mail_transport.saveTemplate', templateInput(), asAdmin)
@@ -313,18 +311,17 @@ test('mail transport: transactional snapshots survive edits, retries, accepted-c
 
 test('calendar email producer creates one immutable RSVP delivery per attendee', async () => {
   const provider = memoryTransport({ now: () => new Date('2026-08-20T12:00:00.000Z') })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'calendar_mail_transport_e2e',
     modules: [address, partner, company, storage, user, mail, mailTransport, calendar, calendarMailTransport],
     headless: true,
     worker: { queues: { default: 1, mail: 1 } },
     serve: {
-      bootstrap: ['calendar_mail_transport'],
       openTransport: () => provider,
       sessions: { anonymous: { company: 'acme' } },
     },
   })
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     await seedIdentity(e2e)
     await e2e.fixture.call(

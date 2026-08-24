@@ -12,7 +12,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { KetError } from './errors.ts'
 import { topoSort } from './graph.ts'
 import type { KetModule } from '../types.ts'
-import type { AppDeclaration, AppSpec, ModulePath, ModuleRef, WorkspaceDeclaration } from './workspace.ts'
+import type {
+  DeploymentDeclaration,
+  DeploymentSpec,
+  ModulePath,
+  ModuleRef,
+  WorkspaceDeclaration,
+} from './workspace.ts'
 
 const DESCRIPTOR = 'ket.module.json'
 const NAME = /^[a-z][a-z0-9_]*$/
@@ -37,11 +43,11 @@ export type ResolvedModuleInfo = {
   version: string
   kind: KetModule['kind']
   source: 'workspace' | string
-  apps: string[]
+  deployments: string[]
 }
 
 export type ResolvedWorkspace = {
-  apps: AppSpec[]
+  deployments: DeploymentSpec[]
   modulePaths: string[]
   modules: ResolvedModuleInfo[]
 }
@@ -243,7 +249,6 @@ const assertModule = (value: unknown, source: ModuleSource): KetModule => {
     'sections',
     'relations',
     'messages',
-    'groups',
   ] as const) {
     const field = module[key]
     if (!field || typeof field !== 'object' || Array.isArray(field))
@@ -254,11 +259,11 @@ const assertModule = (value: unknown, source: ModuleSource): KetModule => {
 
 const moduleName = (ref: ModuleRef): string => (typeof ref === 'string' ? ref : ref.name)
 
-async function resolveApp(
-  declaration: AppDeclaration,
+async function resolveDeployment(
+  declaration: DeploymentDeclaration,
   catalog: Map<string, ModuleSource>,
   imports: Map<string, Promise<KetModule>>,
-): Promise<{ spec: AppSpec; sources: Map<string, ModuleSource | null> }> {
+): Promise<{ spec: DeploymentSpec; sources: Map<string, ModuleSource | null> }> {
   const inline = new Map<string, KetModule>()
   const stringRefs = new Set<string>()
   const refs = [
@@ -272,11 +277,14 @@ async function resolveApp(
       if (!NAME.test(ref))
         fail(
           'E_MODULE_REF',
-          `app "${declaration.name}" has invalid module reference ${JSON.stringify(ref)}`,
+          `deployment "${declaration.name}" has invalid module reference ${JSON.stringify(ref)}`,
           'use the snake_case name from ket.module.json',
         )
       if (stringRefs.has(ref))
-        fail('E_MODULE_DUPLICATE_REF', `app "${declaration.name}" references module "${ref}" more than once`)
+        fail(
+          'E_MODULE_DUPLICATE_REF',
+          `deployment "${declaration.name}" references module "${ref}" more than once`,
+        )
       stringRefs.add(ref)
       continue
     }
@@ -284,8 +292,8 @@ async function resolveApp(
     if (existing)
       fail(
         'E_MODULE_NAME_CLASH',
-        `app "${declaration.name}" contains two inline modules named "${ref.name}"`,
-        'each app must ship exactly one implementation of a module name',
+        `deployment "${declaration.name}" contains two inline modules named "${ref.name}"`,
+        'each deployment must ship exactly one implementation of a module name',
       )
     inline.set(ref.name, ref)
   }
@@ -293,7 +301,7 @@ async function resolveApp(
     if (inline.has(name))
       fail(
         'E_MODULE_NAME_CLASH',
-        `app "${declaration.name}" provides "${name}" inline and by module path`,
+        `deployment "${declaration.name}" provides "${name}" inline and by module path`,
         'choose the imported module object or its string reference, not both',
       )
   }
@@ -311,8 +319,8 @@ async function resolveApp(
       if (!found) {
         throw new KetError({
           code: 'E_MISSING_DEPENDENCY',
-          message: `app "${declaration.name}" needs module "${name}", which no module path provides`,
-          hint: `add a root containing "${name}" to modulePaths, or import it into the app`,
+          message: `deployment "${declaration.name}" needs module "${name}", which no module path provides`,
+          hint: `add a root containing "${name}" to modulePaths, or import it into the deployment`,
         })
       }
       source = found
@@ -349,16 +357,16 @@ async function resolveApp(
   for (const selected of selectedThemes)
     if (selected.kind !== 'theme')
       fail(
-        'E_APP_THEME_KIND',
-        `app "${declaration.name}" selects "${selected.name}" as a theme, but it is a ${selected.kind}`,
+        'E_DEPLOYMENT_THEME_KIND',
+        `deployment "${declaration.name}" selects "${selected.name}" as a theme, but it is a ${selected.kind}`,
         'export it with defineTheme(), or move it into modules',
       )
   const selectedNames = new Set(selectedThemes.map((selected) => selected.name))
   const modules = ordered.filter((module) => !selectedNames.has(module.name))
-  const { modules: _moduleRefs, theme: _themeRef, themes: _themeRefs, ...app } = declaration
+  const { modules: _moduleRefs, theme: _themeRef, themes: _themeRefs, ...deployment } = declaration
   return {
     spec: {
-      ...app,
+      ...deployment,
       modules,
       ...(theme ? { theme } : {}),
       ...(selectedThemes.length ? { themes: selectedThemes.filter((item) => item !== theme) } : {}),
@@ -372,38 +380,38 @@ export async function resolveWorkspace(
   declaration: WorkspaceDeclaration,
   options: ResolveWorkspaceOptions,
 ): Promise<ResolvedWorkspace> {
-  if (!declaration || !Array.isArray(declaration.apps))
-    fail('E_WORKSPACE_SHAPE', 'workspace must contain an apps array')
+  if (!declaration || !Array.isArray(declaration.deployments))
+    fail('E_WORKSPACE_SHAPE', 'workspace must contain a deployments array')
   const configured = [...(declaration.modulePaths ?? []), ...(options.extraModulePaths ?? [])]
   const { roots, catalog } = await scanModulePaths(configured, options)
   const imports = new Map<string, Promise<KetModule>>()
-  const apps: AppSpec[] = []
+  const deployments: DeploymentSpec[] = []
   const inventory = new Map<string, ResolvedModuleInfo>()
 
-  for (const app of declaration.apps) {
-    const { spec, sources } = await resolveApp(app, catalog, imports)
-    apps.push(spec)
+  for (const deployment of declaration.deployments) {
+    const { spec, sources } = await resolveDeployment(deployment, catalog, imports)
+    deployments.push(spec)
     for (const module of [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]) {
       const source = sources.get(module.name)
       const label = source?.entry ?? 'workspace'
       const key = `${module.name}\0${module.version}\0${label}`
       const existing = inventory.get(key)
       if (existing) {
-        if (!existing.apps.includes(spec.name)) existing.apps.push(spec.name)
+        if (!existing.deployments.includes(spec.name)) existing.deployments.push(spec.name)
       } else {
         inventory.set(key, {
           name: module.name,
           version: module.version,
           kind: module.kind,
           source: label,
-          apps: [spec.name],
+          deployments: [spec.name],
         })
       }
     }
   }
 
   return {
-    apps,
+    deployments,
     modulePaths: roots,
     modules: [...inventory.values()].sort(
       (a, b) =>

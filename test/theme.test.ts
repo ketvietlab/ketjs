@@ -89,7 +89,7 @@ test('theme: a template pointing at an unpublished joint fails at build time', (
   ]
   assert.throws(
     () => createTheme(compose(mods as never), mods as never),
-    /E_TEMPLATE_UNKNOWN_JOINT|no installed module publishes/,
+    /E_TEMPLATE_UNKNOWN_JOINT|no composed module publishes/,
   )
 })
 

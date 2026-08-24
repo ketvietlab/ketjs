@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'mail_transport_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['mail_transport', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Hộp thư đi',
   summary: 'Theo dõi delivery, lỗi gửi và retry vận hành.',
   category: 'Năng suất',

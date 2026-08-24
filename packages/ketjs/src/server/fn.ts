@@ -177,7 +177,7 @@ export async function callFn(
      * business being narrowed by one.
      *
      * A list rather than a predicate so that it can be printed, diffed and stored.
-     * The framework enforces it; which list a user gets is the app's decision, the
+     * The framework enforces it; which list a user gets is the deployment's decision, the
      * same split as the datastore driver.
      */
     allow?: readonly string[] | null
@@ -186,15 +186,6 @@ export async function callFn(
   },
 ): Promise<CallResult> {
   const def = registry.get(fnKey)
-  const owner = fnKey.split('.')[0] as string
-  if (o.manifest.disabledModules?.includes(owner)) {
-    throw new KetError({
-      code: 'E_APP_NOT_INSTALLED',
-      module: owner,
-      message: `"${fnKey}" belongs to "${owner}", which is not installed on this database`,
-      hint: `install "${owner}" first — the code ships with this deployment, it is simply switched off here`,
-    })
-  }
   if (!def)
     throw new KetError({
       code: 'E_UNKNOWN_FUNCTION',
@@ -206,6 +197,7 @@ export async function callFn(
   // call this at all learns that and nothing else — not which arguments it takes,
   // and not whether the ones they guessed were right.
   if (o.allow && !o.allow.includes(fnKey)) {
+    const owner = fnKey.split('.')[0] ?? fnKey
     throw new KetError({
       code: 'E_FN_NOT_PERMITTED',
       module: owner,

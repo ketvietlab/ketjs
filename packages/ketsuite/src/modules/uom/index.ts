@@ -6,9 +6,7 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'uom',
-  group: 'system',
   version: '0.1.0',
-  app: true,
   title: 'Đơn vị tính',
   summary: 'Cây đơn vị tương đối và quy đổi.',
   category: 'Bán hàng',

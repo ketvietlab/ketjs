@@ -226,7 +226,7 @@ Generate app-specific declarations from the composed manifest:
 
 ```bash
 # Run from: /path/to/example-app
-ket types --app backoffice --workspace dist/ket.workspace.js
+ket types --deployment backoffice --workspace dist/ket.workspace.js
 ```
 
 The output under `.ket/types.<app>.d.ts` includes the composed fields and contribution provenance.

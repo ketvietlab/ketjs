@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { compose, formatMissing, missingMessages, renderToString, translator } from '@ketvietlab/ketjs'
-import backend, { appsScreen } from '@ketvietlab/ketsuite/backend'
+import backend from '@ketvietlab/ketsuite/backend'
 import {
   account,
   accountBackend,
@@ -66,51 +66,6 @@ const manifest = compose(modules, { headless: true })
 test('ketsuite i18n: business catalogues have complete vi/en parity', () => {
   const gaps = missingMessages(manifest, ['vi', 'en'])
   assert.deepEqual(gaps, {}, formatMissing(gaps))
-})
-
-test('ketsuite i18n: app metadata is translated instead of falling back to Vietnamese literals', () => {
-  const rows = [
-    address,
-    addressBackend,
-    product,
-    productMedia,
-    pricing,
-    stock,
-    account,
-    accountPartner,
-    purchase,
-    sale,
-    pos,
-    storage,
-    productBackend,
-    pricingBackend,
-    stockBackend,
-    accountBackend,
-    partnerBackend,
-    accountPartnerBackend,
-    purchaseBackend,
-    saleBackend,
-    posBackend,
-  ].map((module) => ({
-    name: module.name,
-    title: module.title ?? module.name,
-    summary: module.summary ?? '',
-    category: module.category ?? '',
-    state: 'installed' as const,
-    depends: [...module.depends],
-    dependents: [],
-  }))
-  const html = renderToString(appsScreen(translator(manifest, 'en'), rows))
-
-  assert.match(html, /Product images/)
-  assert.match(html, /Shared countries, versioned administrative divisions/)
-  assert.match(html, /Install and inspect country administrative catalogs/)
-  assert.match(html, /Stock, transfers, and replenishment/)
-  assert.match(html, /Manage company pricelists/)
-  assert.doesNotMatch(html, /Hình ảnh sản phẩm/)
-  assert.doesNotMatch(html, /Quốc gia, catalog địa giới/)
-  assert.doesNotMatch(html, /Tồn kho, dịch chuyển/)
-  assert.doesNotMatch(html, /Danh sách bảng giá theo company/)
 })
 
 test('ketsuite i18n: Product selection labels are translated, not leaked as storage codes', () => {

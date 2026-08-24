@@ -6,10 +6,8 @@ import { models } from './models.ts'
 
 export default defineModule({
   name: 'crm',
-  group: 'crm',
   version: '0.1.0',
   depends: ['company', 'partner', 'user', 'mail', 'activity', 'calendar'],
-  app: true,
   title: 'CRM',
   summary: 'Sales pipeline for leads and opportunities.',
   category: 'Sales',

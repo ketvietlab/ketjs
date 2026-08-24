@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'attendance_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['attendance', 'hr_backend', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Chấm công trong quản trị',
   summary: 'Kiosk, self-service và chốt kỳ công.',
   category: 'Nhân sự',

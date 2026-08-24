@@ -9,15 +9,12 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'user',
-  group: 'system',
   version: '0.1.0',
   depends: ['partner', 'company'],
-  app: true,
   title: 'Người dùng',
   summary: 'Tài khoản đăng nhập và những công ty mỗi tài khoản được vào.',
   category: 'Hệ thống',
   // Removing the accounts would remove every way back in.
-  removable: false,
   models,
   relations,
   functions,

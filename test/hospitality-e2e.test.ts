@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import type { Row, Scope } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const scope: Scope = { company: 'default', companies: ['default'], branches: null }
 
 test('hospitality e2e: authenticated booking and front-desk flow crosses real HTTP', async (t) => {
-  const e2e = await createTestApp(ketsuite)
+  const e2e = await createTestDeployment(ketsuite)
   t.after(() => e2e.close())
   const seed = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
 

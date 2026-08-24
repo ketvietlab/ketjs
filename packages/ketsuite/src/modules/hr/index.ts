@@ -6,10 +6,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'hr',
-  group: 'system',
   version: '0.1.0',
   depends: ['company', 'partner', 'user'],
-  app: true,
   title: 'Nhân sự',
   summary: 'Nhân viên, ca xoay và nghỉ phép.',
   category: 'Nhân sự',

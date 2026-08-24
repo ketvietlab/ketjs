@@ -8,7 +8,6 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'hospitality_billing',
-  group: 'hospitality',
   version: '0.1.0',
   // `backend` for the settings screen, and both sides of the seam this module
   // exists to close. It is optional on purpose: a property that bills outside

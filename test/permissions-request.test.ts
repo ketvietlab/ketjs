@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bootApp, defineApp, defineModule, memorySessionStore, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  bootDeployment,
+  defineDeployment,
+  defineModule,
+  memorySessionStore,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import { createSessions } from '@ketvietlab/ketjs'
 import type { Adapter } from '@ketvietlab/ketjs'
 
@@ -13,7 +19,6 @@ const SECRET = 'permissions-request-test'
  */
 const core = defineModule({
   name: 'core',
-  app: true,
   models: { Grant: { scope: 'shared', fields: { id: 'id', userId: 'text', fn: 'text' } } },
   functions: {
     open: {
@@ -51,12 +56,11 @@ const boot = async () => {
   const dbs = new Map<string, Adapter>()
   const seen: Array<{ tenant: string; path: string }> = []
   const store = memorySessionStore()
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'permission_request',
     modules: [core],
     headless: true,
     serve: {
-      bootstrap: ['core'],
       sessions: { secret: SECRET, store },
       tenants: {
         resolve: (_url, req) => {
@@ -82,7 +86,7 @@ const boot = async () => {
       },
     },
   })
-  const booted = await bootApp(app, { port: 0, log: () => {} })
+  const booted = await bootDeployment(app, { port: 0, log: () => {} })
   const sessions = await createSessions({ secret: SECRET, store })
   const started = await sessions.start({ userId: 'u1', companies: ['c1'], company: 'c1' })
   const cookie = started.cookie.split(';')[0]!

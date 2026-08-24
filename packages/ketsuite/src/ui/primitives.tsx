@@ -19,7 +19,6 @@ export const HOOKS = [
   'person-name',
   'avatar',
   'thumbnail',
-  'app-action',
   'qr-code',
 ] as const
 
@@ -146,18 +145,6 @@ export const person = (name: string): TemplateResult => (
     {avatar(name)}
     <span data-ui="person-name">{name}</span>
   </span>
-)
-
-/**
- * A button that acts on the row or card it sits in.
- *
- * `action` is what it does, not how it looks — the stylesheet decides that the
- * primary one is filled and the rest are outlined, and no caller passes a colour.
- */
-export const actionButton = (o: { label: string; action: string; disabled?: boolean }): TemplateResult => (
-  <button type="button" data-ui="app-action" data-action={o.action} disabled={o.disabled === true}>
-    {o.label}
-  </button>
 )
 
 /** A server-rendered QR matrix with a four-module quiet zone. */

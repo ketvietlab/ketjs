@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const form = { 'content-type': 'application/x-www-form-urlencoded' }
 const post = { headers: form, redirect: 'manual' as const }
 
 const boot = async (t: TestContext) => {
-  const app = await createTestApp(ketsuite)
+  const app = await createTestDeployment(ketsuite)
   t.after(() => app.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>) =>

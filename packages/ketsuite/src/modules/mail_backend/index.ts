@@ -4,11 +4,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'mail_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['mail', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Thảo luận trong quản trị',
   summary: 'Chatter trên bản ghi và hộp thư thông báo.',
   category: 'Năng suất',

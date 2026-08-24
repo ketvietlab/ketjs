@@ -20,10 +20,8 @@ const functions = targetActivityFunctions({
 
 export default defineModule({
   name: 'account_activity_backend',
-  group: 'accounting',
   version: '0.1.0',
   depends: ['account_backend', 'account_mail_backend', 'activity_backend'],
-  install: 'auto',
   functions,
   fills: { 'account_backend:move.collaboration': `{% island "activity.record" %}` },
 })

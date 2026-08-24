@@ -6,10 +6,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'website_form',
-  group: 'system',
   version: '0.1.0',
-  app: true,
-  install: 'auto',
   depends: ['website'],
   title: 'Biểu mẫu website',
   summary: 'Biểu mẫu có cấu trúc, chống spam và lưu submission theo từng website.',

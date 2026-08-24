@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
-import { collaborationEvidenceApp } from '../tools/collaboration-evidence-fixture.ts'
+import { collaborationEvidenceDeployment } from '../tools/collaboration-evidence-fixture.ts'
 
 type Sample = { elapsed: number; bytes: number }
 type Summary = { mean: number; p50: number; p95: number; bytes: number }
@@ -29,7 +29,7 @@ const report = (label: string, summary: Summary, suffix = ''): void =>
 
 const databaseUrl = process.env.KET_BENCH_PG?.trim()
 const onlyScreen = process.env.KET_BENCH_SCREEN?.trim()
-const e2e = await collaborationEvidenceApp(databaseUrl ? { databaseUrl } : {})
+const e2e = await collaborationEvidenceDeployment(databaseUrl ? { databaseUrl } : {})
 try {
   await e2e.client.login({ login: 'admin', password: 'correct horse' })
   const screens = [

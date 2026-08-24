@@ -4,11 +4,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'stock_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['stock', 'backend'],
-  install: 'auto',
-  app: true,
   assets: new URL('./client/', import.meta.url),
   islands,
   title: 'Kho trong quản trị',

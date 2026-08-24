@@ -7,11 +7,9 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'attendance',
-  group: 'system',
   version: '0.1.0',
   depends: ['hr', 'channel_api'],
   compatible: { channel_api: '^1' },
-  app: true,
   title: 'Chấm công',
   summary: 'Kiosk, nhật ký công và chốt kỳ tháng.',
   category: 'Nhân sự',

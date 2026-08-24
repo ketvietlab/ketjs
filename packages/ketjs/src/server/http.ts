@@ -43,7 +43,7 @@ export type ServeOpts = {
     | ThemeRuntime['clients']
     | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['clients']>)
   port?: number
-  /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
+  /** Defaults to a table on the deployment adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
   /**
    * Which language this request is in. Resolved in one place, like the datastore,
@@ -74,8 +74,8 @@ export type ServeOpts = {
 
 /**
  * A mount is either a directory, or a function from the rest of the path to an
- * absolute file — which is how a module's assets can stop being served the moment
- * the module is uninstalled, without rebuilding the server.
+ * absolute file — which lets a composed module resolve its own assets without
+ * coupling the server to that module's file layout.
  */
 export type AssetMount = {
   prefix: string
@@ -372,7 +372,7 @@ export async function createKetServer(o: ServeOpts) {
       throw new KetErr({
         code: 'E_UNKNOWN_TENANT',
         message: `no datastore for ${url.host}${url.pathname}`,
-        hint: 'resolveDatastore returned null — the request names a tenant this app does not serve',
+        hint: 'resolveDatastore returned null — the request names a tenant this deployment does not serve',
       })
     }
     return o.pool.with(key, fn)
@@ -412,10 +412,9 @@ export async function createKetServer(o: ServeOpts) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     try {
-      // Static files. Several mounts, because the app has its own and every
-      // installed module may ship some — and a module's must stop being served the
-      // moment it is switched off, which is what `resolve` is for: it answers per
-      // request instead of being fixed when the server was built.
+      // Static files. Several mounts, because the deployment has its own and every
+      // composed module may ship some. `resolve` keeps the file lookup behind the
+      // same request boundary as every other route.
       for (const mount of mounts) {
         if (!url.pathname.startsWith(mount.prefix)) continue
         // Path traversal is the one thing a static handler must not get wrong.
