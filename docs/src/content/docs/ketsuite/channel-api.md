@@ -117,18 +117,19 @@ customer one. The customer profile hands the CSRF token over at sign-in; staff s
 framework, which knows nothing about this channel, so `staff/bootstrap` is where it is handed over. A
 client that has not bootstrapped cannot mutate.
 
-`sale_staff_channel` currently contributes the first read-only sales slice:
-`GET sales/customers` and `GET sales/customers/{id}`. Both call the permission-checked Partner functions,
-admit only active partners holding the `customer` role, and project no raw contact or street-address fields.
-Order mutations and product lookup remain outside this module until their mobile ownership, concurrency,
-availability, and product-kind contracts can be represented by the public domain without guessing.
+`sale_staff_channel` contributes read-only customer and order slices. Customer lookup admits only active
+partners holding the `customer` role and projects no raw contact or street-address fields. Order list and
+detail call Sale's bounded, company-scoped functions and return server totals plus line data, delivery-move
+progress, and invoice counts without claiming a writable aggregate version. Order mutations and product lookup remain outside this
+module until their mobile ownership, concurrency, availability, and product-kind contracts can be represented
+by the public domain without guessing.
 
-`purchase_staff_channel` currently contributes the first read-only purchasing slice:
-`GET purchasing/vendors` and `GET purchasing/vendors/{id}`. Both call the permission-checked Partner
-functions, admit only active partners holding the `supplier` role, and project no raw contact or
-street-address fields. Purchase mutations, bills, and product lookup remain outside this module until
-their mobile ownership, concurrency, workflow, and product-kind contracts can be represented by the
-public domain without guessing.
+`purchase_staff_channel` contributes read-only vendor, order, and vendor-bill slices. Vendor lookup has the
+same role and privacy boundary as customer lookup. Purchase orders expose server totals and receipt/billing
+progress without writable actions or synthetic versions. Vendor bills expose document state and totals but
+withhold ledger posting lines; posting, matching, payment, and e-invoice maintenance remain back-office work.
+Purchase mutations and product lookup remain outside this module until their mobile ownership, concurrency,
+workflow, and product-kind contracts can be represented by the public domain without guessing.
 
 ## Contract behavior
 

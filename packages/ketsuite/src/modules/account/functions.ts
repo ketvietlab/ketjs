@@ -1,4 +1,4 @@
-import { and, asc, defineFn, eq, from, gte, inArray, lte } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, desc, eq, from, gte, ilike, inArray, lte, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { moneyText, roundMoney, scaleOf, toleranceOf } from './money.ts'
 import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
@@ -179,6 +179,7 @@ const refused = (field: string, error: unknown) =>
 
 const n = (value: unknown): number => Number(value ?? 0)
 const today = (): string => new Date().toISOString()
+const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 /** The currency a ledger write is denominated in, with the scale its arithmetic must use. */
 type Ledger = { currency: string; scale: number }
@@ -963,9 +964,12 @@ export const functions: Record<string, FnSpec> = {
       moveType: 'text?',
       moveTypes: 'json?',
       state: 'text?',
+      paymentState: 'text?',
       partnerId: 'id?',
+      search: 'text?',
       dateFrom: 'datetime?',
       dateTo: 'datetime?',
+      order: 'text?',
       limit: 'int?',
       offset: 'int?',
     },
@@ -977,11 +981,24 @@ export const functions: Record<string, FnSpec> = {
         ...(args.moveType ? [eq(M.moveType, args.moveType)] : []),
         ...(moveTypeList(args.moveTypes).length ? [inArray(M.moveType, moveTypeList(args.moveTypes))] : []),
         ...(args.state ? [eq(M.state, args.state)] : []),
+        ...(args.paymentState ? [eq(M.paymentState, args.paymentState)] : []),
         ...(args.partnerId ? [eq(M.partnerId, args.partnerId)] : []),
+        ...(args.search
+          ? [
+              or(
+                ilike(M.name, `%${wildcard(args.search)}%`, true),
+                ilike(M.ref, `%${wildcard(args.search)}%`, true),
+              ),
+            ]
+          : []),
         ...(args.dateFrom ? [gte(M.date, args.dateFrom)] : []),
         ...(args.dateTo ? [lte(M.date, args.dateTo)] : []),
       ]
-      const q = (where.length ? from(M).where(and(...where)) : from(M)).orderBy(asc(M.date), asc(M.id))
+      const direction = args.order === 'desc' ? desc : asc
+      const q = (where.length ? from(M).where(and(...where)) : from(M)).orderBy(
+        direction(M.date),
+        direction(M.id),
+      )
       return ctx.db.all(paginate(q, args.limit, args.offset))
     },
   }),
