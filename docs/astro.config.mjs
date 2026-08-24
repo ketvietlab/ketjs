@@ -139,6 +139,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Product', slug: 'ketsuite/product' },
+                { label: 'Manufacturing', slug: 'ketsuite/manufacturing' },
                 { label: 'CRM', slug: 'ketsuite/crm' },
                 { label: 'Loyalty', slug: 'ketsuite/loyalty' },
                 { label: 'Accounting ledger', slug: 'ketsuite/accounting' },
