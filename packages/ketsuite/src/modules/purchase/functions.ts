@@ -1,4 +1,4 @@
-import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, desc, eq, from, ilike, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as stockFunctions } from '../stock/functions.ts'
 import { convertQty, type Unit, UomError } from '../uom/convert.ts'
@@ -12,6 +12,7 @@ const n = (value: unknown): number => Number(value ?? 0)
 const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
 const decimal = (value: number): string => String(money(value))
 const now = (): string => new Date().toISOString()
+const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 async function currency(ctx: Ctx): Promise<string> {
   if (!ctx.scope.company) throw new Error('purchase requires an active company')
@@ -527,14 +528,41 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listOrders: defineFn({
-    input: { state: 'text?', partnerId: 'id?' },
+    input: {
+      state: 'text?',
+      states: 'json?',
+      partnerId: 'id?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:purchase.Order'],
     agent: true,
-    handler: (ctx, args) =>
-      ctx.db.select('purchase.Order', {
-        ...(args.state ? { state: args.state } : {}),
-        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
-      }),
+    handler: (ctx, args) => {
+      const O = ctx.table('purchase.Order')
+      const states = Array.isArray(args.states) ? args.states.map(String) : []
+      const limit = Math.max(1, Math.min(Math.trunc(Number(args.limit) || 500), 2_000))
+      return ctx.db.all(
+        from(O)
+          .where(
+            eq(O.companyId, ctx.scope.company),
+            ...(args.state ? [eq(O.state, String(args.state))] : []),
+            ...(states.length ? [inArray(O.state, states)] : []),
+            ...(args.partnerId ? [eq(O.partnerId, String(args.partnerId))] : []),
+            ...(args.search
+              ? [
+                  or(
+                    ilike(O.name, `%${wildcard(args.search)}%`, true),
+                    ilike(O.partnerRef, `%${wildcard(args.search)}%`, true),
+                  ),
+                ]
+              : []),
+          )
+          .orderBy(desc(O.dateOrder), desc(O.id))
+          .limit(limit)
+          .offset(Math.max(0, Math.trunc(Number(args.offset) || 0))),
+      )
+    },
   }),
   getOrder: defineFn({
     input: { id: 'id' },

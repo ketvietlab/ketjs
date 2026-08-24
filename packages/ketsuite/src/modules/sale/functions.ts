@@ -1,4 +1,4 @@
-import { defineFn, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, desc, eq, from, ilike, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -12,6 +12,7 @@ const n = (value: unknown) => Number(value ?? 0)
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const decimal = (value: number) => String(money(value))
 const now = () => new Date().toISOString()
+const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 async function companyCurrency(ctx: Ctx) {
   const row = (await ctx.db.select('company.Company', { id: company(ctx) }))[0]
@@ -282,7 +283,14 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listOrders: defineFn({
-    input: { state: 'text?', states: 'json?', partnerId: 'id?', limit: 'int?', offset: 'int?' },
+    input: {
+      state: 'text?',
+      states: 'json?',
+      partnerId: 'id?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:sale.Order'],
     agent: true,
     // Bounded and newest-first. Unbounded, a tenant with an imported order
@@ -299,6 +307,14 @@ export const functions: Record<string, FnSpec> = {
             ...(args.state ? [eq(O.state, String(args.state))] : []),
             ...(states.length ? [inArray(O.state, states)] : []),
             ...(args.partnerId ? [eq(O.partnerId, String(args.partnerId))] : []),
+            ...(args.search
+              ? [
+                  or(
+                    ilike(O.name, `%${wildcard(args.search)}%`, true),
+                    ilike(O.clientOrderRef, `%${wildcard(args.search)}%`, true),
+                  ),
+                ]
+              : []),
           )
           .orderBy(desc(O.dateOrder), desc(O.id))
           .limit(limit)

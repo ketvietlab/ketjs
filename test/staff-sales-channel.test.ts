@@ -44,6 +44,49 @@ const boot = async (t: TestContext) => {
   return e2e
 }
 
+const seedOrders = async (e2e: Awaited<ReturnType<typeof boot>>) => {
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  await fixture('uom.saveUnit', { id: 'unit', name: 'Đơn vị', relativeFactor: '1' })
+  await fixture('product.saveTemplate', {
+    id: 'goods',
+    name: 'Ghế công thái học',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '3000000',
+    saleOk: true,
+  })
+  await fixture('product.saveVariant', {
+    id: 'chair',
+    templateId: 'goods',
+    defaultCode: 'GHE-01',
+    combinationKey: '',
+  })
+  await fixture('stock.saveWarehouse', { id: 'wh', name: 'Kho chính', code: 'WH' })
+  await fixture('sale.createOrder', {
+    id: 'so-a',
+    partnerId: 'customer-a',
+    warehouseId: 'wh',
+    clientOrderRef: 'SPECIAL-ORDER',
+    dateOrder: '2026-08-20T00:00:00.000Z',
+    notes: 'Giao giờ hành chính',
+  })
+  await fixture('sale.addLine', {
+    id: 'so-a:line',
+    orderId: 'so-a',
+    productId: 'chair',
+    productUomQty: '2',
+    productUomId: 'unit',
+  })
+  await fixture('sale.createOrder', {
+    id: 'so-b',
+    partnerId: 'customer-b',
+    warehouseId: 'wh',
+    dateOrder: '2026-08-21T00:00:00.000Z',
+  })
+}
+
 test('staff sales channel lists only customers with bounded cursor pagination', async (t) => {
   const e2e = await boot(t)
   assert.equal((await e2e.client.get('/api/staff/v1/sales/customers')).status, 401)
@@ -81,4 +124,56 @@ test('staff sales channel returns a read-only customer and hides non-customer pa
   const supplier = await e2e.client.get('/api/staff/v1/sales/customers/supplier')
   assert.equal(supplier.status, 404)
   assert.equal(((await supplier.json()) as Envelope<null>).error?.code, 'sale_staff_channel.customerNotFound')
+})
+
+test('staff sales channel pages and searches bounded order summaries', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/orders')).status, 401)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const first = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      '/api/staff/v1/sales/orders?limit=1',
+    )
+  ).data
+  assert.equal(first.items[0]?.id, 'so-b')
+  assert.ok(first.nextCursor)
+
+  const searched = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      '/api/staff/v1/sales/orders?query=SPECIAL',
+    )
+  ).data
+  assert.deepEqual(
+    searched.items.map((item) => item.id),
+    ['so-a'],
+  )
+  assert.deepEqual(searched.items[0]?.customer, { id: 'customer-a', name: 'An Nhiên' })
+  assert.deepEqual(searched.items[0]?.total, { currency: 'VND', amount: '6000000' })
+})
+
+test('staff sales channel returns a narrow read-only order detail', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const response = await e2e.client.json<Envelope<Row>>('/api/staff/v1/sales/orders/so-a/detail')
+  assert.equal(response.data.id, 'so-a')
+  assert.equal(response.data.customerReference, 'SPECIAL-ORDER')
+  assert.equal(response.data.readOnly, true)
+  assert.deepEqual(response.data.lines, [
+    {
+      id: 'so-a:line',
+      productId: 'chair',
+      name: 'Ghế công thái học',
+      quantity: '2',
+      uomId: 'unit',
+      unitPrice: '3000000',
+      discount: '0',
+      subtotal: '6000000',
+    },
+  ])
+
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
 })
