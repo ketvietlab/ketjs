@@ -117,6 +117,9 @@ const REFUSALS = {
 
   invoiceTypeRequired: 'createInvoice requires an invoice, refund, or receipt type',
   invoiceAccountsMissing: 'invoice accounts do not exist',
+  invoiceLinesAndSingle: 'give either lines or a single description, not both',
+  invoiceLinesEmpty: 'an invoice needs at least one line',
+  invoiceLineRequired: 'every invoice line needs a description',
   lineAccountUndecided:
     'no revenue or expense account was given, and neither the product category nor the company has a default',
   counterpartAccountUndecided:
@@ -1187,6 +1190,20 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, existing: true }
     },
   }),
+  /**
+   * An invoice, in one call, with one line or many.
+   *
+   * A document with several lines cannot be assembled out of `createMove` and
+   * `addMoveLine`: those write exactly what they are given, and the tax a line
+   * carries has to become a posting of its own, computed in the order taxes
+   * compound. Leaving that to callers means every caller re-derives VAT, and
+   * they will not all round it the same way.
+   *
+   * So `lines` is the general form and the flat `description`/`quantity`/
+   * `priceUnit` arguments are the one-line shorthand. A single-line document
+   * built either way lands on the same rows with the same ids, which is what
+   * lets an existing caller keep its `${id}:base` and `${id}:tax` identifiers.
+   */
   createInvoice: defineFn({
     input: {
       id: 'id',
@@ -1196,11 +1213,20 @@ export const functions: Record<string, FnSpec> = {
       invoiceDate: 'datetime?',
       paymentTermId: 'id?',
       ref: 'text?',
-      description: 'text',
+      /**
+       * The lines of the document, when there is more than one.
+       *
+       * `{ description, quantity, priceUnit, productId?, productUomId?,
+       * discount?, taxId?, taxIds?, lineAccountId?, taxAccountId? }` — the same
+       * fields as the shorthand below, per line. Give this or the shorthand,
+       * never both.
+       */
+      lines: 'json?',
+      description: 'text?',
       productId: 'id?',
       productUomId: 'id?',
-      quantity: 'decimal',
-      priceUnit: 'decimal',
+      quantity: 'decimal?',
+      priceUnit: 'decimal?',
       discount: 'decimal?',
       // Optional: left out, they come from the product's category, the partner,
       // and the company's defaults, in that order.
@@ -1235,55 +1261,117 @@ export const functions: Record<string, FnSpec> = {
       const customerDocument = ['out_invoice', 'out_refund', 'out_receipt'].includes(String(args.moveType))
       if (journal.type !== (customerDocument ? 'sale' : 'purchase'))
         return invalid('journalId', customerDocument ? 'journalMustBeSale' : 'journalMustBePurchase')
-      const resolved = await resolveAccounts(
+
+      // One shape or the other. Accepting both would leave the shorthand's line
+      // either silently dropped or silently appended, and neither is obvious
+      // from the call site.
+      const many = args.lines !== undefined && args.lines !== null
+      if (many && args.description !== undefined) return invalid('lines', 'invoiceLinesAndSingle')
+      const given: unknown[] = many ? (Array.isArray(args.lines) ? args.lines : []) : [args]
+      if (many && !given.length) return invalid('lines', 'invoiceLinesEmpty')
+      if (!many && (args.description === undefined || args.description === null))
+        return invalid('description', 'invoiceLineRequired')
+
+      const { currency, scale } = await ledgerOf(ctx)
+
+      /** A line as it will be written, with its taxes already applied. */
+      type Priced = {
+        spec: Record<string, unknown>
+        accountId: unknown
+        amounts: LineAmounts
+        firstTaxId: unknown
+      }
+      const priced: Priced[] = []
+      // Tax shares are accumulated across the whole document: two lines at the
+      // same rate post one tax line, as a paper invoice shows one VAT figure per
+      // rate rather than one per row.
+      const shares = new Map<string, TaxShare & { accountId: unknown }>()
+
+      for (const [at, entry] of given.entries()) {
+        const spec = (entry ?? {}) as Record<string, unknown>
+        const where = many ? `lines.${at}` : 'description'
+        if (spec.description === undefined || spec.description === null)
+          return invalid(where, 'invoiceLineRequired')
+
+        const resolved = await resolveAccounts(
+          ctx,
+          { moveType: String(args.moveType), partnerId: args.partnerId, productId: spec.productId },
+          { lineAccountId: spec.lineAccountId },
+        )
+        if (!resolved.lineAccountId) return invalid(many ? where : 'lineAccountId', 'lineAccountUndecided')
+        if (!(await accountOf(ctx, resolved.lineAccountId)))
+          return invalid(many ? where : 'lineAccountId', 'invoiceAccountsMissing')
+
+        // `taxId` stays accepted so existing callers keep working; `taxIds` is how a
+        // line carries the sequence of taxes that compound into one another.
+        const wanted = [
+          ...(Array.isArray(spec.taxIds) ? spec.taxIds.map(String) : []),
+          ...(spec.taxId ? [String(spec.taxId)] : []),
+        ].filter((id, index, all) => all.indexOf(id) === index)
+        const taxes: Row[] = []
+        for (const id of wanted) {
+          const tax = (await ctx.db.select('account.Tax', { id }))[0]
+          if (!tax) return invalid(many ? where : 'taxIds', 'taxMissing')
+          if (![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
+            return invalid(many ? where : 'taxIds', 'taxDirectionMismatch', { name: tax.name })
+          taxes.push(tax)
+        }
+
+        let amounts: LineAmounts
+        try {
+          amounts = taxAmounts(taxes, n(spec.quantity), n(spec.priceUnit), n(spec.discount), scale)
+        } catch (error) {
+          return refused(many ? where : 'taxIds', error)
+        }
+
+        // Each tax posts to its own account. A single override stays meaningful only
+        // while there is one tax to override.
+        for (const held of amounts.shares) {
+          if (!held.amount) continue
+          const accountId = (amounts.shares.length === 1 ? spec.taxAccountId : null) ?? held.accountId
+          if (!accountId || !(await accountOf(ctx, accountId)))
+            return invalid(many ? where : 'taxAccountId', 'taxPostingAccountMissing', { name: held.name })
+          const key = `${String(held.taxId)}:${String(accountId)}`
+          const running = shares.get(key)
+          if (running) running.amount = roundMoney(running.amount + held.amount, scale)
+          else shares.set(key, { ...held, accountId })
+        }
+
+        priced.push({
+          spec,
+          accountId: resolved.lineAccountId,
+          amounts,
+          firstTaxId: taxes[0]?.id ?? null,
+        })
+      }
+
+      // After the lines, so a document with nothing to post still reports the
+      // revenue account it could not decide before the receivable one.
+      const resolvedCounterpart = await resolveAccounts(
         ctx,
-        { moveType: String(args.moveType), partnerId: args.partnerId, productId: args.productId },
-        { lineAccountId: args.lineAccountId, counterpartAccountId: args.counterpartAccountId },
+        { moveType: String(args.moveType), partnerId: args.partnerId },
+        { counterpartAccountId: args.counterpartAccountId },
       )
-      if (!resolved.lineAccountId) return invalid('lineAccountId', 'lineAccountUndecided')
-      if (!resolved.counterpartAccountId)
+      if (!resolvedCounterpart.counterpartAccountId)
         return invalid('counterpartAccountId', 'counterpartAccountUndecided')
-      const lineAccount = await accountOf(ctx, resolved.lineAccountId),
-        counterpart = await accountOf(ctx, resolved.counterpartAccountId)
-      if (!lineAccount || !counterpart) return invalid('accountId', 'invoiceAccountsMissing')
+      const counterpart = await accountOf(ctx, resolvedCounterpart.counterpartAccountId)
+      if (!counterpart) return invalid('counterpartAccountId', 'invoiceAccountsMissing')
       if (counterpart.accountType !== (customerDocument ? 'asset_receivable' : 'liability_payable'))
         return invalid(
           'counterpartAccountId',
           customerDocument ? 'counterpartMustBeReceivable' : 'counterpartMustBePayable',
         )
 
-      // `taxId` stays accepted so existing callers keep working; `taxIds` is how a
-      // line carries the sequence of taxes that compound into one another.
-      const wanted = [
-        ...(Array.isArray(args.taxIds) ? args.taxIds.map(String) : []),
-        ...(args.taxId ? [String(args.taxId)] : []),
-      ].filter((id, at, all) => all.indexOf(id) === at)
-      const taxes: Row[] = []
-      for (const id of wanted) {
-        const tax = (await ctx.db.select('account.Tax', { id }))[0]
-        if (!tax) return invalid('taxIds', 'taxMissing')
-        if (![customerDocument ? 'sale' : 'purchase', 'none'].includes(String(tax.typeTaxUse)))
-          return invalid('taxIds', 'taxDirectionMismatch', { name: tax.name })
-        taxes.push(tax)
-      }
-
-      const { currency, scale } = await ledgerOf(ctx)
-      let amounts: LineAmounts
-      try {
-        amounts = taxAmounts(taxes, n(args.quantity), n(args.priceUnit), n(args.discount), scale)
-      } catch (error) {
-        return refused('taxIds', error)
-      }
-      // Each tax posts to its own account. A single override stays meaningful only
-      // while there is one tax to override.
-      const posting: Array<TaxShare & { accountId: unknown }> = []
-      for (const held of amounts.shares) {
-        if (!held.amount) continue
-        const accountId = (amounts.shares.length === 1 ? args.taxAccountId : null) ?? held.accountId
-        if (!accountId || !(await accountOf(ctx, accountId)))
-          return invalid('taxAccountId', 'taxPostingAccountMissing', { name: held.name })
-        posting.push({ ...held, accountId })
-      }
+      const untaxed = roundMoney(
+        priced.reduce((sum, line) => sum + line.amounts.untaxed, 0),
+        scale,
+      )
+      const tax = roundMoney(
+        [...shares.values()].reduce((sum, held) => sum + held.amount, 0),
+        scale,
+      )
+      const total = roundMoney(untaxed + tax, scale)
+      const posting = [...shares.values()]
 
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
@@ -1305,9 +1393,9 @@ export const functions: Record<string, FnSpec> = {
           paymentTermId: args.paymentTermId ?? null,
           paymentState: 'not_paid',
           currency,
-          amountUntaxed: moneyText(amounts.untaxed, scale),
-          amountTax: moneyText(amounts.tax, scale),
-          amountTotal: moneyText(amounts.total, scale),
+          amountUntaxed: moneyText(untaxed, scale),
+          amountTax: moneyText(tax, scale),
+          amountTotal: moneyText(total, scale),
           postedAt: null,
         })
         const line = async (
@@ -1341,22 +1429,26 @@ export const functions: Record<string, FnSpec> = {
             sequence: 10,
             ...extra,
           })
-        await line(
-          `${String(args.id)}:base`,
-          resolved.lineAccountId,
-          amounts.untaxed,
-          mainDebit,
-          String(args.description),
-          false,
-          {
-            productId: args.productId ?? null,
-            productUomId: args.productUomId ?? null,
-            quantity: String(args.quantity),
-            priceUnit: String(args.priceUnit),
-            discount: String(args.discount ?? 0),
-            taxId: taxes[0]?.id ?? null,
-          },
-        )
+        for (const [at, held] of priced.entries())
+          await line(
+            // The first line keeps the historical id, so a single-line document
+            // written through either shape lands on exactly the same row.
+            at === 0 ? `${String(args.id)}:base` : `${String(args.id)}:base:${at}`,
+            held.accountId,
+            held.amounts.untaxed,
+            mainDebit,
+            String(held.spec.description),
+            false,
+            {
+              productId: held.spec.productId ?? null,
+              productUomId: held.spec.productUomId ?? null,
+              quantity: String(held.spec.quantity ?? 0),
+              priceUnit: String(held.spec.priceUnit ?? 0),
+              discount: String(held.spec.discount ?? 0),
+              taxId: held.firstTaxId,
+              sequence: 10 + at,
+            },
+          )
         for (const [at, held] of posting.entries())
           await line(
             // The first tax line keeps the historical id so an existing document
@@ -1367,19 +1459,19 @@ export const functions: Record<string, FnSpec> = {
             mainDebit,
             held.name,
             false,
-            { taxId: held.taxId, sequence: 20 + at },
+            { taxId: held.taxId, sequence: 10 + priced.length + at },
           )
         await line(
           `${String(args.id)}:counterpart`,
-          resolved.counterpartAccountId,
-          amounts.total,
+          resolvedCounterpart.counterpartAccountId,
+          total,
           !mainDebit,
-          String(args.ref ?? args.description),
+          String(args.ref ?? priced[0]?.spec.description ?? args.id),
           true,
-          { dateMaturity: due, sequence: 30 + posting.length },
+          { dateMaturity: due, sequence: 10 + priced.length + posting.length },
         )
       })
-      return { ok: true, id: args.id, amountTotal: moneyText(amounts.total, scale) }
+      return { ok: true, id: args.id, amountTotal: moneyText(total, scale) }
     },
   }),
   postMove: defineFn({
