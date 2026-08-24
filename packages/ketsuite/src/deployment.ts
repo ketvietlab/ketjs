@@ -61,6 +61,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.loyaltySale,
       suite.loyaltyPos,
       suite.crm,
+      suite.crmStaffChannel,
       suite.crmSale,
       suite.crmWebsite,
       suite.accountPartner,
