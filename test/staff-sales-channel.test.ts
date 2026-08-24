@@ -88,6 +88,67 @@ const seedOrders = async (e2e: Awaited<ReturnType<typeof boot>>) => {
   })
 }
 
+const seedProducts = async (e2e: Awaited<ReturnType<typeof boot>>) => {
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  await fixture('uom.saveUnit', { id: 'kg', name: 'kg', relativeFactor: '1' })
+  await fixture('product.saveCategory', { id: 'fruit', name: 'Trái cây' })
+  for (const template of [
+    {
+      id: 'stock-template',
+      name: 'Xoài Cát',
+      type: 'goods',
+      categoryId: 'fruit',
+      uomId: 'kg',
+      saleOk: true,
+      purchaseOk: false,
+    },
+    {
+      id: 'consumable-template',
+      name: 'Túi giấy',
+      type: 'goods',
+      uomId: 'kg',
+      saleOk: true,
+      purchaseOk: false,
+    },
+    {
+      id: 'service-template',
+      name: 'Gói quà',
+      type: 'service',
+      uomId: 'kg',
+      saleOk: true,
+      purchaseOk: false,
+    },
+    {
+      id: 'purchase-only-template',
+      name: 'Không được bán',
+      type: 'goods',
+      uomId: 'kg',
+      saleOk: false,
+      purchaseOk: true,
+    },
+  ])
+    await fixture('product.saveTemplate', { listPrice: '0', ...template })
+  for (const [id, templateId, defaultCode] of [
+    ['a-stock', 'stock-template', 'XCAT-01'],
+    ['b-consumable', 'consumable-template', 'TUI-01'],
+    ['c-service', 'service-template', 'GOI-01'],
+    ['d-purchase-only', 'purchase-only-template', 'BUY-ONLY'],
+  ])
+    await fixture('product.saveVariant', { id, templateId, defaultCode, combinationKey: '' })
+  await fixture('stock.configureProduct', {
+    templateId: 'stock-template',
+    isStorable: true,
+    tracking: 'none',
+  })
+  await fixture('stock.configureProduct', {
+    templateId: 'consumable-template',
+    isStorable: false,
+    tracking: 'none',
+  })
+}
+
 test('staff sales channel lists only customers with bounded cursor pagination', async (t) => {
   const e2e = await boot(t)
   assert.equal((await e2e.client.get('/api/staff/v1/sales/customers')).status, 401)
@@ -177,6 +238,72 @@ test('staff sales channel returns a narrow read-only order detail', async (t) =>
   ])
 
   assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
+})
+
+test('staff sales channel exposes only bounded sellable product projections', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products')).status, 401)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const first = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      '/api/staff/v1/sales/products?limit=1',
+    )
+  ).data
+  assert.deepEqual(first.items, [
+    {
+      id: 'a-stock',
+      name: 'Xoài Cát',
+      kind: 'stockable',
+      sku: 'XCAT-01',
+      category: 'Trái cây',
+      uom: { id: 'kg', name: 'kg' },
+    },
+  ])
+  assert.ok(first.nextCursor)
+
+  const rest = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      `/api/staff/v1/sales/products?limit=2&cursor=${encodeURIComponent(first.nextCursor!)}`,
+    )
+  ).data
+  assert.deepEqual(
+    rest.items.map((item) => [item.id, item.kind]),
+    [
+      ['b-consumable', 'consumable'],
+      ['c-service', 'service'],
+    ],
+  )
+  assert.equal(rest.nextCursor, null)
+
+  const searched = (
+    await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/sales/products?query=Xoài')
+  ).data
+  assert.deepEqual(
+    searched.items.map((item) => item.id),
+    ['a-stock'],
+  )
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products?query=x')).status, 422)
+})
+
+test('staff sales channel reads one sellable product and hides unsuitable variants', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const product = await e2e.client.json<Envelope<Row>>('/api/staff/v1/sales/products/a-stock')
+  assert.deepEqual(product.data, {
+    id: 'a-stock',
+    name: 'Xoài Cát',
+    kind: 'stockable',
+    sku: 'XCAT-01',
+    category: 'Trái cây',
+    uom: { id: 'kg', name: 'kg' },
+    readOnly: true,
+  })
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products/d-purchase-only')).status, 404)
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products/missing')).status, 404)
 })
 
 test('staff sales channel names every customer on a page in one lookup', async (t) => {

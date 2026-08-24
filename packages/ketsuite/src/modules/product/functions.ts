@@ -28,7 +28,11 @@ const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]
  * here costs nothing and keeps the picker's contract — a `search` term and a
  * `limit` on every call — satisfiable without a second query path.
  */
-const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields: string[]): Row[] => {
+const narrow = (
+  rows: Row[],
+  args: { search?: unknown; limit?: unknown; offset?: unknown },
+  fields: string[],
+): Row[] => {
   const needle = String(args.search ?? '')
     .trim()
     .toLocaleLowerCase()
@@ -41,8 +45,10 @@ const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields
         ),
       )
     : rows
+  const rawOffset = Number(args.offset)
+  const offset = Number.isInteger(rawOffset) && rawOffset > 0 ? rawOffset : 0
   const limit = Number(args.limit)
-  return Number.isInteger(limit) && limit > 0 ? matched.slice(0, limit) : matched
+  return Number.isInteger(limit) && limit > 0 ? matched.slice(offset, offset + limit) : matched.slice(offset)
 }
 
 /**
@@ -189,6 +195,17 @@ const describeVariants = async (ctx: Ctx, products: Row[]): Promise<Row[]> => {
   })
 }
 
+const templateSummary = (template: Row) => ({
+  id: String(template.id),
+  name: String(template.name),
+  type: String(template.type),
+  categoryId: template.categoryId == null ? null : String(template.categoryId),
+  uomId: template.uomId == null ? null : String(template.uomId),
+  saleOk: template.saleOk === true,
+  purchaseOk: template.purchaseOk === true,
+  active: template.active !== false,
+})
+
 type FieldErrors = { ok: false; errors: Array<{ field: string; message: string }> }
 type UomTarget = { ok: true; company: string; id: string; existing: Row | undefined }
 
@@ -291,7 +308,16 @@ export const functions: Record<string, FnSpec> = {
    * which are the three things a person has in front of them.
    */
   listVariants: defineFn({
-    input: { templateId: 'id?', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    input: {
+      templateId: 'id?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+      includeArchived: 'bool?',
+      saleOk: 'bool?',
+      purchaseOk: 'bool?',
+      requireUom: 'bool?',
+    },
     effects: [
       'read:product.Product',
       'read:product.Template',
@@ -307,19 +333,56 @@ export const functions: Record<string, FnSpec> = {
         'product.Product',
         args.templateId == null ? {} : { templateId: args.templateId },
       )
-      const live = args.includeArchived === true ? rows : rows.filter((row) => row.active !== false)
-      const described = await describeVariants(ctx, live)
+      const templates = new Map((await ctx.db.select('product.Template')).map((row) => [String(row.id), row]))
+      const eligible = rows.filter((row) => {
+        const template = templates.get(String(row.templateId))
+        if (!template) return false
+        if (args.includeArchived !== true && (row.active === false || template.active === false)) return false
+        if (args.saleOk === true && template.saleOk !== true) return false
+        if (args.purchaseOk === true && template.purchaseOk !== true) return false
+        if (args.requireUom === true && template.uomId == null) return false
+        return true
+      })
+      const described = await describeVariants(ctx, eligible)
       // The template's name is what makes a variant recognisable in a list that
       // spans the catalogue: "Xanh nghiệp vụ" alone says nothing about which
       // product it belongs to.
-      const templates = new Map(
-        (await ctx.db.select('product.Template')).map((row) => [String(row.id), String(row.name)]),
-      )
-      const labelled = described.map((variant) => ({
+      const labelled: Row[] = described.map((variant) => ({
         ...variant,
-        templateName: templates.get(String(variant.templateId)) ?? null,
+        templateName:
+          templates.get(String(variant.templateId))?.name == null
+            ? null
+            : String(templates.get(String(variant.templateId))!.name),
+        template: templateSummary(templates.get(String(variant.templateId))!),
       }))
-      return narrow(labelled, args, ['name', 'templateName', 'defaultCode', 'barcode'])
+      return narrow(
+        labelled.sort((left, right) => String(left.id).localeCompare(String(right.id))),
+        args,
+        ['name', 'templateName', 'defaultCode', 'barcode'],
+      )
+    },
+  }),
+
+  /** Safe catalogue detail without company cost or barcode-unit records. */
+  getVariantSummary: defineFn({
+    input: { id: 'id' },
+    effects: [
+      'read:product.Product',
+      'read:product.Template',
+      'read:product.ProductValue',
+      'read:product.TemplateAttributeValue',
+      'read:product.TemplateAttributeLine',
+      'read:product.AttributeValue',
+      'read:product.Attribute',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const found = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      if (!found) return null
+      const template = (await ctx.db.select('product.Template', { id: found.templateId }))[0]
+      if (!template) return null
+      const product = (await describeVariants(ctx, [found]))[0]!
+      return { ...product, template: templateSummary(template) }
     },
   }),
 

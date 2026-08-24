@@ -200,6 +200,23 @@ export const functions: Record<string, FnSpec> = {
         : null
     },
   }),
+  /** Batch companion to getProductConfig for bounded catalogue projections. */
+  listProductConfigs: defineFn({
+    input: { templateIds: 'json' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = new Set(Array.isArray(args.templateIds) ? args.templateIds.map(String) : [])
+      if (!ids.size) return []
+      return (await ctx.db.select('product.Template'))
+        .filter((template) => ids.has(String(template.id)))
+        .map((template) => ({
+          templateId: String(template.id),
+          isStorable: Boolean(template.isStorable),
+          tracking: String(template.tracking ?? 'none'),
+        }))
+    },
+  }),
   configureProduct: defineFn({
     input: { templateId: 'id', isStorable: 'bool', tracking: 'text?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
