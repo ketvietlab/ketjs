@@ -5,10 +5,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'manufacturing',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['product', 'uom', 'stock'],
-  app: true,
   title: 'Sản xuất',
   summary: 'Định mức, công đoạn và lệnh sản xuất kết nối tồn kho.',
   category: 'Sản xuất',
