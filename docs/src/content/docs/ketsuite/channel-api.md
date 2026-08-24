@@ -133,6 +133,14 @@ Product lookup applies the same active variant, live UOM, and product-kind rules
 withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
 mobile concurrency and workflow contracts can be represented without guessing.
 
+`crm_staff_channel` contributes the read-only pipeline list and record detail under the mobile capability
+`crm.pipeline`. Both routes call CRM's audience-scoped functions, so a non-superuser sees only records they
+created, records assigned to them, or records belonging to one of their active teams. The list accepts only
+the domain's lead/opportunity kinds and open/won/lost outcomes. Detail includes the canonical integer version
+and next pending activity, but deliberately withholds contact fields, timeline entries, messages, attachments,
+configuration options, and every mutation action. CRM commands remain outside the channel until their CSRF,
+idempotency, and optimistic-concurrency contract is published end to end.
+
 ## Contract behavior
 
 Every response uses one envelope:
