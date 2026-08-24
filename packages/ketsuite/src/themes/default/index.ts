@@ -6,6 +6,7 @@ import { defineTheme, loadTemplates } from '@ketvietlab/ketjs'
 // The templates are .ktl files in templates/ — the file name is the template name.
 export default defineTheme({
   name: 'theme_default',
+  group: 'system',
   version: '1.0.0',
   depends: ['catalog'],
 

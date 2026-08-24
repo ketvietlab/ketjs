@@ -5,6 +5,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'pricing',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['product', 'company', 'uom'],
   app: true,

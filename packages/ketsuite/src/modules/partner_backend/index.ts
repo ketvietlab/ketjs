@@ -5,6 +5,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'partner_backend',
+  group: 'system',
   version: '0.1.0',
   depends: ['partner', 'address', 'backend'],
   install: 'auto',

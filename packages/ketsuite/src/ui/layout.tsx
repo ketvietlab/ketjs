@@ -211,7 +211,7 @@ export const appCard = (options: {
   title: string
   summary: string
   meta: CardMeta[]
-  action: { label: string; action: string; disabled?: boolean }
+  action?: { label: string; action: string; disabled?: boolean }
   extra?: JSXChild
 }): TemplateResult => (
   <article data-ui="app-card" data-state={options.state} data-app={options.app}>
@@ -232,7 +232,7 @@ export const appCard = (options: {
       )}
     </dl>
     <div data-ui="app-actions">
-      {actionButton(options.action)}
+      {options.action ? actionButton(options.action) : ''}
       {options.extra ?? ''}
     </div>
   </article>

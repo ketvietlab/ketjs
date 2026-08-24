@@ -5,6 +5,7 @@ import { views } from './views.ts'
 
 export default defineModule({
   name: 'website_seo',
+  group: 'system',
   version: '0.1.0',
   app: true,
   title: 'SEO',

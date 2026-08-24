@@ -3,6 +3,7 @@ import { functions } from './functions.ts'
 
 export default defineModule({
   name: 'account_partner',
+  group: 'accounting',
   version: '0.1.0',
   depends: ['account', 'partner'],
   install: 'auto',

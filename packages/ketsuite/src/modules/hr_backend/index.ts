@@ -3,6 +3,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'hr_backend',
+  group: 'system',
   version: '0.1.0',
   depends: ['hr', 'backend'],
   install: 'auto',

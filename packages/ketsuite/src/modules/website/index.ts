@@ -16,6 +16,7 @@ import { jobs } from './jobs.ts'
 
 export default defineModule({
   name: 'website',
+  group: 'system',
   version: '0.1.0',
   app: true,
   title: 'Website',

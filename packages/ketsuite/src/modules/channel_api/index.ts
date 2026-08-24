@@ -4,6 +4,7 @@ import { staffRoutes } from './staff.ts'
 
 export default defineModule({
   name: 'channel_api',
+  group: 'system',
   version: '1.0.0',
   app: true,
   depends: ['website', 'user'],

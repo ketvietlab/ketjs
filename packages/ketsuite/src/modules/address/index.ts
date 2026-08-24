@@ -6,6 +6,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'address',
+  group: 'system',
   version: '0.1.0',
   app: true,
   title: 'Địa chỉ',

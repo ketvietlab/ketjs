@@ -6,6 +6,7 @@ import { reportRoute } from './routes.ts'
 
 export default defineModule({
   name: 'report',
+  group: 'system',
   version: '0.1.0',
   install: 'auto',
   title: 'Report engine',

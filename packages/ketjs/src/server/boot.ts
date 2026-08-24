@@ -272,7 +272,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
    */
   const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
   const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
-    if (!bootstrap.length || (await apps.enabled()).size !== 0) return
+    if (!bootstrap.length || !apps.pristine()) return
     for (const name of bootstrap) await apps.install(name)
     log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
   }

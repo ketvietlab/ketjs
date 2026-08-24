@@ -243,6 +243,7 @@ const assertModule = (value: unknown, source: ModuleSource): KetModule => {
     'sections',
     'relations',
     'messages',
+    'groups',
   ] as const) {
     const field = module[key]
     if (!field || typeof field !== 'object' || Array.isArray(field))

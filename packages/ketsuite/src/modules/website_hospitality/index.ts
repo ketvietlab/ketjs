@@ -8,6 +8,7 @@ import { channelRoutes } from './channel-routes.ts'
 
 export default defineModule({
   name: 'website_hospitality',
+  group: 'hospitality',
   version: '0.1.0',
   app: true,
   depends: ['website', 'hospitality_core', 'channel_api'],
