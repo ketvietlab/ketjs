@@ -212,12 +212,11 @@ export const functions: Record<string, FnSpec> = {
       // shape a batch companion exists to avoid; getProductConfig above filters
       // in the query and so does this.
       const T = ctx.table('product.Template')
-      return (await ctx.db.all(from(T).where(inArray(T.id, ids))))
-        .map((template) => ({
-          templateId: String(template.id),
-          isStorable: Boolean(template.isStorable),
-          tracking: String(template.tracking ?? 'none'),
-        }))
+      return (await ctx.db.all(from(T).where(inArray(T.id, ids)))).map((template) => ({
+        templateId: String(template.id),
+        isStorable: Boolean(template.isStorable),
+        tracking: String(template.tracking ?? 'none'),
+      }))
     },
   }),
   configureProduct: defineFn({

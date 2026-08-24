@@ -72,7 +72,9 @@ const contextOf = async (ctx: ServeContext, rows: Row[], url: URL, req: Req): Pr
   // either table to label twenty rows is the cost this contextOf exists to
   // avoid, and it is the same cost whether the page holds twenty rows or one.
   const uomIds = [...new Set(templates.flatMap((t) => (t.uomId == null ? [] : [String(t.uomId)])))]
-  const categoryIds = [...new Set(templates.flatMap((t) => (t.categoryId == null ? [] : [String(t.categoryId)])))]
+  const categoryIds = [
+    ...new Set(templates.flatMap((t) => (t.categoryId == null ? [] : [String(t.categoryId)]))),
+  ]
   const configs = (await ctx.call('stock.listProductConfigs', { templateIds }, url, req)) as Row[]
   const units = (await ctx.call('uom.listUnits', { ids: uomIds }, url, req)) as Row[]
   const categories = (await ctx.call('product.listCategories', { ids: categoryIds }, url, req)) as Row[]
