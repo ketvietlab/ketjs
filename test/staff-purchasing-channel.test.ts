@@ -141,6 +141,56 @@ const seedOrdersAndBills = async (e2e: Awaited<ReturnType<typeof boot>>) => {
   })
 }
 
+const seedProducts = async (e2e: Awaited<ReturnType<typeof boot>>) => {
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  await fixture('uom.saveUnit', { id: 'piece', name: 'Cái', relativeFactor: '1' })
+  for (const template of [
+    {
+      id: 'stock-template',
+      name: 'Bao bì 1 kg',
+      type: 'goods',
+      uomId: 'piece',
+      saleOk: false,
+      purchaseOk: true,
+    },
+    {
+      id: 'consumable-template',
+      name: 'Nhãn giấy',
+      type: 'goods',
+      uomId: 'piece',
+      saleOk: false,
+      purchaseOk: true,
+    },
+    {
+      id: 'sale-only-template',
+      name: 'Không được mua',
+      type: 'goods',
+      uomId: 'piece',
+      saleOk: true,
+      purchaseOk: false,
+    },
+  ])
+    await fixture('product.saveTemplate', { listPrice: '0', ...template })
+  for (const [id, templateId, defaultCode] of [
+    ['a-stock', 'stock-template', 'BUY-01'],
+    ['b-consumable', 'consumable-template', 'BUY-02'],
+    ['c-sale-only', 'sale-only-template', 'SALE-ONLY'],
+  ])
+    await fixture('product.saveVariant', { id, templateId, defaultCode, combinationKey: '' })
+  await fixture('stock.configureProduct', {
+    templateId: 'stock-template',
+    isStorable: true,
+    tracking: 'none',
+  })
+  await fixture('stock.configureProduct', {
+    templateId: 'consumable-template',
+    isStorable: false,
+    tracking: 'none',
+  })
+}
+
 test('staff purchasing channel lists only vendors with bounded cursor pagination', async (t) => {
   const e2e = await boot(t)
   assert.equal((await e2e.client.get('/api/staff/v1/purchasing/vendors')).status, 401)
@@ -231,6 +281,67 @@ test('staff purchasing channel returns a narrow read-only order detail', async (
     },
   ])
   assert.equal((await e2e.client.get('/api/staff/v1/purchasing/orders/missing')).status, 404)
+})
+
+test('staff purchasing channel exposes only bounded purchasable product projections', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  assert.equal((await e2e.client.get('/api/staff/v1/purchasing/products')).status, 401)
+  await e2e.client.login({ login: 'purchaser', password: 'correct horse battery' })
+
+  const first = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      '/api/staff/v1/purchasing/products?limit=1',
+    )
+  ).data
+  assert.deepEqual(first.items, [
+    {
+      id: 'a-stock',
+      name: 'Bao bì 1 kg',
+      kind: 'stockable',
+      reference: 'BUY-01',
+      uom: 'Cái',
+    },
+  ])
+  assert.ok(first.nextCursor)
+
+  const second = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      `/api/staff/v1/purchasing/products?limit=1&cursor=${encodeURIComponent(first.nextCursor!)}`,
+    )
+  ).data
+  assert.deepEqual(
+    second.items.map((item) => [item.id, item.kind]),
+    [['b-consumable', 'consumable']],
+  )
+  assert.equal(second.nextCursor, null)
+
+  const searched = (
+    await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/purchasing/products?query=Nhãn')
+  ).data
+  assert.deepEqual(
+    searched.items.map((item) => item.id),
+    ['b-consumable'],
+  )
+  assert.equal((await e2e.client.get('/api/staff/v1/purchasing/products?query=n')).status, 422)
+})
+
+test('staff purchasing channel reads one purchasable product and hides unsuitable variants', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  await e2e.client.login({ login: 'purchaser', password: 'correct horse battery' })
+
+  const product = await e2e.client.json<Envelope<Row>>('/api/staff/v1/purchasing/products/a-stock')
+  assert.deepEqual(product.data, {
+    id: 'a-stock',
+    name: 'Bao bì 1 kg',
+    kind: 'stockable',
+    reference: 'BUY-01',
+    uom: 'Cái',
+    readOnly: true,
+  })
+  assert.equal((await e2e.client.get('/api/staff/v1/purchasing/products/c-sale-only')).status, 404)
+  assert.equal((await e2e.client.get('/api/staff/v1/purchasing/products/missing')).status, 404)
 })
 
 test('staff purchasing channel lists and reads vendor bills without ledger lines', async (t) => {
