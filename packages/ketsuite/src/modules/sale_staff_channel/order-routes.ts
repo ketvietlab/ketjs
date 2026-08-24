@@ -6,6 +6,11 @@
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+// The domain owns the state machine. Copying its values into the contract by
+// hand meant the published enum could fall behind it, and now that the facade
+// refuses anything the enum omits, falling behind would turn a legitimate
+// filter into a 422.
+import { SALE_STATES } from '../sale/functions.ts'
 
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
@@ -30,7 +35,7 @@ const summary = {
   properties: {
     id: string,
     reference: string,
-    state: { type: 'string', enum: ['draft', 'sent', 'sale', 'cancel'] },
+    state: { type: 'string', enum: [...SALE_STATES] },
     orderedAt: string,
     customer: party,
     total: money,
@@ -149,7 +154,7 @@ export const orderRoutes = routesOf(
         type: 'object',
         properties: {
           query: string,
-          state: { type: 'string', enum: ['draft', 'sent', 'sale', 'cancel'] },
+          state: { type: 'string', enum: [...SALE_STATES] },
           cursor: string,
           limit: { type: 'integer', minimum: 1, maximum: 50 },
         },

@@ -809,7 +809,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["not_paid", "partial", "paid", "reversed"]
+              "enum": ["not_paid", "paid", "partial", "reversed"]
             }
           },
           {
@@ -865,7 +865,7 @@
                               },
                               "paymentState": {
                                 "type": "string",
-                                "enum": ["not_paid", "partial", "paid", "reversed"]
+                                "enum": ["not_paid", "paid", "partial", "reversed"]
                               },
                               "vendor": {
                                 "type": "object",
@@ -984,7 +984,7 @@
                         },
                         "paymentState": {
                           "type": "string",
-                          "enum": ["not_paid", "partial", "paid", "reversed"]
+                          "enum": ["not_paid", "paid", "partial", "reversed"]
                         },
                         "vendor": {
                           "type": "object",

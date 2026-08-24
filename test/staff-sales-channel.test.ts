@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { SALE_STATES } from '../packages/ketsuite/src/modules/sale/functions.ts'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 type Envelope<T> = { data: T; error: { code: string } | null }
@@ -231,4 +232,17 @@ test('staff sales channel refuses query values its published contract forbids', 
   assert.equal(await accepted('state=sale&limit=50'), 200)
   // Undeclared parameters stay tolerated: the contract does not close the set.
   assert.equal(await accepted('_cacheBust=1'), 200)
+})
+
+test('staff sales channel accepts every state its domain can reach', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+  // The published enum is now binding, so a contract that drifts behind the
+  // domain does not read as stale documentation — it refuses a filter the
+  // salesperson is entitled to use.
+  for (const state of SALE_STATES) {
+    const response = await e2e.client.get(`/api/staff/v1/sales/orders?state=${encodeURIComponent(state)}`)
+    assert.equal(response.status, 200, state)
+  }
 })
