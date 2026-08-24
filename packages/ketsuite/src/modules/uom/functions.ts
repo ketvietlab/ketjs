@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty, convertQty, roundTo, type Unit, type UomError } from './convert.ts'
 
@@ -97,12 +97,20 @@ export const functions: Record<string, FnSpec> = {
    * around. Both are optional: omitting them still returns the whole tree.
    */
   listUnits: defineFn({
-    input: { rootId: 'id?', search: 'text?', limit: 'int?' },
+    // `ids` is for the caller that already knows which units it needs: a page of
+    // products wants the names behind its handful of uomIds, and reading every
+    // unit in the tenant to build that map is the same mistake on a smaller
+    // table.
+    input: { rootId: 'id?', search: 'text?', ids: 'json?', limit: 'int?' },
     effects: ['read:uom.Unit'],
     agent: true,
     handler: async (ctx, args) => {
       const U = ctx.table('uom.Unit')
-      const rows = await ctx.db.all(from(U).where(eq(U.active, true)).orderBy(asc(U.sequence), asc(U.name)))
+      const wanted = Array.isArray(args.ids) ? [...new Set(args.ids.map(String))] : null
+      if (wanted && !wanted.length) return []
+      let query = from(U).where(eq(U.active, true))
+      if (wanted) query = query.where(inArray(U.id, wanted))
+      const rows = await ctx.db.all(query.orderBy(asc(U.sequence), asc(U.name)))
       const inTree =
         args.rootId == null
           ? rows

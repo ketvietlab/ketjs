@@ -1102,13 +1102,23 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listCategories: defineFn({
-    input: { search: 'text?', limit: 'int?' },
+    // `ids` narrows the answer to the categories a caller already named — a page
+    // of products wants the labels behind its categoryIds, not the tenant's whole
+    // tree. The rows are still all read, because `path` is an ancestry walk that
+    // the selected rows cannot answer alone, but children are left unloaded and
+    // only the named categories come back.
+    input: { search: 'text?', ids: 'json?', limit: 'int?' },
     output: { id: 'id', name: 'text', parentId: 'id?', path: 'text?', children: 'json?' },
     effects: ['read:product.Category'],
     agent: true,
     handler: async (ctx, args) => {
       const C = ctx.table('product.Category')
-      const rows = await ctx.db.all(from(C).orderBy(asc(C.name)).preload('children'))
+      const wanted = Array.isArray(args.ids) ? new Set(args.ids.map(String)) : null
+      if (wanted && !wanted.size) return []
+      // Children answer the tree picker. An id lookup walks parents instead, so
+      // preloading them there is work nobody reads.
+      const base = from(C).orderBy(asc(C.name))
+      const rows = await ctx.db.all(wanted ? base : base.preload('children'))
       // A category is a node in a tree, and two branches may well hold a "Shirts".
       // `path` spells the ancestry out so a flat picker list stays unambiguous;
       // it is derived here rather than stored, and searching matches on it too.
@@ -1125,7 +1135,9 @@ export const functions: Record<string, FnSpec> = {
         return parts.join(' / ')
       }
       return narrow(
-        rows.map((row) => ({ ...row, path: pathOf(row) })),
+        rows
+          .filter((row) => (wanted ? wanted.has(String(row.id)) : true))
+          .map((row) => ({ ...row, path: pathOf(row) })),
         args,
         ['name', 'path'],
       )

@@ -66,10 +66,16 @@ type DirectoryContext = {
 }
 
 const contextOf = async (ctx: ServeContext, rows: Row[], url: URL, req: Req): Promise<DirectoryContext> => {
-  const templateIds = [...new Set(rows.map((row) => String((row.template as Row).id)))]
+  const templates = rows.map((row) => row.template as Row)
+  const templateIds = [...new Set(templates.map((template) => String(template.id)))]
+  // A page names a handful of units and categories. Asking for the whole of
+  // either table to label twenty rows is the cost this contextOf exists to
+  // avoid, and it is the same cost whether the page holds twenty rows or one.
+  const uomIds = [...new Set(templates.flatMap((t) => (t.uomId == null ? [] : [String(t.uomId)])))]
+  const categoryIds = [...new Set(templates.flatMap((t) => (t.categoryId == null ? [] : [String(t.categoryId)])))]
   const configs = (await ctx.call('stock.listProductConfigs', { templateIds }, url, req)) as Row[]
-  const units = (await ctx.call('uom.listUnits', {}, url, req)) as Row[]
-  const categories = (await ctx.call('product.listCategories', {}, url, req)) as Row[]
+  const units = (await ctx.call('uom.listUnits', { ids: uomIds }, url, req)) as Row[]
+  const categories = (await ctx.call('product.listCategories', { ids: categoryIds }, url, req)) as Row[]
   return {
     configs: new Map(configs.map((row) => [String(row.templateId), row])),
     units: new Map(units.map((row) => [String(row.id), row])),
@@ -131,7 +137,6 @@ export const productRoutes = routesOf(
     request: {
       query: {
         type: 'object',
-        additionalProperties: false,
         properties: {
           query: { type: 'string', minLength: 2 },
           cursor: string,

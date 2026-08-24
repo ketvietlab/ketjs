@@ -9,6 +9,12 @@ type Row = Record<string, unknown>
 const string = { type: 'string' }
 const nullableString = { type: ['string', 'null'] }
 const kind = { type: 'string', enum: ['stockable', 'consumable', 'service'] }
+const uom = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, name: string },
+  required: ['id', 'name'],
+}
 const summary = {
   type: 'object',
   additionalProperties: false,
@@ -16,10 +22,11 @@ const summary = {
     id: string,
     name: string,
     kind,
-    reference: nullableString,
-    uom: string,
+    sku: nullableString,
+    category: nullableString,
+    uom,
   },
-  required: ['id', 'name', 'kind', 'reference', 'uom'],
+  required: ['id', 'name', 'kind', 'sku', 'category', 'uom'],
 }
 const detail = {
   ...summary,
@@ -52,15 +59,27 @@ const offsetOf = (cursor: string | null): number => {
 }
 const cursorOf = (offset: number): string => Buffer.from(JSON.stringify({ offset })).toString('base64url')
 
-type DirectoryContext = { configs: Map<string, Row>; units: Map<string, Row> }
+type DirectoryContext = {
+  configs: Map<string, Row>
+  units: Map<string, Row>
+  categories: Map<string, Row>
+}
 
 const contextOf = async (ctx: ServeContext, rows: Row[], url: URL, req: Req): Promise<DirectoryContext> => {
-  const templateIds = [...new Set(rows.map((row) => String((row.template as Row).id)))]
+  const templates = rows.map((row) => row.template as Row)
+  const templateIds = [...new Set(templates.map((template) => String(template.id)))]
+  // A page names a handful of units and categories. Asking for the whole of
+  // either table to label twenty rows is the cost this contextOf exists to
+  // avoid, and it is the same cost whether the page holds twenty rows or one.
+  const uomIds = [...new Set(templates.flatMap((t) => (t.uomId == null ? [] : [String(t.uomId)])))]
+  const categoryIds = [...new Set(templates.flatMap((t) => (t.categoryId == null ? [] : [String(t.categoryId)])))]
   const configs = (await ctx.call('stock.listProductConfigs', { templateIds }, url, req)) as Row[]
-  const units = (await ctx.call('uom.listUnits', {}, url, req)) as Row[]
+  const units = (await ctx.call('uom.listUnits', { ids: uomIds }, url, req)) as Row[]
+  const categories = (await ctx.call('product.listCategories', { ids: categoryIds }, url, req)) as Row[]
   return {
     configs: new Map(configs.map((row) => [String(row.templateId), row])),
     units: new Map(units.map((row) => [String(row.id), row])),
+    categories: new Map(categories.map((row) => [String(row.id), row])),
   }
 }
 const productName = (row: Row): string => {
@@ -77,12 +96,14 @@ const project = (row: Row, context: DirectoryContext) => {
   const template = row.template as Row
   const unit = context.units.get(String(template.uomId))
   if (!unit) return null
+  const category = template.categoryId == null ? null : context.categories.get(String(template.categoryId))
   return {
     id: String(row.id),
     name: productName(row),
     kind: productKind(row, context),
-    reference: row.defaultCode == null ? null : String(row.defaultCode),
-    uom: String(unit.name),
+    sku: row.defaultCode == null ? null : String(row.defaultCode),
+    category: category == null ? null : String(category.path ?? category.name),
+    uom: { id: String(unit.id), name: String(unit.name) },
   }
 }
 const isPurchasable = (row: Row): boolean => {
@@ -115,7 +136,6 @@ export const productRoutes = routesOf(
     request: {
       query: {
         type: 'object',
-        additionalProperties: false,
         properties: {
           query: { type: 'string', minLength: 2 },
           cursor: string,
