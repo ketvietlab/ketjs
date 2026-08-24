@@ -90,6 +90,7 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
       suite.crmBackend,
       backend,
       suite.hospitalityCore,
+      suite.hospitalityBilling,
     ],
     theme: suite.paperTheme,
     themes: [suite.hospitalityTheme, suite.retailTheme],

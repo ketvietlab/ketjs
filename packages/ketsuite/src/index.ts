@@ -201,6 +201,7 @@ export { PERIOD_STATES, PUNCH_KINDS, PUNCH_SOURCES, REQUEST_STATES } from './mod
 export type { PeriodState, PunchKind, PunchSource, RequestState } from './modules/attendance/types.ts'
 export { default as storage } from './modules/storage/index.ts'
 export { default as hospitalityCore } from './modules/hospitality_core/index.ts'
+export { default as hospitalityBilling } from './modules/hospitality_billing/index.ts'
 export {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
