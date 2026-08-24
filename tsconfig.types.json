@@ -10,5 +10,10 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": ["packages/*/src/**/*"],
-  "exclude": ["packages/*/dist", "node_modules"]
+  "exclude": [
+    "packages/*/dist",
+    "node_modules",
+    "packages/*/src/**/client-src/**",
+    "packages/ketsuite/src/modules/flow_backend/client/**"
+  ]
 }

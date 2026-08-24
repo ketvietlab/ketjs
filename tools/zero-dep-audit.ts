@@ -29,15 +29,34 @@ type Rule = {
   optionalPeers?: string[]
   /** Only the package's own entry point may be imported, never a path inside it. */
   publicOnly?: boolean
+  /**
+   * Entries in `allow` exempt from `publicOnly`. `publicOnly` disciplines how
+   * ketsuite reaches into the *in-house* framework — one entry point, same as a
+   * third-party module gets — so a deep import there is a smuggled shortcut.
+   * A third-party library with its own conventional multi-entry export map
+   * (yjs's ecosystem ships `y-protocols/awareness`, `y-protocols/sync` etc. as
+   * blessed subpaths, not internals) is a different situation: importing its
+   * declared subpath is the correct way to use it, not a boundary violation.
+   */
+  publicOnlyExempt?: string[]
 }
 
 const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
-  ketsuite: { allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view'], publicOnly: true },
+  // yjs/y-protocols are the one accepted breach of ketsuite's own allowance,
+  // mirroring how ketjs-postgres is the framework's one accepted breach of rule
+  // 1: a named, narrow exception rather than an open door. They back the Flow
+  // collaborative editor's CRDT merge and presence — client-bundled only, never
+  // reached by ketjs/ketjs-view, so the framework core stays untouched.
+  ketsuite: {
+    allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'yjs', 'y-protocols'],
+    publicOnly: true,
+    publicOnlyExempt: ['yjs', 'y-protocols'],
+  },
 }
-const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres'])
+const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres', 'esbuild'])
 
 const problems: string[] = []
 const IMPORT_RE =
@@ -105,7 +124,12 @@ for (const [name, rule] of Object.entries(RULES)) {
           )
           continue
         }
-        if (isSibling && rule.publicOnly && spec !== target) {
+        if (
+          isSibling &&
+          rule.publicOnly &&
+          spec !== target &&
+          !(rule.publicOnlyExempt ?? []).includes(target)
+        ) {
           problems.push(
             `${file} imports "${spec}" — ${name} must use the public entry "${target}" alone. If the suite needs it, export it; do not reach past the contract everyone else has.`,
           )
