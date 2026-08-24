@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { TERMINAL_STATES } from '../packages/ketsuite/src/modules/crm/types.ts'
 
 type Envelope<T> = { data: T; error: { code: string } | null }
 
@@ -192,7 +193,17 @@ test('staff CRM channel filters only the domain-supported type, outcome and sear
 
   assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?query=x')).status, 422)
   assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?outcome=unknown')).status, 422)
-  assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?company=other')).status, 422)
+  // A tenant hint in the query is inert, and that is the property worth holding:
+  // the company comes from the session. Refusing the parameter would only have
+  // proved the contract does not list it — not that answering ignored it.
+  const hinted = (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/crm/leads?company=other'))
+    .data
+  const plain = (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/crm/leads')).data
+  assert.deepEqual(
+    hinted.items.map((item) => item.id),
+    plain.items.map((item) => item.id),
+  )
+  assert.ok(plain.items.length > 0)
 })
 
 test('staff CRM channel returns one narrow read-only detail with the canonical next activity', async (t) => {
@@ -223,4 +234,28 @@ test('staff CRM channel returns one narrow read-only detail with the canonical n
   assert.equal(missing.status, 404)
   assert.equal(((await missing.json()) as Envelope<null>).error?.code, 'crm_staff_channel.leadNotFound')
   assert.equal((await e2e.client.get('/api/staff/v1/crm/leads/admin-only')).status, 404)
+})
+
+test('staff CRM channel tolerates undeclared query parameters like its siblings', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  // A native client that appends an analytics or cache-busting parameter must not
+  // find CRM answering 422 where sales and purchasing answer 200.
+  assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?_cacheBust=1')).status, 200)
+  // What the contract does declare is still enforced.
+  assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?type=nonsense')).status, 422)
+  assert.equal((await e2e.client.get('/api/staff/v1/crm/leads?limit=999')).status, 422)
+})
+
+test('staff CRM channel publishes the outcome vocabulary its domain defines', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  // The channel renames one state and owns none of the others, so every terminal
+  // state the domain can reach has to be a filter the contract accepts. A state
+  // added upstream must not quietly arrive here as "pending".
+  for (const state of TERMINAL_STATES) {
+    const outcome = state === 'open' ? 'pending' : state
+    const response = await e2e.client.get(`/api/staff/v1/crm/leads?outcome=${outcome}`)
+    assert.equal(response.status, 200, outcome)
+  }
 })
