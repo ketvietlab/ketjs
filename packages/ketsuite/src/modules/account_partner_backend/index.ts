@@ -3,6 +3,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'account_partner_backend',
+  group: 'accounting',
   version: '0.1.0',
   depends: ['account_partner', 'partner_backend', 'backend'],
   install: 'auto',

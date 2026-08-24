@@ -19,6 +19,7 @@ import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
 export default defineModule({
   name: 'backend',
+  group: 'system',
   version: '0.1.0',
   app: true,
   title: 'Quản trị',

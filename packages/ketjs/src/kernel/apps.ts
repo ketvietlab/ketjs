@@ -17,7 +17,7 @@
 // is the whole point of D7.
 
 import { KetError } from './errors.ts'
-import type { Adapter, InstallPolicy, Manifest } from '../types.ts'
+import type { Adapter, ComposedModuleGroup, InstallPolicy, Manifest } from '../types.ts'
 
 // The row records a DECISION, not a fact: 'removed' is how an explicit uninstall
 // survives the next auto-install sweep. Deleting the row instead would let an
@@ -38,6 +38,7 @@ export type AppInfo = {
   title: string
   summary: string
   category: string
+  group: ({ id: string } & ComposedModuleGroup) | null
   version: string
   state: AppState
   depends: string[]
@@ -49,6 +50,8 @@ export type AppInfo = {
 }
 
 export type AppRegistry = {
+  /** True only when this database had no app decision before fixed groups were seeded. */
+  pristine(): boolean
   enabled(): Promise<Set<string>>
   list(): Promise<AppInfo[]>
   /** Names this database has a record for that the deployment no longer ships. */
@@ -98,6 +101,7 @@ export async function createAppRegistry(
   /** Every name this database has an opinion about, installed or explicitly removed. */
   const decided = async (): Promise<Set<string>> =>
     new Set((await adapter.all(`SELECT name FROM ket_app`)).map((r) => String(r.name)))
+  const pristine = (await decided()).size === 0
 
   const setState = async (names: string[], state: 'installed' | 'removed'): Promise<void> => {
     for (const n of names) {
@@ -132,7 +136,27 @@ export async function createAppRegistry(
     }
   }
 
+  // A fixed group is part of every database served by this AppSpec. Seed its
+  // dependency closure before the first request, then let ordinary auto-install
+  // policy settle around that baseline.
+  const fixedRoots = Object.entries(manifest.modules)
+    .filter(([, module]) => module.group && manifest.groups[module.group]?.fixed)
+    .map(([name]) => name)
+  if (fixedRoots.length) {
+    const on = await enabled()
+    const wanted: string[] = []
+    const visit = (name: string) => {
+      if (on.has(name) || wanted.includes(name)) return
+      for (const dependency of known(name).depends) visit(dependency)
+      wanted.push(name)
+    }
+    for (const name of fixedRoots) visit(name)
+    if (wanted.length) await setState(wanted, 'installed')
+    await settle()
+  }
+
   return {
+    pristine: () => pristine,
     enabled,
 
     async orphans() {
@@ -149,6 +173,7 @@ export async function createAppRegistry(
           title: m.title ?? name,
           summary: m.summary ?? '',
           category: m.category ?? 'Khác',
+          group: m.group && manifest.groups[m.group] ? { id: m.group, ...manifest.groups[m.group] } : null,
           version: m.version,
           state: (on.has(name) ? 'installed' : 'available') as AppState,
           depends: [...m.depends],
@@ -156,7 +181,12 @@ export async function createAppRegistry(
           install: m.install,
           removable: m.removable,
         }))
-        .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
+        .sort(
+          (a, b) =>
+            (a.group?.sequence ?? 1_000) - (b.group?.sequence ?? 1_000) ||
+            (a.group?.id ?? a.category).localeCompare(b.group?.id ?? b.category) ||
+            a.title.localeCompare(b.title),
+        )
     },
 
     async install(name) {
@@ -188,6 +218,14 @@ export async function createAppRegistry(
       const target = known(name)
       const on = await enabled()
       if (!on.has(name)) return []
+      if (target.group && manifest.groups[target.group]?.fixed) {
+        throw new KetError({
+          code: 'E_APP_GROUP_FIXED',
+          module: name,
+          message: `"${name}" belongs to fixed group "${target.group}", so it cannot be uninstalled`,
+          hint: 'fixed groups are the baseline of every database served by this AppSpec',
+        })
+      }
       // Removing this would remove the way back: the boundary is the module's,
       // drawn once, rather than a rule the UI is trusted to remember.
       if (!target.removable) {

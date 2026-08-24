@@ -5,6 +5,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'crm_backend',
+  group: 'crm',
   version: '0.1.0',
   // The backend renders leads that arrive from the website but never calls into
   // that module; the dependency was pulling a public-site concern into the admin

@@ -3,6 +3,7 @@ import { functions } from './functions.ts'
 
 export default defineModule({
   name: 'loyalty_pos',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['loyalty', 'pos'],
   install: 'auto',

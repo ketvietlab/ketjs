@@ -319,6 +319,8 @@ export type AppMeta = {
   title?: string
   summary?: string
   category?: string
+  /** Stable group identifier used by app discovery. Labels belong to a group catalogue. */
+  group?: string
   /**
    * The boundary between what a module permits and what an operator chooses.
    *
@@ -347,6 +349,25 @@ export type AppMeta = {
 }
 
 export type InstallPolicy = 'manual' | 'auto' | 'never'
+
+export type ModuleGroupDef = {
+  /** Readable fallback when the requested locale has no catalogue message. */
+  title: string
+  /** Readable fallback for the group card description. */
+  summary?: string
+  /** Lower groups are presented first. */
+  sequence?: number
+  /** Enabled for every database and excluded from operator install/remove controls. */
+  fixed?: boolean
+}
+
+export type ComposedModuleGroup = {
+  by: string
+  title: string
+  summary: string
+  sequence: number
+  fixed: boolean
+}
 
 export type ModuleSpec = AppMeta & {
   kind?: 'module' | 'theme'
@@ -418,6 +439,8 @@ export type ModuleSpec = AppMeta & {
   relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
   messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
+  /** Group identifiers and fallback labels owned by this metadata-only module. */
+  groups?: Record<string, ModuleGroupDef>
 }
 
 export type KetModule = Readonly<AppMeta> & {
@@ -450,6 +473,7 @@ export type KetModule = Readonly<AppMeta> & {
   readonly taxonomies: Record<string, TaxonomyDef>
   readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
+  readonly groups: Record<string, ModuleGroupDef>
 }
 
 export type Manifest = {
@@ -459,6 +483,7 @@ export type Manifest = {
     string,
     { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta
   >
+  groups: Record<string, ComposedModuleGroup>
   models: Record<string, ComposedModel>
   menus: Record<string, MenuDef & { by: string }>
   joints: Record<

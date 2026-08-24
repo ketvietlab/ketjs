@@ -5,6 +5,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'product_media',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['product', 'storage'],
   app: true,

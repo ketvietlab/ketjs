@@ -1,4 +1,5 @@
-export { defineModule, defineTheme } from './kernel/define.ts'
+export { defineModule, defineModuleGroups, defineTheme } from './kernel/define.ts'
+export type { ModuleGroupsSpec } from './kernel/define.ts'
 export { defineApp, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 export { resolveWorkspace } from './kernel/modules.ts'
 export type {
@@ -23,6 +24,8 @@ export type {
   HttpRouteContract,
   JsonSchema,
   Manifest,
+  ModuleGroupDef,
+  ComposedModuleGroup,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'

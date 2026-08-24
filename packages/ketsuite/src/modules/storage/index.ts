@@ -6,6 +6,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'storage',
+  group: 'system',
   version: '0.1.0',
   depends: ['company'],
   app: true,

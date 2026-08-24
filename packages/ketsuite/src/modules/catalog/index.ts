@@ -2,6 +2,7 @@ import { defineFn, defineModule, desc, eq, from, gte } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'catalog',
+  group: 'commerce',
   version: '1.0.0',
 
   models: {

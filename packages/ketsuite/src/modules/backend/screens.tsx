@@ -20,9 +20,32 @@ export type AppRow = {
   title: string
   summary: string
   category: string
+  group?: {
+    id: string
+    by: string
+    title: string
+    summary: string
+    sequence: number
+    fixed: boolean
+  } | null
   state: 'available' | 'installed'
   depends: string[]
   dependents: string[]
+  install?: 'manual' | 'auto' | 'never'
+  removable?: boolean
+}
+
+type AppGroupRow = {
+  name: string
+  title: string
+  summary: string
+  sequence: number
+  state: 'available' | 'partial' | 'installed'
+  installed: number
+  total: number
+  dependents: number
+  removable: boolean
+  fixed: boolean
 }
 
 export type PageRow = { id: string; path: string; title: string; published: boolean }
@@ -51,14 +74,45 @@ const label = (
 
 export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): TemplateResult => {
   const extras = frame.extras ?? {}
-  const categories = [...new Set(apps.map((a) => a.category))].sort()
-  const categoryLabel = (c: string): string => {
-    const owner = apps.find((a) => a.category === c)
-    return owner ? label(_, owner.name, 'category', c) : c
+  const groupLabel = (group: NonNullable<AppRow['group']>, field: 'title' | 'summary'): string => {
+    const key = `${group.by}.group.${group.id}.${field}`
+    const out = _(key)
+    return out === key ? group[field] : out
   }
+  const grouped = new Map<string, AppRow[]>()
+  for (const app of apps) {
+    if (!app.group) continue
+    const members = grouped.get(app.group.id) ?? []
+    members.push(app)
+    grouped.set(app.group.id, members)
+  }
+  const groups: AppGroupRow[] = [...grouped.values()]
+    .map((members): AppGroupRow => {
+      const group = members[0].group!
+      const installed = members.filter((member) => member.state === 'installed').length
+      const names = new Set(members.map((member) => member.name))
+      const externalDependents = new Set(
+        members.flatMap((member) => member.dependents).filter((dependent) => !names.has(dependent)),
+      )
+      return {
+        name: `group:${group.id}`,
+        title: groupLabel(group, 'title'),
+        summary: groupLabel(group, 'summary'),
+        sequence: group.sequence,
+        state: installed === 0 ? 'available' : installed === members.length ? 'installed' : 'partial',
+        installed,
+        total: members.length,
+        dependents: externalDependents.size,
+        removable: members.every((member) => member.removable !== false),
+        fixed: group.fixed,
+      }
+    })
+    .sort((a, b) => a.sequence - b.sequence || a.title.localeCompare(b.title))
+  const standalone = apps.filter((app) => !app.group)
+
   // Uninstalling something another app needs would take that app with it, so the
   // control says no rather than the failure arriving after the click.
-  const card = (app: AppRow): TemplateResult => (
+  const standaloneCard = (app: AppRow): TemplateResult => (
     <AppCard
       app={app.name}
       state={app.state}
@@ -88,6 +142,55 @@ export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): Te
       extra={extras['app-card.actions']?.[app.name]}
     />
   )
+  const groupCard = (group: AppGroupRow): TemplateResult => (
+    <AppCard
+      app={group.name}
+      state={group.state}
+      title={group.title}
+      summary={group.summary}
+      meta={[
+        {
+          kind: 'neutral',
+          term: _('backend.apps.group.progress'),
+          value: `${group.installed}/${group.total}`,
+        },
+        ...(group.dependents > 0
+          ? [
+              {
+                kind: 'dependents' as const,
+                term: _('backend.apps.group.dependents'),
+                value: String(group.dependents),
+              },
+            ]
+          : []),
+      ]}
+      action={
+        group.fixed
+          ? undefined
+          : {
+              action: group.state === 'installed' ? 'uninstall' : 'install',
+              label: group.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install'),
+              disabled: group.state === 'installed' && (!group.removable || group.dependents > 0),
+            }
+      }
+    />
+  )
+  const sections: Array<{
+    key: string
+    title: string
+    items: Array<AppRow | AppGroupRow>
+  }> = [
+    ...(groups.length ? [{ key: 'groups', title: _('backend.apps.groups'), items: groups }] : []),
+    ...(standalone.length
+      ? [
+          {
+            key: 'standalone',
+            title: _('backend.apps.standalone'),
+            items: standalone,
+          },
+        ]
+      : []),
+  ]
   return shell(
     _,
     _('backend.apps.title'),
@@ -95,14 +198,10 @@ export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): Te
       emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
     ) : (
       <CardGroups
-        groups={categories.map((c) => ({
-          key: c,
-          title: categoryLabel(c),
-          items: apps.filter((a) => a.category === c),
-        }))}
-        id={(a) => a.name}
+        groups={sections}
+        id={(item) => item.name}
         footer={extras['apps.footer']}
-        card={card}
+        card={(item) => ('total' in item ? groupCard(item as AppGroupRow) : standaloneCard(item as AppRow))}
       />
     ),
     frame,

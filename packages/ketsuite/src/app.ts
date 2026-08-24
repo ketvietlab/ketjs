@@ -11,6 +11,7 @@ export const createKetsuiteApp = (openStore: OpenStore = sqliteStore) =>
   defineApp({
     name: 'ketsuite',
     modules: [
+      suite.appGroups,
       suite.website,
       suite.channelApi,
       suite.websiteMenu,

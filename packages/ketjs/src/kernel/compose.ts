@@ -28,6 +28,7 @@ export function compose(
     ket: '0.0.0',
     order: order.map((m) => m.name),
     modules: {},
+    groups: {},
     models: {},
     menus: {},
     joints: {},
@@ -112,6 +113,35 @@ export function compose(
   }
 
   for (const m of order) {
+    for (const [id, group] of Object.entries(m.groups)) {
+      if (manifest.groups[id]) {
+        diag.add({
+          code: 'E_MODULE_GROUP_CLASH',
+          module: m.name,
+          message: `module group "${id}" is declared by both "${manifest.groups[id].by}" and "${m.name}"`,
+          hint: 'a stable group identifier has exactly one catalogue owner',
+        })
+        continue
+      }
+      manifest.groups[id] = {
+        by: m.name,
+        title: group.title,
+        summary: group.summary ?? '',
+        sequence: group.sequence ?? 100,
+        fixed: group.fixed === true,
+      }
+    }
+  }
+
+  for (const m of order) {
+    if (m.group && Object.keys(manifest.groups).length > 0 && !manifest.groups[m.group]) {
+      diag.add({
+        code: 'E_MODULE_GROUP_UNKNOWN',
+        module: m.name,
+        message: `module "${m.name}" belongs to unknown group "${m.group}"`,
+        hint: 'ship a module group catalogue that declares the identifier, or remove group from the module',
+      })
+    }
     manifest.modules[m.name] = {
       version: m.version,
       kind: m.kind,
@@ -120,6 +150,7 @@ export function compose(
       title: m.title,
       summary: m.summary,
       category: m.category,
+      group: m.group,
       install: m.install ?? 'manual',
       removable: m.removable !== false,
     }

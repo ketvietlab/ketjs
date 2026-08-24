@@ -9,6 +9,7 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'partner',
+  group: 'system',
   version: '0.1.0',
   depends: ['address'],
   app: true,
