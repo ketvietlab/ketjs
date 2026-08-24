@@ -117,6 +117,12 @@ customer one. The customer profile hands the CSRF token over at sign-in; staff s
 framework, which knows nothing about this channel, so `staff/bootstrap` is where it is handed over. A
 client that has not bootstrapped cannot mutate.
 
+`sale_staff_channel` currently contributes the first read-only sales slice:
+`GET sales/customers` and `GET sales/customers/{id}`. Both call the permission-checked Partner functions,
+admit only active partners holding the `customer` role, and project no raw contact or street-address fields.
+Order mutations and product lookup remain outside this module until their mobile ownership, concurrency,
+availability, and product-kind contracts can be represented by the public domain without guessing.
+
 ## Contract behavior
 
 Every response uses one envelope:
