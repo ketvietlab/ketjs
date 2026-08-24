@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'manufacturing_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['manufacturing', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Sản xuất trong quản trị',
   summary: 'Điều hành định mức và lệnh sản xuất.',
   category: 'Sản xuất',
