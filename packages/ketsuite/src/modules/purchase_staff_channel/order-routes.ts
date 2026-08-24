@@ -2,6 +2,9 @@
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+// The domain owns the state machine; see the note in the sales channel. A
+// published enum that drifts from it now refuses a legitimate filter.
+import { PURCHASE_STATES } from '../purchase/functions.ts'
 
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
@@ -26,7 +29,7 @@ const summary = {
   properties: {
     id: string,
     reference: string,
-    state: { type: 'string', enum: ['draft', 'sent', 'to approve', 'purchase', 'cancel'] },
+    state: { type: 'string', enum: [...PURCHASE_STATES] },
     orderedAt: string,
     expectedAt: string,
     vendor: party,
@@ -159,7 +162,7 @@ export const orderRoutes = routesOf(
         type: 'object',
         properties: {
           query: string,
-          state: { type: 'string', enum: ['draft', 'sent', 'to approve', 'purchase', 'cancel'] },
+          state: { type: 'string', enum: [...PURCHASE_STATES] },
           cursor: string,
           limit: { type: 'integer', minimum: 1, maximum: 50 },
         },

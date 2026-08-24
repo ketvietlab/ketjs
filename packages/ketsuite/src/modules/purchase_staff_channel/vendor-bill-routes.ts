@@ -5,6 +5,7 @@
 // maintenance remain back-office operations.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import { MOVE_STATES, PAYMENT_STATES } from '../account/functions.ts'
 import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
@@ -31,8 +32,8 @@ const summary = {
     id: string,
     reference: string,
     kind: { type: 'string', enum: ['bill', 'credit_note'] },
-    state: { type: 'string', enum: ['draft', 'posted', 'cancel'] },
-    paymentState: { type: 'string', enum: ['not_paid', 'partial', 'paid', 'reversed'] },
+    state: { type: 'string', enum: [...MOVE_STATES] },
+    paymentState: { type: 'string', enum: [...PAYMENT_STATES] },
     vendor: party,
     invoiceDate: nullableString,
     dueAt: nullableString,
@@ -128,8 +129,8 @@ export const vendorBillRoutes = routesOf(
         properties: {
           query: string,
           kind: { type: 'string', enum: ['bill', 'credit_note'] },
-          state: { type: 'string', enum: ['draft', 'posted', 'cancel'] },
-          paymentState: { type: 'string', enum: ['not_paid', 'partial', 'paid', 'reversed'] },
+          state: { type: 'string', enum: [...MOVE_STATES] },
+          paymentState: { type: 'string', enum: [...PAYMENT_STATES] },
           cursor: string,
           limit: { type: 'integer', minimum: 1, maximum: 50 },
         },
