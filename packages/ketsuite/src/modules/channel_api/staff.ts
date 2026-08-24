@@ -9,7 +9,14 @@
 // a company they were not already granted.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, registerChannelIdentity, routesOf, stableHash } from './core.ts'
+import {
+  channelError,
+  csrfTokenFor,
+  defineChannelRoute,
+  registerChannelIdentity,
+  routesOf,
+  stableHash,
+} from './core.ts'
 import { CHANNEL_API_VERSION } from './core.ts'
 import type { StaffIdentity } from './core.ts'
 
@@ -65,6 +72,17 @@ export const staffRoutes = routesOf(
         data: {
           contractVersion: CHANNEL_API_VERSION,
           user: { id: identity.userId },
+          /**
+           * The token every mutation on this session has to echo back.
+           *
+           * A staff session is a cookie, so it rides along on a cross-site
+           * request whether the operator meant it or not, and the facade asks
+           * unsafe methods to prove intent. The customer profile hands this over
+           * at sign-in; staff sign in through the framework, which knows nothing
+           * about this channel — so bootstrap is where it is handed over, and a
+           * client that has not bootstrapped cannot mutate.
+           */
+          csrfToken: csrfTokenFor(identity.sessionId),
           // The scope the session settled on, so a client can label what it is
           // looking at. It is reported, never accepted.
           scope: {

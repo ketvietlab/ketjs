@@ -109,7 +109,13 @@ credential happens to arrive.
 
 A staff route calls `ctx.call`, not `ctx.callUnchecked`. The framework already knows which functions a
 session may invoke, and reaching past that check is how a channel becomes a way around the roles every
-other surface obeys.
+other surface obeys. `npm run audit:staff-channel` fails the build on a staff route that reaches for the
+unchecked call, because nothing about that is visible at a glance in a diff.
+
+A staff session is a cookie, so the facade asks unsafe methods to prove intent the same way it does for a
+customer one. The customer profile hands the CSRF token over at sign-in; staff sign in through the
+framework, which knows nothing about this channel, so `staff/bootstrap` is where it is handed over. A
+client that has not bootstrapped cannot mutate.
 
 ## Contract behavior
 

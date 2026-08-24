@@ -75,6 +75,16 @@ type ClockInput = {
   employee: Row
   branchId: string
   source: string
+  /**
+   * Which way the caller believes they are punching.
+   *
+   * Absent, the state decides and the punch toggles — which is right at a kiosk,
+   * where the person can see the screen. It is wrong over a network: a client
+   * retrying a check-in whose response was lost would clock the employee out,
+   * silently and in the opposite direction from the one they asked for. Naming
+   * the direction turns that into a refusal.
+   */
+  expect?: 'in' | 'out'
   kioskId?: string
   actorUserId?: string
   networkFingerprint?: string
@@ -101,6 +111,9 @@ const clock = async (ctx: Ctx, input: ClockInput) => {
     }
     const version = Number(state.version)
     const punchId = randomUUID()
+    const heading = state.openSessionId ? 'out' : 'in'
+    if (input.expect && input.expect !== heading)
+      return invalid(issue('expect', `attendance.error.already${heading === 'out' ? 'In' : 'Out'}`))
     if (!state.openSessionId) {
       const sessionId = randomUUID()
       const claimed = await tx.db.compareAndSet(
@@ -445,7 +458,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'punch.self': defineFn({
-    input: {},
+    input: { expect: 'text?' },
     output: {
       ok: 'bool',
       employeeId: 'id?',
@@ -463,15 +476,39 @@ export const functions: Record<string, FnSpec> = {
       'write:attendance.Session',
       'write:attendance.Punch',
     ],
-    handler: async (ctx: Ctx) => {
+    handler: async (ctx: Ctx, a) => {
       const employee = await employeeForActor(ctx)
       if (!employee) return invalid(issue('employeeId', 'attendance.error.employeeUser'))
+      const expect = a.expect == null ? undefined : String(a.expect)
+      if (expect !== undefined && expect !== 'in' && expect !== 'out')
+        return invalid(issue('expect', 'attendance.error.invalid'))
       return clock(ctx, {
         employee,
         branchId: String(employee.homeBranchId),
         source: 'account',
         actorUserId: ctx.actor ?? undefined,
+        ...(expect ? { expect } : {}),
       })
+    },
+  }),
+
+  /** Whether this employee is on the clock right now, and since when. */
+  'clock.mine': defineFn({
+    input: {},
+    output: { onClock: 'bool', sessionId: 'id?', startAt: 'datetime?', branchId: 'id?' },
+    effects: ['read:hr.Employee', 'read:attendance.ClockState', 'read:attendance.Session'],
+    handler: async (ctx: Ctx) => {
+      const employee = await employeeForActor(ctx)
+      if (!employee) return { onClock: false }
+      const state = (await ctx.db.select('attendance.ClockState', { id: String(employee.id) }))[0]
+      if (!state?.openSessionId) return { onClock: false }
+      const session = (await ctx.db.select('attendance.Session', { id: state.openSessionId }))[0]
+      return {
+        onClock: true,
+        sessionId: state.openSessionId,
+        startAt: session?.startAt ?? null,
+        branchId: session?.branchId ?? null,
+      }
     },
   }),
 
