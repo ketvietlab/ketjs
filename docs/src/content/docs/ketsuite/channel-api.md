@@ -123,6 +123,13 @@ admit only active partners holding the `customer` role, and project no raw conta
 Order mutations and product lookup remain outside this module until their mobile ownership, concurrency,
 availability, and product-kind contracts can be represented by the public domain without guessing.
 
+`purchase_staff_channel` currently contributes the first read-only purchasing slice:
+`GET purchasing/vendors` and `GET purchasing/vendors/{id}`. Both call the permission-checked Partner
+functions, admit only active partners holding the `supplier` role, and project no raw contact or
+street-address fields. Purchase mutations, bills, and product lookup remain outside this module until
+their mobile ownership, concurrency, workflow, and product-kind contracts can be represented by the
+public domain without guessing.
+
 ## Contract behavior
 
 Every response uses one envelope:
