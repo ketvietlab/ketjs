@@ -299,8 +299,9 @@ test('staff purchasing channel exposes only bounded purchasable product projecti
       id: 'a-stock',
       name: 'Bao bì 1 kg',
       kind: 'stockable',
-      reference: 'BUY-01',
-      uom: 'Cái',
+      sku: 'BUY-01',
+      category: null,
+      uom: { id: 'piece', name: 'Cái' },
     },
   ])
   assert.ok(first.nextCursor)
@@ -336,8 +337,9 @@ test('staff purchasing channel reads one purchasable product and hides unsuitabl
     id: 'a-stock',
     name: 'Bao bì 1 kg',
     kind: 'stockable',
-    reference: 'BUY-01',
-    uom: 'Cái',
+    sku: 'BUY-01',
+    category: null,
+    uom: { id: 'piece', name: 'Cái' },
     readOnly: true,
   })
   assert.equal((await e2e.client.get('/api/staff/v1/purchasing/products/c-sale-only')).status, 404)

@@ -373,3 +373,49 @@ test('staff sales channel accepts every state its domain can reach', async (t) =
     assert.equal(response.status, 200, state)
   }
 })
+
+test('staff product directory reads only the units and categories a page names', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  // Units and categories nothing on the page points at. Labelling a product must
+  // not become a reason to read them.
+  for (const id of ['box', 'pallet', 'crate'])
+    await fixture('uom.saveUnit', { id, name: id, relativeFactor: '1' })
+  for (const id of ['electronics', 'furniture']) await fixture('product.saveCategory', { id, name: id })
+
+  const units = (await e2e.fixture.call<Row[]>('uom.listUnits', { ids: ['kg'] }, { scope })).value
+  assert.deepEqual(
+    units.map((row) => String(row.id)),
+    ['kg'],
+  )
+  const categories = (await e2e.fixture.call<Row[]>('product.listCategories', { ids: ['fruit'] }, { scope }))
+    .value
+  assert.deepEqual(
+    categories.map((row) => String(row.id)),
+    ['fruit'],
+  )
+  assert.deepEqual((await e2e.fixture.call<Row[]>('uom.listUnits', { ids: [] }, { scope })).value, [])
+
+  // The route still labels the page correctly while asking for that much less.
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+  const page = (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/sales/products?limit=50'))
+    .data
+  assert.deepEqual(page.items[0]?.uom, { id: 'kg', name: 'kg' })
+  assert.equal(page.items[0]?.category, 'Trái cây')
+})
+
+test('staff product routes tolerate undeclared query parameters like their siblings', async (t) => {
+  const e2e = await boot(t)
+  await seedProducts(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+  // A native client that appends an analytics or cache-busting parameter must
+  // not find one endpoint working and the one beside it answering 422.
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products?_cacheBust=1')).status, 200)
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/orders?_cacheBust=1')).status, 200)
+  // What the contract does declare is still enforced.
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products?query=x')).status, 422)
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/products?limit=999')).status, 422)
+})

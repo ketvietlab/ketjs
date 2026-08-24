@@ -487,14 +487,27 @@
                                 "type": "string",
                                 "enum": ["stockable", "consumable", "service"]
                               },
-                              "reference": {
+                              "sku": {
+                                "type": ["string", "null"]
+                              },
+                              "category": {
                                 "type": ["string", "null"]
                               },
                               "uom": {
-                                "type": "string"
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
                               }
                             },
-                            "required": ["id", "name", "kind", "reference", "uom"]
+                            "required": ["id", "name", "kind", "sku", "category", "uom"]
                           }
                         },
                         "nextCursor": {
@@ -562,18 +575,31 @@
                           "type": "string",
                           "enum": ["stockable", "consumable", "service"]
                         },
-                        "reference": {
+                        "sku": {
+                          "type": ["string", "null"]
+                        },
+                        "category": {
                           "type": ["string", "null"]
                         },
                         "uom": {
-                          "type": "string"
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
                         },
                         "readOnly": {
                           "type": "boolean",
                           "const": true
                         }
                       },
-                      "required": ["id", "name", "kind", "reference", "uom", "readOnly"]
+                      "required": ["id", "name", "kind", "sku", "category", "uom", "readOnly"]
                     },
                     "error": {},
                     "meta": {
