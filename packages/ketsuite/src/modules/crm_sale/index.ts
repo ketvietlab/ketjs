@@ -5,10 +5,8 @@ import { saleFunctionsPublic } from './sale-functions.ts'
 
 export default defineModule({
   name: 'crm_sale',
-  group: 'crm',
   version: '0.1.0',
   depends: ['crm', 'sale', 'stock', 'pricing', 'account', 'product', 'uom'],
-  app: true,
   title: 'CRM · Sales',
   summary: 'Quotations written from an opportunity.',
   category: 'Sales',

@@ -20,10 +20,8 @@ const functions = targetActivityFunctions({
 
 export default defineModule({
   name: 'product_variant_activity_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['product_backend', 'product_variant_mail_backend', 'activity_backend'],
-  install: 'auto',
   functions,
   fills: {
     'product_backend:variant.collaboration': `{% island "activity.record" %}`,

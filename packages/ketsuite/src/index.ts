@@ -6,7 +6,6 @@
 // exported rather than smuggled. The dependency audit enforces exactly that.
 
 // website vertical
-export { default as appGroups } from './modules/app_groups/index.ts'
 export { default as channelApi } from './modules/channel_api/index.ts'
 export {
   CHANNEL_API_VERSION,

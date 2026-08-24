@@ -21,9 +21,7 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
       'breaking',
       'JOINT_REMOVED',
       `joint "${key}" was removed`,
-      users.length
-        ? `still filled by: ${users.join(', ')}`
-        : 'no installed module fills it - safe to proceed',
+      users.length ? `still filled by: ${users.join(', ')}` : 'no composed module fills it - safe to proceed',
     )
   }
 

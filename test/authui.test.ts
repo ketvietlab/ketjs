@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, callFn } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { bootDeployment, callFn } from '@ketvietlab/ketjs'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 /**
  * The screens that make the enforcement usable.
@@ -11,7 +11,7 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
  * fetch() gets a status, because a redirect to HTML is a useless answer to it.
  */
 const setup = async () => {
-  const b = await bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme JSC' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
@@ -65,9 +65,9 @@ test('login: something that is not a browser still gets JSON, not a page', async
 
 test('login: signing in lands where you were going', async () => {
   const { b, at } = await setup()
-  const r = await form(at, { login: 'admin', password: 'correct horse', next: '/admin/apps' })
+  const r = await form(at, { login: 'admin', password: 'correct horse', next: '/admin/companies' })
   assert.equal(r.status, 303)
-  assert.equal(r.headers.get('location'), '/admin/apps')
+  assert.equal(r.headers.get('location'), '/admin/companies')
   assert.ok(r.headers.get('set-cookie'))
   await b.close()
 })
@@ -114,9 +114,9 @@ test('login: already signed in, the form is skipped rather than shown twice', as
 
 test('backend: a browser is sent to sign in, carrying where it was going', async () => {
   const { b, at } = await setup()
-  const r = await fetch(`${at}/admin/apps`, { headers: HTML, redirect: 'manual' })
+  const r = await fetch(`${at}/admin/companies`, { headers: HTML, redirect: 'manual' })
   assert.equal(r.status, 303)
-  assert.equal(r.headers.get('location'), '/login?next=%2Fadmin%2Fapps')
+  assert.equal(r.headers.get('location'), '/login?next=%2Fadmin%2Fcompanies')
   await b.close()
 })
 
@@ -179,7 +179,7 @@ test('login: the page carries the stylesheets, like every other screen', async (
   assert.ok(links.length > 0, 'no stylesheet on the sign-in page')
   assert.ok(
     links.some((l) => l.includes('/_ket/asset/backend/')),
-    'and they come from the installed modules',
+    'and they come from the composed modules',
   )
   await b.close()
 })

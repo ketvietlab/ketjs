@@ -3,9 +3,8 @@ title: Migrations and adapters
 description: Derive schemas, plan safe migrations, use SQLite or PostgreSQL, and migrate tenant fleets.
 ---
 
-KetJS derives the datastore schema from the complete composed manifest. Runtime module installation
-does not add or remove tables: every database in a deployment moves toward one known schema, while
-installed module state controls behavior.
+KetJS derives the datastore schema from the complete composed manifest. Every database in a deployment
+moves toward that one known schema, and the same selected module set owns runtime behavior.
 
 ## Schema pipeline
 
@@ -50,8 +49,8 @@ prints SQL, and updates `.ket/schema.<app>.json`:
 
 ```bash
 # Run from: /path/to/ketjs
-ket migrate --app backoffice --workspace dist/ket.workspace.js
-ket migrate --app backoffice --allow-destructive --workspace dist/ket.workspace.js
+ket migrate --deployment backoffice --workspace dist/ket.workspace.js
+ket migrate --deployment backoffice --allow-destructive --workspace dist/ket.workspace.js
 ```
 
 Treat the snapshot as planning state, not proof that SQL was applied to an external database. Normal
@@ -68,11 +67,11 @@ SQLite is built into `@ketvietlab/ketjs` and requires no driver package:
 // File: src/modules/example/models.ts
 import { sqliteAdapter } from '@ketvietlab/ketjs'
 
-const adapter = sqliteAdapter('.ket/app.db')
+const adapter = sqliteAdapter('.ket/deployment.db')
 await adapter.open()
 ```
 
-Most apps need no explicit `openStore`; `sqliteStore` reads `KET_SQLITE` and is the default runtime
+Most deployments need no explicit `openStore`; `sqliteStore` reads `KET_SQLITE` and is the default runtime
 factory.
 
 Useful settings:
@@ -99,10 +98,10 @@ Wire it at the application boundary:
 
 ```ts
 // File: src/app.ts
-import { defineApp } from '@ketvietlab/ketjs'
+import { defineDeployment } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
-export const app = defineApp({
+export const app = defineDeployment({
   name: 'orders',
   modules: [orders],
   headless: true,

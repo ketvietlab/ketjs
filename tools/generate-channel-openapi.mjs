@@ -2,7 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { compose } from '../packages/ketjs/dist/index.js'
-import { ketsuite } from '../packages/ketsuite/dist/app.js'
+import { ketsuite } from '../packages/ketsuite/dist/deployment.js'
 import { openApiDocument } from '../packages/ketsuite/dist/index.js'
 
 const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'customer')

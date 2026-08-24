@@ -65,7 +65,7 @@ KetJS is organized around six constraints:
 %% File: docs/src/content/docs/ketjs/index.md
 flowchart LR
   roots["Module roots and imports"] --> workspace["Workspace declaration"]
-  workspace --> app["Resolved AppSpec"]
+  workspace --> app["Resolved DeploymentSpec"]
   app --> manifest["Composed Manifest"]
   manifest --> schema["Model schema"]
   manifest --> operations["Functions and jobs"]
@@ -79,19 +79,17 @@ flowchart LR
   runtime --> pdf["Deterministic PDF artifacts"]
 ```
 
-The deployment decides which modules it ships. Each database decides which shipped application
-modules are enabled. Installing or removing a module changes behavior, not schema; migrations are
-planned from the complete deployment manifest.
+The deployment decides its complete module composition. Every database and tenant running that
+deployment receives the same behavior and schema.
 
 ## Read the framework in dependency order
 
 The guides are organized by what depends on what. A new contributor should follow this sequence;
 an experienced contributor can enter at the stage that owns the change.
 
-1. **Compose the application.** Start with [Quick start](/ketjs/quick-start/), then learn
-   [Workspaces and apps](/ketjs/workspaces/), [Modules and manifest](/ketjs/modules/), and
-   [Module discovery](/ketjs/module-discovery/). [Application lifecycle](/ketjs/app-lifecycle/)
-   explains what changes after composition.
+1. **Compose the deployment.** Start with [Quick start](/ketjs/quick-start/), then learn
+   [Workspaces and deployments](/ketjs/workspaces/), [Modules and manifest](/ketjs/modules/), and
+   [Module discovery](/ketjs/module-discovery/).
 2. **Model data and behavior.** Read [Models and scopes](/ketjs/models/),
    [Queries and changesets](/ketjs/data/), [Functions and effects](/ketjs/functions/), and
    [Migrations and adapters](/ketjs/migrations/) in that order.

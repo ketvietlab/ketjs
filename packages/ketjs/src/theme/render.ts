@@ -21,7 +21,7 @@ export type ThemeRuntime = {
    * The declared tokens of everything this theme actually renders with, as CSS.
    *
    * Composed here rather than from `manifest.tokens` because the manifest merges
-   * every installed module's tokens flat: with two themes installed the one that
+   * every composed module's tokens flat: with two themes selected the one that
    * happens to sort later would win over the one the site selected.
    */
   tokensCss: string
@@ -37,18 +37,9 @@ export function createTheme(
     theme?: string
   } = {},
 ): ThemeRuntime {
-  // A theme is written against what the DEPLOYMENT ships, not against what a
-  // particular database has switched on. So the strict check belongs to the full
-  // manifest — where a typo is a build error — while a restricted manifest, which
-  // is a runtime view, degrades to rendering nothing. Uninstalling an app must not
-  // take the whole theme down with it.
-  const atRuntime = manifest.disabledModules !== undefined
-  const off = new Set(manifest.disabledModules ?? [])
-  const disabledSections = new Set(manifest.disabledSections ?? [])
   // Islands come from modules; the theme only names them.
   const islands: IslandRegistry = {}
   for (const m of modules) {
-    if (off.has(m.name)) continue
     for (const [name, def] of Object.entries(m.islands)) islands[name] = def.view
   }
   const clients = Object.fromEntries(
@@ -63,7 +54,6 @@ export function createTheme(
   // themes installed the tokens of whichever one composed last.
   const tokens: Record<string, string> = {}
   for (const m of modules) {
-    if (off.has(m.name)) continue // a removed theme contributes no templates
     if (m.kind === 'theme' && opts.theme && m.name !== opts.theme) continue
     Object.assign(tokens, m.tokens)
     for (const [name, src] of Object.entries(m.templates)) {
@@ -99,7 +89,6 @@ export function createTheme(
   const wiring = createJointWiring(manifest, {
     fillsFor: (joint) => fills[joint] ?? [],
     islands,
-    atRuntime,
   })
 
   /**
@@ -115,18 +104,9 @@ export function createTheme(
       const placement = raw as { type?: string; settings?: Record<string, unknown> }
       if (!placement?.type) continue
       if (!manifest.sections[placement.type]) {
-        // A page saved while an app was installed still names its sections after it
-        // is removed. Skip those; re-installing brings them back with their data.
-        if (atRuntime && disabledSections.has(placement.type)) continue
-        if (atRuntime) {
-          // Named by no app this deployment has ever shipped: leave a mark rather
-          // than pretend the page was always this length.
-          out.push(`<!-- ket: unknown section "${placement.type}" -->`)
-          continue
-        }
         throw new KetError({
           code: 'E_UNKNOWN_SECTION',
-          message: `the page places section "${placement.type}", which no installed module provides`,
+          message: `the page places section "${placement.type}", which no composed module provides`,
           hint: `available sections: ${Object.keys(manifest.sections).join(', ') || '(none)'}`,
         })
       }
@@ -166,7 +146,7 @@ export function createTheme(
     if (!t) {
       throw new KetError({
         code: 'E_TEMPLATE_NOT_FOUND',
-        message: `${from} renders "${name}", which no installed module provides`,
+        message: `${from} renders "${name}", which no composed module provides`,
         hint: `available templates: ${Object.keys(templates).sort().join(', ') || '(none)'}`,
       })
     }
@@ -196,7 +176,7 @@ export function createTheme(
   for (const [joint, sourcesForJoint] of Object.entries(fillSources)) {
     fills[joint] = sourcesForJoint.map((fill, i) => {
       const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...compileOpts })
-      assertFillReach(manifest, { joint, by: fill.by }, compiled, { atRuntime })
+      assertFillReach(manifest, { joint, by: fill.by }, compiled)
       return { by: fill.by, compiled }
     })
   }
@@ -210,7 +190,7 @@ export function createTheme(
       if (!manifest.joints[j]) {
         throw new KetError({
           code: 'E_TEMPLATE_UNKNOWN_JOINT',
-          message: `template "${name}" renders joint "${j}", which no installed module publishes`,
+          message: `template "${name}" renders joint "${j}", which no composed module publishes`,
           hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
         })
       }
@@ -219,11 +199,11 @@ export function createTheme(
 
   // Placing an island nobody provides is a build error, exactly like a missing joint.
   for (const [name, t] of Object.entries(templates)) {
-    for (const island of atRuntime ? [] : t.islandsUsed) {
+    for (const island of t.islandsUsed) {
       if (!manifest.islands[island]) {
         throw new KetError({
           code: 'E_TEMPLATE_UNKNOWN_ISLAND',
-          message: `template "${name}" places island "${island}", which no installed module provides`,
+          message: `template "${name}" places island "${island}", which no composed module provides`,
           hint: `provided islands: ${Object.keys(manifest.islands).join(', ') || '(none)'}`,
         })
       }

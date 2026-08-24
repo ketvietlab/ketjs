@@ -8,9 +8,7 @@ import { sections } from './sections.ts'
 
 export default defineModule({
   name: 'website_retail',
-  group: 'commerce',
   version: '0.1.0',
-  app: true,
   depends: ['website', 'product', 'product_media', 'channel_api', 'sale', 'stock', 'pricing', 'uom'],
   compatible: { channel_api: '^1' },
   title: 'Website Retail',

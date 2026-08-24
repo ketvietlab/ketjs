@@ -3,8 +3,8 @@ title: Application architecture
 description: Understand KetSuite composition, module layers, runtime boundaries, and package ownership.
 ---
 
-KetSuite is assembled explicitly in `packages/ketsuite/src/app.ts`. There is no import-time module
-registry: `createKetsuiteApp()` passes the complete module list to `defineApp()`, and KetJS composes it
+KetSuite is assembled explicitly in `packages/ketsuite/src/deployment.ts`. There is no import-time module
+registry: `createKetsuiteDeployment()` passes the complete module list to `defineDeployment()`, and KetJS composes it
 into the manifest used by migration, permissions, HTTP dispatch, workers, and rendering.
 
 ## Three module layers
@@ -15,7 +15,7 @@ KetSuite module names encode an ownership pattern, not a mandatory framework fea
 | --- | --- | --- | --- |
 | Domain | `partner`, `sale`, `loyalty` | Models, invariants, functions, jobs, reports, domain messages | Admin-only markup or another domain's integration policy |
 | Backend | `partner_backend`, `sale_backend` | `/admin/...` routes, screens, menus, islands, backend translations | Duplicate business rules or direct writes around domain functions |
-| Bridge | `account_partner`, `loyalty_sale` | Behavior that is meaningful only when two modules are installed | A patch hidden inside either domain owner |
+| Bridge | `account_partner`, `loyalty_sale` | Behavior that is meaningful only when two modules are selected | A patch hidden inside either domain owner |
 
 Shared capability modules such as `backend`, `mail`, `activity`, `calendar`, `storage`, `user`, and
 `channel_api` provide contracts used by several verticals. Website modules and themes form a separate
@@ -35,10 +35,10 @@ flowchart BT
 The bridge keeps `partner` usable without accounting and prevents `account` from importing partner
 implementation details. The backend bridge follows the same rule for its screen contribution.
 
-## Module families in the packaged app
+## Module families in the packaged deployment
 
-The application composition groups capabilities by dependency direction. This map is an orientation
-aid; the `modules` array in `app.ts` remains the executable inventory.
+The deployment composition groups capabilities by dependency direction. This map is an orientation
+aid; the `modules` array in `deployment.ts` remains the executable inventory.
 
 | Family | Domain and capability modules | Companion pattern |
 | --- | --- | --- |
@@ -55,26 +55,18 @@ Several backend modules intentionally depend on the shared `backend` module, whi
 not. This makes headless composition possible and prevents admin presentation from becoming a hidden
 requirement of business logic.
 
-## Shipped, bootstrapped, and enabled
+## Declared and running
 
-These states are intentionally different:
+A KetSuite deployment has one state: every module in its `modules` array participates in composition,
+schema migration, HTTP behavior, and worker behavior. There is no bootstrap list or per-database module
+lifecycle. Product variants are separate deployment declarations with explicit module lists.
 
-1. The app's `modules` array declares everything shipped by the process and therefore everything that
-   participates in composition and schema planning.
-2. The `serve.bootstrap` list declares modules installed into a new database.
-3. Runtime module state determines which shipped behavior is enabled for a particular database.
+Backend companions remain separate bridge modules so headless deployments can select the business
+module without its screens. A deployment needing the admin selects both modules explicitly.
 
-Do not remove a module from the app merely to hide it in one database. Conversely, adding it to the
-composition does not mean every existing database should automatically receive its behavior. Use
-module dependencies and install policy for lifecycle decisions; see [Modules and manifest](/ketjs/modules/).
+## Deployment-owned runtime policy
 
-Backend companions commonly use `install: 'auto'`: after their dependencies are enabled, KetJS may
-install them automatically. Infrastructure such as the backend and Channel API is non-removable where
-losing it would also remove the recovery or contract boundary.
-
-## Application-owned runtime policy
-
-The app declaration owns policy that no individual module can decide safely:
+The deployment declaration owns policy that no individual module can decide safely:
 
 - datastore selection and SQLite defaults;
 - default and fallback locale;
@@ -102,5 +94,5 @@ When a new feature crosses domains, prefer this decision sequence:
 3. Put behavior requiring two independently useful domains in a bridge module.
 4. Promote a helper to the package public API only when an external module needs the same boundary.
 
-This keeps installation graphs meaningful and makes accidental circular dependencies visible at
+This keeps composition graphs meaningful and makes accidental circular dependencies visible at
 composition time.

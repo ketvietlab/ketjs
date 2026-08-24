@@ -65,9 +65,9 @@ declared `anonymous: true`.
 
 ```ts
 // File: src/app.ts
-import { defineApp, json } from '@ketvietlab/ketjs'
+import { defineDeployment, json } from '@ketvietlab/ketjs'
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'orders_api',
   modules: [sales],
   headless: true,
@@ -100,7 +100,7 @@ Route factories receive live runtime services:
 | `sessionsOf(url, request)` | Session manager for the request's tenant, or `null`. |
 | `storageOf(url, request)` | Tenant-namespaced blob storage. |
 | `translate(locale)` | Translator for the composed message catalogue. |
-| `document(...)`, `styles(request)` | Safe document shell and installed module styles. |
+| `document(...)`, `styles(request)` | Safe document shell and composed module styles. |
 | `joint(...)`, `jointShows(...)` | Installed extension-point output. |
 | `menu(url, request)` | Navigation filtered by install state and function permissions. |
 

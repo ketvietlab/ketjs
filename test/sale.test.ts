@@ -381,9 +381,9 @@ test('sale: an invoice falls due on its payment term, not on the day it is raise
 })
 
 test('sale: a refused quotation line leaves no order behind', async (t) => {
-  const { createTestApp } = await import('@ketvietlab/ketjs/testing')
-  const { ketsuite } = await import('../apps/ketsuite/app.ts')
-  const app = await createTestApp(ketsuite, { worker: false })
+  const { createTestDeployment } = await import('@ketvietlab/ketjs/testing')
+  const { ketsuite } = await import('../apps/ketsuite/deployment.ts')
+  const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const fixture = (name: string, input: Record<string, unknown>) =>
     app.fixture.call<Row>(name, input, { scope, actor: 'user-1' })

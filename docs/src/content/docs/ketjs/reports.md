@@ -66,8 +66,7 @@ export default defineModule({
 ```
 
 Composition qualifies the local name as `sale.quotation`. It rejects unknown target models, missing sources,
-and sources with write or enqueue effects. `restrictManifest()` removes reports belonging to disabled modules.
-Themes cannot declare reports.
+and sources with write or enqueue effects. Themes cannot declare reports.
 
 The source function should publish an explicit `output` schema. Treat that projection as the stable report DTO:
 templates must not receive arbitrary database rows, session objects, or framework services. The source may read

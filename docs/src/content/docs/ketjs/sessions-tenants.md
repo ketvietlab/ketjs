@@ -26,7 +26,7 @@ configure sessions and resolve current account state.
 
 ```ts
 // File: src/app.ts
-const app = defineApp({
+const app = defineDeployment({
   name: 'backoffice',
   modules: [users, sales],
   headless: true,
@@ -154,7 +154,7 @@ Configure `serve.tenants` when each customer has an independent datastore:
 
 ```ts
 // File: src/app.ts
-const app = defineApp({
+const app = defineDeployment({
   name: 'erp',
   modules: [core, sales],
   headless: true,
@@ -178,9 +178,10 @@ The bounded adapter pool leases one tenant for the duration of a callback and pr
 from escaping their lease. An adapter counts as busy while `open()` is pending, so a concurrent request
 cannot evict or close a connection that the first request is still establishing.
 
-## Per-tenant live state
+## Per-tenant runtime state
 
-Each tenant database owns its module install state. On every request KetJS resolves:
+Every tenant uses the immutable module composition declared by its DeploymentSpec. On every request
+KetJS resolves data ownership, never a tenant-specific module lifecycle:
 
 ```mermaid
 %% File: docs/src/content/docs/ketjs/sessions-tenants.md
@@ -188,18 +189,15 @@ sequenceDiagram
   participant Request
   participant Resolver as Tenant resolver
   participant Pool as Adapter pool
-  participant Registry as App registry
-  participant Runtime as Live runtime
+  participant Runtime as Deployment runtime
   Request->>Resolver: Resolve host or header
   Resolver->>Pool: Lease tenant database
-  Pool->>Registry: Load module install state
-  Registry->>Runtime: Restrict deployment manifest
+  Pool->>Runtime: Use composed deployment manifest
   Runtime-->>Request: Tenant services and scope
 ```
 
-The runtime caches restricted manifests and compiled themes by tenant plus enabled-module set. When an
-operator installs or removes a module, the cache key changes and the next request sees the new live
-state.
+The runtime caches compiled themes, joints, and sessions per tenant. Changing module composition means
+shipping a new deployment; every tenant in that deployment receives the same manifest and schema.
 
 Never hold a tenant adapter, `live` manifest, session manager, or storage object in a process-global
 variable.

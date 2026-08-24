@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path'
-import { serveApp } from '@ketvietlab/ketjs'
-import { ketsuite } from './app.ts'
+import { serveDeployment } from '@ketvietlab/ketjs'
+import { ketsuite } from './deployment.ts'
 import { ensureDevelopmentAdmin } from './development.ts'
 import { scaffoldKetsuite } from './scaffold/index.ts'
 
@@ -49,7 +49,7 @@ try {
         }; never expose this server or database.`,
       )
     }
-    await serveApp(ketsuite)
+    await serveDeployment(ketsuite)
   } else {
     throw new Error(`unknown command "${command}"\n\n${HELP}`)
   }

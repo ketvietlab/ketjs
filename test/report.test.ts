@@ -7,16 +7,15 @@ import { deflateSync } from 'node:zlib'
 import { test } from 'node:test'
 import {
   callFn,
-  bootApp,
+  bootDeployment,
   compose,
   defineFn,
   defineModule,
-  defineApp,
+  defineDeployment,
   defineTheme,
   diffManifests,
   migrateOne,
   registerFunctions,
-  restrictManifest,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { KetError } from '@ketvietlab/ketjs'
@@ -62,15 +61,11 @@ const source = defineModule({
   },
 })
 
-test('report manifest composes provenance and follows runtime module restriction', () => {
+test('report manifest composes provenance', () => {
   const manifest = compose([source])
   assert.equal(manifest.reports['orders.order']?.by, 'orders')
   assert.equal(manifest.reports['orders.order']?.source, 'orders.getPrintData')
-  assert.deepEqual(restrictManifest(manifest, new Set()).reports, {})
-  assert.equal(
-    restrictManifest(manifest, new Set(['orders'])).reports['orders.order']?.target,
-    'orders.Order',
-  )
+  assert.equal(manifest.reports['orders.order']?.target, 'orders.Order')
 })
 
 test('report declarations participate in upgrade diffs', () => {
@@ -192,12 +187,12 @@ test('report HTTP route generates synchronously and reuses the 30-day cache', as
   const dir = await mkdtemp(join(tmpdir(), 'ket-report-'))
   const sqliteFile = join(dir, 'report.db')
   const storageDir = join(dir, 'storage')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'reporttest',
     modules: [source, report],
-    serve: { bootstrap: ['orders', 'report'], defaults: { sqliteFile, storageDir, defaultCompany: 'acme' } },
+    serve: { defaults: { sqliteFile, storageDir, defaultCompany: 'acme' } },
   })
-  const server = await bootApp(app, {
+  const server = await bootDeployment(app, {
     port: 0,
     env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
     log: () => {},

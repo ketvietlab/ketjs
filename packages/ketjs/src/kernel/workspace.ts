@@ -1,14 +1,14 @@
-// Umbrella layout: one repository, many deployable apps, shared modules.
+// Umbrella layout: one repository, many deployments, shared modules.
 //
-// Elixir's umbrella works because apps declare their dependencies explicitly and
+// Elixir's umbrella works because applications declare their dependencies explicitly and
 // share one build. Ket already has the first half — `depends` between modules is
-// `in_umbrella` by another name. This adds the second: several apps composed from
+// `in_umbrella` by another name. This adds the second: several deployments composed from
 // overlapping module sets, each with its own routes, theme and agent surface.
 //
 // The classic umbrella failure is the shared database becoming an invisible
-// coupling. Here it is made visible: apps bound to the same datastore get a single
+// coupling. Here it is made visible: deployments bound to the same datastore get a single
 // union schema, computed and checked at build time, and any disagreement between
-// two apps about the same model is an error rather than a 3am surprise.
+// two deployments about the same model is an error rather than a 3am surprise.
 
 import { compose } from './compose.ts'
 import { Diagnostics } from './errors.ts'
@@ -27,7 +27,7 @@ export type WorkerSpec = {
   shutdownGraceMs?: number
 }
 
-export type AppSpec = {
+export type DeploymentSpec = {
   name: string
   modules: KetModule[]
   theme?: KetModule
@@ -35,23 +35,23 @@ export type AppSpec = {
   themes?: KetModule[]
   datastore?: string
   requires?: string[]
-  /** An app that exposes functions but renders no pages: no theme, no region contract. */
+  /** A deployment that exposes functions but renders no pages: no theme, no region contract. */
   headless?: boolean
-  /** How the app runs: pages, routes, assets, datastore. Absent means it is never served. */
+  /** How the deployment runs: pages, routes, assets, datastore. Absent means it is never served. */
   serve?: ServeSpec
-  /** Same app and manifest, a separate production process role. */
+  /** Same deployment and manifest, a separate production process role. */
   worker?: WorkerSpec
 }
 
 /**
  * What an authored workspace may name before module paths have been resolved.
  *
- * Keeping this separate from AppSpec is deliberate: composition, HTTP and workers
+ * Keeping this separate from DeploymentSpec is deliberate: composition, HTTP and workers
  * continue to receive executable KetModule objects only. A string is allowed at
  * the workspace boundary and nowhere deeper in the framework.
  */
 export type ModuleRef = KetModule | string
-export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme' | 'themes'> & {
+export type DeploymentDeclaration = Omit<DeploymentSpec, 'modules' | 'theme' | 'themes'> & {
   modules: ModuleRef[]
   theme?: ModuleRef
   themes?: ModuleRef[]
@@ -59,84 +59,90 @@ export type AppDeclaration = Omit<AppSpec, 'modules' | 'theme' | 'themes'> & {
 
 export type ModulePath = string | URL
 export type WorkspaceDeclaration = {
-  apps: AppDeclaration[]
+  deployments: DeploymentDeclaration[]
   /** the domain contract-like roots whose direct children may contain ket.module.json. */
   modulePaths?: ModulePath[]
 }
 
 export type Workspace = {
-  apps: Record<string, Manifest>
-  datastores: Record<string, { schema: Schema; apps: string[]; modules: string[] }>
+  deployments: Record<string, Manifest>
+  datastores: Record<string, { schema: Schema; deployments: string[]; modules: string[] }>
   shared: string[]
   soloed: Record<string, string[]>
 }
 
-export function defineApp(spec: AppSpec): AppSpec
-export function defineApp(spec: AppDeclaration): AppDeclaration
-export function defineApp(spec: AppDeclaration): AppDeclaration {
-  if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid app name "${spec.name}"`)
+export function defineDeployment(spec: DeploymentSpec): DeploymentSpec
+export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclaration
+export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclaration {
+  if (!/^[a-z][a-z0-9_]*$/.test(spec.name)) throw new Error(`invalid deployment name "${spec.name}"`)
   if (spec.headless && (spec.theme || spec.themes?.length))
-    throw new Error(`app "${spec.name}" is headless but installs a theme`)
+    throw new Error(`deployment "${spec.name}" is headless but selects a theme`)
   const themeNames = [spec.theme, ...(spec.themes ?? [])]
     .filter((theme): theme is ModuleRef => theme !== undefined)
     .map((theme) => (typeof theme === 'string' ? theme : theme.name))
   if (new Set(themeNames).size !== themeNames.length)
-    throw new Error(`app "${spec.name}" selects the same theme more than once`)
-  if (spec.headless && spec.serve?.pages) throw new Error(`app "${spec.name}" is headless but resolves pages`)
+    throw new Error(`deployment "${spec.name}" selects the same theme more than once`)
+  if (spec.headless && spec.serve?.pages)
+    throw new Error(`deployment "${spec.name}" is headless but resolves pages`)
   const pageRegion = spec.serve?.pages?.region
   if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
-    throw new Error(`app "${spec.name}" declares invalid page region "${pageRegion}"`)
+    throw new Error(`deployment "${spec.name}" declares invalid page region "${pageRegion}"`)
   if (spec.worker && !Object.keys(spec.worker.queues).length)
-    throw new Error(`app "${spec.name}" declares a worker with no queues`)
+    throw new Error(`deployment "${spec.name}" declares a worker with no queues`)
   for (const [queue, concurrency] of Object.entries(spec.worker?.queues ?? {})) {
-    if (!/^[a-z][a-z0-9_-]*$/.test(queue)) throw new Error(`app "${spec.name}" has invalid queue "${queue}"`)
+    if (!/^[a-z][a-z0-9_-]*$/.test(queue))
+      throw new Error(`deployment "${spec.name}" has invalid queue "${queue}"`)
     if (!Number.isInteger(concurrency) || concurrency < 1)
-      throw new Error(`app "${spec.name}" queue "${queue}" needs concurrency >= 1`)
+      throw new Error(`deployment "${spec.name}" queue "${queue}" needs concurrency >= 1`)
   }
   return spec
 }
 
 export function defineWorkspace<T extends WorkspaceDeclaration>(spec: T): T {
   if (!spec || typeof spec !== 'object') throw new Error('defineWorkspace() expects an object')
-  if (!Array.isArray(spec.apps)) throw new Error('workspace apps must be an array')
+  if (!Array.isArray(spec.deployments)) throw new Error('workspace deployments must be an array')
   if (spec.modulePaths !== undefined && !Array.isArray(spec.modulePaths))
     throw new Error('workspace modulePaths must be an array')
   return spec
 }
 
-export function composeWorkspace(apps: AppSpec[]): Workspace {
+export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
   const diag = new Diagnostics()
   const manifests: Record<string, Manifest> = {}
   const usedBy = new Map<string, string[]>()
 
-  for (const app of apps) {
-    const mods = [...app.modules, ...(app.theme ? [app.theme] : []), ...(app.themes ?? [])]
+  for (const deployment of deployments) {
+    const mods = [
+      ...deployment.modules,
+      ...(deployment.theme ? [deployment.theme] : []),
+      ...(deployment.themes ?? []),
+    ]
     try {
-      manifests[app.name] = compose(mods, {
-        appRequires: app.requires ?? [],
-        headless: app.headless ?? false,
+      manifests[deployment.name] = compose(mods, {
+        requiredRegions: deployment.requires ?? [],
+        headless: deployment.headless ?? false,
       })
     } catch (e) {
       diag.add({
-        code: 'E_APP_COMPOSE_FAILED',
-        module: app.name,
-        message: `app "${app.name}" failed to compose: ${(e as Error).message}`,
+        code: 'E_DEPLOYMENT_COMPOSE_FAILED',
+        module: deployment.name,
+        message: `deployment "${deployment.name}" failed to compose: ${(e as Error).message}`,
       })
       continue
     }
-    const configured = app.worker?.queues ?? {}
-    for (const [job, meta] of Object.entries(manifests[app.name]!.jobs)) {
+    const configured = deployment.worker?.queues ?? {}
+    for (const [job, meta] of Object.entries(manifests[deployment.name]!.jobs)) {
       if (configured[meta.queue]) continue
       diag.add({
-        code: 'E_APP_JOB_QUEUE_UNCONFIGURED',
-        module: app.name,
-        message: `app "${app.name}" ships job "${job}" on queue "${meta.queue}" but does not configure that worker queue`,
+        code: 'E_DEPLOYMENT_JOB_QUEUE_UNCONFIGURED',
+        module: deployment.name,
+        message: `deployment "${deployment.name}" ships job "${job}" on queue "${meta.queue}" but does not configure that worker queue`,
         hint: `add worker.queues.${meta.queue}, or remove the module that contributes the job`,
       })
     }
     for (const m of mods) {
       const list = usedBy.get(m.name) ?? []
-      list.push(app.name)
+      list.push(deployment.name)
       usedBy.set(m.name, list)
     }
   }
@@ -144,12 +150,16 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
 
   // One union schema per datastore, so the coupling is explicit and checkable.
   const datastores: Workspace['datastores'] = {}
-  for (const app of apps) {
-    const store = app.datastore ?? 'main'
-    const manifest = manifests[app.name] as Manifest
+  for (const deployment of deployments) {
+    const store = deployment.datastore ?? 'main'
+    const manifest = manifests[deployment.name] as Manifest
     const schema = schemaFromManifest(manifest)
-    const slot = (datastores[store] ??= { schema: { version: 1, tables: {} }, apps: [], modules: [] })
-    slot.apps.push(app.name)
+    const slot = (datastores[store] ??= {
+      schema: { version: 1, tables: {} },
+      deployments: [],
+      modules: [],
+    })
+    slot.deployments.push(deployment.name)
     for (const m of manifest.order) if (!slot.modules.includes(m)) slot.modules.push(m)
 
     for (const [tname, table] of Object.entries(schema.tables)) {
@@ -161,9 +171,9 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
       if (existing.model !== table.model) {
         diag.add({
           code: 'E_DATASTORE_MODEL_CLASH',
-          module: app.name,
-          message: `datastore "${store}": table "${tname}" is "${existing.model}" in another app but "${table.model}" in "${app.name}"`,
-          hint: 'rename one of the models, or bind the apps to different datastores',
+          module: deployment.name,
+          message: `datastore "${store}": table "${tname}" is "${existing.model}" in another deployment but "${table.model}" in "${deployment.name}"`,
+          hint: 'rename one of the models, or bind the deployments to different datastores',
         })
         continue
       }
@@ -176,9 +186,9 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
         if (before.base !== col.base || before.by !== col.by) {
           diag.add({
             code: 'E_DATASTORE_COLUMN_CLASH',
-            module: app.name,
-            message: `datastore "${store}": column "${tname}.${cname}" is ${before.base} (from ${before.by}) elsewhere but ${col.base} (from ${col.by}) in "${app.name}"`,
-            hint: 'both apps must install the same version of the contributing module',
+            module: deployment.name,
+            message: `datastore "${store}": column "${tname}.${cname}" is ${before.base} (from ${before.by}) elsewhere but ${col.base} (from ${col.by}) in "${deployment.name}"`,
+            hint: 'both deployments must install the same version of the contributing module',
           })
         }
       }
@@ -193,13 +203,13 @@ export function composeWorkspace(apps: AppSpec[]): Workspace {
     else (soloed[list[0] as string] ??= []).push(mod)
   }
 
-  return { apps: manifests, datastores, shared: shared.sort(), soloed }
+  return { deployments: manifests, datastores, shared: shared.sort(), soloed }
 }
 
 export function explainWorkspace(ws: Workspace): string {
   const lines: string[] = []
-  lines.push('apps:')
-  for (const [name, m] of Object.entries(ws.apps)) {
+  lines.push('deployments:')
+  for (const [name, m] of Object.entries(ws.deployments)) {
     lines.push(
       `  ${name.padEnd(14)} modules=${m.order.length}  fns=${Object.keys(m.functions).length}  jobs=${Object.keys(m.jobs).length}  regions=${m.regions.required.length}`,
     )
@@ -207,10 +217,11 @@ export function explainWorkspace(ws: Workspace): string {
   lines.push('datastores:')
   for (const [name, ds] of Object.entries(ws.datastores)) {
     lines.push(
-      `  ${name.padEnd(14)} tables=${Object.keys(ds.schema.tables).length}  shared by: ${ds.apps.join(', ')}`,
+      `  ${name.padEnd(14)} tables=${Object.keys(ds.schema.tables).length}  shared by: ${ds.deployments.join(', ')}`,
     )
   }
   lines.push(`shared modules: ${ws.shared.join(', ') || '(none)'}`)
-  for (const [app, mods] of Object.entries(ws.soloed)) lines.push(`  only in ${app}: ${mods.join(', ')}`)
+  for (const [deployment, mods] of Object.entries(ws.soloed))
+    lines.push(`  only in ${deployment}: ${mods.join(', ')}`)
   return lines.join('\n')
 }

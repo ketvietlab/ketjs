@@ -40,8 +40,8 @@ npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
 Keep `@latest` even though npm normally defaults to the latest tag. When invoked inside an existing
 KetJS project, `npx` can reuse that project's locally installed older CLI when no tag is present.
 
-The generated app listens on `http://127.0.0.1:3000`. Its first boot creates `.ket/app.db`, applies
-the composed schema, installs the bootstrap module, and serves the workspace's first servable app.
+The generated deployment listens on `http://127.0.0.1:3000`. Its first boot creates
+`.ket/deployment.db`, applies the composed schema, and serves the workspace's first deployment.
 
 The scaffold contains:
 
@@ -52,7 +52,7 @@ notes/
 ├── modules/
 │   └── notes.ts
 ├── test/
-│   └── app.test.ts
+│   └── deployment.test.ts
 ├── tools/
 │   └── dev.mjs
 ├── package.json
@@ -77,9 +77,7 @@ import { defineModule, from } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'notes',
-  app: true,
   title: 'Notes',
-  install: 'manual',
   models: {
     Note: {
       scope: 'company',
@@ -109,26 +107,24 @@ function cannot read another model unless its effects declare that model.
 
 ```ts
 // File: ket.workspace.ts
-import { defineApp, defineWorkspace, json } from '@ketvietlab/ketjs'
+import { defineDeployment, defineWorkspace, json } from '@ketvietlab/ketjs'
 import notes from './modules/notes.ts'
 
-export const app = defineApp({
+export const deployment = defineDeployment({
   name: 'notes',
   modules: [notes],
   headless: true,
   serve: {
-    bootstrap: ['notes'],
     routes: (ctx) => ({
       '/': async (url, request) => json(await ctx.call('notes.list', {}, url, request)),
     }),
   },
 })
 
-export default defineWorkspace({ apps: [app] })
+export default defineWorkspace({ deployments: [deployment] })
 ```
 
-`bootstrap` applies only to an empty database. It does not reinstall modules that an operator has
-explicitly removed.
+The module appears once, in `modules`. KetJS composes it, migrates its schema, and runs its behavior.
 
 ## Call the application
 
@@ -163,7 +159,7 @@ npx ket manifest --workspace dist/ket.workspace.js
 npx ket permissions --workspace dist/ket.workspace.js
 ```
 
-- `check` composes every app and reports contract violations.
+- `check` composes every deployment and reports contract violations.
 - `manifest` prints the single derived artifact.
 - `permissions` inventories callable functions and their data reach.
 
@@ -174,12 +170,12 @@ npx ket permissions --workspace dist/ket.workspace.js
 npm test
 ```
 
-The generated test boots the real app on an ephemeral port with an isolated SQLite database. See
+The generated test boots the real deployment on an ephemeral port with an isolated SQLite database. See
 [Testing](/ketjs/testing/) for fixtures, sessions, tenants, cookie jars, and worker draining.
 
 ## Next steps
 
-1. Model the deployment with [Workspaces and apps](/ketjs/workspaces/).
+1. Model the deployment with [Workspaces and deployments](/ketjs/workspaces/).
 2. Learn the extension rules in [Modules and manifest](/ketjs/modules/).
 3. Add validated writes with [Queries and changesets](/ketjs/data/).
 4. Replace the header identity shim using [Sessions and tenants](/ketjs/sessions-tenants/).

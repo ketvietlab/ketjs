@@ -1,15 +1,11 @@
 ---
 title: Modules and manifest
-description: Build composable KetJS modules and understand the single manifest derived from them.
+description: Build composable KetJS modules and understand the immutable manifest derived from a deployment.
 ---
 
 A module is KetJS's unit of ownership and composition. It declares a capability's data, operations,
 presentation contracts, background work, assets, and messages in one object. `defineModule()` has no
-side effects; composition is explicit and deterministic.
-
-Modules may reserve a static server prefix with `reserves`. Extensions contributing routes inside that
-prefix must depend on its owner, use the owner's published route factory, and declare `compatible` when the
-owner exposes a versioned contract. This makes API ownership and version skew enforceable at composition time.
+side effects; a `DeploymentSpec` explicitly selects which modules exist in a running system.
 
 ## Define a module
 
@@ -20,11 +16,8 @@ import { defineModule, from } from '@ketvietlab/ketjs'
 export const inventory = defineModule({
   name: 'inventory',
   version: '1.0.0',
-  app: true,
   title: 'Inventory',
   summary: 'Stock levels and replenishment',
-  group: 'commerce',
-  install: 'manual',
   models: {
     Warehouse: {
       scope: 'company',
@@ -44,11 +37,11 @@ export const inventory = defineModule({
 Local keys are qualified during composition. `Warehouse` becomes `inventory.Warehouse`, and
 `listWarehouses` becomes `inventory.listWarehouses`.
 
-## Module declaration surface
+## Declaration surface
 
 | Concern | Module fields |
 | --- | --- |
-| Identity and lifecycle | `name`, `version`, `depends`, `app`, `title`, `summary`, `group`, `install`, `removable` |
+| Identity | `name`, `version`, `depends`, `title`, `summary`, `category` |
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
@@ -57,48 +50,10 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 | Printable documents | `reports` |
 | Static resources | `assets`, `styles` |
 
-Unknown keys fail with `E_MODULE_UNKNOWN_KEY`. Module names must be snake_case and stable; renaming a
-module creates a new identity and leaves the old installed state as an orphan.
-
-## Module groups
-
-`group` is an optional stable identifier declared by each module. The framework does not own a
-fixed vocabulary: an application family ships a metadata-only catalogue with `defineModuleGroups()`.
-Composition validates every grouped module against that catalogue and records both the identifier
-and catalogue provenance in the manifest.
-
-```ts
-// File: src/modules/app_groups/index.ts
-import { defineModuleGroups } from '@ketvietlab/ketjs'
-
-export const appGroups = defineModuleGroups({
-  name: 'app_groups',
-  groups: {
-    system: { title: 'System', sequence: 10, fixed: true },
-    commerce: { title: 'Commerce', sequence: 20 },
-  },
-  messages: {
-    vi: {
-      'group.system.title': 'Hệ thống',
-      'group.commerce.title': 'Thương mại',
-    },
-  },
-})
-```
-
-The identifier is the contract; translated group names follow
-`<catalogue module>.group.<identifier>.title` and `.summary`, with the catalogue literals as
-fallbacks. Modules without `group` remain standalone apps. Grouping affects discovery and
-presentation only: schema still belongs to the AppSpec, while enablement still belongs to each
-database's `ket_app` rows.
-
-A catalogue may mark a baseline group `fixed: true`. The registry enables every member and its
-dependency closure when a database opens, and refuses removal with `E_APP_GROUP_FIXED`. Management
-UIs therefore report that group without offering install/remove controls.
+Unknown keys fail with `E_MODULE_UNKNOWN_KEY`. Module names must be snake_case and stable. KetJS has
+no module install state, module group catalogue, or runtime enable/disable lifecycle.
 
 ## Dependencies and extensions
-
-Modules extend contracts through declared dependencies:
 
 ```ts
 // File: src/modules/stock_forecast/index.ts
@@ -106,9 +61,7 @@ export const stockForecast = defineModule({
   name: 'stock_forecast',
   depends: ['inventory'],
   extend: {
-    'inventory.Warehouse': {
-      forecastHorizonDays: 'int?',
-    },
+    'inventory.Warehouse': { forecastHorizonDays: 'int?' },
   },
   fills: {
     'inventory:warehouse.detail.footer':
@@ -121,128 +74,62 @@ The extension field must be optional because existing rows predate the extending
 extend a model or fill a joint only when it depends on the owner. Duplicate fields, missing
 dependencies, and unpublished joints are composition errors.
 
-This rule is the boundary between an extension and a patch: the owner deliberately publishes what
-other modules may change.
-
-## Joints, fills, and omissions
-
-A joint is a named presentation extension point:
-
-```ts
-// File: src/modules/inventory/index.ts
-const inventory = defineModule({
-  name: 'inventory',
-  joints: {
-    'warehouse.detail.footer': {
-      props: { warehouse: 'json' },
-      multiple: true,
-    },
-  },
-})
-```
-
-Another module fills the qualified key `inventory:warehouse.detail.footer`. A dependent module may
-also declare `omits: ['inventory:warehouse.detail.footer']` to remove the joint from the rendered
-output. An omission is structural, not a CSS hide; omitted content is not emitted into HTML.
-
-## Install policy
-
-`install` controls how a module may become enabled in one database:
-
-| Value | Behavior |
-| --- | --- |
-| `manual` | Default. Enabled only when an operator or bootstrap set asks for it. |
-| `auto` | Enabled after its dependencies are enabled, unless the deployment sets `KET_AUTO_INSTALL=0`. |
-| `never` | Cannot be installed directly; it arrives only as a dependency of another installed module. |
-
-Set `removable: false` for infrastructure an operator must not switch off, such as the interface used
-to manage modules. Removing a module keeps its tables, columns, and rows. Reinstalling restores its
-behavior over the preserved data.
-
 ## Compose the manifest
 
 ```ts
-// File: src/modules/inventory/index.ts
+// File: src/deployment.ts
 import { compose } from '@ketvietlab/ketjs'
+import { inventory } from './modules/inventory/index.ts'
+import { stockForecast } from './modules/stock_forecast/index.ts'
 
 const manifest = compose([inventory, stockForecast])
 ```
 
-Composition topologically orders modules and produces one manifest:
+Composition topologically orders modules and produces one immutable manifest:
 
 | Manifest section | Runtime use | Composition checks |
 | --- | --- | --- |
-| `modules`, `groups`, `order` | Dependency, group, and lifecycle inventory | Missing dependencies, cycles, unknown or duplicate group identifiers |
+| `modules`, `order` | Dependency and version inventory | Missing dependencies and cycles |
 | `models`, `relations` | Schema, queries, generated types | Duplicate models, fields, bad relations |
 | `functions`, `jobs` | HTTP, workers, permissions, agents | Signatures, effects, queue declarations |
 | `joints`, `fills`, `regions` | Extension and theme contracts | Ownership and unpublished targets |
-| `routes`, `menus` | Request dispatch and navigation | Duplicate paths/IDs and dependency ownership |
+| `routes`, `menus` | Request dispatch and navigation | Duplicate paths and IDs |
 | `islands`, `sections`, `styles` | Interactive and static presentation | Duplicate providers and asset boundaries |
 | `messages`, `tokens` | Translation and CSS variables | Deterministic merge and provenance |
-| `reports` | Printable documents discovered by target model and source permission | Target and read-only source exist; IDs are unique |
+| `reports` | Printable documents | Target and read-only source exist; IDs are unique |
 
-Every contributed field records its source module in `by`. That provenance powers migration errors,
-upgrade diffs, generated types, and agent capability inspection.
+Every contributed field records its source module in `by`. The same manifest drives schema migration,
+HTTP routes, worker jobs, generated types, themes, permissions, and agent inspection.
 
-## Runtime restriction
+## Deployment semantics
 
-Composition includes everything the deployment ships. Runtime module state belongs to a database:
+The authored module list is the runtime contract:
 
 ```ts
-// File: src/modules/inventory/index.ts
-import { createAppRegistry, restrictManifest } from '@ketvietlab/ketjs'
+// File: src/deployment.ts
+import { defineDeployment } from '@ketvietlab/ketjs'
 
-const registry = await createAppRegistry(manifest, adapter)
-await registry.install('inventory')
-
-const live = restrictManifest(manifest, await registry.enabled())
+export const business = defineDeployment({
+  name: 'business',
+  modules: [inventory, stockForecast],
+  headless: true,
+})
 ```
 
-The restricted manifest drops behavior from disabled modules while retaining the deployment schema.
-In a multi-tenant application, compute this per tenant; reusing one tenant's live manifest for another
-would cross the isolation boundary.
+Both modules are composed, both schemas are migrated, and both behaviors run for every tenant of this
+deployment. To produce a different product shape, declare another deployment with a different module
+list and release it as a separate artifact. A runtime database never changes the composition.
 
 ## Manifest inspection
 
-Use the CLI instead of adding a second registry:
-
 ```bash
-# Run from: /path/to/example-app
+# Run from: /path/to/example-deployment
 ket check --workspace dist/ket.workspace.js
-ket manifest --app backoffice --workspace dist/ket.workspace.js
-ket snapshot --app backoffice --workspace dist/ket.workspace.js
-ket diff --against .ket/manifest.backoffice.json --workspace dist/ket.workspace.js
-ket types --app backoffice --workspace dist/ket.workspace.js
+ket manifest --deployment business --workspace dist/ket.workspace.js
+ket snapshot --deployment business --workspace dist/ket.workspace.js
+ket diff --against .ket/manifest.business.json --workspace dist/ket.workspace.js
+ket types --deployment business --workspace dist/ket.workspace.js
 ```
 
-`snapshot` and `diff` surface breaking contract changes. `types` derives declarations from exactly the
-same manifest used by the runtime.
-
-## Themes are restricted modules
-
-Use `defineTheme()` for installable presentation packages. Themes may declare templates, fills,
-tokens, assets, and styles, but cannot declare models, model extensions, functions, jobs, routes, or
-islands. See [Themes and KTL](/ketjs/themes/).
-
-## Recommended module layout
-
-Small capabilities may live in one file. Larger modules remain easier to review when each concern has
-one file and `index.ts` only assembles the declaration:
-
-```text
-# File: docs/src/content/docs/ketjs/modules.md
-inventory/
-├── index.ts
-├── models.ts
-├── relations.ts
-├── functions.ts
-├── jobs.ts
-├── reports.ts
-├── menus.ts
-├── messages.ts
-├── views.ts
-└── assets/
-```
-
-Do not create side-channel registries in these files. Everything the module contributes must remain
-visible in `defineModule()`.
+Continue with [Workspaces and deployments](/ketjs/workspaces/) for HTTP, worker, datastore, and
+multi-deployment composition.

@@ -285,7 +285,7 @@ everywhere, so enabling a module for a tenant is one UPDATE rather than a
 migration. Measured earlier: 400 empty tables cost 17 MB, and adding a column
 across all of them 43 ms.
 
-**What this closes is not a missing feature but a wrong answer.** `bootApp` opened
+**What this closes is not a missing feature but a wrong answer.** `bootDeployment` opened
 one adapter and built one AppRegistry, so the restricted manifest was computed
 once. Serving two tenants through that would not have crashed — it would have
 shown tenant B the module set of tenant A. The registry is per datastore now and
@@ -744,14 +744,14 @@ manifest should carry.
 
 ## D28 — The framework boots the app, and a module says whether it may arrive
 **Chosen:** `ket serve` and `ket dev`, with the boot sequence as a function
-(`bootApp`) rather than a script. What moved into the framework is everything that
+(`bootDeployment`) rather than a script. What moved into the framework is everything that
 was app-agnostic and would have been copied by the second app: opening a datastore,
 migrating, registering functions, installing a bootstrap set, deciding who the
 request is, mounting the theme, mounting `/_ket/health` and `/_ket/agent`, printing
 a banner, shutting down on a signal. KetSuite's entry went from 162 lines to 4.
 
 **What stayed with the app is what only the app knows**, and it arrives as data on
-`defineApp`: which modules ship, which function turns a path into a page, which
+`defineDeployment`: which modules ship, which function turns a path into a page, which
 extra routes it serves, where its assets are. The page resolver is a *name*
 (`website.getPageByPath`), not a closure — so the framework never learns which
 module provides pages, and a missing resolver is caught at boot rather than at the
@@ -1469,7 +1469,7 @@ path. PostgreSQL sends `pg_notify` on the enqueue transaction's reserved
 connection, so rollback leaves neither business data, job nor notification.
 
 **One app, two process roles.** `ket serve` and `ket worker` both start with
-`bootRuntime`, compose the same `AppSpec` and register the same emitted module
+`bootRuntime`, compose the same `DeploymentSpec` and register the same emitted module
 artifact. Production runs them as separate processes; `ket dev --all` runs both
 loops under the existing single source watcher. There is no second build watcher
 and no execution of source TypeScript in production.
@@ -1576,7 +1576,7 @@ blob column, resize pipeline, CDN rule or file-processing implementation.
 **Chosen:** a workspace may declare several filesystem roots whose direct children
 contain `ket.module.json`. An app selects a module by its declared name; resolution
 loads that module and its dependency closure into the ordinary object-only
-`AppSpec` before composition. Imported `KetModule` objects remain valid in the same
+`DeploymentSpec` before composition. Imported `KetModule` objects remain valid in the same
 list, so existing workspaces need no migration.
 
 **Why:** the domain contract's module search paths makes private and vendor modules operationally easy
@@ -1993,3 +1993,27 @@ joint reported two different error codes depending on which half of the product 
 in, and one of them took a tenant's whole theme down when an island's module was switched
 off while the other degraded to nothing. Both now go through `theme/joint-runtime.ts`. The
 storefront kept the degradation, because that is the behaviour a restricted manifest is for.
+
+## D67 — Deployment composition replaces the module application lifecycle
+
+**Supersedes the lifecycle portions of D28, D50, and D57.** Module groups and database-owned
+install state were designed for customers choosing capabilities at runtime. KetSuite deployments
+are now selected by the system, and product variants can require different implementations of a
+similarly named capability. A partial group such as “11 of 12 installed” therefore exposed an
+operator mechanism without expressing the product decision that actually matters.
+
+**Chosen:** `DeploymentSpec.modules` is the only composition list. Every selected module is composed,
+migrated, served, and run by workers. Every tenant of that deployment receives the same immutable
+manifest. KetJS no longer defines application/group metadata, bootstrap modules, install policies,
+runtime install state, or an App List management screen.
+
+Product-specific arrays may still be ordinary TypeScript constants in a private repository. They are
+authoring conveniences, not framework concepts, discoverable catalogues, or mutable database state.
+
+**Cost:** changing product composition requires a source change and deployment release. Database
+schemas no longer vary independently from behavior, and operators cannot enable a module without
+shipping a new artifact. This is intentional: the deployment owner, not an end user, chooses the
+product shape.
+
+**Reversible:** by adding a separate plugin/lifecycle product later, without weakening the deployment
+contract or restoring hidden state to every KetJS runtime.

@@ -1,12 +1,11 @@
-export { defineModule, defineModuleGroups, defineTheme } from './kernel/define.ts'
-export type { ModuleGroupsSpec } from './kernel/define.ts'
-export { defineApp, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { defineModule, defineTheme } from './kernel/define.ts'
+export { defineDeployment, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 export { resolveWorkspace } from './kernel/modules.ts'
 export type {
   ModuleRef,
   ModulePath,
-  AppDeclaration,
-  AppSpec,
+  DeploymentDeclaration,
+  DeploymentSpec,
   WorkspaceDeclaration,
 } from './kernel/workspace.ts'
 export type {
@@ -24,17 +23,13 @@ export type {
   HttpRouteContract,
   JsonSchema,
   Manifest,
-  ModuleGroupDef,
-  ComposedModuleGroup,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
-export { createAppRegistry, restrictManifest } from './kernel/apps.ts'
-export { buildMenu, activeApp } from './kernel/menu.ts'
+export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'
 export { translator, missingMessages, formatMissing, PSEUDO_LOCALE } from './kernel/i18n.ts'
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
-export type { AppRegistry, AppInfo, AppState } from './kernel/apps.ts'
 export type { Placement, LayoutError } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
@@ -43,14 +38,14 @@ export { isDateText } from './kernel/types.ts'
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
 export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
-export { bootApp, serveApp } from './server/boot.ts'
+export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
   ServeSpec,
   ServeContext,
   SessionResolveContext,
   PagesSpec,
-  BootedApp,
-  BootAppOptions,
+  BootedDeployment,
+  BootDeploymentOptions,
   Route,
 } from './server/boot.ts'
 export { bootRuntime } from './server/runtime.ts'

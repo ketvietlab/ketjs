@@ -569,11 +569,8 @@ const en = {
 
 export default defineModule({
   name: 'purchase_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['purchase', 'backend', 'partner_backend'],
-  install: 'auto',
-  app: true,
   title: 'Mua hàng trong quản trị',
   summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Hệ thống',

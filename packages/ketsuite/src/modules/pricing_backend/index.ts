@@ -7,11 +7,8 @@ import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 
 export default defineModule({
   name: 'pricing_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['pricing', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Bảng giá trong quản trị',
   summary: 'Danh sách bảng giá theo company.',
   category: 'Hệ thống',

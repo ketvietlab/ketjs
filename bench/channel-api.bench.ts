@@ -8,7 +8,7 @@ import {
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import { openApiDocument } from '@ketvietlab/ketsuite'
-import { ketsuite } from '@ketvietlab/ketsuite/app'
+import { ketsuite } from '@ketvietlab/ketsuite/deployment'
 
 const CONTRACT_RUNS = 250
 const REPLAY_RUNS = 1_000

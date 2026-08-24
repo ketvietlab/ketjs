@@ -13,7 +13,7 @@ import {
   registerFunctions,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
-import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
+import { ketsuite } from '../../../.build/apps/ketsuite/deployment.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const runtime = mkdtempSync(join(tmpdir(), 'ketjs-product-list-e2e-'))

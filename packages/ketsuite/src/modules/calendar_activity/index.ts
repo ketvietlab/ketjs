@@ -247,11 +247,8 @@ const relations: Record<string, Record<string, RelationDef>> = {
 
 export default defineModule({
   name: 'calendar_activity',
-  group: 'system',
   version: '0.1.0',
   depends: ['activity', 'calendar', 'user', 'partner', 'storage', 'mail'],
-  install: 'auto',
-  app: true,
   title: 'Cuộc họp từ hoạt động',
   summary: 'Đồng bộ tường minh giữa Meeting Activity và Calendar Event.',
   category: 'Năng suất',

@@ -1,4 +1,4 @@
-// The sidebar: permitted apps, the open app's menu, operational indicators and viewer.
+// The sidebar: permitted root sections, the active section's menu, operational indicators and viewer.
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
@@ -130,8 +130,8 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
   return (
     <>
       <div data-ui="sidebar-header">
-        <a data-ui="sidebar-brand" href="/admin" title={_('backend.nav.apps')}>
-          <span data-ui="sidebar-brand-name">{app ? app.label : _('backend.nav.apps')}</span>
+        <a data-ui="sidebar-brand" href="/admin" title={_('backend.nav.sections')}>
+          <span data-ui="sidebar-brand-name">{app ? app.label : _('backend.nav.sections')}</span>
           <span data-ui="sidebar-brand-chevron">{icon('chevron-down')}</span>
         </a>
       </div>
@@ -151,7 +151,7 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
 
       <nav data-ui="sidebar-nav">
         {menu.length === 0 && <p data-ui="sidebar-empty">{_('backend.nav.noMatch')}</p>}
-        {menu.length > 0 && <p data-ui="sidebar-section-label">{_('backend.nav.apps')}</p>}
+        {menu.length > 0 && <p data-ui="sidebar-section-label">{_('backend.nav.sections')}</p>}
         <ul data-ui="app-list">
           {each(
             menu,

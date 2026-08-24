@@ -20,7 +20,7 @@ test('KetSuite scaffold writes the packaged app and safe development scripts', a
     assert.equal(pkg.scripts.start, 'ketsuite serve')
     assert.equal(
       await readFile(join(target, 'ket.workspace.mjs'), 'utf8'),
-      "export { apps } from '@ketvietlab/ketsuite/app'\n",
+      "export { deployments } from '@ketvietlab/ketsuite/deployment'\n",
     )
     assert.throws(() => scaffoldKetsuite('my_suite', target), /refusing to overwrite/)
     assert.throws(() => scaffoldKetsuite('My-Suite', join(parent, 'invalid')), /invalid app name/)
