@@ -3,6 +3,7 @@ import { tokens } from './tokens.ts'
 
 export default defineTheme({
   name: 'theme_hospitality',
+  group: 'hospitality',
   version: '0.1.0',
   depends: ['website', 'website_menu', 'website_form', 'website_hospitality'],
   title: 'Theme Hospitality',

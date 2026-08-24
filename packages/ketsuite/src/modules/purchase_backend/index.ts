@@ -569,6 +569,7 @@ const en = {
 
 export default defineModule({
   name: 'purchase_backend',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['purchase', 'backend', 'partner_backend'],
   install: 'auto',

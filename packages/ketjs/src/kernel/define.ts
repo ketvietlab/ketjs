@@ -3,7 +3,7 @@
 // depends on a file's name or location.
 
 import { KetError } from './errors.ts'
-import type { KetModule, ModuleSpec } from '../types.ts'
+import type { KetModule, ModuleGroupDef, ModuleSpec } from '../types.ts'
 
 const MODULE_KEYS = new Set([
   'name',
@@ -32,6 +32,8 @@ const MODULE_KEYS = new Set([
   'title',
   'summary',
   'category',
+  'group',
+  'groups',
   'install',
   'autoInstall',
   'removable',
@@ -97,9 +99,68 @@ export function defineModule(spec: ModuleSpec): KetModule {
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
     category: spec.category ?? 'Khác',
+    group: spec.group,
     install: spec.install ?? (spec.autoInstall === true ? 'auto' : 'manual'),
     removable: spec.removable !== false,
     messages: spec.messages ?? {},
+    groups: spec.groups ?? {},
+  })
+}
+
+export type ModuleGroupsSpec = {
+  name: string
+  version?: string
+  groups: Record<string, ModuleGroupDef>
+  messages?: ModuleSpec['messages']
+}
+
+/**
+ * Declares the stable group vocabulary for an application family.
+ *
+ * The result is an ordinary metadata-only module: AppSpecs opt into the vocabulary
+ * explicitly, and composition remains the only discovery mechanism.
+ */
+export function defineModuleGroups(spec: ModuleGroupsSpec): KetModule {
+  if (!spec.groups || Object.keys(spec.groups).length === 0) {
+    throw new KetError({
+      code: 'E_MODULE_GROUPS_EMPTY',
+      module: spec.name,
+      message: `module group catalogue "${spec.name}" declares no groups`,
+      hint: 'declare at least one stable group identifier',
+    })
+  }
+  for (const [id, group] of Object.entries(spec.groups)) {
+    if (!/^[a-z][a-z0-9_]*$/.test(id)) {
+      throw new KetError({
+        code: 'E_MODULE_GROUP_NAME',
+        module: spec.name,
+        message: `invalid module group identifier ${JSON.stringify(id)}`,
+        hint: 'use lowercase letters, digits and underscore, starting with a letter',
+      })
+    }
+    if (!group || typeof group.title !== 'string' || !group.title.trim()) {
+      throw new KetError({
+        code: 'E_MODULE_GROUP_TITLE',
+        module: spec.name,
+        message: `module group "${id}" needs a non-empty fallback title`,
+      })
+    }
+    if (group.sequence !== undefined && (!Number.isInteger(group.sequence) || group.sequence < 0)) {
+      throw new KetError({
+        code: 'E_MODULE_GROUP_SEQUENCE',
+        module: spec.name,
+        message: `module group "${id}" has invalid sequence ${JSON.stringify(group.sequence)}`,
+        hint: 'use a non-negative integer',
+      })
+    }
+  }
+  return defineModule({
+    name: spec.name,
+    version: spec.version,
+    install: 'never',
+    removable: false,
+    groups: spec.groups,
+    messages: spec.messages,
   })
 }
 

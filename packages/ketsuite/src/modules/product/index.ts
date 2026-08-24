@@ -9,6 +9,7 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'product',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['uom'],
   app: true,

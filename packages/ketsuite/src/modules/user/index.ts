@@ -9,6 +9,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'user',
+  group: 'system',
   version: '0.1.0',
   depends: ['partner', 'company'],
   app: true,

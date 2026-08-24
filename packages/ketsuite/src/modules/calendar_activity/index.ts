@@ -247,6 +247,7 @@ const relations: Record<string, Record<string, RelationDef>> = {
 
 export default defineModule({
   name: 'calendar_activity',
+  group: 'system',
   version: '0.1.0',
   depends: ['activity', 'calendar', 'user', 'partner', 'storage', 'mail'],
   install: 'auto',

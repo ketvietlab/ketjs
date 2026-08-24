@@ -7,6 +7,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'oauth',
+  group: 'system',
   version: '0.1.0',
   depends: ['user', 'company'],
   app: true,

@@ -6,6 +6,7 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'purchase',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['company', 'partner', 'product', 'uom', 'stock', 'account'],
   app: true,

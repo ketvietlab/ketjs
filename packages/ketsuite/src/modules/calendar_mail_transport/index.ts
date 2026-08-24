@@ -118,6 +118,7 @@ const functions: Record<string, FnSpec> = {
 
 export default defineModule({
   name: 'calendar_mail_transport',
+  group: 'system',
   version: '0.1.0',
   depends: ['calendar', 'mail_transport'],
   install: 'auto',

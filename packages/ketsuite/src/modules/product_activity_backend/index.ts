@@ -20,6 +20,7 @@ const functions = targetActivityFunctions({
 
 export default defineModule({
   name: 'product_activity_backend',
+  group: 'commerce',
   version: '0.1.0',
   depends: ['product_backend', 'product_mail_backend', 'activity_backend'],
   install: 'auto',

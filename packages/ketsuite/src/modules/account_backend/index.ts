@@ -553,6 +553,7 @@ const MESSAGES: Record<string, Record<string, string>> = { vi: {}, en: {} }
 
 export default defineModule({
   name: 'account_backend',
+  group: 'accounting',
   // 0.3.0: a refused form says which rule it broke and keeps what was typed;
   // pickers only offer values the ledger accepts; dashboard cards count the lists
   // they open; payment-term milestones are visible and editable.

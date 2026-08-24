@@ -6,6 +6,7 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'calendar',
+  group: 'system',
   version: '0.1.0',
   depends: ['mail', 'user', 'partner', 'storage'],
   app: true,
