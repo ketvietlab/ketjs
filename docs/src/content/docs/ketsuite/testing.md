@@ -40,7 +40,7 @@ test suite.
 | --- | --- | --- |
 | Pure helper | Parsing, rounding, state transitions, deterministic calculations | Direct function call with no datastore |
 | Domain integration | Models, functions, transactions, idempotency, and scope | `compose()`, `migrateOne()`, `callFn()`, SQLite adapter |
-| HTTP end-to-end | Sessions, permissions, cookies, routes, forms, locale, redirects | `createTestApp(ketsuite)` and its client |
+| HTTP end-to-end | Sessions, permissions, cookies, routes, forms, locale, redirects | `createTestDeployment(ketsuite)` and its client |
 | UI contract | Shared component markup, hooks, exports, CSS ownership | Server-rendered component and audit tests |
 | Dialect integration | Locks, constraints, concurrency, and SQL behavior | Isolated PostgreSQL database when configured |
 | Benchmark | Regression signals on representative data volume | Named scripts under `bench/` |
@@ -56,11 +56,11 @@ Use framework fixtures only for setup; exercise the behavior under test through 
 // File: test/partner-e2e.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '@ketvietlab/ketsuite/app'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '@ketvietlab/ketsuite/deployment'
 
 test('partner command crosses the staff HTTP boundary', async (t) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
 
   const scope = { company: 'acme', branches: null }

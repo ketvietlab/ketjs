@@ -5,10 +5,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'pricing',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['product', 'company', 'uom'],
-  app: true,
   title: 'Bảng giá',
   summary: 'Quy tắc giá trong tiền tệ của công ty.',
   category: 'Bán hàng',

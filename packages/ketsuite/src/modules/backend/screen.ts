@@ -77,7 +77,7 @@ export type FrameOptions = {
   /**
    * The list a detail page belongs to. A quotation at `/admin/sales/quotations/{id}`
    * highlights the Quotations entry; without this the sidebar marks nothing, which
-   * reads as "you have left the app".
+   * reads as "you have left this section".
    */
   active?: string
   /** Screen-specific joints, merged over the ones every screen gets. */

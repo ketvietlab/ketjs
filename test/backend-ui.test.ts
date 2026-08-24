@@ -4,15 +4,14 @@ import { globSync, readFileSync } from 'node:fs'
 import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
 import { buildMenu, compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
 import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
-import type { MenuNode } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
   actionGroup,
   attachmentPanel,
   activityContractCases,
   calendarContractCases,
-  appsScreen,
   backendPage,
   badge,
   breadcrumbs,
@@ -55,12 +54,13 @@ import {
   recordWorkspace,
   scheduleBoard,
   section,
+  shell,
   stack,
   surface,
   tabs,
   tag,
 } from '@ketvietlab/ketsuite/backend'
-import type { AppRow, ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
+import type { ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
 
 /**
  * The design team writes CSS against these attributes.
@@ -72,16 +72,6 @@ import type { AppRow, ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
  */
 const CONTRACT = HOOKS
 
-const app = (over: Partial<AppRow> = {}): AppRow => ({
-  name: 'website',
-  title: 'Website',
-  summary: 'x',
-  category: 'Website',
-  state: 'available',
-  depends: [],
-  dependents: [],
-  ...over,
-})
 const page = (over: Partial<PageRow> = {}): PageRow => ({
   id: 'p',
   path: '/',
@@ -90,7 +80,7 @@ const page = (over: Partial<PageRow> = {}): PageRow => ({
   ...over,
 })
 
-/** A tree with every shape the shell draws: an app, a section, and a plain link. */
+/** A tree with every shape the shell draws: a root, a section, and a plain link. */
 const node = (id: string, over: Partial<MenuNode> = {}): MenuNode => ({
   id,
   label: id,
@@ -402,24 +392,21 @@ const componentContract = [
 ]
 
 const everything = [
-  appsScreen(
-    _,
-    [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })],
-    {
-      menu: MENU,
-      viewer: {
-        name: 'Nguyễn Quản Trị',
-        company: 'acme',
-        companies: ['acme', 'globex'],
-        companyName: 'Công ty Kết Việt',
-        branch: 'root:acme',
-        branches: ['root:acme'],
-        branchName: 'Trụ sở chính',
-        contextPath: '/admin/context',
-      },
-      indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
+  shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
+  pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {
+    menu: MENU,
+    viewer: {
+      name: 'Nguyễn Quản Trị',
+      company: 'acme',
+      companies: ['acme', 'globex'],
+      companyName: 'Công ty Kết Việt',
+      branch: 'root:acme',
+      branches: ['root:acme'],
+      branchName: 'Trụ sở chính',
+      contextPath: '/admin/context',
     },
-  ),
+    indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
+  }),
   pagesScreen(
     _,
     [page(), page({ id: 'q', published: false })],
@@ -439,7 +426,7 @@ const everything = [
   errorState('E_X', 'msg', 'hint'),
   // The sign-in screen, in the one state that shows every hook it owns at once.
   loginScreen(_, {
-    next: '/admin/apps',
+    next: '/admin/companies',
     failed: true,
     providers: [{ code: 'google', name: 'Google', href: '/oauth/google' }],
     locales: ['vi', 'en'],
@@ -452,33 +439,6 @@ const everything = [
 ]
   .map((r) => renderToString(r))
   .join('')
-
-test('apps: grouped modules collapse into one card and ungrouped modules remain visible', () => {
-  const group = {
-    id: 'commerce',
-    by: 'app_groups',
-    title: 'Thương mại',
-    summary: 'Nghiệp vụ thương mại.',
-    sequence: 30,
-    fixed: false,
-  }
-  const system = { ...group, id: 'system', title: 'Hệ thống', sequence: 10, fixed: true }
-  const html = renderToString(
-    appsScreen(_, [
-      app({ name: 'backend', title: 'Backend', group: system, state: 'installed' }),
-      app({ name: 'sale', title: 'Sales', group, state: 'installed' }),
-      app({ name: 'stock', title: 'Inventory', group }),
-      app({ name: 'extension', title: 'Extension', group: null }),
-    ]),
-  )
-
-  assert.match(html, /data-app="group:commerce"/)
-  assert.match(html, /data-state="partial"/)
-  assert.match(html, /data-app="extension"/)
-  assert.doesNotMatch(html, /data-app="sale"|data-app="stock"/)
-  const systemCard = html.match(/<article[^>]*data-app="group:system"[\s\S]*?<\/article>/)?.[0] ?? ''
-  assert.doesNotMatch(systemCard, /data-ui="app-action"/)
-})
 
 test('ui contract: every documented data-ui hook is actually emitted', () => {
   const missing = CONTRACT.filter((name) => !everything.includes(`data-ui="${name}"`))
@@ -578,7 +538,7 @@ test('design tokens: no rule sits outside a cascade layer, where it outranks ket
   }
 })
 
-test('routes: the segment after /admin names the app, so a path says where it lives', () => {
+test('routes: the segment after /admin names the section, so a path says where it lives', () => {
   // Two conventions used to run side by side: /admin/crm/cases said which app it
   // belonged to, /admin/transfers and /admin/accounts did not — and website_backend
   // used both, with pages and posts namespaced and forms, media, menus, sites and
@@ -607,7 +567,7 @@ test('routes: the segment after /admin names the app, so a path says where it li
     'sales',
     'stock',
     'website',
-    // and the administration app's own screens, which sit directly under /admin
+    // and the administration section's own screens, which sit directly under /admin
     'apps',
     'settings',
     'profile',
@@ -626,7 +586,7 @@ test('routes: the segment after /admin names the app, so a path says where it li
       return app !== undefined && !APPS.has(app)
     })
     .sort()
-  assert.deepEqual(stray, [], 'a backend path must start with the app it belongs to')
+  assert.deepEqual(stray, [], 'a backend path must start with the section it belongs to')
 })
 
 test('routes: every path a screen builds is a path some module serves', () => {
@@ -734,19 +694,19 @@ test('sidebar: equal sequences fall back to the language being read, not the mes
   assert.ok(order('vi').every((label) => !label.startsWith('menu.')))
 })
 
-test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
+test('sidebar: every KetSuite root declares a glyph carried by the design system', () => {
   const manifest = compose(ketsuite.modules, { headless: true })
   const missing = Object.entries(manifest.menus)
     .filter(([, entry]) => !entry.parent)
     .filter(([, entry]) => !entry.icon || !hasIcon(entry.icon))
     .map(([id]) => id)
     .sort()
-  assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
+  assert.deepEqual(missing, [], 'a root menu must choose a supported semantic icon in its own module')
 })
 
 test('sidebar footer: legacy systray order keeps settings and sign-out functional', () => {
   const html = renderToString(
-    appsScreen(_, [app({ state: 'installed' })], {
+    pagesScreen(_, [page()], {
       menu: MENU,
       viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
       indicators: [
@@ -764,7 +724,7 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
 
 test('backend shell: fragment navigation emits only replaceable slots', () => {
   const html = renderToString(
-    appsScreen(_, [app({ state: 'installed' })], {
+    pagesScreen(_, [page()], {
       navigation: true,
       menu: MENU,
       extras: { 'sidebar.foot': 'persistent foot' },
@@ -825,7 +785,7 @@ test('backend responder: a fragment request never renders document infrastructur
     {
       lang: 'vi',
       title: 'Ứng dụng',
-      body: appsScreen(_, [app()], { navigation: true, menu: MENU }),
+      body: pagesScreen(_, [page()], { navigation: true, menu: MENU }),
     },
   )
   assert.equal(result.type, 'text/vnd.ket.fragments+html')
@@ -933,9 +893,6 @@ test('backend layout: a framed screen names itself once, and not with a placehol
   )
   assert.match(listed, /data-ui="chrome-create"/)
   assert.equal(listed.match(/data-ui="title"/g), null)
-
-  // The apps screen has no heading of its own, so the bar is still where it says it.
-  assert.match(renderToString(appsScreen(_, [app()], { menu: MENU })), /data-ui="title"/)
 })
 
 test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
@@ -1154,14 +1111,10 @@ test('schedule: every declared status tone has a concrete visual state', () => {
 })
 
 test('ui contract: the states a stylesheet branches on are present', () => {
-  assert.match(everything, /data-state="installed"/)
-  assert.match(everything, /data-state="available"/)
   assert.match(everything, /data-tone="positive"/)
   assert.match(everything, /data-tone="neutral"/)
   assert.match(everything, /data-active="true"/)
-  assert.match(everything, /data-action="install"/)
-  assert.match(everything, /data-action="uninstall"/)
-  assert.match(everything, /disabled="true"/, 'an app that cannot be removed shows why')
+  assert.match(everything, /disabled="true"/)
 })
 
 test('ui contract: markup carries no class attribute at all', () => {
@@ -1173,15 +1126,7 @@ test('ui contract: markup carries no class attribute at all', () => {
 
 test('catalogue: covers empty, long, blocked and error, not just the happy path', () => {
   const ids = CASES.map((c) => c.id)
-  for (const needed of [
-    'apps-empty',
-    'apps-long',
-    'apps-blocked',
-    'pages-empty',
-    'pages-long',
-    'kit-form',
-    'state-error',
-  ]) {
+  for (const needed of ['pages-empty', 'pages-long', 'kit-form', 'state-error']) {
     assert.ok(
       ids.includes(needed),
       `the catalogue must show "${needed}" — a design that skips it gets built twice`,
@@ -1196,4 +1141,32 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
     CASES.every((c) => c.note.length > 10),
     'every case says what it is testing',
   )
+})
+
+test('backend root opens the first screen contributed by this deployment', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const menu: MenuNode[] = [
+    {
+      id: 'business',
+      label: 'Business',
+      path: null,
+      icon: null,
+      active: false,
+      children: [
+        {
+          id: 'partners',
+          label: 'Partners',
+          path: '/admin/partners',
+          icon: null,
+          active: false,
+          children: [],
+        },
+      ],
+    },
+  ]
+  const route = factory({ menu: async () => menu } as unknown as ServeContext)
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+
+  assert.equal(result.status, 303)
+  assert.equal(result.headers?.location, '/admin/partners')
 })

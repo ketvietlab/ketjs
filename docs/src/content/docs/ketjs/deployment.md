@@ -36,7 +36,7 @@ npm ci
 npm run build
 ket check --workspace dist/ket.workspace.js
 ket test dist/test
-ket migrate --app erp --workspace dist/ket.workspace.js
+ket migrate --deployment erp --workspace dist/ket.workspace.js
 ```
 
 Use `ket snapshot` and `ket diff` when a release process reviews manifest changes. Treat a clean manifest
@@ -53,8 +53,8 @@ For a tenant fleet, the CLI opens each database and owns the apply step:
 
 ```bash
 # Run from: /path/to/ketjs
-ket migrate --app erp --workspace dist/ket.workspace.js --all --dry-run
-ket migrate --app erp --workspace dist/ket.workspace.js --all
+ket migrate --deployment erp --workspace dist/ket.workspace.js --all --dry-run
+ket migrate --deployment erp --workspace dist/ket.workspace.js --all
 ```
 
 Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order. This prevents
@@ -65,8 +65,8 @@ many replicas from racing to alter the same schema during rollout. Destructive p
 
 ```bash
 # Run from: /path/to/example-app
-ket serve --app erp --workspace dist/ket.workspace.js
-ket worker --app erp --workspace dist/ket.workspace.js
+ket serve --deployment erp --workspace dist/ket.workspace.js
+ket worker --deployment erp --workspace dist/ket.workspace.js
 ```
 
 Scale HTTP replicas for request load. Scale worker replicas for queue throughput; each replica still follows
@@ -86,7 +86,7 @@ Before starting traffic, decide and configure:
 - local or S3-compatible object storage;
 - worker queues, concurrency, timeouts, retries, and shutdown grace;
 - tenant catalogue and bounded adapter pool for tenant deployments;
-- module bootstrap and auto-install policy;
+- the exact module composition for each deployment;
 - logs, metrics, readiness, backups, and disaster recovery.
 
 Do not place durable local SQLite or object-storage files in an ephemeral container layer. Mount persistent
@@ -94,14 +94,14 @@ storage or choose external services.
 
 ## PostgreSQL
 
-Install the optional driver in the application and make adapter ownership explicit:
+Install the optional driver in the deployment package and make adapter ownership explicit:
 
 ```ts
 // File: src/app.ts
-import { defineApp } from '@ketvietlab/ketjs'
+import { defineDeployment } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
-export const erp = defineApp({
+export const erp = defineDeployment({
   name: 'erp',
   modules: [core],
   headless: true,
@@ -153,7 +153,7 @@ On shutdown:
 4. close sessions, storage/provider resources, adapters, and sockets;
 5. let expired job leases become retryable if a worker cannot finish.
 
-Configure the platform termination grace period longer than the app's worker `shutdownGraceMs`.
+Configure the platform termination grace period longer than the deployment worker's `shutdownGraceMs`.
 
 ## Rollback strategy
 

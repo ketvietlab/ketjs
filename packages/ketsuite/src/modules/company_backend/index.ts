@@ -4,11 +4,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'company_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['company', 'user', 'partner_backend', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Công ty và chi nhánh',
   summary: 'Quản lý pháp nhân, cây chi nhánh và ngữ cảnh làm việc.',
   category: 'Hệ thống',

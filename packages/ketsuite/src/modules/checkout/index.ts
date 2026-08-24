@@ -2,7 +2,6 @@ import { defineFn, defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'checkout',
-  group: 'commerce',
   version: '1.0.0',
   depends: ['catalog'],
 

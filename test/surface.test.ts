@@ -1,14 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  bootApp,
-  compose,
-  defineApp,
-  defineModule,
-  defineTheme,
-  restrictManifest,
-  page,
-} from '@ketvietlab/ketjs'
+import { bootDeployment, compose, defineDeployment, defineModule, defineTheme, page } from '@ketvietlab/ketjs'
 import type { ServeContext, Route } from '@ketvietlab/ketjs'
 import { html } from '@ketvietlab/ketjs-view'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -30,10 +22,9 @@ const assetDir = (files: Record<string, string>): string => {
 const base = assetDir({ 'base.css': ':root { --x: 1 }' })
 const extra = assetDir({ 'extra.css': '.x { color: red }', 'logo.svg': '<svg/>' })
 
-const core = defineModule({ name: 'core', app: true, assets: base, styles: ['base.css'] })
+const core = defineModule({ name: 'core', assets: base, styles: ['base.css'] })
 const skin = defineModule({
   name: 'skin',
-  app: true,
   depends: ['core'],
   assets: extra,
   styles: ['extra.css'],
@@ -154,30 +145,17 @@ test('compose: but a theme may not serve routes, because a route is server code'
   )
 })
 
-// ── restriction ──────────────────────────────────────────────────────────────
-
-test('restrict: a switched-off module contributes no route, no asset, no stylesheet', () => {
-  const m = compose([core, skin])
-  const live = restrictManifest(m, new Set(['core']))
-  assert.deepEqual(Object.keys(live.routes), [], "skin's route is gone")
-  assert.deepEqual(
-    live.styles.map((s) => s.by),
-    ['core'],
-  )
-  assert.deepEqual(Object.keys(live.assets), ['core'])
-})
-
 // ── the whole thing, running ─────────────────────────────────────────────────
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'surfaceapp',
   modules: [core, skin],
   headless: true,
-  serve: { bootstrap: ['skin'] },
+  serve: {},
 })
 
 test('serving: a module route answers, its asset is served, its stylesheet is linked', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.equal((await fetch(`${at}/skin`)).status, 200)
   assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 200)
@@ -189,28 +167,15 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
 })
 
 test('serving: dynamic segments are decoded and a static route wins over a parameter', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.match(await fetch(`${at}/catalog/%C3%A1o-thun`).then((r) => r.text()), /áo-thun/)
   assert.match(await fetch(`${at}/catalog/new`).then((r) => r.text()), /new product/)
   await b.close()
 })
 
-test('serving: uninstalling stops the route answering and the asset being served', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
-  const at = `http://127.0.0.1:${b.port}`
-  await b.apps!.uninstall('skin')
-  assert.equal((await fetch(`${at}/skin`)).status, 404, 'enable-at-run has to reach what people can see')
-  assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 404)
-  // core is still on, so it is unaffected
-  assert.equal((await fetch(`${at}/_ket/asset/core/base.css`)).status, 200)
-  await b.apps!.install('skin')
-  assert.equal((await fetch(`${at}/skin`)).status, 200, 'and putting it back needs no restart')
-  await b.close()
-})
-
 test('serving: a static handler must not be talked out of its own directory', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   for (const attack of [
     '/_ket/asset/skin/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd',
@@ -226,7 +191,7 @@ test('serving: a static handler must not be talked out of its own directory', as
 })
 
 test('serving: binary assets survive the trip, which a string-typed body would not', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   const r = await fetch(`http://127.0.0.1:${b.port}/_ket/asset/skin/logo.svg`)
   assert.equal(r.status, 200)
   assert.match(r.headers.get('content-type') ?? '', /image\/svg\+xml/)

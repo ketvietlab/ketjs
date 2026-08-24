@@ -44,7 +44,7 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
       errors.push({
         at,
         type: placement.type,
-        message: `no installed module provides this section (available: ${Object.keys(manifest.sections).join(', ') || 'none'})`,
+        message: `no composed module provides this section (available: ${Object.keys(manifest.sections).join(', ') || 'none'})`,
       })
       return
     }

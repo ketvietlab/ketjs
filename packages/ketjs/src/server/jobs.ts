@@ -1,6 +1,6 @@
 // Job declarations are data in the manifest and executable handlers in this
 // process. Keeping the two joined by one qualified key mirrors server functions
-// while allowing `ket worker` to load the same AppSpec without booting HTTP.
+// while allowing `ket worker` to load the same DeploymentSpec without booting HTTP.
 
 import { KetError } from '../kernel/errors.ts'
 import type { JobSpec, KetModule } from '../types.ts'

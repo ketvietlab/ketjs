@@ -23,8 +23,8 @@ export default Object.freeze({
   models: {}, extend: {}, joints: {}, fills: {}, functions: {}, jobs: {}, views: {},
   requires: Object.freeze([]), tokens: {}, templates: {}, provides: Object.freeze([]),
   assets: null, styles: Object.freeze([]), routes: {}, menus: {}, omits: Object.freeze([]),
-  islands: {}, sections: {}, relations: {}, app: true, title: ${JSON.stringify(name)},
-  summary: '', category: 'Benchmark', install: 'manual', removable: true, messages: {},
+  islands: {}, sections: {}, relations: {}, title: ${JSON.stringify(name)},
+  summary: '', category: 'Benchmark', messages: {},
 })
 `
 
@@ -45,7 +45,7 @@ try {
 
   const declaration = {
     modulePaths: [addons],
-    apps: [
+    deployments: [
       {
         name: 'bench',
         modules: [`bench_${String(SELECTED - 1).padStart(3, '0')}`],
@@ -57,7 +57,7 @@ try {
   const started = performance.now()
   const cold = await resolveWorkspace(declaration, options)
   const coldMs = performance.now() - started
-  assert.equal(cold.apps[0]!.modules.length, SELECTED)
+  assert.equal(cold.deployments[0]!.modules.length, SELECTED)
   assert.equal(cold.modules.length, SELECTED)
 
   const samples: number[] = []
@@ -65,7 +65,7 @@ try {
     const before = performance.now()
     const warm = await resolveWorkspace(declaration, options)
     samples.push(performance.now() - before)
-    assert.equal(warm.apps[0]!.modules.length, SELECTED)
+    assert.equal(warm.deployments[0]!.modules.length, SELECTED)
   }
   samples.sort((a, b) => a - b)
   const median = samples[Math.floor(samples.length / 2)] as number

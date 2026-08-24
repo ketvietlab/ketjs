@@ -221,7 +221,7 @@ export function formatInventory(manifest: Manifest): string {
  * warehouse role do here" has to look at the same rows the server enforces from.
  *
  * The table name is a convention rather than an import: the framework does not
- * ship a role model, because roles are the app's to shape. If an app names them
+ * ship a role model, because roles are the deployment's to shape. If a deployment names them
  * differently this command has nothing to read, and says so.
  */
 export async function grantsOfRole(adapter: import('../types.ts').Adapter, role: string): Promise<string[]> {
@@ -251,7 +251,7 @@ export async function grantsOfRole(adapter: import('../types.ts').Adapter, role:
     throw new KetError({
       code: 'E_NO_ROLE_TABLE',
       message: `this database has no role tables to read`,
-      hint: 'roles are an app model, not a framework one — this command expects user_role and user_grant',
+      hint: 'roles are a deployment model, not a framework one — this command expects user_role and user_grant',
     })
   }
 }

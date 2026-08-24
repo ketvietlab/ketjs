@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'mail_inbound_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['mail_inbound', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Email đến',
   summary: 'Chẩn đoán webhook, routing reply, bounce và alias.',
   category: 'Năng suất',

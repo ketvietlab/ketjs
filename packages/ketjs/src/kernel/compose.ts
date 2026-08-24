@@ -18,7 +18,7 @@ const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
 export function compose(
   modules: KetModule[],
-  opts: { appRequires?: string[]; headless?: boolean } = {},
+  opts: { requiredRegions?: string[]; headless?: boolean } = {},
 ): Manifest {
   const diag = new Diagnostics()
   const order = topoSort(modules)
@@ -28,7 +28,6 @@ export function compose(
     ket: '0.0.0',
     order: order.map((m) => m.name),
     modules: {},
-    groups: {},
     models: {},
     menus: {},
     joints: {},
@@ -37,7 +36,7 @@ export function compose(
     jobs: {},
     views: {},
     reports: {},
-    regions: { required: [...(opts.appRequires ?? [])], provided: {} },
+    regions: { required: [...(opts.requiredRegions ?? [])], provided: {} },
     islands: {},
     sections: {},
     contentTypes: {},
@@ -113,54 +112,21 @@ export function compose(
   }
 
   for (const m of order) {
-    for (const [id, group] of Object.entries(m.groups)) {
-      if (manifest.groups[id]) {
-        diag.add({
-          code: 'E_MODULE_GROUP_CLASH',
-          module: m.name,
-          message: `module group "${id}" is declared by both "${manifest.groups[id].by}" and "${m.name}"`,
-          hint: 'a stable group identifier has exactly one catalogue owner',
-        })
-        continue
-      }
-      manifest.groups[id] = {
-        by: m.name,
-        title: group.title,
-        summary: group.summary ?? '',
-        sequence: group.sequence ?? 100,
-        fixed: group.fixed === true,
-      }
-    }
-  }
-
-  for (const m of order) {
-    if (m.group && Object.keys(manifest.groups).length > 0 && !manifest.groups[m.group]) {
-      diag.add({
-        code: 'E_MODULE_GROUP_UNKNOWN',
-        module: m.name,
-        message: `module "${m.name}" belongs to unknown group "${m.group}"`,
-        hint: 'ship a module group catalogue that declares the identifier, or remove group from the module',
-      })
-    }
     manifest.modules[m.name] = {
       version: m.version,
       kind: m.kind,
       depends: [...m.depends],
-      app: m.app,
       title: m.title,
       summary: m.summary,
       category: m.category,
-      group: m.group,
-      install: m.install ?? 'manual',
-      removable: m.removable !== false,
     }
   }
 
   // --- the served surface -------------------------------------------------
   //
   // Assets, stylesheets and routes are composed for the same reason models are:
-  // otherwise the app hand-assembles them, which means knowing another module's
-  // file layout and going on serving it after that module is switched off.
+  // otherwise the deployment hand-assembles them, which means knowing another module's
+  // file layout and going on serving it after that module leaves the composition.
   //
   // `order` is dependency order, so a module that extends another contributes its
   // stylesheet after it and can override it. That ordering is the point.
@@ -580,7 +546,7 @@ export function compose(
         diag.add({
           code: 'E_FILL_UNKNOWN_JOINT',
           module: m.name,
-          message: `fills joint "${key}", which no installed module publishes`,
+          message: `fills joint "${key}", which no composed module publishes`,
           hint: near.length
             ? `did you mean "${near[0]}"?`
             : `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
@@ -620,7 +586,7 @@ export function compose(
         diag.add({
           code: 'E_OMIT_UNKNOWN_JOINT',
           module: m.name,
-          message: `omits joint "${key}", which no installed module publishes`,
+          message: `omits joint "${key}", which no composed module publishes`,
           hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
         })
         continue
@@ -1129,7 +1095,7 @@ export function compose(
     }
   }
 
-  // --- theme <-> app region contract ---------------------------------------
+  // --- theme <-> deployment region contract --------------------------------
   for (const m of order) {
     for (const r of m.provides) (manifest.regions.provided[r] ??= []).push(m.name)
     for (const name of Object.keys(m.templates)) {
@@ -1138,7 +1104,7 @@ export function compose(
     }
     for (const r of m.requires) if (!manifest.regions.required.includes(r)) manifest.regions.required.push(r)
   }
-  // A headless app renders nothing, so the region contract does not apply to it.
+  // A headless deployment renders nothing, so the region contract does not apply to it.
   // Requirements are still recorded, so adding a theme later checks them.
   for (const r of opts.headless ? [] : manifest.regions.required) {
     if (!manifest.regions.provided[r]) {

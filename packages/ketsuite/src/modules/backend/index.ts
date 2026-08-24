@@ -19,18 +19,12 @@ import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
 export default defineModule({
   name: 'backend',
-  group: 'system',
   version: '0.1.0',
-  app: true,
   title: 'Quản trị',
-  summary: 'Màn hình quản lý ứng dụng và cấu hình hệ thống.',
+  summary: 'Khung quản trị và cấu hình hệ thống.',
   category: 'Hệ thống',
-  // The screen you would use to put something back. A deployment that let you
-  // remove it would let you remove your way out of ever fixing it.
-  removable: false,
-  // Its own files, its own stylesheets, its own routes. The app used to name all
-  // three by reaching into this directory, which meant it went on serving them
-  // after the module was switched off.
+  // Its own files, stylesheets, and routes stay together so a deployment only
+  // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
   styles: ['tokens.css', 'admin.css'],
   routes,
@@ -44,8 +38,8 @@ export default defineModule({
 })
 
 // The screens this module owns: data assembly, no markup.
-export { appsScreen, pagesScreen, pageColumns } from './screens.tsx'
-export type { AppRow, PageRow, Screen } from './screens.tsx'
+export { pagesScreen, pageColumns } from './screens.tsx'
+export type { PageRow, Screen } from './screens.tsx'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'
 export { menus } from './menus.ts'
@@ -109,10 +103,7 @@ export {
   initials,
   icon,
   hasIcon,
-  appCard,
-  cardGroups,
   definitionList,
-  actionButton,
   code,
   qrCode,
   inline,
@@ -168,7 +159,6 @@ export type {
   SearchMenuItem,
   Indicator,
   Viewer,
-  CardMeta,
   ActionVariant,
   ActionSize,
   ButtonSpec,

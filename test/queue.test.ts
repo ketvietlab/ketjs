@@ -9,7 +9,7 @@ import {
   compose,
   composeWorkspace,
   createQueue,
-  defineApp,
+  defineDeployment,
   defineModule,
   registerFunctions,
   sqliteAdapter,
@@ -19,7 +19,6 @@ import type { WorkerLog } from '@ketvietlab/ketjs'
 
 const tasks = defineModule({
   name: 'tasks',
-  app: true,
   functions: {
     schedule: {
       input: { id: 'id' },
@@ -82,7 +81,7 @@ test('queue contracts are namespaced and carry operational defaults', () => {
     /invalid queue/,
   )
   assert.throws(
-    () => composeWorkspace([defineApp({ name: 'missing_worker', modules: [tasks], headless: true })]),
+    () => composeWorkspace([defineDeployment({ name: 'missing_worker', modules: [tasks], headless: true })]),
     /does not configure that worker queue/,
   )
 
@@ -310,7 +309,6 @@ test('worker executes with captured context and discards an exhausted handler', 
   let timedOut = false
   const module = defineModule({
     name: 'worker_tasks',
-    app: true,
     jobs: {
       deliver: {
         input: { id: 'id' },
@@ -349,11 +347,11 @@ test('worker executes with captured context and discards an exhausted handler', 
       },
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'worker_test',
     modules: [module],
     headless: true,
-    serve: { bootstrap: ['worker_tasks'] },
+    serve: {},
     worker: { queues: { default: 2 }, leaseMs: 3_000 },
   })
 
@@ -408,7 +406,6 @@ test('multi-database worker refreshes tenants and round-robin prevents a hot ten
   const order: string[] = []
   const module = defineModule({
     name: 'tenant_jobs',
-    app: true,
     jobs: {
       record: {
         input: { n: 'int' },
@@ -419,12 +416,11 @@ test('multi-database worker refreshes tenants and round-robin prevents a hot ten
       },
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'tenant_worker_test',
     modules: [module],
     headless: true,
     serve: {
-      bootstrap: ['tenant_jobs'],
       tenants: {
         resolve: () => null,
         open: (key) => sqliteAdapter(join(dir, `${key}.db`)),
@@ -476,7 +472,6 @@ test('cancelling an executing job aborts its handler and cannot be overwritten b
   let aborted = false
   const module = defineModule({
     name: 'cancel_jobs',
-    app: true,
     jobs: {
       wait: {
         idempotent: true,
@@ -492,11 +487,11 @@ test('cancelling an executing job aborts its handler and cannot be overwritten b
       },
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'cancel_worker_test',
     modules: [module],
     headless: true,
-    serve: { bootstrap: ['cancel_jobs'] },
+    serve: {},
     worker: { queues: { default: 1 }, leaseMs: 3_000, shutdownGraceMs: 100 },
   })
   const producer = sqliteAdapter(file)

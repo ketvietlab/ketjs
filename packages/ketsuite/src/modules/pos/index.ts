@@ -5,10 +5,8 @@ import { relations } from './relations.ts'
 
 export default defineModule({
   name: 'pos',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['company', 'partner', 'user', 'product', 'uom', 'pricing', 'stock', 'account'],
-  app: true,
   title: 'Điểm bán hàng',
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Bán hàng',

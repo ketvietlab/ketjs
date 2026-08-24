@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { callFn, compose, defineModule, text } from '@ketvietlab/ketjs'
 import { openApiDocument } from '@ketvietlab/ketsuite'
-import { ketsuite } from '@ketvietlab/ketsuite/app'
+import { ketsuite } from '@ketvietlab/ketsuite/deployment'
 import { migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 
 const route = () => () => async () => text('ok')

@@ -5,11 +5,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'partner_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['partner', 'address', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Danh bạ đối tác',
   summary: 'Quản lý khách hàng, nhà cung cấp, liên hệ và địa chỉ.',
   category: 'Bán hàng',

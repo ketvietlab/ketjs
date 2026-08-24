@@ -6,7 +6,6 @@ import {
   defineModule,
   migrateOne,
   registerFunctions,
-  restrictManifest,
   sqliteAdapter,
   translator,
 } from '@ketvietlab/ketjs'
@@ -166,21 +165,6 @@ test('product: the type labels are translated, the data is not', () => {
   }
   // The stored value stays a stable key; only its label moves between languages.
   assert.equal(manifest.models['product.Template']!.fields.type!.base, 'text')
-})
-
-test('product: switching the app off takes its functions with it, not its rows', async () => {
-  const db = await boot()
-  await call('product.saveTemplate', { id: 'tpl', name: 'Áo', type: 'goods' }, db)
-  const off = restrictManifest(manifest, new Set<string>())
-  await assert.rejects(
-    () => callFn('product.listTemplates', {}, { adapter: db, manifest: off, scope: SCOPE }),
-    (e: unknown) => {
-      assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLED')
-      return true
-    },
-  )
-  assert.equal((await db.all('SELECT * FROM product_template', [])).length, 1)
-  await db.close()
 })
 
 test('product: a required self-reference would have been refused', () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMenu, compose, defineModule, restrictManifest } from '@ketvietlab/ketjs'
+import { buildMenu, compose, defineModule } from '@ketvietlab/ketjs'
 
 /** Composition reports every violation at once, so a test asks what is in the pile. */
 const violations = (fn: () => unknown): Array<{ code: string; message: string }> => {
@@ -113,16 +113,6 @@ test('menu: what the viewer may not call, the viewer does not see', () => {
 test('menu: an entry with no needs is visible to anyone who reaches the page', () => {
   const tree = buildMenu(compose([sales, admin]), { allow: [] })
   assert.equal(tree[0]!.children[0]!.path, '/admin')
-})
-
-test('menu: uninstalling a module takes its entries with it', () => {
-  const m = compose([sales, admin])
-  const live = restrictManifest(m, new Set(['admin']))
-  assert.deepEqual(Object.keys(live.menus).sort(), ['admin', 'admin.settings'])
-  assert.deepEqual(
-    buildMenu(live).map((n) => n.id),
-    ['admin'],
-  )
 })
 
 test('menu: the branch leading to the open page is marked, all the way up', () => {

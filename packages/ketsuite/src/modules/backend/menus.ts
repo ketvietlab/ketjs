@@ -13,9 +13,6 @@ import type { MenuDef } from '@ketvietlab/ketjs'
 export const menus: Record<string, MenuDef> = {
   admin: { label: 'menu.admin', icon: 'settings', sequence: 90 },
 
-  // The apps screen is the way back in, so it needs no heading above it.
-  'admin.apps': { parent: 'admin', label: 'menu.apps', path: '/admin', sequence: 10 },
-
   // A heading other modules hang their configuration screens on: companies,
   // users, roles, sign-in providers, address data, print templates.
   'admin.config': { parent: 'admin', label: 'menu.config', sequence: 90 },

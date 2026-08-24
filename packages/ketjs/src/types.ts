@@ -96,11 +96,11 @@ export type ModelDef = {
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
 /**
- * One entry in the navigation tree — an app, a section inside it, or a link.
+ * One entry in the navigation tree — a root section, a nested section, or a link.
  *
  * Declared by the module that owns the screen, not stored as rows. the domain contract keeps
  * `ir.ui.menu` in the database so a customer can rearrange it, and pays for that
- * with a menu that can point at a module nobody installed. Here a menu entry is
+ * with a menu that can point at a module outside the deployment. Here a menu entry is
  * checked when the deployment is composed: an unknown parent is a build error, and
  * a link to a function nobody ships cannot be saved because there is nothing to
  * save it in.
@@ -112,7 +112,7 @@ export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 export type MenuDef = {
   /** A message key, resolved against the owning module. Falls back to itself. */
   label: string
-  /** The entry above this one. Absent means it is an app: a root of the tree. */
+  /** The entry above this one. Absent means it is a root of the tree. */
   parent?: string
   /** Where it goes. Absent means it is a heading rather than a link. */
   path?: string
@@ -313,63 +313,14 @@ export type JobExecution = {
   maxAttempts: number
 }
 
-export type AppMeta = {
-  /** Shown in the app list. A module without this is machinery, not an app. */
-  app?: boolean
+export type ModuleMeta = {
+  /** Human-readable module metadata for manifests, diagnostics, and tooling. */
   title?: string
   summary?: string
   category?: string
-  /** Stable group identifier used by app discovery. Labels belong to a group catalogue. */
-  group?: string
-  /**
-   * The boundary between what a module permits and what an operator chooses.
-   *
-   *   'manual' — installed only when someone asks for it by name (the default)
-   *   'auto'   — installs itself as soon as everything it depends on is installed
-   *   'never'  — cannot be installed on its own at all; it arrives only by being
-   *              depended on, which is how machinery stays out of the app list
-   *
-   * A module says what it permits. Whether 'auto' actually fires is the
-   * deployment's call — see RuntimeConfig.autoInstall, which a developer turns off
-   * when they want to watch each install happen rather than arrive.
-   */
-  install?: InstallPolicy
-  /**
-   * Whether an operator may remove this module once it is installed.
-   *
-   * `install` draws the boundary on the way in; this one draws it on the way out,
-   * and they are genuinely different axes. The case that forces it: the backend is
-   * the screen you would use to put something back, so a deployment that let you
-   * remove it would let you remove your way out of ever fixing it. Default true —
-   * refusing removal is the exception and has to be argued for.
-   */
-  removable?: boolean
-  /** The older spelling of `install: 'auto'`. Normalised away by defineModule. */
-  autoInstall?: boolean
 }
 
-export type InstallPolicy = 'manual' | 'auto' | 'never'
-
-export type ModuleGroupDef = {
-  /** Readable fallback when the requested locale has no catalogue message. */
-  title: string
-  /** Readable fallback for the group card description. */
-  summary?: string
-  /** Lower groups are presented first. */
-  sequence?: number
-  /** Enabled for every database and excluded from operator install/remove controls. */
-  fixed?: boolean
-}
-
-export type ComposedModuleGroup = {
-  by: string
-  title: string
-  summary: string
-  sequence: number
-  fixed: boolean
-}
-
-export type ModuleSpec = AppMeta & {
+export type ModuleSpec = ModuleMeta & {
   kind?: 'module' | 'theme'
   name: string
   version?: string
@@ -405,7 +356,7 @@ export type ModuleSpec = AppMeta & {
   /**
    * Static files this module ships — stylesheets, icons, fonts. Served under
    * /_ket/asset/<module>/, namespaced so two modules may both ship tokens.css,
-   * and only for as long as the module is installed.
+   * and only when the module belongs to the deployment composition.
    */
   assets?: URL | string
   /**
@@ -413,9 +364,9 @@ export type ModuleSpec = AppMeta & {
    * written. Across modules the order is dependency order, so a module that
    * extends another loads after it and can override it.
    *
-   * Declared rather than linked by hand: an app that names another module's
+   * Declared rather than linked by hand: a deployment that names another module's
    * stylesheet has to know that module's file layout, and goes on linking it long
-   * after the module is uninstalled.
+   * after the module leaves the composition.
    */
   styles?: string[]
   /**
@@ -425,8 +376,8 @@ export type ModuleSpec = AppMeta & {
    * value reaches the handler in the route params. The path is data so composition
    * can settle ownership — two modules claiming one path is an error at build, not
    * a race at boot. The handler is a factory because it needs the running server,
-   * which does not exist yet. Dispatch checks the live manifest, so a route belonging
-   * to an uninstalled module is 404 rather than quietly still answering.
+   * which does not exist yet. Dispatch uses the composed manifest, so undeclared
+   * module routes never mount.
    */
   routes?: Record<string, RouteEntry>
   /** Absolute path prefixes this module owns and exposes only via published contributors. */
@@ -439,11 +390,9 @@ export type ModuleSpec = AppMeta & {
   relations?: Record<string, Record<string, RelationDef>>
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
   messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
-  /** Group identifiers and fallback labels owned by this metadata-only module. */
-  groups?: Record<string, ModuleGroupDef>
 }
 
-export type KetModule = Readonly<AppMeta> & {
+export type KetModule = Readonly<ModuleMeta> & {
   readonly kind: 'module' | 'theme'
   readonly name: string
   readonly version: string
@@ -473,17 +422,12 @@ export type KetModule = Readonly<AppMeta> & {
   readonly taxonomies: Record<string, TaxonomyDef>
   readonly relations: Record<string, Record<string, RelationDef>>
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
-  readonly groups: Record<string, ModuleGroupDef>
 }
 
 export type Manifest = {
   ket: string
   order: string[]
-  modules: Record<
-    string,
-    { version: string; kind: string; depends: string[]; install: InstallPolicy; removable: boolean } & AppMeta
-  >
-  groups: Record<string, ComposedModuleGroup>
+  modules: Record<string, { version: string; kind: string; depends: string[] } & ModuleMeta>
   models: Record<string, ComposedModel>
   menus: Record<string, MenuDef & { by: string }>
   joints: Record<
@@ -508,7 +452,7 @@ export type Manifest = {
   tokens: Record<string, string>
   /** Static file directories, per module, behind /_ket/asset/<module>/. */
   assets: Record<string, string>
-  /** Stylesheets in dependency order. A disabled module's are dropped by restrictManifest. */
+  /** Stylesheets in dependency order. */
   styles: Array<{ by: string; href: string }>
   /** Path -> the module that owns it and the factory that builds its handler. */
   routes: Record<
@@ -524,10 +468,6 @@ export type Manifest = {
   /** Prefix -> owning module. Longest prefix wins, though overlapping claims are rejected. */
   routePrefixes: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
-  /** Set by restrictManifest: modules this deployment ships but this database has off. */
-  disabledModules?: string[]
-  disabledSections?: string[]
-  disabledIslands?: string[]
   diagnostics?: Diagnostic[]
 }
 

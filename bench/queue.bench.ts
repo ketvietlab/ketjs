@@ -1,11 +1,11 @@
-// Multi-database queue benchmark. This deliberately uses the public AppSpec,
+// Multi-database queue benchmark. This deliberately uses the public DeploymentSpec,
 // tenant and worker APIs rather than calling scheduler internals, so its numbers
 // include the same pool, registry and round-robin path a deployment runs.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bootWorker, createQueue, defineApp, defineModule, sqliteAdapter } from '@ketvietlab/ketjs'
+import { bootWorker, createQueue, defineDeployment, defineModule, sqliteAdapter } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import type { Adapter, JobContext } from '@ketvietlab/ketjs'
 
@@ -24,7 +24,6 @@ const seen = new Map<string, number>()
 const firstAt = new Map<string, number>()
 const module = defineModule({
   name: 'queue_bench',
-  app: true,
   jobs: {
     measure: {
       input: { n: 'int' },
@@ -73,12 +72,11 @@ const cleanup = async () => {
 
 await prepareDatabases()
 try {
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'queue_benchmark',
     modules: [module],
     headless: true,
     serve: {
-      bootstrap: ['queue_bench'],
       tenants: {
         resolve: () => null,
         open,

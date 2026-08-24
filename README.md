@@ -64,7 +64,7 @@ pillars:
 4. **Theming-driven** — third-party themes in a restricted language that cannot run code
 5. **Fullstack** — the framework owns models, migrations, functions, streams and jobs
 
-Plus an **umbrella layout**: one codebase, many deployable apps, shared modules.
+Plus an **umbrella layout**: one codebase, many immutable deployments, shared modules.
 
 ```bash
 npm start                                   # KetSuite on SQLite, at :3000
@@ -82,13 +82,11 @@ npm run bench:storage                       # S3 storage across tenant databases
 Production, tests and release commands build first, then run emitted JavaScript.
 `npm run dev` is deliberately diskless: `tsx` transforms TypeScript/TSX in memory
 after a clean typecheck and watches the dependency graph. Node never receives
-untransformed source. A first run migrates, installs the app's bootstrap set, and
-serves. Every knob has a default that works;
-`KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules that would
-otherwise install themselves, which is what you want mid-change.
+untransformed source. A first run composes the declared modules, migrates their
+complete schema, and serves. The runtime never installs or removes modules.
 
-The production worker is a separate process role of the same app artifact:
-`ket worker --app ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
+The production worker is a separate process role of the same deployment artifact:
+`ket worker --deployment ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
 through `tx.jobs.enqueue(...)` in the same transaction as business data. PostgreSQL
 `LISTEN/NOTIFY` wakes a single-database worker quickly; polling and leases remain the
 guarantee, so Redis is not required. Operators can inspect and control durable rows
@@ -109,13 +107,13 @@ A workspace may select compiled modules from several filesystem roots without im
 custom package by hand:
 
 ```ts
-import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
+import { defineDeployment, defineWorkspace } from '@ketvietlab/ketjs'
 import { product } from '@ketvietlab/ketsuite'
 
 export default defineWorkspace({
   modulePaths: [new URL('./custom-addons/', import.meta.url), '/opt/vendor-addons'],
-  apps: [
-    defineApp({
+  deployments: [
+    defineDeployment({
       name: 'shop',
       modules: [product, 'sale_discount'],
       headless: true,
@@ -141,21 +139,21 @@ the `tsx` development path additionally permits TypeScript source entries.
 
 `--module-path DIR` supplements the workspace and is repeatable.
 `KET_MODULE_PATH` uses the platform path separator. Run `ket modules` to see every
-resolved module, the apps that ship it and its concrete source path.
+resolved module, the deployments that ship it and its concrete source path.
 
 The full packaging, resolution, deployment and error contract is documented in
 [Module discovery](docs/src/content/docs/ketjs/module-discovery.md).
 
 ## Headless end-to-end tests
 
-`@ketvietlab/ketjs/testing` boots the real app on an ephemeral port with an isolated SQLite
+`@ketvietlab/ketjs/testing` boots the real deployment on an ephemeral port with an isolated SQLite
 database and storage directory. `TestClient` crosses HTTP, retains login cookies,
 models company/tenant identity and can drain the app's durable worker without ever
 opening a browser. Fixture calls are named separately so test setup cannot be
 mistaken for the public action being exercised.
 
 ```ts
-const e2e = await createTestApp(app)
+const e2e = await createTestDeployment(app)
 try {
   await e2e.fixture.call('catalog.seed', fixture)
   const result = await e2e.client.call('catalog.list', {})
@@ -170,9 +168,9 @@ and `ket test dist/test --watch` to run emitted headless tests. Full API, isolat
 authentication, multi-tenant and worker examples are in
 [the headless E2E guide](docs/src/content/docs/ketjs/testing.md).
 
-Framework apps may either configure session authentication with `resolveSession` or use the
+Deployments may either configure session authentication with `resolveSession` or use the
 development-only `X-Ket-Company` fallback. KetSuite configures cookie-backed user sessions and
-permission resolution; the header fallback applies only to apps that do not enable sessions.
+permission resolution; the header fallback applies only to deployments that do not enable sessions.
 
 ## The one artifact
 
@@ -222,7 +220,7 @@ the revision and hardware you care about.
 | A stream survives a reload | resumes from cursor, no gap and no duplicate |
 | An agent cannot double-apply | idempotency key replays the first result, and survives a restart |
 | A transaction is really one transaction | BEGIN and body share a reserved connection |
-| Uninstalling an app loses no data | table list is identical before and after; rows are where they were on re-install |
+| Deployment composition is immutable at runtime | one declared module list drives schema, HTTP, workers, permissions, and rendering |
 | A theme cannot write behaviour | `defineTheme` refuses `islands`; placing one nobody provides is a build error |
 | Only islands hydrate | the rest of the page stays inert markup |
 | Hydration adopts server DOM | 20 rows hydrated in a real browser: **0** nodes created, same node objects |
@@ -242,7 +240,7 @@ packages/
   ketjs/           kernel, data, server, theme, agent, codegen — depends only on ketjs-view
   ketjs-postgres/  the one package permitted a driver, and the reason it is a package
   ketsuite/        KetSuite — business modules, using only the public entry
-examples/          umbrella apps composed from the packages
+examples/          umbrella deployments composed from the packages
 tools/  test/  bench/  docs/
 ```
 

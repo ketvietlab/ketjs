@@ -2,10 +2,10 @@
 //
 //   node apps/admin/serve.ts
 //   http://127.0.0.1:4000/catalogue     every screen, every state
-//   http://127.0.0.1:4000/admin/apps    the real screen, on real data
+//   http://127.0.0.1:4000/admin/pages   a real screen, on real data
 //
-// The database is in memory and seeded on boot, so this is disposable: install
-// things, break things, restart. Nothing here talks to a real deployment.
+// The database is in memory and seeded on boot, so this is disposable: change
+// data, break things, restart. Nothing here talks to a real deployment.
 
 import {
   createKetServer,
@@ -13,8 +13,6 @@ import {
   sqliteAdapter,
   migrateOne,
   registerFunctions,
-  createAppRegistry,
-  restrictManifest,
   callFn,
   translator,
   PSEUDO_LOCALE,
@@ -36,7 +34,6 @@ import {
   websiteSeo,
 } from '@ketvietlab/ketsuite'
 import backend, {
-  appsScreen,
   attachmentPanel,
   cataloguePage,
   modalSheet,
@@ -82,11 +79,6 @@ const db = sqliteAdapter()
 await db.open()
 await migrateOne(db, manifest)
 registerFunctions(mods)
-
-const apps = await createAppRegistry(manifest, db)
-await apps.install('website')
-await apps.install('theme_paper')
-await apps.install('backend')
 
 for (const [id, path, title, published] of [
   ['home', '/', 'Trang chủ', true],
@@ -142,7 +134,6 @@ const app = await createKetServer({
         <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
         <li><a href="/catalogue/attachments">Attachment primitive</a></li>
         <li><a href="/catalogue/modal">Modal primitive</a></li>
-        <li><a href="/admin/apps">Apps (real data)</a></li>
         <li><a href="/admin/pages">Pages (real data)</a></li>
       </ul>
       <p>Switch language with <code>?lang=</code>:
@@ -199,15 +190,12 @@ const app = await createKetServer({
       }),
     ),
 
-    '/admin/apps': route(async (t) => appsScreen(t, await apps.list())),
-
     '/admin/pages': route(async (t) => {
-      const restricted = restrictManifest(manifest, await apps.enabled())
       const rows = (
         await callFn(
           'website.listPages',
           { includeDrafts: true },
-          { adapter: db, manifest: restricted, scope: DEMO_SCOPE },
+          { adapter: db, manifest, scope: DEMO_SCOPE },
         )
       ).value
       return pagesScreen(
@@ -226,7 +214,7 @@ console.log(`
   KetSuite backend — the design entry point
 
     state catalogue     http://127.0.0.1:${port}/catalogue
-    real screens        http://127.0.0.1:${port}/admin/apps
+    real screen         http://127.0.0.1:${port}/admin/pages
     in English          http://127.0.0.1:${port}/catalogue?lang=en
     text overflow       http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
 

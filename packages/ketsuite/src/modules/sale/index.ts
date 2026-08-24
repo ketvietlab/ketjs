@@ -6,10 +6,8 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'sale',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['company', 'partner', 'product', 'uom', 'pricing', 'stock', 'account'],
-  app: true,
   title: 'Bán hàng',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Bán hàng',

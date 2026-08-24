@@ -1,13 +1,6 @@
-import {
-  bootRuntime,
-  callFn,
-  createAppRegistry,
-  migrateOne,
-  restrictManifest,
-  sqliteStore,
-} from '@ketvietlab/ketjs'
-import type { AppSpec } from '@ketvietlab/ketjs'
-import { ketsuite } from './app.ts'
+import { bootRuntime, callFn, migrateOne, sqliteStore } from '@ketvietlab/ketjs'
+import type { DeploymentSpec } from '@ketvietlab/ketjs'
+import { ketsuite } from './deployment.ts'
 
 type ProvisionResult = {
   ok: boolean
@@ -20,7 +13,7 @@ type ProvisionResult = {
  * provisioning keeps the production password policy.
  */
 export async function ensureDevelopmentAdmin(
-  spec: AppSpec = ketsuite,
+  spec: DeploymentSpec = ketsuite,
   env: Record<string, string | undefined> = process.env,
 ): Promise<'created' | 'exists'> {
   if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
@@ -28,12 +21,6 @@ export async function ensureDevelopmentAdmin(
   const adapter = await (spec.serve.openStore ?? sqliteStore)(runtime.config)
   try {
     await migrateOne(adapter, runtime.manifest)
-    const registry = await createAppRegistry(runtime.manifest, adapter, {
-      autoInstall: runtime.config.autoInstall,
-    })
-    const bootstrap = runtime.config.bootstrapApps ?? spec.serve.bootstrap ?? []
-    if ((await registry.enabled()).size === 0) for (const name of bootstrap) await registry.install(name)
-    const manifest = restrictManifest(runtime.manifest, await registry.enabled())
     const result = await callFn(
       'user.provisionAdmin',
       {
@@ -47,7 +34,7 @@ export async function ensureDevelopmentAdmin(
       },
       {
         adapter,
-        manifest,
+        manifest: runtime.manifest,
         actor: 'system:scaffold',
         scope: { company: null, branch: null },
       },

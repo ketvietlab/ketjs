@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { performance } from 'node:perf_hooks'
-import { collaborationEvidenceApp } from './collaboration-evidence-fixture.ts'
+import { collaborationEvidenceDeployment } from './collaboration-evidence-fixture.ts'
 
 const CHROME = process.env.KET_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
@@ -198,7 +198,7 @@ const capture = async (cdp: Cdp, path: string): Promise<void> => {
   await writeFile(path, Buffer.from(result.data, 'base64'))
 }
 
-const e2e = await collaborationEvidenceApp()
+const e2e = await collaborationEvidenceDeployment()
 let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/public/assets/collaboration')
 const lotEvidenceDir = resolve('docs/public/assets/inventory-lot-list')

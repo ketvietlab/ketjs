@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bootApp,
+  bootDeployment,
   callFn,
   compose,
   defineModule,
@@ -11,7 +11,7 @@ import {
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 /**
  * A role is a named list of function keys, additive across roles — Salesforce
@@ -112,7 +112,7 @@ test('allow: an empty list is a real restriction, not a missing one', async () =
 // ── the role model, and the whole thing running ──────────────────────────────
 
 const setup = async () => {
-  const b = await bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
+  const b = await bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   const run = (fn: string, args: Record<string, unknown> = {}) =>
     callFn(fn, args, o).then((r) => r.value as Record<string, unknown>)

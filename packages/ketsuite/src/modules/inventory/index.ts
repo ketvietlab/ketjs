@@ -5,7 +5,6 @@ import { defineFn, defineModule } from '@ketvietlab/ketjs'
 // forking or patching anything inside catalog.
 export default defineModule({
   name: 'inventory',
-  group: 'commerce',
   version: '1.0.0',
   depends: ['catalog'],
 

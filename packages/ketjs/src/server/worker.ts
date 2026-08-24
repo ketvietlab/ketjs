@@ -1,9 +1,8 @@
-// The worker process role. It composes the same AppSpec as HTTP, but opens no
+// The worker process role. It composes the same DeploymentSpec as HTTP, but opens no
 // socket, builds no theme and reads no session. Jobs retain the tenant, actor and
 // company scope captured when they were enqueued.
 
 import { randomUUID } from 'node:crypto'
-import { createAppRegistry, restrictManifest } from '../kernel/apps.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { createContext } from './ctx.ts'
@@ -14,7 +13,7 @@ import { bootRuntime } from './runtime.ts'
 import { effectStorage, namespacedStorage, storageFromConfig } from './storage/index.ts'
 import { effectTransport, unavailableTransport } from './transport/index.ts'
 import type { DurableJob, Queue } from './queue.ts'
-import type { AppSpec } from '../kernel/workspace.ts'
+import type { DeploymentSpec } from '../kernel/workspace.ts'
 import type { Adapter, JobContext, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
@@ -64,21 +63,20 @@ const parseQueues = (configured: Record<string, number>, env: Record<string, str
   return queues
 }
 
-async function tenantSource(spec: AppSpec, manifest: Manifest, config: RuntimeConfig): Promise<TenantSource> {
+async function tenantSource(
+  spec: DeploymentSpec,
+  manifest: Manifest,
+  config: RuntimeConfig,
+): Promise<TenantSource> {
   const serve = spec.serve ?? {}
-  const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
-  const registries = new WeakMap<Adapter, Awaited<ReturnType<typeof createAppRegistry>>>()
+  const prepared = new WeakSet<Adapter>()
 
   const prepare = async (adapter: Adapter): Promise<Manifest> => {
-    let registry = registries.get(adapter)
-    if (!registry) {
+    if (!prepared.has(adapter)) {
       if (config.migrateOnBoot) await migrateOne(adapter, manifest)
-      registry = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
-      if (bootstrap.length && (await registry.enabled()).size === 0)
-        for (const name of bootstrap) await registry.install(name)
-      registries.set(adapter, registry)
+      prepared.add(adapter)
     }
-    return restrictManifest(manifest, await registry.enabled())
+    return manifest
   }
 
   if (!serve.tenants) {
@@ -107,7 +105,7 @@ async function tenantSource(spec: AppSpec, manifest: Manifest, config: RuntimeCo
 }
 
 export async function bootWorker(
-  spec: AppSpec,
+  spec: DeploymentSpec,
   options: {
     env?: Record<string, string | undefined>
     workerId?: string
@@ -117,7 +115,7 @@ export async function bootWorker(
   } = {},
 ): Promise<BootedWorker> {
   if (!spec.worker || !Object.keys(spec.worker.queues).length)
-    throw new Error(`app "${spec.name}" declares no worker queues`)
+    throw new Error(`deployment "${spec.name}" declares no worker queues`)
 
   const env = options.env ?? process.env
   const { config, manifest } = await bootRuntime(spec, { env })
@@ -478,7 +476,7 @@ export async function bootWorker(
 }
 
 export async function serveWorker(
-  spec: AppSpec,
+  spec: DeploymentSpec,
   options: Parameters<typeof bootWorker>[1] = {},
 ): Promise<BootedWorker> {
   const worker = await bootWorker(spec, options)

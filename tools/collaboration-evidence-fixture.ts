@@ -1,10 +1,10 @@
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
-export async function collaborationEvidenceApp(
-  options: { databaseUrl?: string; app?: typeof ketsuite } = {},
+export async function collaborationEvidenceDeployment(
+  options: { databaseUrl?: string; deployment?: typeof ketsuite } = {},
 ) {
-  const e2e = await createTestApp(options.app ?? ketsuite, {
+  const e2e = await createTestDeployment(options.deployment ?? ketsuite, {
     worker: false,
     ...(options.databaseUrl ? { env: { DATABASE_URL: options.databaseUrl } } : {}),
   })

@@ -88,11 +88,8 @@ const functions: Record<string, FnSpec> = {
 
 export default defineModule({
   name: 'stock_mail_inbound',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['stock', 'mail_inbound'],
-  install: 'auto',
-  app: true,
   title: 'Email nhập kho',
   summary: 'Alias tường minh tạo phiếu nhập kho nháp và Chatter từ email đã xác thực.',
   category: 'Kho vận',

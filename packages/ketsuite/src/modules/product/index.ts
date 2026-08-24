@@ -9,10 +9,8 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'product',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['uom'],
-  app: true,
   title: 'Sản phẩm',
   summary: 'Danh mục, mẫu sản phẩm và biến thể.',
   category: 'Bán hàng',

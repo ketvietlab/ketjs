@@ -36,9 +36,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./app": {
-      "types": "./dist/app.d.ts",
-      "default": "./dist/app.js"
+    "./deployment": {
+      "types": "./dist/deployment.d.ts",
+      "default": "./dist/deployment.js"
     },
     "./ui": {
       "types": "./dist/ui/index.d.ts",

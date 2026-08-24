@@ -1,6 +1,6 @@
 import { html, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { appsScreen, pagesScreen } from './screens.tsx'
+import { pagesScreen } from './screens.tsx'
 import {
   actionGroup,
   badge,
@@ -34,7 +34,7 @@ import {
   tabs,
   tag,
 } from '../../ui/index.ts'
-import type { AppRow, PageRow } from './screens.tsx'
+import type { PageRow } from './screens.tsx'
 import type { ListChrome, Viewer } from '../../ui/index.ts'
 import { loginScreen } from '../user/login.ts'
 
@@ -51,21 +51,9 @@ import type { MenuNode, Translator } from '@ketvietlab/ketjs'
  *
  * A design that only covers the happy path is a design that will be finished twice.
  * These are the states the real screens actually produce — empty, full, long, error,
- * and the awkward ones like an app that cannot be removed because something depends
- * on it. If a state is missing here, say so and it will be added rather than
+ * and long localized content. If a state is missing here, say so and it will be added rather than
  * discovered later.
  */
-
-const app = (over: Partial<AppRow> = {}): AppRow => ({
-  name: 'website',
-  title: 'Website',
-  summary: 'Trang, section và điều hướng.',
-  category: 'Website',
-  state: 'available',
-  depends: [],
-  dependents: [],
-  ...over,
-})
 
 const page = (over: Partial<PageRow> = {}): PageRow => ({
   id: 'p1',
@@ -135,9 +123,9 @@ const MENU: MenuNode[] = [
     icon: 'settings',
     active: true,
     children: [
-      node('admin.apps', 'Ứng dụng', { icon: 'layout-grid', path: '/admin', active: true }),
       node('admin.config', 'Cấu hình', {
         icon: 'settings',
+        active: true,
         children: [node('admin.users', 'Người dùng', { path: '/admin/users' })],
       }),
     ],
@@ -198,15 +186,14 @@ export const CASES: Array<{
     id: 'viewer-one',
     label: 'Footer sidebar — một công ty',
     note: 'Systray KétViệt: counters, công ty, avatar; menu tài khoản native giữ đăng xuất.',
-    render: (_) =>
-      appsScreen(_, [app({ state: 'installed' })], { viewer: viewer(), menu: MENU, indicators: INDICATORS }),
+    render: (_) => pagesScreen(_, [page()], { viewer: viewer(), menu: MENU, indicators: INDICATORS }),
   },
   {
     id: 'viewer-many',
     label: 'Footer sidebar — nhiều công ty',
     note: 'Icon công ty có accessible label; tên công ty/chi nhánh hiện trong menu và thanh trên vẫn đổi được ngữ cảnh.',
     render: (_) =>
-      appsScreen(_, [app({ state: 'installed' })], {
+      pagesScreen(_, [page()], {
         viewer: viewer({ companies: ['acme', 'globex', 'initech'] }),
         menu: MENU,
       }),
@@ -216,7 +203,7 @@ export const CASES: Array<{
     label: 'Footer sidebar — tên dài',
     note: 'Kiểm tra popover tài khoản không vỡ khi tên người và tên công ty đều dài.',
     render: (_) =>
-      appsScreen(_, [app({ state: 'installed' })], {
+      pagesScreen(_, [page()], {
         viewer: viewer({
           name: 'Nguyễn Thị Hoàng Yến Vy Khánh Linh',
           company: 'cong-ty-co-phan-thuong-mai-dich-vu',
@@ -224,76 +211,6 @@ export const CASES: Array<{
         }),
         menu: MENU,
       }),
-  },
-  {
-    id: 'apps-typical',
-    label: 'Ứng dụng — thường gặp',
-    note: 'Hai nhóm, có cái đã cài có cái chưa.',
-    render: (_) =>
-      appsScreen(
-        _,
-        [
-          app({ name: 'website', state: 'installed' }),
-          app({
-            name: 'website_menu',
-            title: 'Menu điều hướng',
-            summary: 'Thanh menu cho website.',
-            depends: ['website'],
-          }),
-          app({
-            name: 'website_seo',
-            title: 'SEO',
-            summary: 'Thẻ mô tả và canonical.',
-            state: 'installed',
-            depends: ['website'],
-          }),
-          app({
-            name: 'theme_paper',
-            title: 'Theme Paper',
-            summary: 'Giao diện mặc định.',
-            category: 'Giao diện',
-            state: 'installed',
-          }),
-        ],
-        { menu: MENU },
-      ),
-  },
-  {
-    id: 'apps-blocked',
-    label: 'Ứng dụng — không gỡ được',
-    note: 'Nút Gỡ bị vô hiệu vì app khác đang phụ thuộc. Cần cho người dùng hiểu vì sao.',
-    render: (_) =>
-      appsScreen(_, [app({ state: 'installed', dependents: ['website_menu', 'website_seo'] })], {
-        menu: MENU,
-      }),
-  },
-  {
-    id: 'apps-long',
-    label: 'Ứng dụng — danh sách dài',
-    note: 'Kiểm tra lưới khi có nhiều thẻ và tên dài.',
-    render: (_) =>
-      appsScreen(
-        _,
-        Array.from({ length: 14 }, (_, i) =>
-          app({
-            name: `app_${i}`,
-            title: i % 4 === 0 ? `Ứng dụng có tên rất dài số ${i}` : `Ứng dụng ${i}`,
-            summary:
-              i % 3 === 0
-                ? 'Mô tả dài hơn bình thường để xem thẻ có bị vỡ hay không khi chữ tràn sang dòng thứ hai.'
-                : 'Mô tả ngắn.',
-            category: i % 2 ? 'Website' : 'Thương mại',
-            state: i % 3 === 0 ? 'installed' : 'available',
-          }),
-        ),
-        { menu: MENU },
-      ),
-  },
-  {
-    id: 'apps-empty',
-    label: 'Ứng dụng — trống',
-    note: 'Bản triển khai chưa build app nào vào.',
-    render: (_) => appsScreen(_, [], { menu: MENU }),
   },
   {
     id: 'pages-typical',
@@ -704,9 +621,9 @@ export const CASES: Array<{
     note: 'Mọi lỗi của framework đều có mã, câu mô tả, và gợi ý sửa. Cả ba đều cần chỗ hiển thị.',
     render: () =>
       errorState(
-        'E_APP_IN_USE',
-        '"website" không gỡ được khi website_menu đang cài.',
-        'Gỡ website_menu trước, hoặc để website ở nguyên.',
+        'E_VALIDATION',
+        'Không thể lưu vì mã tham chiếu đã tồn tại.',
+        'Dùng một mã khác rồi thử lại.',
       ),
   },
 ]

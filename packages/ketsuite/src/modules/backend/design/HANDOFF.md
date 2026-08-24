@@ -33,9 +33,9 @@ npm run design
 | | |
 |---|---|
 | `http://127.0.0.1:4000/catalogue` | **mọi màn hình, mọi trạng thái** — đây là chỗ làm việc chính |
-| `http://127.0.0.1:4000/admin/apps` | màn hình thật, dữ liệu thật |
+| `http://127.0.0.1:4000/admin/companies` | màn hình thật, dữ liệu thật |
 
-Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Cài app, gỡ app, làm hỏng
+Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Thử thay đổi dữ liệu
 thoải mái — khởi động lại là sạch. Không có gì ở đây chạm vào hệ thống thật.
 
 ## Ai sở hữu cái gì
@@ -69,9 +69,9 @@ phủ đường hạnh phúc là thiết kế sẽ phải làm lại lần hai.
 tả, và một gợi ý sửa:
 
 ```
-E_APP_IN_USE
-"website" không gỡ được khi website_menu đang cài.
-Gỡ website_menu trước, hoặc để website ở nguyên.
+E_VALIDATION
+Tên công ty là bắt buộc.
+Nhập tên rồi thử lại.
 ```
 
 Cả ba đều cần chỗ hiển thị. Phần gợi ý là thứ khiến người dùng tự thoát ra được, đừng

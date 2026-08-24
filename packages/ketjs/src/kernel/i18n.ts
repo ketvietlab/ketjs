@@ -27,7 +27,7 @@ export type TranslateOptions = {
  * Conventionally bound to `_`, after gettext:
  *
  *     const _ = translator(manifest, locale)
- *     _('backend.apps.title')
+ *     _('backend.pages.title')
  *     _('shop.cart', { count: 5 })
  */
 export type Translator = {

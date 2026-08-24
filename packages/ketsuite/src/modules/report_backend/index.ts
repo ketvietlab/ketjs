@@ -3,11 +3,8 @@ import { routes } from './routes.tsx'
 
 export default defineModule({
   name: 'report_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['report', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Báo cáo trong quản trị',
   summary: 'Quản lý KTL, preview, publish và rollback mẫu in.',
   category: 'Hệ thống',
@@ -59,7 +56,8 @@ export default defineModule({
       'field.previewRecord': 'Preview record ID',
       versions: 'Published history',
       empty: 'No print templates yet.',
-      emptyHint: 'Templates come from installed modules; install one that ships reports and it appears here.',
+      emptyHint:
+        'Templates come from composed modules; add a report module to the deployment and release it.',
       'col.version': 'Version',
       'col.publishedAt': 'Published',
       'col.rollback': 'Restore',

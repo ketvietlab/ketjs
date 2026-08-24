@@ -21,7 +21,7 @@ export function topoSort(modules: KetModule[]): KetModule[] {
           code: 'E_MISSING_DEPENDENCY',
           module: m.name,
           message: `module "${m.name}" depends on "${d}", which is not installed`,
-          hint: `add "${d}" to the app's module list, or remove it from ${m.name}.depends`,
+          hint: `add "${d}" to the deployment module list, or remove it from ${m.name}.depends`,
         })
       }
     }

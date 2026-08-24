@@ -9,7 +9,6 @@ import { tokens } from './tokens.ts'
  */
 export default defineTheme({
   name: 'theme_paper',
-  group: 'system',
   version: '0.1.0',
   depends: ['website'],
   title: 'Theme Paper',

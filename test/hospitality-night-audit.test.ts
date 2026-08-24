@@ -8,7 +8,7 @@ import {
   callFn,
   compose,
   createQueue,
-  defineApp,
+  defineDeployment,
   migrateOne,
   registerFunctions,
   sqliteAdapter,
@@ -121,11 +121,11 @@ const seedLongStay = async (adapter: Adapter): Promise<void> => {
 test('hospitality night audit: queue worker catches up rent and nightly services without duplicates', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'ket-hospitality-night-audit-'))
   const file = join(dir, 'hospitality.db')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'hospitality_night_audit_test',
     modules,
     headless: true,
-    serve: { bootstrap: ['hospitality_core'] },
+    serve: {},
     worker: { queues: { maintenance: 1 } },
   })
   const producer = sqliteAdapter(file)

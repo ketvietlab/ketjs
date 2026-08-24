@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compose, createJoints, defineModule, restrictManifest } from '@ketvietlab/ketjs'
+import { compose, createJoints, defineModule } from '@ketvietlab/ketjs'
 import { html, renderToString } from '@ketvietlab/ketjs-view'
 
 /**
@@ -161,8 +161,8 @@ test('fill: an island can render inside a first-party screen joint', () => {
 
 test('fill: unknown joints fail consistently for render() and shows()', () => {
   const joints = createJoints(compose([owner]))
-  assert.throws(() => joints.render('screen:nope'), /no installed module publishes/)
-  assert.throws(() => joints.shows('screen:nope'), /no installed module publishes/)
+  assert.throws(() => joints.render('screen:nope'), /no composed module publishes/)
+  assert.throws(() => joints.shows('screen:nope'), /no composed module publishes/)
 })
 
 test('fill: naming a joint nobody publishes is a build error, with a suggestion', () => {
@@ -172,7 +172,7 @@ test('fill: naming a joint nobody publishes is a build error, with a suggestion'
         owner,
         defineModule({ name: 'b', depends: ['screen'], fills: { 'screen:card.action': `x` } }),
       ]),
-    /no installed module publishes/,
+    /no composed module publishes/,
   )
 })
 
@@ -202,25 +202,10 @@ test('omit: shows() is how a screen knows to skip its own default too', () => {
   assert.equal(createJoints(compose([owner])).shows('screen:card.actions'), true)
 })
 
-test('omit: an omission by a module that is switched off is not an omission', () => {
-  const full = compose([
-    owner,
-    filler('a', `<i>x</i>`),
-    defineModule({ name: 'lean', depends: ['screen'], omits: ['screen:card.actions'] }),
-  ])
-  const live = restrictManifest(full, new Set(['screen', 'a']))
-  assert.equal(
-    createJoints(live).render('screen:card.actions', { app: {} }).html,
-    '<i>x</i>',
-    'the joint comes back, exactly as its fills would',
-  )
-  assert.deepEqual(live.patches, [], 'the live diagnostics do not report an omission that is switched off')
-})
-
 test('omit: omitting a joint nobody publishes is a build error', () => {
   assert.throws(
     () => compose([owner, defineModule({ name: 'b', depends: ['screen'], omits: ['screen:nope'] })]),
-    /no installed module publishes/,
+    /no composed module publishes/,
   )
 })
 
@@ -249,18 +234,17 @@ test('screen: the fill lands verbatim between the hydration markers', () => {
     'screen:card.actions',
     { app: {} },
   )
-  const out = renderToString(html`<div data-ui="app-actions">${markup}</div>`)
-  assert.equal(out, '<div data-ui="app-actions"><!--k[--><a href="/x">Kho</a><!--k--></div>')
+  const out = renderToString(html`<div data-ui="fill-actions">${markup}</div>`)
+  assert.equal(out, '<div data-ui="fill-actions"><!--k[--><a href="/x">Kho</a><!--k--></div>')
 })
 
-test('bridge: a module does not depend on the admin just to add a button to it', async () => {
+test('bridge: a module does not depend on the admin to expose its backend', async () => {
   // Putting the fill in `product` made every test that composes a catalogue
   // without an admin fail with E_MISSING_DEPENDENCY — a headless API could not
   // have products. CI found it; running only the tests I had touched did not,
   // because I had touched product without thinking of it that way.
   //
-  // The fill belongs in a bridge that installs itself once both sides are there,
-  // which is what install:'auto' was built for and what the domain contract does with sales/inventory bridge.
+  // The fill belongs in a bridge selected explicitly by deployments that include both sides.
   const { address, company, partner, product, productBackend, productMedia, storage, uom } = await import(
     '@ketvietlab/ketsuite'
   )
@@ -280,10 +264,5 @@ test('bridge: a module does not depend on the admin just to add a button to it',
     backend,
     productBackend,
   ])
-  assert.equal(
-    both.modules['product_backend']!.install,
-    'auto',
-    'so it appears when the admin does, and not before',
-  )
-  assert.equal(both.fills.filter((f) => f.joint === 'backend:app-card.actions').length, 1)
+  assert.ok(both.modules['product_backend'])
 })

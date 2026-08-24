@@ -5,8 +5,7 @@
 // sources, but "what a joint does when it is rendered" is one behaviour, and it was
 // written out twice. The copies had already drifted — the same missing joint
 // reported two different error codes depending on which side of the product you
-// were standing on, and one of them took a whole tenant down when an island's
-// module was switched off while the other degraded to nothing.
+// were standing on.
 
 import { contractProps } from './contracts.ts'
 import { renderIsland } from '@ketvietlab/ketjs-view'
@@ -24,7 +23,7 @@ export type CompiledFill = { by: string; compiled: Compiled }
 export type JointWiring = {
   renderJoint(joint: string, scope: Scope): string
   renderIsland(name: string, scope: Scope): string
-  /** False when an installed module asked for this joint to be gone. */
+  /** False when a composed module asked for this joint to be gone. */
   shows(joint: string): boolean
 }
 
@@ -34,12 +33,6 @@ export function createJointWiring(
     /** Read late: the fills are compiled with this wiring, so they cannot exist yet. */
     fillsFor: (joint: string) => readonly CompiledFill[]
     islands: IslandRegistry
-    /**
-     * True for a manifest restricted to what one database has switched on. A name
-     * that is merely uninstalled degrades to nothing there; at build time the same
-     * name is a typo and says so.
-     */
-    atRuntime: boolean
   },
 ): JointWiring {
   const stack: string[] = []
@@ -50,7 +43,7 @@ export function createJointWiring(
     if (definition) return definition
     throw new KetError({
       code: 'E_UNKNOWN_JOINT',
-      message: `no installed module publishes joint "${joint}"`,
+      message: `no composed module publishes joint "${joint}"`,
       hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
     })
   }
@@ -95,10 +88,9 @@ export function createJointWiring(
       const factory = o.islands[name]
       const definition = manifest.islands[name]
       if (!factory || !definition) {
-        if (o.atRuntime) return ''
         throw new KetError({
           code: 'E_UNKNOWN_ISLAND',
-          message: `a template places island "${name}", which no installed module provides`,
+          message: `a template places island "${name}", which no composed module provides`,
           hint: `available islands: ${Object.keys(o.islands).join(', ') || '(none)'}`,
         })
       }
@@ -116,14 +108,13 @@ export function createJointWiring(
  * What a fill is allowed to reach for.
  *
  * A fill naming another module's joint or island without depending on it is a
- * decision about somebody else's screen made by a module that may not be installed
+ * decision about somebody else's screen made by a module that may not be composed
  * beside it — the same rule `omits` follows, checked at the same place for both.
  */
 export function assertFillReach(
   manifest: Manifest,
   fill: { joint: string; by: string },
   compiled: Compiled,
-  o: { atRuntime: boolean },
 ): void {
   const owner = manifest.modules[fill.by]
   for (const used of compiled.jointsUsed) {
@@ -146,9 +137,6 @@ export function assertFillReach(
   for (const used of compiled.islandsUsed) {
     const target = manifest.islands[used]
     if (!target) {
-      // Switching an app off must not take the tenant's pages down with it. At
-      // build time the same name has no module behind it at all, and that is a typo.
-      if (o.atRuntime) continue
       throw new KetError({
         code: 'E_FILL_UNKNOWN_ISLAND',
         module: fill.by,

@@ -1,7 +1,7 @@
 // Keep KetJS and KetSuite contracts product-native. Historical implementation
 // names must not leak back into code, tests, docs, filenames, or public copy.
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { extname } from 'node:path'
 
@@ -48,6 +48,7 @@ if (listed.status !== 0) throw new Error(listed.stderr)
 
 const violations = []
 for (const path of listed.stdout.split('\0').filter(Boolean)) {
+  if (!existsSync(path)) continue
   if (path.includes('/dist/') || path.startsWith('.build/') || path.startsWith('.types/')) continue
   if (forbidden.test(path)) {
     violations.push(path)

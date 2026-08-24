@@ -1,13 +1,10 @@
 import { defineModule, from } from '@ketvietlab/ketjs'
 
 // A module is the unit of contribution: models, functions, sections and messages
-// declared together, composable with anyone else's. `install` is the boundary it
-// draws — 'manual' means nothing installs it but a person asking for it by name.
+// declared together, composable with anyone else's.
 export default defineModule({
   name: '__NAME__',
-  app: true,
   title: '__NAME__',
-  install: 'manual',
   models: {
     Note: {
       scope: 'company',

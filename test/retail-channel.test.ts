@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row, Scope } from '@ketvietlab/ketjs'
-import { createTestApp, type TestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment, type TestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const scope: Scope = { company: 'default', companies: ['default'], branches: null }
 const REALM = 'site:default:retail'
@@ -14,7 +14,7 @@ type Envelope<T> = {
 }
 
 const boot = async (t: TestContext) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const seed = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
 
@@ -77,7 +77,7 @@ const configure = (seed: (name: string, input: Record<string, unknown>) => Promi
   })
 
 const channel = async <T>(
-  e2e: TestApp,
+  e2e: TestDeployment,
   path: string,
   init: RequestInit & { token?: string; cart?: string; key?: string } = {},
 ): Promise<{ status: number; body: Envelope<T> }> => {
@@ -93,7 +93,7 @@ const channel = async <T>(
   return { status: response.status, body: (await response.json()) as Envelope<T> }
 }
 
-const signIn = async (e2e: TestApp, email: string): Promise<string> => {
+const signIn = async (e2e: TestDeployment, email: string): Promise<string> => {
   const registered = await channel<{ accessToken: string }>(e2e, 'auth/token/register', {
     method: 'POST',
     body: JSON.stringify({ displayName: 'Lan Anh', email, password: 'retail-password-1' }),
