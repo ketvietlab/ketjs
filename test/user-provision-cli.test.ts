@@ -83,10 +83,9 @@ test('provision CLI: a tenant datastore requires an explicit tenant selection', 
     const workspace = join(dir, 'workspace.mjs')
     await writeFile(
       workspace,
-      `import { defineApp, defineFn, defineModule, sqliteAdapter } from ${JSON.stringify(ketEntry)}
+      `import { defineDeployment, defineFn, defineModule, sqliteAdapter } from ${JSON.stringify(ketEntry)}
 const bootstrap = defineModule({
   name: 'tenant_bootstrap',
-  app: true,
   functions: {
     run: defineFn({
       exposure: 'internal',
@@ -98,12 +97,11 @@ const bootstrap = defineModule({
     }),
   },
 })
-export const apps = [defineApp({
+export const deployments = [defineDeployment({
   name: 'tenant_app',
   modules: [bootstrap],
   headless: true,
   serve: {
-    bootstrap: ['tenant_bootstrap'],
     tenants: { open: () => sqliteAdapter(${JSON.stringify(database)}) },
   },
 })]

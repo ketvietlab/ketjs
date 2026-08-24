@@ -3,7 +3,7 @@ title: Testing
 description: Exercise KetJS applications through real HTTP, isolated datastores, sessions, tenants, and durable workers.
 ---
 
-`@ketvietlab/ketjs/testing` boots a real `AppSpec` on an ephemeral port and provides a cookie-aware HTTP client.
+`@ketvietlab/ketjs/testing` boots a real `DeploymentSpec` on an ephemeral port and provides a cookie-aware HTTP client.
 This boundary covers request parsing, tenant resolution, sessions, permissions, output projection, and
 error serialization. Direct `callFn()` tests remain useful integration tests, but they do not cover those
 HTTP seams.
@@ -14,11 +14,11 @@ HTTP seams.
 // File: test/order.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ordersApp } from '../app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ordersApp } from '../deployment.ts'
 
 test('an order can be listed', async (t) => {
-  const e2e = await createTestApp(ordersApp, {
+  const e2e = await createTestDeployment(ordersApp, {
     worker: false,
     client: { company: 'acme' },
   })
@@ -38,7 +38,7 @@ Always register `close()` with the test lifecycle or use `try/finally`. Cleanup 
 
 ## Isolation model
 
-Each `createTestApp()` call creates a private temporary directory containing:
+Each `createTestDeployment()` call creates a private temporary directory containing:
 
 - a file-backed SQLite database;
 - local object storage;
@@ -53,7 +53,7 @@ silently redirect an isolated test to a real database.
 
 ```ts
 // File: test/order.test.ts
-const e2e = await createTestApp(app, {
+const e2e = await createTestDeployment(app, {
   env: { KET_QUEUE_NOTIFY: '0' },
   worker: false,
   keepArtifacts: true,
@@ -178,7 +178,7 @@ A multi-tenant fixture requires an explicit tenant key.
 
 ## Durable jobs
 
-When the app declares worker queues, the harness opens a worker handle against the same isolated database.
+When the deployment declares worker queues, the harness opens a worker handle against the same isolated database.
 It does not leave a polling loop running. Drain at the point where asynchronous work must settle:
 
 ```ts
@@ -225,14 +225,14 @@ ket call order.create \
 ```
 
 Without `--against`, the CLI loads the workspace app on an ephemeral port and closes it after the request.
-That uses the app's configured datastore. Add `--isolated` for a temporary database and storage directory.
+That uses the deployment's configured datastore. Add `--isolated` for a temporary database and storage directory.
 
 ## Test boundary checklist
 
 - Use direct `callFn()` tests for operation logic and real HTTP for request behavior.
 - Use one isolated app per test or suite ownership boundary.
 - Exercise permission denial as well as success.
-- Test at least two companies or tenants when the app supports them.
+- Test at least two companies or tenants when the deployment supports them.
 - Drain jobs explicitly; do not wait with arbitrary sleeps.
 - Assert durable state or public output, not internal process timing.
 - Close every harness even when an assertion fails.

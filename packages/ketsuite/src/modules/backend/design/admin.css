@@ -851,7 +851,6 @@
   }
 
   /* Screens that are reading rather than scanning keep their measure. */
-  [data-ui="content"]:has([data-ui="app-groups"]),
   [data-ui="content"]:has([data-ui="tokens"]) {
     inline-size: min(100%, var(--admin-page-max));
     margin-inline: auto;
@@ -872,19 +871,6 @@
     box-shadow: none;
   }
 
-  /* ── App registry ──────────────────────────────────────────────────────── */
-
-  [data-ui="app-groups"] {
-    display: grid;
-    gap: 1.375rem;
-  }
-
-  [data-ui="app-group"] {
-    display: grid;
-    min-inline-size: 0;
-    gap: var(--admin-gap-sm);
-  }
-
   [data-ui="group-title"] {
     margin: 0;
     color: var(--admin-ink-secondary);
@@ -893,132 +879,6 @@
     letter-spacing: 0.075em;
     line-height: 1.4;
     text-transform: uppercase;
-  }
-
-  [data-ui="app-grid"] {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
-    gap: var(--admin-gap);
-  }
-
-  [data-ui="app-card"] {
-    position: relative;
-    display: grid;
-    min-inline-size: 0;
-    min-block-size: 10rem;
-    grid-template-rows: auto auto 1fr auto;
-    padding: var(--admin-gap-md);
-    overflow: hidden;
-    border: 1px solid var(--admin-line);
-    border-block-start: 2px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius);
-    background: var(--admin-surface);
-    box-shadow: var(--admin-shadow-card);
-  }
-
-  [data-ui="app-card"][data-state="installed"] {
-    border-block-start-color: var(--admin-accent);
-  }
-
-  [data-ui="app-title"] {
-    min-inline-size: 0;
-    margin: 0;
-    color: var(--admin-ink);
-    font-size: 0.9375rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-  }
-
-  [data-ui="app-summary"] {
-    min-inline-size: 0;
-    margin: 0.25rem 0 0;
-    color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-  }
-
-  [data-ui="app-meta"] {
-    display: grid;
-    min-inline-size: 0;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-content: start;
-    gap: 0.1875rem var(--admin-gap-sm);
-    margin: var(--admin-gap) 0 0;
-    color: var(--admin-ink-muted);
-    font-size: var(--admin-size-sm);
-    line-height: 1.35;
-  }
-
-  [data-ui="app-meta"] dt {
-    color: var(--admin-ink-secondary);
-    font-weight: 600;
-  }
-
-  [data-ui="app-meta"] dd {
-    min-inline-size: 0;
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  [data-ui="app-meta-value"][data-kind="dependents"] {
-    color: var(--admin-ink-secondary);
-    font-weight: 600;
-  }
-
-  [data-ui="app-actions"] {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    margin-block-start: var(--admin-gap);
-    padding-block-start: var(--admin-gap);
-    border-block-start: 1px solid var(--admin-line);
-  }
-
-  [data-ui="app-action"] {
-    /* A button and a link both wear this. The rule was written for the button, so
-     an anchor got the border and none of the shape: min-block-size does nothing
-     to an inline box, and the browser kept its underline. Now it fits either. */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    min-block-size: var(--admin-control-height);
-    padding-inline: 0.75rem;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    color: var(--admin-ink-secondary);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1;
-    transition:
-      background-color var(--admin-motion-fast),
-      border-color var(--admin-motion-fast),
-      color var(--admin-motion-fast),
-      transform var(--admin-motion-fast);
-  }
-
-  [data-ui="app-action"][data-action="install"] {
-    border-color: var(--admin-accent);
-    background: var(--admin-accent);
-    color: var(--admin-accent-ink);
-  }
-
-  [data-ui="app-action"]:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-
-  [data-ui="app-action"]:disabled {
-    border-color: var(--admin-line);
-    background: var(--admin-surface-subtle);
-    color: var(--admin-ink-disabled);
-    cursor: not-allowed;
-    opacity: 0.8;
-    transform: none;
   }
 
   /* ── Data list ────────────────────────────────────────────────────────── */
@@ -1566,18 +1426,6 @@
       color: var(--admin-accent-text);
     }
 
-    [data-ui="app-action"]:hover:not(:disabled) {
-      border-color: var(--admin-line-strong);
-      background: var(--admin-surface-hover);
-      color: var(--admin-ink);
-    }
-
-    [data-ui="app-action"][data-action="install"]:hover:not(:disabled) {
-      border-color: var(--admin-accent-hover);
-      background: var(--admin-accent-hover);
-      color: var(--admin-accent-ink);
-    }
-
     [data-ui="row"]:hover td {
       background: var(--admin-surface-hover);
     }
@@ -1728,15 +1576,6 @@
       padding: var(--admin-gap) var(--admin-gap) var(--admin-gap-lg);
     }
 
-    [data-ui="app-grid"] {
-      grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
-    }
-
-    [data-ui="app-action"] {
-      min-block-size: 2.75rem;
-      padding-inline: var(--admin-gap-md);
-    }
-
     [data-ui="token"] {
       grid-template-columns: 1fr;
     }
@@ -1759,15 +1598,6 @@
   }
 
   @media (max-width: 29.9375rem) {
-    [data-ui="app-grid"] {
-      grid-template-columns: 1fr;
-    }
-
-    [data-ui="app-card"] {
-      min-block-size: 9.5rem;
-      padding: var(--admin-gap);
-    }
-
     [data-ui="empty"] {
       margin-block: var(--admin-gap-md);
       padding: var(--admin-gap-md);
@@ -2234,13 +2064,6 @@
 
   [data-ui="signout-label"] {
     min-inline-size: 0;
-  }
-
-  /* Named in the screen contract but never given a rule, so it inherited nothing
-   and sat flush against its sibling. */
-  [data-ui="app-meta-value"][data-kind="depends"] {
-    color: var(--admin-ink-muted);
-    font-size: var(--admin-size-xs);
   }
 }
 

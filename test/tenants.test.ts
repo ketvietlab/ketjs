@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bootApp,
-  defineApp,
+  bootDeployment,
+  defineDeployment,
   defineModule,
   json,
   migrateOne,
@@ -13,18 +13,12 @@ import {
 import type { Adapter, ServeContext, Route } from '@ketvietlab/ketjs'
 
 /**
- * One deployment, many databases — the domain contract's model, and the one that makes per-tenant
- * module sets work at all.
- *
- * What this guards is subtler than a missing feature. `bootApp` used to open one
- * adapter and build one AppRegistry, so the restricted manifest was computed once.
- * Serving two tenants through that would not crash: it would show tenant B the
- * module set of tenant A. Wrong answers are worse than errors.
+ * One deployment, many databases. Every tenant runs the deployment's immutable
+ * module composition while keeping its data and sessions isolated.
  */
 
 const core = defineModule({
   name: 'core',
-  app: true,
   models: { Note: { scope: 'company', fields: { id: 'id', memo: 'text' } } },
   functions: {
     add: {
@@ -45,7 +39,6 @@ const core = defineModule({
 })
 const extra = defineModule({
   name: 'extra',
-  app: true,
   depends: ['core'],
   routes: {
     '/extra':
@@ -56,16 +49,14 @@ const extra = defineModule({
 })
 
 const dbs = new Map<string, Adapter>()
-const app = defineApp({
+const app = defineDeployment({
   name: 'multi',
   modules: [core, extra],
   headless: true,
   serve: {
-    bootstrap: ['core'],
     routes: (ctx) => ({
       '/notes': async (url, req) => json(await ctx.call('core.list', {}, url, req)),
-      '/apps': async (_url, req) =>
-        json((await ctx.appsOf(req)).filter((a) => a.state === 'installed').map((a) => a.name)),
+      '/modules': async () => json(ctx.manifest.order),
     }),
     tenants: {
       /**
@@ -98,7 +89,7 @@ const get = (port: number, tenant: string, path: string, init: RequestInit = {})
 
 test('tenants: each request lands in its own database', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0 })
   const post = (host: string, id: string) =>
     get(b.port, host, '/_ket/fn/core.add', {
       method: 'POST',
@@ -118,45 +109,36 @@ test('tenants: each request lands in its own database', async () => {
   await b.close()
 })
 
-test('tenants: module sets differ, which is the whole point', async () => {
+test('tenants: every database runs the declared deployment composition', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
-  // Both bootstrap `core`. Only t2 installs `extra`.
-  await b.tenants.with('t2', (t) => t.apps.install('extra'))
-
-  assert.deepEqual(await get(b.port, 't1', '/apps').then((r) => r.json()), ['core'])
-  assert.deepEqual(((await get(b.port, 't2', '/apps').then((r) => r.json())) as string[]).sort(), [
-    'core',
-    'extra',
-  ])
-
-  // And the route that belongs to `extra` follows the installed set, per tenant.
-  assert.equal((await get(b.port, 't1', '/extra')).status, 404)
+  const b = await bootDeployment(app, { port: 0 })
+  assert.deepEqual(await get(b.port, 't1', '/modules').then((r) => r.json()), ['core', 'extra'])
+  assert.deepEqual(await get(b.port, 't2', '/modules').then((r) => r.json()), ['core', 'extra'])
+  assert.equal((await get(b.port, 't1', '/extra')).status, 200)
   assert.equal((await get(b.port, 't2', '/extra')).status, 200)
   await b.close()
 })
 
 test('tenants: health answers for the tenant that asked, not for the deployment', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
-  await b.tenants.with('t2', (t) => t.apps.install('extra'))
+  const b = await bootDeployment(app, { port: 0 })
   const h1 = (await get(b.port, 't1', '/_ket/health').then((r) => r.json())) as {
     tenant: string
-    apps: string[]
+    modules: string[]
   }
   const h2 = (await get(b.port, 't2', '/_ket/health').then((r) => r.json())) as {
     tenant: string
-    apps: string[]
+    modules: string[]
   }
   assert.equal(h1.tenant, 't1')
-  assert.deepEqual(h1.apps, ['core'])
-  assert.deepEqual(h2.apps.sort(), ['core', 'extra'])
+  assert.deepEqual(h1.modules, ['core', 'extra'])
+  assert.deepEqual(h2.modules, ['core', 'extra'])
   await b.close()
 })
 
 test('tenants: a host this deployment does not serve is refused, not defaulted', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0 })
   const r = await get(b.port, 'nobody', '/notes')
   assert.equal(r.status, 400)
   assert.match(
@@ -167,31 +149,30 @@ test('tenants: a host this deployment does not serve is refused, not defaulted',
   await b.close()
 })
 
-test('tenants: bootstrap runs per tenant, on first touch', async () => {
+test('tenants: migrations run per tenant, on first touch', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
-  // Nothing has been touched yet, so nothing has been installed anywhere.
+  const b = await bootDeployment(app, { port: 0 })
+  // Nothing has been touched yet, so no tenant database has been opened.
   assert.equal(dbs.size, 0)
-  await get(b.port, 't1', '/apps')
+  await get(b.port, 't1', '/notes')
   assert.deepEqual([...dbs.keys()], ['t1'], 'only the tenant that asked')
   await b.close()
 })
 
 test('tenants: with several databases there is no single adapter, and the type says so', async () => {
   dbs.clear()
-  const b = await bootApp(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0 })
   assert.equal(b.adapter, null)
-  assert.equal(b.apps, null)
   assert.match(await b.banner(), /tenant\(s\), one database each/)
   await b.close()
 })
 
 test('single: one datastore is the same interface, not a second code path', async () => {
-  const solo = defineApp({ name: 'solo', modules: [core], headless: true, serve: { bootstrap: ['core'] } })
-  const b = await bootApp(solo, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, serve: {} })
+  const b = await bootDeployment(solo, { env: { KET_SQLITE: ':memory:' }, port: 0 })
   assert.notEqual(b.adapter, null)
   assert.deepEqual(await b.tenants.keys(), [''])
-  const seen = await b.tenants.with('', async (t) => [...(await t.apps.enabled())])
+  const seen = await b.tenants.with('', async (t) => t.live.order)
   assert.deepEqual(seen, ['core'])
   await b.close()
 })
@@ -218,12 +199,11 @@ test('migrate: every tenant is migrated, and one failure does not stop the fleet
  * and passes one shared store instead. Both are tested here, because both are
  * deployments someone will have.
  */
-const authed = defineApp({
+const authed = defineDeployment({
   name: 'authed',
   modules: [core],
   headless: true,
   serve: {
-    bootstrap: ['core'],
     sessions: {},
     tenants: {
       resolve: (_url, req) => {
@@ -251,7 +231,7 @@ const loginAs = async (port: number, tenant: string, userId: string) => {
 
 test('sessions: each tenant keeps its own, so a cookie does not travel between them', async () => {
   dbs.clear()
-  const b = await bootApp(authed, { env: { KET_SECRET: 'shared-across-pods' }, port: 0 })
+  const b = await bootDeployment(authed, { env: { KET_SECRET: 'shared-across-pods' }, port: 0 })
 
   const s1 = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
   const jar = s1.cookie.split(';')[0]!
@@ -272,7 +252,7 @@ test('sessions: each tenant keeps its own, so a cookie does not travel between t
 
 test('sessions: the cookie carries no Domain, so the browser scopes it to one subdomain', async () => {
   dbs.clear()
-  const b = await bootApp(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(authed, { env: { KET_SECRET: 'x' }, port: 0 })
   const { cookie } = await b.tenants.with('t1', async (t) =>
     t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
   )
@@ -287,12 +267,11 @@ test('sessions: the cookie carries no Domain, so the browser scopes it to one su
 test('sessions: a shared store is the escape hatch for one domain serving every tenant', async () => {
   dbs.clear()
   const control = memorySessionStore()
-  const oneDomain = defineApp({
+  const oneDomain = defineDeployment({
     name: 'onedomain',
     modules: [core],
     headless: true,
     serve: {
-      bootstrap: ['core'],
       // Reading the session needs the database and knowing the database needs the
       // session, so the session cannot live in the tenant's database at all.
       sessions: { store: control },
@@ -310,7 +289,7 @@ test('sessions: a shared store is the escape hatch for one domain serving every 
       },
     },
   })
-  const b = await bootApp(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
   const { cookie } = await b.tenants.with('t1', async (t) =>
     t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
   )
@@ -324,7 +303,7 @@ test('sessions: a shared store is the escape hatch for one domain serving every 
 
 test('sessions: turning them on with tenants is no longer refused', async () => {
   dbs.clear()
-  const b = await bootApp(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(authed, { env: { KET_SECRET: 'x' }, port: 0 })
   assert.match(await b.banner(), /identity\s+sessions \(one per tenant\)/)
   await b.close()
 })

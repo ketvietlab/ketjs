@@ -320,11 +320,8 @@ const en = {
 
 export default defineModule({
   name: 'pos_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['pos', 'backend'],
-  install: 'auto',
-  app: true,
   joints: { 'order.loyalty': { props: { orderId: 'id', locale: 'text?' } } },
   title: 'Điểm bán hàng trong quản trị',
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',

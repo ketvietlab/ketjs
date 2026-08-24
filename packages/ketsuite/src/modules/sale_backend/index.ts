@@ -692,11 +692,8 @@ const en = {
 }
 export default defineModule({
   name: 'sale_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['sale', 'backend', 'partner_backend'],
-  install: 'auto',
-  app: true,
   assets: new URL('./client/', import.meta.url),
   islands,
   joints: {

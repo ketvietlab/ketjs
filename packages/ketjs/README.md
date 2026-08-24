@@ -36,7 +36,7 @@ npm install @ketvietlab/ketjs
 ```
 
 ```ts
-import { defineApp, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
+import { defineDeployment, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
 ```
 
 Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvietlab/ketjs)

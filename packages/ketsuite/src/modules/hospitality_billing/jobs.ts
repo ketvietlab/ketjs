@@ -93,7 +93,7 @@ export const billingJobFunctions: Record<string, FnSpec> = {
         { propertyId: args.propertyId ?? null },
         { uniqueKey: `invoice-closed-folios:${String(args.propertyId ?? 'all')}` },
       )
-      return { ok: true, queued: 'dryRun' in queued ? false : true }
+      return { ok: true, queued: !('dryRun' in queued) }
     },
   }),
 }

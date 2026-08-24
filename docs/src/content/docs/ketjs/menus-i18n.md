@@ -4,7 +4,7 @@ description: Compose permission-aware navigation and module-owned translated mes
 ---
 
 Menus and messages are module declarations. Composition checks navigation ownership and merges
-language catalogues, while the runtime filters a menu by installed modules and the current viewer's
+language catalogues, while the runtime filters a menu by composed modules and the current viewer's
 function grants.
 
 ## Declare navigation
@@ -43,7 +43,7 @@ export const sales = defineModule({
 })
 ```
 
-A root entry is an app. An entry without `path` is a heading. `parent` references a global menu ID,
+A root entry is a top-level section. An entry without `path` is a heading. `parent` references a global menu ID,
 and a module parenting onto another module's entry must declare that dependency.
 
 Unknown parents, duplicate IDs, dependency violations, and invalid depths are composition errors.
@@ -54,7 +54,7 @@ Build navigation for one viewer:
 
 ```ts
 // File: src/modules/example/index.ts
-import { activeApp, buildMenu } from '@ketvietlab/ketjs'
+import { activeMenuRoot, buildMenu } from '@ketvietlab/ketjs'
 
 const tree = buildMenu(liveManifest, {
   allow: grantedFunctionKeys,
@@ -63,12 +63,12 @@ const tree = buildMenu(liveManifest, {
   q: searchText,
 })
 
-const currentApp = activeApp(tree)
+const currentRoot = activeMenuRoot(tree)
 ```
 
 The filters run in this order:
 
-1. the live manifest contains only shipped and enabled module behavior;
+1. the deployment manifest contains composed module behavior;
 2. `needs` removes entries whose function is absent or not granted;
 3. empty headings disappear with their children;
 4. optional search preserves the ancestor path to every matching leaf;

@@ -44,11 +44,9 @@ export function createJoints(
   // Compiled once. A fill is KTL source, so compiling per request would parse the
   // same text on every page view.
   const compiled = new Map<string, CompiledFill[]>()
-  const atRuntime = manifest.disabledModules !== undefined
   const wiring = createJointWiring(manifest, {
     fillsFor: (joint) => compiled.get(joint) ?? [],
     islands: o.islands ?? {},
-    atRuntime,
   })
 
   for (const fill of manifest.fills) {
@@ -59,7 +57,7 @@ export function createJoints(
       renderJoint: wiring.renderJoint,
       renderIsland: wiring.renderIsland,
     })
-    assertFillReach(manifest, fill, entry, { atRuntime })
+    assertFillReach(manifest, fill, entry)
     list.push({ by: fill.by, compiled: entry })
     compiled.set(fill.joint, list)
   }

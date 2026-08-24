@@ -53,7 +53,7 @@ for (const file of files.sort()) {
       continue
     }
 
-    const opening = /^\s*(\`{3,})([^\`]*)$/.exec(line)
+    const opening = /^\s*(`{3,})([^`]*)$/.exec(line)
     if (!opening) continue
 
     snippetCount += 1

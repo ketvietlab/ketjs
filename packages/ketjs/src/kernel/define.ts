@@ -3,7 +3,7 @@
 // depends on a file's name or location.
 
 import { KetError } from './errors.ts'
-import type { KetModule, ModuleGroupDef, ModuleSpec } from '../types.ts'
+import type { KetModule, ModuleSpec } from '../types.ts'
 
 const MODULE_KEYS = new Set([
   'name',
@@ -28,15 +28,9 @@ const MODULE_KEYS = new Set([
   'contentTypes',
   'taxonomies',
   'relations',
-  'app',
   'title',
   'summary',
   'category',
-  'group',
-  'groups',
-  'install',
-  'autoInstall',
-  'removable',
   'messages',
   'omits',
   'menus',
@@ -95,78 +89,16 @@ export function defineModule(spec: ModuleSpec): KetModule {
     contentTypes: spec.contentTypes ?? {},
     taxonomies: spec.taxonomies ?? {},
     relations: spec.relations ?? {},
-    app: spec.app === true,
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
     category: spec.category ?? 'Khác',
-    group: spec.group,
-    install: spec.install ?? (spec.autoInstall === true ? 'auto' : 'manual'),
-    removable: spec.removable !== false,
     messages: spec.messages ?? {},
-    groups: spec.groups ?? {},
-  })
-}
-
-export type ModuleGroupsSpec = {
-  name: string
-  version?: string
-  groups: Record<string, ModuleGroupDef>
-  messages?: ModuleSpec['messages']
-}
-
-/**
- * Declares the stable group vocabulary for an application family.
- *
- * The result is an ordinary metadata-only module: AppSpecs opt into the vocabulary
- * explicitly, and composition remains the only discovery mechanism.
- */
-export function defineModuleGroups(spec: ModuleGroupsSpec): KetModule {
-  if (!spec.groups || Object.keys(spec.groups).length === 0) {
-    throw new KetError({
-      code: 'E_MODULE_GROUPS_EMPTY',
-      module: spec.name,
-      message: `module group catalogue "${spec.name}" declares no groups`,
-      hint: 'declare at least one stable group identifier',
-    })
-  }
-  for (const [id, group] of Object.entries(spec.groups)) {
-    if (!/^[a-z][a-z0-9_]*$/.test(id)) {
-      throw new KetError({
-        code: 'E_MODULE_GROUP_NAME',
-        module: spec.name,
-        message: `invalid module group identifier ${JSON.stringify(id)}`,
-        hint: 'use lowercase letters, digits and underscore, starting with a letter',
-      })
-    }
-    if (!group || typeof group.title !== 'string' || !group.title.trim()) {
-      throw new KetError({
-        code: 'E_MODULE_GROUP_TITLE',
-        module: spec.name,
-        message: `module group "${id}" needs a non-empty fallback title`,
-      })
-    }
-    if (group.sequence !== undefined && (!Number.isInteger(group.sequence) || group.sequence < 0)) {
-      throw new KetError({
-        code: 'E_MODULE_GROUP_SEQUENCE',
-        module: spec.name,
-        message: `module group "${id}" has invalid sequence ${JSON.stringify(group.sequence)}`,
-        hint: 'use a non-negative integer',
-      })
-    }
-  }
-  return defineModule({
-    name: spec.name,
-    version: spec.version,
-    install: 'never',
-    removable: false,
-    groups: spec.groups,
-    messages: spec.messages,
   })
 }
 
 // A theme is a module with a restricted role. It may provide templates, fill
 // joints and declare tokens; it may NOT declare models, extend models, or register
-// server functions. Third-party themes are only safe to install because this
+// server functions. Third-party themes are only safe to compose because this
 // restriction is enforced here rather than left to convention.
 const THEME_FORBIDDEN = [
   'models',
@@ -180,9 +112,8 @@ const THEME_FORBIDDEN = [
 ] as const
 
 /**
- * A theme is installable like anything else — it has to be, since its templates are
- * what a page renders through. So it defaults to appearing in the app list under its
- * own category: a theme nobody can switch on is a theme nobody can use.
+ * A theme follows the same module contract, with additional restrictions because
+ * its templates render untrusted content inside the deployment.
  */
 export function defineTheme(spec: ModuleSpec): KetModule {
   // Assets and styles a theme may ship — that is most of what a theme *is*. Routes
@@ -218,5 +149,5 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       })
     }
   }
-  return defineModule({ app: true, category: 'Giao diện', ...spec, kind: 'theme' })
+  return defineModule({ category: 'Giao diện', ...spec, kind: 'theme' })
 }

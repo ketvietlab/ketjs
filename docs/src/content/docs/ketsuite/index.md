@@ -20,13 +20,13 @@ development branch disagree.
 
 | Path | Responsibility |
 | --- | --- |
-| `packages/ketsuite/src/app.ts` | Packaged application composition, bootstrap set, worker queues, sessions, and page integration. |
+| `packages/ketsuite/src/deployment.ts` | Packaged module composition, worker queues, sessions, and page integration. |
 | `packages/ketsuite/src/modules/<name>/` | Domain model, functions, relations, jobs, reports, and messages owned by one module. |
 | `packages/ketsuite/src/modules/<name>_backend/` | Trusted admin routes and screens for a domain module. |
 | `packages/ketsuite/src/modules/<a>_<b>/` | Integration logic that depends on both domains without coupling either owner to the other. |
 | `packages/ketsuite/src/ui/` | Server-rendered backend component kit and its stable TypeScript surface. |
 | `packages/ketsuite/src/themes/` | Restricted storefront themes and their assets. |
-| `apps/ketsuite/` | Repository application entry used by development and tests. |
+| `apps/ketsuite/` | Repository deployment entry used by development and tests. |
 | `test/` and `bench/` | Integration, HTTP end-to-end, dialect, contract, and benchmark coverage. |
 
 ## Runtime shape
@@ -34,7 +34,7 @@ development branch disagree.
 ```mermaid
 %% File: docs/src/content/docs/ketsuite/index.md
 flowchart LR
-  app["createKetsuiteApp()"] --> manifest["Composed KetJS manifest"]
+  app["createKetsuiteDeployment()"] --> manifest["Composed KetJS manifest"]
   domain["Domain modules"] --> app
   bridge["Bridge modules"] --> app
   backend["Backend modules"] --> app
@@ -46,7 +46,7 @@ flowchart LR
   manifest --> ui["Backend and website rendering"]
 ```
 
-`createKetsuiteApp()` accepts an `OpenStore`, so a deployment may retain the exact same module graph
+`createKetsuiteDeployment()` accepts an `OpenStore`, so a deployment may retain the exact same module graph
 while selecting a datastore. The packaged default uses SQLite at `.ket/ketsuite.db`; repository
 deployments can provide the PostgreSQL store. Vietnamese and `Asia/Ho_Chi_Minh` are the packaged
 locale and timezone defaults, not assumptions domain code should hard-code.
@@ -58,7 +58,7 @@ Use supported package exports instead of reaching into `src/`:
 | Import | Use |
 | --- | --- |
 | `@ketvietlab/ketsuite` | Published modules, constants, types, Channel API helpers, and selected extension contracts. |
-| `@ketvietlab/ketsuite/app` | `createKetsuiteApp()`, `ketsuite`, and `apps`. |
+| `@ketvietlab/ketsuite/deployment` | `createKetsuiteDeployment()`, `ketsuite`, and `deployments`. |
 | `@ketvietlab/ketsuite/ui` | Backend UI components without depending on the backend application module. |
 | `@ketvietlab/ketsuite/backend` | Backend module plus screen, route, paging, form, and component helpers. |
 

@@ -23,10 +23,8 @@ const functions = withDeliveryStatus(
 
 export default defineModule({
   name: 'stock_mail_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['stock_backend', 'mail_backend', 'mail_transport'],
-  install: 'auto',
   functions,
   fills: {
     'stock_backend:picking.collaboration': `{% island "mail.chatter" %}`,

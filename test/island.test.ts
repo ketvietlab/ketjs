@@ -92,7 +92,7 @@ test('island: placing one nobody provides fails at build time', () => {
   const bad = defineTheme({ name: 't2', templates: { p: `{% island "ghost.widget" %}` } })
   assert.throws(
     () => createTheme(compose([cart, bad]), [cart, bad]),
-    /places island "ghost.widget", which no installed module provides/,
+    /places island "ghost.widget", which no composed module provides/,
   )
 })
 
@@ -319,7 +319,7 @@ test('island: hydrating one nobody registered says which', () => {
   const container = parseFragment(`<${ISLAND_TAG} data-island="ghost" data-props="{}"></${ISLAND_TAG}>`)
   assert.throws(
     () => hydrateIslands(domHost(document), container as never, {}),
-    /island "ghost", which no installed module provides/,
+    /island "ghost", which no composed module provides/,
   )
   assert.deepEqual(
     hydrateIslands(domHost(document), container as never, {}, { strict: false }),

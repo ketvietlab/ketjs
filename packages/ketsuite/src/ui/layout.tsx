@@ -4,12 +4,11 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
-import { activeApp } from '@ketvietlab/ketjs'
+import { activeMenuRoot } from '@ketvietlab/ketjs'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { actionButton } from './primitives.tsx'
 import { icon } from './icons.ts'
 import { recordWorkspace } from './record.tsx'
 
@@ -17,18 +16,8 @@ export const HOOKS = [
   'shell',
   'main',
   'topbar',
-  'title',
   'content',
-  'app-groups',
-  'app-group',
   'group-title',
-  'app-grid',
-  'app-card',
-  'app-title',
-  'app-summary',
-  'app-meta',
-  'app-meta-value',
-  'app-actions',
   'tokens',
   'token-list',
   'token',
@@ -42,9 +31,7 @@ export const HOOKS = [
 export type Extras = {
   'topbar.end'?: JSXChild
   'sidebar.foot'?: JSXChild
-  'apps.footer'?: JSXChild
   'nav.items'?: JSXChild
-  'app-card.actions'?: Record<string, JSXChild>
 }
 
 export type Frame = {
@@ -64,8 +51,7 @@ export type Frame = {
  *
  * A framed screen already opens with `record-heading`, so putting the title in the
  * bar too printed it twice, one line apart, in a different size — the second one
- * adding nothing. A list's chrome owns the row instead, and the apps screen has no
- * heading of its own, so both of those still name themselves here.
+ * adding nothing. A list's chrome owns the row instead.
  */
 const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResult => {
   const { viewer = null, extras = {} } = frame
@@ -177,21 +163,21 @@ export const framedPage = (options: {
   title: string
   frame: Frame
   body: TemplateResult
-  /** The section above the title. Defaults to the open app's name. */
+  /** The section above the title. Defaults to the active root's name. */
   kicker?: string | null
   /** One line on what this screen is for. Worth writing; there is no sensible default. */
   subtitle?: string | null
-  /** A semantic glyph. Defaults to the open app's. */
+  /** A semantic glyph. Defaults to the active root's. */
   icon?: string | null
 }): TemplateResult => {
-  const app = activeApp(options.frame.menu ?? [])
-  const glyph = options.icon ?? app?.icon ?? 'layout-grid'
+  const activeRoot = activeMenuRoot(options.frame.menu ?? [])
+  const glyph = options.icon ?? activeRoot?.icon ?? 'layout-grid'
   return shell(
     options.translator,
     options.title,
     recordWorkspace({
       pageFrame: true,
-      kicker: options.kicker ?? (app?.label === options.title ? null : (app?.label ?? null)),
+      kicker: options.kicker ?? (activeRoot?.label === options.title ? null : (activeRoot?.label ?? null)),
       title: options.title,
       subtitle: options.subtitle ?? null,
       imageFallback: icon(glyph),
@@ -201,63 +187,6 @@ export const framedPage = (options: {
     { ...options.frame, titled: false },
   )
 }
-
-export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
-
-export const appCard = (options: {
-  /** The module this card is for. Not `key`: JSX reserves that name. */
-  app: string
-  state: string
-  title: string
-  summary: string
-  meta: CardMeta[]
-  action?: { label: string; action: string; disabled?: boolean }
-  extra?: JSXChild
-}): TemplateResult => (
-  <article data-ui="app-card" data-state={options.state} data-app={options.app}>
-    <h3 data-ui="app-title">{options.title}</h3>
-    <p data-ui="app-summary">{options.summary}</p>
-    <dl data-ui="app-meta">
-      {each(
-        options.meta,
-        (item) => `${item.kind}:${item.term}`,
-        (item) => (
-          <>
-            <dt>{item.term}</dt>
-            <dd data-ui="app-meta-value" data-kind={item.kind}>
-              {item.value}
-            </dd>
-          </>
-        ),
-      )}
-    </dl>
-    <div data-ui="app-actions">
-      {options.action ? actionButton(options.action) : ''}
-      {options.extra ?? ''}
-    </div>
-  </article>
-)
-
-export const cardGroups = <T,>(options: {
-  groups: Array<{ key: string; title: string; items: readonly T[] }>
-  id: (item: T) => unknown
-  card: (item: T) => TemplateResult
-  footer?: JSXChild
-}): TemplateResult => (
-  <div data-ui="app-groups">
-    {each(
-      options.groups,
-      (group) => group.key,
-      (group) => (
-        <section data-ui="app-group" data-category={group.key}>
-          <h2 data-ui="group-title">{group.title}</h2>
-          <div data-ui="app-grid">{each(group.items, options.id, (item) => options.card(item))}</div>
-        </section>
-      ),
-    )}
-    {options.footer ?? ''}
-  </div>
-)
 
 export const definitionList = (options: {
   title: string

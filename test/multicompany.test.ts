@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bootApp,
+  bootDeployment,
   callFn,
   compose,
-  defineApp,
+  defineDeployment,
   defineModule,
   from,
   migrateOne,
@@ -162,18 +162,17 @@ test('multi-company: crossCompany still means all of them, and still has to be d
 
 // ── over HTTP ────────────────────────────────────────────────────────────────
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'booksapp',
   modules: [books],
   headless: true,
   serve: {
-    bootstrap: ['books'],
     routes: (ctx) => ({ '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)) }),
   },
 })
 
 test('multi-company: the server reads both headers, and the active company joins the set', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   const post = (company: string, id: string) =>
     fetch(`${at}/_ket/fn/books.add`, {

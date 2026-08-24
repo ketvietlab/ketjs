@@ -26,7 +26,6 @@ export {
   thumbnail,
   person,
   initials,
-  actionButton,
   code,
   qrCode,
 } from './primitives.tsx'
@@ -57,8 +56,8 @@ export { sidebar, sidebarMain, sidebarFoot } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
-export { backendPage, shell, framedPage, appCard, cardGroups, definitionList } from './layout.tsx'
-export type { CardMeta, Extras, Frame } from './layout.tsx'
+export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
+export type { Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'
 export { activityContractCases } from './activity.ts'
@@ -80,7 +79,7 @@ export { calendarContractCases } from './calendar.ts'
  * `dataTable(_, table)`) has no PascalCase name, because JSX would hand it a props
  * object where it wants a list. `backend-ui.test.ts` checks the arity.
  */
-export { framedPage as Framed, appCard as AppCard, cardGroups as CardGroups } from './layout.tsx'
+export { framedPage as Framed } from './layout.tsx'
 export { section as Section, surface as Surface, contentCard as ContentCard } from './surfaces.tsx'
 export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
 export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'

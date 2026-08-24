@@ -1,7 +1,7 @@
-// The one thing the framework cannot do for an app: reach a driver.
+// The one thing the framework cannot do for a deployment: reach a driver.
 //
 // ketjs ships SQLite, which it owns. Postgres lives in its own package, and a
-// framework that depended on it would be a cycle — so the app imports it, and the
+// framework that depended on it would be a cycle — so the deployment imports it, and the
 // zero-dep audit is what keeps that honest rather than a comment.
 
 import type { OpenStore } from '@ketvietlab/ketjs'

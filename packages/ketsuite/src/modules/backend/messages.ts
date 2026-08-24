@@ -2,7 +2,7 @@ import type { Message } from '@ketvietlab/ketjs'
 
 /**
  * Every string the backend shows. Keys are prefixed with the module name by the
- * composer, so these become `backend.nav.apps` and so on.
+ * composer, so these become `backend.nav.sections` and so on.
  *
  * Vietnamese is the source language: it is what the team writes and reviews. The
  * English is a real translation, not a placeholder, because a second locale that
@@ -12,12 +12,12 @@ export const messages: Record<string, Record<string, Message>> = {
   vi: {
     signOut: 'Đăng xuất',
     'app.title': 'Quản trị',
-    'app.summary': 'Màn hình quản lý ứng dụng và cấu hình hệ thống.',
+    'app.summary': 'Màn hình quản trị và cấu hình hệ thống.',
     'app.category': 'Hệ thống',
 
-    'nav.apps': 'Ứng dụng',
-    'nav.search': 'Tìm ứng dụng, menu…',
-    'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
+    'nav.sections': 'Phân hệ',
+    'nav.search': 'Tìm phân hệ, menu…',
+    'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
     'nav.pages': 'Trang',
     brand: 'KetSuite',
     'context.rootBranch': 'Chi nhánh gốc',
@@ -67,23 +67,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.apply': 'Áp dụng',
 
     'menu.admin': 'Quản trị',
-    'menu.apps': 'Ứng dụng',
     'menu.content': 'Nội dung',
     'menu.pages': 'Trang',
     'menu.config': 'Cấu hình',
-
-    'apps.title': 'Ứng dụng',
-    'apps.depends': 'Phụ thuộc',
-    'apps.dependents': 'Đang được dùng bởi',
-    'apps.install': 'Cài đặt',
-    'apps.uninstall': 'Gỡ',
-    'apps.none': '—',
-    'apps.groups': 'Nhóm ứng dụng',
-    'apps.standalone': 'Ứng dụng riêng lẻ',
-    'apps.group.progress': 'Đã cài',
-    'apps.group.dependents': 'Nhóm khác đang dùng',
-    'apps.empty.message': 'Bản triển khai này chưa có ứng dụng nào.',
-    'apps.empty.hint': 'Ứng dụng phải được đưa vào lúc build trước khi cài được.',
 
     'pages.title': 'Trang',
     'pages.col.path': 'Đường dẫn',
@@ -98,12 +84,12 @@ export const messages: Record<string, Record<string, Message>> = {
   en: {
     signOut: 'Sign out',
     'app.title': 'Administration',
-    'app.summary': 'Manage apps and system configuration.',
+    'app.summary': 'Manage system administration and configuration.',
     'app.category': 'System',
 
-    'nav.apps': 'Apps',
-    'nav.search': 'Search apps and menus…',
-    'nav.noMatch': 'No app or menu matches.',
+    'nav.sections': 'Modules',
+    'nav.search': 'Search modules and menus…',
+    'nav.noMatch': 'No module or menu matches.',
     'nav.pages': 'Pages',
     brand: 'KetSuite',
     'context.rootBranch': 'Root branch',
@@ -153,23 +139,9 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.apply': 'Apply',
 
     'menu.admin': 'Administration',
-    'menu.apps': 'Apps',
     'menu.content': 'Content',
     'menu.pages': 'Pages',
     'menu.config': 'Configuration',
-
-    'apps.title': 'Apps',
-    'apps.depends': 'Requires',
-    'apps.dependents': 'Required by',
-    'apps.install': 'Install',
-    'apps.uninstall': 'Remove',
-    'apps.none': '—',
-    'apps.groups': 'App groups',
-    'apps.standalone': 'Standalone apps',
-    'apps.group.progress': 'Installed',
-    'apps.group.dependents': 'Used by other groups',
-    'apps.empty.message': 'This deployment ships no apps.',
-    'apps.empty.hint': 'An app has to be built in before it can be installed.',
 
     'pages.title': 'Pages',
     'pages.col.path': 'Path',

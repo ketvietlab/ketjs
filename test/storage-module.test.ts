@@ -3,7 +3,14 @@ import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { bootApp, bootWorker, callFn, defineApp, localStorage, namespacedStorage } from '@ketvietlab/ketjs'
+import {
+  bootDeployment,
+  bootWorker,
+  callFn,
+  defineDeployment,
+  localStorage,
+  namespacedStorage,
+} from '@ketvietlab/ketjs'
 import { company, partner, storage as storageModule } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
@@ -11,20 +18,19 @@ test('storage module: upload, safe download, deduplication and queued GC work en
   const dir = await mkdtemp(join(tmpdir(), 'ket-storage-module-'))
   const sqliteFile = join(dir, 'app.db')
   const storageDir = join(dir, 'objects')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'storageapp',
     modules: [address, partner, company, storageModule],
     worker: { queues: { maintenance: 1 } },
     serve: {
-      bootstrap: ['storage'],
       defaults: { sqliteFile, storageDir, defaultCompany: 'acme' },
     },
   })
 
-  let server: Awaited<ReturnType<typeof bootApp>> | null = null
+  let server: Awaited<ReturnType<typeof bootDeployment>> | null = null
   let worker: Awaited<ReturnType<typeof bootWorker>> | null = null
   try {
-    server = await bootApp(app, {
+    server = await bootDeployment(app, {
       port: 0,
       env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
     })
@@ -105,16 +111,15 @@ test('storage module: a stranger sees only attachments explicitly marked public'
   const dir = await mkdtemp(join(tmpdir(), 'ket-storage-public-'))
   const sqliteFile = join(dir, 'app.db')
   const storageDir = join(dir, 'objects')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'publicfiles',
     modules: [address, partner, company, storageModule],
     serve: {
-      bootstrap: ['storage'],
       sessions: { anonymous: { company: 'acme' } },
       defaults: { sqliteFile, storageDir },
     },
   })
-  const server = await bootApp(app, {
+  const server = await bootDeployment(app, {
     port: 0,
     env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_SECRET: 'test-only-secret' },
   })

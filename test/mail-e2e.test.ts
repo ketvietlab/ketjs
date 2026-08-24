@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defineApp, defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
+import { defineDeployment, defineModule, eq, from, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
-import { createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
+import { createTestDeployment, TestHttpError } from '@ketvietlab/ketjs/testing'
 import { company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 import { ensureThread, followThread, postMessage } from '../packages/ketsuite/src/modules/mail/index.ts'
@@ -10,7 +10,6 @@ import { ensureThread, followThread, postMessage } from '../packages/ketsuite/sr
 const recordBridge = defineModule({
   name: 'mail_e2e_bridge',
   depends: ['mail'],
-  app: true,
   models: {
     Record: { scope: 'company', fields: { id: 'id', name: 'text' } },
   },
@@ -102,18 +101,17 @@ const recordBridge = defineModule({
   },
 })
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'mail_headless_e2e',
   modules: [address, partner, company, storage, user, mail, recordBridge],
   headless: true,
   serve: {
-    bootstrap: ['mail_e2e_bridge'],
     sessions: { anonymous: { company: 'acme' } },
   },
 })
 
 test('mail headless E2E: authenticated post crosses HTTP and reaches the recipient inbox', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     for (const [id, name] of [
       ['p-company', 'ACME'],

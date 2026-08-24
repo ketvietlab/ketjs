@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import { defineApp, defineModule } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
+import { defineDeployment, defineModule } from '@ketvietlab/ketjs'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import channelApi from '../packages/ketsuite/src/modules/channel_api/index.ts'
 import {
   csrfTokenFor,
@@ -107,12 +107,12 @@ const probe = defineModule({
 const boot = async (t: TestContext) => {
   presented = null
   reached = []
-  const e2e = await createTestApp(
-    defineApp({
+  const e2e = await createTestDeployment(
+    defineDeployment({
       name: 'channel_probe',
       headless: true,
       modules: [probe],
-      serve: { bootstrap: ['channel_api'] },
+      serve: {},
     }),
     { worker: false },
   )

@@ -14,7 +14,7 @@ Commands look for emitted workspace files in this order:
 2. `ket.workspace.js`;
 3. `workspace.js`.
 
-Override discovery with `--workspace FILE`. Use `--app NAME` in multi-app workspaces and repeat
+Override discovery with `--workspace FILE`. Use `--deployment NAME` in multi-app workspaces and repeat
 `--module-path DIR` to add module roots. `KET_MODULE_PATH` accepts the platform path separator.
 
 Production commands execute emitted JavaScript. Compile `ket.workspace.ts`, modules, routes, jobs, and tests
@@ -25,11 +25,11 @@ before invoking them.
 | Command | Purpose |
 | --- | --- |
 | `ket check` | Resolve and compose every app; report contract violations. |
-| `ket manifest --app NAME` | Print one composed manifest. |
-| `ket workspace` | Show apps, datastores, shared modules, and app-only modules. |
+| `ket manifest --deployment NAME` | Print one composed manifest. |
+| `ket workspace` | Show deployments, datastores, shared modules, and deployment-only modules. |
 | `ket modules` | Show resolved modules and their source paths. |
-| `ket types --app NAME` | Generate `.ket/types.d.ts` from the manifest. |
-| `ket agent --app NAME` | Print the machine-readable agent capability descriptor. |
+| `ket types --deployment NAME` | Generate `.ket/types.d.ts` from the manifest. |
+| `ket agent --deployment NAME` | Print the machine-readable agent capability descriptor. |
 | `ket permissions` | List grantable functions and the data/effect reach of a grant set, module, or stored role. |
 
 Run `ket check` in CI before migrations or deployment. It catches dependency, extension, layout, route,
@@ -39,7 +39,7 @@ queue, theme, model, and function-contract conflicts without starting a server.
 # Run from: /path/to/example-app
 ket check --workspace dist/ket.workspace.js
 ket workspace --workspace dist/ket.workspace.js
-ket permissions --app backoffice --grant order.list,order.create
+ket permissions --deployment backoffice --grant order.list,order.create
 ```
 
 ## Compare manifests
@@ -48,8 +48,8 @@ Store a reviewed manifest at a release boundary and compare future composition o
 
 ```bash
 # Run from: /path/to/example-app
-ket snapshot --app backoffice --workspace dist/ket.workspace.js
-ket diff --app backoffice \
+ket snapshot --deployment backoffice --workspace dist/ket.workspace.js
+ket diff --deployment backoffice \
   --workspace dist/ket.workspace.js \
   --against .ket/manifest.backoffice.json
 ```
@@ -61,28 +61,27 @@ state belongs to a datastore, not to a JSON snapshot.
 
 ```bash
 # Run from: /path/to/ketjs
-ket migrate --app backoffice --workspace dist/ket.workspace.js
-ket migrate --app backoffice --allow-destructive
-ket migrate --app erp --all --dry-run
+ket migrate --deployment backoffice --workspace dist/ket.workspace.js
+ket migrate --deployment backoffice --allow-destructive
+ket migrate --deployment erp --all --dry-run
 ```
 
 For one datastore, the command plans against `.ket/schema.<app>.json`, prints SQL, and updates that local
 snapshot; it does not prove that an external database was migrated. For tenant databases, `--all` uses the
-app's tenant catalogue and applies each plan unless `--dry-run` is set. Destructive changes always require
+deployment's tenant catalogue and applies each plan unless `--dry-run` is set. Destructive changes always require
 `--allow-destructive`. See [Migrations and adapters](/ketjs/migrations/).
 
 ## Runtime commands
 
 ```bash
 # Run from: /path/to/example-app
-ket serve --app backoffice --workspace dist/ket.workspace.js
-ket worker --app backoffice --workspace dist/ket.workspace.js
-ket dev --all --app backoffice --workspace dist/ket.workspace.js
+ket serve --deployment backoffice --workspace dist/ket.workspace.js
+ket worker --deployment backoffice --workspace dist/ket.workspace.js
+ket dev --all --deployment backoffice --workspace dist/ket.workspace.js
 ```
 
 `serve` owns HTTP traffic. `worker` consumes durable queues. `dev` watches emitted artifacts and restarts the
-selected roles; it does not turn the production process into a TypeScript loader. Use `--no-auto-install`
-when new auto-install modules should remain disabled during development.
+selected roles; it does not turn the production process into a TypeScript loader.
 
 Operational commands include:
 
@@ -97,7 +96,7 @@ ket jobs cancel JOB_ID
 ket jobs prune
 ```
 
-`ket provision` reads input from standard input so secrets need not appear in shell history. Tenant apps
+`ket provision` reads input from standard input so secrets need not appear in shell history. Tenant deployments
 require `--tenant KEY` for provisioning and job operations.
 
 ## Scaffold
@@ -110,7 +109,7 @@ npm install
 npm run dev
 ```
 
-The generated application includes a workspace, module, model, function, TypeScript build, and development
+The generated project includes a workspace, deployment, module, model, function, TypeScript build, and development
 watcher. Read [Quick start](/ketjs/quick-start/) for the file-by-file walkthrough.
 
 ## Runtime environment
@@ -123,11 +122,9 @@ watcher. Read [Quick start](/ketjs/quick-start/) for the file-by-file walkthroug
 | --- | --- | --- |
 | `HOST` | `127.0.0.1` | HTTP bind address. |
 | `PORT` | `3000` | HTTP port. `0` selects an ephemeral port. |
-| `DATABASE_URL` | unset | Non-SQLite connection value interpreted by the app's `openStore`. |
-| `KET_SQLITE` | `.ket/app.db` | SQLite file when no external datastore is configured. |
+| `DATABASE_URL` | unset | Non-SQLite connection value interpreted by the deployment's `openStore`. |
+| `KET_SQLITE` | `.ket/deployment.db` | SQLite file when no external datastore is configured. |
 | `KET_MIGRATE` | enabled | Set to `0` to disable migration on boot. |
-| `KET_APPS` | app bootstrap set | Comma-separated modules installed into an empty database. |
-| `KET_AUTO_INSTALL` | enabled | Set to `0` to hold back modules declaring `install: 'auto'`. |
 
 KetJS ships `sqliteStore`. An app using `DATABASE_URL` must provide `serve.openStore`, typically with
 `postgresAdapter()` from `@ketvietlab/ketjs-postgres`.

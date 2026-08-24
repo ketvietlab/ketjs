@@ -6,19 +6,19 @@ import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
 import { registerFunctions } from './fn.ts'
 import { registerJobs } from './jobs.ts'
-import type { AppSpec } from '../kernel/workspace.ts'
+import type { DeploymentSpec } from '../kernel/workspace.ts'
 import type { KetModule, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
 export type BootedRuntime = {
-  spec: AppSpec
+  spec: DeploymentSpec
   config: RuntimeConfig
   modules: KetModule[]
   manifest: Manifest
 }
 
 export async function bootRuntime(
-  spec: AppSpec,
+  spec: DeploymentSpec,
   options: { env?: Record<string, string | undefined>; port?: number } = {},
 ): Promise<BootedRuntime> {
   const config = readConfig(options.env ?? process.env, {
@@ -29,7 +29,7 @@ export async function bootRuntime(
   if (options.port !== undefined) config.port = options.port
   const modules = [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]
   const manifest = compose(modules, {
-    appRequires: spec.requires ?? [],
+    requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
   })
   registerFunctions(modules)

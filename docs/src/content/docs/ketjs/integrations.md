@@ -77,7 +77,7 @@ Override `serve.openStorage` to supply another implementation.
 
 ## Tenant namespaces
 
-`bootApp()` wraps the base storage with `namespacedStorage()`. A route obtains the storage for its
+`bootDeployment()` wraps the base storage with `namespacedStorage()`. A route obtains the storage for its
 resolved tenant:
 
 ```ts
@@ -143,7 +143,7 @@ The application injects a provider at deployment time:
 
 ```ts
 // File: src/app.ts
-const app = defineApp({
+const app = defineDeployment({
   name: 'erp',
   modules: [mail],
   headless: true,

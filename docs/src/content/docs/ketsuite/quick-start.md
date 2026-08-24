@@ -26,7 +26,7 @@ Start the composed repository application with file watching:
 npm run dev
 ```
 
-The workspace entry is `ket.workspace.ts`; it exports the KetSuite app used by the CLI. Development
+The workspace entry is `ket.workspace.ts`; it exports the KetSuite deployment used by the CLI. Development
 serves on `127.0.0.1:3000` unless `HOST` or `PORT` overrides it. The packaged SQLite default is
 `.ket/ketsuite.db`.
 
@@ -39,17 +39,17 @@ npm run test:one -- test/partner-e2e.test.ts
 
 See [Testing KetSuite](/ketsuite/testing/) before running the full verification suite.
 
-## Inspect the packaged application
+## Inspect the packaged deployment
 
-The public app entry exposes the same composition used by the KetSuite CLI:
+The public deployment entry exposes the same composition used by the KetSuite CLI:
 
 ```ts
 // File: ket.workspace.ts
-import { createKetsuiteApp, ketsuite } from '@ketvietlab/ketsuite/app'
+import { createKetsuiteDeployment, ketsuite } from '@ketvietlab/ketsuite/deployment'
 ```
 
-Use `ketsuite` when the packaged SQLite policy is correct. Use `createKetsuiteApp(openStore)` when a
-deployment supplies another KetJS datastore while retaining KetSuite's module graph, bootstrap policy,
+Use `ketsuite` when the packaged SQLite policy is correct. Use `createKetsuiteDeployment(openStore)` when a
+deployment supplies another KetJS datastore while retaining KetSuite's module graph,
 sessions, queues, and pages.
 
 ## Create an extension workspace
@@ -64,8 +64,8 @@ npm install
 npm run dev
 ```
 
-The generated workspace re-exports `@ketvietlab/ketsuite/app`; it deliberately does not copy the module
-list. Add private modules by creating your own app composition instead of editing generated package code.
+The generated workspace re-exports `@ketvietlab/ketsuite/deployment`; it deliberately does not copy the module
+list. Add private modules by creating your own deployment composition instead of editing generated package code.
 
 For local-only inspection, open `http://127.0.0.1:3000/admin/login` and sign in with `admin` / `admin`.
 
@@ -112,4 +112,4 @@ development capability, not a fallback when production provisioning fails.
 | `npm run bench:<area>` | Run a named business benchmark after correctness tests pass. |
 
 Read [Application architecture](/ketsuite/architecture/) next; then use
-[Module development](/ketsuite/module-development/) before adding code to the app composition.
+[Module development](/ketsuite/module-development/) before adding code to the deployment composition.

@@ -130,7 +130,7 @@ export const routes: Record<string, RouteEntry> = {
           body: ctx.document({
             lang: locale,
             title: _('user.login.title'),
-            // Every installed module's stylesheets, exactly as the backend screens
+            // Every composed module's stylesheets, exactly as the backend screens
             // get them. Passing nothing here shipped a sign-in page with no CSS at
             // all: the markup was right and the page looked broken.
             head: styles,

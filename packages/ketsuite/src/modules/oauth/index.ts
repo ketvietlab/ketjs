@@ -7,10 +7,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'oauth',
-  group: 'system',
   version: '0.1.0',
   depends: ['user', 'company'],
-  app: true,
   title: 'Đăng nhập OAuth',
   summary: 'Nhà cung cấp OIDC và liên kết danh tính ngoài cho KetSuite.',
   category: 'Hệ thống',

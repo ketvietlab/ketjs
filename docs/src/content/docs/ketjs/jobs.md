@@ -103,15 +103,15 @@ was committed externally before acknowledgement.
 
 ## Configure the worker
 
-Every shipped queue must be configured on the app:
+Every shipped queue must be configured on the deployment:
 
 ```ts
-// File: src/app.ts
-const app = defineApp({
+// File: src/deployment.ts
+const deployment = defineDeployment({
   name: 'erp',
   modules: [sales],
   headless: true,
-  serve: { bootstrap: ['sales'] },
+  serve: {},
   worker: {
     queues: {
       mail: 4,
@@ -130,15 +130,15 @@ Run separate production roles:
 
 ```bash
 # Run from: /path/to/example-app
-ket serve --app erp --workspace dist/ket.workspace.js
-ket worker --app erp --workspace dist/ket.workspace.js
+ket serve --deployment erp --workspace dist/ket.workspace.js
+ket worker --deployment erp --workspace dist/ket.workspace.js
 ```
 
 In development:
 
 ```bash
 # Run from: /path/to/ketjs
-ket dev --all --app erp --workspace dist/ket.workspace.js
+ket dev --all --deployment erp --workspace dist/ket.workspace.js
 ```
 
 ## Delivery model
@@ -209,7 +209,7 @@ retention policy for terminal rows.
 
 ## Testing jobs
 
-`createTestApp()` opens a worker handle for apps with worker configuration but does not leave a polling
+`createTestDeployment()` opens a worker handle for deployments with worker configuration but does not leave a polling
 loop running. Drain explicitly where the scenario expects asynchronous work to settle:
 
 ```ts

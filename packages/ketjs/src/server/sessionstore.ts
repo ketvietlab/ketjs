@@ -156,7 +156,7 @@ CREATE INDEX IF NOT EXISTS ket_session_expiry ON ket_session (expires_at);
 `
 
 /**
- * One row per session, in whatever database the app already has.
+ * One row per session, in whatever database the deployment already has.
  *
  * This is the store that makes several pods work at all, and it needs no extra
  * infrastructure to do it — which is the point. Reach for Redis when the read

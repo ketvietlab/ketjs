@@ -554,13 +554,6 @@ export function createContext(o: {
         const meta = manifest.jobs[name]
         if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
         need('enqueue', name)
-        if (manifest.disabledModules?.includes(meta.by)) {
-          throw new KetError({
-            code: 'E_APP_NOT_INSTALLED',
-            module: meta.by,
-            message: `job "${name}" belongs to a module that is not installed`,
-          })
-        }
         validateJobInput(name, manifest, args)
         const queue =
           o.queueNotify === undefined

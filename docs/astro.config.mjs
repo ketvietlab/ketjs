@@ -60,10 +60,9 @@ export default defineConfig({
               label: 'Compose an application',
               collapsed: false,
               items: [
-                { label: 'Workspaces and apps', slug: 'ketjs/workspaces' },
+                { label: 'Workspaces and deployments', slug: 'ketjs/workspaces' },
                 { label: 'Modules and manifest', slug: 'ketjs/modules' },
                 { label: 'Module discovery', slug: 'ketjs/module-discovery' },
-                { label: 'Application lifecycle', slug: 'ketjs/app-lifecycle' },
               ],
             },
             {

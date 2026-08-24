@@ -6,13 +6,11 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
-  group: 'accounting',
   // 0.5.0: currency-scaled amounts, several taxes per line, reverseMove, `group`
   // removed from TAX_AMOUNT_TYPES, refusals that carry a translatable code, and
   // invoice accounts resolved from category, partner and company defaults.
   version: '0.5.0',
   depends: ['company', 'partner', 'product', 'uom'],
-  app: true,
   title: 'Kế toán',
   summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
   category: 'Tài chính',

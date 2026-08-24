@@ -10,21 +10,17 @@ import { menus } from './menus.ts'
  * not this deployment ships an admin UI, and requiring one would mean a headless
  * API could not have products. But a screen in the admin genuinely needs both.
  *
- * So it is a bridge, and it installs itself once both sides are there — what
- * `install: 'auto'` was built for, and what the domain contract does with sales/inventory bridge and its
- * kin. Install only product and there is no screen and no link; install the admin
- * too and both appear without anyone asking.
+ * So it is a bridge selected by deployments that need both sides. A headless
+ * deployment selects `product` without this module; an admin deployment selects
+ * both and receives the screens.
  *
  * It owns the page as well as the link. A bridge that contributed only a button
  * would be a bridge that ships a link to a 404.
  */
 export default defineModule({
   name: 'product_backend',
-  group: 'commerce',
   version: '0.1.0',
   depends: ['product_media', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Sản phẩm trong quản trị',
   summary: 'Màn hình danh mục sản phẩm và lối vào từ thanh điều hướng.',
   category: 'Hệ thống',
@@ -317,8 +313,6 @@ export default defineModule({
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
     'product_backend:media.upload': `{% island "product.media-upload" %}`,
-    // KTL, addressing joints by name — the same language a storefront theme uses.
-    'backend:app-card.actions': `{% if app.name == 'product' %}<a data-ui="app-action" href="/admin/product/templates">{{ 'product_backend.openCatalogue' | _ }}</a>{% endif %}`,
   },
 })
 

@@ -30,7 +30,7 @@ export const paper = defineTheme({
 })
 ```
 
-Themes are installable modules and appear in the application list. `defineTheme()` rejects models,
+Themes are selected in `DeploymentSpec` like other modules. `defineTheme()` rejects models,
 model extensions, functions, jobs, routes, and islands. A theme may place an island provided by a
 normal module but never define one.
 
@@ -235,7 +235,7 @@ joints: {
 The reader matters. A fill sees the fields declared by the view's owner, plus the fields its own
 module declared in a view over the same model. A module that adds a field with `extend` and then
 publishes a view over it has declared that field theme-visible and may read it back through the
-owner's joint; a field no installed module declared anywhere never crosses.
+owner's joint; a field no composed module declared anywhere never crosses.
 
 `makeDrop()` and `makeDrops()` build the same projection by hand, for scopes an application composes
 itself. `sealScope()` refuses functions anywhere inside a scope value, at any depth, and names the
@@ -246,7 +246,7 @@ if a readable property resolves to a function.
 
 Declared `tokens` become CSS without a theme doing anything: the framework serves them at
 `/_ket/tokens.css` and links that stylesheet into every document a theme renders. The tokens served
-are those of the modules that actually render the page — installed modules plus the selected theme —
+are those of the modules that actually render the page — composed modules plus the selected theme —
 so a deployment shipping several themes gets the palette of the one the site chose rather than the
 one that composed last.
 

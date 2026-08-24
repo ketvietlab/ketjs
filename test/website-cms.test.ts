@@ -20,7 +20,7 @@ import {
   websiteMenu,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const SCOPE = { company: 'acme', branches: null }
 const altTheme = defineTheme({

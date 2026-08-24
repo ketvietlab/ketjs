@@ -47,7 +47,7 @@ const PENDING: Record<string, string> = {
  * Twenty-three modules used to assemble the admin frame themselves — viewer, menu,
  * joints, and the document-or-fragment choice. Three of them answered with a plain
  * `page()`, which the browser cannot use as a navigation fragment, so every click
- * into those apps reloaded the whole document; fourteen never passed
+ * into those sections reloaded the whole document; fourteen never passed
  * `backend:sidebar.foot`, so the unread-mail and pending-activity counters vanished
  * as soon as you navigated into them. Neither failure is visible in a diff — both
  * are visible the moment a module writes its own frame.
@@ -59,10 +59,8 @@ const SHELL = 'packages/ketsuite/src/modules/backend/screen.ts'
  *
  * Only these three are the shell's: they belong on every screen, so a module that
  * fetches one has taken over deciding whether every screen gets it — which is how
- * fourteen of them quietly stopped. A screen-specific joint (`apps.footer`,
- * `app-card.actions`) is passed through `extras` instead and stays where it is
- * needed. *Filling* any joint is what a module is supposed to do, so only the
- * `ctx.joint(...)` call counts, never the `fills` key.
+ * fourteen of them quietly stopped. *Filling* any joint is what a module is
+ * supposed to do, so only the `ctx.joint(...)` call counts, never the `fills` key.
  */
 const SHELL_INTERNALS: Array<[RegExp, string]> = [
   [/joint\([^)]*'backend:(?:nav\.items|topbar\.end|sidebar\.foot)'/, 'renders a shell joint itself'],
@@ -105,7 +103,7 @@ const DATA_UI = /data-ui\s*=/
  * export in `ui/index.ts` — there is nothing left to alias.
  */
 const SCREEN_COMPONENT_CALL =
-  /\b(framedPage|recordWorkspace|recordForm|recordActions|recordToggle|section|surface|contentCard|cardGrid|formCluster|notice|modalSheet|datePicker|scheduleBoard|kanbanGrid|kanbanCard|recordList|tabs|breadcrumbs|metric|mediaPanel|attachmentPanel|definitionList|appCard|cardGroups)\s*\(/g
+  /\b(framedPage|recordWorkspace|recordForm|recordActions|recordToggle|section|surface|contentCard|cardGrid|formCluster|notice|modalSheet|datePicker|scheduleBoard|kanbanGrid|kanbanCard|recordList|tabs|breadcrumbs|metric|mediaPanel|attachmentPanel|definitionList)\s*\(/g
 
 const skipQuoted = (source: string, start: number, quote: string): number => {
   for (let i = start + 1; i < source.length; i++) {

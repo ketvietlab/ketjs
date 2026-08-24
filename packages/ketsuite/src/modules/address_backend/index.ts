@@ -3,11 +3,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'address_backend',
-  group: 'system',
   version: '0.1.0',
   depends: ['address', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Dữ liệu địa chỉ',
   summary: 'Cài đặt và kiểm tra catalog địa giới theo quốc gia.',
   category: 'Danh bạ',

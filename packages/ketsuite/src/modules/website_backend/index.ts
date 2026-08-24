@@ -4,10 +4,7 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'website_backend',
-  group: 'system',
   version: '0.1.0',
-  app: true,
-  install: 'auto',
   depends: ['backend', 'website', 'website_form', 'website_menu', 'website_seo'],
   title: 'Website trong quản trị',
   summary: 'Quản trị đa website, nội dung, revision, taxonomy, media, menu và biểu mẫu.',
