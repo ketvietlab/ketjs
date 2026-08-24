@@ -1,5 +1,28 @@
-import type { Manifest } from '@ketvietlab/ketjs'
-import type { ChannelProfile } from './core.ts'
+import { type Manifest, SESSION_COOKIE } from '@ketvietlab/ketjs'
+import { type ChannelAuth, type ChannelProfile, demands, resolves } from './core.ts'
+
+/**
+ * Each profile presents its credential differently, and a document naming the
+ * wrong one produces a generated client that cannot authenticate at all. A
+ * customer arrives with a bearer token or the storefront cookie; a staff caller
+ * only ever arrives with the verified session cookie, which is why there is no
+ * bearer scheme on that side to offer.
+ */
+const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
+  customer: {
+    bearer: { type: 'http', scheme: 'bearer' },
+    customerCookie: { type: 'apiKey', in: 'cookie', name: 'ket_customer_session' },
+  },
+  staff: { staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE } },
+  pos: {},
+  integration: {},
+}
+
+const securityFor = (profile: ChannelProfile, auth: ChannelAuth): unknown[] => {
+  if (!resolves(auth)) return []
+  const offered = Object.keys(SCHEMES[profile]).map((name) => ({ [name]: [] }))
+  return demands(auth) ? offered : [{}, ...offered]
+}
 
 const operationPath = (path: string, profile: ChannelProfile): string =>
   path.slice(`/api/${profile}/v1`.length) || '/'
@@ -21,12 +44,7 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
       [contract.method.toLowerCase()]: {
         operationId: contract.operationId,
         ...(contract.summary ? { summary: contract.summary } : {}),
-        security:
-          contract.auth === 'customer'
-            ? [{ bearer: [] }, { customerCookie: [] }]
-            : contract.auth === 'optional-customer'
-              ? [{}, { bearer: [] }, { customerCookie: [] }]
-              : [],
+        security: securityFor(profile, (contract.auth ?? 'public') as ChannelAuth),
         ...(parameters.length ? { parameters } : {}),
         ...(contract.request?.body
           ? {
@@ -56,11 +74,6 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
     info: { title: `KetSuite ${profile} API`, version: '1.0.0' },
     servers: [{ url: `/api/${profile}/v1` }],
     paths,
-    components: {
-      securitySchemes: {
-        bearer: { type: 'http', scheme: 'bearer' },
-        customerCookie: { type: 'apiKey', in: 'cookie', name: 'ket_customer_session' },
-      },
-    },
+    components: { securitySchemes: SCHEMES[profile] },
   }
 }

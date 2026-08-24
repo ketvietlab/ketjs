@@ -112,18 +112,28 @@ const offsetOf = (cursor: string | null): number => {
 }
 const cursorOf = (offset: number): string => Buffer.from(JSON.stringify({ offset })).toString('base64url')
 
-const vendorOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
-  const id = String(row.partnerId)
-  const partner = (await ctx.call('partner.getPartner', { id }, url, req)) as Row | null
-  return { id, name: String(partner?.name ?? id) }
+// One page points at a handful of vendors, and asking for each name on its own
+// turns fifty rows into two hundred queries: getPartner also loads the addresses
+// and roles this projection never reads. listPartners takes the ids together.
+// Archived partners stay in, or a document whose vendor was later retired would
+// lose its label.
+const namesOf = async (ctx: ServeContext, rows: Row[], url: URL, req: Req) => {
+  const ids = [...new Set(rows.map((row) => String(row.partnerId)))]
+  if (!ids.length) return new Map<string, string>()
+  const partners = (await ctx.call('partner.listPartners', { ids, includeArchived: true }, url, req)) as Row[]
+  return new Map(partners.map((partner) => [String(partner.id), String(partner.name)]))
 }
-const projectSummary = async (ctx: ServeContext, row: Row, url: URL, req: Req) => ({
+const vendorOf = (row: Row, names: Map<string, string>) => {
+  const id = String(row.partnerId)
+  return { id, name: names.get(id) ?? id }
+}
+const projectSummary = (row: Row, names: Map<string, string>) => ({
   id: String(row.id),
   reference: String(row.name),
   state: String(row.state),
   orderedAt: String(row.dateOrder),
   expectedAt: String(row.datePlanned),
-  vendor: await vendorOf(ctx, row, url, req),
+  vendor: vendorOf(row, names),
   billingState: String(row.invoiceStatus),
   total: { currency: String(row.currency), amount: String(row.amountTotal) },
 })
@@ -171,9 +181,11 @@ export const orderRoutes = routesOf(
         req,
       )) as Row[]
       const hasMore = rows.length > limit
+      const pageRows = rows.slice(0, limit)
+      const names = await namesOf(ctx, pageRows, url, req)
       return {
         data: {
-          items: await Promise.all(rows.slice(0, limit).map((row) => projectSummary(ctx, row, url, req))),
+          items: pageRows.map((row) => projectSummary(row, names)),
           nextCursor: hasMore ? cursorOf(offset + limit) : null,
         },
       }
@@ -204,7 +216,7 @@ export const orderRoutes = routesOf(
       const bills = Array.isArray(row.bills) ? row.bills : []
       return {
         data: {
-          ...(await projectSummary(ctx, row, url, req)),
+          ...projectSummary(row, await namesOf(ctx, [row], url, req)),
           vendorReference: row.partnerRef == null ? null : String(row.partnerRef),
           notes: row.notes == null ? null : String(row.notes),
           lines: lines.map((item) => ({

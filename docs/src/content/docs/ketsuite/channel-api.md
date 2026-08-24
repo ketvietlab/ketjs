@@ -148,9 +148,12 @@ Every response uses one envelope:
 }
 ```
 
-Errors carry a stable code and localized message metadata. A body that does not match its declared schema is
-answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published schema
-is the check, so the generated document cannot claim more than the server enforces.
+Errors carry a stable code and localized message metadata. A request that does not match its declared schema
+is answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published
+schema is the check, so the generated document cannot claim more than the server enforces. That covers query
+parameters as well as bodies: a declared `enum` or `maximum` is refused rather than silently clamped. Because
+a query string carries no types, values are coerced to the declared type before the check, and an empty value
+(`?state=`) reads as absent rather than invalid. Parameters the contract does not declare are left alone.
 
 Mutating operations that advertise idempotency require `Idempotency-Key`. Reusing a key with a different
 request body returns `409 channel_api.idempotencyConflict` instead of replaying the wrong result, and reusing
@@ -192,19 +195,24 @@ and a storefront that rounds a total in transit is worse than one that never sho
 
 ## OpenAPI and Starlight
 
-KetSuite's `openApiDocument()` maps the Customer profile, Bearer/cookie security schemes, capabilities, and
-idempotency metadata to OpenAPI 3.1. The checked-in artifact is regenerated from the composed server contract
-before Starlight development and production builds:
+KetSuite's `openApiDocument()` maps one channel profile per document — capabilities, idempotency metadata,
+and the security schemes that profile actually accepts — to OpenAPI 3.1. Customer routes offer Bearer or the
+storefront cookie; staff routes offer only the verified session cookie, and describing that per profile is what
+keeps a generated client from being built without a credential to send. Both checked-in artifacts are
+regenerated from the composed server contract before Starlight development and production builds:
 
 ```sh
 # Run from: /path/to/ketjs
 npm run generate:api --prefix docs
 ```
 
-The [Customer API reference](/ketsuite/channel-api-reference/) renders that artifact directly and offers the raw
-document for SDK generation and external tooling.
+The [Customer API reference](/ketsuite/channel-api-reference/) renders the customer artifact directly and offers
+the raw document for SDK generation and external tooling. The staff document is published alongside it at
+`/api/staff-v1.openapi.json` for native staff clients to generate from.
 
 Because that regeneration was a side effect of building the docs site, a route could be added without one
 and the document would quietly fall behind — which it had, by three routes, before anyone looked. `npm run
-check:api` compares the checked-in document against the composed server and is part of `npm run verify`,
-so adding a route without regenerating now fails on the way in rather than on somebody's next SDK build.
+check:api` compares every checked-in document against the composed server and is part of `npm run verify`,
+so adding a route without regenerating now fails on the way in rather than on somebody's next SDK build. A
+profile shipping routes with no published document is the same failure wearing a different hat, which is why
+the staff document is generated and checked on the same footing as the customer one rather than on demand.

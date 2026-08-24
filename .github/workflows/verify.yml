@@ -77,7 +77,7 @@ jobs:
       - name: staff routes answer within their session's permissions
         run: npm run audit:staff-channel
 
-      - name: the published Channel API document matches the server
+      - name: the published Channel API documents match the server
         run: npm run check:api
 
       - name: types check

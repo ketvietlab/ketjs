@@ -177,3 +177,58 @@ test('staff sales channel returns a narrow read-only order detail', async (t) =>
 
   assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
 })
+
+test('staff sales channel names every customer on a page in one lookup', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  // A customer retired after the order was placed still has to render its label:
+  // batching the names must not quietly inherit the "active only" default that
+  // partner.listPartners applies to a browse screen.
+  await e2e.fixture.call<Row>(
+    'partner.archivePartner',
+    { id: 'customer-b', active: false },
+    { scope: { company: 'acme', branches: null } },
+  )
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const page = (
+    await e2e.client.json<Envelope<{ items: Row[]; nextCursor: string | null }>>(
+      '/api/staff/v1/sales/orders?limit=50',
+    )
+  ).data
+  assert.deepEqual(
+    page.items.map((item) => (item.customer as Row).name),
+    ['Bình Minh', 'An Nhiên'],
+  )
+})
+
+test('staff sales channel refuses query values its published contract forbids', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const refused = async (query: string) => {
+    const response = await e2e.client.get(`/api/staff/v1/sales/orders?${query}`)
+    const body = (await response.json()) as Envelope<null>
+    return { status: response.status, code: body.error?.code }
+  }
+  const accepted = async (query: string) =>
+    (await e2e.client.get(`/api/staff/v1/sales/orders?${query}`)).status
+
+  // The enum reaches native clients through the OpenAPI document, so the server
+  // is the thing that has to mean it.
+  assert.deepEqual(await refused('state=nonsense'), {
+    status: 422,
+    code: 'channel_api.invalidRequest',
+  })
+  // A published bound is a bound, not a suggestion the handler silently clamps.
+  assert.deepEqual(await refused('limit=999'), { status: 422, code: 'channel_api.invalidRequest' })
+  assert.deepEqual(await refused('limit=many'), { status: 422, code: 'channel_api.invalidRequest' })
+
+  // An empty value is how a client spells "no filter", and the handlers already
+  // read it that way, so it stays a 200.
+  assert.equal(await accepted('state='), 200)
+  assert.equal(await accepted('state=sale&limit=50'), 200)
+  // Undeclared parameters stay tolerated: the contract does not close the set.
+  assert.equal(await accepted('_cacheBust=1'), 200)
+})
