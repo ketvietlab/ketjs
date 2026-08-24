@@ -12,6 +12,7 @@ quotation when it is won.
 ## Modules
 
 - `crm`: cases, lead conversion, stages, teams, assignment, scoring, tags, activities and timeline.
+- `crm_staff_channel`: audience-scoped, read-only pipeline list and detail routes for the Staff Channel API.
 - `crm_sale`: quotations written from an opportunity, and the products they may be written for.
 - `crm_backend`: pipeline board, record workspace, planner, leaderboard and configuration. Auto-installs
   once `backend` is present.
@@ -72,6 +73,13 @@ a record or counting duplicates:
 
 The list, group and duplicate queries push those three clauses into SQL, so a case that appears in a
 list is a case the detail screen will open. Commands re-check the same audience before they write.
+
+The Staff Channel API keeps that same audience boundary. `GET /api/staff/v1/crm/leads` provides bounded
+search, kind and outcome filters with an opaque cursor; `GET /api/staff/v1/crm/leads/{id}` provides a narrow
+read-only detail and the next pending activity. Neither projection carries raw email or phone fields, internal
+timeline/messages, attachments, option lists, or a claimed write action. The detail does carry CRM's real
+integer version so a later command contract can use the domain's existing optimistic concurrency rather than
+inventing a second aggregate version.
 
 ## Assignment
 
