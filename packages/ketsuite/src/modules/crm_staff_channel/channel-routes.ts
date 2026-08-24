@@ -7,6 +7,14 @@ import { CASE_KINDS, TERMINAL_STATES } from '../crm/types.ts'
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
 
+/**
+ * The channel says `pending` where the domain says `open`; the rest of the
+ * vocabulary is the domain's. Spelling the list out by hand meant a terminal
+ * state added upstream would report itself as `pending` — wrong, and quiet.
+ * Derived, a new state travels into the published enum and out of the projection
+ * together.
+ */
+const OUTCOMES = TERMINAL_STATES.map((state) => (state === 'open' ? 'pending' : state))
 const string = { type: 'string' }
 const nullableString = { type: ['string', 'null'] }
 const party = {
@@ -38,7 +46,7 @@ const summary = {
     assignee: nullableParty,
     expectedRevenue: string,
     probability: string,
-    outcome: { type: 'string', enum: ['pending', 'won', 'lost'] },
+    outcome: { type: 'string', enum: [...OUTCOMES] },
     version: { type: 'integer', minimum: 1 },
   },
   required: [
@@ -112,9 +120,8 @@ const cursorOf = (cursor: unknown): string | null => {
 }
 
 const outcomeOf = (row: Row): string => {
-  if (row.terminalState === 'won') return 'won'
-  if (row.terminalState === 'lost') return 'lost'
-  return 'pending'
+  const state = String(row.terminalState)
+  return state === 'open' ? 'pending' : state
 }
 const projectSummary = (row: Row) => ({
   id: String(row.id),
@@ -178,11 +185,10 @@ export const channelRoutes = routesOf(
     request: {
       query: {
         type: 'object',
-        additionalProperties: false,
         properties: {
           query: { type: 'string', minLength: 2 },
           type: { type: 'string', enum: [...CASE_KINDS] },
-          outcome: { type: 'string', enum: ['pending', 'won', 'lost'] },
+          outcome: { type: 'string', enum: [...OUTCOMES] },
           cursor: string,
           limit: { type: 'integer', minimum: 1, maximum: 50 },
         },
