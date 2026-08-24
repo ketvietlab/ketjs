@@ -117,19 +117,21 @@ customer one. The customer profile hands the CSRF token over at sign-in; staff s
 framework, which knows nothing about this channel, so `staff/bootstrap` is where it is handed over. A
 client that has not bootstrapped cannot mutate.
 
-`sale_staff_channel` contributes read-only customer and order slices. Customer lookup admits only active
+`sale_staff_channel` contributes read-only customer, product, and order slices. Customer lookup admits only active
 partners holding the `customer` role and projects no raw contact or street-address fields. Order list and
 detail call Sale's bounded, company-scoped functions and return server totals plus line data, delivery-move
-progress, and invoice counts without claiming a writable aggregate version. Order mutations and product lookup remain outside this
-module until their mobile ownership, concurrency, availability, and product-kind contracts can be represented
-by the public domain without guessing.
+progress, and invoice counts without claiming a writable aggregate version. Product lookup admits only active
+variants on active `saleOk` templates with a live default UOM. It derives `stockable` versus `consumable` from
+Stock's `isStorable` extension and withholds price, tax, barcode, and inventory data. Order mutations remain
+outside this module until their mobile concurrency contract can be represented without guessing.
 
-`purchase_staff_channel` contributes read-only vendor, order, and vendor-bill slices. Vendor lookup has the
+`purchase_staff_channel` contributes read-only vendor, product, order, and vendor-bill slices. Vendor lookup has the
 same role and privacy boundary as customer lookup. Purchase orders expose server totals and receipt/billing
 progress without writable actions or synthetic versions. Vendor bills expose document state and totals but
 withhold ledger posting lines; posting, matching, payment, and e-invoice maintenance remain back-office work.
-Purchase mutations and product lookup remain outside this module until their mobile ownership, concurrency,
-workflow, and product-kind contracts can be represented by the public domain without guessing.
+Product lookup applies the same active variant, live UOM, and product-kind rules to `purchaseOk` templates and
+withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
+mobile concurrency and workflow contracts can be represented without guessing.
 
 ## Contract behavior
 

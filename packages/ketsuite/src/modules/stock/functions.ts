@@ -1,4 +1,4 @@
-import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import { defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
@@ -198,6 +198,25 @@ export const functions: Record<string, FnSpec> = {
             tracking: String(template.tracking ?? 'none'),
           }
         : null
+    },
+  }),
+  /** Batch companion to getProductConfig for bounded catalogue projections. */
+  listProductConfigs: defineFn({
+    input: { templateIds: 'json' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = [...new Set(Array.isArray(args.templateIds) ? args.templateIds.map(String) : [])]
+      if (!ids.length) return []
+      // Reading every template in the tenant to answer for twenty of them is the
+      // shape a batch companion exists to avoid; getProductConfig above filters
+      // in the query and so does this.
+      const T = ctx.table('product.Template')
+      return (await ctx.db.all(from(T).where(inArray(T.id, ids)))).map((template) => ({
+        templateId: String(template.id),
+        isStorable: Boolean(template.isStorable),
+        tracking: String(template.tracking ?? 'none'),
+      }))
     },
   }),
   configureProduct: defineFn({
