@@ -63,3 +63,5 @@ export {
   TRACKING,
 } from './functions.ts'
 export { RULE_ACTIONS, PROCUREMENT_METHODS } from './routing.ts'
+/** Stable extension boundary for private modules that compose stock commands. */
+export { functions as stockFunctionSpecs } from './functions.ts'

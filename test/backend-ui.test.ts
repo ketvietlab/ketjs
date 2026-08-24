@@ -556,6 +556,7 @@ test('routes: the segment after /admin names the section, so a path says where i
     'inbound-email',
     'inbox',
     'loyalty',
+    'manufacturing',
     'oauth',
     'outbox',
     'partner',
