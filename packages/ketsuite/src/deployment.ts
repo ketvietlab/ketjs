@@ -52,6 +52,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.account,
       suite.report,
       suite.purchase,
+      suite.purchaseStaffChannel,
       suite.sale,
       suite.saleStaffChannel,
       suite.pos,
