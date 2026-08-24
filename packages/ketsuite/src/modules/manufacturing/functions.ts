@@ -1,4 +1,4 @@
-import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
+import { and, defineFn, deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as stockFunctions } from '../stock/functions.ts'
 import { toProductUnit } from '../stock/units.ts'
@@ -15,8 +15,16 @@ const company = (ctx: Ctx): string => {
   if (!ctx.scope.company) throw new Error('manufacturing requires an active company')
   return ctx.scope.company
 }
+/**
+ * Rows belonging to the company being written to, and no other.
+ *
+ * The company goes into the query rather than into a filter afterwards. Both
+ * answer the same set, but the filter form reads every other company's rows
+ * first and discards them — and on a shared table like `stock.Move` that is the
+ * whole tenant's history to answer for one production order.
+ */
 const ours = async (ctx: Ctx, model: string, where: InputRow = {}): Promise<Row[]> =>
-  (await ctx.db.select(model, where)).filter((row) => String(row.companyId) === company(ctx))
+  ctx.db.select(model, { ...where, companyId: company(ctx) })
 
 const effectsOf = (...specs: Array<FnSpec | undefined>): string[] => [
   ...new Set(specs.flatMap((spec) => spec?.effects ?? [])),
@@ -49,7 +57,19 @@ const productionDetail = async (ctx: Ctx, row: Row): Promise<Row> => {
   const links = (await ours(ctx, 'manufacturing.ProductionMove', { productionId: row.id })).sort(
     (a, b) => Number(a.sequence) - Number(b.sequence),
   )
-  const moves = new Map((await ours(ctx, 'stock.Move')).map((move) => [String(move.id), move]))
+  // The moves this production actually links to. Reading the whole move table
+  // to find a handful was the detail screen doing work proportional to
+  // everything the factory has ever moved.
+  const moveIds = links.map((link) => String(link.moveId))
+  const M = ctx.table('stock.Move')
+  const moves = new Map(
+    (moveIds.length
+      ? ((await ctx.db.all(
+          from(M).where(and(eq(M.companyId, company(ctx)), inArray(M.id, moveIds))),
+        )) as Row[])
+      : []
+    ).map((move) => [String(move.id), move]),
+  )
   return {
     ...row,
     moves: links.map((link) => ({ ...link, move: moves.get(String(link.moveId)) ?? null })),
@@ -122,12 +142,37 @@ const saveBomEffects = [
   'read:manufacturing.Operation',
   'write:manufacturing.Operation',
   'read:manufacturing.WorkCenter',
+  // A BOM cannot be edited while an order is built on it, and a rule that
+  // cannot read the orders cannot enforce that.
+  'read:manufacturing.Production',
   'read:product.Product',
   'read:product.Template',
   'read:uom.Unit',
 ]
 
+/**
+ * Orders that are still living off this BOM.
+ *
+ * Saving a BOM deletes its lines, operations and by-products and writes them
+ * again. That is fine while nothing has been built from it, and destructive the
+ * moment something has: a confirmed order's work orders point at operation rows
+ * by id, and an edit that drops or reorders an operation leaves them pointing
+ * at a row that no longer exists — a reference the schema says cannot be null
+ * and now cannot be resolved either.
+ *
+ * A finished or cancelled order is not in the way. Its work orders still name
+ * operations that may vanish, but nothing will act on them again, and refusing
+ * to ever edit a BOM that once produced something would make BOMs write-once.
+ */
+const productionsHolding = async (ctx: Ctx, bomId: string): Promise<Row[]> =>
+  (await ours(ctx, 'manufacturing.Bom', { id: bomId }))[0]
+    ? (await ours(ctx, 'manufacturing.Production', { bomId })).filter((row) =>
+        ['confirmed', 'in_progress', 'to_close'].includes(String(row.state)),
+      )
+    : []
+
 const confirmEffects = [
+  'read:stock.Picking',
   'read:manufacturing.Bom',
   'read:manufacturing.BomLine',
   'read:manufacturing.Byproduct',
@@ -147,6 +192,23 @@ const confirmEffects = [
     stockFunctions.assignPicking,
   ),
 ]
+
+/**
+ * What this production is still short of, asked of the reservation itself.
+ *
+ * Reserving is idempotent, so asking again is how a caller finds out where it
+ * stands. The alternative — answering an already-confirmed order with an empty
+ * list — reports "nothing missing" to whoever presses confirm a second time,
+ * and reports it most confidently in exactly the case where the first attempt
+ * failed after the transaction committed and nothing was ever reserved.
+ */
+const shortagesOf = async (ctx: Ctx, rawPickingId: unknown): Promise<Row[]> => {
+  if (!rawPickingId) return []
+  const picking = (await ours(ctx, 'stock.Picking', { id: rawPickingId }))[0]
+  if (!picking || ['draft', 'done', 'cancel'].includes(String(picking.state))) return []
+  const allocation = (await stockFunctions.assignPicking!.handler(ctx, { id: rawPickingId })) as Row
+  return (allocation.shortages as Row[] | undefined) ?? []
+}
 
 export const functions: Record<string, FnSpec> = {
   listBoms: defineFn({
@@ -213,6 +275,8 @@ export const functions: Record<string, FnSpec> = {
       if (errors.length) return { ok: false, errors }
 
       const existing = (await ours(ctx, 'manufacturing.Bom', { id }))[0]
+      if (existing && (await productionsHolding(ctx, id)).length)
+        return { ok: false, errors: [issue('id', 'manufacturing.error.bomInUse')] }
       await ctx.tx(async (tx) => {
         const values = {
           code,
@@ -401,8 +465,18 @@ export const functions: Record<string, FnSpec> = {
       if (!bom || bom.active === false) return invalid(issue('bomId', 'manufacturing.error.missing'))
       const converted = await productUnit(ctx, bom.productId, args.productUomId, args.productQty)
       if (!converted) return invalid(issue('productQty', 'manufacturing.error.invalid'))
+      // The three locations named, not every location in the tenant.
+      const wanted = [args.sourceLocationId, args.productionLocationId, args.destinationLocationId]
+        .map((id) => String(id ?? ''))
+        .filter(Boolean)
+      const L = ctx.table('stock.Location')
       const locations = new Map(
-        (await ours(ctx, 'stock.Location')).map((location) => [String(location.id), location]),
+        (wanted.length
+          ? ((await ctx.db.all(
+              from(L).where(and(eq(L.companyId, company(ctx)), inArray(L.id, wanted))),
+            )) as Row[])
+          : []
+        ).map((location) => [String(location.id), location]),
       )
       const source = locations.get(String(args.sourceLocationId))
       const production = locations.get(String(args.productionLocationId))
@@ -419,6 +493,14 @@ export const functions: Record<string, FnSpec> = {
       if (existing && existing.state !== 'draft') return invalid(issue('state', 'manufacturing.error.state'))
       if (existing && Number(existing.version) !== Number(args.version))
         return invalid(issue('version', 'manufacturing.error.version'))
+      // Two orders may not share a name, and the check has to look past this
+      // row: an edit that keeps its own name is not a clash with itself.
+      if (
+        (await ours(ctx, 'manufacturing.Production', { name: clean(args.name) })).some(
+          (row) => String(row.id) !== id,
+        )
+      )
+        return invalid(issue('name', 'manufacturing.error.invalid'))
       const version = existing ? Number(existing.version) + 1 : 1
       const values = {
         name: clean(args.name),
@@ -440,8 +522,18 @@ export const functions: Record<string, FnSpec> = {
         origin: clean(args.origin) || null,
         version,
       }
-      if (existing) await ctx.db.update('manufacturing.Production', { id }, values)
-      else await ctx.db.insert('manufacturing.Production', { id, ...values })
+      if (existing) {
+        await ctx.db.update('manufacturing.Production', { id }, values)
+        return { ok: true, id, version }
+      }
+      // Two operators pressing create, or a browser resubmitting the form, both
+      // read no existing row. The primary key settles it and the loser answers
+      // ok — which is what `idempotent` promises and a thrown constraint is not.
+      const inserted = await ctx.db.insertIfAbsent('manufacturing.Production', { id, ...values })
+      if (!('dryRun' in inserted) && !inserted.inserted) {
+        const winner = (await ours(ctx, 'manufacturing.Production', { id }))[0]
+        return { ok: true, id, version: Number(winner?.version ?? version) }
+      }
       return { ok: true, id, version }
     },
   }),
@@ -457,7 +549,15 @@ export const functions: Record<string, FnSpec> = {
       if (!production) return invalid(issue('id', 'manufacturing.error.missing'))
       if (production.state !== 'draft')
         return ['confirmed', 'in_progress', 'done'].includes(String(production.state))
-          ? { ok: true, id: production.id, version: production.version, shortages: [] }
+          ? {
+              ok: true,
+              id: production.id,
+              version: production.version,
+              // Asked, not assumed. This is also the path a retry takes when
+              // the first confirm committed and then failed to reserve, so it
+              // is where the reservation finally happens.
+              shortages: await shortagesOf(ctx, production.rawPickingId),
+            }
           : invalid(issue('state', 'manufacturing.error.state'))
       if (Number(production.version) !== Number(args.version))
         return invalid(issue('version', 'manufacturing.error.version'))
@@ -598,14 +698,14 @@ export const functions: Record<string, FnSpec> = {
         await stockFunctions.confirmPicking!.handler(tx, { id: rawPickingId })
         await stockFunctions.confirmPicking!.handler(tx, { id: outputPickingId })
       })
-      const allocation = (await stockFunctions.assignPicking!.handler(ctx, {
-        id: rawPickingId,
-      })) as Row
+      // Outside the transaction on purpose: `assignPicking` reserves through
+      // `reserveMove`, which opens a transaction of its own, and the framework
+      // has no re-entrancy guard.
       return {
         ok: true,
         id: production.id,
         version: Number(args.version) + 1,
-        shortages: allocation.shortages ?? [],
+        shortages: await shortagesOf(ctx, rawPickingId),
       }
     },
   }),
@@ -674,6 +774,23 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Consume the components and book the outputs.
+   *
+   * There is no transaction around this, and there cannot be one: every stock
+   * command it calls — `assignPicking` through `reserveMove`, `saveMoveLine`,
+   * `completePicking` — opens a transaction of its own, and the adapter has no
+   * re-entrancy guard, so an enclosing one deadlocks rather than protecting
+   * anything. Do not add one without first making those commands compose.
+   *
+   * What stands in for it is `to_close` plus the picking states. The order is
+   * moved to `to_close` before any stock is touched, and every step afterwards
+   * asks whether it has already happened, so a completion interrupted between
+   * consuming the components and booking the outputs finishes correctly when it
+   * is called again. That is a real property and is tested; what it is not is
+   * automatic, so an interrupted order sits in `to_close` with its components
+   * gone until somebody completes it again.
+   */
   completeProduction: defineFn({
     input: { id: 'id', version: 'int', producedQuantity: 'decimal?', outputs: 'json?' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },

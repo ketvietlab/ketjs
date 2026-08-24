@@ -267,3 +267,283 @@ test('manufacturing: completion fails closed when components are short', async (
     await adapter.close()
   }
 })
+
+test('manufacturing: a BOM in use cannot be rewritten under its production orders', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'manufacturing.saveWorkCenter',
+      { id: 'packing', code: 'PACK', name: 'Packing', capacity: '2' },
+      adapter,
+    )
+    const bom = {
+      id: 'bom-1',
+      productId: 'basket',
+      productQty: '10',
+      productUomId: 'kg',
+      operations: [
+        { id: 'op-a', name: 'Op A', workCenterId: 'packing', durationExpected: 5 },
+        { id: 'op-b', name: 'Op B', workCenterId: 'packing', durationExpected: 5 },
+      ],
+      lines: [{ id: 'l1', productId: 'fruit', productQty: '12', productUomId: 'kg' }],
+    }
+    await call('manufacturing.saveBom', bom, adapter)
+    await call(
+      'manufacturing.saveProduction',
+      {
+        id: 'mo-1',
+        name: 'MO-1',
+        bomId: 'bom-1',
+        productQty: '10',
+        productUomId: 'kg',
+        sourceLocationId: 'stock',
+        productionLocationId: 'production',
+        destinationLocationId: 'finished',
+        scheduledStart: '2026-08-24T00:00:00.000Z',
+      },
+      adapter,
+    )
+    await call('manufacturing.confirmProduction', { id: 'mo-1', version: 1 }, adapter)
+
+    // Saving a BOM rewrites its operations. A confirmed order's work orders
+    // point at those rows by id, through a reference the schema says cannot be
+    // null — so an edit that drops one leaves a work order pointing at nothing.
+    const refused = (
+      await call('manufacturing.saveBom', { ...bom, operations: [bom.operations[0]] }, adapter)
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Array<{ code: string }>)[0]?.code, 'manufacturing.error.bomInUse')
+
+    const operations = await adapter.all('SELECT id FROM manufacturing_operation ORDER BY id')
+    const workOrders = await adapter.all('SELECT "operationId" FROM manufacturing_work_order')
+    const known = new Set(operations.map((row) => String(row.id)))
+    assert.deepEqual(
+      workOrders.filter((row) => !known.has(String(row.operationId))),
+      [],
+      'no work order may point at an operation that no longer exists',
+    )
+
+    // Once the order is out of the way the BOM is editable again: refusing
+    // forever would make a BOM write-once the first time it produced anything.
+    await call('manufacturing.cancelProduction', { id: 'mo-1', version: 2 }, adapter)
+    assert.equal(
+      (
+        (await call('manufacturing.saveBom', { ...bom, operations: [bom.operations[0]] }, adapter))
+          .value as Row
+      ).ok,
+      true,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('manufacturing: confirming twice reports the shortage both times', async () => {
+  const adapter = await boot()
+  try {
+    // 500kg demanded against the 100kg the fixture stocks.
+    await call(
+      'manufacturing.saveBom',
+      {
+        id: 'bom-short',
+        productId: 'basket',
+        productQty: '10',
+        productUomId: 'kg',
+        lines: [{ id: 'l1', productId: 'fruit', productQty: '500', productUomId: 'kg' }],
+      },
+      adapter,
+    )
+    await call(
+      'manufacturing.saveProduction',
+      {
+        id: 'mo-short',
+        name: 'MO-SHORT',
+        bomId: 'bom-short',
+        productQty: '10',
+        productUomId: 'kg',
+        sourceLocationId: 'stock',
+        productionLocationId: 'production',
+        destinationLocationId: 'finished',
+        scheduledStart: '2026-08-24T00:00:00.000Z',
+      },
+      adapter,
+    )
+    const first = (await call('manufacturing.confirmProduction', { id: 'mo-short', version: 1 }, adapter))
+      .value as Row
+    assert.deepEqual(first.shortages, [{ moveId: 'mo-short:raw:l1', quantity: '400' }])
+
+    // The second press used to answer with an empty list — reporting "nothing
+    // missing" to an operator staring at a 400kg hole, and reporting it most
+    // confidently in the case where the first attempt reserved nothing at all.
+    const second = (await call('manufacturing.confirmProduction', { id: 'mo-short', version: 1 }, adapter))
+      .value as Row
+    assert.deepEqual(second.shortages, first.shortages)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('manufacturing: a production order is created once, however many callers ask', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'manufacturing.saveBom',
+      {
+        id: 'bom-1',
+        productId: 'basket',
+        productQty: '10',
+        productUomId: 'kg',
+        lines: [{ id: 'l1', productId: 'fruit', productQty: '12', productUomId: 'kg' }],
+      },
+      adapter,
+    )
+    const args = {
+      id: 'mo-race',
+      name: 'MO-RACE',
+      bomId: 'bom-1',
+      productQty: '10',
+      productUomId: 'kg',
+      sourceLocationId: 'stock',
+      productionLocationId: 'production',
+      destinationLocationId: 'finished',
+      scheduledStart: '2026-08-24T00:00:00.000Z',
+    }
+    // Two operators pressing create, or a browser resubmitting the form. Every
+    // caller must get ok — the function declares itself idempotent — and one
+    // row may exist.
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => call('manufacturing.saveProduction', args, adapter)),
+    )
+    for (const result of results) assert.equal((result.value as Row).ok, true)
+    assert.equal((await adapter.all('SELECT COUNT(*) c FROM manufacturing_production'))[0]!.c, 1)
+
+    // And a name already taken is refused rather than duplicated: the name is
+    // what `origin` stamps on every move this order makes.
+    const clash = (await call('manufacturing.saveProduction', { ...args, id: 'mo-other' }, adapter))
+      .value as Row
+    assert.equal(clash.ok, false)
+    assert.equal((clash.errors as Array<{ field: string }>)[0]?.field, 'name')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('manufacturing: a completion interrupted after the components are gone finishes on retry', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'manufacturing.saveBom',
+      {
+        id: 'bom-1',
+        productId: 'basket',
+        productQty: '10',
+        productUomId: 'kg',
+        lines: [{ id: 'l1', productId: 'fruit', productQty: '12', productUomId: 'kg' }],
+      },
+      adapter,
+    )
+    await call(
+      'manufacturing.saveProduction',
+      {
+        id: 'mo-1',
+        name: 'MO-1',
+        bomId: 'bom-1',
+        productQty: '10',
+        productUomId: 'kg',
+        sourceLocationId: 'stock',
+        productionLocationId: 'production',
+        destinationLocationId: 'finished',
+        scheduledStart: '2026-08-24T00:00:00.000Z',
+      },
+      adapter,
+    )
+    await call('manufacturing.confirmProduction', { id: 'mo-1', version: 1 }, adapter)
+
+    // Completion cannot run in one transaction — every stock command it calls
+    // opens one of its own — so what stands in for atomicity is `to_close` plus
+    // the picking states. This is that guarantee: the crash leaves the
+    // components consumed and no output booked, which is the worst moment for
+    // it to happen.
+    await adapter.all(
+      "UPDATE manufacturing_production SET state='to_close', version=version+1 WHERE id='mo-1'",
+    )
+    await call('stock.completePicking', { id: 'mo-1:components', createBackorder: false }, adapter)
+    assert.equal(
+      (
+        await adapter.all(
+          'SELECT quantity FROM stock_quant WHERE "productId" = \'fruit\' AND "locationId" = \'stock\'',
+        )
+      )[0]!.quantity,
+      '88',
+      'the components are gone',
+    )
+
+    const stuck = (await call('manufacturing.getProduction', { id: 'mo-1' }, adapter)).value as Row
+    const finished = (
+      await call('manufacturing.completeProduction', { id: 'mo-1', version: Number(stuck.version) }, adapter)
+    ).value as Row
+    assert.equal(finished.ok, true)
+    assert.equal(
+      ((await call('manufacturing.getProduction', { id: 'mo-1' }, adapter)).value as Row).state,
+      'done',
+    )
+    assert.equal(
+      (
+        await adapter.all(
+          'SELECT quantity FROM stock_quant WHERE "productId" = \'basket\' AND "locationId" = \'finished\'',
+        )
+      )[0]!.quantity,
+      '10',
+      'the retry books the output the crash never got to',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('manufacturing: a production detail reads its own moves, not the factory ledger', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'manufacturing.saveBom',
+      {
+        id: 'bom-1',
+        productId: 'basket',
+        productQty: '10',
+        productUomId: 'kg',
+        lines: [{ id: 'l1', productId: 'fruit', productQty: '12', productUomId: 'kg' }],
+      },
+      adapter,
+    )
+    for (const id of ['mo-a', 'mo-b']) {
+      await call(
+        'manufacturing.saveProduction',
+        {
+          id,
+          name: id.toUpperCase(),
+          bomId: 'bom-1',
+          productQty: '10',
+          productUomId: 'kg',
+          sourceLocationId: 'stock',
+          productionLocationId: 'production',
+          destinationLocationId: 'finished',
+          scheduledStart: '2026-08-24T00:00:00.000Z',
+        },
+        adapter,
+      )
+      await call('manufacturing.confirmProduction', { id, version: 1 }, adapter)
+    }
+    // Both orders have moves. The narrowed read must still return exactly one
+    // order's, and every link must resolve — an unresolved move on the detail
+    // screen would look like a data loss rather than a bad query.
+    const detail = (await call('manufacturing.getProduction', { id: 'mo-a' }, adapter)).value as Row
+    const moves = detail.moves as Array<{ moveId: string; move: Row | null }>
+    assert.equal(moves.length > 0, true)
+    for (const link of moves) {
+      assert.notEqual(link.move, null, `${link.moveId} did not resolve`)
+      assert.match(String(link.moveId), /^mo-a:/u)
+    }
+  } finally {
+    await adapter.close()
+  }
+})

@@ -99,6 +99,11 @@ export const models: Record<string, ModelDef> = {
       version: 'int',
     },
     indexes: {
+      // The name is what an operator reads off the shop floor paperwork and
+      // what `origin` stamps onto every stock move this order makes. Two orders
+      // called MO-001 make a move impossible to trace back to the one that
+      // caused it.
+      company_name: { fields: ['companyId', 'name'], unique: true },
       state_schedule: { fields: ['companyId', 'state', 'scheduledStart'] },
       product: { fields: ['companyId', 'productId'] },
     },
