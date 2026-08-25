@@ -1,6 +1,7 @@
 const vi = {
   'issue.description': 'Mô tả',
   'menu.app': 'Flow',
+  'menu.projects': 'Dự án',
   'projects.title': 'Dự án',
   'error.invalid': 'Giá trị không hợp lệ.',
   'error.customColumnsRequired': 'Chọn mẫu "Tuỳ chỉnh" thì phải nhập ít nhất một tên cột.',
@@ -83,6 +84,7 @@ const vi = {
 const en: Record<keyof typeof vi, string> = {
   'issue.description': 'Description',
   'menu.app': 'Flow',
+  'menu.projects': 'Projects',
   'projects.title': 'Projects',
   'error.invalid': 'That value will not do.',
   'error.customColumnsRequired': 'The custom template needs at least one column name.',
