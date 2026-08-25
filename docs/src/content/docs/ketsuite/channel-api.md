@@ -142,6 +142,15 @@ an opaque content-derived `pkv_` version, and a matching strong ETag. Quality is
 the next action remains explicitly unsupported. Claim, release, completion, scan, and return execution stay
 outside the module until ownership, quality, and optimistic-concurrency models exist in the domain.
 
+`inventory_staff_channel` contributes a bounded goods catalogue and one read-only stock detail under the
+`inventory.products` read capability. Product owns variant identity and channel eligibility, Stock owns the
+company-scoped availability and internal/transit positions, UOM owns unit labels, and Product Media supplies
+only whether a primary image exists. The detail carries an opaque content-derived `ipv_` version, a matching
+strong ETag, and independently versioned positions. Service products, prices, costs, tax setup, BOMs, and
+management-option catalogues are deliberately absent. Create, edit, archive, restore, and stock-adjustment
+commands remain outside this module until their aggregate versions and domain workflows can satisfy the mobile
+contract without inventing state.
+
 `crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
 mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
 functions, so a non-superuser sees or changes only records they
