@@ -6,6 +6,10 @@ import {
   FormCluster,
   inline,
   linkButton,
+  PartnerDetailLayout,
+  PartnerFacts,
+  PartnerInitials,
+  PartnerPanel,
   RecordForm,
   RecordWorkspace,
   Section,
@@ -16,7 +20,6 @@ import {
 } from '../../../ui/index.ts'
 import type { FormOption, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
-import { PartnerDetailLayout, PartnerFacts, PartnerInitials, PartnerPanel } from '../partner-view.tsx'
 import type { PartnerDetail } from './types.ts'
 
 export const partnerDetailScreen = (

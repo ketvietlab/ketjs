@@ -67,6 +67,14 @@ export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'
 export { activityContractCases } from './activity.ts'
 export { calendarContractCases } from './calendar.ts'
+export {
+  PartnerDetailLayout,
+  PartnerFacts,
+  PartnerInitials,
+  PartnerListLayout,
+  PartnerPanel,
+} from './partner.tsx'
+export type { PartnerFact, PartnerStat } from './partner.tsx'
 
 /**
  * The same components, under the names JSX wants.
