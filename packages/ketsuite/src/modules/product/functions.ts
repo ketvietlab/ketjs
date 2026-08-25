@@ -8,6 +8,7 @@ import {
   eq,
   from,
   ilike,
+  inArray,
   isNull,
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
@@ -310,6 +311,7 @@ export const functions: Record<string, FnSpec> = {
   listVariants: defineFn({
     input: {
       templateId: 'id?',
+      ids: 'json?',
       search: 'text?',
       limit: 'int?',
       offset: 'int?',
@@ -329,10 +331,15 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx, args) => {
-      const rows = await ctx.db.select(
-        'product.Product',
-        args.templateId == null ? {} : { templateId: args.templateId },
-      )
+      const wanted = Array.isArray(args.ids) ? [...new Set(args.ids.map(String))].slice(0, 2_000) : null
+      if (wanted && !wanted.length) return []
+      const P = ctx.table('product.Product')
+      const rows = wanted
+        ? await ctx.db.all(from(P).where(inArray(P.id, wanted)))
+        : await ctx.db.select(
+            'product.Product',
+            args.templateId == null ? {} : { templateId: args.templateId },
+          )
       const templates = new Map((await ctx.db.select('product.Template')).map((row) => [String(row.id), row]))
       const eligible = rows.filter((row) => {
         const template = templates.get(String(row.templateId))
