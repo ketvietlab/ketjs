@@ -40,6 +40,7 @@ const LABELS = {
     linkApply: 'Áp dụng',
     linkRemove: 'Bỏ liên kết',
     linkCancel: 'Huỷ',
+    alsoHere: 'Đang xem:',
   },
   en: {
     toolbar: 'Formatting',
@@ -64,6 +65,7 @@ const LABELS = {
     linkApply: 'Apply',
     linkRemove: 'Remove link',
     linkCancel: 'Cancel',
+    alsoHere: 'Also here:',
   },
 }
 
@@ -152,10 +154,62 @@ const blockBody = (block) => {
   return inner ? `${inner}${trailingBreak(plainOf(block.delta))}` : '<br>'
 }
 
+/**
+ * A stable colour per person, from their name.
+ *
+ * Assigning colours in arrival order would give the same person a different
+ * colour in every tab, and the colour is the whole point of the marker — it is
+ * what lets you match the initials by the paragraph to the chip in the row
+ * without reading either.
+ */
+const hueOf = (key) => {
+  let hash = 0
+  for (let i = 0; i < String(key).length; i++) hash = (hash * 31 + String(key).charCodeAt(i)) % 360
+  return hash
+}
+
+/** Two letters, because that is what fits and what people recognise. */
+const initialsOf = (name) => {
+  const words = String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  const first = words[0][0] ?? ''
+  const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : ''
+  return (first + last).toUpperCase()
+}
+
+/** The people in a block, marked inside it so you can see whose paragraph it is. */
+const viewerMarks = (people) =>
+  people
+    .map(
+      (person) =>
+        `<span data-ui="flow-editor-viewer" contenteditable="false" style="--flow-viewer-hue:${hueOf(person.name)}" title="${escapeAttr(person.name)}" aria-hidden="true">${escapeHtml(initialsOf(person.name))}</span>`,
+    )
+    .join('')
+
+/**
+ * Who else has this description open.
+ *
+ * Rendered into its own container rather than into the document, so a
+ * heartbeat never touches the element somebody is typing into.
+ */
+export function presenceHtml(people, lang) {
+  const labels = labelsOf(lang)
+  if (!people?.length) return ''
+  return `<span data-ui="flow-editor-presence-label">${escapeHtml(labels.alsoHere)}</span>${people
+    .map(
+      (person) =>
+        `<span data-ui="flow-editor-viewer" data-size="chip" style="--flow-viewer-hue:${hueOf(person.name)}" title="${escapeAttr(person.name)}">${escapeHtml(initialsOf(person.name))}</span>`,
+    )
+    .join('')}`
+}
+
 const checkMark = (block, labels) =>
   `<span data-ui="flow-editor-check" contenteditable="false" role="checkbox" aria-checked="${block.checked ? 'true' : 'false'}" aria-label="${escapeAttr(labels.check)}" tabindex="-1"></span>`
 
-const blockHtml = (block, index, labels) => {
+const blockHtml = (block, index, labels, people) => {
   const type = BLOCK_TAG[block.type] ? block.type : 'p'
   const tag = BLOCK_TAG[type]
   const checked = type === 'check' ? ` data-checked="${block.checked ? 'true' : 'false'}"` : ''
@@ -170,7 +224,7 @@ const blockHtml = (block, index, labels) => {
       : type === 'check'
         ? `${checkMark(block, labels)}<span data-ui="flow-editor-line">${blockBody(block)}</span>`
         : blockBody(block)
-  return `<${tag} data-block="${type}" data-index="${index}"${checked}>${body}</${tag}>`
+  return `<${tag} data-block="${type}" data-index="${index}"${checked}>${body}${viewerMarks(people)}</${tag}>`
 }
 
 /**
@@ -182,8 +236,14 @@ const blockHtml = (block, index, labels) => {
  * the binding finds a block again afterwards, precisely because these wrappers
  * mean a block is not always a direct child of the container.
  */
-export function documentHtml(blocks, lang) {
+export function documentHtml(blocks, lang, presence) {
   const labels = labelsOf(lang)
+  const here = new Map()
+  for (const person of presence ?? []) {
+    const at = here.get(person.index)
+    if (at) at.push(person)
+    else here.set(person.index, [person])
+  }
   const parts = []
   let openList = ''
   let openKind = ''
@@ -203,7 +263,7 @@ export function documentHtml(blocks, lang) {
       openKind = block.type
       parts.push(`<${wrapper} data-ui="flow-editor-list" data-kind="${block.type}">`)
     }
-    parts.push(blockHtml(block, index, labels))
+    parts.push(blockHtml(block, index, labels, here.get(index) ?? []))
   }
   closeList()
   return parts.join('')
@@ -240,6 +300,7 @@ export function issueEditorShell(runtime, { containerId, lang }) {
       ${mark('code', '</>', labels.inlineCode)}
       ${mark('link', '🔗', labels.link)}
     </div>
+    <div data-ui="flow-editor-presence" data-flow-editor-presence role="status" aria-live="polite"></div>
     <div data-ui="flow-editor-content" id=${containerId} contenteditable="true" role="textbox" aria-multiline="true" aria-label=${labels.editor}></div>
     <dialog data-ui="flow-editor-link-dialog" data-flow-editor-link-dialog aria-label=${labels.linkTitle}>
       <div data-ui="flow-editor-link-body">

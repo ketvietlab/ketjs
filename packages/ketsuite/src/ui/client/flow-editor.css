@@ -173,6 +173,48 @@
     min-inline-size: 0;
   }
 
+  [data-ui="flow-editor-presence"] {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding-inline: var(--admin-gap-md);
+    color: var(--admin-muted);
+    font-size: 0.8rem;
+  }
+
+  /* Nothing at all when nobody else is here, rather than an empty strip. */
+  [data-ui="flow-editor-presence"]:empty {
+    display: none;
+  }
+
+  [data-ui="flow-editor-presence"] + [data-ui="flow-editor-content"] {
+    padding-block-start: var(--admin-gap-xs);
+  }
+
+  [data-ui="flow-editor-viewer"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.4rem;
+    block-size: 1.4rem;
+    padding-inline: 0.25rem;
+    border-radius: 999px;
+    /* The hue comes from the name, so one person is one colour in every tab. */
+    background: hsl(var(--flow-viewer-hue, 0) 60% 45%);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    user-select: none;
+  }
+
+  /* Inside a block it marks whose paragraph this is, and stays out of the text. */
+  [data-block] > [data-ui="flow-editor-viewer"] {
+    margin-inline-start: var(--admin-gap-xs);
+    vertical-align: text-bottom;
+    opacity: 0.85;
+  }
+
   [data-ui="flow-editor-link-dialog"] {
     border: 1px solid var(--admin-line);
     border-radius: var(--admin-radius);

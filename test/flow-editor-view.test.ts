@@ -7,7 +7,7 @@
 // and watching text disappear, and both are pinned here so they stay found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { documentHtml } from '../packages/ketsuite/src/ui/client/flow-editor-view.mjs'
+import { documentHtml, presenceHtml } from '../packages/ketsuite/src/ui/client/flow-editor-view.mjs'
 
 const text = (insert: string, attributes?: Record<string, unknown>) => ({ insert, attributes })
 const block = (type: string, delta: Array<{ insert: string }>, checked = false) => ({
@@ -101,4 +101,42 @@ test('flow editor: a code block carries no marks', () => {
 
 test('flow editor: an unknown block type renders as a paragraph rather than an unknown tag', () => {
   assert.match(documentHtml([block('marquee', [text('no')])], 'en'), /^<p data-block="p"/)
+})
+
+test('flow editor: whoever is in a block is marked inside it', () => {
+  const html = documentHtml([block('p', [text('first')]), block('p', [text('second')])], 'en', [
+    { id: 'u2', name: 'Le Thi Mai', index: 1 },
+  ])
+  assert.doesNotMatch(html.split('data-index="1"')[0] ?? '', /flow-editor-viewer/)
+  assert.match(html, /<p data-block="p" data-index="1">second<span data-ui="flow-editor-viewer"/)
+  // Inert to the binding's own position arithmetic, which walks a block's text
+  // and rejects anything the user cannot put a caret in.
+  assert.match(html, /data-ui="flow-editor-viewer" contenteditable="false"/)
+})
+
+test('flow editor: two people in the same block are both marked', () => {
+  const html = documentHtml([block('p', [text('shared')])], 'en', [
+    { id: 'u2', name: 'Le Thi Mai', index: 0 },
+    { id: 'u3', name: 'Tran Van Binh', index: 0 },
+  ])
+  assert.equal(html.match(/flow-editor-viewer/g)?.length, 2)
+})
+
+test('flow editor: nobody else here renders nothing at all', () => {
+  assert.equal(presenceHtml([], 'en'), '')
+  assert.equal(presenceHtml(undefined, 'en'), '')
+})
+
+/**
+ * The colour is what lets you match the initials beside a paragraph to the chip
+ * in the row without reading either, so it has to be the same colour in every
+ * tab — which means it comes from the person, not from who arrived first.
+ */
+test('flow editor: a person keeps the same colour wherever they appear', () => {
+  const row = presenceHtml([{ id: 'u2', name: 'Le Thi Mai', index: 3 }], 'en')
+  const inBlock = documentHtml([block('p', [text('x')])], 'en', [{ id: 'u2', name: 'Le Thi Mai', index: 0 }])
+  const hue = /--flow-viewer-hue:(\d+)/
+  assert.equal(row.match(hue)?.[1], inBlock.match(hue)?.[1])
+  assert.match(row, />LM</)
+  assert.match(row, /Also here:/)
 })

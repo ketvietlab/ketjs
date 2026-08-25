@@ -165,6 +165,32 @@ export async function publishUpdate(
   return { shouldFlatten: entry.updateCount >= FLATTEN_AFTER_UPDATES }
 }
 
+/**
+ * Relays who is looking at a document, on the same topic as its edits.
+ *
+ * Deliberately not applied to the doc and deliberately not counted towards the
+ * flatten threshold: presence is who is here *now*, and the moment it were
+ * persisted it would outlive the person. The generation this rides on is
+ * ended by the next flatten, which is what keeps these frames from
+ * accumulating — so the client only announces while somebody is actually
+ * working, since a room with viewers and no edits never rolls its topic.
+ *
+ * Nothing is published for an issue this process holds no document for: there
+ * is no topic to publish onto, and no reader to hear it.
+ */
+export async function publishPresence(
+  companyId: string,
+  issueId: string,
+  presence: Record<string, unknown>,
+): Promise<void> {
+  const entry = live.get(keyFor(companyId, issueId))
+  if (!entry) return
+  entry.touchedAt = Date.now()
+  const writer = await writerFor(topicFor(companyId, issueId, entry.generation))
+  writer.write({ presence })
+  await writer.flush()
+}
+
 /** Ends the current topic and starts a fresh one — what keeps `ket_stream` bounded. */
 export async function rollGeneration(companyId: string, issueId: string): Promise<void> {
   const entry = live.get(keyFor(companyId, issueId))

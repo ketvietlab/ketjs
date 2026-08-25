@@ -35,6 +35,7 @@ import {
   getOrCreateLive,
   isLive,
   previewTextOf,
+  publishPresence,
   publishUpdate,
   rollGeneration,
   snapshotBytes,
@@ -220,7 +221,14 @@ async function hydrate(
 ): Promise<boolean> {
   const { isNew } = getOrCreateLive(companyId, issueId)
   if (!isNew) return true
-  const resolved = (await ctx.call(
+  // Unchecked, like `commitContent` in `flatten` below and for the same
+  // reason: these are `exposure: 'internal'` helpers of a route that has
+  // already run its own permission check, and `ctx.call` would ask for a
+  // second grant nobody has any reason to hold. It used to be a checked call,
+  // and it worked only because the line above usually returns first — a
+  // reader-role viewer opening an issue this process had not already loaded
+  // got `E_FN_NOT_PERMITTED` for a function they never named.
+  const resolved = (await ctx.callUnchecked(
     'flow_backend.sync.resolveSnapshotKey',
     { attachmentId: contentAttachmentId },
     url,
@@ -278,9 +286,16 @@ export const routes: Record<string, RouteEntry> = {
       if (!scope.company) return text('company scope required', { status: 400 })
       if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
         return text('stored description could not be read', { status: 503 })
+      // Who the caller is, so a client knows which presence frames are its own
+      // before it can receive any. Learning that from its first announce
+      // instead left a window in which its own second tab read as a stranger.
+      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
+        id: string | null
+      }
       return json({
         snapshot: Buffer.from(snapshotBytes(scope.company, issueId) ?? new Uint8Array()).toString('base64'),
         topic: topicFor(scope.company, issueId, currentGeneration(scope.company, issueId)),
+        viewerId: viewer.id,
       })
     },
 
@@ -360,6 +375,47 @@ export const routes: Record<string, RouteEntry> = {
         'cache-control': 'no-cache',
         connection: 'keep-alive',
       })
+    },
+
+  /**
+   * "I am here, on this block" — relayed to everyone else in the document.
+   *
+   * Gated on reading the issue, not on writing its description: watching
+   * somebody type is looking, and a reviewer with read access showing up in
+   * the room is the point. Nothing here touches the document.
+   *
+   * The name is resolved from the session rather than read out of the body.
+   * A client that could name itself could sit in the room as somebody else,
+   * and everyone else's screen would agree with it.
+   */
+  '/admin/flow/issues/{id}/presence':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = onlyPost(req)
+      if (refused) return refused
+      const issueId = String(params.id)
+      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      const scope = await ctx.scopeOf(url, req)
+      if (!scope.company) return text('company scope required', { status: 400 })
+      let body: Record<string, unknown>
+      try {
+        body = await readJsonBody(req)
+      } catch {
+        return text('bad request', { status: 400 })
+      }
+      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
+        id: string | null
+        name: string | null
+      }
+      if (!viewer.id) return json({ id: null })
+      const index = Number(body.index)
+      await publishPresence(scope.company, issueId, {
+        id: viewer.id,
+        name: viewer.name || viewer.id,
+        index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0,
+        gone: body.gone === true,
+      })
+      return json({ id: viewer.id })
     },
 
   /**
