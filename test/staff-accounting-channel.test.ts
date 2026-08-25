@@ -38,6 +38,7 @@ const boot = async (t: TestContext) => {
     'account.listMoves',
     'account.listMoveResiduals',
     'account.getMove',
+    'account.listJournals',
     'partner.listPartners',
   ])
     await fixture('user.grantFunction', {
@@ -252,6 +253,74 @@ test('staff accounting channel returns versioned read-only invoice totals', asyn
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/missing')).status, 404)
 })
 
+test('staff accounting channel reviews exact full-payment eligibility without mutating', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+
+  assert.equal(
+    (await e2e.client.get('/api/staff/v1/accounting/invoices/invoice-a/payment-eligibility')).status,
+    422,
+  )
+  const detail = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/invoice-a')
+  const response = await e2e.client.get(
+    '/api/staff/v1/accounting/invoices/invoice-a/payment-eligibility?today=2026-08-25',
+  )
+  assert.equal(response.status, 200)
+  const body = (await response.json()) as Envelope<Row>
+  assert.deepEqual(body.data, {
+    eligible: true,
+    reason: 'available',
+    invoiceId: 'invoice-a',
+    expectedVersion: detail.data.version,
+    amount: { currency: 'VND', amount: '150' },
+    paymentDate: '2026-08-25',
+    journals: [
+      { id: 'cash-journal', name: 'Tiền mặt', type: 'cash' },
+      { id: 'journal:acme:bank', name: 'Ngân hàng', type: 'bank' },
+    ],
+  })
+  // The concurrency token is still the invoice's, which is the half worth
+  // sharing: a payment command checks it against the invoice. The ETag is not,
+  // because this body says more than the invoice does.
+  assert.match(String(response.headers.get('etag')), /^"aipe_[0-9a-f]{64}"$/)
+
+  const credit = await e2e.client.json<Envelope<Row>>(
+    '/api/staff/v1/accounting/invoices/credit-a/payment-eligibility?today=2026-08-25',
+  )
+  assert.equal(credit.data.eligible, false)
+  assert.equal(credit.data.reason, 'unsupported_invoice_type')
+  assert.deepEqual(credit.data.journals, [])
+  assert.equal(
+    (await e2e.client.get('/api/staff/v1/accounting/invoices/bill-a/payment-eligibility?today=2026-08-25'))
+      .status,
+    404,
+  )
+})
+
+test('staff accounting channel reviews only generic lifecycle actions for the current state', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+
+  const draft = await e2e.client.get('/api/staff/v1/accounting/invoices/credit-a/lifecycle-eligibility')
+  assert.equal(draft.status, 200)
+  const draftBody = (await draft.json()) as Envelope<Row>
+  assert.deepEqual(draftBody.data.actions, [
+    { action: 'post', destructive: false },
+    { action: 'cancel_draft', destructive: true },
+  ])
+  assert.match(String(draftBody.data.expectedVersion), /^aiv_[0-9a-f]{64}$/)
+  assert.equal(draft.headers.get('etag'), `"${String(draftBody.data.expectedVersion)}"`)
+
+  const posted = await e2e.client.json<Envelope<Row>>(
+    '/api/staff/v1/accounting/invoices/invoice-a/lifecycle-eligibility',
+  )
+  assert.deepEqual(posted.data.actions, [])
+  assert.equal(
+    (await e2e.client.get('/api/staff/v1/accounting/invoices/bill-a/lifecycle-eligibility')).status,
+    404,
+  )
+})
+
 test('staff invoice version tracks the names it resolves elsewhere', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
@@ -277,4 +346,40 @@ test('staff invoice version tracks the names it resolves elsewhere', async (t) =
   assert.equal(after.customer, 'Minh An Đã Đổi')
   assert.notEqual(after.version, before.version)
   assert.equal(after.etag, `"${after.version}"`)
+})
+
+test('staff payment eligibility ETag tracks the journals and the day it was asked about', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const read = async (today: string) => {
+    const response = await e2e.client.get(
+      `/api/staff/v1/accounting/invoices/invoice-a/payment-eligibility?today=${today}`,
+    )
+    const body = (await response.json()) as Envelope<Row>
+    return { etag: response.headers.get('etag'), body: body.data }
+  }
+
+  // Two different days are two different answers, and an ETag that cannot tell
+  // them apart tells a caller its stale copy is current.
+  const dayOne = await read('2026-08-25')
+  const dayTwo = await read('2026-09-30')
+  assert.equal(dayOne.body.paymentDate, '2026-08-25')
+  assert.equal(dayTwo.body.paymentDate, '2026-09-30')
+  assert.notEqual(dayOne.etag, dayTwo.etag)
+
+  // The journals come from the tenant, not from the invoice.
+  await e2e.fixture.call<Row>(
+    'account.saveJournal',
+    { id: 'cash-journal', name: 'Quỹ tiền mặt', code: 'CSH', type: 'cash', defaultAccountId: 'cash' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const renamed = await read('2026-08-25')
+  assert.deepEqual((renamed.body.journals as Row[])[0], {
+    id: 'cash-journal',
+    name: 'Quỹ tiền mặt',
+    type: 'cash',
+  })
+  assert.notEqual(renamed.etag, dayOne.etag)
+  // The invoice did not change, so the token a payment would check has not.
+  assert.equal(renamed.body.expectedVersion, dayOne.body.expectedVersion)
 })

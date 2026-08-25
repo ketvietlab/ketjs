@@ -509,6 +509,244 @@
         "x-ket-idempotent": false
       }
     },
+    "/accounting/invoices/{id}/payment-eligibility": {
+      "get": {
+        "operationId": "staff.accounting.invoices.paymentEligibility",
+        "summary": "Review the canonical residual and journals for a full customer-invoice payment.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "today",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "eligible": {
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "unsupported_invoice_type",
+                            "invoice_not_posted",
+                            "nothing_due",
+                            "no_payment_journal"
+                          ]
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "expectedVersion": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "paymentDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "journals": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": ["bank", "cash"]
+                              }
+                            },
+                            "required": ["id", "name", "type"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "eligible",
+                        "reason",
+                        "invoiceId",
+                        "expectedVersion",
+                        "amount",
+                        "paymentDate",
+                        "journals"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/accounting/invoices/{id}/lifecycle-eligibility": {
+      "get": {
+        "operationId": "staff.accounting.invoices.lifecycleEligibility",
+        "summary": "Review generic workflow actions supported by the current customer-invoice state.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "expectedVersion": {
+                          "type": "string"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "action": {
+                                "type": "string",
+                                "enum": ["post", "cancel_draft"]
+                              },
+                              "destructive": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["action", "destructive"]
+                          }
+                        }
+                      },
+                      "required": ["invoiceId", "expectedVersion", "actions"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
     "/attendance/status": {
       "get": {
         "operationId": "staff.attendance.status",
