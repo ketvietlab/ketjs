@@ -280,13 +280,19 @@ export const channelRoutes = routesOf(
           requiresLotName: tracking !== 'none' && !lot,
         }
       })
-      const version = `ipv_${sha256(JSON.stringify({ row, config, stock, media: base.hasImage }))}`
+      // `base` carries labels resolved from uom and product — a unit renamed
+      // there changed the answer while a hash of the raw row did not. Hash the
+      // representation that was actually built.
+      const content = {
+        ...base,
+        availableQuantity: String(stock.available ?? base.availableQuantity),
+        tracking,
+        stockPositions: positions,
+      }
+      const version = `ipv_${sha256(JSON.stringify(content))}`
       return {
         data: {
-          ...base,
-          availableQuantity: String(stock.available ?? base.availableQuantity),
-          tracking,
-          stockPositions: positions,
+          ...content,
           version,
           availableActions: [],
           readOnly: true,
