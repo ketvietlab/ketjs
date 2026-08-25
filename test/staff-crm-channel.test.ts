@@ -61,6 +61,10 @@ const boot = async (t: TestContext) => {
     'crm.case.move',
     'crm.case.assign',
     'crm.case.markWon',
+    'crm.case.markLost',
+    'crm.case.save',
+    'crm.activity.schedule',
+    'crm.activity.complete',
     'activity.listTypes',
   ])
     await fixture('user.grantFunction', {
@@ -403,4 +407,98 @@ test('staff CRM assign and won commands return the refreshed safe projection', a
     body: JSON.stringify({ stageId: 'crm-stage-qualified', expectedVersion: 1 }),
   })
   assert.equal(hidden.status, 404)
+})
+
+test('staff CRM creates actor-visible leads and marks opportunities lost', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const created = await e2e.client.request('/api/staff/v1/crm/leads/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-create-mobile-lead'),
+    body: JSON.stringify({
+      name: 'Lead created from staff channel',
+      type: 'lead',
+      partnerId: 'customer',
+      expectedRevenue: '7500',
+    }),
+  })
+  assert.equal(created.status, 200)
+  const createdBody = (await created.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(createdBody.data.outcome, 'created')
+  assert.equal(createdBody.data.lead.name, 'Lead created from staff channel')
+  assert.equal(createdBody.data.lead.expectedRevenue, '7500')
+  assert.equal(createdBody.data.lead.version, 1)
+  assert.match(String(createdBody.data.lead.id), /^[0-9a-f-]{36}$/)
+
+  const lost = await e2e.client.request('/api/staff/v1/crm/leads/opportunity-open/lost', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-opportunity-lost'),
+    body: JSON.stringify({ expectedVersion: 1, lostReason: 'Budget deferred' }),
+  })
+  assert.equal(lost.status, 200)
+  const lostBody = (await lost.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(lostBody.data.outcome, 'lost')
+  assert.equal(lostBody.data.lead.outcome, 'lost')
+  assert.equal(lostBody.data.lead.version, 2)
+})
+
+test('staff CRM schedules and completes only activities belonging to the addressed lead', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const scheduled = await e2e.client.request('/api/staff/v1/crm/leads/lead-a/activities', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-schedule-mobile-activity'),
+    body: JSON.stringify({
+      activityTypeId: 'crm-next-action',
+      dueDate: '2026-08-26',
+      expectedVersion: 1,
+    }),
+  })
+  assert.equal(scheduled.status, 200)
+  const scheduledBody = (await scheduled.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(scheduledBody.data.outcome, 'activity_scheduled')
+  const nextActivity = scheduledBody.data.lead.nextActivity as Row
+  assert.equal(nextActivity.summary, 'CRM next action')
+  assert.equal(nextActivity.dueDate, '2026-08-26')
+
+  const wrongLead = await e2e.client.request(
+    `/api/staff/v1/crm/leads/opportunity-open/activities/${String(nextActivity.id)}/complete`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'crm-complete-wrong-lead'),
+      body: JSON.stringify({ expectedVersion: 1, completedDate: '2026-08-25' }),
+    },
+  )
+  assert.equal(wrongLead.status, 404)
+
+  const completed = await e2e.client.request(
+    `/api/staff/v1/crm/leads/lead-a/activities/${String(nextActivity.id)}/complete`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'crm-complete-mobile-activity'),
+      body: JSON.stringify({ expectedVersion: 1, completedDate: '2026-08-25' }),
+    },
+  )
+  assert.equal(completed.status, 200)
+  const completedBody = (await completed.json()) as Envelope<{ outcome: string; lead: Row }>
+  assert.equal(completedBody.data.outcome, 'activity_completed')
+  assert.equal((completedBody.data.lead.nextActivity as Row).id, 'activity-a')
+
+  const stale = await e2e.client.request('/api/staff/v1/crm/leads/lead-a/activities', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'crm-schedule-stale-version'),
+    body: JSON.stringify({
+      activityTypeId: 'crm-next-action',
+      dueDate: '2026-08-28',
+      expectedVersion: 99,
+    }),
+  })
+  assert.equal(stale.status, 409)
+  assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'crm.error.stageConflict')
 })
