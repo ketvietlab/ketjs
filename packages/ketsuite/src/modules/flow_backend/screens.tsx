@@ -5,8 +5,8 @@ import {
   dataTable,
   emptyState,
   Framed,
-  kanbanCard,
-  kanbanGrid,
+  KanbanCard,
+  KanbanGrid,
   linkButton,
   RecordActions,
   RecordForm,
@@ -25,7 +25,11 @@ const priorityLabel = (_: Translator, value: unknown): string => {
 }
 const priorityBadge = (_: Translator, value: unknown): TemplateResult => {
   const raw = String(value ?? 'normal')
-  return badge(priorityLabel(_, value), raw === 'urgent' ? 'danger' : raw === 'high' ? 'warning' : 'neutral', raw)
+  return badge(
+    priorityLabel(_, value),
+    raw === 'urgent' ? 'danger' : raw === 'high' ? 'warning' : 'neutral',
+    raw,
+  )
 }
 const sprintStateBadge = (_: Translator, value: unknown): TemplateResult => {
   const raw = String(value ?? 'planned')
@@ -121,15 +125,15 @@ export const boardScreen = (
   projectName: string,
   board: JSXChild,
 ): TemplateResult => (
-  <Framed translator={_} title={projectName} frame={frame} body={<Section title={projectName} body={board} />} />
+  <Framed
+    translator={_}
+    title={projectName}
+    frame={frame}
+    body={<Section title={projectName} body={board} />}
+  />
 )
 
-export const mapScreen = (
-  _: Translator,
-  frame: Frame,
-  epicTitle: string,
-  map: JSXChild,
-): TemplateResult => (
+export const mapScreen = (_: Translator, frame: Frame, epicTitle: string, map: JSXChild): TemplateResult => (
   <Framed translator={_} title={epicTitle} frame={frame} body={<Section title={epicTitle} body={map} />} />
 )
 
@@ -342,19 +346,19 @@ export const issueDetailScreen = (
                       label: '',
                       align: 'end',
                       cell: (item) =>
-                        item.direction === 'out'
-                          ? (
-                              <RecordForm
-                                action={endpoint}
-                                hidden={{ action: 'removeDependency', id: String(item.id) }}
-                                fields={[]}
-                                submit={_('flow_backend.action.remove')}
-                                submitVariant="destructive"
-                                submitSize="compact"
-                                layout="inline"
-                              />
-                            )
-                          : '—',
+                        item.direction === 'out' ? (
+                          <RecordForm
+                            action={endpoint}
+                            hidden={{ action: 'removeDependency', id: String(item.id) }}
+                            fields={[]}
+                            submit={_('flow_backend.action.remove')}
+                            submitVariant="destructive"
+                            submitSize="compact"
+                            layout="inline"
+                          />
+                        ) : (
+                          '—'
+                        ),
                     },
                   ],
                 })
@@ -405,7 +409,10 @@ export const issueDetailScreen = (
             />,
             ...(comments.length
               ? comments.map((item) => (
-                  <Surface padding="compact" body={stack([when(item.createdAt), String(item.body)], 'compact')} />
+                  <Surface
+                    padding="compact"
+                    body={stack([when(item.createdAt), String(item.body)], 'compact')}
+                  />
                 ))
               : [empty(_)]),
           ])}
@@ -413,7 +420,10 @@ export const issueDetailScreen = (
         !!tags.length && (
           <Section
             title={_('flow_backend.field.tags')}
-            body={stack(tags.map((tag) => badge(String(tag.name), 'neutral', String(tag.id))), 'compact')}
+            body={stack(
+              tags.map((tag) => badge(String(tag.name), 'neutral', String(tag.id))),
+              'compact',
+            )}
           />
         ),
       ])}
@@ -447,39 +457,42 @@ export const epicsScreen = (
           />
         }
       />,
-      epics.length
-        ? kanbanGrid({
-            rows: epics,
-            id: (epic) => String(epic.id),
-            card: (epic) =>
-              kanbanCard({
-                key: String(epic.id),
-                title: String(epic.title),
-                href: `/admin/flow/projects/${String(epic.projectId)}/issues?f.epicId=${String(epic.id)}`,
-                meta: _('flow_backend.epics.issueCount', { count: Number(epic.totalCount ?? 0) }),
-                actions: stack(
-                  [
-                    linkButton({
-                      href: `/admin/flow/projects/${String(epic.projectId)}/epics/${String(epic.id)}/map`,
-                      label: _('flow_backend.epics.map'),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                    <RecordForm
-                      action={endpoint}
-                      hidden={{ action: 'archive', id: String(epic.id) }}
-                      fields={[]}
-                      submit={_('flow_backend.action.archive')}
-                      submitVariant="destructive"
-                      submitSize="compact"
-                      layout="inline"
-                    />,
-                  ],
-                  'compact',
-                ),
-              }),
-          })
-        : empty(_),
+      epics.length ? (
+        <KanbanGrid
+          rows={epics}
+          id={(epic) => String(epic.id)}
+          card={(epic) => (
+            <KanbanCard
+              key={String(epic.id)}
+              title={String(epic.title)}
+              href={`/admin/flow/projects/${String(epic.projectId)}/issues?f.epicId=${String(epic.id)}`}
+              meta={_('flow_backend.epics.issueCount', { count: Number(epic.totalCount ?? 0) })}
+              actions={stack(
+                [
+                  linkButton({
+                    href: `/admin/flow/projects/${String(epic.projectId)}/epics/${String(epic.id)}/map`,
+                    label: _('flow_backend.epics.map'),
+                    variant: 'tertiary',
+                    size: 'compact',
+                  }),
+                  <RecordForm
+                    action={endpoint}
+                    hidden={{ action: 'archive', id: String(epic.id) }}
+                    fields={[]}
+                    submit={_('flow_backend.action.archive')}
+                    submitVariant="destructive"
+                    submitSize="compact"
+                    layout="inline"
+                  />,
+                ],
+                'compact',
+              )}
+            />
+          )}
+        />
+      ) : (
+        empty(_)
+      ),
     ])}
   />
 )
@@ -515,14 +528,29 @@ export const sprintsScreen = (
             rows: sprints,
             id: (row) => String(row.id),
             columns: [
-              { key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name) },
+              {
+                key: 'name',
+                label: _('flow_backend.field.name'),
+                priority: 'primary',
+                cell: (row) => String(row.name),
+              },
               {
                 key: 'state',
                 label: _('flow_backend.field.state'),
                 cell: (row) => sprintStateBadge(_, row.state),
               },
-              { key: 'startDate', label: _('flow_backend.field.startDate'), kind: 'date', cell: (row) => when(row.startDate) },
-              { key: 'endDate', label: _('flow_backend.field.endDate'), kind: 'date', cell: (row) => when(row.endDate) },
+              {
+                key: 'startDate',
+                label: _('flow_backend.field.startDate'),
+                kind: 'date',
+                cell: (row) => when(row.startDate),
+              },
+              {
+                key: 'endDate',
+                label: _('flow_backend.field.endDate'),
+                kind: 'date',
+                cell: (row) => when(row.endDate),
+              },
               {
                 key: 'actions',
                 label: '',
@@ -532,13 +560,17 @@ export const sprintsScreen = (
                     <RecordActions
                       action={endpoint}
                       hidden={{ id: String(row.id) }}
-                      actions={[{ value: 'start', label: _('flow_backend.action.start'), variant: 'secondary' }]}
+                      actions={[
+                        { value: 'start', label: _('flow_backend.action.start'), variant: 'secondary' },
+                      ]}
                     />
                   ) : row.state === 'active' ? (
                     <RecordActions
                       action={endpoint}
                       hidden={{ id: String(row.id) }}
-                      actions={[{ value: 'close', label: _('flow_backend.action.close'), variant: 'secondary' }]}
+                      actions={[
+                        { value: 'close', label: _('flow_backend.action.close'), variant: 'secondary' },
+                      ]}
                     />
                   ) : (
                     '—'
@@ -579,9 +611,23 @@ export const settingsScreen = (
                 rows: options.columns,
                 id: (row) => String(row.id),
                 columns: [
-                  { key: 'sequence', label: _('flow_backend.field.sequence'), cell: (row) => String(row.sequence) },
-                  { key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name) },
-                  { key: 'code', label: _('flow_backend.field.code'), kind: 'identifier', cell: (row) => String(row.code) },
+                  {
+                    key: 'sequence',
+                    label: _('flow_backend.field.sequence'),
+                    cell: (row) => String(row.sequence),
+                  },
+                  {
+                    key: 'name',
+                    label: _('flow_backend.field.name'),
+                    priority: 'primary',
+                    cell: (row) => String(row.name),
+                  },
+                  {
+                    key: 'code',
+                    label: _('flow_backend.field.code'),
+                    kind: 'identifier',
+                    cell: (row) => String(row.code),
+                  },
                   {
                     key: 'terminal',
                     label: _('flow_backend.field.terminalState'),
@@ -604,19 +650,19 @@ export const settingsScreen = (
                     label: '',
                     align: 'end',
                     cell: (row) =>
-                      row.terminalState || row.active === false
-                        ? '—'
-                        : (
-                            <RecordForm
-                              action={endpoint}
-                              hidden={{ action: 'archiveColumn', id: String(row.id) }}
-                              fields={[]}
-                              submit={_('flow_backend.action.archive')}
-                              submitVariant="destructive"
-                              submitSize="compact"
-                              layout="inline"
-                            />
-                          ),
+                      row.terminalState || row.active === false ? (
+                        '—'
+                      ) : (
+                        <RecordForm
+                          action={endpoint}
+                          hidden={{ action: 'archiveColumn', id: String(row.id) }}
+                          fields={[]}
+                          submit={_('flow_backend.action.archive')}
+                          submitVariant="destructive"
+                          submitSize="compact"
+                          layout="inline"
+                        />
+                      ),
                   },
                 ],
               })
@@ -639,7 +685,12 @@ export const settingsScreen = (
                 rows: options.tags,
                 id: (row) => String(row.id),
                 columns: [
-                  { key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name) },
+                  {
+                    key: 'name',
+                    label: _('flow_backend.field.name'),
+                    priority: 'primary',
+                    cell: (row) => String(row.name),
+                  },
                   {
                     key: 'edit',
                     label: '',

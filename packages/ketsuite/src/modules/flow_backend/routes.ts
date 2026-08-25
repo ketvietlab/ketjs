@@ -4,11 +4,11 @@ import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { ISSUE_PRIORITIES } from '../flow/types.ts'
 import { issueListSearch } from '../flow/search.ts'
-import { adminPage, choices, inLocale, resultErrors } from '../backend/screen.ts'
+import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { assigneeControl, epicControl, issueControl, sprintControl, tagsControl } from './relation-control.ts'
+import { assigneeControl, epicControl, issueControl, tagsControl } from './relation-control.ts'
 import { FLOW_PAGE_SIZE, keepForListSearch, listFacets, listMenus, loadListGroups } from './list-search.ts'
 import {
   boardScreen,
@@ -60,7 +60,8 @@ async function projectOf(ctx: ServeContext, url: URL, req: Req, id: string): Pro
   return (found ?? []).find((row) => String(row.id) === id) ?? null
 }
 
-const errorsOf = (result: unknown, _: Translator): string[] => resultErrors(result, _, 'flow_backend.error.invalid')
+const errorsOf = (result: unknown, _: Translator): string[] =>
+  resultErrors(result, _, 'flow_backend.error.invalid')
 
 const pager = (url: URL, state: ListState, rows: number, total: number) => {
   const link = (target: number) => encodeListState({ ...state, page: target }, url)
@@ -465,10 +466,21 @@ export const routes: Record<string, RouteEntry> = {
       // per-epic issue counts.
       const dependencies = (issue.dependencies as AnyRow[] | undefined) ?? []
       const dependents = (issue.dependents as AnyRow[] | undefined) ?? []
-      const relatedIds = [...new Set([...dependencies.map((d) => d.dependsOnIssueId), ...dependents.map((d) => d.issueId)].map(String))]
+      const relatedIds = [
+        ...new Set(
+          [...dependencies.map((d) => d.dependsOnIssueId), ...dependents.map((d) => d.issueId)].map(String),
+        ),
+      ]
       const relatedTitles = relatedIds.length
         ? new Map(
-            ((await ctx.call('flow.issue.options', { projectId: issue.projectId, limit: 200 }, url, req)) as AnyRow[])
+            (
+              (await ctx.call(
+                'flow.issue.options',
+                { projectId: issue.projectId, limit: 200 },
+                url,
+                req,
+              )) as AnyRow[]
+            )
               .filter((row) => relatedIds.includes(String(row.id)))
               .map((row) => [String(row.id), String(row.title)]),
           )
@@ -489,13 +501,22 @@ export const routes: Record<string, RouteEntry> = {
         assignee: await assigneeControl(ctx, url, req, _, {
           id: 'issue-assignee',
           value: issue.assigneeUserId ? String(issue.assigneeUserId) : null,
-          users: issue.assigneeUserId ? [{ value: String(issue.assigneeUserId), label: String(issue.assigneeName ?? issue.assigneeUserId) }] : [],
+          users: issue.assigneeUserId
+            ? [
+                {
+                  value: String(issue.assigneeUserId),
+                  label: String(issue.assigneeName ?? issue.assigneeUserId),
+                },
+              ]
+            : [],
         }),
         epic: await epicControl(ctx, url, req, _, {
           id: 'issue-epic',
           value: issue.epicId ? String(issue.epicId) : null,
           projectId: String(issue.projectId),
-          epics: issue.epicId ? [{ value: String(issue.epicId), label: String(issue.epicTitle ?? issue.epicId) }] : [],
+          epics: issue.epicId
+            ? [{ value: String(issue.epicId), label: String(issue.epicTitle ?? issue.epicId) }]
+            : [],
         }),
         tags: await tagsControl(ctx, url, req, _, {
           id: 'issue-tags',
@@ -517,7 +538,14 @@ export const routes: Record<string, RouteEntry> = {
         title: String(issue.title),
         translate: false,
         body: (_, frame) =>
-          issueDetailScreen(_, frame, issue, { fields: issueFields(_, issue, controls), columns, sprints, controls, editor, errors }),
+          issueDetailScreen(_, frame, issue, {
+            fields: issueFields(_, issue, controls),
+            columns,
+            sprints,
+            controls,
+            editor,
+            errors,
+          }),
       })
     },
 
@@ -574,24 +602,35 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
         body: (_, frame) =>
-          projectsScreen(_, frame, rows, [
-            { name: 'key', label: _('flow_backend.field.key'), required: true },
-            { name: 'name', label: _('flow_backend.field.name'), required: true },
-            { name: 'description', label: _('flow_backend.field.description'), type: 'textarea', span: 'full' },
-            {
-              name: 'template',
-              label: _('flow_backend.field.template'),
-              type: 'select',
-              value: 'simple',
-              options: TEMPLATE_OPTIONS(_),
-            },
-            {
-              name: 'customColumns',
-              label: _('flow_backend.field.customColumns'),
-              help: _('flow_backend.field.customColumnsHint'),
-              span: 'full',
-            },
-          ], errors),
+          projectsScreen(
+            _,
+            frame,
+            rows,
+            [
+              { name: 'key', label: _('flow_backend.field.key'), required: true },
+              { name: 'name', label: _('flow_backend.field.name'), required: true },
+              {
+                name: 'description',
+                label: _('flow_backend.field.description'),
+                type: 'textarea',
+                span: 'full',
+              },
+              {
+                name: 'template',
+                label: _('flow_backend.field.template'),
+                type: 'select',
+                value: 'simple',
+                options: TEMPLATE_OPTIONS(_),
+              },
+              {
+                name: 'customColumns',
+                label: _('flow_backend.field.customColumns'),
+                help: _('flow_backend.field.customColumnsHint'),
+                span: 'full',
+              },
+            ],
+            errors,
+          ),
       })
     },
 
@@ -616,7 +655,12 @@ export const routes: Record<string, RouteEntry> = {
           const rows = (result.rows as AnyRow[]) ?? []
           const more = new URLSearchParams({ 'f.columnId': String(column.id) })
           return {
-            column: { ...column, total, loadMoreHref: rows.length < total ? `/admin/flow/projects/${projectId}/issues?${more.toString()}` : null },
+            column: {
+              ...column,
+              total,
+              loadMoreHref:
+                rows.length < total ? `/admin/flow/projects/${projectId}/issues?${more.toString()}` : null,
+            },
             rows,
           }
         }),
@@ -703,7 +747,13 @@ export const routes: Record<string, RouteEntry> = {
       const cursor = (state.page - 1) * FLOW_PAGE_SIZE
       const result = (await ctx.call(
         'flow.issue.list',
-        { projectId, listState: state, timezone, cursor: String(cursor), limit: grouped ? 1 : FLOW_PAGE_SIZE },
+        {
+          projectId,
+          listState: state,
+          timezone,
+          cursor: String(cursor),
+          limit: grouped ? 1 : FLOW_PAGE_SIZE,
+        },
         url,
         req,
       )) as AnyRow
@@ -728,7 +778,9 @@ export const routes: Record<string, RouteEntry> = {
               facets: listFacets(_, url, state, spec),
               menus: listMenus(_, url, state, spec),
             },
-            pager: grouped ? null : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+            pager: grouped
+              ? null
+              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           }
           return issuesScreen(
             _,
@@ -801,10 +853,18 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name),
         translate: false,
         body: (_, frame) =>
-          epicsScreen(_, frame, String(project.name), endpoint, withCounts, [
-            { name: 'title', label: _('flow_backend.field.title'), required: true },
-            { name: 'color', label: _('flow_backend.field.color'), type: 'color' },
-          ], errors),
+          epicsScreen(
+            _,
+            frame,
+            String(project.name),
+            endpoint,
+            withCounts,
+            [
+              { name: 'title', label: _('flow_backend.field.title'), required: true },
+              { name: 'color', label: _('flow_backend.field.color'), type: 'color' },
+            ],
+            errors,
+          ),
       })
     },
 
@@ -830,7 +890,9 @@ export const routes: Record<string, RouteEntry> = {
       ])
       const epic = epics.find((row) => String(row.id) === epicId)
       if (!epic) return text('not found', { status: 404 })
-      const terminalColumnIds = new Set(columns.filter((column) => column.terminalState).map((column) => String(column.id)))
+      const terminalColumnIds = new Set(
+        columns.filter((column) => column.terminalState).map((column) => String(column.id)),
+      )
       const issues = (found.rows as AnyRow[]) ?? []
       const issueIds = issues.map((row) => String(row.id))
       const deps = (await ctx.call('flow.issue.dependencies', { issueIds }, url, req)) as AnyRow[]
@@ -847,7 +909,9 @@ export const routes: Record<string, RouteEntry> = {
             done: terminalColumnIds.has(String(row.columnId)),
           })),
           edges: deps
-            .filter((dep) => issueIdSet.has(String(dep.issueId)) && issueIdSet.has(String(dep.dependsOnIssueId)))
+            .filter(
+              (dep) => issueIdSet.has(String(dep.issueId)) && issueIdSet.has(String(dep.dependsOnIssueId)),
+            )
             .map((dep) => ({ source: dep.dependsOnIssueId, target: dep.issueId })),
         }),
       })
@@ -901,11 +965,19 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name),
         translate: false,
         body: (_, frame) =>
-          sprintsScreen(_, frame, String(project.name), endpoint, sprints, [
-            { name: 'name', label: _('flow_backend.field.name'), required: true },
-            { name: 'startDate', label: _('flow_backend.field.startDate'), type: 'date' },
-            { name: 'endDate', label: _('flow_backend.field.endDate'), type: 'date' },
-          ], errors),
+          sprintsScreen(
+            _,
+            frame,
+            String(project.name),
+            endpoint,
+            sprints,
+            [
+              { name: 'name', label: _('flow_backend.field.name'), required: true },
+              { name: 'startDate', label: _('flow_backend.field.startDate'), type: 'date' },
+              { name: 'endDate', label: _('flow_backend.field.endDate'), type: 'date' },
+            ],
+            errors,
+          ),
       })
     },
 
@@ -975,16 +1047,41 @@ export const routes: Record<string, RouteEntry> = {
           settingsScreen(_, frame, String(project.name), endpoint, {
             columns,
             columnFields: [
-              { name: 'name', label: _('flow_backend.field.name'), required: true, value: String(editingColumn?.name ?? '') },
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingColumn?.name ?? ''),
+              },
               { name: 'code', label: _('flow_backend.field.code'), value: String(editingColumn?.code ?? '') },
-              { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: String(editingColumn?.sequence ?? 10) },
-              { name: 'terminalState', label: _('flow_backend.field.terminalState'), type: 'checkbox', value: editingColumn?.terminalState === true },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: String(editingColumn?.sequence ?? 10),
+              },
+              {
+                name: 'terminalState',
+                label: _('flow_backend.field.terminalState'),
+                type: 'checkbox',
+                value: editingColumn?.terminalState === true,
+              },
             ],
             editingColumnId: editingColumn ? String(editingColumn.id) : undefined,
             tags,
             tagFields: [
-              { name: 'name', label: _('flow_backend.field.name'), required: true, value: String(editingTag?.name ?? '') },
-              { name: 'color', label: _('flow_backend.field.color'), type: 'color', value: String(editingTag?.color ?? '') },
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingTag?.name ?? ''),
+              },
+              {
+                name: 'color',
+                label: _('flow_backend.field.color'),
+                type: 'color',
+                value: String(editingTag?.color ?? ''),
+              },
             ],
             editingTagId: editingTag ? String(editingTag.id) : undefined,
             errors,
