@@ -14,6 +14,26 @@ const decimal = (value: number): string => String(money(value))
 const now = (): string => new Date().toISOString()
 const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
+class PurchaseRefused extends Error {
+  result: Row
+  constructor(result: Row) {
+    super('refused')
+    this.result = result
+  }
+}
+
+const claimRevision = async (ctx: Ctx, order: Row, expectedRevision?: unknown): Promise<boolean> => {
+  const revision = n(order.revision)
+  if (expectedRevision !== undefined && revision !== n(expectedRevision)) return false
+  const changed = await ctx.db.compareAndSet(
+    'purchase.Order',
+    { id: order.id },
+    { revision: order.revision ?? null },
+    { revision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
+}
+
 async function currency(ctx: Ctx): Promise<string> {
   if (!ctx.scope.company) throw new Error('purchase requires an active company')
   const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
@@ -167,6 +187,8 @@ async function totals(ctx: Ctx, orderId: unknown) {
     untaxed = money(untaxed + amounts.untaxed)
     tax = money(tax + amounts.tax)
   }
+  const order = (await ctx.db.select('purchase.Order', { id: orderId }))[0]
+  if (!order) return
   await ctx.db.update(
     'purchase.Order',
     { id: orderId },
@@ -174,6 +196,7 @@ async function totals(ctx: Ctx, orderId: unknown) {
       amountUntaxed: decimal(untaxed),
       amountTax: decimal(tax),
       amountTotal: decimal(untaxed + tax),
+      revision: n(order.revision) + 1,
     },
   )
 }
@@ -381,33 +404,44 @@ async function createReceipt(ctx: Ctx, order: Row) {
   return { ok: true, pickingId }
 }
 
-async function confirm(ctx: Ctx, id: unknown, approval: boolean) {
+async function confirm(ctx: Ctx, id: unknown, approval: boolean, expectedRevision?: unknown) {
   const order = (await ctx.db.select('purchase.Order', { id }))[0]
   if (!order) return invalid('id', 'purchase order does not exist')
+  if (expectedRevision !== undefined && n(order.revision) !== n(expectedRevision))
+    return invalid('expectedRevision', 'purchase order changed')
   if (order.state === 'purchase') return { ok: true, id, state: order.state }
   if (!['draft', 'sent', 'to approve'].includes(String(order.state)))
     return invalid('state', 'only an RFQ can be confirmed')
   if (!(await ctx.db.select('purchase.OrderLine', { orderId: id })).length)
     return invalid('lines', 'an RFQ needs at least one product line')
-  if (approval) {
-    await ctx.db.update('purchase.Order', { id }, { state: 'to approve' })
-    return { ok: true, id, state: 'to approve' }
-  }
-  // The receipt is a picking plus one move per line plus the order's own state.
-  // Written separately, a failure part-way left a half-built receipt attached to
-  // an order that still looked like a request.
-  return ctx.tx(async (tx) => {
-    const receipt = await createReceipt(tx, order)
-    if ((receipt as Row).ok !== true) return receipt
-    await tx.db.update('purchase.Order', { id }, { state: 'purchase', dateApprove: now() })
-    await refreshInvoiceStatus(tx, id)
+  try {
+    let pickingId: unknown
+    await ctx.tx(async (tx) => {
+      const current = (await tx.db.select('purchase.Order', { id }))[0]
+      if (!current || !(await claimRevision(tx, current, expectedRevision)))
+        throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+      if (approval) {
+        await tx.db.update('purchase.Order', { id }, { state: 'to approve' })
+        return
+      }
+      // The receipt is a picking plus one move per line plus the order's own
+      // state. A domain refusal rolls the entire graph back.
+      const receipt = (await createReceipt(tx, current)) as Row
+      if (receipt.ok !== true) throw new PurchaseRefused(receipt)
+      pickingId = receipt.pickingId
+      await tx.db.update('purchase.Order', { id }, { state: 'purchase', dateApprove: now() })
+      await refreshInvoiceStatus(tx, id)
+    })
     return {
       ok: true,
       id,
-      state: 'purchase',
-      ...((receipt as Row).pickingId ? { pickingId: (receipt as Row).pickingId } : {}),
+      state: approval ? 'to approve' : 'purchase',
+      ...(pickingId ? { pickingId } : {}),
     }
-  })
+  } catch (error) {
+    if (error instanceof PurchaseRefused) return error.result
+    throw error
+  }
 }
 
 export const functions: Record<string, FnSpec> = {
@@ -570,6 +604,7 @@ export const functions: Record<string, FnSpec> = {
       'read:purchase.Order',
       'read:purchase.OrderLine',
       'read:stock.Move',
+      'read:stock.MoveLine',
       'read:stock.Picking',
       'read:account.MoveLine',
       'read:account.Move',
@@ -602,7 +637,31 @@ export const functions: Record<string, FnSpec> = {
         const bill = (await ctx.db.select('account.Move', { id }))[0]
         if (bill) bills.push(bill)
       }
-      return { ...order, invoiceStatus: await invoiceStatus(ctx, args.id), lines, moves, bills }
+      const detailedMoves: Row[] = await Promise.all(
+        moves.map(async (move) => ({
+          ...move,
+          tracking: String((await productContext(ctx, move.productId))?.template.tracking ?? 'none'),
+          lines: await ctx.db.select('stock.MoveLine', { moveId: move.id }),
+        })),
+      )
+      const pickingIds = [
+        ...new Set(detailedMoves.flatMap((move) => (move.pickingId ? [String(move.pickingId)] : []))),
+      ]
+      const P = ctx.table('stock.Picking')
+      const pickings = pickingIds.length
+        ? (await ctx.db.all(from(P).where(inArray(P.id, pickingIds)))).map((picking) => ({
+            ...picking,
+            moves: detailedMoves.filter((move) => String(move.pickingId) === String(picking.id)),
+          }))
+        : []
+      return {
+        ...order,
+        invoiceStatus: await invoiceStatus(ctx, args.id),
+        lines,
+        moves: detailedMoves,
+        pickings,
+        bills,
+      }
     },
   }),
   createOrder: defineFn({
@@ -655,8 +714,106 @@ export const functions: Record<string, FnSpec> = {
         amountTax: '0',
         amountTotal: '0',
         notes: args.notes ?? null,
+        revision: 0,
       })
       return { ok: true, id: args.id, name }
+    },
+  }),
+  saveDraft: defineFn({
+    input: {
+      id: 'id',
+      partnerId: 'id',
+      pickingTypeId: 'id?',
+      lines: 'json',
+      create: 'bool?',
+      expectedRevision: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:purchase.Sequence',
+      'write:purchase.Sequence',
+      'read:purchase.Order',
+      'write:purchase.Order',
+      'read:purchase.OrderLine',
+      'write:purchase.OrderLine',
+      'read:purchase.SupplierInfo',
+      'read:partner.Partner',
+      'read:partner.Role',
+      'read:stock.PickingType',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
+      'read:account.Tax',
+      'read:company.Company',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const lines = Array.isArray(args.lines) ? (args.lines as Row[]) : []
+      if (!args.create && args.expectedRevision === undefined)
+        return invalid('expectedRevision', 'purchase order version is required')
+      if (!lines.length || lines.length > 100) return invalid('lines', 'an RFQ needs 1 to 100 lines')
+      if (
+        lines.some(
+          (line) =>
+            !line ||
+            typeof line !== 'object' ||
+            !line.id ||
+            !line.productId ||
+            !line.productUomId ||
+            !(n(line.productQty) > 0),
+        )
+      )
+        return invalid('lines', 'every line needs a product, unit and positive quantity')
+
+      try {
+        await ctx.tx(async (tx) => {
+          let order = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          if (args.create && order) return
+          if (!order) {
+            if (!args.create) throw new PurchaseRefused(invalid('id', 'purchase order does not exist'))
+            if (!args.pickingTypeId)
+              throw new PurchaseRefused(invalid('pickingTypeId', 'receipt operation type is required'))
+            const created = (await functions.createOrder!.handler(tx, {
+              id: args.id,
+              partnerId: args.partnerId,
+              pickingTypeId: args.pickingTypeId,
+            })) as Row
+            if (created.ok !== true) throw new PurchaseRefused(created)
+            order = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          } else {
+            if (order.state !== 'draft' || order.locked)
+              throw new PurchaseRefused(invalid('state', 'only an unlocked RFQ can be updated'))
+            if (!(await claimRevision(tx, order, args.expectedRevision)))
+              throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+          }
+          if (!order) throw new PurchaseRefused(invalid('id', 'purchase order does not exist'))
+          if (!(await tx.db.select('partner.Partner', { id: args.partnerId }))[0])
+            throw new PurchaseRefused(invalid('partnerId', 'vendor does not exist'))
+          if (!(await tx.db.select('partner.Role', { partnerId: args.partnerId, role: 'supplier' }))[0])
+            throw new PurchaseRefused(invalid('partnerId', 'partner is not an active vendor'))
+
+          await tx.db.update('purchase.Order', { id: args.id }, { partnerId: args.partnerId })
+          const L = tx.table('purchase.OrderLine')
+          await tx.db.del(deleteFrom(L).where(eq(L.orderId, String(args.id))))
+          for (const [index, line] of lines.entries()) {
+            const added = (await functions.addLine!.handler(tx, {
+              id: line.id,
+              orderId: args.id,
+              productId: line.productId,
+              productQty: line.productQty,
+              productUomId: line.productUomId,
+              sequence: (index + 1) * 10,
+            })) as Row
+            if (added.ok !== true) throw new PurchaseRefused(added)
+          }
+        })
+      } catch (error) {
+        if (error instanceof PurchaseRefused) return error.result
+        throw error
+      }
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      return { ok: true, id: args.id, revision: n(order?.revision) }
     },
   }),
   addLine: defineFn({
@@ -785,15 +942,15 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   confirmOrder: defineFn({
-    input: { id: 'id', requiresApproval: 'bool?' },
+    input: { id: 'id', requiresApproval: 'bool?', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', state: 'text?', pickingId: 'id?', errors: 'json?' },
     effects: [...confirmEffects],
     idempotent: true,
     agent: true,
-    handler: (ctx, args) => confirm(ctx, args.id, args.requiresApproval === true),
+    handler: (ctx, args) => confirm(ctx, args.id, args.requiresApproval === true, args.expectedRevision),
   }),
   approveOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', state: 'text?', pickingId: 'id?', errors: 'json?' },
     effects: [...confirmEffects],
     idempotent: true,
@@ -801,7 +958,80 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (order?.state !== 'to approve') return invalid('state', 'order is not waiting for approval')
-      return confirm(ctx, args.id, false)
+      return confirm(ctx, args.id, false, args.expectedRevision)
+    },
+  }),
+  receiveOrderReceipt: defineFn({
+    input: { id: 'id', receiptId: 'id', expectedRevision: 'int?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      receiptId: 'id?',
+      receivedAt: 'datetime?',
+      lineCount: 'int?',
+      errors: 'json?',
+    },
+    effects: [
+      ...(stockFunctions.completePicking!.effects ?? []),
+      'read:purchase.Order',
+      'write:purchase.Order',
+      'read:purchase.OrderLine',
+      'write:purchase.OrderLine',
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:uom.Unit',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'purchase order does not exist')
+      if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
+        return invalid('expectedRevision', 'purchase order changed')
+      if (order.state !== 'purchase') return invalid('state', 'only a purchase order can be received')
+      const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
+      const moves: Row[] = []
+      for (const line of lines)
+        moves.push(...(await ctx.db.select('stock.Move', { purchaseLineId: line.id })))
+      const receiptMoves = moves.filter((move) => String(move.pickingId) === String(args.receiptId))
+      const picking = (await ctx.db.select('stock.Picking', { id: args.receiptId }))[0]
+      if (!picking || !receiptMoves.length)
+        return invalid('receiptId', 'receipt does not belong to the purchase order')
+      if (picking.state === 'cancel') return invalid('state', 'a cancelled receipt cannot be received')
+      const quantities: Array<{ moveLineId: string; quantity: number }> = []
+      for (const move of receiptMoves) {
+        const prepared = await ctx.db.select('stock.MoveLine', { moveId: move.id })
+        const quantity = prepared.reduce((sum, row) => sum + n(row.quantity), 0)
+        if (!prepared.length || Math.abs(quantity - n(move.productUomQty)) > 0.000001)
+          return invalid('receiptId', 'receipt quantities need warehouse review before mobile receipt')
+        const context = await productContext(ctx, move.productId)
+        const tracking = String(context?.template.tracking ?? 'none')
+        if (tracking !== 'none' && prepared.some((row) => !row.lotId))
+          return invalid('receiptId', 'tracked receipt lines need lot or serial review')
+        for (const row of prepared) quantities.push({ moveLineId: String(row.id), quantity: n(row.quantity) })
+      }
+      const current = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!current || !(await claimRevision(ctx, current, args.expectedRevision)))
+        return invalid('expectedRevision', 'purchase order changed')
+      // completePicking owns its own atomic stock transaction. Claim the order
+      // version immediately before entering it instead of nesting transactions,
+      // which is not portable across SQLite and PostgreSQL adapters.
+      const completed = (await stockFunctions.completePicking!.handler(ctx, {
+        id: args.receiptId,
+        quantities,
+        createBackorder: false,
+      })) as Row
+      if (completed.ok !== true) return completed
+      await refreshReceived(ctx, args.id)
+      await refreshInvoiceStatus(ctx, args.id)
+      const receipt = (await ctx.db.select('stock.Picking', { id: args.receiptId }))[0]
+      return {
+        ok: true,
+        id: args.id,
+        receiptId: args.receiptId,
+        receivedAt: receipt?.dateDone ?? now(),
+        lineCount: quantities.length,
+      }
     },
   }),
   syncReceipts: defineFn({
@@ -1062,7 +1292,7 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   cancelOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:purchase.Order',
@@ -1079,27 +1309,37 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'purchase order does not exist')
+      if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
+        return invalid('expectedRevision', 'purchase order changed')
       if (order.state === 'cancel') return { ok: true, id: args.id }
-      // Locking is the operator saying "no more changes"; cancellation is the
-      // largest change there is.
-      if (order.locked) return invalid('state', 'a locked order cannot be cancelled')
-      const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
-      // Both of these used to read every stock move and every accounting line in
-      // the company and filter in memory, which cost the whole ledger to cancel
-      // one request.
-      const moves: Row[] = []
-      for (const line of lines)
-        moves.push(...(await ctx.db.select('stock.Move', { purchaseLineId: line.id })))
-      if (moves.some((move) => move.state === 'done'))
-        return invalid('state', 'a received order cannot be cancelled')
-      for (const line of lines)
-        if ((await ctx.db.select('account.MoveLine', { purchaseLineId: line.id })).length)
-          return invalid('state', 'a billed order cannot be cancelled')
-      for (const move of moves) await ctx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
-      for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
-        await ctx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
-      await ctx.db.update('purchase.Order', { id: args.id }, { state: 'cancel' })
-      return { ok: true, id: args.id }
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          if (!current || !(await claimRevision(tx, current, args.expectedRevision)))
+            throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+          // Locking is the operator saying "no more changes"; cancellation is
+          // the largest change there is.
+          if (current.locked)
+            throw new PurchaseRefused(invalid('state', 'a locked order cannot be cancelled'))
+          const lines = await tx.db.select('purchase.OrderLine', { orderId: args.id })
+          const moves: Row[] = []
+          for (const line of lines)
+            moves.push(...(await tx.db.select('stock.Move', { purchaseLineId: line.id })))
+          if (moves.some((move) => move.state === 'done'))
+            throw new PurchaseRefused(invalid('state', 'a received order cannot be cancelled'))
+          for (const line of lines)
+            if ((await tx.db.select('account.MoveLine', { purchaseLineId: line.id })).length)
+              throw new PurchaseRefused(invalid('state', 'a billed order cannot be cancelled'))
+          for (const move of moves) await tx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
+          for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
+            await tx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
+          await tx.db.update('purchase.Order', { id: args.id }, { state: 'cancel' })
+        })
+        return { ok: true, id: args.id }
+      } catch (error) {
+        if (error instanceof PurchaseRefused) return error.result
+        throw error
+      }
     },
   }),
 }
