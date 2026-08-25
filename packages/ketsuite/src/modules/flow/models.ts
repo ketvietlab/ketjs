@@ -128,6 +128,32 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * Which project a reader's board is looking at.
+   *
+   * A board has to be one project's: `Column` belongs to a project by design,
+   * so a board spanning them has nothing to group by. The route is global, the
+   * scope is per person, and this is where that scope lives.
+   *
+   * Flow's own model rather than a preference store for the whole suite.
+   * Nothing here has one, and inventing one as a side effect of a board would
+   * be deciding on every other module's behalf how they keep per-user state.
+   * When a second module needs it, that is the moment to lift it — not this
+   * one.
+   */
+  BoardScope: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      projectId: 'ref:flow.Project',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      reader: { fields: ['companyId', 'userId'], unique: true },
+    },
+  },
+
   Epic: {
     scope: 'company',
     fields: {
@@ -178,6 +204,15 @@ export const models: Record<string, ModelDef> = {
       title: 'text',
       assigneeUserId: 'ref:user.User?',
       priority: 'text',
+      /**
+       * When work is meant to start. Optional, and usually absent: most issues
+       * are written down without anybody deciding a start date, and a Gantt
+       * chart still has to draw them. `serializeIssueList` answers that with
+       * `startsOn`, which falls back to the day the issue was created — a
+       * separate field, so a bar can be drawn without the fallback being
+       * written back as though somebody had chosen it.
+       */
+      startDate: 'date?',
       dueDate: 'date?',
       /** Story points or hours; the unit is a team convention, not a schema one. */
       estimate: 'decimal?',

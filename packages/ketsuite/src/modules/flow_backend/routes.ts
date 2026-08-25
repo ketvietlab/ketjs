@@ -180,6 +180,12 @@ const issueFields = (
   { name: 'assigneeUserId', label: _('flow_backend.field.assignee'), control: controls.assignee },
   { name: 'epicId', label: _('flow_backend.field.epic'), control: controls.epic },
   { name: 'tagIds', label: _('flow_backend.field.tags'), control: controls.tags },
+  {
+    name: 'startDate',
+    label: _('flow_backend.field.startDate'),
+    type: 'date',
+    value: String(row.startDate ?? ''),
+  },
   { name: 'dueDate', label: _('flow_backend.field.dueDate'), type: 'date', value: String(row.dueDate ?? '') },
   {
     name: 'estimate',
@@ -620,6 +626,7 @@ export const routes: Record<string, RouteEntry> = {
                   .map(([key, value]) => [key.slice('field:'.length), value]),
               ),
               tagIds: form.tagIds ? form.tagIds.split(',').filter(Boolean) : [],
+              startDate: form.startDate || null,
               dueDate: form.dueDate || null,
               estimate: form.estimate || undefined,
               expectedVersion: Number(form.expectedVersion ?? 0),
@@ -909,6 +916,29 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
+  /**
+   * The board, without saying which project in the path.
+   *
+   * A board is one project's — `flow.Column` belongs to a project, so there is
+   * nothing for a board spanning them to group by. This resolves the reader's
+   * own last board and sends them there; the first time, when there is nothing
+   * remembered and nothing to guess from, it sends them to the project list to
+   * choose rather than picking one for them.
+   */
+  '/admin/flow/board':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const scope = (await ctx.call('flow.board.scope', {}, url, req)) as { projectId?: string | null }
+      if (scope.projectId)
+        return seeOther(inLocale(url, `/admin/flow/projects/${String(scope.projectId)}/board`))
+      const projects = (await ctx.call('flow.project.list', { limit: 2 }, url, req)) as AnyRow[]
+      // One project is not a choice, so it is not worth making somebody make it.
+      if (projects.length === 1)
+        return seeOther(inLocale(url, `/admin/flow/projects/${String(projects[0]!.id)}/board`))
+      return seeOther(inLocale(url, '/admin/flow/projects'))
+    },
+
   '/admin/flow/projects/{id}/board':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -916,6 +946,10 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
+      // Opening a board is what says which one you meant. `/admin/flow/board`
+      // reads this back, so the global entry lands where you last were rather
+      // than asking again every time.
+      await ctx.call('flow.board.remember', { projectId }, url, req).catch(() => null)
       const columns = (await ctx.call('flow.column.list', { projectId }, url, req)) as AnyRow[]
       const BOARD_COLUMN = 40
       const pages = await Promise.all(

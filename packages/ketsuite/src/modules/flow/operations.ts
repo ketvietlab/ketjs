@@ -269,6 +269,16 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     const counted = progress.get(String(row.id))
     return {
       ...row,
+      /**
+       * The day a bar starts, which is not the same fact as `startDate`.
+       *
+       * Nobody sets a start date on most issues, and a chart still has to
+       * begin somewhere; the day it was written down is the honest stand-in.
+       * Kept separate from the stored value on purpose — a form bound to this
+       * would show the fallback as an answer, and saving would then write it
+       * back as one.
+       */
+      startsOn: row.startDate ?? (row.createdAt ? String(row.createdAt).slice(0, 10) : null),
       subtaskTotal: counted?.total ?? 0,
       subtaskDone: counted?.done ?? 0,
       /**
@@ -464,6 +474,7 @@ export type SaveIssueInput = {
   title: string
   assigneeUserId?: string | null
   priority?: string
+  startDate?: string | null
   dueDate?: string | null
   estimate?: unknown
   tagIds?: string[]
@@ -567,6 +578,7 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       title: input.title.trim(),
       assigneeUserId: kept(input.assigneeUserId, existing?.assigneeUserId),
       priority: input.priority ?? existing?.priority ?? 'normal',
+      startDate: kept(input.startDate, existing?.startDate),
       dueDate: kept(input.dueDate, existing?.dueDate),
       estimate: input.estimate == null ? (existing?.estimate ?? null) : String(input.estimate),
       active: true,

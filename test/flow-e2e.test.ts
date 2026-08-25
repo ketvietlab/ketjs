@@ -504,3 +504,72 @@ test('flow: a project defines its own fields, and an issue answers them', async 
     await e2e.close()
   }
 })
+
+/**
+ * A board is one project's, because `flow.Column` is. So the global board
+ * entry has to know which one a reader meant, and that answer belongs to the
+ * reader rather than to the deployment.
+ */
+test('flow: the board a reader last opened is remembered for that reader alone', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-a', kind: 'person', name: 'Reader A' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-b', kind: 'person', name: 'Reader B' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    for (const [id, partnerId] of [
+      ['ua', 'p-a'],
+      ['ub', 'p-b'],
+    ]) {
+      await e2e.fixture.call('user.createUser', {
+        id,
+        login: id,
+        password: 'test-password',
+        name: id,
+        partnerId,
+        defaultCompanyId: 'acme',
+        superuser: true,
+      })
+      await e2e.fixture.call('user.grantCompany', { id: `${id}:acme`, userId: id, companyId: 'acme' })
+    }
+
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    await e2e.client.login({ login: 'ua', password: 'test-password' })
+    for (const [id, key] of [
+      ['alpha', 'ALP'],
+      ['beta', 'BET'],
+    ])
+      await call('flow.project.save', {
+        values: { id, key, name: id },
+        idempotencyKey: `project-${id}-scope`,
+      })
+
+    // Nothing remembered yet, so nothing is guessed.
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, null)
+
+    assert.equal((await call<Row>('flow.board.remember', { projectId: 'alpha' })).ok, true)
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, 'alpha')
+
+    // A second reader starts blank and keeps their own answer.
+    await e2e.client.login({ login: 'ub', password: 'test-password' })
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, null)
+    await call('flow.board.remember', { projectId: 'beta' })
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, 'beta')
+
+    await e2e.client.login({ login: 'ua', password: 'test-password' })
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, 'alpha')
+
+    // Opening another board replaces the answer rather than adding one.
+    await call('flow.board.remember', { projectId: 'beta' })
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, 'beta')
+    await e2e.client.login({ login: 'ub', password: 'test-password' })
+    assert.equal((await call<Row>('flow.board.scope', {})).projectId, 'beta')
+
+    const missing = await call<Row>('flow.board.remember', { projectId: 'nosuchproject' })
+    assert.equal(missing.ok, false)
+  } finally {
+    await e2e.close()
+  }
+})
