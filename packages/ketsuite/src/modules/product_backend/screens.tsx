@@ -5,6 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
+  formatMoney,
   Framed,
   icon,
   inline,
@@ -16,6 +17,7 @@ import {
   RecordToggle,
   RecordWorkspace,
   Section,
+  shell,
   stack,
   Surface,
   Tabs,
@@ -50,6 +52,8 @@ export type TemplateRow = {
   type: string
   categoryId: string | null
   uomId: string | null
+  listPrice: number
+  isStorable?: boolean | null
   variants: number
   /**
    * The unit and the category as the reader knows them.
@@ -80,8 +84,7 @@ export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
  * `product.Template` has something to name when it wants a column for it.
  *
  * Goods and services are not a good/bad axis, so neither gets a judgemental tone.
- * The id and the category are off by default: useful to a specialist, noise to
- * everyone else.
+ * The id is off by default: useful to a specialist, noise to everyone else.
  */
 export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   {
@@ -105,9 +108,35 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
       badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
   },
   {
+    key: 'category',
+    label: _('product_backend.col.category'),
+    cell: (r) => r.categoryName || r.categoryId || '—',
+    priority: 'secondary',
+  },
+  {
+    key: 'isStorable',
+    label: _('product_backend.field.isStorable'),
+    kind: 'status',
+    priority: 'secondary',
+    cell: (r) =>
+      r.isStorable == null
+        ? '—'
+        : badge(
+            _(r.isStorable ? 'product_backend.value.yes' : 'product_backend.value.no'),
+            r.isStorable ? 'positive' : 'neutral',
+          ),
+  },
+  {
     key: 'uom',
     label: _('product_backend.col.uom'),
     cell: (r) => r.uomName || r.uomId || '—',
+  },
+  {
+    key: 'listPrice',
+    label: _('product_backend.field.listPrice'),
+    cell: (r) => formatMoney(_, r.listPrice),
+    align: 'end',
+    kind: 'currency',
   },
   {
     key: 'variants',
@@ -115,13 +144,6 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
     cell: (r) => String(r.variants),
     align: 'end',
     kind: 'number',
-  },
-  {
-    key: 'category',
-    label: _('product_backend.col.category'),
-    cell: (r) => r.categoryName || r.categoryId || '—',
-    priority: 'tertiary',
-    optional: true,
   },
   {
     key: 'id',
@@ -172,26 +194,24 @@ export const productsScreen = (
   frame: Frame = {},
   table: Partial<DataTable<TemplateRow>> = {},
   locale = '',
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('product_backend.screen.title')}
-    frame={frame}
-    body={
-      rows.length === 0 && !table.groups?.length
-        ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-        : view === 'kanban'
-          ? kanban(_, rows, locale)
-          : dataTable(_, {
-              columns: templateColumns(_),
-              rows,
-              id: (r) => r.id,
-              rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
-              ...table,
-            })
-    }
-  />
-)
+): TemplateResult =>
+  shell(
+    _,
+    _('product_backend.screen.title'),
+    rows.length === 0 && !table.groups?.length
+      ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+      : view === 'kanban'
+        ? kanban(_, rows, locale)
+        : dataTable(_, {
+            columns: templateColumns(_),
+            rows,
+            id: (r) => r.id,
+            gutter: 'compact',
+            rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
+            ...table,
+          }),
+    frame,
+  )
 
 export const favoriteScreen = (
   _: Translator,

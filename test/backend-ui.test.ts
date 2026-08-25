@@ -110,6 +110,15 @@ const MENU: MenuNode[] = [
 /** Every control at once — the contract test only sees what is rendered. */
 const CHROME: ListChrome = {
   create: { label: 'Mới', path: '/admin/pages/new' },
+  selection: {
+    formId: 'page-bulk',
+    action: '/admin/pages/bulk',
+    hidden: { returnTo: '/admin/pages' },
+    actions: [
+      { id: 'archive', label: 'Archive' },
+      { id: 'delete', label: 'Delete', tone: 'danger' },
+    ],
+  },
   search: {
     name: 'q',
     value: 'x',
@@ -335,6 +344,11 @@ const componentContract = [
     rows: [{ id: 'r', name: 'Record' }],
     id: (row) => row.id,
     rowHref: (row) => `/r/${row.id}`,
+    selection: {
+      formId: 'page-bulk',
+      action: '/admin/pages/bulk',
+      actions: [{ id: 'archive', label: 'Archive' }],
+    },
     columns: [
       {
         key: 'name',
@@ -1079,7 +1093,7 @@ test('date picker: range remains a native, accessible and URL-driven form', () =
   )
   assert.match(html, /data-ui="date-picker" method="get" action="\/calendar" data-range="true"/)
   assert.match(html, /type="hidden" name="property" value="hotel-1"/)
-  assert.match(html, /type="date" name="from" value="2026-08-20" min="2026-01-01"/)
+  assert.match(html, /type="date" name="from" autocomplete="off" value="2026-08-20" min="2026-01-01"/)
   assert.match(html, /aria-invalid="true" aria-describedby="date-picker--calendar-to-error"/)
   assert.match(html, /data-ui="date-picker-error" id="date-picker--calendar-to-error"/)
   assert.match(html, /href="\/calendar"/)
@@ -1094,7 +1108,7 @@ test('date picker: range remains a native, accessible and URL-driven form', () =
     }),
   )
   assert.match(single, /method="post" action="\/day" data-range="false"/)
-  assert.match(single, /type="date" name="date" value="" disabled/)
+  assert.match(single, /type="date" name="date" autocomplete="off" value="" disabled/)
   assert.doesNotMatch(single, /href=/)
 })
 
@@ -1139,6 +1153,31 @@ test('ui contract: markup carries no class attribute at all', () => {
   assert.ok(
     !everything.includes('class='),
     "a class is a decision about looks, and that decision is the design team's",
+  )
+})
+
+test('ui contract: every input disables browser autocomplete', () => {
+  const missing: string[] = []
+  for (const file of globSync('packages/ketsuite/src/**/*.{ts,tsx,mjs}')) {
+    const source = readFileSync(file, 'utf8')
+    for (const match of source.matchAll(/<input\b[^>]*>/g)) {
+      if (/\bautocomplete="off"/.test(match[0])) continue
+      const line = source.slice(0, match.index).split('\n').length
+      missing.push(`${file}:${line}`)
+    }
+  }
+  assert.deepEqual(missing, [], 'new inputs must not restore browser autocomplete')
+})
+
+test('table selection: the checkbox cell is a navigation dead zone', () => {
+  const source = readFileSync(
+    'packages/ketsuite/src/modules/backend/design/client/table-selection.mjs',
+    'utf8',
+  )
+  assert.match(
+    source,
+    /target\?\.closest\?\.\([\s\S]*?\[data-ui="select-cell"\][\s\S]*?\)\s*\)\s*return[\s\S]*?target\?\.closest\?\.\('\[data-ui="row"\]\[data-row-href\]'\)/,
+    'the selection-cell guard must run before linked-row navigation',
   )
 })
 

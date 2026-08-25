@@ -171,7 +171,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     if (path === '/admin/sales/invoicing-policies') {
       assert.match(html, /data-ui="record-workspace"/)
       assert.match(html, /id="invoicing-policy-form"/)
-      assert.match(html, /type="radio" name="invoicePolicy" value="delivery"/)
+      assert.match(html, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
       assert.match(html, /Theo số lượng giao/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }

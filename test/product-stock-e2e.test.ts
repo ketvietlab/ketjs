@@ -252,7 +252,10 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.equal((productHtml.match(/name="isStorable"/g) ?? []).length, 1)
   assert.equal((productHtml.match(/name="type"/g) ?? []).length, 2)
   assert.doesNotMatch(productHtml, /<select[^>]*name="type"/)
-  assert.match(productHtml, /data-ui="form-option-input" type="radio" name="type" value="goods"/)
+  assert.match(
+    productHtml,
+    /data-ui="form-option-input" type="radio" name="type" autocomplete="off" value="goods"/,
+  )
   assert.match(productHtml, /Loại hàng hoá/)
   assert.match(productHtml, /name="saleOk"[^>]*form="product-detail-form"/)
   assert.match(
@@ -454,8 +457,8 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   assert.match(warehousesHtml, /data-ui="record-workspace"/)
   assert.match(warehousesHtml, /id="warehouse-create-form"/)
   assert.match(warehousesHtml, /data-scope="warehouse-create"/)
-  assert.match(warehousesHtml, /name="receptionSteps" value="one_step"/)
-  assert.match(warehousesHtml, /name="deliverySteps" value="pick_pack_ship"/)
+  assert.match(warehousesHtml, /name="receptionSteps" autocomplete="off" value="one_step"/)
+  assert.match(warehousesHtml, /name="deliverySteps" autocomplete="off" value="pick_pack_ship"/)
   assert.match(warehousesHtml, /Lô hàng đến/)
   assert.match(warehousesHtml, /Kho chính/)
   assert.doesNotMatch(warehousesHtml, /data-island="mail\.chatter"/)
@@ -621,7 +624,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   assert.match(uiHtml, /<option value="p1"/)
   assert.match(uiHtml, /Áo thun · AO/)
   assert.match(uiHtml, /name="operationId"/)
-  assert.match(uiHtml, /name="backorder" value="create"/)
+  assert.match(uiHtml, /name="backorder" value="create" autocomplete="off"/)
   await e2e.client.form<string>('/admin/stock/transfers/ui-pick?lang=vi', {
     action: 'pick',
     operationId: `line:${String(uiLine.id)}`,

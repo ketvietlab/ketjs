@@ -102,7 +102,7 @@
 
     /* Shell and controls */
     --admin-sidebar-width: 14rem;
-    --admin-topbar-height: 2.75rem;
+    --admin-topbar-height: calc(2.75rem + 10px);
     --admin-control-height: 1.75rem;
     /*
      * The height of something a reader types into or picks from.

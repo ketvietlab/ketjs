@@ -60,7 +60,7 @@ export const datePicker = (options: DatePickerOptions): TemplateResult => (
       Object.entries(options.hidden ?? {}),
       ([name]) => name,
       ([name, value]) => (
-        <input type="hidden" name={name} value={value} />
+        <input type="hidden" name={name} value={value} autocomplete="off" />
       ),
     )}
     <fieldset>
@@ -93,6 +93,7 @@ export const datePicker = (options: DatePickerOptions): TemplateResult => (
                     id={id}
                     type="date"
                     name={field.name}
+                    autocomplete="off"
                     value={field.value ?? ''}
                     min={field.min ?? null}
                     max={field.max ?? null}
