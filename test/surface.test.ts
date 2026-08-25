@@ -29,6 +29,11 @@ const extra = assetDir({
   'widget-view.tsx': 'export const secret = "API_KEY_IN_SOURCE"',
   'extra.mjs.map': '{"sourcesContent":["API_KEY_IN_SOURCE"]}',
   'HANDOFF.md': 'internal notes',
+  // Types a module may legitimately publish. `.jpeg` and `.woff` were briefly
+  // refused along with the source above, and `.PNG` is a PNG.
+  'photo.jpeg': 'not really a jpeg',
+  'body.woff': 'not really a font',
+  'LOGO.PNG': 'not really a png',
 })
 
 const core = defineModule({ name: 'core', assets: base, styles: ['base.css'] })
@@ -241,9 +246,19 @@ test('serving: a module publishes a directory, but only the asset types in it', 
       assert.equal(response.status, 404, leaked)
       assert.doesNotMatch(await response.text(), /API_KEY_IN_SOURCE|internal notes/, leaked)
     }
-    // The real assets in the same directory are unaffected.
-    assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 200)
-    assert.equal((await fetch(`${at}/_ket/asset/skin/logo.svg`)).status, 200)
+    // The real assets in the same directory are unaffected, whatever case
+    // their extension is written in.
+    for (const [name, type] of [
+      ['extra.css', /text\/css/],
+      ['logo.svg', /image\/svg\+xml/],
+      ['photo.jpeg', /image\/jpeg/],
+      ['body.woff', /font\/woff/],
+      ['LOGO.PNG', /image\/png/],
+    ] as const) {
+      const response = await fetch(`${at}/_ket/asset/skin/${name}`)
+      assert.equal(response.status, 200, name)
+      assert.match(response.headers.get('content-type') ?? '', type, name)
+    }
   } finally {
     await b.close()
   }
