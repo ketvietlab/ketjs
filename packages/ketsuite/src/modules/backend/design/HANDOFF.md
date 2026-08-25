@@ -2,7 +2,7 @@
 
 ## Trạng thái triển khai — 2026-08-20
 
-Visual baseline đã hoàn tất trong `design/tokens.css` và `design/admin.css` theo hướng
+Visual baseline đã hoàn tất trong `design/tokens.css` và các stylesheet component trong `design/` theo hướng
 **enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
 divider và typography thay vì khoảng trắng/card/shadow quá mức.
 
@@ -42,7 +42,7 @@ thoải mái — khởi động lại là sạch. Không có gì ở đây chạ
 
 | | |
 |---|---|
-| **của đội design** | `design/tokens.css` · `design/admin.css` |
+| **của đội design** | `design/tokens.css` · `design/foundation.css` · `design/lists.css` · `design/responsive.css` · `design/auth.css` · `design/controls.css` · `design/record.css` · `design/forms.css` · `design/content.css` |
 | **của framework** | mọi file `.ts` |
 
 Sửa CSS xong bấm F5 là thấy, không cần build, không cần khởi động lại.
@@ -53,7 +53,7 @@ CSS viết theo `[data-ui="..."]`, **không phải class**. Cố ý: một cái 
 định về việc thứ đó trông thế nào, mà quyết định đó là của đội design chứ không phải
 của tôi. Nên markup không mang sẵn class nào.
 
-Toàn bộ selector được liệt kê trong `admin.css`, kèm các trạng thái mỗi cái có thể ở.
+Toàn bộ selector nền được chia theo component trong các file CSS của `design/`, kèm các trạng thái mỗi cái có thể ở.
 Chúng **được khoá bằng test** (`test/backend-ui.test.ts`): nếu tôi lỡ đổi hoặc xoá một
 `data-ui`, test đỏ. Nghĩa là CSS của các bạn không thể vỡ ngầm.
 
@@ -77,8 +77,8 @@ Nhập tên rồi thử lại.
 Cả ba đều cần chỗ hiển thị. Phần gợi ý là thứ khiến người dùng tự thoát ra được, đừng
 cắt nó đi.
 
-**3. Token trước, quy tắc sau.** Điền `tokens.css` trước rồi hãy viết `admin.css` tham
-chiếu tới chúng. Thứ tự tầng đã cố định:
+**3. Token trước, quy tắc sau.** Điền `tokens.css` trước rồi hãy viết stylesheet component
+tham chiếu tới chúng. Thứ tự tầng đã cố định:
 
 ```
 ket.reset  <  ket.theme  <  ket.app  <  ket.user
@@ -221,7 +221,7 @@ Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
     viewer-many      footer, nhiều công ty — có tên công ty/chi nhánh đang chọn
     viewer-long      tên người và tên công ty đều dài, kiểm tra popover không vỡ
 
-Các selector này đã có baseline trong `admin.css` và nằm trong `@layer ket.app`, nên
+Các selector này đã có baseline trong `auth.css` và nằm trong `@layer ket.app`, nên
 `ket.user` vẫn override được mà không cần tăng specificity.
 
 Việc đổi công ty/chi nhánh dùng `context-switcher` trên thanh trên. Footer chỉ hiển

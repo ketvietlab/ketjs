@@ -466,16 +466,29 @@ test('ui contract: every documented data-ui hook is actually emitted', () => {
 test('ui contract: no hook is emitted that the contract does not list', () => {
   const emitted = new Set([...everything.matchAll(/data-ui="([^"]+)"/g)].map((m) => m[1] as string))
   const undocumented = [...emitted].filter((n) => !CONTRACT.includes(n)).sort()
-  assert.deepEqual(undocumented, [], 'a new hook needs a line in admin.css before it ships')
+  assert.deepEqual(undocumented, [], 'a new hook needs a baseline rule before it ships')
 })
+
+const ADMIN_STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/foundation.css',
+  'packages/ketsuite/src/modules/backend/design/lists.css',
+  'packages/ketsuite/src/modules/backend/design/responsive.css',
+  'packages/ketsuite/src/modules/backend/design/auth.css',
+  'packages/ketsuite/src/modules/backend/design/controls.css',
+  'packages/ketsuite/src/modules/backend/design/record.css',
+  'packages/ketsuite/src/modules/backend/design/forms.css',
+  'packages/ketsuite/src/modules/backend/design/content.css',
+]
 
 /** Every stylesheet the kit's hooks are styled by. */
 const STYLESHEETS = [
-  'packages/ketsuite/src/modules/backend/design/admin.css',
+  ...ADMIN_STYLESHEETS,
   'packages/ketsuite/src/ui/client/mail.css',
   'packages/ketsuite/src/ui/client/activity.css',
   'packages/ketsuite/src/ui/client/calendar.css',
 ]
+
+const ADMIN_CSS = ADMIN_STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
 
 /** And the ones a module owns for its own island. */
 const MODULE_STYLESHEETS = [
@@ -528,7 +541,7 @@ test('ui contract: the stylesheet targets no hook nothing emits', () => {
 test('design tokens: the cascade order is declared before the first stylesheet', () => {
   // `@layer a, b, c;` is what fixes precedence; without it the order is whatever
   // first-appearance across the loaded stylesheets happens to be, and `ket.theme`
-  // outranked `ket.app` on every backend page purely because admin.css linked first.
+  // outranked `ket.app` on every backend page purely because its stylesheet linked first.
   const rendered = renderToString(
     ketDocument({
       lang: 'vi',
@@ -788,7 +801,7 @@ test('backend layout: framed list and form screens share the accounting workspac
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
   assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
 
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(css, /data-page-frame="true"\]:has/)
   assert.ok(
     css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
@@ -797,7 +810,7 @@ test('backend layout: framed list and form screens share the accounting workspac
 })
 
 test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
   assert.match(
     css,
@@ -824,7 +837,7 @@ test('record workspace: breadcrumbs and actions share the global record header',
 })
 
 test('record workspace: floating form controls can extend beyond the sheet', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
   assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
 })
@@ -921,7 +934,7 @@ test('design tokens: the native date picker glyph follows the theme', () => {
   // The browser draws the calendar and clock marks itself, in its own colour, which
   // on a dark canvas is a dark mark on a dark field. It is a bitmap: invertible,
   // not recolourable.
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   assert.match(css, /::-webkit-calendar-picker-indicator[\s\S]*?filter: invert\(var\(--admin-picker-invert/)
   assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
@@ -962,7 +975,7 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   // height — so on a long list the systray, the message and activity counts and the
   // settings link sat hundreds of pixels below the fold. It is the window's height
   // and it sticks; `sidebar-nav` takes the overflow inside it.
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
   assert.match(rule, /position:\s*sticky;/)
   assert.match(rule, /inset-block-start:\s*0;/)
@@ -973,7 +986,7 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
 
 test('design density: fields use a 32px minimum without enlarging operational controls', () => {
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
   assert.match(tokens, /--admin-field-height:\s*2rem;/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
@@ -982,7 +995,7 @@ test('design density: fields use a 32px minimum without enlarging operational co
 })
 
 test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
   assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
   assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
@@ -1166,7 +1179,7 @@ test('media: primary state has a label and image actions keep accessible icon co
 })
 
 test('schedule: every declared status tone has a concrete visual state', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   for (const tone of ['neutral', 'positive', 'info', 'warning', 'danger'])
     assert.ok(
       css.includes(`[data-ui="schedule-event"][data-tone="${tone}"]`),

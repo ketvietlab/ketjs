@@ -103,8 +103,16 @@ for (const [id, path, title, published] of [
 const localeOf = (url: URL) => url.searchParams.get('lang') ?? 'vi'
 const LOCALES = ['vi', 'en', PSEUDO_LOCALE]
 
-/** One wrapper for every page, so the stylesheets are loaded exactly once. */
-const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
+/** One wrapper for every page, in the same cascade order as the backend module. */
+const STYLES = html`<link rel="stylesheet" href="/design/tokens.css">
+  <link rel="stylesheet" href="/design/foundation.css">
+  <link rel="stylesheet" href="/design/lists.css">
+  <link rel="stylesheet" href="/design/responsive.css">
+  <link rel="stylesheet" href="/design/auth.css">
+  <link rel="stylesheet" href="/design/controls.css">
+  <link rel="stylesheet" href="/design/record.css">
+  <link rel="stylesheet" href="/design/forms.css">
+  <link rel="stylesheet" href="/design/content.css">`
 
 const route =
   (build: (t: ReturnType<typeof translator>, url: URL) => Promise<TemplateResult> | TemplateResult) =>
@@ -218,7 +226,6 @@ console.log(`
     in English          http://127.0.0.1:${port}/catalogue?lang=en
     text overflow       http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
 
-  Edit these directly; a refresh is enough:
-    ${DESIGN}/tokens.css
-    ${DESIGN}/admin.css
+  Edit the token and component styles under:
+    ${DESIGN}
 `)
