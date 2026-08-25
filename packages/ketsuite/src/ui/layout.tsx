@@ -23,9 +23,6 @@ export const HOOKS = [
   'token',
   'token-name',
   'token-value',
-  'context-switcher',
-  'context-company',
-  'context-branch',
 ] as const
 
 export type Extras = {
@@ -44,6 +41,8 @@ export type Frame = {
   navigation?: boolean
   /** False when the body opens with its own heading, so the topbar does not repeat it. */
   titled?: boolean
+  /** False when a self-titled workspace replaces the shared topbar. */
+  topbar?: boolean
 }
 
 /**
@@ -54,7 +53,7 @@ export type Frame = {
  * adding nothing. A list's chrome owns the row instead.
  */
 const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResult => {
-  const { viewer = null, extras = {} } = frame
+  const { extras = {} } = frame
   return (
     <>
       {frame.chrome ? (
@@ -63,16 +62,6 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
         ''
       ) : (
         <h1 data-ui="title">{title}</h1>
-      )}
-      {!!viewer?.contextPath && (
-        <a
-          data-ui="context-switcher"
-          href={viewer.contextPath}
-          title={`${viewer.companyName ?? viewer.company ?? ''}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
-        >
-          <span data-ui="context-company">{viewer.companyName ?? viewer.company}</span>
-          {!!viewer.branchName && <span data-ui="context-branch">{viewer.branchName}</span>}
-        </a>
       )}
       {extras['topbar.end'] ?? ''}
     </>
@@ -98,7 +87,9 @@ export const shell = (
     return (
       <ket-fragments data-title={title}>
         <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
-        <template data-ket-slot="backend.topbar">{topbarContent(_, title, frame)}</template>
+        <template data-ket-slot="backend.topbar">
+          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
+        </template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
@@ -106,9 +97,13 @@ export const shell = (
     <div data-ui="shell">
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
-        <header data-ui="topbar" data-ket-slot="backend.topbar">
-          {topbarContent(_, title, frame)}
-        </header>
+        {frame.topbar === false ? (
+          ''
+        ) : (
+          <header data-ui="topbar" data-ket-slot="backend.topbar">
+            {topbarContent(_, title, frame)}
+          </header>
+        )}
         <div data-ui="content" data-ket-slot="backend.content">
           {body}
         </div>
@@ -177,14 +172,20 @@ export const framedPage = (options: {
     options.title,
     recordWorkspace({
       pageFrame: true,
-      kicker: options.kicker ?? (activeRoot?.label === options.title ? null : (activeRoot?.label ?? null)),
+      kicker: options.kicker ?? activeRoot?.label ?? options.translator('backend.brand'),
       title: options.title,
-      subtitle: options.subtitle ?? null,
+      subtitle: options.subtitle ?? options.translator('backend.app.summary'),
       imageFallback: icon(glyph),
+      controller: options.frame.chrome ? (
+        <>
+          {listChrome(options.translator, options.title, options.frame.chrome, false)}
+          {options.frame.extras?.['topbar.end'] ?? ''}
+        </>
+      ) : undefined,
       body: options.body,
     }),
     // The workspace below opens with this same title, so the bar does not repeat it.
-    { ...options.frame, titled: false },
+    { ...options.frame, titled: false, topbar: false },
   )
 }
 

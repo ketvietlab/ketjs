@@ -69,7 +69,9 @@ test('company-branch-e2e: company, hierarchy, branch and context screens cross r
     assert.equal(response.status, 200, path)
     const html = await response.text()
     assert.match(html, expected, path)
-    assert.match(html, /data-ui="context-switcher"/, `${path} has the named company/branch selector`)
+    assert.doesNotMatch(html, /data-ui="context-switcher"/, `${path} has no company selector in the topbar`)
+    assert.doesNotMatch(html, /data-ui="topbar"/, `${path} uses its three-line workspace heading`)
+    assert.match(html, /data-ui="viewer-context-switcher"/, `${path} has the company selector in the user menu`)
     assert.doesNotMatch(html, /company_backend\.[A-Za-z]/, path)
   }
 

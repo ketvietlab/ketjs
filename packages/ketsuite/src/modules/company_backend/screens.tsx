@@ -437,6 +437,7 @@ export const contextScreen = (
     <Framed
       translator={_}
       title={_('company_backend.context.title')}
+      subtitle={_('company_backend.app.summary')}
       frame={frame}
       body={stack([
         <Section

@@ -725,7 +725,12 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
   const html = renderToString(
     pagesScreen(_, [page()], {
       menu: MENU,
-      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      viewer: {
+        name: 'Nguyễn Quản Trị',
+        company: 'acme',
+        companies: ['acme', 'globex'],
+        contextPath: '/admin/context',
+      },
       indicators: [
         { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
         { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
@@ -733,9 +738,11 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
-  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)
+  assert.match(html, /Chuyển công ty/)
+  assert.doesNotMatch(html, /data-ui="context-switcher"|data-ui="viewer-company-indicator"/)
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
 })
 
