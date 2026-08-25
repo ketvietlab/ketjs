@@ -1,0 +1,501 @@
+/* Shared cards, navigation, record lists and feedback components. */
+
+@layer ket.app {
+  [data-ui="card-grid"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
+    gap: var(--admin-gap);
+  }
+  [data-ui="content-card"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    box-shadow: var(--admin-shadow-card);
+  }
+  [data-ui="card-head"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="content-card"][data-selected="true"] {
+    border-color: var(--admin-accent-line);
+    box-shadow: 0 0 0 2px var(--admin-focus-ring);
+  }
+  [data-ui="card-title"],
+  [data-ui="card-summary"] {
+    margin: 0;
+  }
+  [data-ui="card-title"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    line-height: 1.35;
+  }
+  [data-ui="card-title"] a {
+    color: inherit;
+    text-decoration: none;
+  }
+  [data-ui="card-summary"],
+  [data-ui="card-meta"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+  [data-ui="card-body"] {
+    min-inline-size: 0;
+    color: var(--admin-ink);
+  }
+  [data-ui="card-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--admin-gap-sm);
+    padding-block-start: var(--admin-gap);
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="metric"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+  [data-ui="card-grid"]:has(> [data-ui="metric"]) {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+  [data-ui="metric-label"],
+  [data-ui="metric-value"],
+  [data-ui="metric-detail"] {
+    margin: 0;
+  }
+  [data-ui="metric-label"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+  [data-ui="metric-value"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+  }
+  @media (max-width: 29.9375rem) {
+    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"] {
+      font-size: var(--admin-size-lg);
+      overflow-wrap: anywhere;
+    }
+  }
+  [data-ui="metric-detail"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+  }
+
+  /* Secondary navigation for deep records. */
+  [data-ui="breadcrumbs"] ol {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  [data-ui="breadcrumb"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="breadcrumb"]:not(:last-child)::after {
+    color: var(--admin-ink-muted);
+    content: "/";
+  }
+  [data-ui="breadcrumb"] a {
+    color: inherit;
+  }
+  [data-ui="breadcrumb"] [aria-current="page"] {
+    color: var(--admin-ink);
+    font-weight: 600;
+  }
+  [data-ui="tabs"] {
+    display: flex;
+    min-inline-size: 0;
+    gap: var(--admin-gap-xs);
+    overflow-x: auto;
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="tab"] {
+    display: inline-flex;
+    min-block-size: var(--admin-control-height);
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding-block-start: 0.25rem;
+    padding-inline: var(--admin-gap);
+    border-block-end: 2px solid transparent;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  [data-ui="tab"][data-active="true"] {
+    border-block-end-color: var(--admin-accent);
+    color: var(--admin-accent-text);
+  }
+
+  /* Compact operational records for mobile and narrow side panels. */
+  [data-ui="record-list"] {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    list-style: none;
+  }
+  [data-ui="record-row"] + [data-ui="record-row"] {
+    border-block-start: 1px solid var(--admin-line);
+  }
+  [data-ui="record-row"] > a {
+    display: flex;
+    min-block-size: 3rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    color: inherit;
+    text-decoration: none;
+  }
+  [data-ui="record-copy"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  [data-ui="record-title"] {
+    overflow: hidden;
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="record-summary"] {
+    overflow: hidden;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="record-value"] {
+    flex: 0 0 auto;
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Inline feedback and loading. */
+  [data-ui="notice"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm);
+    border: 1px solid var(--admin-accent-line);
+    border-inline-start: 3px solid var(--admin-accent);
+    border-radius: var(--admin-radius);
+    background: var(--admin-accent-soft);
+    color: var(--admin-ink);
+  }
+  [data-ui="notice"][data-tone="positive"] {
+    border-color: var(--admin-success-icon);
+    background: var(--admin-success-soft);
+  }
+  [data-ui="notice"][data-tone="warning"] {
+    border-color: var(--admin-warning-icon);
+    background: var(--admin-warning-soft);
+  }
+  [data-ui="notice"][data-tone="danger"] {
+    border-color: var(--admin-danger-line);
+    border-inline-start-color: var(--admin-danger);
+    background: var(--admin-danger-soft);
+  }
+  [data-ui="notice"][data-tone="positive"],
+  [data-ui="notice"][data-tone="warning"],
+  [data-ui="notice"][data-tone="danger"] {
+    color: var(--admin-status-fixed-ink);
+  }
+  [data-ui="notice-icon"] {
+    display: grid;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    place-items: center;
+  }
+  [data-ui="notice-copy"] {
+    min-inline-size: 0;
+  }
+  [data-ui="notice-title"],
+  [data-ui="notice-message"] {
+    margin: 0;
+  }
+  [data-ui="notice-title"] {
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+  [data-ui="notice-message"] {
+    margin-block-start: 0.125rem;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+  [data-ui="notice"][data-tone="positive"] [data-ui="notice-message"],
+  [data-ui="notice"][data-tone="warning"] [data-ui="notice-message"],
+  [data-ui="notice"][data-tone="danger"] [data-ui="notice-message"] {
+    color: var(--admin-status-fixed-ink-secondary);
+  }
+  [data-ui="notice-actions"],
+  [data-ui="empty-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="loading"] {
+    display: grid;
+    max-inline-size: 42rem;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-md);
+  }
+  [data-ui="loading-label"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  [data-ui="skeleton"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="skeleton-line"] {
+    display: block;
+    block-size: 0.75rem;
+    border-radius: var(--admin-radius-xs);
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="skeleton-line"]:nth-child(2n) {
+    inline-size: 82%;
+  }
+  [data-ui="skeleton-line"]:nth-child(3n) {
+    inline-size: 64%;
+  }
+
+  [data-ui="table-caption"] {
+    padding: var(--admin-gap);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-align: start;
+  }
+  [data-ui="sort-link"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: inherit;
+    text-decoration: none;
+  }
+  [data-ui="sort-icon"] {
+    display: grid;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    place-items: center;
+    color: var(--admin-accent-text);
+  }
+  [data-ui="action-label"],
+  [data-ui="col"],
+  [data-ui="facet-label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="empty-icon"] {
+    display: grid;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    place-items: center;
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="kanban-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-sm);
+    margin-block-start: auto;
+  }
+  [data-ui="pager-range"] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  @media (hover: hover) {
+    :where([data-ui="action"], [data-control="action"]):hover:not(:disabled, [aria-disabled="true"]),
+    [data-ui="record-row"] > a:hover {
+      border-color: var(--admin-line-strong);
+      background: var(--admin-surface-hover);
+      color: var(--admin-ink);
+    }
+    :where([data-ui="action"], [data-control="action"])[data-variant="primary"]:hover:not(:disabled) {
+      border-color: var(--admin-accent-hover);
+      background: var(--admin-accent-hover);
+      color: var(--admin-accent-ink);
+    }
+    :where([data-ui="action"], [data-control="action"])[data-variant="destructive"]:hover:not(:disabled) {
+      border-color: var(--admin-danger);
+      background: var(--admin-danger);
+      color: #fff;
+    }
+    [data-ui="content-card"][data-interactive="true"]:hover {
+      border-color: var(--admin-accent-line);
+      box-shadow: var(--admin-shadow-float);
+      transform: translateY(-2px);
+    }
+  }
+
+  @media (max-width: 47.9375rem) {
+    /* A button sits in a row with the fields it submits, so it is the height of
+       one. The 2.75rem touch target this used to take stood half again as tall
+       as the input above it and read as a banner rather than a control. */
+    :where([data-ui="action"], [data-control="action"])[data-size] {
+      min-block-size: var(--admin-field-height);
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"]
+      [data-ui="relation-dialog-actions"]
+      [data-ui="action"][data-size="compact"] {
+      min-block-size: var(--admin-field-height);
+    }
+    :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
+      inline-size: var(--admin-field-height);
+    }
+    [data-ui="section-head"],
+    [data-ui="notice"] {
+      grid-template-columns: 1fr;
+      flex-direction: column;
+    }
+    [data-ui="section-actions"],
+    [data-ui="notice-actions"] {
+      inline-size: 100%;
+    }
+    [data-ui="surface"][data-padding="default"] {
+      padding: var(--admin-gap-md);
+    }
+    [data-ui="card-grid"] {
+      grid-template-columns: 1fr;
+    }
+    [data-ui="attachment-item"] {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--admin-gap-xs);
+    }
+    [data-ui="modal-sheet"] {
+      inline-size: 100%;
+      border-inline-start: 0;
+    }
+    [data-ui="table"] [data-priority="tertiary"] {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-ui="action-spinner"] {
+      animation: none;
+    }
+    [data-ui="content-card"] {
+      transform: none !important;
+    }
+  }
+
+  /* The compact shell is two useful rows: identity/search, then a horizontally
+     scrollable menu for the current app. The old responsive rules changed the
+     sidebar to a row but left its flexing navigation at desktop height, producing
+     more than 500px of empty space above every mobile screen. */
+  @media (max-width: 47.9375rem) {
+    [data-ui="sidebar-main"] {
+      display: contents;
+    }
+
+    [data-ui="sidebar"],
+    body > [data-ui="shell"] > [data-ui="sidebar"] {
+      display: grid;
+      grid-template-columns: auto minmax(8rem, 1fr) auto;
+      align-items: center;
+      gap: var(--admin-gap-sm);
+      block-size: auto;
+      padding: var(--admin-gap-sm);
+    }
+    [data-ui="sidebar-header"] {
+      padding: 0;
+    }
+    [data-ui="sidebar-search"] {
+      margin: 0;
+    }
+    [data-ui="sidebar-nav"] {
+      display: block;
+      grid-column: 1 / -1;
+      padding: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    [data-ui="sidebar-section-label"],
+    [data-ui="app-list"],
+    [data-ui="menu-section-title"] {
+      display: none;
+    }
+    [data-ui="sidebar-foot"] {
+      display: flex;
+      grid-column: 3;
+      grid-row: 1;
+    }
+    [data-ui="menu"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+    }
+    [data-ui="menu-item-wrap"],
+    [data-ui="menu-section"] {
+      display: block;
+    }
+    [data-ui="menu-section-children"] {
+      display: flex;
+      inline-size: max-content;
+      gap: var(--admin-gap-xs);
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    [data-ui="menu-item"] {
+      min-block-size: 2.5rem;
+      padding-inline: var(--admin-gap);
+    }
+    [data-ui="menu-dot"] {
+      display: none;
+    }
+
+    /* A list remains a readable list on a narrow screen. Let its own scroll box
+       carry the width instead of squeezing identifiers into one-character lines. */
+    [data-ui="table"] {
+      inline-size: max-content;
+      min-inline-size: 100%;
+    }
+    [data-ui="row"] td,
+    [data-ui="cell"] code {
+      overflow-wrap: normal;
+      white-space: nowrap;
+    }
+  }
+}
