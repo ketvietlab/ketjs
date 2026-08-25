@@ -244,6 +244,51 @@ export const models: Record<string, ModelDef> = {
   },
 
   /**
+   * A written document that belongs to a project rather than to a task.
+   *
+   * The rich text is the whole point here, which is the difference from
+   * `Issue`: an issue is a row with a description attached, a page is a
+   * document with a title on it. So the same three Live Doc columns appear,
+   * and almost nothing else does — no assignee, no state, no due date. A page
+   * that needs those is an issue.
+   *
+   * `parentPageId` gives the tree a wiki grows into. Self-referencing, the
+   * same shape `Issue.parentIssueId` already uses; depth is not bounded by the
+   * schema because the query builder has no recursive CTE to walk it with, so
+   * the screen reads one level at a time.
+   */
+  Page: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'ref:flow.Project',
+      parentPageId: 'ref:flow.Page?',
+      title: 'text',
+      /**
+       * Written only by Live Doc's flatten routine (modules/livedoc), as a
+       * plain column update outside the CAS path — the same arrangement, and
+       * the same reason, as `Issue`'s three columns above: a Yjs document and
+       * a `version` counter are two consistency models, and one row cannot
+       * honestly carry both under one number.
+       */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
+      /** Ordering among siblings, stepped by 10 the way Column does. */
+      sequence: 'int',
+      active: 'bool',
+      version: 'int',
+      createdByUserId: 'ref:user.User?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      project_active: { fields: ['companyId', 'projectId', 'active', 'sequence'] },
+      parent: { fields: ['companyId', 'parentPageId'] },
+    },
+  },
+
+  /**
    * `blocks` and `related` are the two relations an issue tracker's own logic
    * reads — a `blocks` dependency that is not done keeps the blocked issue out of
    * a terminal column. Neither is a name a team would want to change; that is

@@ -59,6 +59,10 @@ const vi = {
   'error.selfParent': 'Một công việc không thể là công việc cha của chính nó.',
   'error.parentProjectMismatch': 'Công việc cha phải thuộc cùng một dự án.',
   'error.parentCycle': 'Thao tác này sẽ tạo ra vòng lặp cha–con.',
+  'error.pageSelfParent': 'Một tài liệu không thể là tài liệu cha của chính nó.',
+  'error.pageProjectMismatch': 'Tài liệu cha phải thuộc cùng một dự án.',
+  'error.pageCycle': 'Thao tác này sẽ tạo ra vòng lặp cha–con giữa các tài liệu.',
+  'error.pageTooDeep': 'Cây tài liệu đã quá sâu.',
 } as const
 
 const en: Record<keyof typeof vi, string> = {
@@ -122,6 +126,10 @@ const en: Record<keyof typeof vi, string> = {
   'error.selfParent': 'An issue cannot be its own parent.',
   'error.parentProjectMismatch': 'A parent issue must be in the same project.',
   'error.parentCycle': 'That would create a parent cycle.',
+  'error.pageSelfParent': 'A page cannot be its own parent.',
+  'error.pageProjectMismatch': 'A parent page must belong to the same project.',
+  'error.pageCycle': 'That would make a parent–child loop between pages.',
+  'error.pageTooDeep': 'The page tree is already too deep.',
 }
 
 export const messages = { vi, en }

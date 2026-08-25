@@ -23,11 +23,16 @@ export default defineModule({
   messages,
   joints: {
     'screen.issue': { props: { docId: 'text', base: 'text', lang: 'text?' } },
+    // A page's document is the same island under a different base — one joint
+    // per screen, because a fill is placed per joint and the two screens do
+    // not share a template.
+    'screen.page': { props: { docId: 'text', base: 'text', lang: 'text?' } },
     'screen.board': { props: { lang: 'text?', data: 'text?' } },
     'screen.map': { props: { lang: 'text?', data: 'text?' } },
   },
   fills: {
     'flow_backend:screen.issue': '{% island "livedoc.editor" %}',
+    'flow_backend:screen.page': '{% island "livedoc.editor" %}',
     'flow_backend:screen.board': '{% island "flow.board" %}',
     'flow_backend:screen.map': '{% island "flow.map" %}',
     // The screens under a project are reachable only once a project is
@@ -68,6 +73,13 @@ export default defineModule({
       path: '/admin/flow/issues',
       sequence: 20,
       needs: 'flow.issue.list',
+    },
+    'flow.pages': {
+      parent: 'flow',
+      label: 'flow_backend.menu.pages',
+      path: '/admin/flow/pages',
+      sequence: 25,
+      needs: 'flow.page.list',
     },
   },
 })
