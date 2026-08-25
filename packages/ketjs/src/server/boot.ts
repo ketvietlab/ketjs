@@ -166,6 +166,30 @@ export type SessionResolveContext = {
   req: IncomingMessage
 }
 
+/**
+ * Identity established by infrastructure in front of the deployment.
+ *
+ * The resolver is the trust boundary: callers must verify the proxy credential
+ * (for example a short-lived signed assertion) before returning an identity.
+ * KetJS then applies the same actor, scope and permission pipeline used by a
+ * cookie session without persisting a second login session in the tenant DB.
+ */
+export type RequestIdentity = {
+  userId: string
+  companies: string[]
+  company: string | null
+  branch?: string | null
+  branches?: string[] | null
+  securityVersion?: number
+}
+
+export type RequestIdentityResolveContext = {
+  adapter: Adapter
+  manifest: Manifest
+  url: URL
+  req: IncomingMessage
+}
+
 export type ServeSpec = {
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
@@ -183,6 +207,8 @@ export type ServeSpec = {
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
   /** Revalidate live account state and memberships before scope and permissions. */
   resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
+  /** Verify and resolve identity asserted by a trusted gateway for this request. */
+  resolveIdentity?: (ctx: RequestIdentityResolveContext) => Promise<RequestIdentity | null>
   /** Classify non-staff credentials so the generic function transport can fail closed. */
   resolveAudience?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
   /**
@@ -367,17 +393,52 @@ export async function bootDeployment(
 
   // One cookie lookup per request even though scope, permissions and actor all
   // depend on it. With tenant databases this also avoids three separate leases.
+  const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
   const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
   const sessionRecordOf = (url: URL, req: IncomingMessage): Promise<SessionRecord | null> => {
-    if (!makeSessions) return Promise.resolve(null)
+    if (!authenticationEnabled) return Promise.resolve(null)
     let record = sessionRecords.get(req)
     if (!record) {
-      record = sessionsOf(url, req).then(async (manager) => {
+      record = tenants.ofRequest(url, req, async (tenant) => {
+        const identity = await serve.resolveIdentity?.({
+          adapter: tenant.adapter,
+          manifest: tenant.live,
+          url,
+          req,
+        })
+        if (identity) {
+          const companies = [...new Set(identity.companies)]
+          if (
+            !identity.userId ||
+            !companies.length ||
+            !identity.company ||
+            !companies.includes(identity.company)
+          )
+            return null
+          const now = Date.now()
+          return {
+            id: `request:${identity.userId}`,
+            userId: identity.userId,
+            companies,
+            company: identity.company,
+            branch: identity.branch ?? null,
+            branches: identity.branches ?? null,
+            securityVersion: identity.securityVersion ?? 0,
+            revision: 0,
+            createdAt: now,
+            expiresAt: now,
+          }
+        }
+        const manager = await sessionsOf(url, req)
         const raw = (await manager?.of(req)) ?? null
         if (!raw || !manager || !serve.resolveSession) return raw
-        const resolved = await tenants.ofRequest(url, req, (tenant) =>
-          serve.resolveSession!({ adapter: tenant.adapter, manifest: tenant.live, record: raw, url, req }),
-        )
+        const resolved = await serve.resolveSession({
+          adapter: tenant.adapter,
+          manifest: tenant.live,
+          record: raw,
+          url,
+          req,
+        })
         if (!resolved) {
           await manager.store.destroy(raw.id)
           return null
@@ -412,7 +473,7 @@ export async function bootDeployment(
    * a session id issued by one tenant is not a row in another's table at all.
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
-    if (!makeSessions) {
+    if (!authenticationEnabled) {
       const list = (h: string) =>
         ((req.headers[h] as string | undefined) ?? '')
           .split(',')
@@ -427,8 +488,17 @@ export async function bootDeployment(
         branches: list('x-ket-branch') || null,
       }
     }
-    const s = await sessionsOf(url, req)
-    return s?.scopeOf(await sessionRecordOf(url, req)) ?? { company: null }
+    const record = await sessionRecordOf(url, req)
+    if (!record) {
+      const s = await sessionsOf(url, req)
+      return s?.scopeOf(null) ?? { company: null }
+    }
+    return {
+      companies: record.companies,
+      company: record.company,
+      branch: record.branch,
+      branches: record.branches,
+    }
   }
 
   /**
@@ -569,7 +639,7 @@ export async function bootDeployment(
       // Closed unless the module said otherwise. A browser is sent to the sign-in
       // page carrying where it was going; anything else gets the status, because a
       // redirect to an HTML form is a useless answer to a fetch().
-      if (makeSessions && !entry.anonymous) {
+      if (authenticationEnabled && !entry.anonymous) {
         if (!(await sessionRecordOf(url, req))) {
           const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
           return wantsHtml
@@ -612,7 +682,7 @@ export async function bootDeployment(
     .map(([k]) => k)
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!makeSessions) return null // no login exists yet; the shim is the identity
+    if (!authenticationEnabled) return null // no login exists yet; the shim is the identity
     const audience = await serve.resolveAudience?.(url, req)
     if (audience && audience !== 'anonymous' && audience !== 'staff') return []
     const record = await sessionRecordOf(url, req)
