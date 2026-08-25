@@ -6,21 +6,25 @@ import type { AnyRow } from './shared.tsx'
 import { priorityBadge, when } from './shared.tsx'
 
 /**
- * Everything assigned to the reader, across projects.
+ * Issues across projects: everything assigned to the reader, or everything
+ * there is.
  *
  * The same columns the backlog shows plus the project each issue came from,
  * and no create form: a new issue belongs to a board, and this screen is not
- * on one.
+ * on one. The two lists differ by one argument at the call site and by their
+ * title, which is the whole reason they are one screen — anything else and
+ * they drift.
  */
-export const myWorkScreen = (
+export const crossProjectScreen = (
   _: Translator,
   frame: Frame,
+  title: string,
   rows: AnyRow[],
   groups: TableGroup<AnyRow>[] = [],
 ): TemplateResult => (
   <Framed
     translator={_}
-    title={_('flow_backend.mine.title')}
+    title={title}
     frame={frame}
     body={
       rows.length || groups.length

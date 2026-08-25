@@ -22,7 +22,7 @@ import {
   issueDetailScreen,
   issuesScreen,
   mapScreen,
-  myWorkScreen,
+  crossProjectScreen,
   projectsScreen,
   settingsScreen,
   sprintsScreen,
@@ -313,6 +313,71 @@ async function flatten(
   )
   await rollGeneration(companyId, issueId)
 }
+
+/**
+ * A list of issues that is not on a board.
+ *
+ * `mine` is the only thing that differs between the two, so it is the only
+ * thing this takes: a second copy of the search/filter/group/pager wiring is a
+ * second place for them to drift apart.
+ */
+const crossProjectIssues =
+  (options: { mine: boolean; title: string }) =>
+  (ctx: ServeContext): Route =>
+  async (url, req) => {
+    if (req.method !== 'GET') return text('GET', { status: 405 })
+    const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
+    const state = parseListState(spec, url).state
+    const timezone = 'UTC'
+    const grouped = state.groupBy.length > 0
+    const cursor = (state.page - 1) * LIST_PAGE_SIZE
+    const scoped = options.mine ? { mine: true } : {}
+    const result = (await ctx.call(
+      'flow.issue.list',
+      {
+        ...scoped,
+        listState: state,
+        timezone,
+        cursor: String(cursor),
+        limit: grouped ? 1 : LIST_PAGE_SIZE,
+      },
+      url,
+      req,
+    )) as AnyRow
+    const groups = grouped
+      ? await loadListGroups(ctx, url, req, state, timezone, {
+          groupFunction: 'flow.issue.group',
+          listFunction: 'flow.issue.list',
+          listArgs: scoped,
+          label: (_field, value) => String(value ?? '\u2014'),
+        })
+      : []
+    return adminPage(ctx, url, req, {
+      title: options.title,
+      body: (_, frame) => {
+        frame.chrome = {
+          search: {
+            name: 'q',
+            value: state.q ?? '',
+            placeholder: _('flow_backend.search.issues'),
+            keep: keepForListSearch(url),
+            facets: listFacets(_, url, state, spec),
+            menus: listMenus(_, url, state, spec),
+          },
+          pager: grouped
+            ? null
+            : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+        }
+        return crossProjectScreen(
+          _,
+          frame,
+          _(options.title),
+          grouped ? [] : ((result.rows as AnyRow[]) ?? []),
+          groups,
+        )
+      },
+    })
+  }
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/flow': () => async (url, req) =>
@@ -905,55 +970,16 @@ export const routes: Record<string, RouteEntry> = {
    * way `activity.listMy` settles it: a screen has no cheap way to learn who
    * is signed in.
    */
-  '/admin/flow/mine':
-    (ctx: ServeContext): Route =>
-    async (url, req) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
-      const state = parseListState(spec, url).state
-      const timezone = 'UTC'
-      const grouped = state.groupBy.length > 0
-      const cursor = (state.page - 1) * LIST_PAGE_SIZE
-      const result = (await ctx.call(
-        'flow.issue.list',
-        {
-          mine: true,
-          listState: state,
-          timezone,
-          cursor: String(cursor),
-          limit: grouped ? 1 : LIST_PAGE_SIZE,
-        },
-        url,
-        req,
-      )) as AnyRow
-      const groups = grouped
-        ? await loadListGroups(ctx, url, req, state, timezone, {
-            groupFunction: 'flow.issue.group',
-            listFunction: 'flow.issue.list',
-            listArgs: { mine: true },
-            label: (_field, value) => String(value ?? '\u2014'),
-          })
-        : []
-      return adminPage(ctx, url, req, {
-        title: 'flow_backend.mine.title',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: state.q ?? '',
-              placeholder: _('flow_backend.search.issues'),
-              keep: keepForListSearch(url),
-              facets: listFacets(_, url, state, spec),
-              menus: listMenus(_, url, state, spec),
-            },
-            pager: grouped
-              ? null
-              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
-          }
-          return myWorkScreen(_, frame, grouped ? [] : ((result.rows as AnyRow[]) ?? []), groups)
-        },
-      })
-    },
+  '/admin/flow/mine': crossProjectIssues({ mine: true, title: 'flow_backend.mine.title' }),
+
+  /**
+   * Every issue, whoever it belongs to.
+   *
+   * The same route body as `/admin/flow/mine` with one argument dropped —
+   * search, filters, grouping and the pager all come from the same apparatus,
+   * so the two cannot answer differently about the same question.
+   */
+  '/admin/flow/issues': crossProjectIssues({ mine: false, title: 'flow_backend.issues.allTitle' }),
 
   '/admin/flow/projects/{id}/issues':
     (ctx: ServeContext): Route =>
