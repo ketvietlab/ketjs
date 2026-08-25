@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildFlowClient } from './build-flow-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -142,6 +143,10 @@ function copyAssets(source, destinations) {
 
 await acquireLock()
 try {
+  // Regenerated before the fingerprint hash runs, so the bundle it produces is
+  // itself part of what the fingerprint covers — a fresh checkout and a
+  // no-op rebuild both land on a self-consistent state.
+  await buildFlowClient()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
   if (current === fingerprint && artifactsExist()) {

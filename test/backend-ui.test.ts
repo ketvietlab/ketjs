@@ -551,6 +551,7 @@ test('routes: the segment after /admin names the section, so a path says where i
     'attendance',
     'calendar',
     'crm',
+    'flow',
     'hospitality',
     'hr',
     'inbound-email',
