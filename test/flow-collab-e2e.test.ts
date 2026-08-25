@@ -384,3 +384,78 @@ test('flow collab: previewText is what the user typed, not the mark markup', asy
     await e2e.close()
   }
 })
+
+/**
+ * The editor writes a flat list of `block` elements, each holding one text run,
+ * rather than the single top-level run the first version of it produced. The
+ * flatten path reads whatever shape it is handed, so a heading and two list
+ * items have to come out of it as the lines somebody typed — that string is the
+ * list column and the search field.
+ */
+test('flow collab: previewText reads a document made of blocks', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-save-1',
+    })
+    await call('flow.column.save', {
+      values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },
+      idempotencyKey: 'column-save-1',
+    })
+    await call('flow.issue.save', {
+      id: 'issue-4',
+      projectId: 'proj1',
+      columnId: 'col-todo',
+      title: 'Rollout',
+      idempotencyKey: 'issue-save-4',
+    })
+
+    // Exactly what the editor builds: an element per block, each with one run.
+    const doc = new Y.Doc()
+    const fragment = doc.getXmlFragment('content')
+    const lines: Array<[string, string]> = [
+      ['h1', 'Rollout plan'],
+      ['bullet', 'Freeze the branch'],
+      ['check', 'Tell support'],
+    ]
+    lines.forEach(([type, line], index) => {
+      const element = new Y.XmlElement('block')
+      element.setAttribute('type', type)
+      fragment.insert(index, [element])
+      const run = new Y.XmlText()
+      element.insert(0, [run])
+      run.insert(0, line)
+    })
+
+    await e2e.client.json('/admin/flow/issues/issue-4/content')
+    await e2e.client.request('/admin/flow/issues/issue-4/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }),
+    })
+    await e2e.client.request('/admin/flow/issues/issue-4/leave', { method: 'POST' })
+
+    assert.equal(
+      (await call<Row>('flow.issue.get', { id: 'issue-4' })).previewText,
+      'Rollout plan Freeze the branch Tell support',
+    )
+  } finally {
+    await e2e.close()
+  }
+})

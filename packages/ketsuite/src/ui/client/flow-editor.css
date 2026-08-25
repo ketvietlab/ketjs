@@ -11,9 +11,23 @@
 
   [data-ui="flow-editor-toolbar"] {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: var(--admin-gap-xs);
     padding: var(--admin-gap-xs) var(--admin-gap-sm);
     border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="flow-editor-toolbar"] [data-ui="form-control"] {
+    inline-size: auto;
+    min-inline-size: 9rem;
+  }
+
+  [data-ui="flow-editor-divider"] {
+    align-self: stretch;
+    inline-size: 1px;
+    margin-inline: var(--admin-gap-xs);
+    background: var(--admin-line);
   }
 
   [data-ui="flow-editor-mark"] {
@@ -21,14 +35,167 @@
     font-weight: 600;
   }
 
+  /* A mark button reports the selection it is looking at, not the last thing clicked. */
+  [data-ui="flow-editor-mark"][aria-pressed="true"] {
+    background: var(--admin-accent-soft, var(--admin-surface-sunken));
+    border-color: var(--admin-accent, var(--admin-line));
+  }
+
   [data-ui="flow-editor-content"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
     min-block-size: 10rem;
     padding: var(--admin-gap-sm) var(--admin-gap-md);
     outline: none;
     line-height: 1.6;
+    /* So a space the user typed is a space the model reads back. Without it a
+       trailing space collapses, contenteditable substitutes U+00A0 to keep it
+       visible, and the substitute is what gets stored — see domTextOf in
+       flow_backend/editor-view.ts. */
+    white-space: pre-wrap;
   }
 
   [data-ui="flow-editor-content"]:focus-visible {
     box-shadow: inset 0 0 0 2px var(--admin-focus-ring);
+  }
+
+  /* Blocks carry their own rhythm; the grid gap above supplies the spacing. */
+  [data-ui="flow-editor-content"] > *,
+  [data-ui="flow-editor-list"] {
+    margin: 0;
+  }
+
+  [data-block="h1"] {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  [data-block="h2"] {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  [data-block="h3"] {
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  [data-block="quote"] {
+    padding-inline-start: var(--admin-gap-md);
+    border-inline-start: 3px solid var(--admin-line);
+    color: var(--admin-muted);
+  }
+
+  [data-block="code"] {
+    padding: var(--admin-gap-sm) var(--admin-gap-md);
+    border-radius: var(--admin-radius-sm, var(--admin-radius));
+    background: var(--admin-surface-sunken);
+    font-family: var(--admin-font-mono, ui-monospace, monospace);
+    font-size: 0.9em;
+    /* <br> supplies every line break, so pre-wrap is here for leading
+       indentation rather than for newlines the markup does not contain. */
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  [data-ui="flow-editor-code"] {
+    padding: 0.1em 0.3em;
+    border-radius: var(--admin-radius-sm, 3px);
+    background: var(--admin-surface-sunken);
+    font-family: var(--admin-font-mono, ui-monospace, monospace);
+    font-size: 0.9em;
+  }
+
+  [data-ui="flow-editor-link"] {
+    color: var(--admin-accent, currentColor);
+    text-decoration: underline;
+  }
+
+  [data-ui="flow-editor-list"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+    padding-inline-start: var(--admin-gap-lg);
+  }
+
+  [data-ui="flow-editor-list"][data-kind="check"] {
+    padding-inline-start: 0;
+    list-style: none;
+  }
+
+  [data-ui="flow-editor-list"][data-kind="ordered"] {
+    /* Numbering comes from the wrapper, which is the whole reason a run of
+       items shares one rather than each getting its own. */
+    list-style: decimal;
+  }
+
+  [data-block="check"] {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="flow-editor-check"] {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.25rem;
+    border: 1px solid var(--admin-line);
+    border-radius: 3px;
+    background: var(--admin-surface);
+    cursor: pointer;
+  }
+
+  [data-ui="flow-editor-check"][aria-checked="true"] {
+    border-color: var(--admin-accent, var(--admin-line));
+    background: var(--admin-accent, var(--admin-line));
+  }
+
+  [data-ui="flow-editor-check"][aria-checked="true"]::after {
+    content: "";
+    display: block;
+    inline-size: 0.28rem;
+    block-size: 0.55rem;
+    margin: 0.06rem auto;
+    border: solid var(--admin-surface);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  [data-block="check"][data-checked="true"] [data-ui="flow-editor-line"] {
+    color: var(--admin-muted);
+    text-decoration: line-through;
+  }
+
+  [data-ui="flow-editor-line"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="flow-editor-link-dialog"] {
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    color: inherit;
+    padding: 0;
+  }
+
+  [data-ui="flow-editor-link-body"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-md);
+    min-inline-size: 20rem;
+  }
+
+  [data-ui="flow-editor-link-label"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="flow-editor-link-actions"] {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--admin-gap-xs);
   }
 }
