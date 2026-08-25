@@ -43,6 +43,33 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * What kind of work an issue is: Bug, Story, Task.
+   *
+   * Dynamic per project like Column, not a fixed list like priority. A support
+   * desk's vocabulary is Ticket and Question; a product team's is Story, Bug
+   * and Spike; neither would recognise the other's. The test is the same one
+   * Column passes and Sprint fails: nothing in this module branches on a
+   * type's name, so there is nothing for the code to be wrong about when a
+   * team renames one.
+   */
+  IssueType: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'ref:flow.Project',
+      code: 'text',
+      name: 'text',
+      color: 'text?',
+      sequence: 'int',
+      active: 'bool',
+    },
+    indexes: {
+      code: { fields: ['companyId', 'projectId', 'code'], unique: true },
+      project: { fields: ['companyId', 'projectId', 'active', 'sequence'] },
+    },
+  },
+
   Epic: {
     scope: 'company',
     fields: {
@@ -85,6 +112,7 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       projectId: 'ref:flow.Project',
       columnId: 'ref:flow.Column',
+      typeId: 'ref:flow.IssueType?',
       epicId: 'ref:flow.Epic?',
       sprintId: 'ref:flow.Sprint?',
       /** A sub-task. Self-referencing, the same shape as `crm.Case.mergedIntoId`. */

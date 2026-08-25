@@ -247,6 +247,26 @@ test('flow: issue.save refuses the sprint, column and parent it cannot honour', 
       idempotencyKey: 'sprint-beta-1',
     })
 
+    // An issue type belongs to one project, the same way an epic and a sprint
+    // do. Epic was the reference that was written straight through, and an
+    // issue in one project ended up filed under another's — this one is
+    // checked from the start.
+    await call('flow.issueType.save', {
+      values: { id: 'beta-bug', projectId: 'beta', code: 'bug', name: 'Bug', sequence: 10 },
+      idempotencyKey: 'type-beta-bug',
+    })
+    const crossType = await call<Row>('flow.issue.save', {
+      id: 'alpha-typed',
+      projectId: 'alpha',
+      columnId: 'a-todo',
+      title: 'Alpha work',
+      typeId: 'beta-bug',
+      idempotencyKey: 'issue-cross-type',
+    })
+    assert.equal(crossType.ok, false)
+    assert.equal(errorCode(crossType), 'flow.error.typeProjectMismatch')
+    assert.equal(await call<Row>('flow.issue.get', { id: 'alpha-typed' }), null)
+
     const crossSprint = await call<Row>('flow.issue.save', {
       id: 'alpha-1',
       projectId: 'alpha',
@@ -295,6 +315,26 @@ test('flow: issue.save refuses the sprint, column and parent it cannot honour', 
       idempotencyKey: 'issue-alpha-move-2',
     })
     assert.equal(properly.ok, true)
+
+    // Archiving a type in use would leave those issues pointing at a row no
+    // screen lists, so they would read as untyped while still carrying it.
+    await call('flow.issueType.save', {
+      values: { id: 'beta-task', projectId: 'beta', code: 'task', name: 'Task', sequence: 20 },
+      idempotencyKey: 'type-beta-task',
+    })
+    await call('flow.issue.save', {
+      id: 'beta-1',
+      projectId: 'beta',
+      columnId: 'b-todo',
+      title: 'Beta work',
+      typeId: 'beta-bug',
+      expectedVersion: Number((await call<Row>('flow.issue.get', { id: 'beta-1' })).version),
+      idempotencyKey: 'issue-beta-typed',
+    })
+    const held = await call<Row>('flow.issueType.archive', { id: 'beta-bug' })
+    assert.equal(held.ok, false)
+    assert.equal(errorCode(held), 'flow.error.typeHasIssues')
+    assert.equal((await call<Row>('flow.issueType.archive', { id: 'beta-task' })).ok, true)
 
     const at = async () => Number((await call<Row>('flow.issue.get', { id: 'alpha-1' })).version)
     const saveParent = async (parentIssueId: string, key: string) =>

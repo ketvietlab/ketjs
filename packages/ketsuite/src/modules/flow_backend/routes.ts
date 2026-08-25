@@ -27,8 +27,8 @@ import {
   settingsScreen,
   sprintsScreen,
   TEMPLATE_OPTIONS,
-} from './screens.tsx'
-import type { IssueDetailControls } from './screens.tsx'
+} from './screens/index.ts'
+import type { IssueDetailControls } from './screens/index.ts'
 import {
   applySnapshot,
   currentGeneration,
@@ -51,6 +51,26 @@ const COLUMN_TEMPLATES: Record<string, string[]> = {
   simple: ['To do', 'Done'],
   kanban: ['To do', 'In Progress', 'Done'],
   scrum: ['Backlog', 'To do', 'In Progress', 'Review', 'Done'],
+}
+
+/**
+ * The kinds of work each preset expects, seeded beside its columns.
+ *
+ * A process is a pair — how work moves and what work is — and a team that
+ * picks "Scrum" means Story and Spike as much as it means a Review column.
+ * These are a starting point and nothing more: types are edited in project
+ * settings afterwards, exactly like the columns above, and the code never
+ * reads one of these names back.
+ *
+ * "Custom" gets a single Task, because a board with no type at all cannot
+ * offer the field, and choosing to name your own columns is not a statement
+ * about issue types.
+ */
+const TYPE_TEMPLATES: Record<string, string[]> = {
+  simple: ['Task'],
+  kanban: ['Task', 'Bug'],
+  scrum: ['Story', 'Task', 'Bug', 'Spike'],
+  custom: ['Task'],
 }
 
 const slugify = (name: string): string =>
@@ -100,8 +120,31 @@ const pager = (url: URL, state: ListState, rows: number, total: number) => {
   }
 }
 
-const issueFields = (_: Translator, row: AnyRow, controls: IssueDetailControls): FormField[] => [
+const issueFields = (
+  _: Translator,
+  row: AnyRow,
+  controls: IssueDetailControls,
+  types: AnyRow[] = [],
+): FormField[] => [
   { name: 'title', label: _('flow_backend.field.title'), value: String(row.title ?? ''), required: true },
+  // A native select, like the column and priority beside it: the vocabulary is
+  // small, it is the project's own, and a dialog to choose between four values
+  // is worse than the four values. A project with no types offers no field at
+  // all rather than an empty one.
+  ...(types.length
+    ? [
+        {
+          name: 'typeId',
+          label: _('flow_backend.field.type'),
+          type: 'select' as const,
+          value: String(row.typeId ?? ''),
+          options: [
+            { value: '', label: '\u2014' },
+            ...types.map((type) => ({ value: String(type.id), label: String(type.name) })),
+          ],
+        },
+      ]
+    : []),
   {
     name: 'priority',
     label: _('flow_backend.field.priority'),
@@ -477,6 +520,7 @@ export const routes: Record<string, RouteEntry> = {
               priority: form.priority || undefined,
               assigneeUserId: form.assigneeUserId || null,
               epicId: form.epicId || null,
+              typeId: form.typeId || null,
               tagIds: form.tagIds ? form.tagIds.split(',').filter(Boolean) : [],
               dueDate: form.dueDate || null,
               estimate: form.estimate || undefined,
@@ -579,9 +623,10 @@ export const routes: Record<string, RouteEntry> = {
 
       const issue = (await readable(ctx, url, req, issueId)) as Row | null
       if (!issue) return text('not found', { status: 404 })
-      const [columns, sprints] = await Promise.all([
+      const [columns, sprints, types] = await Promise.all([
         ctx.call('flow.column.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.sprint.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.issueType.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
         issueId,
@@ -633,7 +678,7 @@ export const routes: Record<string, RouteEntry> = {
         active: `/admin/flow/projects/${String(issue.projectId)}/issues`,
         body: (_, frame) =>
           issueDetailScreen(_, frame, issue, {
-            fields: issueFields(_, issue, controls),
+            fields: issueFields(_, issue, controls, types),
             columns,
             sprints,
             controls,
@@ -703,6 +748,27 @@ export const routes: Record<string, RouteEntry> = {
               // the settings screen is the only place to repair one — so say
               // so here rather than landing on a board missing a column.
               if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
+            }
+            for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
+              TYPE_TEMPLATES.simple)!.entries()) {
+              // Unlike a column, a project with no type is still a working
+              // board — the field is simply not offered — so a type that will
+              // not save is not worth diverting the whole creation for.
+              await ctx.call(
+                'flow.issueType.save',
+                {
+                  values: {
+                    id: randomUUID(),
+                    projectId: id,
+                    code: slugify(name),
+                    name,
+                    sequence: (index + 1) * 10,
+                  },
+                  idempotencyKey: randomUUID(),
+                },
+                url,
+                req,
+              )
             }
             return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
           }
@@ -1209,6 +1275,7 @@ export const routes: Record<string, RouteEntry> = {
       // Two independent halves on one screen, so two error sinks: a duplicate
       // tag name reported above the columns form reads as a broken column.
       let columnErrors: string[] = []
+      let typeErrors: string[] = []
       let tagErrors: string[] = []
       const endpoint = `/admin/flow/projects/${projectId}/settings`
       if (req.method === 'POST') {
@@ -1220,6 +1287,33 @@ export const routes: Record<string, RouteEntry> = {
           const archived = (await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(archived, _)
+        } else if (form.action === 'archiveType') {
+          const archived = (await ctx.call(
+            'flow.issueType.archive',
+            { id: form.id ?? '' },
+            url,
+            req,
+          )) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          typeErrors = errorsOf(archived, _)
+        } else if (form.action === 'saveType') {
+          const result = (await ctx.call(
+            'flow.issueType.save',
+            {
+              values: {
+                id: form.id || randomUUID(),
+                projectId,
+                code: form.code || slugify(form.name ?? ''),
+                name: form.name ?? '',
+                sequence: Number(form.sequence ?? 10),
+              },
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          typeErrors = errorsOf(result, _)
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
@@ -1254,13 +1348,16 @@ export const routes: Record<string, RouteEntry> = {
           tagErrors = errorsOf(result, _)
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [columns, tags] = await Promise.all([
+      const [columns, types, tags] = await Promise.all([
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.issueType.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.tag.list', {}, url, req) as Promise<AnyRow[]>,
       ])
       const editColumn = url.searchParams.get('editColumnId')
+      const editType = url.searchParams.get('editTypeId')
       const editTag = url.searchParams.get('editTagId')
       const editingColumn = editColumn ? columns.find((row) => String(row.id) === editColumn) : undefined
+      const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
       return adminPage(ctx, url, req, {
         title: String(project.name),
@@ -1307,6 +1404,24 @@ export const routes: Record<string, RouteEntry> = {
             ],
             editingTagId: editingTag ? String(editingTag.id) : undefined,
             columnErrors,
+            types,
+            editingTypeId: editingType ? String(editingType.id) : undefined,
+            typeFields: [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingType?.name ?? ''),
+              },
+              { name: 'code', label: _('flow_backend.field.code'), value: String(editingType?.code ?? '') },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: String(editingType?.sequence ?? 10),
+              },
+            ],
+            typeErrors,
             tagErrors,
           }),
       })
