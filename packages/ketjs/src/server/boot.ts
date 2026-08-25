@@ -11,6 +11,7 @@
 // a datastore that is not SQLite. Those arrive through `DeploymentSpec.serve` as data
 // rather than as a closure the framework has to trust.
 
+import { withoutVersion } from './assets.ts'
 import { translator } from '../kernel/i18n.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createTheme } from '../theme/render.ts'
@@ -662,7 +663,8 @@ export async function bootDeployment(
       const slash = rest.indexOf('/')
       if (slash <= 0) return null
       const owner = rest.slice(0, slash)
-      const file = rest.slice(slash + 1)
+      // A version segment names the bytes, not a directory — see assets.ts.
+      const file = withoutVersion(rest.slice(slash + 1))
       const dir = manifest.assets[owner]
       if (!dir || !file || file.startsWith('..') || isAbsolute(file)) return null
       return join(dir, file)
