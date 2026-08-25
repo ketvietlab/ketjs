@@ -7,7 +7,7 @@
 // and watching text disappear, and both are pinned here so they stay found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { documentHtml, presenceHtml } from '../packages/ketsuite/src/ui/client/flow-editor-view.mjs'
+import { documentHtml, presenceHtml } from '../packages/ketsuite/src/ui/client/live-doc-shell.tsx'
 
 const text = (insert: string, attributes?: Record<string, unknown>) => ({ insert, attributes })
 const block = (type: string, delta: Array<{ insert: string }>, checked = false) => ({

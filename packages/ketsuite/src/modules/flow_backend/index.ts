@@ -7,27 +7,27 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'flow_backend',
   version: '0.1.0',
-  depends: ['flow', 'backend', 'user', 'storage'],
+  depends: ['flow', 'backend', 'user', 'storage', 'livedoc'],
   title: 'Flow',
-  summary: 'Real-time collaborative editing for Flow issue descriptions.',
+  summary: 'Projects, boards and issues, with collaborative descriptions.',
   category: 'Productivity',
   // The kit's client directory, the same one mail_backend serves its chatter
-  // from: the editor's shell and stylesheet are kit files, so they ship from
-  // where the kit keeps them rather than being copied into this module. The
-  // board and map views follow it here for the same reason.
+  // from: the board and map views are kit files, so they ship from where the
+  // kit keeps them rather than being copied into this module. The editor's own
+  // stylesheet is livedoc's and loads with that module.
   assets: new URL('../../ui/client/', import.meta.url),
-  styles: ['flow-editor.css', 'flow-app.css'],
+  styles: ['flow-app.css'],
   functions,
   routes,
   islands,
   messages,
   joints: {
-    'screen.issue': { props: { issueId: 'text', lang: 'text?' } },
+    'screen.issue': { props: { docId: 'text', base: 'text', lang: 'text?' } },
     'screen.board': { props: { lang: 'text?', data: 'text?' } },
     'screen.map': { props: { lang: 'text?', data: 'text?' } },
   },
   fills: {
-    'flow_backend:screen.issue': '{% island "flow.issue-editor" %}',
+    'flow_backend:screen.issue': '{% island "livedoc.editor" %}',
     'flow_backend:screen.board': '{% island "flow.board" %}',
     'flow_backend:screen.map': '{% island "flow.map" %}',
     // The screens under a project are reachable only once a project is
