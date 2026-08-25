@@ -770,6 +770,21 @@ test('backend layout: framed list and form screens share the accounting workspac
   )
 })
 
+test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
+  assert.match(
+    css,
+    /\[data-ui="main"\]:has\(> \[data-ui="topbar"\] > \*\) \[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
+  )
+})
+
+test('record workspace: floating form controls can extend beyond the sheet', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
+  assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
+})
+
 test('backend responder: a fragment request never renders document infrastructure', async () => {
   let styles = 0
   let documents = 0
