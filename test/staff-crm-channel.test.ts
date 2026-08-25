@@ -560,3 +560,27 @@ test('staff CRM commands that create a record replay under the same idempotency 
   const replayedSchedule = await scheduleActivity()
   assert.equal(replayedSchedule.status, 200)
 })
+
+test('staff CRM overview counts only activities on cases the actor can see', async (t) => {
+  const e2e = await boot(t)
+  const scope = { company: 'acme', branches: null }
+  // An overdue activity on a lead this actor cannot open. The aggregate reaches
+  // for activity links by case, so the boundary has to hold there too — not just
+  // on the list and detail routes.
+  await e2e.fixture.call<Row>(
+    'crm.activity.schedule',
+    {
+      id: 'activity-admin-only',
+      caseId: 'admin-only',
+      assigneeUserId: 'admin',
+      summary: 'Admin follow-up',
+      dueDate: '2026-08-01',
+      idempotencyKey: 'staff-crm-activity-admin-only',
+    },
+    { scope, actor: 'admin' },
+  )
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const overview = (await e2e.client.json<Envelope<Row>>('/api/staff/v1/crm/overview?today=2026-08-28')).data
+  assert.equal(overview.overdueActivityCount, 1)
+  assert.equal(overview.leadCount, 1)
+})
