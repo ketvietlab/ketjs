@@ -352,6 +352,7 @@ export const functions: Record<string, FnSpec> = {
       'read:sale.Order',
       'read:sale.OrderLine',
       'read:stock.Move',
+      'read:stock.Picking',
       'read:account.MoveLine',
       'read:account.Move',
     ],
@@ -362,13 +363,18 @@ export const functions: Record<string, FnSpec> = {
       const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
       const lineIds = lines.map((line) => String(line.id))
       const moves = await movesOf(ctx, lineIds)
+      const pickingIds = [
+        ...new Set(moves.flatMap((move) => (move.pickingId ? [String(move.pickingId)] : []))),
+      ]
       const invoiceLines = await invoiceLinesOf(ctx, lineIds)
       const ids = [...new Set(invoiceLines.map((line) => String(line.moveId)))]
       const A = ctx.table('account.Move')
+      const P = ctx.table('stock.Picking')
       return {
         ...order,
         lines,
         moves,
+        pickings: pickingIds.length ? await ctx.db.all(from(P).where(inArray(P.id, pickingIds))) : [],
         invoices: ids.length ? await ctx.db.all(from(A).where(inArray(A.id, ids))) : [],
       }
     },

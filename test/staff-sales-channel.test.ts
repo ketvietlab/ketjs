@@ -240,6 +240,39 @@ test('staff sales channel returns a narrow read-only order detail', async (t) =>
   assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
 })
 
+test('staff sales channel projects the canonical order delivery and invoice lifecycle', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  await e2e.fixture.call<Row>(
+    'sale.confirmOrder',
+    { id: 'so-a' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+
+  const response = await e2e.client.get('/api/staff/v1/sales/orders/so-a/lifecycle')
+  assert.equal(response.status, 200)
+  const body = (await response.json()) as Envelope<Row>
+  assert.deepEqual(body.data.order, {
+    id: 'so-a',
+    reference: 'S00001',
+    state: 'sale',
+  })
+  assert.deepEqual(body.data.deliveries, [
+    {
+      id: 'so-a:delivery',
+      reference: 'Delivery S00001',
+      state: 'draft',
+    },
+  ])
+  assert.deepEqual(body.data.invoices, [])
+  assert.equal(body.data.readOnly, true)
+  assert.match(String(body.data.version), /^solv_[0-9a-f]{64}$/)
+  assert.equal(response.headers.get('etag'), `"${String(body.data.version)}"`)
+
+  assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/lifecycle')).status, 404)
+})
+
 test('staff sales channel exposes only bounded sellable product projections', async (t) => {
   const e2e = await boot(t)
   await seedProducts(e2e)

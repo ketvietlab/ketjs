@@ -268,6 +268,54 @@ export const functions: Record<string, FnSpec> = {
     handler: (ctx, args) => listCases(ctx, args),
   }),
 
+  overview: defineFn({
+    input: { today: 'date' },
+    output: {
+      leadCount: 'int',
+      opportunityCount: 'int',
+      openOpportunityCount: 'int',
+      overdueActivityCount: 'int',
+      expectedRevenue: 'decimal',
+    },
+    effects: [...caseReadEffects],
+    agent: true,
+    handler: async (ctx, args) => {
+      const C = ctx.table('crm.Case')
+      const owned = await ctx.db.all(from(C).where(eq(C.active, true), inArray(C.kind, [...CASE_KINDS])))
+      const visible = await visibleCases(ctx, owned)
+      const rows = await serializeCaseList(ctx, visible)
+      const openOpportunities = rows.filter(
+        (row) => row.kind === 'opportunity' && row.terminalState === 'open',
+      )
+      const visibleIds = [...new Set(rows.map((row) => String(row.id)))]
+      // Reading every link in the tenant to keep the handful that belong to
+      // these cases is work the query can do instead.
+      const L = ctx.table('crm.ActivityLink')
+      const links = visibleIds.length ? await ctx.db.all(from(L).where(inArray(L.caseId, visibleIds))) : []
+      const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
+      const activities = activityIds.length
+        ? await ctx.db.all(
+            from(ctx.table('activity.Activity')).where(
+              inArray(ctx.table('activity.Activity').id, activityIds),
+            ),
+          )
+        : []
+      return {
+        leadCount: rows.filter((row) => row.kind === 'lead').length,
+        opportunityCount: rows.filter((row) => row.kind === 'opportunity').length,
+        openOpportunityCount: openOpportunities.length,
+        overdueActivityCount: activities.filter(
+          (activity) =>
+            activity.active !== false &&
+            activity.doneAt == null &&
+            activity.canceledAt == null &&
+            String(activity.dueDate) < String(args.today),
+        ).length,
+        expectedRevenue: String(openOpportunities.reduce((total, row) => total + n(row.expectedRevenue), 0)),
+      }
+    },
+  }),
+
   'case.count': defineFn({
     input: {
       kind: 'text?',
