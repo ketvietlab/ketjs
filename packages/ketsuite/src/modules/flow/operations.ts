@@ -52,6 +52,38 @@ async function assignableSprint(ctx: Ctx, sprintId: unknown): Promise<Row | null
   return sprint.state === 'closed' ? undefined : sprint
 }
 
+/**
+ * A parent an issue may point at.
+ *
+ * Sub-tasks nest inside one project's board, so a parent from another project
+ * would put a child on a board its parent is not on. A cycle is worse: the
+ * pair becomes each other's ancestor and any walk up the tree runs forever.
+ * `blocks` already refuses cycles for the same reason (see createsBlockCycle);
+ * parentage had no check at all, and accepted a parent id that did not exist.
+ */
+async function parentIssueError(
+  ctx: Ctx,
+  issueId: string,
+  parentIssueId: unknown,
+  projectId: string,
+): Promise<FlowIssue | null> {
+  if (!parentIssueId) return null
+  if (String(parentIssueId) === issueId) return issue('parentIssueId', 'flow.error.selfParent')
+  const parent = (await ctx.db.select('flow.Issue', { id: parentIssueId }))[0]
+  if (!parent) return issue('parentIssueId', 'flow.error.notFound')
+  if (String(parent.projectId) !== projectId)
+    return issue('parentIssueId', 'flow.error.parentProjectMismatch')
+  const seen = new Set<string>([issueId])
+  let at: Row | undefined = parent
+  while (at) {
+    const id = String(at.id)
+    if (seen.has(id)) return issue('parentIssueId', 'flow.error.parentCycle')
+    seen.add(id)
+    at = at.parentIssueId ? (await ctx.db.select('flow.Issue', { id: at.parentIssueId }))[0] : undefined
+  }
+  return null
+}
+
 export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const ids = (values: unknown[]): string[] => [...new Set(values.filter(Boolean).map(String))]
   const columnIds = ids(rows.map((row) => row.columnId))
@@ -213,10 +245,20 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
     return invalid(issue('assigneeUserId', 'flow.error.notFound'))
   const sprint = await assignableSprint(ctx, input.sprintId)
   if (sprint === undefined) return invalid(issue('sprintId', 'flow.error.sprintClosed'))
+  if (sprint && String(sprint.projectId) !== String(input.projectId))
+    return invalid(issue('sprintId', 'flow.error.sprintProjectMismatch'))
   return ctx.tx(async (tx) => {
     const existing = (await tx.db.select('flow.Issue', { id: input.id }))[0]
     if (existing && String(existing.projectId) !== String(input.projectId))
       return invalid(issue('projectId', 'flow.error.immutableProject'))
+    // moveIssue is the only door into a column, because it is the one that
+    // checks `blocks` dependencies before letting an issue reach a terminal
+    // state. Save used to keep `existing.columnId` and still answer ok, so a
+    // caller asking for a different column was told the move had happened.
+    if (existing && String(existing.columnId) !== String(input.columnId))
+      return invalid(issue('columnId', 'flow.error.columnNeedsMove'))
+    const parentError = await parentIssueError(tx, input.id, input.parentIssueId, String(input.projectId))
+    if (parentError) return invalid(parentError)
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     const values: Row = {
@@ -344,7 +386,7 @@ export async function assignSprint(
     const sprint = await assignableSprint(tx, input.sprintId)
     if (sprint === undefined) return invalid(issue('sprintId', 'flow.error.sprintClosed'))
     if (sprint && String(sprint.projectId) !== String(held.projectId))
-      return invalid(issue('sprintId', 'flow.error.invalidColumn'))
+      return invalid(issue('sprintId', 'flow.error.sprintProjectMismatch'))
     const timestamp = now()
     const changed = await tx.db.compareAndSet(
       'flow.Issue',

@@ -10,12 +10,15 @@
 // split mail_backend's own chatter view uses.
 import * as Y from 'yjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
+// The shell's markup, which belongs to the kit and not to a module — see the
+// header of that file, and tools/ui-audit.ts for the rule it answers.
+import { issueEditorShell } from '../../ui/client/flow-editor-view.mjs'
 
 export type EditorRuntime = {
   html: (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult
 }
 
-export type IssueEditorProps = { issueId: string }
+export type IssueEditorProps = { issueId: string; lang?: string }
 
 type Delta = Array<{ insert: string; attributes?: { bold?: boolean; italic?: boolean } }>
 
@@ -274,14 +277,7 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   }
 
   return {
-    view: () =>
-      html`<div class="flow-editor">
-        <div class="flow-editor__toolbar">
-          <button type="button" data-flow-editor-bold>B</button>
-          <button type="button" data-flow-editor-italic>I</button>
-        </div>
-        <div id=${containerId} class="flow-editor__content" contenteditable="true"></div>
-      </div>`,
+    view: () => issueEditorShell({ html }, { containerId, lang: props.lang }) as TemplateResult,
     dispose() {
       source?.close()
     },

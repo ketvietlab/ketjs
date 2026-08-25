@@ -1,0 +1,34 @@
+@layer ket.app {
+  [data-ui="flow-editor"] {
+    display: grid;
+    min-inline-size: 0;
+    max-inline-size: 52rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    overflow: hidden;
+  }
+
+  [data-ui="flow-editor-toolbar"] {
+    display: flex;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap-xs) var(--admin-gap-sm);
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="flow-editor-mark"] {
+    min-inline-size: 2rem;
+    font-weight: 600;
+  }
+
+  [data-ui="flow-editor-content"] {
+    min-block-size: 10rem;
+    padding: var(--admin-gap-sm) var(--admin-gap-md);
+    outline: none;
+    line-height: 1.6;
+  }
+
+  [data-ui="flow-editor-content"]:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--admin-focus-ring);
+  }
+}
