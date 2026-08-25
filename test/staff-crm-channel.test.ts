@@ -502,3 +502,44 @@ test('staff CRM schedules and completes only activities belonging to the address
   assert.equal(stale.status, 409)
   assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'crm.error.stageConflict')
 })
+
+test('staff CRM commands that create a record replay under the same idempotency key', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  // A retry is the whole reason the key exists. If the id were minted fresh per
+  // attempt the retry would look like a different request and be refused as a
+  // conflict — which tells a caller its create failed when it succeeded, and
+  // invites a retry under a new key that finally writes the duplicate.
+  const createLead = () =>
+    e2e.client.request('/api/staff/v1/crm/leads/create', {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'crm-create-retry'),
+      body: JSON.stringify({ name: 'Retried lead', type: 'lead', expectedRevenue: '100' }),
+    })
+  const created = await createLead()
+  assert.equal(created.status, 200)
+  const createdId = String(((await created.json()) as Envelope<{ lead: Row }>).data.lead.id)
+  const replayed = await createLead()
+  assert.equal(replayed.status, 200)
+  assert.equal(String(((await replayed.json()) as Envelope<{ lead: Row }>).data.lead.id), createdId)
+  const listed = (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/crm/leads?limit=50')).data
+  assert.equal(listed.items.filter((item) => String(item.name) === 'Retried lead').length, 1)
+
+  const scheduleActivity = () =>
+    e2e.client.request('/api/staff/v1/crm/leads/lead-a/activities', {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'crm-schedule-retry'),
+      body: JSON.stringify({
+        activityTypeId: 'crm-next-action',
+        dueDate: '2026-08-27',
+        expectedVersion: 1,
+      }),
+    })
+  const scheduled = await scheduleActivity()
+  assert.equal(scheduled.status, 200)
+  const replayedSchedule = await scheduleActivity()
+  assert.equal(replayedSchedule.status, 200)
+})
