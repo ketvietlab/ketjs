@@ -471,6 +471,11 @@ const fieldErrorsOf = (issues: FieldIssue[]): Record<string, FieldError> =>
 // --- failure mapping -------------------------------------------------------
 
 const FAILURES: Record<string, { status: number; code: string; messageKey: string; retryable?: boolean }> = {
+  E_FN_NOT_PERMITTED: {
+    status: 403,
+    code: 'channel_api.forbidden',
+    messageKey: 'channel_api.error.forbidden',
+  },
   E_MEDIA_TYPE: {
     status: 415,
     code: 'channel_api.unsupportedMediaType',

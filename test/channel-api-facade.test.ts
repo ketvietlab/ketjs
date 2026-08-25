@@ -101,6 +101,16 @@ const probe = defineModule({
         throw Object.assign(new Error('already running'), { code: 'E_IDEMPOTENCY_IN_FLIGHT' })
       },
     }),
+    defineChannelRoute({
+      profile: 'customer',
+      method: 'GET',
+      path: 'probe/forbidden',
+      operationId: 'customer.probe.forbidden',
+      responses: { '403': envelope },
+      handler: () => {
+        throw Object.assign(new Error('function permission denied'), { code: 'E_FN_NOT_PERMITTED' })
+      },
+    }),
   ),
 })
 
@@ -251,6 +261,16 @@ test('channel facade: an in-flight idempotent command is a retryable conflict, n
   assert.equal(response.headers.get('x-request-id'), 'req_probe_inflight')
 })
 
+test('channel facade: a refused function permission is a stable forbidden response', async (t) => {
+  const e2e = await boot(t)
+  const response = await e2e.client.get('/api/customer/v1/probe/forbidden')
+  assert.equal(response.status, 403)
+  const body = await read(response)
+  assert.equal(body.error?.code, 'channel_api.forbidden')
+  assert.equal(body.error?.messageKey, 'channel_api.error.forbidden')
+  assert.equal(body.error?.message, 'You do not have permission to perform this action.')
+})
+
 test('channel facade: a wrong method answers 405 and says which one is allowed', async (t) => {
   const e2e = await boot(t)
   const response = await e2e.client.get('/api/customer/v1/probe/inflight')
@@ -267,6 +287,7 @@ test('channel api: every facade message key is translated in both locales', () =
     'error.methodNotAllowed',
     'error.internal',
     'error.unauthenticated',
+    'error.forbidden',
     'error.idempotencyRequired',
     'error.idempotencyConflict',
     'error.idempotencyInFlight',
