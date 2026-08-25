@@ -25,6 +25,10 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 // not to a module — see the header of that file, and tools/ui-audit.ts for the
 // rule it answers.
 import { documentHtml, issueEditorShell, presenceHtml } from '../../ui/client/flow-editor-view.mjs'
+import { BLOCK_TYPES, CONTINUES, LIST_TYPES } from './blocks.ts'
+import type { Attributes, BlockType, Delta, MarkName } from './blocks.ts'
+import { parseMarkdown } from './markdown.ts'
+import type { MarkdownBlock } from './markdown.ts'
 
 export type EditorRuntime = {
   html: (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult
@@ -32,36 +36,10 @@ export type EditorRuntime = {
 
 export type IssueEditorProps = { issueId: string; lang?: string }
 
-type MarkName = 'bold' | 'italic' | 'strike' | 'code'
-type Attributes = {
-  bold?: boolean
-  italic?: boolean
-  strike?: boolean
-  code?: boolean
-  link?: string | null
-}
-type Delta = Array<{ insert: string; attributes?: Attributes }>
-type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'code' | 'bullet' | 'ordered' | 'check'
 type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: BlockType; checked: boolean }
 type Point = { index: number; offset: number }
 type Span = { start: Point; end: Point }
 type Viewer = { id: string; name: string; index: number; seenAt: number }
-
-const BLOCK_TYPES: readonly BlockType[] = [
-  'p',
-  'h1',
-  'h2',
-  'h3',
-  'quote',
-  'code',
-  'bullet',
-  'ordered',
-  'check',
-]
-const LIST_TYPES: readonly BlockType[] = ['bullet', 'ordered', 'check']
-
-/** Pressing Enter at the end of one of these starts another of the same kind. */
-const CONTINUES = new Set<BlockType>(['p', 'bullet', 'ordered', 'check'])
 
 /**
  * Typing a prefix turns the block into what the prefix means, the way every
@@ -79,6 +57,30 @@ const INPUT_RULES: Array<[RegExp, BlockType]> = [
   [/^\[[ xX]?\] $/, 'check'],
   [/^```$/, 'code'],
 ]
+
+/**
+ * Markdown that completes as you type it.
+ *
+ * Each pattern is anchored to the caret, so a rule fires on the keystroke that
+ * closes it and never reaches back through text somebody finished with — the
+ * closing delimiter is the gesture.
+ *
+ * No inner text may contain its own delimiter, and it may not begin or end
+ * with a space. The second half keeps `2 * 3 * 4` a sum. The first half is
+ * what makes `**now**` bold: while the inner text was merely "not a space",
+ * the italic rule could open on the first `*` of a bold pair and swallow the
+ * second one as content, so finishing `**now**` produced italic `now`.
+ */
+const INLINE_RULES: Array<{ pattern: RegExp; open: number; mark: MarkName }> = [
+  { pattern: /\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, open: 2, mark: 'bold' },
+  { pattern: /__([^_\s](?:[^_]*[^_\s])?)__$/, open: 2, mark: 'bold' },
+  { pattern: /~~([^~\s](?:[^~]*[^~\s])?)~~$/, open: 2, mark: 'strike' },
+  { pattern: /(?<![*\w])\*([^*\s](?:[^*]*[^*\s])?)\*$/, open: 1, mark: 'italic' },
+  { pattern: /(?<![_\w])_([^_\s](?:[^_]*[^_\s])?)_$/, open: 1, mark: 'italic' },
+  { pattern: /`([^`]+)`$/, open: 1, mark: 'code' },
+]
+
+const LINK_RULE = /\[([^\]]+)\]\(([^)\s]+)\)$/
 
 /**
  * How long a viewer stays listed without saying anything.
@@ -133,31 +135,53 @@ const sliceDelta = (delta: Delta, from: number, to = Number.POSITIVE_INFINITY): 
   return out
 }
 
+/** Everything a run can carry, so every one of them can be turned off by name. */
+const MARK_KEYS = ['bold', 'italic', 'strike', 'code', 'link'] as const
+
 /**
- * The marks new text inherits: whatever the character before it carries.
+ * The marks new text inherits: the ones it is landing *inside* of.
  *
- * A link is the exception, and only at its far edge. Typing in the middle of
- * a link extends it, which is what anyone expects; typing immediately after
- * one does not, or every sentence that ends in a link swallows the rest of
- * the paragraph into the same href.
+ * A mark does not reach past its own end. Typing in the middle of a bold word
+ * keeps it bold, which is what anyone expects; typing immediately after one
+ * does not, which is the half that has to be said out loud, because word
+ * processors do the opposite.
+ *
+ * Here the closing delimiter is usually the gesture that made the mark —
+ * somebody types `**now**`, and the two asterisks they finished with mean
+ * exactly "stop". Extending anyway turned the rest of the sentence bold, then
+ * the rest of that into code, then dropped all of it inside a link. The
+ * failure is silent in the direction that matters, too: unwanted formatting is
+ * invisible until you look at it, while missing formatting is visible at once
+ * and one click away.
+ *
+ * Every mark is named on every insert, `null` for the ones that do not apply,
+ * because leaving them out is not the same statement. `Y.Text.insert` with no
+ * attributes means *inherit whatever is at this position* — so the answer to
+ * "no marks here" is an explicit no, not silence. That distinction is why the
+ * paragraph above was true of the code and false of the running editor.
  */
-function attributesAt(text: Y.XmlText, offset: number): Attributes | undefined {
-  if (offset === 0) return undefined
+function attributesAt(text: Y.XmlText, offset: number): Record<string, unknown> {
+  const clear: Record<string, unknown> = {}
+  for (const key of MARK_KEYS) clear[key] = null
+  if (offset === 0) return clear
   const delta = text.toDelta() as Delta
   let cursor = 0
   for (const op of delta) {
     const end = cursor + op.insert.length
+    // `toDelta` merges neighbouring runs carrying the same marks, so the end of
+    // an op is always the end of the run it belongs to.
     if (offset <= end) {
-      if (!op.attributes) return undefined
-      if (op.attributes.link && offset === end) {
-        const { link: _link, ...rest } = op.attributes
-        return rest
+      if (offset === end || !op.attributes) return clear
+      const carried: Record<string, unknown> = { ...clear }
+      for (const key of MARK_KEYS) {
+        const value = (op.attributes as Record<string, unknown>)[key]
+        if (value != null) carried[key] = value
       }
-      return op.attributes
+      return carried
     }
     cursor = end
   }
-  return undefined
+  return clear
 }
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
@@ -675,6 +699,14 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     structural(caretAt(caret), () => block.text.insert(at.offset, value, attributesAt(block.text, at.offset)))
   }
 
+  /** Sets a checklist item's tick without regard to what it was. Call inside a transaction. */
+  function checkedOn(index: number, checked: boolean) {
+    const block = blocksOf()[index]
+    if (!block || block.node instanceof Y.XmlText) return
+    if (checked) block.node.setAttribute('checked', 'true')
+    else block.node.removeAttribute('checked')
+  }
+
   function toggleChecked(index: number) {
     const block = blocksOf()[index]
     if (!block || block.node instanceof Y.XmlText || block.type !== 'check') return
@@ -738,16 +770,61 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
 
   // ---- input --------------------------------------------------------------
 
-  function applyInputRule(index: number) {
+  function applyInputRule(index: number): boolean {
     const block = blocksOf()[index]
-    if (!block || block.type === 'code') return
+    if (!block || block.type === 'code') return false
     const text = plainTextOf(block.text)
     const rule = INPUT_RULES.find(([pattern]) => pattern.test(text))
-    if (!rule) return
+    if (!rule) return false
     structural(caretAt({ index, offset: 0 }), () => {
       block.text.delete(0, text.length)
       setBlockType(index, rule[1])
     })
+    return true
+  }
+
+  /**
+   * Turns a completed Markdown span into the mark it spells.
+   *
+   * The delimiters are removed from the end first, so the offsets computed
+   * against the original text still hold when the opening one goes. What is
+   * left keeps whatever marks it already carried — writing `**` around a word
+   * that is already a link should bold the link, not replace it.
+   */
+  function applyInlineRule(index: number, caret: number): boolean {
+    const block = blocksOf()[index]
+    // Not in a code block: the delimiters there are characters.
+    if (!block || block.type === 'code') return false
+    const upToCaret = plainTextOf(block.text).slice(0, caret)
+
+    const link = LINK_RULE.exec(upToCaret)
+    if (link) {
+      const whole = link[0] as string
+      const label = link[1] as string
+      const href = link[2] as string
+      const start = caret - whole.length
+      structural(caretAt({ index, offset: start + label.length }), () => {
+        block.text.delete(start + 1 + label.length, whole.length - 1 - label.length)
+        block.text.delete(start, 1)
+        block.text.format(start, label.length, { link: href })
+      })
+      return true
+    }
+
+    for (const rule of INLINE_RULES) {
+      const match = rule.pattern.exec(upToCaret)
+      if (!match) continue
+      const whole = match[0] as string
+      const inner = match[1] as string
+      const start = caret - whole.length
+      structural(caretAt({ index, offset: start + inner.length }), () => {
+        block.text.delete(start + rule.open + inner.length, rule.open)
+        block.text.delete(start, rule.open)
+        block.text.format(start, inner.length, { [rule.mark]: true })
+      })
+      return true
+    }
+    return false
   }
 
   /**
@@ -784,7 +861,9 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
       if (deletedLength) block.text.delete(start, deletedLength)
       if (inserted) block.text.insert(start, inserted, attributesAt(block.text, start))
     }, LOCAL_TYPING)
-    applyInputRule(span.start.index)
+    // Block rules win: they only fire on a line that is still nothing but its
+    // prefix, so the two can never both be right about the same keystroke.
+    if (!applyInputRule(span.start.index)) applyInlineRule(span.start.index, start + inserted.length)
   }
 
   function onBeforeInput(event: InputEvent) {
@@ -871,25 +950,46 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     const at = isCollapsed(span) ? span.start : deleteSpan(span)
     const block = blocksOf()[at.index]
     if (!block) return
-    const lines = value.split(/\r\n|\r|\n/)
-    if (lines.length === 1 || block.type === 'code') {
-      insertTextAt(at, block.type === 'code' ? value : lines.join(' '))
+    // Into a code block the clipboard is characters, delimiters and all —
+    // pasting a snippet is the one time nobody wants it read as Markdown.
+    if (block.type === 'code') {
+      insertTextAt(at, value)
       return
     }
+    const parsed = parseMarkdown(value)
+    if (!parsed.length) return
+
     const delta = block.text.toDelta() as Delta
     const length = plainLength(delta)
     const tail = sliceDelta(delta, at.offset)
-    const lastLine = lines[lines.length - 1] ?? ''
-    structural(caretAt({ index: at.index + lines.length - 1, offset: lastLine.length }), () => {
+    const first = parsed[0] as MarkdownBlock
+    // An empty block takes the shape of what lands in it — pasting a heading
+    // into a blank line should give a heading, not a heading's words. A block
+    // with something in it keeps its own kind and takes only the words.
+    const adopt = length === 0 && first.type !== 'p'
+    const lastBlock = parsed[parsed.length - 1] as MarkdownBlock
+    const caret = {
+      index: at.index + parsed.length - 1,
+      offset: parsed.length === 1 ? at.offset + plainLength(first.delta) : plainLength(lastBlock.delta),
+    }
+
+    structural(caretAt(caret), () => {
       if (at.offset < length) block.text.delete(at.offset, length - at.offset)
-      block.text.insert(at.offset, lines[0] ?? '', attributesAt(block.text, at.offset))
-      for (let line = 1; line < lines.length; line++) {
-        const text = insertBlock(at.index + line, block.type)
-        const content = lines[line] ?? ''
-        if (content) text.insert(0, content)
-        if (line === lines.length - 1 && tail.length)
-          text.applyDelta([{ retain: content.length }, ...tail] as unknown[])
+      if (first.delta.length) block.text.applyDelta([{ retain: at.offset }, ...first.delta] as unknown[])
+      if (adopt) {
+        setBlockType(at.index, first.type)
+        if (first.checked) checkedOn(at.index, true)
       }
+      for (let index = 1; index < parsed.length; index++) {
+        const source = parsed[index] as MarkdownBlock
+        const text = insertBlock(at.index + index, source.type, source.checked)
+        if (source.delta.length) text.applyDelta(source.delta as unknown[])
+        if (index === parsed.length - 1 && tail.length)
+          text.applyDelta([{ retain: plainLength(source.delta) }, ...tail] as unknown[])
+      }
+      // One block in, so the text after the caret never left its own block.
+      if (parsed.length === 1 && tail.length)
+        block.text.applyDelta([{ retain: at.offset + plainLength(first.delta) }, ...tail] as unknown[])
     })
   }
 
