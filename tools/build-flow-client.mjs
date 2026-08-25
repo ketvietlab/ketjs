@@ -55,7 +55,12 @@ export async function buildFlowClient() {
     platform: 'browser',
     target: 'es2022',
     minify: true,
-    sourcemap: true,
+    // External rather than linked: a minified bundle's map inlines the
+    // whole original source, so it is not something the asset mount will
+    // serve (packages/ketjs/src/server/http.ts). Writing it without the
+    // `sourceMappingURL` comment keeps it on disk for anyone debugging
+    // locally without pointing every browser at a URL that must 404.
+    sourcemap: 'external',
     // Every .mjs under the kit's client directory carries this, and the
     // generated one is no different: tsconfig.build.json type-checks that
     // directory, and a minified yjs bundle is not code TypeScript can have an
