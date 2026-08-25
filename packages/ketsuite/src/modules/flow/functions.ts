@@ -22,7 +22,15 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
-import { archivePage, listPages, movePage, pageDetail, restorePage, savePage } from './pages.ts'
+import {
+  archivePage,
+  listPages,
+  movePage,
+  pageDetail,
+  reorderPage,
+  restorePage,
+  savePage,
+} from './pages.ts'
 
 const flowReadEffects = [
   'read:flow.Project',
@@ -162,10 +170,33 @@ export const functions: Record<string, FnSpec> = {
    */
   'project.get': defineFn({
     input: { id: 'id' },
-    output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
+    output: {
+      id: 'id',
+      key: 'text',
+      name: 'text',
+      description: 'text?',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      active: 'bool',
+    },
     effects: ['read:flow.Project'],
     agent: true,
     handler: async (ctx, args) => (await ctx.db.select('flow.Project', { id: args.id }))[0] ?? null,
+  }),
+
+  /**
+   * Rewriting a project's brief, as a permission key of its own — separate
+   * from `project.save`, which renames the project and archives it.
+   */
+  'project.editContent': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Project', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
+    },
   }),
 
   'project.save': saveEntity(
@@ -423,7 +454,15 @@ export const functions: Record<string, FnSpec> = {
 
   'epic.list': defineFn({
     input: { projectId: 'id', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
-    output: { id: 'id', projectId: 'id', title: 'text', color: 'text?', active: 'bool' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      title: 'text',
+      color: 'text?',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      active: 'bool',
+    },
     effects: ['read:flow.Epic'],
     agent: true,
     handler: async (ctx, args) => {
@@ -437,6 +476,35 @@ export const functions: Record<string, FnSpec> = {
       return rows
         .filter((row) => !needle || normalized(row.title).includes(needle))
         .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+    },
+  }),
+
+  /**
+   * One epic by id — what Live Doc reads to find its stored document, and what
+   * the epic's own screen is built from.
+   */
+  'epic.get': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Epic'],
+    agent: true,
+    handler: async (ctx, args) => ({
+      value: (await ctx.db.select('flow.Epic', { id: args.id }))[0] ?? null,
+    }),
+  }),
+
+  /**
+   * Rewriting an epic's document, as a permission key of its own — the same
+   * split `page.editContent` makes, and for the same reason.
+   */
+  'epic.editContent': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Epic'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Epic', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
 
@@ -546,6 +614,19 @@ export const functions: Record<string, FnSpec> = {
         id: String(args.id),
         parentPageId: (args.parentPageId as string | null) ?? null,
         sequence: args.sequence == null ? null : n(args.sequence),
+      }),
+  }),
+
+  'page.reorder': defineFn({
+    input: { id: 'id', direction: 'text' },
+    output: { ok: 'bool', id: 'id?', moved: 'bool?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      reorderPage(ctx, {
+        id: String(args.id),
+        direction: String(args.direction) === 'up' ? 'up' : 'down',
       }),
   }),
 

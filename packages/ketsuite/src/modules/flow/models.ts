@@ -7,7 +7,17 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       key: 'text',
       name: 'text',
+      /**
+       * The one line that identifies the project in a list — kept as a plain
+       * column beside the brief below, not replaced by it. A list row wants a
+       * sentence, and rendering one out of a CRDT to draw a table would be a
+       * document read per row.
+       */
       description: 'text?',
+      /** The project brief, as a Live Doc. Written only by its flatten routine. */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
       active: 'bool',
     },
     indexes: {
@@ -161,6 +171,10 @@ export const models: Record<string, ModelDef> = {
       projectId: 'ref:flow.Project',
       title: 'text',
       color: 'text?',
+      /** What the epic is actually for, as a Live Doc — see the note on Issue. */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
       active: 'bool',
     },
     indexes: {

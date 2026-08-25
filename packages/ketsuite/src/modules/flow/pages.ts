@@ -10,7 +10,7 @@
 // routine, which updates them as plain columns outside the CAS path — see
 // `commitPageContent` in flow_backend and the note on the model.
 
-import { asc, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, desc, eq, from, inArray, isNull } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { actorRequired, commandKey, invalid, issue, n, normalized, now } from './operations.ts'
 import type { FlowResult } from './operations.ts'
@@ -60,6 +60,18 @@ const parentError = async (
   return null
 }
 
+/** Where the last sibling sits, so a new page can be put after it. */
+const lastSequence = async (ctx: Ctx, projectId: string, parentPageId: string | null): Promise<number> => {
+  const P = ctx.table('flow.Page')
+  const siblings = await ctx.db.all(
+    from(P).where(
+      eq(P.projectId, projectId),
+      parentPageId ? eq(P.parentPageId, parentPageId) : isNull(P.parentPageId),
+    ),
+  )
+  return siblings.reduce((highest, row) => Math.max(highest, n(row.sequence)), 0)
+}
+
 export async function savePage(ctx: Ctx, input: SavePageInput): Promise<FlowResult> {
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
@@ -83,15 +95,27 @@ export async function savePage(ctx: Ctx, input: SavePageInput): Promise<FlowResu
     // A reference the caller did not mention keeps what is stored; an explicit
     // null clears it. The page form carries no parent field — moving a page is
     // its own action — so a partial save must not orphan the page.
-    const parent =
+    const parent: string | null =
       input.parentPageId === undefined
-        ? (existing?.parentPageId ?? null)
+        ? existing?.parentPageId
+          ? String(existing.parentPageId)
+          : null
         : input.parentPageId || null
+    // A new page goes after the siblings it joins. Every page used to be
+    // created at the same sequence, which left the whole tree sorted by title
+    // and made the column pointless — a wiki's order is the order somebody put
+    // things in, not the alphabet.
+    const sequence =
+      input.sequence != null
+        ? n(input.sequence)
+        : existing
+          ? n(existing.sequence)
+          : (await lastSequence(tx, String(input.projectId), parent)) + SEQUENCE_STEP
     const values: Row = {
       projectId: input.projectId,
       parentPageId: parent,
       title,
-      sequence: n(input.sequence ?? existing?.sequence ?? SEQUENCE_STEP),
+      sequence,
       active: true,
       version: n(existing?.version) + 1,
       updatedAt: timestamp,
@@ -144,6 +168,52 @@ export async function movePage(
     },
   )
   return { ok: true, id: input.id }
+}
+
+/**
+ * Swaps a page with the sibling above or below it.
+ *
+ * A swap rather than a renumber: only two rows change, so two people
+ * reordering different parts of the same branch do not fight, and a sequence
+ * nobody touched keeps the value it had. Reaching the end is not an error —
+ * there is simply nothing to swap with, and the caller is told so rather than
+ * being handed a failure for asking.
+ */
+export async function reorderPage(
+  ctx: Ctx,
+  input: { id: string; direction: 'up' | 'down' },
+): Promise<FlowResult> {
+  const existing = await pageRow(ctx, input.id)
+  if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+  const P = ctx.table('flow.Page')
+  const parent = existing.parentPageId ? String(existing.parentPageId) : null
+  const siblings = await ctx.db.all(
+    from(P)
+      .where(
+        eq(P.projectId, existing.projectId),
+        eq(P.active, true),
+        parent ? eq(P.parentPageId, parent) : isNull(P.parentPageId),
+      )
+      .orderBy(asc(P.sequence), asc(P.title)),
+  )
+  const at = siblings.findIndex((row) => String(row.id) === input.id)
+  const neighbour = siblings[at + (input.direction === 'up' ? -1 : 1)]
+  if (at < 0 || !neighbour) return { ok: true, id: input.id, moved: false }
+  // Ties are possible — `sequence` is not unique, and rows created before this
+  // existed all share one value — so equal neighbours are pushed apart rather
+  // than swapped into the same place they started.
+  const mine = n(existing.sequence)
+  const theirs = n(neighbour.sequence)
+  const [next, other] =
+    mine === theirs
+      ? input.direction === 'up'
+        ? [mine - SEQUENCE_STEP, theirs]
+        : [mine + SEQUENCE_STEP, theirs]
+      : [theirs, mine]
+  const stamp = now()
+  await ctx.db.update('flow.Page', { id: input.id }, { sequence: next, updatedAt: stamp })
+  await ctx.db.update('flow.Page', { id: neighbour.id }, { sequence: other, updatedAt: stamp })
+  return { ok: true, id: input.id, moved: true }
 }
 
 /**

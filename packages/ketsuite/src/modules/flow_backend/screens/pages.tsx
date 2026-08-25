@@ -205,7 +205,7 @@ export const pageDetailScreen = (
         // is a different decision from renaming it.
         <Section
           title={_('flow_backend.pages.move')}
-          body={
+          body={stack([
             <RecordForm
               action={endpoint}
               hidden={{ action: 'move' }}
@@ -213,8 +213,29 @@ export const pageDetailScreen = (
               submit={_('flow_backend.pages.moveSubmit')}
               submitVariant="secondary"
               layout="inline"
-            />
-          }
+            />,
+            // Order among siblings, as two nudges rather than a number to
+            // type: `sequence` is bookkeeping, and asking a writer to pick one
+            // is asking them to know what every neighbour holds.
+            <RecordForm
+              action={endpoint}
+              hidden={{ action: 'orderUp' }}
+              fields={[]}
+              submit={_('flow_backend.pages.orderUp')}
+              submitVariant="tertiary"
+              submitSize="compact"
+              layout="inline"
+            />,
+            <RecordForm
+              action={endpoint}
+              hidden={{ action: 'orderDown' }}
+              fields={[]}
+              submit={_('flow_backend.pages.orderDown')}
+              submitVariant="tertiary"
+              submitSize="compact"
+              layout="inline"
+            />,
+          ])}
         />,
         <Surface
           body={stack([

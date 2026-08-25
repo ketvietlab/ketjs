@@ -285,3 +285,102 @@ test('flow pages: listing without a project answers across projects', async () =
     await e2e.close()
   }
 })
+
+/**
+ * Sibling order is the order somebody put things in, which is the whole reason
+ * `sequence` exists — every page used to be created at the same value, leaving
+ * the tree sorted by title and the column doing nothing.
+ */
+test('flow pages: new pages queue after their siblings, and can be nudged past them', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await created(call, page('zulu', 'Zulu'))
+    await created(call, page('alpha', 'Alpha'))
+    await created(call, page('mike', 'Mike'))
+
+    const order = async () =>
+      (await call<Row[]>('flow.page.list', { projectId: 'proj1' })).map((row) => String(row.id))
+
+    assert.deepEqual(await order(), ['zulu', 'alpha', 'mike'], 'creation order, not the alphabet')
+
+    await call('flow.page.reorder', { id: 'mike', direction: 'up' })
+    assert.deepEqual(await order(), ['zulu', 'mike', 'alpha'])
+
+    await call('flow.page.reorder', { id: 'mike', direction: 'up' })
+    assert.deepEqual(await order(), ['mike', 'zulu', 'alpha'])
+
+    // Off the end is not a failure — there is simply nothing to swap with.
+    const past = await call<{ ok: boolean; moved: boolean }>('flow.page.reorder', {
+      id: 'mike',
+      direction: 'up',
+    })
+    assert.equal(past.ok, true)
+    assert.equal(past.moved, false)
+    assert.deepEqual(await order(), ['mike', 'zulu', 'alpha'], 'and nothing moved')
+
+    // Ordering is per branch: a child never trades places with an uncle.
+    await created(call, page('child', 'Child', 'zulu'))
+    await call('flow.page.reorder', { id: 'child', direction: 'up' })
+    const parents = new Map(
+      (await call<Row[]>('flow.page.list', { projectId: 'proj1' })).map((row) => [
+        String(row.id),
+        row.parentPageId,
+      ]),
+    )
+    assert.equal(parents.get('child'), 'zulu', 'still under its own parent')
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * The seam's real test: four models now hold a document, and each one's
+ * flatten has to land on its own row through its own commit function.
+ */
+test('flow docs: a project brief and an epic carry their own Live Doc', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await call('flow.epic.save', {
+      values: { id: 'epic1', projectId: 'proj1', title: 'Rollout' },
+      idempotencyKey: 'epic-save-1',
+    })
+
+    const write = async (base: string, id: string, text: string) => {
+      await e2e.client.json(`${base}/${id}/content`)
+      const doc = new Y.Doc()
+      const run = new Y.XmlText()
+      doc.getXmlFragment('content').insert(0, [run])
+      run.insert(0, text)
+      await e2e.client.request(`${base}/${id}/push`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }),
+      })
+      await e2e.client.request(`${base}/${id}/leave`, { method: 'POST' })
+    }
+
+    await write('/admin/flow/projects', 'proj1', 'Nền tảng nội bộ')
+    await write('/admin/flow/epics', 'epic1', 'Đưa lên production')
+
+    const project = await call<Row>('flow.project.get', { id: 'proj1' })
+    assert.equal(project.previewText, 'Nền tảng nội bộ')
+    assert.ok(project.contentAttachmentId, 'the brief is reachable again after a restart')
+    assert.equal(project.name, 'Flagship', 'and the short summary is untouched')
+
+    const epic = (await call<{ value: Row }>('flow.epic.get', { id: 'epic1' })).value
+    assert.equal(epic.previewText, 'Đưa lên production')
+    assert.ok(epic.contentAttachmentId)
+
+    // Each owner's topic names its own model, so two records sharing an id
+    // cannot share a document.
+    const projectTopic = (await e2e.client.json<{ topic: string }>('/admin/flow/projects/proj1/content'))
+      .topic
+    assert.match(projectTopic, /^doc:acme:flow\.Project:proj1:/)
+    const epicTopic = (await e2e.client.json<{ topic: string }>('/admin/flow/epics/epic1/content')).topic
+    assert.match(epicTopic, /^doc:acme:flow\.Epic:epic1:/)
+  } finally {
+    await e2e.close()
+  }
+})
