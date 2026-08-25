@@ -53,6 +53,20 @@ async function assignableSprint(ctx: Ctx, sprintId: unknown): Promise<Row | null
 }
 
 /**
+ * An epic an issue may belong to.
+ *
+ * `undefined` means "named but not found". Every other reference on an issue
+ * — column, sprint, parent — is checked for existence and for belonging to
+ * the same project; epic was the one that was written straight through, so an
+ * issue in project A could be filed under project B's epic and would then
+ * appear on B's epic panel and dependency map while still living on A's board.
+ */
+async function issueEpic(ctx: Ctx, epicId: unknown): Promise<Row | null | undefined> {
+  if (!epicId) return null
+  return (await ctx.db.select('flow.Epic', { id: epicId }))[0] ?? undefined
+}
+
+/**
  * A parent an issue may point at.
  *
  * Sub-tasks nest inside one project's board, so a parent from another project
@@ -204,27 +218,56 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
   const tagRows = tagIds.length
     ? await ctx.db.all(from(ctx.table('flow.Tag')).where(inArray(ctx.table('flow.Tag').id, tagIds)))
     : []
+  // The far side of each dependency, by id and in one query — the same shape
+  // serializeIssueList already uses for column/epic/sprint/assignee. A screen
+  // that resolved these itself could only do it by listing the project's
+  // issues and filtering, which silently prints a raw id for any dependency
+  // outside that page: `issue.options` caps at 100 rows, so a 1000-issue
+  // project showed uuids for every dependency older than the newest hundred.
+  const relatedIds = [
+    ...new Set([...outgoing.map((row) => row.dependsOnIssueId), ...incoming.map((row) => row.issueId)]),
+  ].map(String)
+  const relatedRows = relatedIds.length
+    ? await ctx.db.all(from(ctx.table('flow.Issue')).where(inArray(ctx.table('flow.Issue').id, relatedIds)))
+    : []
+  const titleOf = new Map(relatedRows.map((row) => [String(row.id), String(row.title)]))
   return {
     ...serialized!,
     tags: tagRows,
-    dependencies: outgoing,
-    dependents: incoming,
+    dependencies: outgoing.map((row) => ({
+      ...row,
+      dependsOnTitle: titleOf.get(String(row.dependsOnIssueId)) ?? row.dependsOnIssueId,
+    })),
+    dependents: incoming.map((row) => ({
+      ...row,
+      issueTitle: titleOf.get(String(row.issueId)) ?? row.issueId,
+    })),
     comments,
   }
 }
 
 /**
- * Blocking dependencies among a given set of issues, batched — the map view
- * (flow_backend's dependency atlas, one epic at a time) needs every edge among
- * its own node set, not the per-issue read `issueDetail` already does. No JOIN
- * in this query builder by design, so this is one query against
- * `IssueDependency` alone, filtered client-side to edges whose two ends are
- * both in the requested set.
+ * Blocking dependencies leading into a given set of issues, batched — the map
+ * view (flow_backend's dependency atlas, one epic at a time) needs the edges
+ * among its own node set, not the per-issue read `issueDetail` already does.
+ * No JOIN in this query builder by design, so this is one query against
+ * `IssueDependency` alone.
+ *
+ * Both ends are matched here rather than only `issueId`: an edge pointing out
+ * of the set is not an edge of the set, and leaving that to the caller meant
+ * `flow.issue.dependencies` — an agent-callable function — answered with
+ * edges nobody asked about. The id list is capped for the same reason every
+ * other read in this module is: it arrives over HTTP.
  */
+export const DEPENDENCY_BATCH = 200
+
 export async function dependenciesFor(ctx: Ctx, issueIds: readonly string[]): Promise<Row[]> {
-  if (!issueIds.length) return []
+  const ids = [...new Set(issueIds.map(String))].slice(0, DEPENDENCY_BATCH)
+  if (!ids.length) return []
   const D = ctx.table('flow.IssueDependency')
-  return ctx.db.all(from(D).where(inArray(D.issueId, [...issueIds]), eq(D.relation, 'blocks')))
+  const held = new Set(ids)
+  const rows = await ctx.db.all(from(D).where(inArray(D.issueId, ids), eq(D.relation, 'blocks')))
+  return rows.filter((row) => held.has(String(row.dependsOnIssueId)))
 }
 
 export type SaveIssueInput = {
@@ -261,6 +304,10 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
   if (sprint === undefined) return invalid(issue('sprintId', 'flow.error.sprintClosed'))
   if (sprint && String(sprint.projectId) !== String(input.projectId))
     return invalid(issue('sprintId', 'flow.error.sprintProjectMismatch'))
+  const epic = await issueEpic(ctx, input.epicId)
+  if (epic === undefined) return invalid(issue('epicId', 'flow.error.notFound'))
+  if (epic && String(epic.projectId) !== String(input.projectId))
+    return invalid(issue('epicId', 'flow.error.epicProjectMismatch'))
   return ctx.tx(async (tx) => {
     const existing = (await tx.db.select('flow.Issue', { id: input.id }))[0]
     if (existing && String(existing.projectId) !== String(input.projectId))
@@ -293,16 +340,25 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
     }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
+    // A reference the caller did not mention keeps what is stored; an
+    // explicit null clears it. `priority` and `estimate` below already read
+    // this way, but epic, sprint, parent, assignee and due date did not — so
+    // any caller sending a partial record silently cleared the rest. The
+    // issue detail screen is exactly that caller: its form carries no sprint
+    // and no parent field (both have their own action), so editing a title
+    // dropped the issue out of its sprint and orphaned its sub-task link.
+    const kept = <T>(given: T | null | undefined, stored: unknown): unknown =>
+      given === undefined ? (stored ?? null) : given || null
     const values: Row = {
       projectId: input.projectId,
       columnId: existing ? existing.columnId : input.columnId,
-      epicId: input.epicId || null,
-      sprintId: sprint ? sprint.id : null,
-      parentIssueId: input.parentIssueId || null,
+      epicId: input.epicId === undefined ? (existing?.epicId ?? null) : epic ? epic.id : null,
+      sprintId: input.sprintId === undefined ? (existing?.sprintId ?? null) : sprint ? sprint.id : null,
+      parentIssueId: kept(input.parentIssueId, existing?.parentIssueId),
       title: input.title.trim(),
-      assigneeUserId: input.assigneeUserId || null,
+      assigneeUserId: kept(input.assigneeUserId, existing?.assigneeUserId),
       priority: input.priority ?? existing?.priority ?? 'normal',
-      dueDate: input.dueDate || null,
+      dueDate: kept(input.dueDate, existing?.dueDate),
       estimate: input.estimate == null ? (existing?.estimate ?? null) : String(input.estimate),
       active: true,
       version: nextVersion,

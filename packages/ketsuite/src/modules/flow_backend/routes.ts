@@ -3,13 +3,19 @@ import { encodeListState, json, parseListState, streamed, table, text, withHeade
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { ISSUE_PRIORITIES } from '../flow/types.ts'
-import { issueListSearch } from '../flow/search.ts'
+import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { assigneeControl, epicControl, issueControl, tagsControl } from './relation-control.ts'
-import { FLOW_PAGE_SIZE, keepForListSearch, listFacets, listMenus, loadListGroups } from './list-search.ts'
+import {
+  keepForListSearch,
+  LIST_PAGE_SIZE,
+  listFacets,
+  listMenus,
+  loadListGroups,
+} from '../backend/list-search.ts'
 import {
   boardScreen,
   epicsScreen,
@@ -52,21 +58,37 @@ const slugify = (name: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'col'
 
-/** No dedicated `project.get` — `project.list` is the only read function, so this filters it. */
+/** The project behind the id in the URL, or null when the caller may not read it. */
 async function projectOf(ctx: ServeContext, url: URL, req: Req, id: string): Promise<AnyRow | null> {
-  const found = (await ctx.call('flow.project.list', { limit: 200, includeArchived: true }, url, req)) as
-    | AnyRow[]
-    | undefined
-  return (found ?? []).find((row) => String(row.id) === id) ?? null
+  try {
+    return (await ctx.call('flow.project.get', { id }, url, req)) as AnyRow | null
+  } catch {
+    return null
+  }
 }
 
 const errorsOf = (result: unknown, _: Translator): string[] =>
   resultErrors(result, _, 'flow_backend.error.invalid')
 
+/**
+ * The backlog list, narrowed to one reference field.
+ *
+ * `parseListState` reads filters from `filter` params carrying encoded rule
+ * nodes — there is no `f.<key>=` convention anywhere in the framework, so the
+ * board's "load more" and the epic cards, which both linked with one, landed
+ * on the unfiltered project list instead. `encodeListState` writes the form
+ * the parser on the other end actually reads.
+ */
+const issuesFilteredBy = (projectId: string, field: string, value: string): string =>
+  encodeListState(
+    { ...emptyIssueListState(), filters: [{ kind: 'rule', field, operator: 'equals', value }] },
+    `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+  )
+
 const pager = (url: URL, state: ListState, rows: number, total: number) => {
   const link = (target: number) => encodeListState({ ...state, page: target }, url)
-  const from = rows ? (state.page - 1) * FLOW_PAGE_SIZE + 1 : 0
-  const to = Math.min(state.page * FLOW_PAGE_SIZE, total)
+  const from = rows ? (state.page - 1) * LIST_PAGE_SIZE + 1 : 0
+  const to = Math.min(state.page * LIST_PAGE_SIZE, total)
   return {
     from,
     to,
@@ -372,7 +394,9 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const issueId = String(params.id)
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
+      // Tagged with the action that produced them, so the screen can put each
+      // message under the form it belongs to rather than all of them on top.
+      let errors: { action: string; messages: string[] } | undefined
       if (req.method === 'POST') {
         const form = await readForm(req)
         const action = form.action ?? ''
@@ -381,6 +405,11 @@ export const routes: Record<string, RouteEntry> = {
         if (action === 'save') {
           const existing = (await readable(ctx, url, req, issueId)) as Row | null
           if (!existing) return text('not found', { status: 404 })
+          // Every field this form owns is sent, empty ones as an explicit
+          // null so clearing a picker actually clears it. Sprint and parent
+          // are deliberately absent: neither is on this form (sprint has its
+          // own action below, parent has no screen yet), and `issue.save`
+          // keeps what it is not told about.
           result = (await ctx.call(
             'flow.issue.save',
             {
@@ -389,10 +418,10 @@ export const routes: Record<string, RouteEntry> = {
               columnId: existing.columnId,
               title: form.title ?? '',
               priority: form.priority || undefined,
-              assigneeUserId: form.assigneeUserId || undefined,
-              epicId: form.epicId || undefined,
+              assigneeUserId: form.assigneeUserId || null,
+              epicId: form.epicId || null,
               tagIds: form.tagIds ? form.tagIds.split(',').filter(Boolean) : [],
-              dueDate: form.dueDate || undefined,
+              dueDate: form.dueDate || null,
               estimate: form.estimate || undefined,
               expectedVersion: Number(form.expectedVersion ?? 0),
               idempotencyKey,
@@ -450,7 +479,7 @@ export const routes: Record<string, RouteEntry> = {
           return text('unknown action', { status: 400 })
         }
         if (result?.ok) return seeOther(inLocale(url, `/admin/flow/issues/${issueId}`))
-        errors = errorsOf(result, _)
+        errors = { action, messages: errorsOf(result, _) }
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
       const issue = (await readable(ctx, url, req, issueId)) as Row | null
@@ -459,40 +488,6 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('flow.column.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.sprint.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
-      // `issueDetail`'s dependencies/dependents are raw IssueDependency rows —
-      // just the two issue ids, no titles. A small bounded resolution (one
-      // options query, capped to what's on screen) so the table reads as
-      // issue titles rather than raw ids, same spirit as the epic panel's
-      // per-epic issue counts.
-      const dependencies = (issue.dependencies as AnyRow[] | undefined) ?? []
-      const dependents = (issue.dependents as AnyRow[] | undefined) ?? []
-      const relatedIds = [
-        ...new Set(
-          [...dependencies.map((d) => d.dependsOnIssueId), ...dependents.map((d) => d.issueId)].map(String),
-        ),
-      ]
-      const relatedTitles = relatedIds.length
-        ? new Map(
-            (
-              (await ctx.call(
-                'flow.issue.options',
-                { projectId: issue.projectId, limit: 200 },
-                url,
-                req,
-              )) as AnyRow[]
-            )
-              .filter((row) => relatedIds.includes(String(row.id)))
-              .map((row) => [String(row.id), String(row.title)]),
-          )
-        : new Map<string, string>()
-      issue.dependencies = dependencies.map((d) => ({
-        ...d,
-        dependsOnTitle: relatedTitles.get(String(d.dependsOnIssueId)) ?? d.dependsOnIssueId,
-      }))
-      issue.dependents = dependents.map((d) => ({
-        ...d,
-        issueTitle: relatedTitles.get(String(d.issueId)) ?? d.issueId,
-      }))
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
         issueId,
         lang: url.searchParams.get('lang') ?? '',
@@ -558,45 +553,62 @@ export const routes: Record<string, RouteEntry> = {
       let errors: string[] = []
       if (req.method === 'POST') {
         const form = await readForm(req)
-        const id = randomUUID()
-        const result = (await ctx.call(
-          'flow.project.save',
-          {
-            values: { id, key: form.key ?? '', name: form.name ?? '', description: form.description || null },
-            idempotencyKey: randomUUID(),
-          },
-          url,
-          req,
-        )) as AnyRow
-        if (result.ok) {
-          const names =
-            form.template === 'custom'
-              ? (form.customColumns ?? '')
-                  .split(',')
-                  .map((name) => name.trim())
-                  .filter(Boolean)
-              : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
-          for (const [index, name] of names.entries()) {
-            await ctx.call(
-              'flow.column.save',
-              {
-                values: {
-                  id: randomUUID(),
-                  projectId: id,
-                  code: slugify(name),
-                  name,
-                  sequence: (index + 1) * 10,
-                  terminalState: index === names.length - 1,
-                },
-                idempotencyKey: randomUUID(),
+        const names =
+          form.template === 'custom'
+            ? (form.customColumns ?? '')
+                .split(',')
+                .map((name) => name.trim())
+                .filter(Boolean)
+            : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
+        // Refused before the project row exists, not after: a board with no
+        // column cannot hold an issue, so "Custom" with an empty list used to
+        // build a project whose Issues screen rejected every create with an
+        // error the screen had nowhere to show.
+        if (!names.length) {
+          errors = [_('flow_backend.error.customColumnsRequired')]
+        } else {
+          const id = randomUUID()
+          const result = (await ctx.call(
+            'flow.project.save',
+            {
+              values: {
+                id,
+                key: form.key ?? '',
+                name: form.name ?? '',
+                description: form.description || null,
               },
-              url,
-              req,
-            )
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) {
+            for (const [index, name] of names.entries()) {
+              const column = (await ctx.call(
+                'flow.column.save',
+                {
+                  values: {
+                    id: randomUUID(),
+                    projectId: id,
+                    code: slugify(name),
+                    name,
+                    sequence: (index + 1) * 10,
+                    terminalState: index === names.length - 1,
+                  },
+                  idempotencyKey: randomUUID(),
+                },
+                url,
+                req,
+              )) as AnyRow
+              // A column that will not save leaves a half-built board, and
+              // the settings screen is the only place to repair one — so say
+              // so here rather than landing on a board missing a column.
+              if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
+            }
+            return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
           }
-          return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
+          errors = errorsOf(result, _)
         }
-        errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
@@ -653,13 +665,12 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           const total = Number(result.total ?? 0)
           const rows = (result.rows as AnyRow[]) ?? []
-          const more = new URLSearchParams({ 'f.columnId': String(column.id) })
           return {
             column: {
               ...column,
               total,
               loadMoreHref:
-                rows.length < total ? `/admin/flow/projects/${projectId}/issues?${more.toString()}` : null,
+                rows.length < total ? issuesFilteredBy(projectId, 'columnId', String(column.id)) : null,
             },
             rows,
           }
@@ -679,6 +690,14 @@ export const routes: Record<string, RouteEntry> = {
             unassigned: _('flow_backend.board.unassigned'),
             loadMore: _('flow_backend.board.loadMore'),
             moveShort: _('flow_backend.action.moveShort'),
+            // Every refusal `issue.move` can answer with, translated here
+            // where the catalogue is, so a drag that is genuinely not allowed
+            // says why instead of claiming someone else edited the issue.
+            errors: {
+              'flow.error.blocked': _('flow.error.blocked'),
+              'flow.error.invalidColumn': _('flow.error.invalidColumn'),
+              'flow.error.notFound': _('flow.error.notFound'),
+            },
           },
         }),
       })
@@ -720,10 +739,12 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
       const columns = (await ctx.call('flow.column.list', { projectId }, url, req)) as AnyRow[]
+      let errors: string[] = []
       if (req.method === 'POST') {
         const form = await readForm(req)
-        await ctx.call(
+        const result = (await ctx.call(
           'flow.issue.save',
           {
             id: randomUUID(),
@@ -735,16 +756,16 @@ export const routes: Record<string, RouteEntry> = {
           },
           url,
           req,
-        )
-        return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
-      }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        )) as AnyRow
+        if (result.ok) return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
+        errors = errorsOf(result, _)
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
       const parsed = parseListState(spec, url)
       const state = parsed.state
       const timezone = 'UTC'
       const grouped = state.groupBy.length > 0
-      const cursor = (state.page - 1) * FLOW_PAGE_SIZE
+      const cursor = (state.page - 1) * LIST_PAGE_SIZE
       const result = (await ctx.call(
         'flow.issue.list',
         {
@@ -752,7 +773,7 @@ export const routes: Record<string, RouteEntry> = {
           listState: state,
           timezone,
           cursor: String(cursor),
-          limit: grouped ? 1 : FLOW_PAGE_SIZE,
+          limit: grouped ? 1 : LIST_PAGE_SIZE,
         },
         url,
         req,
@@ -808,6 +829,7 @@ export const routes: Record<string, RouteEntry> = {
             ],
             grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
+            errors,
           )
         },
       })
@@ -827,26 +849,40 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archive') {
-          await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)
-          return seeOther(inLocale(url, endpoint))
+          const archived = (await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(archived, _)
+        } else {
+          const result = (await ctx.call(
+            'flow.epic.save',
+            {
+              values: { id: randomUUID(), projectId, title: form.title ?? '', color: form.color || null },
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
         }
-        const result = (await ctx.call(
-          'flow.epic.save',
-          {
-            values: { id: randomUUID(), projectId, title: form.title ?? '', color: form.color || null },
-            idempotencyKey: randomUUID(),
-          },
-          url,
-          req,
-        )) as AnyRow
-        if (result.ok) return seeOther(inLocale(url, endpoint))
-        errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const epics = (await ctx.call('flow.epic.list', { projectId }, url, req)) as AnyRow[]
       const withCounts = await Promise.all(
         epics.map(async (epic) => {
-          const found = (await ctx.call('flow.issue.list', { epicId: epic.id, limit: 1 }, url, req)) as AnyRow
-          return { ...epic, totalCount: Number(found.total ?? 0) }
+          // Scoped to the project as well as the epic: `epicId` is a plain
+          // reference, so counting by it alone would fold in any issue that
+          // named this epic from another project.
+          const found = (await ctx.call(
+            'flow.issue.list',
+            { projectId, epicId: epic.id, limit: 1 },
+            url,
+            req,
+          )) as AnyRow
+          return {
+            ...epic,
+            totalCount: Number(found.total ?? 0),
+            issuesHref: issuesFilteredBy(projectId, 'epicId', String(epic.id)),
+          }
         }),
       )
       return adminPage(ctx, url, req, {
@@ -886,7 +922,7 @@ export const routes: Record<string, RouteEntry> = {
       const [epics, columns, found] = await Promise.all([
         ctx.call('flow.epic.list', { projectId, includeArchived: true }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
-        ctx.call('flow.issue.list', { epicId, limit: 200 }, url, req) as Promise<AnyRow>,
+        ctx.call('flow.issue.list', { projectId, epicId, limit: 200 }, url, req) as Promise<AnyRow>,
       ])
       const epic = epics.find((row) => String(row.id) === epicId)
       if (!epic) return text('not found', { status: 404 })
@@ -897,6 +933,7 @@ export const routes: Record<string, RouteEntry> = {
       const issueIds = issues.map((row) => String(row.id))
       const deps = (await ctx.call('flow.issue.dependencies', { issueIds }, url, req)) as AnyRow[]
       const issueIdSet = new Set(issueIds)
+      const _ = ctx.translate(ctx.localeOf(url, req))
       const map = await ctx.joint(url, req, 'flow_backend:screen.map', {
         lang: ctx.localeOf(url, req),
         data: JSON.stringify({
@@ -913,6 +950,22 @@ export const routes: Record<string, RouteEntry> = {
               (dep) => issueIdSet.has(String(dep.issueId)) && issueIdSet.has(String(dep.dependsOnIssueId)),
             )
             .map((dep) => ({ source: dep.dependsOnIssueId, target: dep.issueId })),
+          // The board route beside this one has always passed its wording
+          // through the catalogue; the map did not, which left eleven strings
+          // reachable only by the island's own vi/en fallback — the second,
+          // untranslatable vocabulary the island pattern exists to avoid.
+          labels: {
+            eyebrow: _('flow_backend.map.eyebrow'),
+            title: _('flow_backend.map.title'),
+            hint: _('flow_backend.map.hint'),
+            empty: _('flow_backend.map.empty'),
+            done: _('flow_backend.map.done'),
+            active: _('flow_backend.map.active'),
+            ready: _('flow_backend.map.ready'),
+            blocked: _('flow_backend.map.blocked'),
+            unassigned: _('flow_backend.map.unassigned'),
+            waitingFor: _('flow_backend.map.waitingFor'),
+          },
         }),
       })
       return adminPage(ctx, url, req, {
@@ -936,29 +989,34 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'start' || form.action === 'close') {
-          await ctx.call(
+          // `startSprint` refuses a second active sprint and `closeSprint` a
+          // sprint that is not running — both answer with a translated code,
+          // and dropping the result reported those refusals as a success.
+          const changed = (await ctx.call(
             form.action === 'start' ? 'flow.sprint.start' : 'flow.sprint.close',
             { id: form.id ?? '', idempotencyKey: randomUUID() },
             url,
             req,
-          )
-          return seeOther(inLocale(url, endpoint))
+          )) as AnyRow
+          if (changed.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(changed, _)
+        } else {
+          const result = (await ctx.call(
+            'flow.sprint.save',
+            {
+              id: randomUUID(),
+              projectId,
+              name: form.name ?? '',
+              startDate: form.startDate || undefined,
+              endDate: form.endDate || undefined,
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
         }
-        const result = (await ctx.call(
-          'flow.sprint.save',
-          {
-            id: randomUUID(),
-            projectId,
-            name: form.name ?? '',
-            startDate: form.startDate || undefined,
-            endDate: form.endDate || undefined,
-            idempotencyKey: randomUUID(),
-          },
-          url,
-          req,
-        )) as AnyRow
-        if (result.ok) return seeOther(inLocale(url, endpoint))
-        errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const sprints = (await ctx.call('flow.sprint.list', { projectId }, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
@@ -990,19 +1048,25 @@ export const routes: Record<string, RouteEntry> = {
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
+      // Two independent halves on one screen, so two error sinks: a duplicate
+      // tag name reported above the columns form reads as a broken column.
+      let columnErrors: string[] = []
+      let tagErrors: string[] = []
       const endpoint = `/admin/flow/projects/${projectId}/settings`
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archiveColumn') {
-          await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)
-          return seeOther(inLocale(url, endpoint))
-        }
-        if (form.action === 'archiveTag') {
-          await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)
-          return seeOther(inLocale(url, endpoint))
-        }
-        if (form.action === 'saveColumn') {
+          // `column.archive` refuses a column that still holds active issues,
+          // which is the whole point of the check — reporting that refusal as
+          // a success left the column on screen with no explanation.
+          const archived = (await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          columnErrors = errorsOf(archived, _)
+        } else if (form.action === 'archiveTag') {
+          const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          tagErrors = errorsOf(archived, _)
+        } else if (form.action === 'saveColumn') {
           const result = (await ctx.call(
             'flow.column.save',
             {
@@ -1020,7 +1084,7 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          columnErrors = errorsOf(result, _)
         } else if (form.action === 'saveTag') {
           const result = (await ctx.call(
             'flow.tag.save',
@@ -1029,7 +1093,7 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          tagErrors = errorsOf(result, _)
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [columns, tags] = await Promise.all([
@@ -1084,7 +1148,8 @@ export const routes: Record<string, RouteEntry> = {
               },
             ],
             editingTagId: editingTag ? String(editingTag.id) : undefined,
-            errors,
+            columnErrors,
+            tagErrors,
           }),
       })
     },

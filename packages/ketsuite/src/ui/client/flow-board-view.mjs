@@ -31,7 +31,11 @@ const dataOf = (props) => {
     return {
       rows: Array.isArray(value.rows) ? value.rows : [],
       columns: Array.isArray(value.columns) ? value.columns : [],
-      labels: { ...fallback, ...(value.labels && typeof value.labels === 'object' ? value.labels : {}) },
+      labels: {
+        ...fallback,
+        ...(value.labels && typeof value.labels === 'object' ? value.labels : {}),
+        errors: value.labels?.errors || {},
+      },
     }
   } catch {
     return { rows: [], columns: [], labels: fallback }
@@ -79,9 +83,18 @@ export function createFlowBoardView(runtime, props, seed = {}) {
       rows.set(
         rows().map((row) => (row.id === entry.id ? { ...row, columnId, version: result.version } : row)),
       )
-    } catch {
-      error.set(labels.conflict)
-      if (typeof window !== 'undefined') setTimeout(() => window.location.reload(), 900)
+    } catch (caught) {
+      // `issue.move` refuses more than a stale version: dropping a card into
+      // a terminal column while a `blocks` dependency is unfinished answers
+      // `flow.error.blocked`. Reporting every refusal as a conflict told the
+      // user to reload and showed them the same card in the same place with
+      // no reason given, while the real message sat translated in the
+      // catalogue. Only a genuine version clash is worth a reload — the rest
+      // leave the board as it is and say what happened.
+      const code = String(caught?.message ?? '')
+      const known = labels.errors?.[code]
+      error.set(known ?? labels.conflict)
+      if (!known && typeof window !== 'undefined') setTimeout(() => window.location.reload(), 900)
     } finally {
       busy.set('')
     }
