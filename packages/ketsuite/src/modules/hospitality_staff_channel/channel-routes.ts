@@ -349,8 +349,17 @@ const propertyFor = async (ctx: ServeContext, url: URL, req: Req, id: string): P
   (await ctx.call('hospitality_core.getProperty', { id }, url, req)) as Row | null
 const sameProperty = (row: Row | null, propertyId: string): row is Row =>
   Boolean(row && String(row.propertyId) === propertyId)
-const usersById = async (ctx: ServeContext, url: URL, req: Req): Promise<Map<string, Row>> => {
-  const rows = (await ctx.call('user.listUsers', { limit: 500 }, url, req)) as Row[]
+const usersById = async (ctx: ServeContext, url: URL, req: Req, tasks: Row[]): Promise<Map<string, Row>> => {
+  const ids = [
+    ...new Set(
+      tasks
+        .map((task) => task.assigneeId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  if (!ids.length) return new Map()
+  const rows = (await ctx.call('user.listUsers', { ids, includeArchived: true }, url, req)) as Row[]
   return new Map(rows.map((row) => [String(row.id), row]))
 }
 
@@ -652,7 +661,7 @@ export const channelRoutes = routesOf(
         url,
         req,
       )) as Row[]
-      const assignees = await usersById(ctx, url, req)
+      const assignees = await usersById(ctx, url, req, rows)
       return {
         data: pageRows(
           rows.map((row) => projectTask(row, assignees)),
@@ -849,7 +858,7 @@ function housekeepingMutation(action: 'start' | 'complete') {
     )) as Row
     if (result.ok !== true) return domainFailure(ctx, url, req, result)
     const refreshed = (await ctx.call('hospitality_core.getCleaningTask', { id: params.id }, url, req)) as Row
-    const assignees = await usersById(ctx, url, req)
+    const assignees = await usersById(ctx, url, req, [refreshed])
     const task = projectTask(refreshed, assignees)
     return { data: { outcome: action === 'start' ? 'started' : 'completed', version: task.version, task } }
   }
@@ -1104,7 +1113,7 @@ async function operationMutation(
     const value = await detailFolio(ctx, url, req, refreshed)
     return { data: { outcome, version: value.version, folio: value } }
   }
-  const assignees = await usersById(ctx, url, req)
+  const assignees = await usersById(ctx, url, req, [refreshed])
   const value = projectTask(refreshed, assignees)
   return { data: { outcome, version: value.version, task: value } }
 }

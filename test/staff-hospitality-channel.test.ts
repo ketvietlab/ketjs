@@ -252,3 +252,39 @@ test('staff hospitality dispatcher executes supported commands and rejects missi
     'hospitality_staff_channel.unsupportedOperation',
   )
 })
+
+test('staff hospitality names the assignee a task actually points at', async (t) => {
+  const { e2e } = await boot(t)
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+
+  // A housekeeper who has since left. The task still points at them, so the
+  // screen still has to say who it was: the label is read by id rather than by
+  // scanning a page of the user list, where an archived or five-hundred-and-first
+  // user would never appear and the id would be shown as the name.
+  await fixture('partner.savePartner', { id: 'left-party', kind: 'person', name: 'Đã nghỉ' })
+  await fixture('user.createUser', {
+    id: 'housekeeper-left',
+    partnerId: 'left-party',
+    login: 'zz-housekeeper-left',
+    password: 'correct horse battery',
+    name: 'Trần Thu Dọn',
+    defaultCompanyId: 'acme',
+  })
+  await fixture('user.archiveUser', { id: 'housekeeper-left', active: false })
+  const created = await fixture('hospitality_core.createCleaningTask', {
+    id: 'task-left',
+    code: 'HK-002',
+    roomId: '102',
+    taskType: 'daily_clean',
+    assigneeId: 'housekeeper-left',
+  })
+  assert.equal(created.value.ok, true, JSON.stringify(created.value))
+
+  const listed = await e2e.client.json<Envelope<{ items: Row[] }>>(
+    '/api/staff/v1/hospitality/housekeeping/tasks?propertyId=hotel&status=todo',
+  )
+  const task = listed.data.items.find((item) => String(item.id) === 'task-left')
+  assert.deepEqual(task?.assignee, { id: 'housekeeper-left', name: 'Trần Thu Dọn' })
+})
