@@ -129,10 +129,17 @@ async function recompute(ctx: Ctx, orderId: unknown) {
     untaxed = money(untaxed + amounts.untaxed)
     tax = money(tax + amounts.tax)
   }
+  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
+  if (!order) return
   await ctx.db.update(
     'sale.Order',
     { id: orderId },
-    { amountUntaxed: decimal(untaxed), amountTax: decimal(tax), amountTotal: decimal(untaxed + tax) },
+    {
+      amountUntaxed: decimal(untaxed),
+      amountTax: decimal(tax),
+      amountTotal: decimal(untaxed + tax),
+      revision: n(order.revision) + 1,
+    },
   )
 }
 /**
@@ -194,7 +201,7 @@ const confirmEffects = [
  * `adapter.tx` commits on a normal return, so a soft error returned from inside
  * one would commit the half-built delivery it is refusing over.
  */
-class ConfirmRefused extends Error {
+class SaleRefused extends Error {
   result: Row
   constructor(result: Row) {
     super('refused')
@@ -202,9 +209,23 @@ class ConfirmRefused extends Error {
   }
 }
 
-async function confirm(ctx: Ctx, id: unknown) {
+const claimRevision = async (ctx: Ctx, order: Row, expectedRevision?: unknown): Promise<boolean> => {
+  const revision = n(order.revision)
+  if (expectedRevision !== undefined && revision !== n(expectedRevision)) return false
+  const changed = await ctx.db.compareAndSet(
+    'sale.Order',
+    { id: order.id },
+    { revision: order.revision ?? null },
+    { revision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
+}
+
+async function confirm(ctx: Ctx, id: unknown, expectedRevision?: unknown) {
   const order = (await ours(ctx, 'sale.Order', { id }))[0]
   if (!order) return invalid('id', 'sales order does not exist')
+  if (expectedRevision !== undefined && n(order.revision) !== n(expectedRevision))
+    return invalid('expectedRevision', 'sales order changed')
   if (order.state === 'sale') return { ok: true, id, state: 'sale' }
   if (!['draft', 'sent'].includes(String(order.state)))
     return invalid('state', 'only a quotation can be confirmed')
@@ -223,6 +244,9 @@ async function confirm(ctx: Ctx, id: unknown) {
   let pickingId: string | undefined
   try {
     await ctx.tx(async (tx) => {
+      const current = (await ours(tx, 'sale.Order', { id }))[0]
+      if (!current || !(await claimRevision(tx, current, expectedRevision)))
+        throw new SaleRefused(invalid('expectedRevision', 'sales order changed'))
       if (goods.length) {
         pickingId = `${String(id)}:delivery`
         const created = (await stockFunctions.createPicking!.handler(tx, {
@@ -231,7 +255,7 @@ async function confirm(ctx: Ctx, id: unknown) {
           pickingTypeId: `${String(order.warehouseId)}:outgoing`,
           scheduledDate: order.dateOrder,
         })) as Row
-        if (created.ok !== true) throw new ConfirmRefused(created)
+        if (created.ok !== true) throw new SaleRefused(created)
         for (const line of goods) {
           const moveId = `${String(line.id)}:delivery`
           const moved = (await stockFunctions.addMove!.handler(tx, {
@@ -243,7 +267,7 @@ async function confirm(ctx: Ctx, id: unknown) {
             productUomQty: line.productUomQty,
             origin: order.name,
           })) as Row
-          if (moved.ok !== true) throw new ConfirmRefused(moved)
+          if (moved.ok !== true) throw new SaleRefused(moved)
           await tx.db.update('stock.Move', { id: moveId }, { saleLineId: line.id })
         }
       }
@@ -253,7 +277,7 @@ async function confirm(ctx: Ctx, id: unknown) {
       await tx.db.update('sale.Order', { id }, { state: 'sale' })
     })
   } catch (error) {
-    if (error instanceof ConfirmRefused) return error.result
+    if (error instanceof SaleRefused) return error.result
     throw error
   }
   await refreshStatus(ctx, id)
@@ -439,6 +463,7 @@ export const functions: Record<string, FnSpec> = {
         amountTax: '0',
         amountTotal: '0',
         notes: args.notes ?? null,
+        revision: 0,
       })
       if (!('dryRun' in inserted) && !inserted.inserted) {
         const winner = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
@@ -543,6 +568,120 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, priceUnit: String(priceUnit) }
     },
   }),
+  saveDraft: defineFn({
+    input: {
+      id: 'id',
+      partnerId: 'id',
+      warehouseId: 'id',
+      clientOrderRef: 'text?',
+      notes: 'text?',
+      lines: 'json',
+      create: 'bool?',
+      expectedRevision: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:sale.Sequence',
+      'write:sale.Sequence',
+      'read:sale.Order',
+      'write:sale.Order',
+      'read:sale.OrderLine',
+      'write:sale.OrderLine',
+      'read:partner.Partner',
+      'read:partner.Role',
+      'read:stock.Warehouse',
+      'read:product.Product',
+      'read:product.Template',
+      'read:product.Category',
+      'read:product.Cost',
+      'read:uom.Unit',
+      'read:pricing.Pricelist',
+      'read:pricing.PricelistItem',
+      'read:account.PaymentTerm',
+      'read:account.Tax',
+      'read:company.Company',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const lines = Array.isArray(args.lines) ? (args.lines as Row[]) : []
+      if (!args.create && args.expectedRevision === undefined)
+        return invalid('expectedRevision', 'sales order version is required')
+      if (!lines.length || lines.length > 100) return invalid('lines', 'a draft needs 1 to 100 lines')
+      if (
+        lines.some(
+          (line) =>
+            !line ||
+            typeof line !== 'object' ||
+            !line.id ||
+            !line.productId ||
+            !line.productUomId ||
+            !(n(line.productUomQty) > 0),
+        )
+      )
+        return invalid('lines', 'every line needs a product, unit and positive quantity')
+
+      try {
+        await ctx.tx(async (tx) => {
+          let order = (await ours(tx, 'sale.Order', { id: args.id }))[0]
+          if (args.create && order) return
+          if (!order) {
+            if (!args.create) throw new SaleRefused(invalid('id', 'sales order does not exist'))
+            const created = (await functions.createOrder!.handler(tx, {
+              id: args.id,
+              partnerId: args.partnerId,
+              warehouseId: args.warehouseId,
+              clientOrderRef: args.clientOrderRef,
+              notes: args.notes,
+            })) as Row
+            if (created.ok !== true) throw new SaleRefused(created)
+            order = (await ours(tx, 'sale.Order', { id: args.id }))[0]
+          } else {
+            if (order.state !== 'draft' || order.locked)
+              throw new SaleRefused(invalid('state', 'only an unlocked quotation can be updated'))
+            if (!(await claimRevision(tx, order, args.expectedRevision)))
+              throw new SaleRefused(invalid('expectedRevision', 'sales order changed'))
+          }
+          if (!order) throw new SaleRefused(invalid('id', 'sales order does not exist'))
+          if (!(await tx.db.select('partner.Partner', { id: args.partnerId }))[0])
+            throw new SaleRefused(invalid('partnerId', 'customer does not exist'))
+          if (!(await tx.db.select('partner.Role', { partnerId: args.partnerId, role: 'customer' }))[0])
+            throw new SaleRefused(invalid('partnerId', 'partner is not an active customer'))
+          if (!(await tx.db.select('stock.Warehouse', { id: args.warehouseId }))[0])
+            throw new SaleRefused(invalid('warehouseId', 'warehouse does not exist'))
+
+          await tx.db.update(
+            'sale.Order',
+            { id: args.id },
+            {
+              partnerId: args.partnerId,
+              warehouseId: args.warehouseId,
+              clientOrderRef: args.clientOrderRef ?? null,
+              notes: args.notes ?? null,
+            },
+          )
+          const L = tx.table('sale.OrderLine')
+          await tx.db.del(deleteFrom(L).where(eq(L.orderId, String(args.id))))
+          for (const [index, line] of lines.entries()) {
+            const added = (await functions.addLine!.handler(tx, {
+              id: line.id,
+              orderId: args.id,
+              productId: line.productId,
+              productUomQty: line.productUomQty,
+              productUomId: line.productUomId,
+              sequence: (index + 1) * 10,
+            })) as Row
+            if (added.ok !== true) throw new SaleRefused(added)
+          }
+        })
+      } catch (error) {
+        if (error instanceof SaleRefused) return error.result
+        throw error
+      }
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+      return { ok: true, id: args.id, revision: n(order?.revision) }
+    },
+  }),
   removeLine: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', orderId: 'id?', errors: 'json?' },
@@ -584,7 +723,11 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'sales order does not exist')
       if (order.state !== 'cancel') return invalid('state', 'only a cancelled order can return to draft')
-      await ctx.db.update('sale.Order', { id: args.id }, { state: 'draft', locked: false })
+      await ctx.db.update(
+        'sale.Order',
+        { id: args.id },
+        { state: 'draft', locked: false, revision: n(order.revision) + 1 },
+      )
       return { ok: true, id: args.id }
     },
   }),
@@ -598,17 +741,17 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order || !['draft', 'sent'].includes(String(order.state)))
         return invalid('state', 'only a draft quotation can be sent')
-      await ctx.db.update('sale.Order', { id: args.id }, { state: 'sent' })
+      await ctx.db.update('sale.Order', { id: args.id }, { state: 'sent', revision: n(order.revision) + 1 })
       return { ok: true, id: args.id }
     },
   }),
   confirmOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', state: 'text?', pickingId: 'id?', errors: 'json?' },
     effects: [...confirmEffects],
     idempotent: true,
     agent: true,
-    handler: (ctx, args) => confirm(ctx, args.id),
+    handler: (ctx, args) => confirm(ctx, args.id, args.expectedRevision),
   }),
   syncDeliveries: defineFn({
     input: { id: 'id' },
@@ -849,12 +992,16 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (order?.state !== 'sale') return invalid('state', 'only a sales order can be locked')
-      await ctx.db.update('sale.Order', { id: args.id }, { locked: args.locked })
+      await ctx.db.update(
+        'sale.Order',
+        { id: args.id },
+        { locked: args.locked, revision: n(order.revision) + 1 },
+      )
       return { ok: true, id: args.id }
     },
   }),
   cancelOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:sale.Order',
@@ -871,17 +1018,30 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'sales order does not exist')
-      const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
-      const lineIds = lines.map((line) => String(line.id))
-      const moves = await movesOf(ctx, lineIds)
-      if (moves.some((move) => move.state === 'done'))
-        return invalid('state', 'a delivered order cannot be cancelled')
-      if ((await invoiceLinesOf(ctx, lineIds)).length)
-        return invalid('state', 'an invoiced order cannot be cancelled')
-      for (const move of moves) await ctx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
-      for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
-        await ctx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
-      await ctx.db.update('sale.Order', { id: args.id }, { state: 'cancel' })
+      if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
+        return invalid('expectedRevision', 'sales order changed')
+      if (order.state === 'cancel') return { ok: true, id: args.id }
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await ours(tx, 'sale.Order', { id: args.id }))[0]
+          if (!current || !(await claimRevision(tx, current, args.expectedRevision)))
+            throw new SaleRefused(invalid('expectedRevision', 'sales order changed'))
+          const lines = await ours(tx, 'sale.OrderLine', { orderId: args.id })
+          const lineIds = lines.map((line) => String(line.id))
+          const moves = await movesOf(tx, lineIds)
+          if (moves.some((move) => move.state === 'done'))
+            throw new SaleRefused(invalid('state', 'a delivered order cannot be cancelled'))
+          if ((await invoiceLinesOf(tx, lineIds)).length)
+            throw new SaleRefused(invalid('state', 'an invoiced order cannot be cancelled'))
+          for (const move of moves) await tx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
+          for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
+            await tx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
+          await tx.db.update('sale.Order', { id: args.id }, { state: 'cancel' })
+        })
+      } catch (error) {
+        if (error instanceof SaleRefused) return error.result
+        throw error
+      }
       return { ok: true, id: args.id }
     },
   }),
