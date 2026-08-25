@@ -464,6 +464,7 @@ const MODULE_STYLESHEETS = [
   'packages/ketsuite/src/modules/backend/design/tokens.css',
   'packages/ketsuite/src/modules/crm_backend/client/crm.css',
   'packages/ketsuite/src/modules/partner_backend/client/address.css',
+  'packages/ketsuite/src/ui/client/flow-app.css',
 ]
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {

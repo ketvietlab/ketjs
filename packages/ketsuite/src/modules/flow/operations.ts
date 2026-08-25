@@ -213,6 +213,22 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
   }
 }
 
+/**
+ * Blocking dependencies among a given set of issues, batched — the map view
+ * (flow_backend's dependency atlas, one epic at a time) needs every edge among
+ * its own node set, not the per-issue read `issueDetail` already does. No JOIN
+ * in this query builder by design, so this is one query against
+ * `IssueDependency` alone, filtered client-side to edges whose two ends are
+ * both in the requested set.
+ */
+export async function dependenciesFor(ctx: Ctx, issueIds: readonly string[]): Promise<Row[]> {
+  if (!issueIds.length) return []
+  const D = ctx.table('flow.IssueDependency')
+  return ctx.db.all(
+    from(D).where(inArray(D.issueId, [...issueIds]), eq(D.relation, 'blocks')),
+  )
+}
+
 export type SaveIssueInput = {
   id: string
   projectId: string
@@ -259,6 +275,24 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       return invalid(issue('columnId', 'flow.error.columnNeedsMove'))
     const parentError = await parentIssueError(tx, input.id, input.parentIssueId, String(input.projectId))
     if (parentError) return invalid(parentError)
+    // Resolved before the issue row is touched: `tx` only rolls back on a
+    // thrown exception, not on a plain `return invalid(...)`, so validating
+    // tags after the insert/compareAndSet below committed a half-written
+    // issue (row present, no tags, caller told `ok: false`) on every bad
+    // tagId — found by seeding 1000 issues and finding "failed" ones that
+    // existed anyway.
+    const tagIds = input.tagIds ? [...new Set(input.tagIds)] : null
+    if (tagIds) {
+      const tags = tagIds.length
+        ? await tx.db.all(
+            from(tx.table('flow.Tag')).where(
+              inArray(tx.table('flow.Tag').id, tagIds),
+              eq(tx.table('flow.Tag').active, true),
+            ),
+          )
+        : []
+      if (tags.length !== tagIds.length) return invalid(issue('tagIds', 'flow.error.notFound'))
+    }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     const values: Row = {
@@ -291,20 +325,10 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
         createdAt: timestamp,
       })
     }
-    if (input.tagIds) {
-      const ids = [...new Set(input.tagIds)]
-      const tags = ids.length
-        ? await tx.db.all(
-            from(tx.table('flow.Tag')).where(
-              inArray(tx.table('flow.Tag').id, ids),
-              eq(tx.table('flow.Tag').active, true),
-            ),
-          )
-        : []
-      if (tags.length !== ids.length) return invalid(issue('tagIds', 'flow.error.notFound'))
+    if (tagIds) {
       const IT = tx.table('flow.IssueTag')
       await tx.db.del(deleteFrom(IT).where(eq(IT.issueId, input.id)))
-      for (const tagId of ids)
+      for (const tagId of tagIds)
         await tx.db.insertIfAbsent('flow.IssueTag', { id: `${input.id}:${tagId}`, issueId: input.id, tagId })
     }
     return { ok: true, id: input.id, version: nextVersion }
