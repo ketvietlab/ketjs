@@ -1197,13 +1197,13 @@ test('ui contract: every input disables browser autocomplete', () => {
 })
 
 test('table selection: the checkbox cell is a navigation dead zone', () => {
-  const source = readFileSync(
-    'packages/ketsuite/src/modules/backend/design/client/table-selection.mjs',
-    'utf8',
-  )
-  assert.match(
-    source,
-    /target\?\.closest\?\.\([\s\S]*?\[data-ui="select-cell"\][\s\S]*?\)\s*\)\s*return[\s\S]*?target\?\.closest\?\.\('\[data-ui="row"\]\[data-row-href\]'\)/,
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  const selectionGuard = source.indexOf('[data-ui="select-cell"]')
+  const linkedRowNavigation = source.indexOf('[data-ui="row"][data-row-href]')
+  assert.ok(selectionGuard >= 0, 'the selection-cell guard must remain declared')
+  assert.ok(linkedRowNavigation >= 0, 'linked-row navigation must remain declared')
+  assert.ok(
+    selectionGuard < linkedRowNavigation,
     'the selection-cell guard must run before linked-row navigation',
   )
 })

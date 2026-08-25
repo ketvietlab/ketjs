@@ -88,6 +88,10 @@ outputs.
 runtime still produces Ket's existing `TemplateResult`; there is no React or VDOM.
 The explicit build also makes published package contents identical to what was
 tested locally.
+Browser islands follow the same rule. Their typed TS or TSX source is compiled by a scoped esbuild step
+into ESM under the owning module's asset root; those generated `.mjs` files are not authoring sources.
+The browser build keeps `@ketvietlab/ketjs-view` external and resolves it to the framework copy served at
+`/_ket/view/`, so islands share one renderer instead of bundling private copies.
 **Cost:** a compiler is a required development dependency and startup waits for an
 initial build. It remains absent from runtime dependencies.
 

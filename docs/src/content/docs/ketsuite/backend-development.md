@@ -123,14 +123,20 @@ export const islands = {
     key: ['identity'],
     client: 'example.mjs',
     export: 'editor',
-    view: (props) => createExampleEditorView(runtime, props),
+    view: (props) => createExampleEditorView(props),
   },
 }
 ```
 
-Place the client module under the backend module's declared asset root. Do not hydrate an entire page
-to implement a small selector. Server rendering must remain useful before hydration, and island props
-must contain only data the current viewer is allowed to receive.
+Author non-trivial island views as typed TS or TSX beside the shared UI layer. A scoped build may emit
+their browser ESM into the owning module's declared asset root; generated `.mjs` files are deployment
+artifacts and must not be edited by hand. Keep `@ketvietlab/ketjs-view` external in that build and import
+the copy served at `/_ket/view/`, otherwise every island bundles a second renderer. A module can keep
+styles and generated browser entries under one asset root even when the authoring source lives in the
+UI layer.
+
+Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
+hydration, and island props must contain only data the current viewer is allowed to receive.
 
 ## Extension joints
 
