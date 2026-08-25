@@ -1357,6 +1357,362 @@
         "x-ket-idempotent": true
       }
     },
+    "/inventory/products": {
+      "get": {
+        "operationId": "staff.inventory.products.list",
+        "summary": "List goods with company availability and channel eligibility.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["active", "archived", "all"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["storable", "consumable"]
+                              },
+                              "sku": {
+                                "type": ["string", "null"]
+                              },
+                              "barcode": {
+                                "type": ["string", "null"]
+                              },
+                              "uom": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "channels": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "sales": {
+                                    "type": "boolean"
+                                  },
+                                  "purchase": {
+                                    "type": "boolean"
+                                  },
+                                  "pointOfSale": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["sales", "purchase", "pointOfSale"]
+                              },
+                              "hasImage": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "active",
+                              "kind",
+                              "sku",
+                              "barcode",
+                              "uom",
+                              "availableQuantity",
+                              "channels",
+                              "hasImage"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "inventory.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/inventory/products/{id}": {
+      "get": {
+        "operationId": "staff.inventory.products.get",
+        "summary": "Read one goods variant with its company stock positions.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["storable", "consumable"]
+                        },
+                        "sku": {
+                          "type": ["string", "null"]
+                        },
+                        "barcode": {
+                          "type": ["string", "null"]
+                        },
+                        "uom": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "availableQuantity": {
+                          "type": "string"
+                        },
+                        "channels": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "sales": {
+                              "type": "boolean"
+                            },
+                            "purchase": {
+                              "type": "boolean"
+                            },
+                            "pointOfSale": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["sales", "purchase", "pointOfSale"]
+                        },
+                        "hasImage": {
+                          "type": "boolean"
+                        },
+                        "tracking": {
+                          "type": "string",
+                          "enum": ["none", "lot", "serial"]
+                        },
+                        "stockPositions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "locationId": {
+                                "type": "string"
+                              },
+                              "locationName": {
+                                "type": "string"
+                              },
+                              "lotId": {
+                                "type": ["string", "null"]
+                              },
+                              "lotName": {
+                                "type": ["string", "null"]
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "requiresLotName": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "locationId",
+                              "locationName",
+                              "lotId",
+                              "lotName",
+                              "quantity",
+                              "version",
+                              "requiresLotName"
+                            ]
+                          }
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 0
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "active",
+                        "kind",
+                        "sku",
+                        "barcode",
+                        "uom",
+                        "availableQuantity",
+                        "channels",
+                        "hasImage",
+                        "tracking",
+                        "stockPositions",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "inventory.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
     "/purchasing/vendors": {
       "get": {
         "operationId": "staff.purchasing.vendors.list",

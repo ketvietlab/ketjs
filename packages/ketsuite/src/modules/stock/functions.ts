@@ -1837,3 +1837,92 @@ functions.getPickingView = defineFn({
     return row ? (await pickingViews(ctx, [row]))[0] : null
   },
 })
+
+functions.listProductAvailability = defineFn({
+  input: { productIds: 'json' },
+  output: { productId: 'id', available: 'decimal' },
+  effects: ['read:stock.Quant', 'read:stock.Location'],
+  agent: true,
+  handler: async (ctx, args) => {
+    const productIds = [
+      ...new Set(Array.isArray(args.productIds) ? args.productIds.map(String).slice(0, 2_000) : []),
+    ]
+    if (!productIds.length) return []
+    const mine = company(ctx)
+    const Q = ctx.table('stock.Quant')
+    const L = ctx.table('stock.Location')
+    const [quants, locations] = await Promise.all([
+      ctx.db.all(from(Q).where(eq(Q.companyId, mine), inArray(Q.productId, productIds))),
+      ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.usage, ['internal', 'transit']))),
+    ])
+    const inside = new Set(locations.map((row) => String(row.id)))
+    const available = new Map(productIds.map((id) => [id, 0]))
+    for (const quant of quants) {
+      if (!inside.has(String(quant.locationId))) continue
+      const id = String(quant.productId)
+      available.set(id, (available.get(id) ?? 0) + Number(quant.quantity) - Number(quant.reservedQuantity))
+    }
+    return productIds.map((productId) => ({
+      productId,
+      available: String(available.get(productId) ?? 0),
+    }))
+  },
+})
+
+functions.getProductStockView = defineFn({
+  input: { productId: 'id' },
+  effects: ['read:stock.Quant', 'read:stock.Location', 'read:stock.Lot'],
+  agent: true,
+  handler: async (ctx, args) => {
+    const mine = company(ctx)
+    const Q = ctx.table('stock.Quant')
+    const L = ctx.table('stock.Location')
+    const Lot = ctx.table('stock.Lot')
+    const quants = await ctx.db.all(
+      from(Q).where(eq(Q.companyId, mine), eq(Q.productId, String(args.productId))),
+    )
+    const locationIds = [...new Set(quants.map((row) => String(row.locationId)))]
+    const lotIds = [
+      ...new Set(
+        quants
+          .map((row) => row.lotId)
+          .filter(Boolean)
+          .map(String),
+      ),
+    ]
+    const [locations, lots] = await Promise.all([
+      locationIds.length ? ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.id, locationIds))) : [],
+      lotIds.length ? ctx.db.all(from(Lot).where(eq(Lot.companyId, mine), inArray(Lot.id, lotIds))) : [],
+    ])
+    const locationById = new Map(locations.map((row) => [String(row.id), row]))
+    const lotById = new Map(lots.map((row) => [String(row.id), row]))
+    const positions = quants
+      .flatMap((quant) => {
+        const location = locationById.get(String(quant.locationId))
+        if (
+          !location ||
+          !['internal', 'transit'].includes(String(location.usage)) ||
+          Number(quant.quantity) <= 0
+        )
+          return []
+        return [
+          {
+            quant,
+            location,
+            lot: quant.lotId ? (lotById.get(String(quant.lotId)) ?? null) : null,
+          },
+        ]
+      })
+      .sort(
+        (left, right) =>
+          String(left.location.name).localeCompare(String(right.location.name)) ||
+          String(left.lot?.name ?? '').localeCompare(String(right.lot?.name ?? '')) ||
+          String(left.quant.id).localeCompare(String(right.quant.id)),
+      )
+    const available = positions.reduce(
+      (sum, entry) => sum + Number(entry.quant.quantity) - Number(entry.quant.reservedQuantity),
+      0,
+    )
+    return { productId: String(args.productId), available: String(available), positions }
+  },
+})
