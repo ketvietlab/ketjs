@@ -1,18 +1,30 @@
-// The collaborative editor's DOM<->Yjs binding — the hardest, most
-// deliberately narrow part of Flow's editor (see the plan: v1 is one flat
-// rich-text run with bold/italic, not the full paragraph/heading/list
-// vocabulary; that's follow-up work once this foundation is proven).
+// The collaborative editor's DOM<->Yjs binding.
 //
-// Runtime-agnostic on purpose: `html`/`signal` come from the caller so the
-// same code renders server-side (flow_backend/islands.ts, importing
-// @ketvietlab/ketjs-view directly) and client-side (editor-client.ts,
-// importing the framework's browser-served /_ket/view/index.js) — the same
-// split mail_backend's own chatter view uses.
+// The first version of this file was one flat rich-text run with bold and
+// italic — deliberately narrow, to prove the CRDT binding and IME handling
+// before spending anything on vocabulary. This is that vocabulary: paragraphs,
+// three heading levels, quote, code block, bullet/numbered/checklist items,
+// and the marks bold/italic/strikethrough/code/link.
+//
+// The document is a flat list of blocks, not a tree. Each block is a
+// `Y.XmlElement('block')` carrying a `type` attribute and one `Y.XmlText`
+// child; nesting exists only in the rendered HTML, where consecutive list
+// items share a `<ul>`. A tree would buy indented sub-lists and cost a
+// position model that no longer maps to `(blockIndex, offset)` — the pair
+// every operation below is written in terms of. Sub-lists are the thing given
+// up for that, stated rather than pretended away.
+//
+// Runtime-agnostic on purpose: `html` comes from the caller so the same code
+// renders server-side (flow_backend/islands.ts, importing @ketvietlab/ketjs-view
+// directly) and client-side (editor-client.mjs, importing the framework's
+// browser-served /_ket/view/index.js) — the same split mail_backend's own
+// chatter view uses.
 import * as Y from 'yjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-// The shell's markup, which belongs to the kit and not to a module — see the
-// header of that file, and tools/ui-audit.ts for the rule it answers.
-import { issueEditorShell } from '../../ui/client/flow-editor-view.mjs'
+// The shell's markup and the document serializer, which belong to the kit and
+// not to a module — see the header of that file, and tools/ui-audit.ts for the
+// rule it answers.
+import { documentHtml, issueEditorShell } from '../../ui/client/flow-editor-view.mjs'
 
 export type EditorRuntime = {
   html: (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult
@@ -20,74 +32,120 @@ export type EditorRuntime = {
 
 export type IssueEditorProps = { issueId: string; lang?: string }
 
-type Delta = Array<{ insert: string; attributes?: { bold?: boolean; italic?: boolean } }>
+type MarkName = 'bold' | 'italic' | 'strike' | 'code'
+type Attributes = {
+  bold?: boolean
+  italic?: boolean
+  strike?: boolean
+  code?: boolean
+  link?: string | null
+}
+type Delta = Array<{ insert: string; attributes?: Attributes }>
+type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'code' | 'bullet' | 'ordered' | 'check'
+type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: BlockType; checked: boolean }
+type Point = { index: number; offset: number }
+type Span = { start: Point; end: Point }
+
+const BLOCK_TYPES: readonly BlockType[] = [
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'quote',
+  'code',
+  'bullet',
+  'ordered',
+  'check',
+]
+const LIST_TYPES: readonly BlockType[] = ['bullet', 'ordered', 'check']
+
+/** Pressing Enter at the end of one of these starts another of the same kind. */
+const CONTINUES = new Set<BlockType>(['p', 'bullet', 'ordered', 'check'])
+
+/**
+ * Typing a prefix turns the block into what the prefix means, the way every
+ * editor people already use behaves. Each pattern matches the block's *whole*
+ * text, so a rule only fires on a line that is still nothing but its prefix —
+ * `1. ` mid-sentence is a numbered reference, not a list.
+ */
+const INPUT_RULES: Array<[RegExp, BlockType]> = [
+  [/^# $/, 'h1'],
+  [/^## $/, 'h2'],
+  [/^### $/, 'h3'],
+  [/^> $/, 'quote'],
+  [/^[-*] $/, 'bullet'],
+  [/^\d+\. $/, 'ordered'],
+  [/^\[[ xX]?\] $/, 'check'],
+  [/^```$/, 'code'],
+]
 
 const REMOTE = Symbol('remote-origin')
 /**
  * Typing's own transact() is tagged so the update listener can skip its
  * render() — the DOM the user is actively typing into already reflects
  * their keystroke, so replacing its innerHTML from Yjs on every single
- * character is churn a re-render doesn't need to do (the actual mark-loss
- * bug this looked like it caused turned out to be `plainTextOf` below;
- * this stays as the right call regardless — it avoids fighting the
- * browser's own cursor/IME state for no reason). Every other local change
- * (toggleMark, initial run creation) still wants the normal render.
+ * character is churn a re-render doesn't need to do (it avoids fighting the
+ * browser's own cursor and IME state for no reason). Every structural change
+ * still wants the normal render, and says where the caret lands.
  */
 const LOCAL_TYPING = Symbol('local-typing-origin')
-
-const escapeHtml = (text: string): string =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
  * `Y.XmlText.prototype.toString()` is NOT plain text — it renders each
  * attribute key as a wrapping XML tag name (e.g. `bold: true` becomes
  * `<bold>...</bold>`), which is what XmlText is for structurally, but it
- * silently broke every diff in this file: comparing that against
- * `container.textContent` (real plain text) made two unrelated strings,
- * so `diffRange` computed a delete-everything-insert-everything range and
- * every mark on the run was gone the moment anything was typed nearby.
- * This is the actual plain-text projection to diff against instead.
+ * silently broke every diff in this file: comparing that against the DOM's
+ * real plain text made two unrelated strings, so `diffRange` computed a
+ * delete-everything-insert-everything range and every mark on the run was
+ * gone the moment anything was typed nearby. This is the actual plain-text
+ * projection to diff against instead.
  */
 const plainTextOf = (text: Y.XmlText): string => (text.toDelta() as Delta).map((op) => op.insert).join('')
 
-function deltaToHtml(delta: Delta): string {
-  return delta
-    .map((op) => {
-      let html = escapeHtml(op.insert)
-      if (op.attributes?.bold) html = `<b>${html}</b>`
-      if (op.attributes?.italic) html = `<i>${html}</i>`
-      return html
-    })
-    .join('')
+const plainLength = (delta: Delta): number => delta.reduce((total, op) => total + op.insert.length, 0)
+
+const sliceDelta = (delta: Delta, from: number, to = Number.POSITIVE_INFINITY): Delta => {
+  const out: Delta = []
+  let cursor = 0
+  for (const op of delta) {
+    const end = cursor + op.insert.length
+    const start = Math.max(from, cursor)
+    const stop = Math.min(to, end)
+    if (stop > start)
+      out.push({
+        insert: op.insert.slice(start - cursor, stop - cursor),
+        ...(op.attributes ? { attributes: op.attributes } : {}),
+      })
+    cursor = end
+  }
+  return out
 }
 
-/** The plain-text offset of a (node, nodeOffset) point within `container`. */
-function offsetOf(container: Node, node: Node, nodeOffset: number): number {
-  let offset = 0
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let current = walker.nextNode()
-  while (current) {
-    if (current === node) return offset + nodeOffset
-    offset += (current.textContent ?? '').length
-    current = walker.nextNode()
+/**
+ * The marks new text inherits: whatever the character before it carries.
+ *
+ * A link is the exception, and only at its far edge. Typing in the middle of
+ * a link extends it, which is what anyone expects; typing immediately after
+ * one does not, or every sentence that ends in a link swallows the rest of
+ * the paragraph into the same href.
+ */
+function attributesAt(text: Y.XmlText, offset: number): Attributes | undefined {
+  if (offset === 0) return undefined
+  const delta = text.toDelta() as Delta
+  let cursor = 0
+  for (const op of delta) {
+    const end = cursor + op.insert.length
+    if (offset <= end) {
+      if (!op.attributes) return undefined
+      if (op.attributes.link && offset === end) {
+        const { link: _link, ...rest } = op.attributes
+        return rest
+      }
+      return op.attributes
+    }
+    cursor = end
   }
-  return offset
-}
-
-/** The inverse of offsetOf: the (node, nodeOffset) point at a plain-text offset. */
-function pointAt(container: Node, offset: number): { node: Node; offset: number } | null {
-  let remaining = offset
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let current = walker.nextNode()
-  let last: Text | null = null
-  while (current) {
-    const length = (current.textContent ?? '').length
-    if (remaining <= length) return { node: current, offset: remaining }
-    remaining -= length
-    last = current as Text
-    current = walker.nextNode()
-  }
-  return last ? { node: last, offset: (last.textContent ?? '').length } : null
+  return undefined
 }
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
@@ -120,46 +178,614 @@ function diffRange(
   return { start, deletedLength: endBefore - start, inserted: after.slice(start, endAfter) }
 }
 
+/** A selection point given as an element must be resolved down to a text node first. */
+function descend(node: Node, offset: number): { node: Node; offset: number } {
+  let current = node
+  let at = offset
+  while (current.nodeType === Node.ELEMENT_NODE) {
+    const children = current.childNodes
+    if (!children.length) return { node: current, offset: 0 }
+    if (at >= children.length) {
+      const last = children[children.length - 1] as Node
+      current = last
+      at = last.nodeType === Node.TEXT_NODE ? (last.textContent ?? '').length : last.childNodes.length
+    } else {
+      current = children[at] as Node
+      at = 0
+    }
+  }
+  return { node: current, offset: at }
+}
+
 export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditorProps) {
   const { html } = runtime
   const issueId = props.issueId
   const base = `/admin/flow/issues/${encodeURIComponent(issueId)}`
   const containerId = `flow-editor-${issueId}`
   const doc = new Y.Doc()
-  let run: Y.XmlText | null = null
   let container: HTMLElement | null = null
+  let shell: HTMLElement | null = null
   let composing = false
   let source: EventSource | null = null
+  /**
+   * Where the caret goes after the next render, set by whichever structural
+   * edit is about to run.
+   *
+   * A structural edit changes how many blocks there are, so reading the
+   * selection out of the DOM at render time — which is the old DOM, still
+   * showing the old block count — yields indices that no longer exist and a
+   * caret that silently vanishes. The operation knows where the caret lands
+   * before it runs; this is where it says so.
+   */
+  let pending: Span | null = null
+  /** The selection the link dialog was opened over, since focusing its input destroys it. */
+  let linkSpan: Span | null = null
 
   const fragment = doc.getXmlFragment('content')
-  const ensureRun = (): Y.XmlText => {
-    let first = fragment.get(0) as Y.XmlText | undefined
-    if (!first) {
-      first = new Y.XmlText()
-      fragment.insert(0, [first])
-    }
-    return first
+
+  // ---- document model -----------------------------------------------------
+
+  const typeOf = (element: Y.XmlElement): BlockType => {
+    const value = element.getAttribute('type') as BlockType | undefined
+    return value && BLOCK_TYPES.includes(value) ? value : 'p'
   }
 
-  function render() {
-    if (!container || !run) return
-    const selection = document.getSelection()
-    const anchored =
-      selection?.rangeCount && container.contains(selection.anchorNode)
-        ? offsetOf(container, selection.anchorNode as Node, selection.anchorOffset)
-        : null
-    container.innerHTML = deltaToHtml(run.toDelta() as Delta) || '<br>'
-    if (anchored != null) {
-      const point = pointAt(container, anchored)
-      if (point) {
-        const range = document.createRange()
-        range.setStart(point.node, point.offset)
-        range.collapse(true)
-        selection?.removeAllRanges()
-        selection?.addRange(range)
-      }
+  /**
+   * The blocks, in order.
+   *
+   * A bare `Y.XmlText` at the top level is what the first version of this
+   * editor wrote, and documents written by it are still stored. It is read as
+   * a paragraph rather than migrated on load: a migration is a write, two tabs
+   * opening the same old issue would each perform it, and the result is the
+   * paragraph twice. It converts to a real block the first time somebody
+   * changes its type, which is a deliberate act by one client.
+   */
+  const blocksOf = (): Block[] =>
+    fragment.toArray().flatMap((node): Block[] => {
+      if (node instanceof Y.XmlText) return [{ node, text: node, type: 'p', checked: false }]
+      if (!(node instanceof Y.XmlElement)) return []
+      const first = node.get(0)
+      if (!(first instanceof Y.XmlText)) return []
+      return [{ node, text: first, type: typeOf(node), checked: node.getAttribute('checked') === 'true' }]
+    })
+
+  /** Inserts a new empty block and answers its text run. Call inside a transaction. */
+  function insertBlock(index: number, type: BlockType, checked = false): Y.XmlText {
+    const element = new Y.XmlElement('block')
+    element.setAttribute('type', type)
+    if (checked) element.setAttribute('checked', 'true')
+    fragment.insert(index, [element])
+    const text = new Y.XmlText()
+    element.insert(0, [text])
+    return text
+  }
+
+  const ensureBlocks = () => {
+    if (fragment.length === 0) doc.transact(() => void insertBlock(0, 'p'))
+  }
+
+  const modelOf = () =>
+    blocksOf().map((block) => ({
+      type: block.type,
+      checked: block.checked,
+      delta: block.text.toDelta() as Delta,
+    }))
+
+  // ---- DOM <-> model positions --------------------------------------------
+
+  const elementAt = (index: number): HTMLElement | null =>
+    container?.querySelector(`[data-index="${index}"]`) ?? null
+
+  /**
+   * The element a block's characters actually live in.
+   *
+   * For most blocks that is the block itself. A checklist item also holds a
+   * tick box, so its text sits in its own span — and the difference matters at
+   * exactly one moment: an empty item has no text node to put the caret in, so
+   * `pointIn`'s fallback has to name an element instead. Naming the `<li>` put
+   * the caret *before* the tick box, and the first character typed into a
+   * fresh checklist item landed outside the line, ahead of its own checkbox.
+   *
+   * Only that fallback uses this. Reading a block's text still walks the whole
+   * block, so a character that does end up outside the line — a click landing
+   * in the item's padding, say — is still read into the model and moved back
+   * where it belongs by the next render, rather than quietly discarded.
+   */
+  const lineOf = (block: HTMLElement): HTMLElement =>
+    (block.querySelector('[data-ui="flow-editor-line"]') as HTMLElement | null) ?? block
+
+  /**
+   * The editable nodes of one block, in order.
+   *
+   * `contenteditable="false"` subtrees are rejected outright — a checklist's
+   * own tick box is chrome, not a character, and counting it shifted every
+   * offset in the line by one. A trailing `<br>` is dropped for the same kind
+   * of reason: it is the placeholder that gives an empty block a line box, not
+   * something anybody typed.
+   */
+  function blockNodes(block: HTMLElement): Node[] {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (node: Node) => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return NodeFilter.FILTER_ACCEPT
+        const element = node as HTMLElement
+        if (element.getAttribute('contenteditable') === 'false') return NodeFilter.FILTER_REJECT
+        return element.tagName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+      },
+    })
+    const nodes: Node[] = []
+    let current = walker.nextNode()
+    while (current) {
+      nodes.push(current)
+      current = walker.nextNode()
+    }
+    // Exactly one, never more: the last `<br>` is the placeholder the renderer
+    // adds so an empty line has somewhere to put the caret, and every one
+    // before it is a newline somebody typed. Dropping them all read
+    // `"cd build\n"` back as `"cd build"`, so the next character typed landed
+    // on the end of the previous line.
+    if (nodes.length && (nodes[nodes.length - 1] as HTMLElement).tagName === 'BR') nodes.pop()
+    return nodes
+  }
+
+  const lengthOfNode = (node: Node): number =>
+    node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '').length : 1
+
+  /**
+   * A block's text as the model would spell it.
+   *
+   * The U+00A0 replacement is not cosmetic. contenteditable writes a
+   * non-breaking space wherever a normal one would collapse -- a trailing
+   * space above all -- so what the model read back after typing "# " was "#"
+   * followed by U+00A0, which matches no input rule and is not the character
+   * anybody typed. It reached the stored description and the search index
+   * that way too. `white-space: pre-wrap` on the container (flow-editor.css)
+   * is the other half: it lets a real space survive the round trip, so the
+   * browser has no reason to reach for the substitute in the first place.
+   */
+  const domTextOf = (block: HTMLElement): string =>
+    blockNodes(block)
+      .map((node) => (node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '') : '\n'))
+      .join('')
+      .replace(/\u00a0/g, ' ')
+
+  function offsetIn(block: HTMLElement, node: Node, nodeOffset: number): number {
+    let offset = 0
+    for (const current of blockNodes(block)) {
+      if (current === node) return offset + nodeOffset
+      offset += lengthOfNode(current)
+    }
+    return offset
+  }
+
+  /** Where in the DOM a `<br>` sits, as a (parent, childIndex) point. */
+  const beside = (node: Node, after: boolean): { node: Node; offset: number } => {
+    const parent = node.parentNode as Node
+    const at = Array.prototype.indexOf.call(parent.childNodes, node) as number
+    return { node: parent, offset: at + (after ? 1 : 0) }
+  }
+
+  function pointIn(block: HTMLElement, offset: number): { node: Node; offset: number } {
+    let remaining = offset
+    let last: Node | null = null
+    for (const current of blockNodes(block)) {
+      const length = lengthOfNode(current)
+      if (current.nodeType === Node.TEXT_NODE) {
+        if (remaining <= length) return { node: current, offset: remaining }
+      } else if (remaining === 0) return beside(current, false)
+      remaining -= length
+      last = current
+    }
+    if (last?.nodeType === Node.TEXT_NODE) return { node: last, offset: (last.textContent ?? '').length }
+    // Past the last newline is the empty line after it, which is a position
+    // between two `<br>`s rather than anywhere inside a text node.
+    if (last) return beside(last, true)
+    return { node: lineOf(block), offset: 0 }
+  }
+
+  function pointFrom(node: Node | null, offset: number): Point | null {
+    if (!container || !node || !container.contains(node)) return null
+    const resolved = descend(node, offset)
+    const host =
+      resolved.node.nodeType === Node.ELEMENT_NODE
+        ? (resolved.node as HTMLElement)
+        : resolved.node.parentElement
+    const block = host?.closest('[data-index]') as HTMLElement | null
+    if (!block) return null
+    return {
+      index: Number(block.getAttribute('data-index')),
+      offset: offsetIn(block, resolved.node, resolved.offset),
     }
   }
+
+  /** The current selection as model positions, always in document order. */
+  function selectionSpan(): Span | null {
+    const selection = document.getSelection()
+    if (!selection?.rangeCount) return null
+    const range = selection.getRangeAt(0)
+    const start = pointFrom(range.startContainer, range.startOffset)
+    const end = pointFrom(range.endContainer, range.endOffset)
+    return start && end ? { start, end } : null
+  }
+
+  const isCollapsed = (span: Span) =>
+    span.start.index === span.end.index && span.start.offset === span.end.offset
+
+  const caretAt = (point: Point): Span => ({ start: point, end: point })
+
+  function restoreSelection(span: Span) {
+    const startBlock = elementAt(span.start.index)
+    const endBlock = elementAt(span.end.index)
+    if (!startBlock || !endBlock) return
+    const from = pointIn(startBlock, span.start.offset)
+    const to = pointIn(endBlock, span.end.offset)
+    const range = document.createRange()
+    range.setStart(from.node, from.offset)
+    range.setEnd(to.node, to.offset)
+    const selection = document.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }
+
+  // ---- rendering ----------------------------------------------------------
+
+  function render(keep?: Span | null) {
+    if (!container) return
+    const span = keep === undefined ? selectionSpan() : keep
+    container.innerHTML = documentHtml(modelOf(), props.lang)
+    if (span) restoreSelection(span)
+    syncToolbar()
+  }
+
+  /**
+   * The toolbar reports the block under the caret and which marks it carries.
+   *
+   * Without it the type control keeps showing whatever was last chosen and the
+   * mark buttons never look pressed, so the toolbar describes the past rather
+   * than the selection — which is worse than having no toolbar state at all,
+   * because it reads as authoritative.
+   */
+  function syncToolbar() {
+    if (!shell) return
+    const span = selectionSpan()
+    const block = span ? blocksOf()[span.start.index] : undefined
+    const select = shell.querySelector('[data-flow-editor-block]') as HTMLSelectElement | null
+    if (select && block) select.value = LIST_TYPES.includes(block.type) ? 'p' : block.type
+    for (const button of Array.from(shell.querySelectorAll('[data-flow-editor-mark]')) as HTMLElement[]) {
+      const name = button.getAttribute('data-flow-editor-mark') ?? ''
+      const active = LIST_TYPES.includes(name as BlockType)
+        ? block?.type === name
+        : span && !isCollapsed(span) && spanHasMark(span, name as MarkName)
+      button.setAttribute('aria-pressed', String(active === true))
+    }
+  }
+
+  // ---- structural edits ---------------------------------------------------
+
+  /** Every structural edit runs through here, so none of them can forget the caret. */
+  function structural(caret: Span, run: () => void) {
+    pending = caret
+    doc.transact(run)
+  }
+
+  function setBlockType(index: number, type: BlockType) {
+    const block = blocksOf()[index]
+    if (!block || block.type === type) return
+    if (block.node instanceof Y.XmlText) {
+      // A legacy top-level run has nowhere to put an attribute, so it is
+      // replaced by a real block carrying the same content.
+      const delta = block.text.toDelta() as Delta
+      fragment.delete(index, 1)
+      const text = insertBlock(index, type)
+      if (delta.length) text.applyDelta(delta as unknown[])
+      return
+    }
+    block.node.setAttribute('type', type)
+    if (type !== 'check') block.node.removeAttribute('checked')
+  }
+
+  function applyBlockType(type: BlockType) {
+    const span = selectionSpan()
+    if (!span) return
+    const blocks = blocksOf()
+    // Asking for the type a block already has means asking to leave it — the
+    // way the same button both makes a list and unmakes one.
+    const all = blocks.slice(span.start.index, span.end.index + 1).every((block) => block.type === type)
+    const target = all ? 'p' : type
+    structural(span, () => {
+      for (let index = span.end.index; index >= span.start.index; index--) setBlockType(index, target)
+    })
+  }
+
+  function splitBlock(at: Point) {
+    const blocks = blocksOf()
+    const block = blocks[at.index]
+    if (!block) return
+    const delta = block.text.toDelta() as Delta
+    const length = plainLength(delta)
+    // Enter on an empty list item leaves the list rather than extending it —
+    // otherwise there is no way out of one except deleting it.
+    if (LIST_TYPES.includes(block.type) && length === 0) {
+      structural(caretAt({ index: at.index, offset: 0 }), () => setBlockType(at.index, 'p'))
+      return
+    }
+    const tail = sliceDelta(delta, at.offset)
+    const nextType = CONTINUES.has(block.type) ? block.type : 'p'
+    structural(caretAt({ index: at.index + 1, offset: 0 }), () => {
+      if (at.offset < length) block.text.delete(at.offset, length - at.offset)
+      const text = insertBlock(at.index + 1, nextType)
+      if (tail.length) text.applyDelta(tail as unknown[])
+    })
+  }
+
+  function mergeBackward(index: number) {
+    if (index <= 0) return
+    const blocks = blocksOf()
+    const previous = blocks[index - 1]
+    const current = blocks[index]
+    if (!previous || !current) return
+    const at = plainLength(previous.text.toDelta() as Delta)
+    const tail = current.text.toDelta() as Delta
+    structural(caretAt({ index: index - 1, offset: at }), () => {
+      if (tail.length) previous.text.applyDelta([{ retain: at }, ...tail] as unknown[])
+      fragment.delete(index, 1)
+    })
+  }
+
+  function mergeForward(index: number) {
+    const blocks = blocksOf()
+    if (index + 1 >= blocks.length) return
+    mergeBackward(index + 1)
+  }
+
+  /** Removes everything between the two ends and answers where the caret lands. */
+  function deleteSpan(span: Span): Point {
+    const blocks = blocksOf()
+    const first = blocks[span.start.index]
+    if (!first) return span.start
+    const caret = { index: span.start.index, offset: span.start.offset }
+    if (span.start.index === span.end.index) {
+      structural(caretAt(caret), () =>
+        first.text.delete(span.start.offset, span.end.offset - span.start.offset),
+      )
+      return caret
+    }
+    const last = blocks[span.end.index]
+    const tail = last ? sliceDelta(last.text.toDelta() as Delta, span.end.offset) : []
+    const length = plainLength(first.text.toDelta() as Delta)
+    structural(caretAt(caret), () => {
+      if (span.start.offset < length) first.text.delete(span.start.offset, length - span.start.offset)
+      if (tail.length) first.text.applyDelta([{ retain: span.start.offset }, ...tail] as unknown[])
+      fragment.delete(span.start.index + 1, span.end.index - span.start.index)
+    })
+    return caret
+  }
+
+  function insertTextAt(at: Point, value: string) {
+    const block = blocksOf()[at.index]
+    if (!block || !value) return
+    const caret = { index: at.index, offset: at.offset + value.length }
+    structural(caretAt(caret), () => block.text.insert(at.offset, value, attributesAt(block.text, at.offset)))
+  }
+
+  function toggleChecked(index: number) {
+    const block = blocksOf()[index]
+    if (!block || block.node instanceof Y.XmlText || block.type !== 'check') return
+    const next = block.checked ? null : 'true'
+    structural(selectionSpan() ?? caretAt({ index, offset: 0 }), () => {
+      if (next) (block.node as Y.XmlElement).setAttribute('checked', next)
+      else (block.node as Y.XmlElement).removeAttribute('checked')
+    })
+  }
+
+  // ---- marks --------------------------------------------------------------
+
+  /** Runs `visit` over each block's slice of the selection. */
+  function overSpan(span: Span, visit: (text: Y.XmlText, from: number, to: number) => void) {
+    const blocks = blocksOf()
+    for (let index = span.start.index; index <= span.end.index; index++) {
+      const block = blocks[index]
+      if (!block) continue
+      const length = plainLength(block.text.toDelta() as Delta)
+      const from = index === span.start.index ? span.start.offset : 0
+      const to = index === span.end.index ? Math.min(span.end.offset, length) : length
+      if (to > from) visit(block.text, from, to)
+    }
+  }
+
+  function spanHasMark(span: Span, name: MarkName): boolean {
+    let seen = false
+    let all = true
+    overSpan(span, (text, from, to) => {
+      let cursor = 0
+      for (const op of text.toDelta() as Delta) {
+        const end = cursor + op.insert.length
+        if (end > from && cursor < to) {
+          seen = true
+          if (!op.attributes?.[name]) all = false
+        }
+        cursor = end
+      }
+    })
+    return seen && all
+  }
+
+  function toggleMark(name: MarkName) {
+    const span = selectionSpan()
+    if (!span || isCollapsed(span)) return
+    const on = spanHasMark(span, name)
+    pending = span
+    doc.transact(() => {
+      overSpan(span, (text, from, to) => text.format(from, to - from, { [name]: on ? null : true }))
+    })
+  }
+
+  function applyLink(href: string | null) {
+    const span = linkSpan
+    if (!span || isCollapsed(span)) return
+    pending = span
+    doc.transact(() => {
+      overSpan(span, (text, from, to) => text.format(from, to - from, { link: href }))
+    })
+  }
+
+  // ---- input --------------------------------------------------------------
+
+  function applyInputRule(index: number) {
+    const block = blocksOf()[index]
+    if (!block || block.type === 'code') return
+    const text = plainTextOf(block.text)
+    const rule = INPUT_RULES.find(([pattern]) => pattern.test(text))
+    if (!rule) return
+    structural(caretAt({ index, offset: 0 }), () => {
+      block.text.delete(0, text.length)
+      setBlockType(index, rule[1])
+    })
+  }
+
+  /**
+   * Within-block typing, diffed rather than intercepted.
+   *
+   * Everything structural is handled in `onBeforeInput` before the browser
+   * touches the DOM; what reaches here is a character landing inside one
+   * block, which is exactly the case where letting contenteditable do its own
+   * work is what keeps an IME's composition intact. If the DOM has more or
+   * fewer blocks than the model, the browser did something structural anyway
+   * and the model wins — re-rendering discards it rather than trying to
+   * reverse-engineer it.
+   */
+  function applyLocalTextChange() {
+    if (!container || composing) return
+    const blocks = blocksOf()
+    if (container.querySelectorAll('[data-index]').length !== blocks.length) {
+      render(null)
+      return
+    }
+    const span = selectionSpan()
+    if (!span) return
+    const element = elementAt(span.start.index)
+    const block = blocks[span.start.index]
+    if (!element || !block) {
+      render(null)
+      return
+    }
+    const before = plainTextOf(block.text)
+    const after = domTextOf(element)
+    if (before === after) return
+    const { start, deletedLength, inserted } = diffRange(before, after)
+    doc.transact(() => {
+      if (deletedLength) block.text.delete(start, deletedLength)
+      if (inserted) block.text.insert(start, inserted, attributesAt(block.text, start))
+    }, LOCAL_TYPING)
+    applyInputRule(span.start.index)
+  }
+
+  function onBeforeInput(event: InputEvent) {
+    if (composing || !container) return
+    const span = selectionSpan()
+    if (!span) return
+    const type = event.inputType
+    const collapsed = isCollapsed(span)
+    const multi = span.start.index !== span.end.index
+
+    if (type === 'insertParagraph' || type === 'insertLineBreak') {
+      event.preventDefault()
+      const at = collapsed ? span.start : deleteSpan(span)
+      const block = blocksOf()[at.index]
+      // A code block is where a newline is a character rather than a new
+      // block — that is most of what makes it a code block. Which leaves the
+      // question of how anyone gets out of one, since Enter no longer means
+      // "next block" and a code block at the end of the document has nothing
+      // after it to click into. Enter on an already-blank last line is the
+      // way out, the same gesture every editor uses for the same problem.
+      if (block?.type === 'code') {
+        const length = plainLength(block.text.toDelta() as Delta)
+        if (at.offset === length && plainTextOf(block.text).endsWith('\n'))
+          structural(caretAt({ index: at.index + 1, offset: 0 }), () => {
+            block.text.delete(length - 1, 1)
+            insertBlock(at.index + 1, 'p')
+          })
+        else insertTextAt(at, '\n')
+      } else splitBlock(at)
+      return
+    }
+
+    if (type.startsWith('delete')) {
+      if (!collapsed) {
+        event.preventDefault()
+        deleteSpan(span)
+        return
+      }
+      const block = blocksOf()[span.start.index]
+      if (!block) return
+      const length = plainLength(block.text.toDelta() as Delta)
+      if (type.includes('Backward') && span.start.offset === 0) {
+        event.preventDefault()
+        // Backspace at the head of a heading or a list item removes the *kind*
+        // first and joins the line above only on a second press. Joining
+        // straight away is how a heading silently disappears into the
+        // paragraph before it.
+        if (block.type !== 'p')
+          structural(caretAt({ index: span.start.index, offset: 0 }), () =>
+            setBlockType(span.start.index, 'p'),
+          )
+        else mergeBackward(span.start.index)
+        return
+      }
+      if (type.includes('Forward') && span.start.offset === length) {
+        event.preventDefault()
+        mergeForward(span.start.index)
+      }
+      return
+    }
+
+    if (!multi) return
+    // Anything else spanning two blocks would leave contenteditable to do its
+    // own structural surgery, which the model cannot read back. The selection
+    // is removed here and the typed character, if there is one, re-inserted.
+    event.preventDefault()
+    const at = deleteSpan(span)
+    if (type === 'insertText' && typeof event.data === 'string') insertTextAt(at, event.data)
+  }
+
+  /**
+   * Paste arrives as plain text and lands as blocks.
+   *
+   * Keeping the source's own HTML would mean trusting markup from wherever the
+   * clipboard came from, which is a different and much larger problem than
+   * this editor has; every line becomes a block of the current kind instead,
+   * so pasting a list into a list stays a list.
+   */
+  function onPaste(event: ClipboardEvent) {
+    event.preventDefault()
+    const value = event.clipboardData?.getData('text/plain') ?? ''
+    const span = selectionSpan()
+    if (!value || !span) return
+    const at = isCollapsed(span) ? span.start : deleteSpan(span)
+    const block = blocksOf()[at.index]
+    if (!block) return
+    const lines = value.split(/\r\n|\r|\n/)
+    if (lines.length === 1 || block.type === 'code') {
+      insertTextAt(at, block.type === 'code' ? value : lines.join(' '))
+      return
+    }
+    const delta = block.text.toDelta() as Delta
+    const length = plainLength(delta)
+    const tail = sliceDelta(delta, at.offset)
+    const lastLine = lines[lines.length - 1] ?? ''
+    structural(caretAt({ index: at.index + lines.length - 1, offset: lastLine.length }), () => {
+      if (at.offset < length) block.text.delete(at.offset, length - at.offset)
+      block.text.insert(at.offset, lines[0] ?? '', attributesAt(block.text, at.offset))
+      for (let line = 1; line < lines.length; line++) {
+        const text = insertBlock(at.index + line, block.type)
+        const content = lines[line] ?? ''
+        if (content) text.insert(0, content)
+        if (line === lines.length - 1 && tail.length)
+          text.applyDelta([{ retain: content.length }, ...tail] as unknown[])
+      }
+    })
+  }
+
+  // ---- transport ----------------------------------------------------------
 
   async function pushLocalUpdate(update: Uint8Array) {
     await fetch(`${base}/push`, {
@@ -203,39 +829,67 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     source = es
   }
 
-  function applyLocalTextChange() {
-    if (!container || !run || composing) return
-    const before = plainTextOf(run)
-    const after = container.textContent ?? ''
-    if (before === after) return
-    const { start, deletedLength, inserted } = diffRange(before, after)
-    doc.transact(() => {
-      if (deletedLength) run!.delete(start, deletedLength)
-      if (inserted) run!.insert(start, inserted)
-    }, LOCAL_TYPING)
+  // ---- mount --------------------------------------------------------------
+
+  const onSelectionChange = () => syncToolbar()
+
+  function wireToolbar(root: HTMLElement) {
+    for (const button of Array.from(root.querySelectorAll('[data-flow-editor-mark]')) as HTMLElement[]) {
+      const name = button.getAttribute('data-flow-editor-mark') ?? ''
+      button.addEventListener('mousedown', (event) => event.preventDefault())
+      button.addEventListener('click', () => {
+        if (LIST_TYPES.includes(name as BlockType)) applyBlockType(name as BlockType)
+        else if (name === 'link') openLinkDialog()
+        else toggleMark(name as MarkName)
+      })
+    }
+    const select = root.querySelector('[data-flow-editor-block]') as HTMLSelectElement | null
+    select?.addEventListener('change', () => {
+      const value = select.value as BlockType
+      const span = selectionSpan()
+      if (!span) return
+      structural(span, () => {
+        for (let index = span.end.index; index >= span.start.index; index--) setBlockType(index, value)
+      })
+    })
   }
 
-  function toggleMark(attribute: 'bold' | 'italic') {
-    if (!container || !run) return
-    const selection = document.getSelection()
-    if (!selection?.rangeCount || selection.isCollapsed) return
-    const range = selection.getRangeAt(0)
-    const start = offsetOf(container, range.startContainer, range.startOffset)
-    const end = offsetOf(container, range.endContainer, range.endOffset)
-    if (end <= start) return
-    const delta = run.toDelta() as Delta
-    let cursor = 0
-    let currentlyOn = true
-    for (const op of delta) {
-      const opEnd = cursor + op.insert.length
-      if (opEnd > start && cursor < end && !op.attributes?.[attribute]) currentlyOn = false
-      cursor = opEnd
-    }
-    run.format(start, end - start, { [attribute]: !currentlyOn })
+  const linkDialog = () => shell?.querySelector('[data-flow-editor-link-dialog]') as HTMLDialogElement | null
+
+  function openLinkDialog() {
+    const span = selectionSpan()
+    if (!span || isCollapsed(span)) return
+    linkSpan = span
+    const dialog = linkDialog()
+    const input = shell?.querySelector('[data-flow-editor-link-input]') as HTMLInputElement | null
+    const block = blocksOf()[span.start.index]
+    const existing = block
+      ? (sliceDelta(block.text.toDelta() as Delta, span.start.offset)[0]?.attributes?.link ?? '')
+      : ''
+    if (input) input.value = existing
+    dialog?.showModal()
+    input?.focus()
+  }
+
+  function wireLinkDialog(root: HTMLElement) {
+    const dialog = root.querySelector('[data-flow-editor-link-dialog]') as HTMLDialogElement | null
+    const input = root.querySelector('[data-flow-editor-link-input]') as HTMLInputElement | null
+    root.querySelector('[data-flow-editor-link-cancel]')?.addEventListener('click', () => {
+      dialog?.close()
+    })
+    root.querySelector('[data-flow-editor-link-remove]')?.addEventListener('click', () => {
+      applyLink(null)
+      dialog?.close()
+    })
+    root.querySelector('[data-flow-editor-link-apply]')?.addEventListener('click', () => {
+      applyLink(input?.value?.trim() || null)
+      dialog?.close()
+    })
   }
 
   async function mount(el: HTMLElement) {
     container = el
+    shell = (el.closest('[data-ui="flow-editor"]') as HTMLElement | null) ?? el.parentElement
     el.addEventListener('compositionstart', () => {
       composing = true
     })
@@ -243,32 +897,43 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
       composing = false
       applyLocalTextChange()
     })
+    el.addEventListener('beforeinput', (event) => onBeforeInput(event as InputEvent))
     el.addEventListener('input', () => {
       if (!composing) applyLocalTextChange()
     })
-    el.parentElement
-      ?.querySelector('[data-flow-editor-bold]')
-      ?.addEventListener('click', () => toggleMark('bold'))
-    el.parentElement
-      ?.querySelector('[data-flow-editor-italic]')
-      ?.addEventListener('click', () => toggleMark('italic'))
+    el.addEventListener('paste', (event) => onPaste(event as ClipboardEvent))
+    el.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null
+      const box = target?.closest('[data-ui="flow-editor-check"]')
+      const block = box?.closest('[data-index]')
+      if (block) toggleChecked(Number(block.getAttribute('data-index')))
+    })
+    document.addEventListener('selectionchange', onSelectionChange)
+    if (shell) {
+      wireToolbar(shell)
+      wireLinkDialog(shell)
+    }
 
     doc.on('update', (update: Uint8Array, origin: unknown) => {
       // The incremental update Yjs already computed for this change, not a
       // fresh Y.encodeStateAsUpdate(doc) full re-encode — sending the whole
-      // document's state on every keystroke was the actual source of the
-      // formatting loss bug: applying a full-state update on top of the
+      // document's state on every keystroke was the actual source of an early
+      // formatting-loss bug: applying a full-state update on top of the
       // server's own incrementally-built state doesn't round-trip marks the
       // same way normal incremental merges do.
       if (origin !== REMOTE) void pushLocalUpdate(update)
-      if (origin !== LOCAL_TYPING) render()
+      if (origin !== LOCAL_TYPING) {
+        const keep = pending
+        pending = null
+        render(keep ?? undefined)
+      }
     })
 
     const response = await fetch(`${base}/content`)
     const { snapshot, topic } = (await response.json()) as { snapshot: string; topic: string }
     Y.applyUpdate(doc, base64ToBytes(snapshot), REMOTE)
-    run = ensureRun()
-    render()
+    ensureBlocks()
+    render(null)
     connectLive(topic)
 
     window.addEventListener('pagehide', () => {
@@ -280,6 +945,7 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     view: () => issueEditorShell({ html }, { containerId, lang: props.lang }) as TemplateResult,
     dispose() {
       source?.close()
+      if (typeof document !== 'undefined') document.removeEventListener('selectionchange', onSelectionChange)
     },
     mount,
     containerId,
