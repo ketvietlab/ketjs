@@ -287,10 +287,11 @@ export const functions: Record<string, FnSpec> = {
       const openOpportunities = rows.filter(
         (row) => row.kind === 'opportunity' && row.terminalState === 'open',
       )
-      const visibleIds = new Set(rows.map((row) => String(row.id)))
-      const links = (await ctx.db.select('crm.ActivityLink')).filter((link) =>
-        visibleIds.has(String(link.caseId)),
-      )
+      const visibleIds = [...new Set(rows.map((row) => String(row.id)))]
+      // Reading every link in the tenant to keep the handful that belong to
+      // these cases is work the query can do instead.
+      const L = ctx.table('crm.ActivityLink')
+      const links = visibleIds.length ? await ctx.db.all(from(L).where(inArray(L.caseId, visibleIds))) : []
       const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
       const activities = activityIds.length
         ? await ctx.db.all(
