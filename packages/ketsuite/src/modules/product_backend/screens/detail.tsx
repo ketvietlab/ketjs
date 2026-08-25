@@ -1,31 +1,27 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import type { MenuNode, Translator } from '@ketvietlab/ketjs'
+import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  code,
+  button,
   dataTable,
   emptyState,
-  formatMoney,
   Framed,
+  FormCluster,
   icon,
   inline,
-  KanbanCard,
-  KanbanGrid,
   linkButton,
   MediaPanel,
   RecordForm,
   RecordToggle,
   RecordWorkspace,
   Section,
-  shell,
   stack,
   Surface,
   Tabs,
-  thumbnail,
-} from '../../ui/index.ts'
-import type { Column, DataTable, FormOption, Frame, MediaPanelProps } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
-import { selectionLabel as resolveSelection } from '../backend/screen.ts'
+} from '../../../ui/index.ts'
+import type { FormOption, Frame, MediaPanelProps } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
 
 const mediaLabels = (_: Translator) => ({
   unavailable: _('product_backend.media.unavailable'),
@@ -46,205 +42,8 @@ const mediaLabels = (_: Translator) => ({
 const selectionLabel = (_: Translator, group: string, value: unknown): string =>
   resolveSelection(_, 'product_backend', group, value)
 
-export type TemplateRow = {
-  id: string
-  name: string
-  type: string
-  categoryId: string | null
-  uomId: string | null
-  listPrice: number
-  isStorable?: boolean | null
-  variants: number
-  /**
-   * The unit and the category as the reader knows them.
-   *
-   * The ids stay on the row because a filter and a link both travel on them, but
-   * a catalogue that prints `workwear` where it means "Đồng phục vận hành" is
-   * showing its own plumbing. Absent names fall back to the id rather than to a
-   * dash: an unresolved reference is worth seeing.
-   */
-  uomName?: string | null
-  categoryName?: string | null
-  /** The primary image, when the product has one. */
-  image?: { src: string; alt: string } | null
-}
-
-/** The two ways to look at the same rows. More can be added; each is a real page. */
-export const VIEWS = ['list', 'kanban'] as const
-export type View = (typeof VIEWS)[number]
-
 export const PRODUCT_DETAIL_TABS = ['general', 'variants', 'media'] as const
 export type ProductDetailTab = (typeof PRODUCT_DETAIL_TABS)[number]
-
-export const VARIANT_DETAIL_TABS = ['general', 'media'] as const
-export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
-
-/**
- * The catalogue's columns, as data — so a module that adds a field to
- * `product.Template` has something to name when it wants a column for it.
- *
- * Goods and services are not a good/bad axis, so neither gets a judgemental tone.
- * The id is off by default: useful to a specialist, noise to everyone else.
- */
-export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
-  {
-    key: 'image',
-    label: _('product_backend.col.image'),
-    // The catalogue is looked at as much as it is read, and a thumbnail is the
-    // fastest way to tell two similar names apart. The placeholder keeps the
-    // column's width steady so rows do not jog as images come and go.
-    cell: (r) =>
-      r.image ? thumbnail({ src: r.image.src, alt: r.image.alt }) : thumbnail({ fallback: icon('package') }),
-    kind: 'media',
-    priority: 'primary',
-  },
-  { key: 'name', label: _('product_backend.col.name'), cell: (r) => r.name, priority: 'primary' },
-  {
-    key: 'type',
-    label: _('product_backend.col.type'),
-    kind: 'status',
-    priority: 'secondary',
-    cell: (r) =>
-      badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
-  },
-  {
-    key: 'category',
-    label: _('product_backend.col.category'),
-    cell: (r) => r.categoryName || r.categoryId || '—',
-    priority: 'secondary',
-  },
-  {
-    key: 'isStorable',
-    label: _('product_backend.field.isStorable'),
-    kind: 'status',
-    priority: 'secondary',
-    cell: (r) =>
-      r.isStorable == null
-        ? '—'
-        : badge(
-            _(r.isStorable ? 'product_backend.value.yes' : 'product_backend.value.no'),
-            r.isStorable ? 'positive' : 'neutral',
-          ),
-  },
-  {
-    key: 'uom',
-    label: _('product_backend.col.uom'),
-    cell: (r) => r.uomName || r.uomId || '—',
-  },
-  {
-    key: 'listPrice',
-    label: _('product_backend.field.listPrice'),
-    cell: (r) => formatMoney(_, r.listPrice),
-    align: 'end',
-    kind: 'currency',
-  },
-  {
-    key: 'variants',
-    label: _('product_backend.col.variants'),
-    cell: (r) => String(r.variants),
-    align: 'end',
-    kind: 'number',
-  },
-  {
-    key: 'id',
-    label: _('backend.table.id'),
-    cell: (r) => code(r.id, 'identifier'),
-    kind: 'identifier',
-    priority: 'tertiary',
-    optional: true,
-  },
-]
-
-const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): TemplateResult => (
-  <KanbanGrid
-    rows={rows}
-    id={(r) => r.id}
-    card={(r) => (
-      <KanbanCard
-        key={r.id}
-        title={r.name}
-        href={localized(`/admin/product/templates/${r.id}`, locale)}
-        media={
-          r.image
-            ? thumbnail({ src: r.image.src, alt: r.image.alt, size: 'card' })
-            : thumbnail({ fallback: icon('package'), size: 'card' })
-        }
-        meta={inline([
-          badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
-          r.uomName || r.uomId || '',
-        ])}
-        note={`${_('product_backend.col.variants')}: ${String(r.variants)}`}
-      />
-    )}
-  />
-)
-
-/**
- * The catalogue, in the frame the backend already owns.
- *
- * It reuses `framed` and `dataTable` rather than building its own: a second frame
- * is a frame that drifts, and the sidebar, chrome and row height are not this
- * module's to reinvent. The two views are two renderings of the same rows, not
- * two screens.
- */
-export const productsScreen = (
-  _: Translator,
-  rows: TemplateRow[],
-  view: View,
-  frame: Frame = {},
-  table: Partial<DataTable<TemplateRow>> = {},
-  locale = '',
-): TemplateResult =>
-  shell(
-    _,
-    _('product_backend.screen.title'),
-    rows.length === 0 && !table.groups?.length
-      ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-      : view === 'kanban'
-        ? kanban(_, rows, locale)
-        : dataTable(_, {
-            columns: templateColumns(_),
-            rows,
-            id: (r) => r.id,
-            gutter: 'compact',
-            rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
-            ...table,
-          }),
-    frame,
-  )
-
-export const favoriteScreen = (
-  _: Translator,
-  frame: Frame,
-  returnTo: string,
-  locale = '',
-  errors?: string[],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('product_backend.favorite.create')}
-    frame={frame}
-    body={
-      <Surface
-        body={
-          <RecordForm
-            action={localized('/admin/product/templates/favorites/new', locale)}
-            submit={_('product_backend.favorite.save')}
-            submitVariant="primary"
-            errors={errors}
-            hidden={{ returnTo }}
-            fields={[
-              { name: 'name', label: _('product_backend.favorite.name'), required: true },
-              { name: 'default', label: _('product_backend.favorite.default'), type: 'checkbox' },
-            ]}
-          />
-        }
-      />
-    }
-  />
-)
-
-export type { MenuNode }
 
 export const productDetailScreen = (
   _: Translator,
@@ -329,6 +128,7 @@ export const productDetailScreen = (
       action={localized(`/admin/product/templates/${row.id}?tab=general`, locale)}
       submit={_('product_backend.action.save')}
       submitVariant="primary"
+      submitPlacement="external"
       scope="product-detail"
       errors={management.errors}
       fields={[
@@ -398,7 +198,7 @@ export const productDetailScreen = (
   const archived = row.active === false
   const generalTab = stack(
     [
-      general,
+      <Section title={_('product_backend.tabs.general')} body={<Surface body={general} />} />,
       <Section
         title={_(archived ? 'product_backend.archive.restoreTitle' : 'product_backend.archive.title')}
         description={_(archived ? 'product_backend.archive.restoreHint' : 'product_backend.archive.hint')}
@@ -580,6 +380,20 @@ export const productDetailScreen = (
 
   const workspace = (
     <RecordWorkspace
+      breadcrumbs={{
+        label: _('product_backend.tabs.label'),
+        items: [
+          {
+            label: _('product_backend.menu.app'),
+            href: localized('/admin/product/templates', locale),
+          },
+          {
+            label: _('product_backend.menu.templates'),
+            href: localized('/admin/product/templates', locale),
+          },
+          { label: row.name },
+        ],
+      }}
       kicker={_('product_backend.detail.kicker')}
       title={row.name}
       subtitle={subtitle}
@@ -647,7 +461,24 @@ export const productDetailScreen = (
           ]}
         />
       }
-      controller={management.editor}
+      controller={
+        <>
+          {activeTab === 'general' && (
+            <FormCluster
+              label={_('product_backend.action.save')}
+              forms={[
+                button({
+                  label: _('product_backend.action.save'),
+                  type: 'submit',
+                  form: productFormId,
+                  variant: 'primary',
+                }),
+              ]}
+            />
+          )}
+          {management.editor}
+        </>
+      }
       body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : generalTab}
       aside={collaboration}
       asideLabel={_('product_backend.collaboration.label')}
@@ -668,153 +499,4 @@ export const productDetailScreen = (
       body={workspace}
     />
   )
-}
-
-export const variantScreen = (
-  _: Translator,
-  templateId: string,
-  row: Record<string, unknown>,
-  media: MediaPanelProps,
-  uoms: FormOption[],
-  template: { name: string },
-  collaboration: JSXChild,
-  frame: Frame,
-  errors?: string[],
-  locale = '',
-  editor?: JSXChild,
-  activeTab: VariantDetailTab = 'general',
-  partial = false,
-  uomControl?: JSXChild,
-): TemplateResult => {
-  const images = media.images ?? []
-  const primaryImage = images.find((image) => image.primary) ?? images[0]
-  const productUom = Array.isArray(row.uoms)
-    ? (row.uoms[0] as Record<string, unknown> | undefined)
-    : undefined
-  const tabHref = (tab: VariantDetailTab) =>
-    localized(`/admin/product/templates/${templateId}/variants/${String(row.id)}?tab=${tab}`, locale)
-  // The heading names the variant, not its template: arriving from the variant
-  // list on a page headed with the template's name gives the reader no way to
-  // tell which of the two screens they are on.
-  const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
-  const title = String(row.name || row.defaultCode || row.id)
-  const subtitle = [
-    `${_('product_backend.variant.template')}: ${template.name}`,
-    // The combination as attribute and value, not as the key the database stores
-    // it under: "Màu sắc: Đỏ" rather than "color-red".
-    ...values.map((entry) =>
-      entry.attribute ? `${String(entry.attribute)}: ${String(entry.value)}` : String(entry.value),
-    ),
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  const general = (
-    <RecordForm
-      id="product-variant-form"
-      action={tabHref('general')}
-      submit={_('product_backend.action.save')}
-      submitVariant="primary"
-      scope="product-variant"
-      errors={errors}
-      fields={[
-        {
-          name: 'defaultCode',
-          label: _('product_backend.field.defaultCode'),
-          value: String(row.defaultCode ?? ''),
-        },
-        { name: 'barcode', label: _('product_backend.field.barcode'), value: String(row.barcode ?? '') },
-        {
-          name: 'weight',
-          label: _('product_backend.field.weight'),
-          type: 'decimal',
-          value: Number(row.weight ?? 0),
-        },
-        {
-          name: 'volume',
-          label: _('product_backend.field.volume'),
-          type: 'decimal',
-          value: Number(row.volume ?? 0),
-        },
-        {
-          name: 'standardPrice',
-          label: _('product_backend.field.standardPrice'),
-          type: 'decimal',
-          value: Number((row.cost as Record<string, unknown> | null)?.standardPrice ?? 0),
-        },
-        {
-          name: 'uomId',
-          label: _('product_backend.field.uom'),
-          type: 'select',
-          value: productUom?.uomId ? String(productUom.uomId) : '',
-          options: [{ value: '', label: '—' }, ...uoms],
-          ...(uomControl ? { control: uomControl } : {}),
-        },
-        {
-          name: 'uomBarcode',
-          label: _('product_backend.field.uomBarcode'),
-          value: String(productUom?.barcode ?? ''),
-        },
-      ]}
-    />
-  )
-  const mediaTab = (
-    <Section
-      title={_('product_backend.media.title')}
-      description={_('product_backend.media.description')}
-      body={<MediaPanel {...media} labels={mediaLabels(_)} />}
-    />
-  )
-
-  const workspace = (
-    <RecordWorkspace
-      kicker={_('product_backend.variant.kicker')}
-      title={title}
-      subtitle={subtitle}
-      image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
-      imageFallback={icon('package')}
-      summary={[
-        {
-          id: 'media',
-          label: _('product_backend.summary.images'),
-          value: images.length,
-          href: tabHref('media'),
-        },
-        {
-          id: 'state',
-          label: _('product_backend.col.state'),
-          value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
-        },
-      ]}
-      navigation={
-        <Tabs
-          label={_('product_backend.variant.tabs.label')}
-          items={[
-            {
-              id: 'general',
-              label: _('product_backend.tabs.general'),
-              href: tabHref('general'),
-              active: activeTab === 'general',
-            },
-            {
-              id: 'media',
-              label: _('product_backend.tabs.media'),
-              href: tabHref('media'),
-              active: activeTab === 'media',
-              count: images.length,
-            },
-          ]}
-        />
-      }
-      controller={editor}
-      body={activeTab === 'media' ? mediaTab : general}
-      aside={collaboration}
-      asideLabel={_('product_backend.variant.collaboration.label')}
-      slots={{
-        header: 'product.record-header',
-        body: 'product.record-body',
-        ...(partial ? { fragmentTitle: title } : {}),
-      }}
-    />
-  )
-  return partial ? workspace : <Framed translator={_} title={title} frame={frame} body={workspace} />
 }

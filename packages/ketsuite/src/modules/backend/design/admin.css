@@ -101,8 +101,8 @@
     flex-direction: column;
     overflow: hidden;
     padding: 0;
-    background: var(--admin-bg);
-    border-inline-end: 1px solid var(--admin-line);
+    background: var(--admin-sidebar-bg);
+    border-inline-end: 1px solid var(--admin-divider-subtle);
     white-space: nowrap;
   }
 
@@ -178,9 +178,9 @@
   [data-ui="sidebar-search-input"] {
     inline-size: 100%;
     padding: 0.4375rem 0.625rem 0.4375rem 1.875rem;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
+    background: var(--admin-control-bg);
     color: var(--admin-ink);
     font: inherit;
     font-size: 0.8125rem;
@@ -192,7 +192,7 @@
   }
 
   [data-ui="sidebar-search-input"]::placeholder {
-    color: var(--admin-ink-muted);
+    color: var(--admin-placeholder);
   }
 
   [data-ui="sidebar-search-input"]:focus {
@@ -274,8 +274,8 @@
 
   [data-ui="app-entry"][data-active="true"],
   [data-ui="menu-item"][data-active="true"] {
-    background: var(--admin-accent-soft);
-    color: var(--admin-accent-text);
+    background: var(--admin-nav-selected);
+    color: light-dark(var(--admin-accent-text), #dce2ff);
     font-weight: 600;
   }
 
@@ -450,6 +450,55 @@
      which slice you are looking at, and how you want to look at it. Every one of
      them is a link or a form — no client state, so the back button works. */
 
+  [data-ui="list-chrome"] {
+    display: grid;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+
+  [data-ui="list-context"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 650;
+    line-height: 1.25;
+  }
+
+  [data-ui="list-context"]:empty {
+    display: none;
+  }
+
+  [data-ui="list-chrome-row"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-lg);
+  }
+
+  [data-ui="chrome-tools"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="topbar"]:has([data-ui="list-chrome"][data-layout="catalogue"]) {
+    display: block;
+    padding: var(--admin-gap-lg);
+    background: var(--admin-bg);
+  }
+
+  [data-ui="list-chrome"][data-layout="catalogue"] {
+    gap: var(--admin-gap-lg);
+  }
+
+  [data-ui="list-chrome"][data-layout="catalogue"] [data-ui="chrome-search"] {
+    inline-size: min(100%, 44rem);
+    margin-inline: 0;
+  }
+
   [data-ui="chrome-lead"],
   [data-ui="chrome-tail"] {
     display: flex;
@@ -558,9 +607,9 @@
     gap: var(--admin-gap-xs);
     min-block-size: var(--admin-control-height);
     padding-inline: 0.5rem;
-    border: 1px solid var(--admin-line-strong);
+    border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
+    background: var(--admin-control-bg);
   }
 
   [data-ui="chrome-search-query"] {
@@ -588,6 +637,7 @@
 
   [data-ui="chrome-search"]:focus-within {
     border-color: var(--admin-focus-border);
+    background: var(--admin-control-focus);
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
   }
 
@@ -600,6 +650,10 @@
     font: inherit;
     font-size: 0.8125rem;
     outline: none;
+  }
+
+  [data-ui="chrome-search-input"]::placeholder {
+    color: var(--admin-placeholder);
   }
 
   /* A facet is what you filtered on, and the × is how you undo it. Both visible:
@@ -739,9 +793,9 @@
   [data-ui="custom-filter"] input,
   [data-ui="custom-filter"] button {
     min-block-size: 2rem;
-    border: 1px solid var(--admin-line-strong);
+    border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
+    background: var(--admin-control-bg);
     color: var(--admin-ink);
     font: inherit;
   }
@@ -842,9 +896,9 @@
     flex-direction: column;
     gap: var(--admin-gap-xs);
     padding: var(--admin-gap-sm);
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
   }
 
   /* The card's picture sits above its title and spans the card, so a grid of
@@ -886,8 +940,8 @@
     gap: var(--admin-gap);
     padding-block: 5px;
     padding-inline: var(--admin-gap);
-    background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
-    border-block-end: 1px solid var(--admin-line);
+    background: color-mix(in srgb, var(--admin-bg) 94%, transparent);
+    border-block-end: 0;
     backdrop-filter: blur(10px);
   }
 
@@ -928,6 +982,10 @@
     overflow-x: auto;
   }
 
+  [data-ui="content"]:has(> [data-ui="record-workspace"]) {
+    padding: 1.375rem 1.75rem 3rem;
+  }
+
   /* Screens that are reading rather than scanning keep their measure. */
   [data-ui="content"]:has([data-ui="tokens"]) {
     inline-size: min(100%, var(--admin-page-max));
@@ -939,6 +997,16 @@
      something that is not a card. */
   [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])) {
     padding: 0;
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    > [data-ui="content"] {
+    padding: 0 var(--admin-gap-lg) var(--admin-gap-lg);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="table-scroll"][data-gutter="compact"] {
+    margin: 0;
   }
 
   [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"]))
@@ -971,9 +1039,9 @@
 
   [data-ui="table-scroll"] {
     overflow-x: auto;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
 
@@ -985,7 +1053,7 @@
   [data-ui="table"] {
     inline-size: 100%;
     border-spacing: 0;
-    background: var(--admin-surface);
+    background: var(--admin-table-bg);
     /* auto, not fixed: a name column and a status column do not want the same
        share of the width, and nothing here knows which is which. */
     table-layout: auto;
@@ -997,9 +1065,9 @@
     inset-block-start: 0;
     block-size: 2rem;
     padding: 0 var(--admin-gap);
-    background: var(--admin-surface-subtle);
-    border-block-end: 1px solid var(--admin-line);
-    color: var(--admin-ink-secondary);
+    background: var(--admin-table-header);
+    border-block-end: 1px solid var(--admin-table-line);
+    color: var(--admin-table-header-ink);
     font-size: var(--admin-size-xs);
     font-weight: 700;
     letter-spacing: 0.055em;
@@ -1009,13 +1077,31 @@
     white-space: nowrap;
   }
 
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="table"]
+    th {
+    block-size: var(--table-header-height);
+    background: var(--admin-table-header);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="row"] {
+    block-size: var(--table-row-height);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="row"]
+    td {
+    padding-block: var(--admin-gap-sm);
+  }
+
   [data-ui="row"] {
     block-size: var(--admin-row-height);
   }
 
   [data-ui="group-row"] td {
     padding: 0;
-    border-block-end: 1px solid var(--admin-line);
+    border-block-end: 1px solid var(--admin-divider-subtle);
     background: var(--admin-surface-subtle);
   }
 
@@ -1059,7 +1145,7 @@
 
   [data-ui="row"] td {
     padding: 0.375rem var(--admin-gap);
-    border-block-end: 1px solid var(--admin-line);
+    border-block-end: 1px solid var(--admin-table-line);
     color: var(--admin-ink-secondary);
     font-size: 0.8125rem;
     line-height: 1.35;
@@ -1325,9 +1411,9 @@
   [data-ui="token-list"] {
     margin: 0;
     overflow: hidden;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
 
@@ -1377,7 +1463,7 @@
     padding: var(--admin-gap-md);
     border: 1px dashed var(--admin-line-strong);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
   }
 
   [data-ui="empty-message"],
@@ -1503,7 +1589,7 @@
     overflow: auto;
     border: 1px solid var(--admin-line-strong);
     border-radius: var(--admin-radius-lg);
-    background: var(--admin-bg);
+    background: var(--admin-surface);
     box-shadow: var(--admin-shadow-card);
   }
 
@@ -1530,7 +1616,7 @@
     }
 
     [data-ui="row"]:hover td {
-      background: var(--admin-surface-hover);
+      background: var(--admin-table-hover);
     }
 
     [data-ui="catalogue-nav"] a:hover {
@@ -1690,9 +1776,9 @@
       min-block-size: var(--admin-topbar-height);
       padding: var(--admin-gap-xs) var(--admin-gap-sm);
       overflow: hidden;
-      background: var(--admin-surface);
-      border-inline-end: 0;
-      border-block-end: 1px solid var(--admin-line);
+      background: var(--admin-sidebar-bg);
+      border: 0;
+      border-block-end: 1px solid var(--admin-divider-subtle);
     }
 
     [data-ui="sidebar-header"] {
@@ -1749,6 +1835,28 @@
       flex-wrap: wrap;
       min-block-size: var(--admin-topbar-height);
       padding: calc(var(--admin-gap-sm) + 5px) var(--admin-gap);
+    }
+
+    [data-ui="list-chrome"] {
+      gap: var(--admin-gap-sm);
+    }
+
+    [data-ui="list-chrome-row"] {
+      flex-wrap: wrap;
+      gap: var(--admin-gap);
+    }
+
+    [data-ui="chrome-tools"] {
+      flex: 1 0 100%;
+    }
+
+    [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+      > [data-ui="content"] {
+      padding: 0 var(--admin-gap) var(--admin-gap-lg);
+    }
+
+    [data-ui="content"]:has(> [data-ui="record-workspace"]) {
+      padding: var(--admin-gap) var(--admin-gap) var(--admin-gap-lg);
     }
 
     [data-ui="chrome-lead"] {
@@ -1953,9 +2061,9 @@
   [data-ui="field-input"] {
     min-block-size: var(--admin-control-height);
     padding-inline: 0.625rem;
-    border: 1px solid var(--admin-line-strong);
+    border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-bg);
+    background: var(--admin-control-bg);
     color: var(--admin-ink);
     font: inherit;
     font-size: var(--admin-size-base);
@@ -1966,8 +2074,14 @@
 
   [data-ui="field-input"]:focus-visible {
     border-color: var(--admin-focus-border);
+    background: var(--admin-control-focus);
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
     outline: none;
+  }
+
+  [data-ui="field-input"]:hover:not(:focus-visible) {
+    border-color: var(--admin-control-border-hover);
+    background: var(--admin-control-hover);
   }
 
   [data-ui="login-submit"] {
@@ -2315,7 +2429,7 @@
     display: grid;
     min-inline-size: 0;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--admin-gap-sm);
+    gap: var(--admin-gap);
   }
   [data-ui="stack"][data-gap="compact"] {
     gap: var(--admin-gap-xs);
@@ -2447,9 +2561,9 @@
   [data-ui="schedule-scroll"] {
     max-inline-size: 100%;
     overflow-x: auto;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
   }
   [data-ui="schedule"] {
     position: relative;
@@ -2622,11 +2736,19 @@
   [data-ui="record-workspace"] {
     display: grid;
     min-inline-size: 0;
+    grid-template-areas:
+      "record-top record-top"
+      "record-navigation ."
+      "record-body record-aside";
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
     align-items: start;
-    gap: var(--admin-gap);
+    gap: 0;
   }
   [data-ui="record-workspace"][data-has-aside="false"] {
+    grid-template-areas:
+      "record-top"
+      "record-navigation"
+      "record-body";
     grid-template-columns: minmax(0, 1fr);
   }
   /* `framed` gives legacy list/form screens the accounting workspace. Rich
@@ -2650,33 +2772,45 @@
       > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
     )
     > [data-ui="record-sheet"]
-    > [data-ui="record-header"] {
+    > [data-ui="record-top"] {
     display: none;
   }
   [data-ui="record-sheet"] {
+    display: contents;
     min-inline-size: 0;
     /* Relation menus and other anchored controls may extend past the sheet.
        Clipping here hides their options when a field sits near the last row. */
     overflow: visible;
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius);
-    background: var(--admin-surface);
-    box-shadow: var(--admin-shadow-card);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
-  [data-ui="record-header"] {
-    display: flex;
+  [data-ui="record-top"] {
+    display: grid;
     min-inline-size: 0;
-    flex-wrap: wrap;
-    align-items: stretch;
-    justify-content: space-between;
+    grid-area: record-top;
+    grid-template-areas:
+      "breadcrumbs breadcrumbs"
+      "identity controller"
+      "facts facts"
+      "badges badges";
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: var(--admin-gap-md);
     padding: var(--admin-gap-md);
-    border-block-end: 1px solid var(--admin-line);
+    border-block-end: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="record-top"] > [data-ui="record-header"] {
+    display: contents;
+  }
+  [data-ui="record-top"] > [data-ui="record-header"] > [data-ui="breadcrumbs"] {
+    grid-area: breadcrumbs;
   }
   [data-ui="record-identity"] {
     display: grid;
     min-inline-size: 0;
-    flex: 1 1 auto;
+    grid-area: identity;
     grid-template-columns: 4.5rem minmax(0, 1fr);
     align-items: center;
     gap: var(--admin-gap);
@@ -2730,7 +2864,7 @@
   [data-ui="record-badges"] {
     display: flex;
     min-inline-size: 0;
-    flex: 1 0 100%;
+    grid-area: badges;
     flex-wrap: nowrap;
     align-items: center;
     gap: var(--admin-gap);
@@ -2770,16 +2904,18 @@
   }
   [data-ui="record-facts"] {
     display: flex;
+    inline-size: 100%;
     min-inline-size: 0;
-    flex: 0 1 auto;
+    grid-area: facts;
     align-items: stretch;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface-subtle);
+    background: var(--admin-card-raised);
   }
   [data-ui="record-fact"] {
     display: grid;
     min-inline-size: 5rem;
+    flex: 1 1 0;
     align-content: center;
     justify-items: center;
     gap: 0.0625rem;
@@ -2789,7 +2925,7 @@
     text-decoration: none;
   }
   [data-ui="record-fact"] + [data-ui="record-fact"] {
-    border-inline-start: 1px solid var(--admin-line);
+    border-inline-start: 1px solid var(--admin-divider-subtle);
   }
   [data-ui="record-fact-value"] {
     max-inline-size: 9rem;
@@ -2806,35 +2942,41 @@
     white-space: nowrap;
   }
   a[data-ui="record-fact"]:hover {
-    background: var(--admin-surface-hover);
+    background: var(--admin-card-hover);
     color: var(--admin-accent-text);
   }
   [data-ui="record-navigation"] {
     min-inline-size: 0;
+    grid-area: record-navigation;
     padding-inline: var(--admin-gap);
   }
   [data-ui="record-navigation"] [data-ui="tabs"] {
     border-block-end: 0;
   }
-  [data-ui="record-controller"]:has(> [data-ui="chrome-lead"]) {
+  [data-ui="record-controller"] {
     display: flex;
-    min-block-size: var(--admin-topbar-height);
+    min-inline-size: 0;
+    grid-area: controller;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--admin-gap);
-    padding: 5px var(--admin-gap);
-    border-block-start: 1px solid var(--admin-line);
+    align-self: center;
+  }
+  [data-ui="record-controller"] > [data-ui="form-cluster"] {
+    inline-size: auto;
   }
   [data-ui="record-controller"]:has(> ket-island:not([hidden]) > :not([hidden])) {
-    padding: var(--admin-gap-sm) var(--admin-gap-md) 0;
-    border-block-start: 1px solid var(--admin-line);
+    align-self: stretch;
   }
   [data-ui="record-controller"] > ket-island {
     display: contents;
   }
   [data-ui="record-body"] {
     min-inline-size: 0;
+    grid-area: record-body;
     padding: var(--admin-gap-md);
-    border-block-start: 1px solid var(--admin-line);
+    border-block-start: 1px solid var(--admin-divider-subtle);
   }
   [data-ui="record-aside"] {
     position: sticky;
@@ -2843,10 +2985,14 @@
     inset-block-start: 0;
     display: grid;
     min-inline-size: 0;
+    grid-area: record-aside;
     max-block-size: calc(100dvh - 2 * var(--admin-gap));
     align-content: start;
     gap: var(--admin-gap);
+    padding: var(--admin-gap-md);
     overflow-y: auto;
+    border-inline-start: 1px solid var(--admin-divider-subtle);
+    background: var(--admin-rail-bg);
   }
   [data-ui="main"]:has(> [data-ui="topbar"] > *) [data-ui="record-aside"] {
     max-block-size: calc(100dvh - var(--admin-topbar-height) - 2 * var(--admin-gap));
@@ -2863,18 +3009,44 @@
   }
   @media (max-width: 72rem) {
     [data-ui="record-workspace"] {
+      grid-template-areas:
+        "record-top"
+        "record-navigation"
+        "record-body"
+        "record-aside";
       grid-template-columns: minmax(0, 1fr);
+      gap: var(--admin-gap);
     }
     [data-ui="record-aside"] {
       position: static;
       max-block-size: none;
+      padding: 0;
       overflow: visible;
+      border-inline-start: 0;
+      background: transparent;
     }
   }
   @media (max-width: 47.9375rem) {
-    [data-ui="record-header"] {
-      flex-direction: column;
+    [data-ui="record-top"] {
+      grid-template-areas:
+        "breadcrumbs"
+        "identity"
+        "controller"
+        "facts"
+        "badges";
+      grid-template-columns: minmax(0, 1fr);
       padding: var(--admin-gap);
+    }
+    [data-ui="record-controller"] {
+      inline-size: 100%;
+      justify-content: stretch;
+    }
+    [data-ui="record-controller"] > [data-ui="form-cluster"],
+    [data-ui="record-controller"] [data-ui="action-group"] {
+      inline-size: 100%;
+    }
+    [data-ui="record-controller"] [data-ui="action"] {
+      flex: 1 1 9rem;
     }
     [data-ui="record-identity"] {
       grid-template-columns: 3.75rem minmax(0, 1fr);
@@ -2971,9 +3143,9 @@
 
   [data-ui="surface"] {
     min-inline-size: 0;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
   [data-ui="surface"][data-tone="subtle"] {
@@ -3004,9 +3176,9 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     list-style: none;
   }
   [data-ui="attachment-item"] {
@@ -3421,9 +3593,9 @@
     inline-size: 100%;
     gap: var(--admin-gap-xs);
     padding: var(--admin-gap-xs);
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
   }
   [data-ui="media-item"][data-primary="true"] {
     border-color: var(--admin-accent-line);
@@ -3567,10 +3739,10 @@
     min-block-size: var(--admin-field-height);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
     color: var(--admin-ink);
-    background: var(--admin-surface);
+    background: var(--admin-control-bg);
     font: inherit;
     font-size: 0.8125rem;
     line-height: 1.3;
@@ -3583,12 +3755,17 @@
   }
   [data-ui="form-control"]:focus-visible {
     border-color: var(--admin-focus-border);
+    background: var(--admin-control-focus);
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
     outline: none;
   }
+  [data-ui="form-control"]:hover:not(:focus-visible):not(:disabled) {
+    border-color: var(--admin-control-border-hover);
+    background: var(--admin-control-hover);
+  }
   [data-ui="form-control"]:disabled {
     border-color: var(--admin-line);
-    background: var(--admin-surface-subtle);
+    background: light-dark(var(--admin-surface-subtle), var(--color-control-disabled));
     color: var(--admin-ink-disabled);
     cursor: not-allowed;
   }
@@ -3596,7 +3773,7 @@
     border-color: var(--admin-danger);
   }
   textarea[data-ui="form-control"] {
-    min-block-size: 5rem;
+    min-block-size: 6.875rem;
     resize: vertical;
   }
   /* The browser draws the calendar and clock glyphs in its own colour, which on a
@@ -3981,9 +4158,9 @@
     min-inline-size: 0;
     gap: var(--admin-gap);
     padding: var(--admin-gap);
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
   [data-ui="card-head"] {
@@ -4031,9 +4208,9 @@
     min-inline-size: 0;
     gap: var(--admin-gap-xs);
     padding: var(--admin-gap);
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
   }
   [data-ui="card-grid"]:has(> [data-ui="metric"]) {
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
@@ -4127,9 +4304,9 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     list-style: none;
   }
   [data-ui="record-row"] + [data-ui="record-row"] {
@@ -4468,5 +4645,4 @@
       white-space: nowrap;
     }
   }
-
 }

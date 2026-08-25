@@ -21,9 +21,11 @@ flowchart LR
   kit --> page["adminPage() response"]
 ```
 
-Backend companions normally contain `index.ts`, `routes.ts`, `screens.tsx`, `menus.ts`, and optional
-`islands.ts` plus client assets. Their manifest depends on the domain and `backend`; it may declare
-assets, styles, routes, menus, messages, islands, joints, and fills.
+Backend companions normally contain `index.ts`, `routes.ts`, `screens.tsx` or a `screens/` directory,
+`menus.ts`, and optional `islands.ts` plus client assets. Use a `screens/` directory when list, detail,
+edit, and secondary record views have independent responsibilities; export their public entry points
+from `screens/index.ts`. Their manifest depends on the domain and `backend`; it may declare assets,
+styles, routes, menus, messages, islands, joints, and fills.
 
 ## Route responsibilities
 
@@ -79,6 +81,24 @@ Prefer PascalCase exports in TSX where available.
 Keep list state in the URL: search terms, filters, grouping, page, view, visible columns, archived state,
 and locale should survive a copied link. Reuse the backend paging and search helpers instead of creating
 a module-local query-string convention.
+
+### Record workspace layout
+
+Use `RecordWorkspace` for a deep record or edit screen. The shared layout owns the hierarchy rather
+than each module rebuilding it:
+
+- breadcrumbs, identity, record actions, and summary facts span the complete workspace;
+- the action controller occupies the upper-right of the identity header and wraps below the identity on
+  narrow screens;
+- tabs remain between the record summary and the active body;
+- an optional aside starts beside the body, not beside the breadcrumbs or identity header, and follows
+  the body on narrow screens.
+
+Pass an explicit three-level breadcrumb trail when the module has a catalogue or directory level. Older
+screens receive a stable fallback from `kicker` and `title`. For an edit form whose submit action belongs
+in the record header, set `RecordForm.submitPlacement` to `external` and place a button associated through
+its `form` attribute in `RecordWorkspace.controller`. This keeps native form submission and validation
+while avoiding a duplicate submit row inside the form card.
 
 ## Forms and validation
 

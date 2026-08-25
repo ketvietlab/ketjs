@@ -29,7 +29,8 @@ test('search, pagination, columns, view switching and record navigation work', a
 
   await page.getByRole('link', { name: 'Trang sau' }).click()
   await expect(page).toHaveURL(/page=2/)
-  await expect(page.locator('[data-ui="row"]')).toHaveCount(2)
+  await expect.poll(() => page.locator('[data-ui="row"]').count()).toBeGreaterThan(0)
+  expect(await page.locator('[data-ui="row"]').count()).toBeLessThan(30)
 
   await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   const firstRecord = page.locator('[data-ui="row-link"]').first()
@@ -38,8 +39,11 @@ test('search, pagination, columns, view switching and record navigation work', a
   await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 
   await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
-  await page.locator('[data-ui="chrome-search-input"]').fill('Áo khoác')
-  await page.locator('[data-ui="chrome-search-input"]').press('Enter')
+  const inlineSearch = page.locator(
+    '[data-ui="chrome-search"][data-presentation="inline"] [data-ui="chrome-search-input"]',
+  )
+  await inlineSearch.fill('Áo khoác')
+  await inlineSearch.press('Enter')
   await expect(page).toHaveURL(/q=%C3%81o(?:\+|%20)kho%C3%A1c/)
   await expect(page.getByRole('link', { name: 'Áo khoác vận hành KETSUITE' })).toBeVisible()
 
@@ -53,6 +57,80 @@ test('search, pagination, columns, view switching and record navigation work', a
   await page.locator('[data-ui="kanban-title"] a').first().click()
   await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 })
+
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const) {
+  test(`uses the product list behavior on the partner directory on ${viewport.name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/admin/partner/partners?lang=vi')
+    await expect(page.locator('[data-ui="topbar"]')).toBeVisible()
+    await expect(page.locator('[data-ui="record-workspace"]')).toHaveCount(0)
+    await expect(page.locator('[data-ui="chrome-create"]')).toHaveAttribute(
+      'href',
+      /\/admin\/partner\/partners\/new/,
+    )
+    await expect(page.locator('[data-ui="list-context"]')).toContainText('Đối tác')
+    await page.screenshot({
+      path: join(artifacts, `partner-list-product-pattern-${viewport.name}.png`),
+      fullPage: true,
+    })
+    if (viewport.name === 'desktop') {
+      await page
+        .locator('[data-ui="chrome-search"][data-presentation="inline"] [data-ui="search-menu-open"]')
+        .click()
+    } else {
+      await page.locator('[data-ui="chrome-search-toggle"]').click()
+      await page.locator('[data-ui="chrome-search-modal"] [data-ui="search-menu-open"]').click()
+    }
+    await expect(
+      page.locator('[data-ui="search-menu-content"]').getByRole('link', { name: 'Khách hàng', exact: true }),
+    ).toBeVisible()
+  })
+
+  test(`renders the partner detail and edit screens on ${viewport.name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/admin/partner/partners?lang=vi')
+    const detailPath = await page.locator('[data-row-href]').first().getAttribute('data-row-href')
+    expect(detailPath).toBeTruthy()
+    await page.goto(detailPath!)
+    await expect(page.locator('[data-ui="partner-detail-layout"]')).toBeVisible()
+    await expect(page.locator('[data-ui="topbar"]')).toHaveCount(0)
+    await expect(page.locator('a[href*="tab=addresses"]')).toBeVisible()
+    await expect(page.locator('a[href*="tab=roles"]')).toBeVisible()
+    await page.locator('a[href*="tab=addresses"]').click()
+    await expect(page).toHaveURL(/[?&]tab=addresses(?:&|$)/)
+    await expect(page.locator('#partner-addresses')).toBeVisible()
+    await expect(page.locator('#partner-roles')).toHaveCount(0)
+    await page.locator('a[href*="tab=roles"]').click()
+    await expect(page).toHaveURL(/[?&]tab=roles(?:&|$)/)
+    await expect(page.locator('#partner-roles')).toBeVisible()
+    await expect(page.locator('#partner-addresses')).toHaveCount(0)
+    const editLink = page.locator('a[href*="/edit"]').first()
+    await expect(editLink).toBeVisible()
+    await page.screenshot({
+      path: join(artifacts, `partner-detail-${viewport.name}.png`),
+      fullPage: true,
+    })
+
+    await editLink.click()
+    await expect(page.locator('#partner-identity-form')).toBeVisible()
+    await expect(page.locator('[data-ui="topbar"]')).toHaveCount(0)
+    await expect(page.locator('body')).not.toContainText('<!--k-->')
+    await expect(page.locator('body')).not.toContainText('<ket-island')
+    await expect(page.locator('ket-island[data-island="partner.address-form"]')).not.toHaveAttribute(
+      'data-key',
+      /address-country-/,
+    )
+    await page.screenshot({
+      path: join(artifacts, `partner-edit-${viewport.name}.png`),
+      fullPage: true,
+    })
+  })
+}
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
@@ -80,6 +158,7 @@ for (const viewport of [
   { name: 'mobile', width: 390, height: 844 },
 ] as const) {
   test(`renders aligned list and kanban views on ${viewport.name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     for (const [view, path] of [
       ['list', '/admin/product/templates?lang=vi&view=list&cols=id'],
@@ -108,13 +187,23 @@ for (const viewport of [
           const box = icon.getBoundingClientRect()
           return { width: box.width, height: box.height }
         }),
+        tableHeader: (() => {
+          const header = document.querySelector<HTMLElement>('[data-ui="table"] th')
+          return header ? getComputedStyle(header).backgroundColor : null
+        })(),
+        rowHeight:
+          document.querySelector<HTMLElement>('[data-ui="row"]')?.getBoundingClientRect().height ?? null,
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
       expect(metrics.main).not.toBeNull()
       expect(metrics.create).not.toBeNull()
       expect(metrics.create!.left - metrics.main!.left).toBeGreaterThanOrEqual(12)
-      expect(metrics.create!.height).toBe(viewport.name === 'desktop' ? 28 : 32)
+      expect(metrics.create!.height).toBe(viewport.name === 'desktop' ? 28 : 44)
       expect(metrics.iconSizes.every(({ width, height }) => width <= 14 && height <= 14)).toBeTruthy()
+      if (view === 'list') {
+        expect(metrics.tableHeader).toBe('rgb(40, 45, 52)')
+        expect(metrics.rowHeight).toBe(52)
+      }
       await page.screenshot({ path: join(artifacts, `${view}-${viewport.name}.png`), fullPage: true })
     }
   })

@@ -800,6 +800,24 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   )
 })
 
+test('record workspace: breadcrumbs and actions share the global record header', () => {
+  const html = renderToString(
+    recordWorkspace({
+      kicker: 'Products',
+      title: 'Linen shirt',
+      imageFallback: icon('package'),
+      controller: button({ label: 'Save', type: 'submit', form: 'product-form', variant: 'primary' }),
+      body: surface({ body: 'Product form' }),
+    }),
+  )
+
+  assert.match(
+    html,
+    /data-ui="record-top"[\s\S]*data-ui="record-header"[\s\S]*data-ui="breadcrumbs"[\s\S]*Products[\s\S]*Linen shirt[\s\S]*data-ui="record-controller"[\s\S]*form="product-form"/,
+  )
+  assert.doesNotMatch(html, /data-ui="record-navigation"[\s\S]*data-ui="record-controller"/)
+})
+
 test('record workspace: floating form controls can extend beyond the sheet', () => {
   const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
   assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
