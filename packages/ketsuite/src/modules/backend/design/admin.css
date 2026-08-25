@@ -885,6 +885,44 @@
 
   /* ── Kanban ───────────────────────────────────────────────────────────────── */
 
+  [data-ui="progress"] {
+    display: inline-grid;
+    gap: 0.2rem;
+    min-inline-size: 4rem;
+    inline-size: 100%;
+    max-inline-size: 10rem;
+  }
+
+  /* A record the question does not apply to draws nothing, not an empty bar. */
+  [data-ui="progress"][data-empty="true"] {
+    display: none;
+  }
+
+  [data-ui="progress-label"] {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--admin-ink-muted);
+  }
+
+  [data-ui="progress-track"] {
+    display: block;
+    block-size: 0.3rem;
+    border-radius: 999px;
+    background: var(--admin-surface-subtle);
+    overflow: hidden;
+  }
+
+  [data-ui="progress-fill"] {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background: var(--admin-accent, currentColor);
+  }
+
+  [data-ui="progress"][data-complete="true"] [data-ui="progress-fill"] {
+    background: var(--admin-success-icon, var(--admin-accent, currentColor));
+  }
+
   [data-ui="kanban"] {
     display: grid;
     gap: var(--admin-gap-sm);

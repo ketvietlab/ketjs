@@ -9,6 +9,7 @@ import {
   KanbanGrid,
   linkButton,
   NavGroup,
+  Progress,
   RecordActions,
   RecordForm,
   Section,
@@ -293,6 +294,21 @@ export const issuesScreen = (
                 kind: 'date',
                 cell: (row) => when(row.dueDate),
               },
+              {
+                key: 'progress',
+                label: _('flow_backend.field.progress'),
+                cell: (row) => (
+                  <Progress
+                    value={row.progress == null ? null : Number(row.progress)}
+                    label={_('flow_backend.field.progress')}
+                    text={
+                      row.progress == null
+                        ? null
+                        : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+                    }
+                  />
+                ),
+              },
             ],
           })
         : empty(_),
@@ -362,6 +378,21 @@ export const myWorkScreen = (
                 label: _('flow_backend.field.dueDate'),
                 kind: 'date',
                 cell: (row) => when(row.dueDate),
+              },
+              {
+                key: 'progress',
+                label: _('flow_backend.field.progress'),
+                cell: (row) => (
+                  <Progress
+                    value={row.progress == null ? null : Number(row.progress)}
+                    label={_('flow_backend.field.progress')}
+                    text={
+                      row.progress == null
+                        ? null
+                        : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+                    }
+                  />
+                ),
               },
             ],
           })
@@ -478,6 +509,13 @@ export const issueDetailScreen = (
         <Section title={_('flow_backend.issue.description')} body={options.editor} />,
         <Section
           title={_('flow_backend.subtasks.title')}
+          actions={
+            <Progress
+              value={row.progress == null ? null : Number(row.progress)}
+              label={_('flow_backend.field.progress')}
+              text={`${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`}
+            />
+          }
           description={
             row.parentIssueId
               ? `${_('flow_backend.subtasks.parent')}: ${String(row.parentTitle ?? row.parentIssueId)}`
