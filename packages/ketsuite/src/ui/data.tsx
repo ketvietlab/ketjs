@@ -18,7 +18,50 @@ export const HOOKS = [
   'record-title',
   'record-summary',
   'record-value',
+  'progress',
+  'progress-track',
+  'progress-fill',
+  'progress-label',
 ] as const
+
+/**
+ * How far along something is: a bar and the number beside it.
+ *
+ * `value` is a percentage, and `null` is not zero — it means the question does
+ * not apply to this record, and the bar is not drawn at all. An empty bar
+ * against a record nobody has broken down reports "none of it is done" while
+ * meaning "there is nothing to count", and a column full of those reads as a
+ * team that has stopped working.
+ *
+ * `<progress>` would have been the honest element, but it cannot be styled to
+ * a consistent height and radius across browsers without being rebuilt anyway,
+ * so this carries the ARIA the native one would have given.
+ */
+export const progressBar = (o: {
+  value: number | null
+  label?: string | null
+  /** Shown in the label instead of the percentage, e.g. "3/5". */
+  text?: string | null
+}): TemplateResult => {
+  if (o.value == null) return <span data-ui="progress" data-empty="true" />
+  const value = Math.max(0, Math.min(100, Math.round(o.value)))
+  return (
+    <span
+      data-ui="progress"
+      role="progressbar"
+      aria-valuenow={String(value)}
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-label={o.label ?? undefined}
+      data-complete={String(value === 100)}
+    >
+      <span data-ui="progress-label">{o.text ?? `${value}%`}</span>
+      <span data-ui="progress-track">
+        <span data-ui="progress-fill" style={`inline-size:${value}%`} />
+      </span>
+    </span>
+  )
+}
 
 export const kanbanCard = (o: {
   key: string

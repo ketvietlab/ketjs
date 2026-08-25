@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { encodeListState, json, parseListState, streamed, table, text, withHeaders } from '@ketvietlab/ketjs'
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { ISSUE_PRIORITIES } from '../flow/types.ts'
+import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -22,19 +22,20 @@ import {
   issueDetailScreen,
   issuesScreen,
   mapScreen,
-  myWorkScreen,
+  crossProjectScreen,
   projectsScreen,
   settingsScreen,
   sprintsScreen,
   TEMPLATE_OPTIONS,
-} from './screens.tsx'
-import type { IssueDetailControls } from './screens.tsx'
+} from './screens/index.ts'
+import type { IssueDetailControls } from './screens/index.ts'
 import {
   applySnapshot,
   currentGeneration,
   getOrCreateLive,
   isLive,
   previewTextOf,
+  publishPresence,
   publishUpdate,
   rollGeneration,
   snapshotBytes,
@@ -50,6 +51,26 @@ const COLUMN_TEMPLATES: Record<string, string[]> = {
   simple: ['To do', 'Done'],
   kanban: ['To do', 'In Progress', 'Done'],
   scrum: ['Backlog', 'To do', 'In Progress', 'Review', 'Done'],
+}
+
+/**
+ * The kinds of work each preset expects, seeded beside its columns.
+ *
+ * A process is a pair — how work moves and what work is — and a team that
+ * picks "Scrum" means Story and Spike as much as it means a Review column.
+ * These are a starting point and nothing more: types are edited in project
+ * settings afterwards, exactly like the columns above, and the code never
+ * reads one of these names back.
+ *
+ * "Custom" gets a single Task, because a board with no type at all cannot
+ * offer the field, and choosing to name your own columns is not a statement
+ * about issue types.
+ */
+const TYPE_TEMPLATES: Record<string, string[]> = {
+  simple: ['Task'],
+  kanban: ['Task', 'Bug'],
+  scrum: ['Story', 'Task', 'Bug', 'Spike'],
+  custom: ['Task'],
 }
 
 const slugify = (name: string): string =>
@@ -99,8 +120,53 @@ const pager = (url: URL, state: ListState, rows: number, total: number) => {
   }
 }
 
-const issueFields = (_: Translator, row: AnyRow, controls: IssueDetailControls): FormField[] => [
+/** A control shaped by what the field says it holds. */
+const customFieldControl = (field: AnyRow): FormField => {
+  const name = `field:${String(field.code)}`
+  const label = String(field.name)
+  const value = field.value == null ? '' : String(field.value)
+  const kind = String(field.kind)
+  if (kind === 'select') {
+    const options = ((field.config as { options?: AnyRow[] } | null)?.options ?? []).map((option) => ({
+      value: String(option.code),
+      label: String(option.label ?? option.code),
+    }))
+    // A blank first entry, because a field somebody has not answered is not the
+    // same as one answered with whatever happened to be first.
+    return { name, label, type: 'select', value, options: [{ value: '', label: '\u2014' }, ...options] }
+  }
+  if (kind === 'bool') return { name, label, type: 'checkbox', value: value === 'true' }
+  if (kind === 'number') return { name, label, type: 'number', value }
+  if (kind === 'date') return { name, label, type: 'date', value }
+  if (kind === 'url') return { name, label, type: 'text', value, placeholder: 'https://' }
+  return { name, label, value }
+}
+
+const issueFields = (
+  _: Translator,
+  row: AnyRow,
+  controls: IssueDetailControls,
+  types: AnyRow[] = [],
+): FormField[] => [
   { name: 'title', label: _('flow_backend.field.title'), value: String(row.title ?? ''), required: true },
+  // A native select, like the column and priority beside it: the vocabulary is
+  // small, it is the project's own, and a dialog to choose between four values
+  // is worse than the four values. A project with no types offers no field at
+  // all rather than an empty one.
+  ...(types.length
+    ? [
+        {
+          name: 'typeId',
+          label: _('flow_backend.field.type'),
+          type: 'select' as const,
+          value: String(row.typeId ?? ''),
+          options: [
+            { value: '', label: '\u2014' },
+            ...types.map((type) => ({ value: String(type.id), label: String(type.name) })),
+          ],
+        },
+      ]
+    : []),
   {
     name: 'priority',
     label: _('flow_backend.field.priority'),
@@ -114,6 +180,12 @@ const issueFields = (_: Translator, row: AnyRow, controls: IssueDetailControls):
   { name: 'assigneeUserId', label: _('flow_backend.field.assignee'), control: controls.assignee },
   { name: 'epicId', label: _('flow_backend.field.epic'), control: controls.epic },
   { name: 'tagIds', label: _('flow_backend.field.tags'), control: controls.tags },
+  {
+    name: 'startDate',
+    label: _('flow_backend.field.startDate'),
+    type: 'date',
+    value: String(row.startDate ?? ''),
+  },
   { name: 'dueDate', label: _('flow_backend.field.dueDate'), type: 'date', value: String(row.dueDate ?? '') },
   {
     name: 'estimate',
@@ -121,6 +193,9 @@ const issueFields = (_: Translator, row: AnyRow, controls: IssueDetailControls):
     type: 'decimal',
     value: row.estimate != null ? String(row.estimate) : '',
   },
+  // Whatever this project added to its own issues, after everything Flow
+  // itself asks about.
+  ...((row.fields as AnyRow[] | undefined) ?? []).map(customFieldControl),
 ]
 
 const encoder = new TextEncoder()
@@ -220,7 +295,14 @@ async function hydrate(
 ): Promise<boolean> {
   const { isNew } = getOrCreateLive(companyId, issueId)
   if (!isNew) return true
-  const resolved = (await ctx.call(
+  // Unchecked, like `commitContent` in `flatten` below and for the same
+  // reason: these are `exposure: 'internal'` helpers of a route that has
+  // already run its own permission check, and `ctx.call` would ask for a
+  // second grant nobody has any reason to hold. It used to be a checked call,
+  // and it worked only because the line above usually returns first — a
+  // reader-role viewer opening an issue this process had not already loaded
+  // got `E_FN_NOT_PERMITTED` for a function they never named.
+  const resolved = (await ctx.callUnchecked(
     'flow_backend.sync.resolveSnapshotKey',
     { attachmentId: contentAttachmentId },
     url,
@@ -263,6 +345,71 @@ async function flatten(
   await rollGeneration(companyId, issueId)
 }
 
+/**
+ * A list of issues that is not on a board.
+ *
+ * `mine` is the only thing that differs between the two, so it is the only
+ * thing this takes: a second copy of the search/filter/group/pager wiring is a
+ * second place for them to drift apart.
+ */
+const crossProjectIssues =
+  (options: { mine: boolean; title: string }) =>
+  (ctx: ServeContext): Route =>
+  async (url, req) => {
+    if (req.method !== 'GET') return text('GET', { status: 405 })
+    const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
+    const state = parseListState(spec, url).state
+    const timezone = 'UTC'
+    const grouped = state.groupBy.length > 0
+    const cursor = (state.page - 1) * LIST_PAGE_SIZE
+    const scoped = options.mine ? { mine: true } : {}
+    const result = (await ctx.call(
+      'flow.issue.list',
+      {
+        ...scoped,
+        listState: state,
+        timezone,
+        cursor: String(cursor),
+        limit: grouped ? 1 : LIST_PAGE_SIZE,
+      },
+      url,
+      req,
+    )) as AnyRow
+    const groups = grouped
+      ? await loadListGroups(ctx, url, req, state, timezone, {
+          groupFunction: 'flow.issue.group',
+          listFunction: 'flow.issue.list',
+          listArgs: scoped,
+          label: (_field, value) => String(value ?? '\u2014'),
+        })
+      : []
+    return adminPage(ctx, url, req, {
+      title: options.title,
+      body: (_, frame) => {
+        frame.chrome = {
+          search: {
+            name: 'q',
+            value: state.q ?? '',
+            placeholder: _('flow_backend.search.issues'),
+            keep: keepForListSearch(url),
+            facets: listFacets(_, url, state, spec),
+            menus: listMenus(_, url, state, spec),
+          },
+          pager: grouped
+            ? null
+            : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+        }
+        return crossProjectScreen(
+          _,
+          frame,
+          _(options.title),
+          grouped ? [] : ((result.rows as AnyRow[]) ?? []),
+          groups,
+        )
+      },
+    })
+  }
+
 export const routes: Record<string, RouteEntry> = {
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
@@ -278,9 +425,16 @@ export const routes: Record<string, RouteEntry> = {
       if (!scope.company) return text('company scope required', { status: 400 })
       if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
         return text('stored description could not be read', { status: 503 })
+      // Who the caller is, so a client knows which presence frames are its own
+      // before it can receive any. Learning that from its first announce
+      // instead left a window in which its own second tab read as a stranger.
+      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
+        id: string | null
+      }
       return json({
         snapshot: Buffer.from(snapshotBytes(scope.company, issueId) ?? new Uint8Array()).toString('base64'),
         topic: topicFor(scope.company, issueId, currentGeneration(scope.company, issueId)),
+        viewerId: viewer.id,
       })
     },
 
@@ -363,6 +517,47 @@ export const routes: Record<string, RouteEntry> = {
     },
 
   /**
+   * "I am here, on this block" — relayed to everyone else in the document.
+   *
+   * Gated on reading the issue, not on writing its description: watching
+   * somebody type is looking, and a reviewer with read access showing up in
+   * the room is the point. Nothing here touches the document.
+   *
+   * The name is resolved from the session rather than read out of the body.
+   * A client that could name itself could sit in the room as somebody else,
+   * and everyone else's screen would agree with it.
+   */
+  '/admin/flow/issues/{id}/presence':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = onlyPost(req)
+      if (refused) return refused
+      const issueId = String(params.id)
+      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      const scope = await ctx.scopeOf(url, req)
+      if (!scope.company) return text('company scope required', { status: 400 })
+      let body: Record<string, unknown>
+      try {
+        body = await readJsonBody(req)
+      } catch {
+        return text('bad request', { status: 400 })
+      }
+      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
+        id: string | null
+        name: string | null
+      }
+      if (!viewer.id) return json({ id: null })
+      const index = Number(body.index)
+      await publishPresence(scope.company, issueId, {
+        id: viewer.id,
+        name: viewer.name || viewer.id,
+        index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0,
+        gone: body.gone === true,
+      })
+      return json({ id: viewer.id })
+    },
+
+  /**
    * The explicit "I'm done editing" signal — the client calls this
    * (`navigator.sendBeacon`, so it fires reliably on tab close) instead of
    * relying on the SSE connection's own teardown. Flattening is idempotent,
@@ -421,7 +616,17 @@ export const routes: Record<string, RouteEntry> = {
               priority: form.priority || undefined,
               assigneeUserId: form.assigneeUserId || null,
               epicId: form.epicId || null,
+              typeId: form.typeId || null,
+              // The form names a custom field `field:<code>`, so the posted
+              // keys say which definition each answer belongs to without the
+              // route having to load them first.
+              fields: Object.fromEntries(
+                Object.entries(form)
+                  .filter(([key]) => key.startsWith('field:'))
+                  .map(([key, value]) => [key.slice('field:'.length), value]),
+              ),
               tagIds: form.tagIds ? form.tagIds.split(',').filter(Boolean) : [],
+              startDate: form.startDate || null,
               dueDate: form.dueDate || null,
               estimate: form.estimate || undefined,
               expectedVersion: Number(form.expectedVersion ?? 0),
@@ -523,9 +728,10 @@ export const routes: Record<string, RouteEntry> = {
 
       const issue = (await readable(ctx, url, req, issueId)) as Row | null
       if (!issue) return text('not found', { status: 404 })
-      const [columns, sprints] = await Promise.all([
+      const [columns, sprints, types] = await Promise.all([
         ctx.call('flow.column.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.sprint.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.issueType.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
         issueId,
@@ -577,7 +783,7 @@ export const routes: Record<string, RouteEntry> = {
         active: `/admin/flow/projects/${String(issue.projectId)}/issues`,
         body: (_, frame) =>
           issueDetailScreen(_, frame, issue, {
-            fields: issueFields(_, issue, controls),
+            fields: issueFields(_, issue, controls, types),
             columns,
             sprints,
             controls,
@@ -648,6 +854,27 @@ export const routes: Record<string, RouteEntry> = {
               // so here rather than landing on a board missing a column.
               if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
             }
+            for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
+              TYPE_TEMPLATES.simple)!.entries()) {
+              // Unlike a column, a project with no type is still a working
+              // board — the field is simply not offered — so a type that will
+              // not save is not worth diverting the whole creation for.
+              await ctx.call(
+                'flow.issueType.save',
+                {
+                  values: {
+                    id: randomUUID(),
+                    projectId: id,
+                    code: slugify(name),
+                    name,
+                    sequence: (index + 1) * 10,
+                  },
+                  idempotencyKey: randomUUID(),
+                },
+                url,
+                req,
+              )
+            }
             return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
           }
           errors = errorsOf(result, _)
@@ -689,6 +916,29 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
+  /**
+   * The board, without saying which project in the path.
+   *
+   * A board is one project's — `flow.Column` belongs to a project, so there is
+   * nothing for a board spanning them to group by. This resolves the reader's
+   * own last board and sends them there; the first time, when there is nothing
+   * remembered and nothing to guess from, it sends them to the project list to
+   * choose rather than picking one for them.
+   */
+  '/admin/flow/board':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const scope = (await ctx.call('flow.board.scope', {}, url, req)) as { projectId?: string | null }
+      if (scope.projectId)
+        return seeOther(inLocale(url, `/admin/flow/projects/${String(scope.projectId)}/board`))
+      const projects = (await ctx.call('flow.project.list', { limit: 2 }, url, req)) as AnyRow[]
+      // One project is not a choice, so it is not worth making somebody make it.
+      if (projects.length === 1)
+        return seeOther(inLocale(url, `/admin/flow/projects/${String(projects[0]!.id)}/board`))
+      return seeOther(inLocale(url, '/admin/flow/projects'))
+    },
+
   '/admin/flow/projects/{id}/board':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -696,6 +946,10 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
+      // Opening a board is what says which one you meant. `/admin/flow/board`
+      // reads this back, so the global entry lands where you last were rather
+      // than asking again every time.
+      await ctx.call('flow.board.remember', { projectId }, url, req).catch(() => null)
       const columns = (await ctx.call('flow.column.list', { projectId }, url, req)) as AnyRow[]
       const BOARD_COLUMN = 40
       const pages = await Promise.all(
@@ -783,55 +1037,16 @@ export const routes: Record<string, RouteEntry> = {
    * way `activity.listMy` settles it: a screen has no cheap way to learn who
    * is signed in.
    */
-  '/admin/flow/mine':
-    (ctx: ServeContext): Route =>
-    async (url, req) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
-      const state = parseListState(spec, url).state
-      const timezone = 'UTC'
-      const grouped = state.groupBy.length > 0
-      const cursor = (state.page - 1) * LIST_PAGE_SIZE
-      const result = (await ctx.call(
-        'flow.issue.list',
-        {
-          mine: true,
-          listState: state,
-          timezone,
-          cursor: String(cursor),
-          limit: grouped ? 1 : LIST_PAGE_SIZE,
-        },
-        url,
-        req,
-      )) as AnyRow
-      const groups = grouped
-        ? await loadListGroups(ctx, url, req, state, timezone, {
-            groupFunction: 'flow.issue.group',
-            listFunction: 'flow.issue.list',
-            listArgs: { mine: true },
-            label: (_field, value) => String(value ?? '\u2014'),
-          })
-        : []
-      return adminPage(ctx, url, req, {
-        title: 'flow_backend.mine.title',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: state.q ?? '',
-              placeholder: _('flow_backend.search.issues'),
-              keep: keepForListSearch(url),
-              facets: listFacets(_, url, state, spec),
-              menus: listMenus(_, url, state, spec),
-            },
-            pager: grouped
-              ? null
-              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
-          }
-          return myWorkScreen(_, frame, grouped ? [] : ((result.rows as AnyRow[]) ?? []), groups)
-        },
-      })
-    },
+  '/admin/flow/mine': crossProjectIssues({ mine: true, title: 'flow_backend.mine.title' }),
+
+  /**
+   * Every issue, whoever it belongs to.
+   *
+   * The same route body as `/admin/flow/mine` with one argument dropped —
+   * search, filters, grouping and the pager all come from the same apparatus,
+   * so the two cannot answer differently about the same question.
+   */
+  '/admin/flow/issues': crossProjectIssues({ mine: false, title: 'flow_backend.issues.allTitle' }),
 
   '/admin/flow/projects/{id}/issues':
     (ctx: ServeContext): Route =>
@@ -1153,6 +1368,8 @@ export const routes: Record<string, RouteEntry> = {
       // Two independent halves on one screen, so two error sinks: a duplicate
       // tag name reported above the columns form reads as a broken column.
       let columnErrors: string[] = []
+      let typeErrors: string[] = []
+      let fieldErrors: string[] = []
       let tagErrors: string[] = []
       const endpoint = `/admin/flow/projects/${projectId}/settings`
       if (req.method === 'POST') {
@@ -1164,6 +1381,63 @@ export const routes: Record<string, RouteEntry> = {
           const archived = (await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(archived, _)
+        } else if (form.action === 'archiveType') {
+          const archived = (await ctx.call(
+            'flow.issueType.archive',
+            { id: form.id ?? '' },
+            url,
+            req,
+          )) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          typeErrors = errorsOf(archived, _)
+        } else if (form.action === 'saveType') {
+          const result = (await ctx.call(
+            'flow.issueType.save',
+            {
+              values: {
+                id: form.id || randomUUID(),
+                projectId,
+                code: form.code || slugify(form.name ?? ''),
+                name: form.name ?? '',
+                sequence: Number(form.sequence ?? 10),
+              },
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          typeErrors = errorsOf(result, _)
+        } else if (form.action === 'archiveField') {
+          const archived = (await ctx.call('flow.field.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          fieldErrors = errorsOf(archived, _)
+        } else if (form.action === 'saveField') {
+          // Options arrive as one line of text, the same way the project
+          // wizard takes custom column names: a list edited as a unit.
+          const labels = (form.options ?? '')
+            .split(',')
+            .map((label) => label.trim())
+            .filter(Boolean)
+          const result = (await ctx.call(
+            'flow.field.save',
+            {
+              id: form.id || randomUUID(),
+              projectId,
+              code: form.code || slugify(form.name ?? ''),
+              name: form.name ?? '',
+              kind: form.kind || 'text',
+              config: labels.length
+                ? { options: labels.map((label) => ({ code: slugify(label), label })) }
+                : null,
+              sequence: Number(form.sequence ?? 10),
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          fieldErrors = errorsOf(result, _)
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
@@ -1198,13 +1472,19 @@ export const routes: Record<string, RouteEntry> = {
           tagErrors = errorsOf(result, _)
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [columns, tags] = await Promise.all([
+      const [columns, types, fields, tags] = await Promise.all([
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.issueType.list', { projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.field.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.tag.list', {}, url, req) as Promise<AnyRow[]>,
       ])
       const editColumn = url.searchParams.get('editColumnId')
+      const editType = url.searchParams.get('editTypeId')
+      const editField = url.searchParams.get('editFieldId')
       const editTag = url.searchParams.get('editTagId')
       const editingColumn = editColumn ? columns.find((row) => String(row.id) === editColumn) : undefined
+      const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
+      const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
       return adminPage(ctx, url, req, {
         title: String(project.name),
@@ -1251,6 +1531,60 @@ export const routes: Record<string, RouteEntry> = {
             ],
             editingTagId: editingTag ? String(editingTag.id) : undefined,
             columnErrors,
+            types,
+            editingTypeId: editingType ? String(editingType.id) : undefined,
+            typeFields: [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingType?.name ?? ''),
+              },
+              { name: 'code', label: _('flow_backend.field.code'), value: String(editingType?.code ?? '') },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: String(editingType?.sequence ?? 10),
+              },
+            ],
+            typeErrors,
+            fields,
+            editingFieldId: editingField ? String(editingField.id) : undefined,
+            fieldFields: [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingField?.name ?? ''),
+              },
+              { name: 'code', label: _('flow_backend.field.code'), value: String(editingField?.code ?? '') },
+              {
+                name: 'kind',
+                label: _('flow_backend.field.kind'),
+                type: 'select',
+                value: String(editingField?.kind ?? 'text'),
+                options: FIELD_KINDS.map((kind) => ({
+                  value: kind,
+                  label: _(`flow_backend.kind.${kind}`),
+                })),
+              },
+              {
+                name: 'options',
+                label: _('flow_backend.field.options'),
+                help: _('flow_backend.field.optionsHint'),
+                value: (((editingField?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
+                  .map((option) => String(option.label ?? option.code))
+                  .join(', '),
+              },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: String(editingField?.sequence ?? 10),
+              },
+            ],
+            fieldErrors,
             tagErrors,
           }),
       })

@@ -24,6 +24,7 @@ import {
   dataTable,
   datePicker,
   definitionList,
+  progressBar,
   emptyState,
   errorState,
   formCluster,
@@ -431,6 +432,9 @@ const everything = [
   person('Nguyễn Quản Trị'),
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
   pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // How far along a record is. A value, because the empty case draws nothing at
+  // all — which is the point of it, and would show none of the parts.
+  progressBar({ value: 62, label: 'Tiến độ' }),
   // The token list, which no admin screen renders any more now that the design-token
   // dump has left /admin/settings. Modules still reach for it on record detail.
   definitionList({
