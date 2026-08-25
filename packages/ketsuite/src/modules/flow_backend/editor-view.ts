@@ -24,7 +24,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 // The shell's markup and the document serializer, which belong to the kit and
 // not to a module — see the header of that file, and tools/ui-audit.ts for the
 // rule it answers.
-import { documentHtml, issueEditorShell } from '../../ui/client/flow-editor-view.mjs'
+import { documentHtml, issueEditorShell, presenceHtml } from '../../ui/client/flow-editor-view.mjs'
 
 export type EditorRuntime = {
   html: (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult
@@ -45,6 +45,7 @@ type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'code' | 'bullet' | 'order
 type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: BlockType; checked: boolean }
 type Point = { index: number; offset: number }
 type Span = { start: Point; end: Point }
+type Viewer = { id: string; name: string; index: number; seenAt: number }
 
 const BLOCK_TYPES: readonly BlockType[] = [
   'p',
@@ -78,6 +79,17 @@ const INPUT_RULES: Array<[RegExp, BlockType]> = [
   [/^\[[ xX]?\] $/, 'check'],
   [/^```$/, 'code'],
 ]
+
+/**
+ * How long a viewer stays listed without saying anything.
+ *
+ * Three heartbeats' worth, so one dropped frame does not make somebody blink
+ * out of the room and back.
+ */
+const VIEWER_TTL = 90_000
+const HEARTBEAT_MS = 30_000
+/** A caret moving between blocks is worth announcing; a caret moving is not. */
+const ANNOUNCE_EVERY_MS = 1_000
 
 const REMOTE = Symbol('remote-origin')
 /**
@@ -220,6 +232,18 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   let pending: Span | null = null
   /** The selection the link dialog was opened over, since focusing its input destroys it. */
   let linkSpan: Span | null = null
+  /**
+   * Everyone else with this description open, by user id.
+   *
+   * Kept only here. Presence is who is here *now*, so the moment it were
+   * stored anywhere it would outlive the person — a viewer is remembered
+   * until they stop saying otherwise, and no longer.
+   */
+  const viewers = new Map<string, Viewer>()
+  let selfId = ''
+  let announcedAt = 0
+  let announcedIndex = -1
+  let heartbeat: ReturnType<typeof setInterval> | null = null
 
   const fragment = doc.getXmlFragment('content')
 
@@ -431,9 +455,10 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   function render(keep?: Span | null) {
     if (!container) return
     const span = keep === undefined ? selectionSpan() : keep
-    container.innerHTML = documentHtml(modelOf(), props.lang)
+    container.innerHTML = documentHtml(modelOf(), props.lang, others())
     if (span) restoreSelection(span)
     syncToolbar()
+    renderPresence()
   }
 
   /**
@@ -457,6 +482,89 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
         : span && !isCollapsed(span) && spanHasMark(span, name as MarkName)
       button.setAttribute('aria-pressed', String(active === true))
     }
+  }
+
+  // ---- presence -----------------------------------------------------------
+
+  /** Everyone but you, and only while they are still saying they are here. */
+  function others(): Array<{ id: string; name: string; index: number }> {
+    const now = Date.now()
+    for (const [id, viewer] of viewers) if (now - viewer.seenAt > VIEWER_TTL) viewers.delete(id)
+    return [...viewers.values()]
+      .filter((viewer) => viewer.id !== selfId)
+      .map(({ id, name, index }) => ({ id, name, index }))
+  }
+
+  /** What the room looks like, so a frame that changes nothing costs nothing. */
+  const roomSignature = (): string =>
+    others()
+      .map((viewer) => `${viewer.id}@${viewer.index}`)
+      .sort()
+      .join(',')
+
+  function renderPresence() {
+    const slot = shell?.querySelector('[data-flow-editor-presence]')
+    if (slot) slot.innerHTML = presenceHtml(others(), props.lang)
+  }
+
+  /**
+   * Says where this client's caret is — or, with `gone`, that it is leaving.
+   *
+   * The name is not sent. The route stamps it from the session, because a
+   * frame goes to everyone else in the document and a client that could name
+   * itself could sit in the room under somebody else's name.
+   */
+  async function announce(index: number, gone = false) {
+    announcedAt = Date.now()
+    announcedIndex = gone ? -1 : index
+    const answer = await fetch(`${base}/presence`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ index, gone }),
+    })
+      .then((response) => (response.ok ? (response.json() as Promise<{ id?: string }>) : null))
+      .catch(() => null)
+    if (answer?.id) selfId = answer.id
+  }
+
+  /**
+   * Announce when the caret changes block, and no more often than that.
+   *
+   * A caret moving inside a paragraph tells nobody anything the marker on that
+   * paragraph did not already say, and these frames ride the same topic as the
+   * edits — which is bounded by how often the document flattens, not by how
+   * often anybody types.
+   */
+  function announceCaret() {
+    const span = selectionSpan()
+    if (!span) return
+    const index = span.start.index
+    if (index === announcedIndex && Date.now() - announcedAt < HEARTBEAT_MS) return
+    if (Date.now() - announcedAt < ANNOUNCE_EVERY_MS) return
+    void announce(index)
+  }
+
+  function receivePresence(frame: { id?: string; name?: string; index?: number; gone?: boolean }) {
+    if (!frame.id) return
+    const before = roomSignature()
+    const known = viewers.has(frame.id)
+    if (frame.gone) viewers.delete(frame.id)
+    else
+      viewers.set(frame.id, {
+        id: frame.id,
+        name: String(frame.name ?? frame.id),
+        index: Number(frame.index) || 0,
+        // Stamped on arrival rather than taken from the frame: freshness is
+        // measured against this clock, and the sender's is a different one.
+        seenAt: Date.now(),
+      })
+    // Somebody new only learns who is already here when they next speak, and
+    // an idle room is silent. Answering a stranger is what makes the room
+    // visible to a joiner within a beat instead of within a heartbeat.
+    if (!known && !frame.gone && frame.id !== selfId && Date.now() - announcedAt > ANNOUNCE_EVERY_MS)
+      void announce(selectionSpan()?.start.index ?? 0)
+    if (roomSignature() !== before) render()
   }
 
   // ---- structural edits ---------------------------------------------------
@@ -806,7 +914,12 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   async function resync() {
     const response = await fetch(`${base}/content`).catch(() => null)
     if (!response?.ok) return
-    const { snapshot, topic } = (await response.json()) as { snapshot: string; topic: string }
+    const { snapshot, topic, viewerId } = (await response.json()) as {
+      snapshot: string
+      topic: string
+      viewerId?: string | null
+    }
+    if (viewerId) selfId = viewerId
     Y.applyUpdate(doc, base64ToBytes(snapshot), REMOTE)
     connectLive(topic)
   }
@@ -816,8 +929,12 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     const es = new EventSource(`${base}/live?topic=${encodeURIComponent(topic)}`)
     es.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as { update: string }
-        Y.applyUpdate(doc, base64ToBytes(payload.update), REMOTE)
+        const payload = JSON.parse(event.data) as {
+          update?: string
+          presence?: Record<string, unknown>
+        }
+        if (payload.presence) receivePresence(payload.presence)
+        else if (payload.update) Y.applyUpdate(doc, base64ToBytes(payload.update), REMOTE)
       } catch {
         // A malformed frame is skipped rather than tearing down the
         // connection — the CRDT stays correct either way.
@@ -831,7 +948,10 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
 
   // ---- mount --------------------------------------------------------------
 
-  const onSelectionChange = () => syncToolbar()
+  const onSelectionChange = () => {
+    syncToolbar()
+    announceCaret()
+  }
 
   function wireToolbar(root: HTMLElement) {
     for (const button of Array.from(root.querySelectorAll('[data-flow-editor-mark]')) as HTMLElement[]) {
@@ -930,14 +1050,34 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     })
 
     const response = await fetch(`${base}/content`)
-    const { snapshot, topic } = (await response.json()) as { snapshot: string; topic: string }
+    const { snapshot, topic, viewerId } = (await response.json()) as {
+      snapshot: string
+      topic: string
+      viewerId?: string | null
+    }
+    if (viewerId) selfId = viewerId
     Y.applyUpdate(doc, base64ToBytes(snapshot), REMOTE)
     ensureBlocks()
     render(null)
     connectLive(topic)
 
+    void announce(0)
+    // Only while the tab is actually being looked at: a background tab that
+    // kept announcing would hold its author in the room for as long as the
+    // browser stayed open, and would keep writing frames onto a topic that
+    // only a flatten ever ends.
+    heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') void announce(selectionSpan()?.start.index ?? 0)
+    }, HEARTBEAT_MS)
+
     window.addEventListener('pagehide', () => {
       navigator.sendBeacon?.(`${base}/leave`)
+      // A Blob, because sendBeacon posts text/plain otherwise and the route
+      // reads JSON. Beacons survive the page going away; a fetch does not.
+      navigator.sendBeacon?.(
+        `${base}/presence`,
+        new Blob([JSON.stringify({ index: 0, gone: true })], { type: 'application/json' }),
+      )
     })
   }
 
@@ -945,6 +1085,7 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     view: () => issueEditorShell({ html }, { containerId, lang: props.lang }) as TemplateResult,
     dispose() {
       source?.close()
+      if (heartbeat) clearInterval(heartbeat)
       if (typeof document !== 'undefined') document.removeEventListener('selectionchange', onSelectionChange)
     },
     mount,

@@ -21,6 +21,27 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Who the caller is, for a presence frame to be stamped with.
+   *
+   * The name comes from here rather than from the browser because a presence
+   * frame is broadcast to everyone else in the document: a client that got to
+   * say who it was could sit in a room under somebody else's name and watch
+   * them work. `ctx.actor` is the session's own answer and cannot be asked
+   * for from the route layer, which sees a `Scope` and no user at all.
+   */
+  'sync.viewer': defineFn({
+    input: {},
+    output: { id: 'text?', name: 'text?' },
+    effects: ['read:user.User'],
+    exposure: 'internal',
+    handler: async (ctx) => {
+      if (!ctx.actor) return { id: null, name: null }
+      const found = (await ctx.db.select('user.User', { id: ctx.actor }))[0]
+      return { id: String(ctx.actor), name: found ? String(found.name ?? '') : null }
+    },
+  }),
+
   'sync.commitContent': defineFn({
     input: {
       issueId: 'id',
