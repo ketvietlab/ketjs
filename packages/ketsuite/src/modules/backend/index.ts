@@ -107,6 +107,7 @@ export {
   icon,
   hasIcon,
   definitionList,
+  progressBar,
   code,
   qrCode,
   inline,

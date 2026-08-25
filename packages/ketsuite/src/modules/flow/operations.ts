@@ -120,6 +120,51 @@ async function parentIssueError(
   return null
 }
 
+/**
+ * How far along each issue is, counted from its sub-tasks.
+ *
+ * "Done" is a sub-task sitting in a column with `terminalState` — the concept
+ * models.ts introduced for exactly this kind of question, so that a team whose
+ * workflow is five columns wide gets the same answer as one running three, and
+ * neither has to be called "Done".
+ *
+ * Sub-tasks are the checklist. The description can hold one too, and does, but
+ * that one is prose: nobody can be given an item in it, nothing can be counted
+ * from outside the document, and it is not what this reads.
+ *
+ * Unlimited on purpose, unlike `dependenciesFor` below. The query is already
+ * bounded twice over — by one page of parents, and by sub-tasks being a
+ * relation a person types out by hand — and a cap on a *count* is worse than a
+ * cap on a list: a truncated list looks truncated, while 3/5 that should read
+ * 3/9 just looks wrong.
+ */
+async function progressOf(
+  ctx: Ctx,
+  issueIds: string[],
+): Promise<Map<string, { done: number; total: number }>> {
+  const tally = new Map<string, { done: number; total: number }>()
+  if (!issueIds.length) return tally
+  const I = ctx.table('flow.Issue')
+  const children = await ctx.db.all(
+    from(I).where(inArray(I.parentIssueId, issueIds)).where(eq(I.active, true)),
+  )
+  if (!children.length) return tally
+  const C = ctx.table('flow.Column')
+  const columnIds = [...new Set(children.map((child) => String(child.columnId)))]
+  const columns = await ctx.db.all(from(C).where(inArray(C.id, columnIds)))
+  const terminal = new Set(
+    columns.filter((column) => column.terminalState).map((column) => String(column.id)),
+  )
+  for (const child of children) {
+    const key = String(child.parentIssueId)
+    const at = tally.get(key) ?? { done: 0, total: 0 }
+    at.total += 1
+    if (terminal.has(String(child.columnId))) at.done += 1
+    tally.set(key, at)
+  }
+  return tally
+}
+
 export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const ids = (values: unknown[]): string[] => [...new Set(values.filter(Boolean).map(String))]
   const columnIds = ids(rows.map((row) => row.columnId))
@@ -129,7 +174,7 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   // The project too, for the one list that spans them: an issue read outside
   // its own board has to say which board it came from.
   const projectIds = ids(rows.map((row) => row.projectId))
-  const [columns, epics, sprints, users, projects] = await Promise.all([
+  const [columns, epics, sprints, users, projects, progress] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -145,6 +190,10 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     projectIds.length
       ? ctx.db.all(from(ctx.table('flow.Project')).where(inArray(ctx.table('flow.Project').id, projectIds)))
       : [],
+    progressOf(
+      ctx,
+      rows.map((row) => String(row.id)),
+    ),
   ])
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const columnBy = by(columns)
@@ -152,16 +201,28 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const sprintBy = by(sprints)
   const userBy = by(users)
   const projectBy = by(projects)
-  return rows.map((row) => ({
-    ...row,
-    projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
-    columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
-    epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
-    sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
-    assigneeName: row.assigneeUserId
-      ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
-      : null,
-  }))
+  return rows.map((row) => {
+    const counted = progress.get(String(row.id))
+    return {
+      ...row,
+      subtaskTotal: counted?.total ?? 0,
+      subtaskDone: counted?.done ?? 0,
+      /**
+       * Null, not zero, when an issue has no sub-tasks. "Nothing to do" and
+       * "nothing done yet" are different facts, and a column of 0% against every
+       * issue nobody had broken down would report the second while meaning the
+       * first.
+       */
+      progress: counted ? Math.round((counted.done * 100) / counted.total) : null,
+      projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
+      columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
+      epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
+      sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
+      assigneeName: row.assigneeUserId
+        ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
+        : null,
+    }
+  })
 }
 
 const listStateOf = (value: unknown): ListState | null =>

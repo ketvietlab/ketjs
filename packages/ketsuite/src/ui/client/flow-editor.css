@@ -37,7 +37,7 @@
 
   /* A mark button reports the selection it is looking at, not the last thing clicked. */
   [data-ui="flow-editor-mark"][aria-pressed="true"] {
-    background: var(--admin-accent-soft, var(--admin-surface-sunken));
+    background: var(--admin-accent-soft, var(--admin-surface-subtle));
     border-color: var(--admin-accent, var(--admin-line));
   }
 
@@ -86,13 +86,13 @@
   [data-block="quote"] {
     padding-inline-start: var(--admin-gap-md);
     border-inline-start: 3px solid var(--admin-line);
-    color: var(--admin-muted);
+    color: var(--admin-ink-muted);
   }
 
   [data-block="code"] {
     padding: var(--admin-gap-sm) var(--admin-gap-md);
     border-radius: var(--admin-radius-sm, var(--admin-radius));
-    background: var(--admin-surface-sunken);
+    background: var(--admin-surface-subtle);
     font-family: var(--admin-font-mono, ui-monospace, monospace);
     font-size: 0.9em;
     /* <br> supplies every line break, so pre-wrap is here for leading
@@ -104,7 +104,7 @@
   [data-ui="flow-editor-code"] {
     padding: 0.1em 0.3em;
     border-radius: var(--admin-radius-sm, 3px);
-    background: var(--admin-surface-sunken);
+    background: var(--admin-surface-subtle);
     font-family: var(--admin-font-mono, ui-monospace, monospace);
     font-size: 0.9em;
   }
@@ -165,7 +165,7 @@
   }
 
   [data-block="check"][data-checked="true"] [data-ui="flow-editor-line"] {
-    color: var(--admin-muted);
+    color: var(--admin-ink-muted);
     text-decoration: line-through;
   }
 
@@ -178,7 +178,7 @@
     align-items: center;
     gap: var(--admin-gap-xs);
     padding-inline: var(--admin-gap-md);
-    color: var(--admin-muted);
+    color: var(--admin-ink-muted);
     font-size: 0.8rem;
   }
 
