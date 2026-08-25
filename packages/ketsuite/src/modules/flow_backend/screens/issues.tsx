@@ -14,6 +14,8 @@ export const issuesScreen = (
   rows: AnyRow[],
   groups: TableGroup<AnyRow>[] = [],
   errors: string[] = [],
+  /** This project's custom fields, each becoming a column of its own. */
+  fields: AnyRow[] = [],
 ): TemplateResult => (
   <Framed
     translator={_}
@@ -71,6 +73,21 @@ export const issuesScreen = (
                 kind: 'date',
                 cell: (row) => when(row.dueDate),
               },
+              // One column per field the project defined, after everything Flow
+              // itself asks about. A select shows the option's label rather
+              // than its code — the code is what the filter speaks, not what
+              // anybody named it.
+              ...fields.map((field) => ({
+                key: `field:${String(field.code)}`,
+                label: String(field.name),
+                cell: (row: AnyRow) => {
+                  const held = (row.fieldValues as Record<string, unknown> | undefined)?.[String(field.id)]
+                  if (held == null || held === '') return '\u2014'
+                  const options = ((field.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? []
+                  const chosen = options.find((option) => String(option.code) === String(held))
+                  return String(chosen?.label ?? held)
+                },
+              })),
               {
                 key: 'progress',
                 label: _('flow_backend.field.progress'),

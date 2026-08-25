@@ -1178,6 +1178,7 @@ export const routes: Record<string, RouteEntry> = {
             grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
             errors,
+            fieldDefs,
           )
         },
       })
