@@ -1,4 +1,4 @@
-import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import { defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
@@ -198,6 +198,25 @@ export const functions: Record<string, FnSpec> = {
             tracking: String(template.tracking ?? 'none'),
           }
         : null
+    },
+  }),
+  /** Batch companion to getProductConfig for bounded catalogue projections. */
+  listProductConfigs: defineFn({
+    input: { templateIds: 'json' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = [...new Set(Array.isArray(args.templateIds) ? args.templateIds.map(String) : [])]
+      if (!ids.length) return []
+      // Reading every template in the tenant to answer for twenty of them is the
+      // shape a batch companion exists to avoid; getProductConfig above filters
+      // in the query and so does this.
+      const T = ctx.table('product.Template')
+      return (await ctx.db.all(from(T).where(inArray(T.id, ids)))).map((template) => ({
+        templateId: String(template.id),
+        isStorable: Boolean(template.isStorable),
+        tracking: String(template.tracking ?? 'none'),
+      }))
     },
   }),
   configureProduct: defineFn({
@@ -848,9 +867,13 @@ export const functions: Record<string, FnSpec> = {
       if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
       if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
       const demand = Number(move.productUomQty)
-      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id }))
-        .filter((line) => !line.picked)
-        .reduce((sum, line) => sum + Number(line.quantity), 0)
+      // Picked lines still hold their reservation until the picking is completed
+      // or cancelled. Counting only unpicked lines makes a later assignment pass
+      // reserve the same demand twice after an operator has marked a line picked.
+      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id })).reduce(
+        (sum, line) => sum + Number(line.quantity),
+        0,
+      )
       let state = 'confirmed'
       const tracking = await trackingOf(ctx, move.productId)
       const sources = await sourcesUnder(ctx, move.locationId)

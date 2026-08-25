@@ -110,12 +110,41 @@ credential happens to arrive.
 A staff route calls `ctx.call`, not `ctx.callUnchecked`. The framework already knows which functions a
 session may invoke, and reaching past that check is how a channel becomes a way around the roles every
 other surface obeys. `npm run audit:staff-channel` fails the build on a staff route that reaches for the
-unchecked call, because nothing about that is visible at a glance in a diff.
+unchecked call, because nothing about that is visible at a glance in a diff. A refused function grant is
+mapped to `403 channel_api.forbidden`, rather than being disguised as an internal failure.
 
 A staff session is a cookie, so the facade asks unsafe methods to prove intent the same way it does for a
 customer one. The customer profile hands the CSRF token over at sign-in; staff sign in through the
 framework, which knows nothing about this channel, so `staff/bootstrap` is where it is handed over. A
 client that has not bootstrapped cannot mutate.
+
+`sale_staff_channel` contributes read-only customer, product, and order slices. Customer lookup admits only active
+partners holding the `customer` role and projects no raw contact or street-address fields. Order list and
+detail call Sale's bounded, company-scoped functions and return server totals plus line data, delivery-move
+progress, and invoice counts without claiming a writable aggregate version. Product lookup admits only active
+variants on active `saleOk` templates with a live default UOM. It derives `stockable` versus `consumable` from
+Stock's `isStorable` extension and withholds price, tax, barcode, and inventory data. Order mutations remain
+outside this module until their mobile concurrency contract can be represented without guessing.
+
+`purchase_staff_channel` contributes read-only vendor, product, order, and vendor-bill slices. Vendor lookup has the
+same role and privacy boundary as customer lookup. Purchase orders expose server totals and receipt/billing
+progress without writable actions or synthetic versions. Vendor bills expose document state and totals but
+withhold ledger posting lines; posting, matching, payment, and e-invoice maintenance remain back-office work.
+Product lookup applies the same active variant, live UOM, and product-kind rules to `purchaseOk` templates and
+withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
+mobile concurrency and workflow contracts can be represented without guessing.
+
+`crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
+mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
+functions, so a non-superuser sees or changes only records they
+created, records assigned to them, or records belonging to one of their active teams. The list accepts only
+the domain's lead/opportunity kinds and open/won/lost outcomes. Detail includes the canonical integer version
+and next pending activity, but deliberately withholds contact fields, timeline entries, messages, attachments,
+and configuration options. Each command requires the CSRF token from bootstrap, an `Idempotency-Key`, and the
+integer `expectedVersion`; a replay returns the same result, a changed replay or stale aggregate returns `409`,
+and the response carries the refreshed safe projection. Create cannot yet share the list path because the
+current router keys routes by path rather than method. Lost-reason and activity commands remain outside the
+channel because their legacy request shapes do not map one-to-one to the current domain.
 
 ## Contract behavior
 
@@ -134,9 +163,12 @@ Every response uses one envelope:
 }
 ```
 
-Errors carry a stable code and localized message metadata. A body that does not match its declared schema is
-answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published schema
-is the check, so the generated document cannot claim more than the server enforces.
+Errors carry a stable code and localized message metadata. A request that does not match its declared schema
+is answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published
+schema is the check, so the generated document cannot claim more than the server enforces. That covers query
+parameters as well as bodies: a declared `enum` or `maximum` is refused rather than silently clamped. Because
+a query string carries no types, values are coerced to the declared type before the check, and an empty value
+(`?state=`) reads as absent rather than invalid. Parameters the contract does not declare are left alone.
 
 Mutating operations that advertise idempotency require `Idempotency-Key`. Reusing a key with a different
 request body returns `409 channel_api.idempotencyConflict` instead of replaying the wrong result, and reusing
@@ -178,19 +210,24 @@ and a storefront that rounds a total in transit is worse than one that never sho
 
 ## OpenAPI and Starlight
 
-KetSuite's `openApiDocument()` maps the Customer profile, Bearer/cookie security schemes, capabilities, and
-idempotency metadata to OpenAPI 3.1. The checked-in artifact is regenerated from the composed server contract
-before Starlight development and production builds:
+KetSuite's `openApiDocument()` maps one channel profile per document — capabilities, idempotency metadata,
+and the security schemes that profile actually accepts — to OpenAPI 3.1. Customer routes offer Bearer or the
+storefront cookie; staff routes offer only the verified session cookie, and describing that per profile is what
+keeps a generated client from being built without a credential to send. Both checked-in artifacts are
+regenerated from the composed server contract before Starlight development and production builds:
 
 ```sh
 # Run from: /path/to/ketjs
 npm run generate:api --prefix docs
 ```
 
-The [Customer API reference](/ketsuite/channel-api-reference/) renders that artifact directly and offers the raw
-document for SDK generation and external tooling.
+The [Customer API reference](/ketsuite/channel-api-reference/) renders the customer artifact directly and offers
+the raw document for SDK generation and external tooling. The staff document is published alongside it at
+`/api/staff-v1.openapi.json` for native staff clients to generate from.
 
 Because that regeneration was a side effect of building the docs site, a route could be added without one
 and the document would quietly fall behind — which it had, by three routes, before anyone looked. `npm run
-check:api` compares the checked-in document against the composed server and is part of `npm run verify`,
-so adding a route without regenerating now fails on the way in rather than on somebody's next SDK build.
+check:api` compares every checked-in document against the composed server and is part of `npm run verify`,
+so adding a route without regenerating now fails on the way in rather than on somebody's next SDK build. A
+profile shipping routes with no published document is the same failure wearing a different hat, which is why
+the staff document is generated and checked on the same footing as the customer one rather than on demand.

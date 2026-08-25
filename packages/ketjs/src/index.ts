@@ -43,6 +43,8 @@ export type {
   ServeSpec,
   ServeContext,
   SessionResolveContext,
+  RequestIdentity,
+  RequestIdentityResolveContext,
   PagesSpec,
   BootedDeployment,
   BootDeploymentOptions,

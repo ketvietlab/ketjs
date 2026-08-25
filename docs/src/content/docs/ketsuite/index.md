@@ -88,6 +88,7 @@ smallest stable contract from the package entry point and cover that contract wi
 | Admin route, form, screen, menu, or island | [Backend UI development](/ketsuite/backend-development/) | [Form validation](/ketjs/form-validation/) |
 | Customer, website, mobile, POS, or integration endpoint | [Channel API architecture](/ketsuite/channel-api/) | [Customer API reference](/ketsuite/channel-api-reference/) |
 | CRM behavior | [CRM modules](/ketsuite/crm/) | [Testing KetSuite](/ketsuite/testing/) |
+| Manufacturing behavior | [Manufacturing](/ketsuite/manufacturing/) | [Testing KetSuite](/ketsuite/testing/) |
 | Loyalty behavior | [Loyalty](/ketsuite/loyalty/) | [Loyalty benchmark evidence](/ketsuite/benchmarks/loyalty/) |
 | Vietnam accounting defaults | [Vietnam accounting defaults](/ketsuite/accounting-tt99/) | [Testing KetSuite](/ketsuite/testing/) |
 

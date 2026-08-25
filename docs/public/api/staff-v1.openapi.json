@@ -1,0 +1,3136 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "KetSuite staff API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/staff/v1"
+    }
+  ],
+  "paths": {
+    "/bootstrap": {
+      "get": {
+        "operationId": "staff.bootstrap",
+        "summary": "Resolve the signed-in operator, their company scope and live capabilities.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": null,
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "staff.me",
+        "summary": "The operator this session belongs to.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "channel_api.staff_account",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/attendance/status": {
+      "get": {
+        "operationId": "staff.attendance.status",
+        "summary": "Whether the signed-in operator is on the clock, and since when.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "attendance.records",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/attendance/records": {
+      "get": {
+        "operationId": "staff.attendance.records.list",
+        "summary": "The operator’s own attendance sessions, newest first.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "attendance.records",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/attendance/check-in": {
+      "post": {
+        "operationId": "staff.attendance.checkIn",
+        "summary": "Start a shift. Refused when one is already open.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "attendance.records",
+          "action": "check_in"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/attendance/check-out": {
+      "post": {
+        "operationId": "staff.attendance.checkOut",
+        "summary": "End the open shift. Refused when there is none.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {},
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "attendance.records",
+          "action": "check_out"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/crm/leads": {
+      "get": {
+        "operationId": "staff.crm.leads.list",
+        "summary": "List actor-visible CRM leads and opportunities without mutation actions.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["lead", "opportunity"]
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "won", "lost"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": ["lead", "opportunity"]
+                              },
+                              "stage": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "terminalState": {
+                                    "type": "string",
+                                    "enum": ["open", "won", "lost"]
+                                  }
+                                },
+                                "required": ["id", "name", "terminalState"]
+                              },
+                              "customer": {
+                                "type": ["object", "null"],
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "assignee": {
+                                "type": ["object", "null"],
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "expectedRevenue": {
+                                "type": "string"
+                              },
+                              "probability": {
+                                "type": "string"
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": ["pending", "won", "lost"]
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": 1
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "type",
+                              "stage",
+                              "customer",
+                              "assignee",
+                              "expectedRevenue",
+                              "probability",
+                              "outcome",
+                              "version"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/crm/leads/{id}": {
+      "get": {
+        "operationId": "staff.crm.leads.get",
+        "summary": "Read one actor-visible CRM record without exposing a writable aggregate.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["lead", "opportunity"]
+                        },
+                        "stage": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "terminalState": {
+                              "type": "string",
+                              "enum": ["open", "won", "lost"]
+                            }
+                          },
+                          "required": ["id", "name", "terminalState"]
+                        },
+                        "customer": {
+                          "type": ["object", "null"],
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "assignee": {
+                          "type": ["object", "null"],
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "expectedRevenue": {
+                          "type": "string"
+                        },
+                        "probability": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["pending", "won", "lost"]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "expectedClosing": {
+                          "type": ["string", "null"]
+                        },
+                        "description": {
+                          "type": ["string", "null"]
+                        },
+                        "nextActivity": {
+                          "type": ["object", "null"],
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "dueDate": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "type", "summary", "dueDate"]
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "type",
+                        "stage",
+                        "customer",
+                        "assignee",
+                        "expectedRevenue",
+                        "probability",
+                        "outcome",
+                        "version",
+                        "priority",
+                        "expectedClosing",
+                        "description",
+                        "nextActivity",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/crm/leads/{id}/transition": {
+      "post": {
+        "operationId": "staff.crm.leads.transition",
+        "summary": "Move an actor-visible CRM record with optimistic concurrency and replay protection.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "stageId": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["stageId", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["transitioned", "assigned", "won"]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "transition"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/crm/leads/{id}/assign": {
+      "post": {
+        "operationId": "staff.crm.leads.assign",
+        "summary": "Assign an actor-visible CRM record inside its current team.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "assigneeUserId": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["assigneeUserId", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["transitioned", "assigned", "won"]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "assign"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/crm/leads/{id}/won": {
+      "post": {
+        "operationId": "staff.crm.leads.markWon",
+        "summary": "Move an actor-visible opportunity to the canonical won stage.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["transitioned", "assigned", "won"]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "mark_won"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/vendors": {
+      "get": {
+        "operationId": "staff.purchasing.vendors.list",
+        "summary": "List or search active vendors available to the signed-in purchaser.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["company", "person"]
+                              }
+                            },
+                            "required": ["id", "name", "kind"]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.vendors",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/vendors/{id}": {
+      "get": {
+        "operationId": "staff.purchasing.vendors.get",
+        "summary": "Read one active vendor available to the signed-in purchaser.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["company", "person"]
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": ["id", "name", "kind", "readOnly"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.vendors",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/products": {
+      "get": {
+        "operationId": "staff.purchasing.products.list",
+        "summary": "List or search active purchasable products without supplier pricing or barcode data.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["stockable", "consumable", "service"]
+                              },
+                              "sku": {
+                                "type": ["string", "null"]
+                              },
+                              "category": {
+                                "type": ["string", "null"]
+                              },
+                              "uom": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "required": ["id", "name", "kind", "sku", "category", "uom"]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/products/{id}": {
+      "get": {
+        "operationId": "staff.purchasing.products.get",
+        "summary": "Read one active purchasable product without supplier pricing or barcode data.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["stockable", "consumable", "service"]
+                        },
+                        "sku": {
+                          "type": ["string", "null"]
+                        },
+                        "category": {
+                          "type": ["string", "null"]
+                        },
+                        "uom": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": ["id", "name", "kind", "sku", "category", "uom", "readOnly"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/orders": {
+      "get": {
+        "operationId": "staff.purchasing.orders.list",
+        "summary": "List or search purchase orders available to the signed-in purchaser.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                              },
+                              "orderedAt": {
+                                "type": "string"
+                              },
+                              "expectedAt": {
+                                "type": "string"
+                              },
+                              "vendor": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "billingState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "orderedAt",
+                              "expectedAt",
+                              "vendor",
+                              "billingState",
+                              "total"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/orders/{id}": {
+      "get": {
+        "operationId": "staff.purchasing.orders.detail",
+        "summary": "Read one purchase order without exposing a mutation contract.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "lines",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/vendor-bills": {
+      "get": {
+        "operationId": "staff.purchasing.vendorBills.list",
+        "summary": "List or search read-only vendor bills and credit notes.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["bill", "credit_note"]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "posted", "cancel"]
+            }
+          },
+          {
+            "name": "paymentState",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["not_paid", "paid", "partial", "reversed"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["bill", "credit_note"]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["draft", "posted", "cancel"]
+                              },
+                              "paymentState": {
+                                "type": "string",
+                                "enum": ["not_paid", "paid", "partial", "reversed"]
+                              },
+                              "vendor": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "invoiceDate": {
+                                "type": ["string", "null"]
+                              },
+                              "dueAt": {
+                                "type": ["string", "null"]
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "kind",
+                              "state",
+                              "paymentState",
+                              "vendor",
+                              "invoiceDate",
+                              "dueAt",
+                              "total"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.vendor_bills",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/vendor-bills/{id}": {
+      "get": {
+        "operationId": "staff.purchasing.vendorBills.detail",
+        "summary": "Read one vendor bill without exposing ledger posting lines.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["bill", "credit_note"]
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "posted", "cancel"]
+                        },
+                        "paymentState": {
+                          "type": "string",
+                          "enum": ["not_paid", "paid", "partial", "reversed"]
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "invoiceDate": {
+                          "type": ["string", "null"]
+                        },
+                        "dueAt": {
+                          "type": ["string", "null"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "sourceReference": {
+                          "type": ["string", "null"]
+                        },
+                        "lineCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "kind",
+                        "state",
+                        "paymentState",
+                        "vendor",
+                        "invoiceDate",
+                        "dueAt",
+                        "total",
+                        "sourceReference",
+                        "lineCount",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.vendor_bills",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/customers": {
+      "get": {
+        "operationId": "staff.sales.customers.list",
+        "summary": "List or search active customers available to the signed-in salesperson.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["company", "person"]
+                              }
+                            },
+                            "required": ["id", "name", "kind"]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.customers",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/customers/{id}": {
+      "get": {
+        "operationId": "staff.sales.customers.get",
+        "summary": "Read one active customer available to the signed-in salesperson.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["company", "person"]
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": ["id", "name", "kind", "readOnly"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.customers",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/products": {
+      "get": {
+        "operationId": "staff.sales.products.list",
+        "summary": "List or search active sellable products without price or inventory data.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": ["stockable", "consumable", "service"]
+                              },
+                              "sku": {
+                                "type": ["string", "null"]
+                              },
+                              "category": {
+                                "type": ["string", "null"]
+                              },
+                              "uom": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "required": ["id", "name", "kind", "sku", "category", "uom"]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/products/{id}": {
+      "get": {
+        "operationId": "staff.sales.products.get",
+        "summary": "Read one active sellable product without price or inventory data.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["stockable", "consumable", "service"]
+                        },
+                        "sku": {
+                          "type": ["string", "null"]
+                        },
+                        "category": {
+                          "type": ["string", "null"]
+                        },
+                        "uom": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": ["id", "name", "kind", "sku", "category", "uom", "readOnly"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.products",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/orders": {
+      "get": {
+        "operationId": "staff.sales.orders.list",
+        "summary": "List or search sales orders available to the signed-in salesperson.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "sent", "sale", "cancel"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["draft", "sent", "sale", "cancel"]
+                              },
+                              "orderedAt": {
+                                "type": "string"
+                              },
+                              "customer": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "orderedAt", "customer", "total"]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/orders/{id}/detail": {
+      "get": {
+        "operationId": "staff.sales.orders.detail",
+        "summary": "Read one sales order without exposing a mutation contract.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "staffCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ket_session"
+      }
+    }
+  }
+}
