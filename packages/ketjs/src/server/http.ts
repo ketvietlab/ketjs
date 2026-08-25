@@ -1,6 +1,7 @@
 // One server function, three surfaces: an HTTP endpoint, the typed client that
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
+import { isVersioned } from './assets.ts'
 import { createServer } from 'node:http'
 import { pipeline } from 'node:stream/promises'
 import { isNavigationRequest, navigablePage } from './respond.ts'
@@ -429,7 +430,13 @@ export async function createKetServer(o: ServeOpts) {
         try {
           const body = await readFile(file)
           const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
-          res.writeHead(200, { 'content-type': contentType(type), 'cache-control': 'no-cache' })
+          // A URL that names its own content can never go stale, so it is kept
+          // rather than revalidated. Anything else keeps the old answer: safe,
+          // and re-fetched every time, which is what versioning is for.
+          res.writeHead(200, {
+            'content-type': contentType(type),
+            'cache-control': isVersioned(rel) ? 'public, max-age=31536000, immutable' : 'no-cache',
+          })
           return res.end(body)
         } catch {
           break
