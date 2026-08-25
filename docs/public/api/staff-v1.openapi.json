@@ -3122,6 +3122,649 @@
         "x-ket-auth": "required",
         "x-ket-idempotent": false
       }
+    },
+    "/warehouse/pickings": {
+      "get": {
+        "operationId": "staff.warehouse.pickings.list",
+        "summary": "List warehouse transfers available in the signed-in staff company.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["waiting", "ready", "in_progress", "blocked", "done", "cancelled"]
+                              },
+                              "context": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "company": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "warehouse": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "sourceLocation": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "destinationLocation": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "operation": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "code": {
+                                        "type": "string",
+                                        "enum": ["incoming", "outgoing", "internal"]
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["code", "name"]
+                                  },
+                                  "sourceDocument": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": ["other", "none"]
+                                      },
+                                      "reference": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["type"]
+                                  }
+                                },
+                                "required": [
+                                  "company",
+                                  "sourceLocation",
+                                  "destinationLocation",
+                                  "operation",
+                                  "sourceDocument"
+                                ]
+                              },
+                              "progress": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "lineCount": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "completedLineCount": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": ["lineCount", "completedLineCount"]
+                              },
+                              "tracking": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "lotOrSerialRequired": {
+                                    "type": "boolean"
+                                  },
+                                  "allRequirementsSatisfied": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["lotOrSerialRequired", "allRequirementsSatisfied"]
+                              },
+                              "quality": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "enum": ["not_required", "pending", "passed", "failed", "unavailable"]
+                                  },
+                                  "requirements": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": ["status", "requirements"]
+                              },
+                              "nextAction": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "supported": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["code", "label", "supported"]
+                              },
+                              "sourceReference": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "stock_picking"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "displayName": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["type", "id", "displayName", "version"]
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "state",
+                              "context",
+                              "progress",
+                              "tracking",
+                              "quality",
+                              "nextAction",
+                              "sourceReference",
+                              "version"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/pickings/{id}": {
+      "get": {
+        "operationId": "staff.warehouse.pickings.get",
+        "summary": "Read one warehouse transfer and its execution lines.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["waiting", "ready", "in_progress", "blocked", "done", "cancelled"]
+                        },
+                        "context": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "company": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "warehouse": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "sourceLocation": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "destinationLocation": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "operation": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "code": {
+                                  "type": "string",
+                                  "enum": ["incoming", "outgoing", "internal"]
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["code", "name"]
+                            },
+                            "sourceDocument": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": ["other", "none"]
+                                },
+                                "reference": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["type"]
+                            }
+                          },
+                          "required": [
+                            "company",
+                            "sourceLocation",
+                            "destinationLocation",
+                            "operation",
+                            "sourceDocument"
+                          ]
+                        },
+                        "progress": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "lineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "completedLineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": ["lineCount", "completedLineCount"]
+                        },
+                        "tracking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "lotOrSerialRequired": {
+                              "type": "boolean"
+                            },
+                            "allRequirementsSatisfied": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["lotOrSerialRequired", "allRequirementsSatisfied"]
+                        },
+                        "quality": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": ["not_required", "pending", "passed", "failed", "unavailable"]
+                            },
+                            "requirements": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": ["status", "requirements"]
+                        },
+                        "nextAction": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "supported": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["code", "label", "supported"]
+                        },
+                        "sourceReference": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "stock_picking"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["type", "id", "displayName", "version"]
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "scheduledAt": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "product": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "sku": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "uom": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "expectedQuantity": {
+                                "type": "string"
+                              },
+                              "doneQuantity": {
+                                "type": "string"
+                              },
+                              "remainingQuantity": {
+                                "type": "string"
+                              },
+                              "tracking": {
+                                "type": "string",
+                                "enum": ["none", "lot", "serial"]
+                              },
+                              "trackingRequirement": {
+                                "type": "string",
+                                "enum": ["not_required", "required", "satisfied"]
+                              },
+                              "lots": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "quantity": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["name", "quantity"]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "product",
+                              "uom",
+                              "expectedQuantity",
+                              "doneQuantity",
+                              "remainingQuantity",
+                              "tracking",
+                              "trackingRequirement",
+                              "lots"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "state",
+                        "context",
+                        "progress",
+                        "tracking",
+                        "quality",
+                        "nextAction",
+                        "sourceReference",
+                        "version",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
     }
   },
   "components": {

@@ -134,6 +134,14 @@ Product lookup applies the same active variant, live UOM, and product-kind rules
 withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
 mobile concurrency and workflow contracts can be represented without guessing.
 
+`stock_staff_channel` contributes a bounded warehouse-transfer queue and one transfer detail under the
+`warehouse.pickings` read capability. Stock batches the picking type, warehouse, location, move, move-line,
+lot, and tracking joins so the facade does not issue one query per row; Product, UOM, and Company remain the
+owners of their display labels. The projection carries the canonical line quantities, tracking requirements,
+an opaque content-derived `pkv_` version, and a matching strong ETag. Quality is reported as unavailable and
+the next action remains explicitly unsupported. Claim, release, completion, scan, and return execution stay
+outside the module until ownership, quality, and optimistic-concurrency models exist in the domain.
+
 `crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
 mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
 functions, so a non-superuser sees or changes only records they
