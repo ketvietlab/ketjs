@@ -138,6 +138,30 @@ UI layer.
 Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
 hydration, and island props must contain only data the current viewer is allowed to receive.
 
+## Module-owned styles
+
+The backend module owns only the shared shell, tokens, and UI-kit baselines. A feature module must ship
+its visual rules from its own asset root instead of adding product-, partner-, or route-specific selectors
+to the backend design styles:
+
+```ts
+// File: packages/ketsuite/src/modules/example_backend/index.ts
+export default defineModule({
+  name: 'example_backend',
+  depends: ['backend'],
+  assets: new URL('./client/', import.meta.url),
+  styles: ['example.css'],
+  routes,
+  menus,
+})
+```
+
+Composition namespaces the asset URL by module and loads dependency styles first, so `backend` provides
+the baseline before `example_backend` applies its scoped adjustments. Keep module rules inside
+`@layer ket.app`, scope them to a module-owned root or state, and consume semantic tokens. Add a rule to
+the shared backend styles only when the corresponding component is genuinely reusable through
+`@ketvietlab/ketsuite/ui`.
+
 ## Extension joints
 
 Publish a joint when another module has a legitimate structural contribution to a screen. Declare its

@@ -26,7 +26,17 @@ export default defineModule({
   // Its own files, stylesheets, and routes stay together so a deployment only
   // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
-  styles: ['tokens.css', 'admin.css'],
+  styles: [
+    'tokens.css',
+    'foundation.css',
+    'lists.css',
+    'responsive.css',
+    'auth.css',
+    'controls.css',
+    'record.css',
+    'forms.css',
+    'content.css',
+  ],
   routes,
   models: savedSearchModels,
   functions: savedSearchFunctions,
