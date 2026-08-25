@@ -316,6 +316,8 @@ export const functions: Record<string, FnSpec> = {
       limit: 'int?',
       offset: 'int?',
       includeArchived: 'bool?',
+      active: 'bool?',
+      type: 'text?',
       saleOk: 'bool?',
       purchaseOk: 'bool?',
       requireUom: 'bool?',
@@ -344,7 +346,11 @@ export const functions: Record<string, FnSpec> = {
       const eligible = rows.filter((row) => {
         const template = templates.get(String(row.templateId))
         if (!template) return false
-        if (args.includeArchived !== true && (row.active === false || template.active === false)) return false
+        const active = row.active !== false && template.active !== false
+        if (args.includeArchived !== true && !active) return false
+        if (args.active === true && !active) return false
+        if (args.active === false && active) return false
+        if (args.type && template.type !== args.type) return false
         if (args.saleOk === true && template.saleOk !== true) return false
         if (args.purchaseOk === true && template.purchaseOk !== true) return false
         if (args.requireUom === true && template.uomId == null) return false
