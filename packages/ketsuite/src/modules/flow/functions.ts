@@ -40,6 +40,20 @@ const issueWriteEffects = [
   'write:flow.Issue',
   'write:flow.IssueTag',
   'write:mail.Thread',
+  // Saving an issue now subscribes its author and its assignee to the thread,
+  // and writes a system entry when it changes hands — so it touches the same
+  // mail tables a comment does.
+  'read:mail.Follower',
+  'write:mail.Follower',
+  'read:mail.FollowerSubtype',
+  'write:mail.FollowerSubtype',
+  'read:mail.Subtype',
+  'write:mail.Message',
+  'write:mail.Mention',
+  'write:mail.MessageAttachment',
+  'write:mail.TrackingValue',
+  'write:mail.Notification',
+  'read:partner.Partner',
 ] as const
 
 const commentEffects = [
@@ -55,6 +69,8 @@ const commentEffects = [
   'write:mail.MessageAttachment',
   'write:mail.TrackingValue',
   'write:mail.Notification',
+  'write:mail.Follower',
+  'write:mail.FollowerSubtype',
   'read:user.User',
   'read:partner.Partner',
 ] as const
@@ -359,6 +375,8 @@ export const functions: Record<string, FnSpec> = {
       epicId: 'id?',
       sprintId: 'id?',
       assigneeUserId: 'id?',
+      /** Assigned to whoever is asking; resolved from the actor, not the caller. */
+      mine: 'bool?',
       includeArchived: 'bool?',
       cursor: 'text?',
       limit: 'int?',
@@ -379,6 +397,7 @@ export const functions: Record<string, FnSpec> = {
       epicId: 'id?',
       sprintId: 'id?',
       assigneeUserId: 'id?',
+      mine: 'bool?',
       includeArchived: 'bool?',
       listState: 'json',
       path: 'json?',

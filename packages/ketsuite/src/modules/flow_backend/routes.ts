@@ -22,6 +22,7 @@ import {
   issueDetailScreen,
   issuesScreen,
   mapScreen,
+  myWorkScreen,
   projectsScreen,
   settingsScreen,
   sprintsScreen,
@@ -733,6 +734,65 @@ export const routes: Record<string, RouteEntry> = {
       return result.ok
         ? seeOther(inLocale(url, `/admin/flow/projects/${projectId}/board`))
         : text(errorsOf(result, ctx.translate(ctx.localeOf(url, req))).join('\n'), { status: 409 })
+    },
+
+  /**
+   * Every issue assigned to whoever is reading, across every project.
+   *
+   * It reuses the backlog's whole list apparatus — search, filters, grouping,
+   * pager — by passing `mine` down instead of a project id, so the two screens
+   * cannot drift. Who "mine" is gets settled in the domain (`issueQuery`), the
+   * way `activity.listMy` settles it: a screen has no cheap way to learn who
+   * is signed in.
+   */
+  '/admin/flow/mine':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
+      const state = parseListState(spec, url).state
+      const timezone = 'UTC'
+      const grouped = state.groupBy.length > 0
+      const cursor = (state.page - 1) * LIST_PAGE_SIZE
+      const result = (await ctx.call(
+        'flow.issue.list',
+        {
+          mine: true,
+          listState: state,
+          timezone,
+          cursor: String(cursor),
+          limit: grouped ? 1 : LIST_PAGE_SIZE,
+        },
+        url,
+        req,
+      )) as AnyRow
+      const groups = grouped
+        ? await loadListGroups(ctx, url, req, state, timezone, {
+            groupFunction: 'flow.issue.group',
+            listFunction: 'flow.issue.list',
+            listArgs: { mine: true },
+            label: (_field, value) => String(value ?? '\u2014'),
+          })
+        : []
+      return adminPage(ctx, url, req, {
+        title: 'flow_backend.mine.title',
+        body: (_, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: state.q ?? '',
+              placeholder: _('flow_backend.search.issues'),
+              keep: keepForListSearch(url),
+              facets: listFacets(_, url, state, spec),
+              menus: listMenus(_, url, state, spec),
+            },
+            pager: grouped
+              ? null
+              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+          }
+          return myWorkScreen(_, frame, grouped ? [] : ((result.rows as AnyRow[]) ?? []), groups)
+        },
+      })
     },
 
   '/admin/flow/projects/{id}/issues':
