@@ -128,6 +128,55 @@ test('identity engine: live session resolution updates context and rejects a rev
   }
 })
 
+test('identity engine: a trusted request identity uses the normal actor, scope and permission pipeline', async () => {
+  const identity = defineModule({
+    name: 'request_identity',
+    functions: {
+      inspect: defineFn({
+        input: {},
+        output: { actor: 'text?', company: 'text?' },
+        effects: [],
+        handler: (ctx) => ({ actor: ctx.actor, company: ctx.scope.company }),
+      }),
+      denied: defineFn({ input: {}, output: { ok: 'bool' }, effects: [], handler: () => ({ ok: true }) }),
+    },
+    routes: {
+      '/who': (ctx) => async (url, req) => json(await ctx.call('request_identity.inspect', {}, url, req)),
+    },
+  })
+  const app = defineDeployment({
+    name: 'trusted_request_identity',
+    modules: [identity],
+    headless: true,
+    serve: {
+      resolveIdentity: async ({ req }) =>
+        req.headers['x-signed-identity'] === 'valid'
+          ? { userId: 'zitadel:u1', companies: ['default'], company: 'default' }
+          : null,
+      permissions: async () => ['request_identity.inspect'],
+    },
+  })
+  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  try {
+    const at = `http://127.0.0.1:${booted.port}`
+    assert.equal((await fetch(`${at}/who`, { headers: { accept: 'application/json' } })).status, 401)
+    const signed = { 'x-signed-identity': 'valid', accept: 'application/json' }
+    assert.deepEqual(await fetch(`${at}/who`, { headers: signed }).then((r) => r.json()), {
+      actor: 'zitadel:u1',
+      company: 'default',
+    })
+    const denied = await fetch(`${at}/_ket/fn/request_identity.denied`, {
+      method: 'POST',
+      headers: { ...signed, 'content-type': 'application/json' },
+      body: '{}',
+    })
+    assert.equal(denied.status, 400)
+    assert.equal(((await denied.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+  } finally {
+    await booted.close()
+  }
+})
+
 test('identity engine: provisioning must be internal', () => {
   assert.throws(
     () =>
