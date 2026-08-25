@@ -222,6 +222,21 @@ const contentOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
   }
 }
 const versionOf = (content: Row): string => `aiv_${sha256(JSON.stringify(content))}`
+
+/**
+ * Payment eligibility answers with more than the invoice.
+ *
+ * `expectedVersion` is the invoice's version and stays that way: it is the token
+ * a later payment command checks against, so it has to mean the invoice. The
+ * ETag is a different promise — it says this body has not changed — and this
+ * body also carries the tenant's usable journals and the date the caller asked
+ * about. Renaming a journal, or asking about a different day, changed the answer
+ * while the invoice version did not move.
+ *
+ * Lifecycle eligibility keeps the shared invoice ETag, because its actions are
+ * read from the invoice row and nowhere else.
+ */
+const eligibilityEtag = (data: Row): string => `aipe_${sha256(JSON.stringify(data))}`
 const lifecycleActionsOf = (row: Row): Array<{ action: string; destructive: boolean }> =>
   row.state === 'draft'
     ? [
@@ -378,18 +393,16 @@ export const channelRoutes = routesOf(
       const journals = reason === 'available' ? await paymentJournals(ctx, url, req) : []
       if (reason === 'available' && journals.length === 0) reason = 'no_payment_journal'
       const eligible = reason === 'available'
-      return {
-        data: {
-          eligible,
-          reason,
-          invoiceId: String(row.id),
-          expectedVersion,
-          amount,
-          paymentDate: String(url.searchParams.get('today')),
-          journals: eligible ? journals : [],
-        },
-        headers: { etag: `"${expectedVersion}"` },
+      const data = {
+        eligible,
+        reason,
+        invoiceId: String(row.id),
+        expectedVersion,
+        amount,
+        paymentDate: String(url.searchParams.get('today')),
+        journals: eligible ? journals : [],
       }
+      return { data, headers: { etag: `"${eligibilityEtag(data)}"` } }
     },
   }),
   defineChannelRoute({

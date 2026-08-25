@@ -279,7 +279,10 @@ test('staff accounting channel reviews exact full-payment eligibility without mu
       { id: 'journal:acme:bank', name: 'Ngân hàng', type: 'bank' },
     ],
   })
-  assert.equal(response.headers.get('etag'), `"${String(detail.data.version)}"`)
+  // The concurrency token is still the invoice's, which is the half worth
+  // sharing: a payment command checks it against the invoice. The ETag is not,
+  // because this body says more than the invoice does.
+  assert.match(String(response.headers.get('etag')), /^"aipe_[0-9a-f]{64}"$/)
 
   const credit = await e2e.client.json<Envelope<Row>>(
     '/api/staff/v1/accounting/invoices/credit-a/payment-eligibility?today=2026-08-25',
@@ -343,4 +346,40 @@ test('staff invoice version tracks the names it resolves elsewhere', async (t) =
   assert.equal(after.customer, 'Minh An Đã Đổi')
   assert.notEqual(after.version, before.version)
   assert.equal(after.etag, `"${after.version}"`)
+})
+
+test('staff payment eligibility ETag tracks the journals and the day it was asked about', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const read = async (today: string) => {
+    const response = await e2e.client.get(
+      `/api/staff/v1/accounting/invoices/invoice-a/payment-eligibility?today=${today}`,
+    )
+    const body = (await response.json()) as Envelope<Row>
+    return { etag: response.headers.get('etag'), body: body.data }
+  }
+
+  // Two different days are two different answers, and an ETag that cannot tell
+  // them apart tells a caller its stale copy is current.
+  const dayOne = await read('2026-08-25')
+  const dayTwo = await read('2026-09-30')
+  assert.equal(dayOne.body.paymentDate, '2026-08-25')
+  assert.equal(dayTwo.body.paymentDate, '2026-09-30')
+  assert.notEqual(dayOne.etag, dayTwo.etag)
+
+  // The journals come from the tenant, not from the invoice.
+  await e2e.fixture.call<Row>(
+    'account.saveJournal',
+    { id: 'cash-journal', name: 'Quỹ tiền mặt', code: 'CSH', type: 'cash', defaultAccountId: 'cash' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const renamed = await read('2026-08-25')
+  assert.deepEqual((renamed.body.journals as Row[])[0], {
+    id: 'cash-journal',
+    name: 'Quỹ tiền mặt',
+    type: 'cash',
+  })
+  assert.notEqual(renamed.etag, dayOne.etag)
+  // The invoice did not change, so the token a payment would check has not.
+  assert.equal(renamed.body.expectedVersion, dayOne.body.expectedVersion)
 })
