@@ -18,6 +18,12 @@ export const HOOKS = [
   'record-title',
   'record-summary',
   'record-value',
+  'doc-tree',
+  'doc-branch',
+  'doc-entry',
+  'doc-title',
+  'doc-summary',
+  'doc-count',
   'progress',
   'progress-track',
   'progress-fill',
@@ -89,6 +95,58 @@ export const kanbanGrid = <T,>(o: {
 }): TemplateResult => <div data-ui="kanban">{each(o.rows, o.id, (row) => o.card(row))}</div>
 
 /** Compact/mobile operational rows: values stay aligned and the row has one destination. */
+/**
+ * A hierarchy of documents, nested the way it reads.
+ *
+ * Real nesting rather than one flat list with an indent baked into each label:
+ * a `<ol>` inside its parent `<li>` is what says "these belong under that one"
+ * to a screen reader, to a keyboard, and to anything that reformats the page.
+ * A padded string only says it to someone looking at it.
+ *
+ * Rows arrive flat — the query builder has no recursive read — and are grouped
+ * here by their parent. A row whose parent is not in the list (archived, or
+ * filtered away by a search) is shown at the root rather than dropped: it is
+ * still one of the rows the caller asked for, and burying it under a parent
+ * that is not on screen would make it unreachable.
+ */
+export const docTree = <T,>(o: {
+  rows: readonly T[]
+  id: (row: T) => string
+  parent: (row: T) => string | null
+  title: (row: T) => string
+  href: (row: T) => string
+  summary?: (row: T) => string | null
+  count?: (row: T) => string | null
+  /** How deep the nesting may go before it stops; guards a cycle in stored data. */
+  maxDepth?: number
+}): TemplateResult => {
+  const present = new Set(o.rows.map(o.id))
+  const byParent = new Map<string, T[]>()
+  for (const row of o.rows) {
+    const parent = o.parent(row) ?? ''
+    const key = parent && present.has(parent) ? parent : ''
+    byParent.set(key, [...(byParent.get(key) ?? []), row])
+  }
+  const limit = o.maxDepth ?? 12
+  const branch = (parent: string, depth: number): TemplateResult => (
+    <ol data-ui={depth === 0 ? 'doc-tree' : 'doc-branch'}>
+      {each(byParent.get(parent) ?? [], o.id, (row) => (
+        <li>
+          <a data-ui="doc-entry" href={o.href(row)}>
+            <span data-ui="doc-title">{o.title(row)}</span>
+            {!!o.summary?.(row) && <span data-ui="doc-summary">{o.summary!(row)}</span>}
+            {!!o.count?.(row) && <span data-ui="doc-count">{o.count!(row)}</span>}
+          </a>
+          {depth < limit && (byParent.get(o.id(row)) ?? []).length > 0
+            ? branch(o.id(row), depth + 1)
+            : null}
+        </li>
+      ))}
+    </ol>
+  )
+  return branch('', 0)
+}
+
 export const recordList = <T,>(o: {
   rows: readonly T[]
   id: (row: T) => unknown

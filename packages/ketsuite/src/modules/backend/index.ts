@@ -137,6 +137,7 @@ export {
   cardGrid,
   contentCard,
   metric,
+  docTree,
   kanbanCard,
   kanbanGrid,
   recordList,
