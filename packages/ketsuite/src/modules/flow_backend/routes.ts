@@ -532,6 +532,10 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(issue.title),
         translate: false,
+        // The list this detail page belongs to, so the sidebar keeps marking
+        // the project the issue is in rather than emptying out — the same
+        // reason a quotation points at the quotations list.
+        active: `/admin/flow/projects/${String(issue.projectId)}/issues`,
         body: (_, frame) =>
           issueDetailScreen(_, frame, issue, {
             fields: issueFields(_, issue, controls),
