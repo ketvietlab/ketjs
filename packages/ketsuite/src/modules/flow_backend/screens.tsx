@@ -145,6 +145,7 @@ export const issuesScreen = (
   createFields: FormField[],
   rows: AnyRow[],
   groups: TableGroup<AnyRow>[] = [],
+  errors: string[] = [],
 ): TemplateResult => (
   <Framed
     translator={_}
@@ -156,6 +157,7 @@ export const issuesScreen = (
           <RecordForm
             action={endpoint}
             fields={createFields}
+            errors={errors}
             submit={_('flow_backend.action.create')}
             submitVariant="primary"
             layout="inline"
@@ -226,7 +228,12 @@ export const issueDetailScreen = (
     sprints: AnyRow[]
     controls?: IssueDetailControls
     editor: JSXChild
-    errors?: string[]
+    /**
+     * Which action failed, and why. This screen carries six forms; naming the
+     * action is what puts a rejected dependency under the dependency form
+     * instead of at the top of the save form three sections above it.
+     */
+    errors?: { action: string; messages: string[] }
   },
 ): TemplateResult => {
   const tags = (row.tags as AnyRow[] | undefined) ?? []
@@ -235,6 +242,8 @@ export const issueDetailScreen = (
   const comments = (row.comments as AnyRow[] | undefined) ?? []
   const controls = options.controls ?? {}
   const endpoint = `/admin/flow/issues/${String(row.id)}`
+  const errorsFor = (action: string): string[] | undefined =>
+    options.errors?.action === action ? options.errors.messages : undefined
 
   return (
     <Framed
@@ -248,7 +257,7 @@ export const issueDetailScreen = (
               action={endpoint}
               hidden={{ action: 'save', expectedVersion: String(row.version ?? 0) }}
               fields={options.fields}
-              errors={options.errors}
+              errors={errorsFor('save')}
               submit={_('flow_backend.action.save')}
               submitVariant="primary"
             />
@@ -273,6 +282,7 @@ export const issueDetailScreen = (
                   })),
                 },
               ]}
+              errors={errorsFor('move')}
               submit={_('flow_backend.action.move')}
               submitVariant="secondary"
             />
@@ -299,6 +309,7 @@ export const issueDetailScreen = (
                   ],
                 },
               ]}
+              errors={errorsFor('assignSprint')}
               submit={_('flow_backend.action.assignSprint')}
               submitVariant="secondary"
             />
@@ -384,6 +395,7 @@ export const issueDetailScreen = (
                   ],
                 },
               ]}
+              errors={errorsFor('addDependency')}
               submit={_('flow_backend.dependencies.add')}
               submitVariant="secondary"
             />,
@@ -404,6 +416,7 @@ export const issueDetailScreen = (
                   span: 'full',
                 },
               ]}
+              errors={errorsFor('comment')}
               submit={_('flow_backend.action.addComment')}
               submitVariant="secondary"
             />,
@@ -465,7 +478,7 @@ export const epicsScreen = (
             <KanbanCard
               key={String(epic.id)}
               title={String(epic.title)}
-              href={`/admin/flow/projects/${String(epic.projectId)}/issues?f.epicId=${String(epic.id)}`}
+              href={String(epic.issuesHref ?? '')}
               meta={_('flow_backend.epics.issueCount', { count: Number(epic.totalCount ?? 0) })}
               actions={stack(
                 [
@@ -595,7 +608,9 @@ export const settingsScreen = (
     tags: AnyRow[]
     tagFields: FormField[]
     editingTagId?: string
-    errors?: string[]
+    /** Errors from the columns half of this screen, and from the tags half. */
+    columnErrors?: string[]
+    tagErrors?: string[]
   },
 ): TemplateResult => (
   <Framed
@@ -671,7 +686,7 @@ export const settingsScreen = (
             action={endpoint}
             hidden={{ action: 'saveColumn', id: options.editingColumnId ?? '' }}
             fields={options.columnFields}
-            errors={options.errors}
+            errors={options.columnErrors}
             submit={_('flow_backend.action.save')}
             submitVariant="secondary"
           />,
@@ -726,6 +741,7 @@ export const settingsScreen = (
             action={endpoint}
             hidden={{ action: 'saveTag', id: options.editingTagId ?? '' }}
             fields={options.tagFields}
+            errors={options.tagErrors}
             submit={_('flow_backend.action.save')}
             submitVariant="secondary"
           />,

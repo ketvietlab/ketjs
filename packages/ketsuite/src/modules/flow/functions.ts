@@ -128,6 +128,22 @@ export const functions: Record<string, FnSpec> = {
     handler: (ctx, args) => optionRows(ctx, 'flow.Project', args),
   }),
 
+  /**
+   * One project by id, the way `issue.get` answers one issue.
+   *
+   * Every project-scoped screen needs the project behind the id in its URL.
+   * Resolving that through `project.list` means listing and filtering, and
+   * `optionRows` caps at 200 rows sorted by name — so the 201st project by
+   * name would answer "not found" on its own board.
+   */
+  'project.get': defineFn({
+    input: { id: 'id' },
+    output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
+    effects: ['read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => (await ctx.db.select('flow.Project', { id: args.id }))[0] ?? null,
+  }),
+
   'project.save': saveEntity(
     'flow.Project',
     ['id', 'key', 'name', 'description', 'active'],

@@ -30,7 +30,13 @@ import {
   plannerScreen,
 } from './screens.tsx'
 import type { CaseDetailControls, ConfigurationTab } from './screens.tsx'
-import { CRM_PAGE_SIZE, keepForListSearch, listFacets, listMenus, loadListGroups } from './list-search.ts'
+import {
+  keepForListSearch,
+  LIST_PAGE_SIZE,
+  listFacets,
+  listMenus,
+  loadListGroups,
+} from '../backend/list-search.ts'
 
 type Translator = ReturnType<ServeContext['translate']>
 const bool = (value: string | undefined) => ['1', 'true', 'on'].includes(value ?? '')
@@ -225,8 +231,8 @@ const saveInput = (id: string, form: Record<string, string>, kind = form.kind ??
 
 const pager = (url: URL, state: ListState, rows: number, total: number) => {
   const link = (target: number) => encodeListState({ ...state, page: target }, url)
-  const from = rows ? (state.page - 1) * CRM_PAGE_SIZE + 1 : 0
-  const to = Math.min(state.page * CRM_PAGE_SIZE, total)
+  const from = rows ? (state.page - 1) * LIST_PAGE_SIZE + 1 : 0
+  const to = Math.min(state.page * LIST_PAGE_SIZE, total)
   return {
     from,
     to,
@@ -380,10 +386,10 @@ export const routes: Record<string, RouteEntry> = {
       const state = parsed.state
       const timezone = await timezoneOf(ctx, url, req)
       const grouped = state.groupBy.length > 0
-      const cursor = (state.page - 1) * CRM_PAGE_SIZE
+      const cursor = (state.page - 1) * LIST_PAGE_SIZE
       const result = (await ctx.call(
         'crm.case.list',
-        { listState: state, timezone, cursor: String(cursor), limit: grouped ? 1 : CRM_PAGE_SIZE },
+        { listState: state, timezone, cursor: String(cursor), limit: grouped ? 1 : LIST_PAGE_SIZE },
         url,
         req,
       )) as AnyRow

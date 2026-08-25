@@ -14,14 +14,19 @@ type AnyRow = Record<string, unknown>
 type SavedGroup = { key: unknown[]; count: number }
 
 /**
- * Direct port of crm_backend/list-search.ts's generic pieces — confirmed
- * by reading that file in full: every helper here reads the domain only
- * through passed-in function-name strings/args, never `crm.*` by name, so
- * it carries over to Flow's `issueListSearch`/`flow.issue.group`/`flow.issue.list`
- * unchanged.
+ * The list chrome every searchable backend list shares.
+ *
+ * None of this reads a domain: the caller passes the function names, the
+ * list-search spec and the label resolver, so the same code drives CRM's
+ * cases and Flow's issues. It lived in `crm_backend/` until a second module
+ * needed it and copied all 269 lines across — which is the moment a helper
+ * belongs beside `forms.ts`, `paging.ts` and `relation-select.ts` instead.
+ *
+ * `product_backend/routes.ts` still keeps a private `customRuleOf`; folding
+ * that one in is follow-up work, not part of the module that prompted this.
  */
 
-export const FLOW_PAGE_SIZE = 50
+export const LIST_PAGE_SIZE = 50
 
 export const cloneListState = (state: ListState): ListState => ({
   ...state,
@@ -207,7 +212,7 @@ export const loadListGroups = async (
 ): Promise<TableGroup<AnyRow>[]> => {
   const groups = (await ctx.call(
     options.groupFunction,
-    { ...(options.listArgs ?? {}), listState: state, path, timezone, limit: FLOW_PAGE_SIZE },
+    { ...(options.listArgs ?? {}), listState: state, path, timezone, limit: LIST_PAGE_SIZE },
     url,
     req,
   )) as SavedGroup[]
@@ -238,8 +243,8 @@ export const loadListGroups = async (
                 listState: state,
                 path: nextPath,
                 timezone,
-                cursor: String((page - 1) * FLOW_PAGE_SIZE),
-                limit: FLOW_PAGE_SIZE,
+                cursor: String((page - 1) * LIST_PAGE_SIZE),
+                limit: LIST_PAGE_SIZE,
               },
               url,
               req,
@@ -252,8 +257,8 @@ export const loadListGroups = async (
         else paged.groupPages[pageKey] = target
         return encodeListState(paged, url)
       }
-      const from = (page - 1) * FLOW_PAGE_SIZE + 1
-      const to = Math.min(page * FLOW_PAGE_SIZE, Number(group.count))
+      const from = (page - 1) * LIST_PAGE_SIZE + 1
+      const to = Math.min(page * LIST_PAGE_SIZE, Number(group.count))
       return {
         id: JSON.stringify(nextPath),
         label: options.label(selected.key, value),
@@ -264,7 +269,7 @@ export const loadListGroups = async (
         children,
         rows,
         pager:
-          rows && Number(group.count) > FLOW_PAGE_SIZE
+          rows && Number(group.count) > LIST_PAGE_SIZE
             ? {
                 label: `${from}-${to} / ${Number(group.count)}`,
                 prev: page > 1 ? pagerHref(page - 1) : undefined,

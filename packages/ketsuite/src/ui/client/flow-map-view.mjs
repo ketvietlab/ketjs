@@ -19,7 +19,6 @@ const LABELS = {
     blocked: 'Đang chặn',
     unassigned: 'Chưa gán',
     waitingFor: 'Chờ',
-    deps: 'phụ thuộc',
   },
   en: {
     eyebrow: 'Dependency atlas',
@@ -32,7 +31,6 @@ const LABELS = {
     blocked: 'Waiting on dependency',
     unassigned: 'Unassigned',
     waitingFor: 'Waiting for',
-    deps: 'deps',
   },
 }
 
