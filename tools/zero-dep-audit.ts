@@ -35,9 +35,16 @@ const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
-  ketsuite: { allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view'], publicOnly: true },
+  // yjs is the one accepted breach of ketsuite's own allowance, mirroring how
+  // ketjs-postgres is the framework's one accepted breach of rule 1: a named,
+  // narrow exception rather than an open door. It backs the Flow collaborative
+  // editor's CRDT merge, in the browser bundle and on the server that flattens
+  // the document, and is never reached by ketjs/ketjs-view — so the framework
+  // core stays untouched. One entry point, like everything else here: nothing
+  // imports a path inside it.
+  ketsuite: { allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'yjs'], publicOnly: true },
 }
-const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres'])
+const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres', 'esbuild'])
 
 const problems: string[] = []
 const IMPORT_RE =
