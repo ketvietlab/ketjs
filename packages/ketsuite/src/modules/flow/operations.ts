@@ -89,6 +89,19 @@ async function issueEpic(ctx: Ctx, epicId: unknown): Promise<Row | null | undefi
 }
 
 /**
+ * A type an issue may be filed as.
+ *
+ * Checked for existence and for belonging to the same project, which is what
+ * `epicId` was not and had to be taught — a reference written straight through
+ * puts a row on a board it does not belong to, and every screen downstream
+ * then agrees with it.
+ */
+async function issueType(ctx: Ctx, typeId: unknown): Promise<Row | null | undefined> {
+  if (!typeId) return null
+  return (await ctx.db.select('flow.IssueType', { id: typeId }))[0] ?? undefined
+}
+
+/**
  * A parent an issue may point at.
  *
  * Sub-tasks nest inside one project's board, so a parent from another project
@@ -171,10 +184,11 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const epicIds = ids(rows.map((row) => row.epicId))
   const sprintIds = ids(rows.map((row) => row.sprintId))
   const userIds = ids(rows.map((row) => row.assigneeUserId))
+  const typeIds = ids(rows.map((row) => row.typeId))
   // The project too, for the one list that spans them: an issue read outside
   // its own board has to say which board it came from.
   const projectIds = ids(rows.map((row) => row.projectId))
-  const [columns, epics, sprints, users, projects, progress] = await Promise.all([
+  const [columns, epics, sprints, users, projects, types, progress] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -190,6 +204,9 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     projectIds.length
       ? ctx.db.all(from(ctx.table('flow.Project')).where(inArray(ctx.table('flow.Project').id, projectIds)))
       : [],
+    typeIds.length
+      ? ctx.db.all(from(ctx.table('flow.IssueType')).where(inArray(ctx.table('flow.IssueType').id, typeIds)))
+      : [],
     progressOf(
       ctx,
       rows.map((row) => String(row.id)),
@@ -201,6 +218,7 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const sprintBy = by(sprints)
   const userBy = by(users)
   const projectBy = by(projects)
+  const typeBy = by(types)
   return rows.map((row) => {
     const counted = progress.get(String(row.id))
     return {
@@ -221,6 +239,8 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
       assigneeName: row.assigneeUserId
         ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
         : null,
+      typeName: row.typeId ? (typeBy.get(String(row.typeId))?.name ?? row.typeId) : null,
+      typeColor: row.typeId ? (typeBy.get(String(row.typeId))?.color ?? null) : null,
     }
   })
 }
@@ -379,6 +399,7 @@ export type SaveIssueInput = {
   id: string
   projectId: string
   columnId: string
+  typeId?: string | null
   epicId?: string | null
   sprintId?: string | null
   parentIssueId?: string | null
@@ -413,6 +434,10 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
   if (epic === undefined) return invalid(issue('epicId', 'flow.error.notFound'))
   if (epic && String(epic.projectId) !== String(input.projectId))
     return invalid(issue('epicId', 'flow.error.epicProjectMismatch'))
+  const kind = await issueType(ctx, input.typeId)
+  if (kind === undefined) return invalid(issue('typeId', 'flow.error.notFound'))
+  if (kind && String(kind.projectId) !== String(input.projectId))
+    return invalid(issue('typeId', 'flow.error.typeProjectMismatch'))
   return ctx.tx(async (tx) => {
     const existing = (await tx.db.select('flow.Issue', { id: input.id }))[0]
     if (existing && String(existing.projectId) !== String(input.projectId))
@@ -457,6 +482,7 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
     const values: Row = {
       projectId: input.projectId,
       columnId: existing ? existing.columnId : input.columnId,
+      typeId: input.typeId === undefined ? (existing?.typeId ?? null) : kind ? kind.id : null,
       epicId: input.epicId === undefined ? (existing?.epicId ?? null) : epic ? epic.id : null,
       sprintId: input.sprintId === undefined ? (existing?.sprintId ?? null) : sprint ? sprint.id : null,
       parentIssueId: kept(input.parentIssueId, existing?.parentIssueId),
