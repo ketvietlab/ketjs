@@ -13,17 +13,31 @@ export default defineModule({
   category: 'Productivity',
   // The kit's client directory, the same one mail_backend serves its chatter
   // from: the editor's shell and stylesheet are kit files, so they ship from
-  // where the kit keeps them rather than being copied into this module.
+  // where the kit keeps them rather than being copied into this module. The
+  // board and map views follow it here for the same reason.
   assets: new URL('../../ui/client/', import.meta.url),
-  styles: ['flow-editor.css'],
+  styles: ['flow-editor.css', 'flow-app.css'],
   functions,
   routes,
   islands,
   messages,
-  joints: { 'screen.issue': { props: { issueId: 'text', lang: 'text?' } } },
-  fills: { 'flow_backend:screen.issue': '{% island "flow.issue-editor" %}' },
-  // No menu entry yet — that wants a list/board screen this plan didn't
-  // scope (it was about the collaborative editor, not the whole admin UI).
-  // The detail screen below is reachable directly at
-  // /admin/flow/issues/{id} for now.
+  joints: {
+    'screen.issue': { props: { issueId: 'text', lang: 'text?' } },
+    'screen.board': { props: { lang: 'text?', data: 'text?' } },
+    'screen.map': { props: { lang: 'text?', data: 'text?' } },
+  },
+  fills: {
+    'flow_backend:screen.issue': '{% island "flow.issue-editor" %}',
+    'flow_backend:screen.board': '{% island "flow.board" %}',
+    'flow_backend:screen.map': '{% island "flow.map" %}',
+  },
+  menus: {
+    flow: {
+      label: 'flow_backend.menu.app',
+      icon: 'list',
+      path: '/admin/flow',
+      sequence: 45,
+      needs: 'flow.project.list',
+    },
+  },
 })
