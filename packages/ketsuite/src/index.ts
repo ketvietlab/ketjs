@@ -79,6 +79,7 @@ export { default as purchaseStaffChannel } from './modules/purchase_staff_channe
 export { default as purchaseBackend } from './modules/purchase_backend/index.ts'
 export { default as sale } from './modules/sale/index.ts'
 export { default as saleStaffChannel } from './modules/sale_staff_channel/index.ts'
+export { default as stockStaffChannel } from './modules/stock_staff_channel/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
