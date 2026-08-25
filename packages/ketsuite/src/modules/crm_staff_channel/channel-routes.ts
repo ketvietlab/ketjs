@@ -112,6 +112,26 @@ const page = {
   properties: { items: { type: 'array', items: summary }, nextCursor: nullableString },
   required: ['items', 'nextCursor'],
 }
+const overview = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    leadCount: { type: 'integer', minimum: 0 },
+    opportunityCount: { type: 'integer', minimum: 0 },
+    openOpportunityCount: { type: 'integer', minimum: 0 },
+    overdueActivityCount: { type: 'integer', minimum: 0 },
+    expectedRevenue: string,
+    asOf: { type: 'string', format: 'date' },
+  },
+  required: [
+    'leadCount',
+    'opportunityCount',
+    'openOpportunityCount',
+    'overdueActivityCount',
+    'expectedRevenue',
+    'asOf',
+  ],
+}
 const mutation = {
   type: 'object',
   additionalProperties: false,
@@ -341,6 +361,29 @@ const refreshedMutation = async (
 }
 
 export const channelRoutes = routesOf(
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'crm/overview',
+    operationId: 'staff.crm.overview',
+    summary: 'Read an exact actor-visible CRM pipeline and overdue-activity aggregate.',
+    auth: 'required',
+    capability: { key: 'crm.pipeline', action: 'read' },
+    request: {
+      query: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { today: { type: 'string', format: 'date' } },
+        required: ['today'],
+      },
+    },
+    responses: { '200': envelope(overview) },
+    handler: async (ctx, url, req) => {
+      const today = String(url.searchParams.get('today'))
+      const data = (await ctx.call('crm.overview', { today }, url, req)) as Row
+      return { data: { ...data, asOf: today } }
+    },
+  }),
   defineChannelRoute({
     profile: 'staff',
     method: 'GET',

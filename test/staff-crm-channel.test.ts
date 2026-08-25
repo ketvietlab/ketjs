@@ -58,6 +58,7 @@ const boot = async (t: TestContext) => {
   for (const fnKey of [
     'crm.case.list',
     'crm.case.get',
+    'crm.overview',
     'crm.case.move',
     'crm.case.assign',
     'crm.case.markWon',
@@ -193,6 +194,22 @@ test('staff CRM channel requires a session and pages bounded pipeline summaries'
   assert.equal(second.items.length, 1)
   assert.equal(second.nextCursor, null)
   assert.equal(new Set([...first.items, ...second.items].map((item) => item.id)).size, 3)
+})
+
+test('staff CRM overview aggregates the complete actor-visible pipeline', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+
+  assert.equal((await e2e.client.get('/api/staff/v1/crm/overview')).status, 422)
+  const response = await e2e.client.json<Envelope<Row>>('/api/staff/v1/crm/overview?today=2026-08-28')
+  assert.deepEqual(response.data, {
+    leadCount: 1,
+    opportunityCount: 2,
+    openOpportunityCount: 1,
+    overdueActivityCount: 1,
+    expectedRevenue: '2400',
+    asOf: '2026-08-28',
+  })
 })
 
 test('staff CRM channel filters only the domain-supported type, outcome and search values', async (t) => {
@@ -542,4 +559,28 @@ test('staff CRM commands that create a record replay under the same idempotency 
   assert.equal(scheduled.status, 200)
   const replayedSchedule = await scheduleActivity()
   assert.equal(replayedSchedule.status, 200)
+})
+
+test('staff CRM overview counts only activities on cases the actor can see', async (t) => {
+  const e2e = await boot(t)
+  const scope = { company: 'acme', branches: null }
+  // An overdue activity on a lead this actor cannot open. The aggregate reaches
+  // for activity links by case, so the boundary has to hold there too — not just
+  // on the list and detail routes.
+  await e2e.fixture.call<Row>(
+    'crm.activity.schedule',
+    {
+      id: 'activity-admin-only',
+      caseId: 'admin-only',
+      assigneeUserId: 'admin',
+      summary: 'Admin follow-up',
+      dueDate: '2026-08-01',
+      idempotencyKey: 'staff-crm-activity-admin-only',
+    },
+    { scope, actor: 'admin' },
+  )
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const overview = (await e2e.client.json<Envelope<Row>>('/api/staff/v1/crm/overview?today=2026-08-28')).data
+  assert.equal(overview.overdueActivityCount, 1)
+  assert.equal(overview.leadCount, 1)
 })
