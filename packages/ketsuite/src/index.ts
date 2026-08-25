@@ -53,7 +53,21 @@ export { default as productMedia } from './modules/product_media/index.ts'
 export { default as productBackend } from './modules/product_backend/index.ts'
 export { default as pricing } from './modules/pricing/index.ts'
 export { default as stock } from './modules/stock/index.ts'
+export { stockFunctionSpecs } from './modules/stock/index.ts'
 export { default as stockBackend } from './modules/stock_backend/index.ts'
+export { default as manufacturing } from './modules/manufacturing/index.ts'
+export { default as manufacturingBackend } from './modules/manufacturing_backend/index.ts'
+export { manufacturingFunctionSpecs } from './modules/manufacturing/index.ts'
+export {
+  BOM_TYPES,
+  PRODUCTION_STATES,
+  WORK_ORDER_STATES,
+} from './modules/manufacturing/index.ts'
+export type {
+  BomType,
+  ProductionState,
+  WorkOrderState,
+} from './modules/manufacturing/index.ts'
 export { default as pricingBackend } from './modules/pricing_backend/index.ts'
 export { default as account } from './modules/account/index.ts'
 export { default as report } from './modules/report/index.ts'
@@ -61,8 +75,10 @@ export { REPORT_FILTERS } from './modules/report/routes.ts'
 export { default as reportBackend } from './modules/report_backend/index.ts'
 export { default as accountBackend } from './modules/account_backend/index.ts'
 export { default as purchase } from './modules/purchase/index.ts'
+export { default as purchaseStaffChannel } from './modules/purchase_staff_channel/index.ts'
 export { default as purchaseBackend } from './modules/purchase_backend/index.ts'
 export { default as sale } from './modules/sale/index.ts'
+export { default as saleStaffChannel } from './modules/sale_staff_channel/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
@@ -71,6 +87,7 @@ export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
 export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
 export { default as crm } from './modules/crm/index.ts'
+export { default as crmStaffChannel } from './modules/crm_staff_channel/index.ts'
 export { default as crmSale } from './modules/crm_sale/index.ts'
 export { default as crmBackend } from './modules/crm_backend/index.ts'
 export { default as crmWebsite } from './modules/crm_website/index.ts'

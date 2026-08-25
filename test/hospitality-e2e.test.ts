@@ -914,7 +914,15 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(checkedInHtml, /Điều chỉnh ngày trả phòng/)
   assert.doesNotMatch(checkedInHtml, /hospitality_core\./)
 
-  const adjustedCheckOut = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+  // The field is a datetime-local, read in the property's timezone. Building it
+  // from toISOString() spells the instant in UTC, so once UTC and Ho Chi Minh
+  // City fall on different dates — every day from 17:00 UTC — "tomorrow" arrived
+  // as tomorrow-in-UTC, which is still today where the property is. The stay then
+  // had no night left to release and the early checkout stopped being early.
+  const adjustedCheckOut = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
+    .slice(0, 16)
+    .replace(' ', 'T')
   const departureAdjusted = await e2e.client.post(
     '/admin/hospitality/reservations/booking-1?lang=vi',
     new URLSearchParams({
