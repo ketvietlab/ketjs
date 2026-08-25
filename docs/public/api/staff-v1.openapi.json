@@ -7342,6 +7342,9 @@
                         "notes": {
                           "type": ["string", "null"]
                         },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
                         "lines": {
                           "type": "array",
                           "items": {
@@ -7393,6 +7396,84 @@
                             ]
                           }
                         },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
                         "receiptMoveCount": {
                           "type": "integer",
                           "minimum": 0
@@ -7401,9 +7482,18 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "readOnly": {
-                          "type": "boolean",
-                          "const": true
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -7417,9 +7507,14 @@
                         "total",
                         "vendorReference",
                         "notes",
+                        "pickingTypeId",
                         "lines",
+                        "receipts",
+                        "vendorBills",
                         "receiptMoveCount",
                         "vendorBillCount",
+                        "version",
+                        "availableActions",
                         "readOnly"
                       ]
                     },
@@ -7458,6 +7553,2076 @@
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false
+      }
+    },
+    "/purchasing/orders/create": {
+      "post": {
+        "operationId": "staff.purchasing.orders.create",
+        "summary": "Create or replay one canonical RFQ and its complete line set.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "vendorId": {
+                    "type": "string"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+                        }
+                      },
+                      "required": ["productId", "quantity"]
+                    }
+                  }
+                },
+                "required": ["vendorId", "lines"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "pickingTypeId",
+                        "lines",
+                        "receipts",
+                        "vendorBills",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "create"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/orders/{id}/update": {
+      "put": {
+        "operationId": "staff.purchasing.orders.update",
+        "summary": "Replace one RFQ vendor and complete line set under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "vendorId": {
+                    "type": "string"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+                        }
+                      },
+                      "required": ["productId", "quantity"]
+                    }
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^pov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["vendorId", "lines", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "pickingTypeId",
+                        "lines",
+                        "receipts",
+                        "vendorBills",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "update"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/orders/{id}/confirm": {
+      "post": {
+        "operationId": "staff.purchasing.orders.confirm",
+        "summary": "Submit one reviewed RFQ for explicit approval under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^pov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "pickingTypeId",
+                        "lines",
+                        "receipts",
+                        "vendorBills",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "confirm"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/orders/{id}/approve": {
+      "post": {
+        "operationId": "staff.purchasing.orders.approve",
+        "summary": "Approve one submitted RFQ and create its receipt under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^pov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "pickingTypeId",
+                        "lines",
+                        "receipts",
+                        "vendorBills",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "approve"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/orders/{id}/cancel": {
+      "post": {
+        "operationId": "staff.purchasing.orders.cancel",
+        "summary": "Cancel one unreceived and unbilled RFQ under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^pov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "expectedAt": {
+                          "type": "string"
+                        },
+                        "vendor": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "billingState": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "vendorReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "pickingTypeId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "receivedQuantity": {
+                                "type": "string"
+                              },
+                              "billedQuantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "receivedQuantity",
+                              "billedQuantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "receipts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "scheduledAt": {
+                                "type": "string"
+                              },
+                              "receivedAt": {
+                                "type": ["string", "null"]
+                              },
+                              "lineCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "availableActions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "scheduledAt",
+                              "receivedAt",
+                              "lineCount",
+                              "availableActions"
+                            ]
+                          }
+                        },
+                        "vendorBills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentState": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "amount": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentState", "total"]
+                          }
+                        },
+                        "receiptMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "vendorBillCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^pov_[0-9a-f]{64}$"
+                        },
+                        "availableActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "expectedAt",
+                        "vendor",
+                        "billingState",
+                        "total",
+                        "vendorReference",
+                        "notes",
+                        "pickingTypeId",
+                        "lines",
+                        "receipts",
+                        "vendorBills",
+                        "receiptMoveCount",
+                        "vendorBillCount",
+                        "version",
+                        "availableActions",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "cancel"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/purchasing/orders/{id}/receipts/{receiptId}/receive": {
+      "post": {
+        "operationId": "staff.purchasing.orders.receive",
+        "summary": "Receive one fully prepared receipt under the current purchase-order version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^pov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "const": "received"
+                        },
+                        "receiptId": {
+                          "type": "string"
+                        },
+                        "receivedAt": {
+                          "type": "string"
+                        },
+                        "lineCount": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "order": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["draft", "sent", "to approve", "purchase", "cancel"]
+                            },
+                            "orderedAt": {
+                              "type": "string"
+                            },
+                            "expectedAt": {
+                              "type": "string"
+                            },
+                            "vendor": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "billingState": {
+                              "type": "string"
+                            },
+                            "total": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "vendorReference": {
+                              "type": ["string", "null"]
+                            },
+                            "notes": {
+                              "type": ["string", "null"]
+                            },
+                            "pickingTypeId": {
+                              "type": "string"
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "quantity": {
+                                    "type": "string"
+                                  },
+                                  "receivedQuantity": {
+                                    "type": "string"
+                                  },
+                                  "billedQuantity": {
+                                    "type": "string"
+                                  },
+                                  "uomId": {
+                                    "type": "string"
+                                  },
+                                  "unitPrice": {
+                                    "type": "string"
+                                  },
+                                  "discount": {
+                                    "type": "string"
+                                  },
+                                  "subtotal": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "productId",
+                                  "name",
+                                  "quantity",
+                                  "receivedQuantity",
+                                  "billedQuantity",
+                                  "uomId",
+                                  "unitPrice",
+                                  "discount",
+                                  "subtotal"
+                                ]
+                              }
+                            },
+                            "receipts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "reference": {
+                                    "type": "string"
+                                  },
+                                  "state": {
+                                    "type": "string"
+                                  },
+                                  "scheduledAt": {
+                                    "type": "string"
+                                  },
+                                  "receivedAt": {
+                                    "type": ["string", "null"]
+                                  },
+                                  "lineCount": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "availableActions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "reference",
+                                  "state",
+                                  "scheduledAt",
+                                  "receivedAt",
+                                  "lineCount",
+                                  "availableActions"
+                                ]
+                              }
+                            },
+                            "vendorBills": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "reference": {
+                                    "type": "string"
+                                  },
+                                  "state": {
+                                    "type": "string"
+                                  },
+                                  "paymentState": {
+                                    "type": "string"
+                                  },
+                                  "total": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "currency": {
+                                        "type": "string"
+                                      },
+                                      "amount": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["currency", "amount"]
+                                  }
+                                },
+                                "required": ["id", "reference", "state", "paymentState", "total"]
+                              }
+                            },
+                            "receiptMoveCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "vendorBillCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "string",
+                              "pattern": "^pov_[0-9a-f]{64}$"
+                            },
+                            "availableActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "readOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "reference",
+                            "state",
+                            "orderedAt",
+                            "expectedAt",
+                            "vendor",
+                            "billingState",
+                            "total",
+                            "vendorReference",
+                            "notes",
+                            "pickingTypeId",
+                            "lines",
+                            "receipts",
+                            "vendorBills",
+                            "receiptMoveCount",
+                            "vendorBillCount",
+                            "version",
+                            "availableActions",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "receiptId", "receivedAt", "lineCount", "order"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "purchasing.orders",
+          "action": "receive"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
       }
     },
     "/purchasing/vendor-bills": {
