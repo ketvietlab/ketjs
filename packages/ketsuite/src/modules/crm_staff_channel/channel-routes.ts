@@ -1,6 +1,6 @@
 // CRM pipeline projections and explicit commands for staff clients.
 
-import { randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
 import { CASE_KINDS, TERMINAL_STATES } from '../crm/types.ts'
@@ -8,6 +8,25 @@ import { CASE_KINDS, TERMINAL_STATES } from '../crm/types.ts'
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
 type Issue = { field?: string; code?: string; params?: Record<string, unknown> }
+
+/**
+ * The id of a record a command creates.
+ *
+ * A retry carries the same idempotency key, so everything the call is
+ * deduplicated on has to be the same too. A fresh uuid per attempt made the
+ * second attempt look like a different request, and the key refused it with a
+ * conflict — telling a caller its create failed when it had in fact succeeded,
+ * which is the opposite of what an idempotency key is for. Worse, the natural
+ * answer to that conflict is to retry under a new key, and that is how the
+ * duplicate the key exists to prevent finally gets written.
+ *
+ * Deriving the id from the namespace the call is already deduplicated under
+ * makes a replay byte-identical, so it replays.
+ */
+const commandId = (namespace: string, key: string): string => {
+  const hex = createHash('sha256').update(`${namespace}\n${key}`).digest('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
 
 /**
  * The channel says `pending` where the domain says `open`; the rest of the
@@ -394,7 +413,8 @@ export const channelRoutes = routesOf(
       const key = idempotencyKey(ctx, url, req)
       if (typeof key !== 'string') return key
       const identity = request.identity!
-      const id = randomUUID()
+      const namespace = `staff:${String(identity.companyId)}:${identity.userId}:crm.case.save`
+      const id = commandId(namespace, key)
       const result = (await ctx.call(
         'crm.case.save',
         {
@@ -409,7 +429,7 @@ export const channelRoutes = routesOf(
         req,
         {
           idempotencyKey: key,
-          idempotencyNamespace: `staff:${String(identity.companyId)}:${identity.userId}:crm.case.save`,
+          idempotencyNamespace: namespace,
         },
       )) as { ok?: boolean; id?: unknown }
       if (!result.ok) return domainFailure(ctx, url, req, result)
@@ -573,7 +593,7 @@ export const channelRoutes = routesOf(
       const result = (await ctx.call(
         'crm.activity.schedule',
         {
-          id: randomUUID(),
+          id: commandId(`staff:${String(identity.companyId)}:${identity.userId}:crm.activity.schedule`, key),
           caseId: params.id,
           typeId: request.body.activityTypeId,
           summary: type.name,
