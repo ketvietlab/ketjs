@@ -206,3 +206,28 @@ test('staff inventory channel returns read-only stock positions and strong versi
   assert.equal((await e2e.client.get('/api/staff/v1/inventory/products/service')).status, 404)
   assert.equal((await e2e.client.get('/api/staff/v1/inventory/products/missing')).status, 404)
 })
+
+test('staff inventory version tracks the unit label it resolves elsewhere', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'inventory-user', password: 'correct horse battery' })
+  const read = async () => {
+    const response = await e2e.client.get('/api/staff/v1/inventory/products/mango')
+    const body = (await response.json()) as Envelope<Row>
+    return {
+      version: String(body.data.version),
+      etag: response.headers.get('etag'),
+      uom: String((body.data.uom as Row).name),
+    }
+  }
+  const before = await read()
+  // The unit name is resolved from uom, not from the product row.
+  await e2e.fixture.call<Row>(
+    'uom.saveUnit',
+    { id: 'unit', name: 'Thùng carton', relativeFactor: '1' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const after = await read()
+  assert.equal(after.uom, 'Thùng carton')
+  assert.notEqual(after.version, before.version)
+  assert.equal(after.etag, `"${after.version}"`)
+})
