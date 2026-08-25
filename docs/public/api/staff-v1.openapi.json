@@ -673,6 +673,89 @@
         "x-ket-idempotent": false
       }
     },
+    "/crm/overview": {
+      "get": {
+        "operationId": "staff.crm.overview",
+        "summary": "Read an exact actor-visible CRM pipeline and overdue-activity aggregate.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "today",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "leadCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "opportunityCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "openOpportunityCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "overdueActivityCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "expectedRevenue": {
+                          "type": "string"
+                        },
+                        "asOf": {
+                          "type": "string",
+                          "format": "date"
+                        }
+                      },
+                      "required": [
+                        "leadCount",
+                        "opportunityCount",
+                        "openOpportunityCount",
+                        "overdueActivityCount",
+                        "expectedRevenue",
+                        "asOf"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
     "/crm/leads": {
       "get": {
         "operationId": "staff.crm.leads.list",
@@ -5204,6 +5287,141 @@
                         "invoiceCount",
                         "readOnly"
                       ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/sales/orders/{id}/lifecycle": {
+      "get": {
+        "operationId": "staff.sales.orders.lifecycle",
+        "summary": "Read the canonical delivery and invoice lifecycle of one sales order.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "reference", "state"]
+                        },
+                        "deliveries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "reference", "state"]
+                          }
+                        },
+                        "invoices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "paymentStatus": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "reference", "state", "paymentStatus"]
+                          }
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": ["order", "deliveries", "invoices", "version", "readOnly"]
                     },
                     "error": {},
                     "meta": {

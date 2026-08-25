@@ -5,7 +5,7 @@
 // never invents an aggregate version or a write action.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
 // The domain owns the state machine. Copying its values into the contract by
 // hand meant the published enum could fall behind it, and now that the facade
 // refuses anything the enum omits, falling behind would turn a legitimate
@@ -77,6 +77,29 @@ const detail = {
     'invoiceCount',
     'readOnly',
   ],
+}
+const lifecycleReference = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, reference: string, state: string },
+  required: ['id', 'reference', 'state'],
+}
+const lifecycleInvoice = {
+  ...lifecycleReference,
+  properties: { ...lifecycleReference.properties, paymentStatus: string },
+  required: [...lifecycleReference.required, 'paymentStatus'],
+}
+const lifecycle = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    order: lifecycleReference,
+    deliveries: { type: 'array', items: lifecycleReference },
+    invoices: { type: 'array', items: lifecycleInvoice },
+    version: string,
+    readOnly: { type: 'boolean', const: true },
+  },
+  required: ['order', 'deliveries', 'invoices', 'version', 'readOnly'],
 }
 const page = {
   type: 'object',
@@ -228,6 +251,47 @@ export const orderRoutes = routesOf(
           invoiceCount: invoices.length,
           readOnly: true,
         },
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'sales/orders/{id}/lifecycle',
+    operationId: 'staff.sales.orders.lifecycle',
+    summary: 'Read the canonical delivery and invoice lifecycle of one sales order.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'read' },
+    request: {
+      params: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string },
+        required: ['id'],
+      },
+    },
+    responses: { '200': envelope(lifecycle), '404': envelope({ type: 'null' }) },
+    handler: async (ctx, url, req, params) => {
+      const row = (await ctx.call('sale.getOrder', { id: params.id }, url, req)) as Row | null
+      if (!row) return notFound(ctx, url, req)
+      const references = (values: unknown, payment = false) =>
+        (Array.isArray(values) ? (values as Row[]) : [])
+          .map((item) => ({
+            id: String(item.id),
+            reference: String(item.name ?? item.id),
+            state: String(item.state),
+            ...(payment ? { paymentStatus: String(item.paymentState ?? 'not_paid') } : {}),
+          }))
+          .sort((left, right) => left.id.localeCompare(right.id))
+      const content = {
+        order: { id: String(row.id), reference: String(row.name), state: String(row.state) },
+        deliveries: references(row.pickings),
+        invoices: references(row.invoices, true),
+      }
+      const version = `solv_${sha256(JSON.stringify(content))}`
+      return {
+        data: { ...content, version, readOnly: true },
+        headers: { etag: `"${version}"` },
       }
     },
   }),
