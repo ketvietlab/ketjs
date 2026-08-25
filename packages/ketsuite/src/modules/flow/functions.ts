@@ -280,6 +280,45 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The project this reader's board last showed, if any.
+   *
+   * Answers null rather than guessing a project: the board asks them to pick
+   * once, and a wrong guess would show one team's work to somebody who wanted
+   * another's.
+   */
+  'board.scope': defineFn({
+    input: {},
+    output: { projectId: 'id?' },
+    effects: ['read:flow.BoardScope'],
+    agent: true,
+    handler: async (ctx) => {
+      if (!ctx.actor) return { projectId: null }
+      const held = (await ctx.db.select('flow.BoardScope', { userId: ctx.actor }))[0]
+      return { projectId: held ? held.projectId : null }
+    },
+  }),
+
+  'board.remember': defineFn({
+    input: { projectId: 'id' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: ['read:flow.BoardScope', 'write:flow.BoardScope', 'read:flow.Project'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!ctx.actor) return invalid(issue('actor', 'flow.error.actorRequired'))
+      const project = (await ctx.db.select('flow.Project', { id: args.projectId, active: true }))[0]
+      if (!project) return invalid(issue('projectId', 'flow.error.notFound'))
+      // One row per reader, so opening a different board replaces the answer
+      // rather than adding one.
+      const id = `${String(ctx.actor)}`
+      const row = { id, userId: ctx.actor, projectId: args.projectId, updatedAt: new Date().toISOString() }
+      await ctx.db.insertIfAbsent('flow.BoardScope', row)
+      await ctx.db.update('flow.BoardScope', { id }, row)
+      return { ok: true }
+    },
+  }),
+
   'field.list': defineFn({
     input: { projectId: 'id', includeArchived: 'bool?' },
     output: {
@@ -605,6 +644,7 @@ export const functions: Record<string, FnSpec> = {
       title: 'text',
       assigneeUserId: 'id?',
       priority: 'text?',
+      startDate: 'date?',
       dueDate: 'date?',
       estimate: 'decimal?',
       tagIds: 'json?',
