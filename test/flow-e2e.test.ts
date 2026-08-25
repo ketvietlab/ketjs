@@ -5,6 +5,7 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { address, company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
+import { emptyIssueListState } from '../packages/ketsuite/src/modules/flow/search.ts'
 
 const errorCode = (row: Row): unknown => (row.errors as Array<{ code: string }> | undefined)?.[0]?.code
 
@@ -569,6 +570,110 @@ test('flow: the board a reader last opened is remembered for that reader alone',
 
     const missing = await call<Row>('flow.board.remember', { projectId: 'nosuchproject' })
     assert.equal(missing.ok, false)
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * The half that makes custom fields a tool rather than a decoration.
+ *
+ * The value lives in `flow.IssueFieldValue` and this query builder has no
+ * JOIN, so the rule is answered by collecting ids and constraining the issue
+ * query with them — the same shape every other cross-table question in this
+ * codebase takes.
+ */
+test('flow: a custom field can be filtered on', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    await call('flow.project.save', {
+      values: { id: 'pf', key: 'PF', name: 'Filterable' },
+      idempotencyKey: 'project-filter-fields',
+    })
+    await call('flow.column.save', {
+      values: { id: 'cf', projectId: 'pf', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-filter-fields',
+    })
+    await call('flow.field.save', {
+      id: 'ff-env',
+      projectId: 'pf',
+      code: 'environment',
+      name: 'Environment',
+      kind: 'select',
+      config: {
+        options: [
+          { code: 'production', label: 'Production' },
+          { code: 'staging', label: 'Staging' },
+        ],
+      },
+      idempotencyKey: 'field-filter-env',
+    })
+
+    const add = (id: string, title: string, environment?: string) =>
+      call('flow.issue.save', {
+        id,
+        projectId: 'pf',
+        columnId: 'cf',
+        title,
+        ...(environment ? { fields: { environment } } : {}),
+        idempotencyKey: `issue-filter-${id}`,
+      })
+    await add('fi1', 'Prod one', 'production')
+    await add('fi2', 'Prod two', 'production')
+    await add('fi3', 'Stage one', 'staging')
+    await add('fi4', 'No environment')
+
+    const listed = async (filters: unknown[]) =>
+      (
+        await call<Row>('flow.issue.list', {
+          projectId: 'pf',
+          limit: 50,
+          listState: { ...emptyIssueListState(), filters },
+        })
+      ).rows as Row[]
+    const titles = async (filters: unknown[]) =>
+      (await listed(filters)).map((row) => String(row.title)).sort()
+    const rule = (operator: string, value?: unknown) => [
+      { kind: 'rule', field: 'field:environment', operator, value },
+    ]
+
+    assert.deepEqual(await titles([]), ['No environment', 'Prod one', 'Prod two', 'Stage one'])
+    assert.deepEqual(await titles(rule('equals', 'production')), ['Prod one', 'Prod two'])
+    assert.deepEqual(await titles(rule('anyOf', ['production', 'staging'])), [
+      'Prod one',
+      'Prod two',
+      'Stage one',
+    ])
+    // A row exists only where there is a value, so `isSet` needs no clause of
+    // its own — and the issue nobody answered is the one it leaves out.
+    assert.deepEqual(await titles(rule('isSet')), ['Prod one', 'Prod two', 'Stage one'])
+    // Asking for a value nothing holds answers with nothing, not with everything.
+    assert.deepEqual(await titles(rule('equals', 'moon')), [])
+
+    // And it narrows alongside an ordinary rule rather than replacing it.
+    assert.deepEqual(
+      await titles([
+        { kind: 'rule', field: 'field:environment', operator: 'equals', value: 'production' },
+        { kind: 'rule', field: 'title', operator: 'contains', value: 'two' },
+      ]),
+      ['Prod two'],
+    )
   } finally {
     await e2e.close()
   }

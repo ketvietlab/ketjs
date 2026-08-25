@@ -1,5 +1,39 @@
 import { defineListSearch, isNull } from '@ketvietlab/ketjs'
-import type { ListState, Table } from '@ketvietlab/ketjs'
+import type { FilterFieldSpec, ListState, Row, Table } from '@ketvietlab/ketjs'
+
+/** The prefix that marks a filter key as one project's own field rather than Flow's. */
+export const FIELD_FILTER_PREFIX = 'field:'
+
+/**
+ * A project's custom fields, as things the filter menu can offer.
+ *
+ * `col` is the issue's own id, which is not a lie: the rule is rewritten into
+ * an id set before it compiles (see `fieldFilterIds` in operations.ts), because
+ * the value lives in another table and this query builder has no JOIN. What the
+ * spec contributes is the menu entry, the vocabulary and the validation.
+ *
+ * Only operators that can be answered by a set of ids are offered. `notEquals`
+ * and `isNotSet` are the complement of one, which is every other issue in the
+ * system — a control that cannot answer honestly is worse than one that is not
+ * there.
+ */
+export const fieldFilters = (T: Table, fields: Row[]): FilterFieldSpec[] =>
+  fields.map((field) => ({
+    key: `${FIELD_FILTER_PREFIX}${String(field.code)}`,
+    label: String(field.name),
+    col: T.id!,
+    type: String(field.kind) === 'select' ? ('selection' as const) : ('text' as const),
+    operators: ['equals', 'anyOf', 'isSet'] as const,
+    ...(String(field.kind) === 'select'
+      ? {
+          choices: (
+            ((field.config as { options?: Array<{ code?: unknown }> } | null)?.options ?? []) as Array<{
+              code?: unknown
+            }>
+          ).map((option) => String(option?.code ?? '')),
+        }
+      : {}),
+  }))
 
 export const emptyIssueListState = (): ListState => ({
   presets: [],
@@ -12,7 +46,11 @@ export const emptyIssueListState = (): ListState => ({
   includeArchived: false,
 })
 
-export const issueListSearch = (T: Table) =>
+/**
+ * `fields` are one project's custom fields. Absent on the cross-project lists,
+ * where there is no single project whose vocabulary to offer.
+ */
+export const issueListSearch = (T: Table, fields: Row[] = []) =>
   defineListSearch({
     key: 'flow.issues',
     searchable: [
@@ -42,6 +80,7 @@ export const issueListSearch = (T: Table) =>
       { key: 'active', label: 'flow.field.active', col: T.active!, type: 'boolean' },
       { key: 'createdAt', label: 'flow.field.createdAt', col: T.createdAt!, type: 'datetime' },
       { key: 'updatedAt', label: 'flow.field.updatedAt', col: T.updatedAt!, type: 'datetime' },
+      ...fieldFilters(T, fields),
     ],
     groupable: [
       { key: 'columnId', label: 'flow.field.column', col: T.columnId! },

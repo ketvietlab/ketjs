@@ -4,7 +4,7 @@ import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { ensureThread, followThread, listTimeline, postMessage } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
 import type { FieldKind } from './types.ts'
-import { emptyIssueListState, issueListSearch } from './search.ts'
+import { emptyIssueListState, FIELD_FILTER_PREFIX, issueListSearch } from './search.ts'
 
 export type FlowIssue = { field: string; code: string; params?: Record<string, unknown> }
 export type FlowResult = { ok: boolean; id?: string; errors?: FlowIssue[]; [key: string]: unknown }
@@ -301,17 +301,107 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   })
 }
 
+/**
+ * How many issues one custom-field filter may match.
+ *
+ * The value lives in another table and this query builder has no JOIN, so the
+ * rule is answered by collecting ids and handing them to `IN (...)`. That list
+ * becomes SQL parameters, and every database has a ceiling on those — SQLite's
+ * has historically been 999.
+ *
+ * Capped rather than left to fail at the driver, and reported rather than
+ * trimmed quietly: a truncated *list* looks truncated, while a truncated
+ * *filter* looks like an answer. `listIssues` passes `fieldFilterTruncated`
+ * back so a screen can say so.
+ */
+export const FIELD_FILTER_MATCHES = 900
+
+type FieldFilterOutcome = { state: ListState; ids: string[] | null; truncated: boolean }
+
+/**
+ * Answers every `field:<code>` rule as a set of issue ids, and takes the rules
+ * out of the state on the way.
+ *
+ * The value lives in another table, so the rule cannot compile against a column
+ * of `flow.Issue`. Rewriting it in place does not work either — the spec
+ * declares a select field's `choices`, and a list of ids is not among them, so
+ * validation refuses the rewritten rule. So the rules leave, and what they
+ * selected is applied to the query directly.
+ *
+ * Only the top level is read, which is the only shape the filter UI builds
+ * (facets and the custom-filter row are both flat, and flat means AND). A rule
+ * nested inside an `or` group is left where it is rather than quietly hoisted
+ * out of it: removing one from an `or` widens the group, and answering a
+ * narrower question than was asked is the failure that looks like success.
+ */
+async function resolveFieldFilters(
+  ctx: Ctx,
+  state: ListState,
+  projectId: unknown,
+): Promise<FieldFilterOutcome> {
+  const top = (state.filters ?? []) as Array<Record<string, unknown>>
+  const rules = top.filter(
+    (node) => node?.kind === 'rule' && String(node.field ?? '').startsWith(FIELD_FILTER_PREFIX),
+  )
+  if (!rules.length) return { state, ids: null, truncated: false }
+  const defs = await ctx.db.select(
+    'flow.FieldDef',
+    projectId ? { projectId, active: true } : { active: true },
+  )
+  const byCode = new Map(defs.map((def) => [String(def.code), def]))
+  let truncated = false
+  let matched: Set<string> | null = null
+
+  for (const rule of rules) {
+    const code = String(rule.field).slice(FIELD_FILTER_PREFIX.length)
+    const def = byCode.get(code)
+    const found = new Set<string>()
+    if (def) {
+      const V = ctx.table('flow.IssueFieldValue')
+      let query = from(V).where(eq(V.fieldId, def.id))
+      const operator = String(rule.operator)
+      if (operator === 'equals') query = query.where(eq(V.value, String(rule.value ?? '')))
+      else if (operator === 'anyOf') {
+        const values = (Array.isArray(rule.value) ? rule.value : [rule.value]).map(String)
+        query = query.where(inArray(V.value, values))
+      }
+      // `isSet` needs no clause of its own: a row exists only where there is a
+      // value, because emptying a field deletes its row rather than storing "".
+      const rows = await ctx.db.all(query.limit(FIELD_FILTER_MATCHES + 1))
+      if (rows.length > FIELD_FILTER_MATCHES) truncated = true
+      for (const row of rows.slice(0, FIELD_FILTER_MATCHES)) found.add(String(row.issueId))
+    }
+    // Several rules narrow each other, which is what a flat filter row means.
+    matched = matched ? new Set([...matched].filter((id: string) => found.has(id))) : found
+  }
+
+  return {
+    state: { ...state, filters: top.filter((node) => !rules.includes(node)) as ListState['filters'] },
+    ids: [...(matched ?? new Set<string>())],
+    truncated,
+  }
+}
+
 const listStateOf = (value: unknown): ListState | null =>
   value && typeof value === 'object' ? (value as ListState) : null
 
 const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const I = ctx.table('flow.Issue')
-  const state = listStateOf(args.listState) ?? emptyIssueListState()
+  const given = listStateOf(args.listState) ?? emptyIssueListState()
   const timezone = String(args.timezone ?? 'UTC')
   let query = from(I)
-  const spec = issueListSearch(I)
+  // The spec has to know the project's own fields, or `parseListState` would
+  // have dropped their rules as unknown before they ever reached here.
+  const defs = args.projectId
+    ? await ctx.db.select('flow.FieldDef', { projectId: args.projectId, active: true })
+    : []
+  const { state, ids, truncated } = await resolveFieldFilters(ctx, given, args.projectId)
+  const spec = issueListSearch(I, defs)
   const compiled = compileListFilter(spec, state, { timezone })
   if (compiled) query = query.where(compiled)
+  // No match is not "no filter": asking for a value nothing holds has to answer
+  // with nothing, and an empty `IN ()` is how that is said.
+  if (ids) query = query.where(inArray(I.id, ids.length ? ids : ['\u0000']))
   const path = Array.isArray(args.path) ? args.path : []
   for (let index = 0; index < path.length; index++) {
     const selected = state.groupBy[index]
@@ -341,14 +431,19 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
     const col = sortable.get(sort.key)
     if (col) query = query.orderBy(sort.dir === 'desc' ? desc(col) : asc(col))
   }
-  return { query, state, spec, timezone }
+  return { query, state, spec, timezone, truncated }
 }
 
 export async function listIssues(
   ctx: Ctx,
   args: Record<string, unknown>,
-): Promise<{ rows: Row[]; total: number; nextCursor: string | null }> {
-  const { query } = await issueQuery(ctx, args)
+): Promise<{
+  rows: Row[]
+  total: number
+  nextCursor: string | null
+  fieldFilterTruncated?: boolean
+}> {
+  const { query, truncated } = await issueQuery(ctx, args)
   const offset = Math.max(0, Number.parseInt(String(args.cursor ?? '0'), 10) || 0)
   const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
   const [total, page] = await Promise.all([
@@ -359,6 +454,9 @@ export async function listIssues(
     rows: await serializeIssueList(ctx, page),
     total,
     nextCursor: offset + limit < total ? String(offset + limit) : null,
+    // Only said when it happened. A filter that quietly stopped short reads as
+    // an answer, which is the one thing it must not do.
+    ...(truncated ? { fieldFilterTruncated: true } : {}),
   }
 }
 
