@@ -583,7 +583,7 @@ export const functions: Record<string, FnSpec> = {
       path: 'json?',
       timezone: 'text?',
     },
-    output: { rows: 'json', total: 'int', nextCursor: 'text?' },
+    output: { rows: 'json', total: 'int', nextCursor: 'text?', fieldFilterTruncated: 'bool?' },
     effects: [...flowReadEffects],
     agent: true,
     handler: (ctx, args) => listIssues(ctx, args),

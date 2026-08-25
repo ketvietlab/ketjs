@@ -1077,7 +1077,11 @@ export const routes: Record<string, RouteEntry> = {
         if (result.ok) return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
+      // The project's own fields have to be in the spec before the URL is
+      // parsed: a rule naming a field the spec does not know is dropped as
+      // unknown, and the filter would silently do nothing.
+      const fieldDefs = (await ctx.call('flow.field.list', { projectId }, url, req)) as AnyRow[]
+      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'), fieldDefs)
       const parsed = parseListState(spec, url)
       const state = parsed.state
       const timezone = 'UTC'
