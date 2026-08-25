@@ -8,6 +8,10 @@ import { icon } from './icons.ts'
 import type { TableSelection } from './table.tsx'
 
 export const HOOKS = [
+  'list-chrome',
+  'list-context',
+  'list-chrome-row',
+  'chrome-tools',
   'chrome-lead',
   'chrome-tail',
   'chrome-create',
@@ -75,6 +79,10 @@ export type SearchMenu = {
 }
 
 export type ListChrome = {
+  /** Optional visual treatment for catalogue-style operational lists. */
+  layout?: 'catalogue'
+  /** Small section label above the list title. */
+  section?: string
   create?: { label: string; path: string } | null
   selection?: TableSelection | null
   search?: {
@@ -267,11 +275,16 @@ export const listChrome = (
   chrome: ListChrome,
   titled = true,
 ): TemplateResult => (
-  <>
-    {chromeLead(_, title, chrome, titled)}
-    {!!chrome.search && topbarSearch(_, chrome)}
-    {chromeTail(_, chrome)}
-  </>
+  <section data-ui="list-chrome" data-layout={chrome.layout ?? null}>
+    <span data-ui="list-context">{chrome.section ?? ''}</span>
+    <div data-ui="list-chrome-row">
+      {chromeLead(_, title, chrome, titled)}
+      <div data-ui="chrome-tools">
+        {!!chrome.search && topbarSearch(_, chrome)}
+        {chromeTail(_, chrome)}
+      </div>
+    </div>
+  </section>
 )
 
 const chromeLead = (_: Translator, title: string, chrome: ListChrome, titled: boolean): TemplateResult => (

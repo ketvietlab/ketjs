@@ -9,15 +9,6 @@ export default defineModule({
   summary: 'Chẩn đoán webhook, routing reply, bounce và alias.',
   category: 'Năng suất',
   routes,
-  menus: {
-    inbound: {
-      label: 'menu.app',
-      icon: 'download',
-      path: '/admin/inbound-email',
-      sequence: 17,
-      needs: 'mail_inbound.listEvents',
-    },
-  },
   messages: {
     vi: {
       'app.title': 'Email đến',

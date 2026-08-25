@@ -38,6 +38,8 @@ export type DataTable<R> = {
   gutter?: 'compact'
   selection?: TableSelection
   rowHref?: (row: R) => string
+  /** Keep row navigation without wrapping the first cell in a second link. */
+  rowLink?: boolean
   caption?: string | null
   shown?: readonly string[]
   colsHref?: (keys: readonly string[]) => string
@@ -222,7 +224,7 @@ const rowViews = <R,>(
               data-kind={column.kind ?? 'text'}
               data-priority={column.priority ?? 'secondary'}
             >
-              {table.rowHref && column === columns[0] ? (
+              {table.rowHref && table.rowLink !== false && column === columns[0] ? (
                 <a data-ui="row-link" href={table.rowHref(row)}>
                   {column.cell(row)}
                 </a>

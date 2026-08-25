@@ -1,0 +1,144 @@
+@layer ket.app {
+  /* Product records are a dense operational workspace: the identity remains
+     visually light while each editable concern reads as one deliberate panel. */
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-top"],
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="record-top"],
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="record-top"] {
+    padding: var(--space-5, 20px) var(--space-6, 24px);
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-body"],
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="record-body"],
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="record-body"] {
+    padding: var(--space-4, 16px) var(--space-5, 20px) var(--space-8, 32px);
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-body"] > [data-ui="stack"],
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"])
+    [data-ui="record-body"]
+    > [data-ui="stack"] {
+    gap: var(--space-4, 16px);
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="section"],
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="section"],
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="section"] {
+    gap: var(--space-3, 12px);
+    padding: var(--space-4, 16px);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-md, 7px);
+    background: var(--admin-card);
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form)
+    [data-ui="section"]
+    > [data-ui="section-body"]
+    > [data-ui="surface"],
+  [data-ui="record-workspace"]:has([data-ui="media"])
+    [data-ui="section"]
+    > [data-ui="section-body"]
+    > [data-ui="surface"],
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"])
+    [data-ui="section"]
+    > [data-ui="section-body"]
+    > [data-ui="surface"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-scope="product-detail"] [data-ui="form-grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4, 16px);
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form)
+    [data-scope="product-detail"]
+    [data-ui="form-field"]:first-child,
+  [data-ui="record-workspace"]:has(#product-detail-form)
+    [data-scope="product-detail"]
+    [data-ui="form-field"]:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* The design establishes attributes before the generated combinations. The
+     DOM order remains stable for forms and tests; visual order follows that
+     business sequence. */
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"])
+    [data-ui="record-body"]
+    > [data-ui="stack"] {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media"] {
+    display: grid;
+    grid-template-columns: minmax(14rem, 0.75fr) minmax(0, 1.5fr);
+    align-items: stretch;
+    gap: var(--space-3, 12px);
+  }
+
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-primary"],
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-placeholder"] {
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 19rem;
+    border: 1px dashed var(--admin-line);
+    border-radius: var(--radius-sm, 5px);
+    background: var(--admin-surface-subtle);
+    object-fit: cover;
+  }
+
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-gallery"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2, 8px);
+  }
+
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-item"] {
+    min-inline-size: 0;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-sm, 5px);
+  }
+
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-actions"],
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-extension"] {
+    grid-column: 1 / -1;
+  }
+
+  [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-aside"] > *,
+  [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="record-aside"] > *,
+  [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="record-aside"] > * {
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-md, 7px);
+    background: var(--admin-card);
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-top"],
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="record-top"],
+    [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="record-top"],
+    [data-ui="record-workspace"]:has(#product-detail-form) [data-ui="record-body"],
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="record-body"],
+    [data-ui="record-workspace"]:has(form[action*="attribute-lines"]) [data-ui="record-body"] {
+      padding-inline: var(--space-3, 12px);
+    }
+
+    [data-ui="record-workspace"]:has(#product-detail-form)
+      [data-scope="product-detail"]
+      [data-ui="form-grid"],
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-primary"],
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-placeholder"] {
+      min-block-size: 14rem;
+    }
+
+    [data-ui="record-workspace"]:has([data-ui="media"]) [data-ui="media-gallery"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}

@@ -5,9 +5,9 @@
     gap: var(--admin-gap-sm);
     max-inline-size: 52rem;
     padding: var(--admin-gap-md);
-    border: 1px solid var(--admin-line);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
 

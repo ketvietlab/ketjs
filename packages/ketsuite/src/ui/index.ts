@@ -51,7 +51,12 @@ export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
 export { modalSheet } from './modal.tsx'
-export type { RecordSummaryItem, RecordWorkspaceSlots } from './record.tsx'
+export type {
+  RecordBreadcrumbs,
+  RecordSummaryItem,
+  RecordWorkspaceOptions,
+  RecordWorkspaceSlots,
+} from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
