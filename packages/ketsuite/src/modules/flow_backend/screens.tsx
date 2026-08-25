@@ -399,6 +399,7 @@ export const issueDetailScreen = (
   const dependencies = (row.dependencies as AnyRow[] | undefined) ?? []
   const dependents = (row.dependents as AnyRow[] | undefined) ?? []
   const comments = (row.comments as AnyRow[] | undefined) ?? []
+  const children = (row.children as AnyRow[] | undefined) ?? []
   const controls = options.controls ?? {}
   const endpoint = `/admin/flow/issues/${String(row.id)}`
   const errorsFor = (action: string): string[] | undefined =>
@@ -475,6 +476,81 @@ export const issueDetailScreen = (
           }
         />,
         <Section title={_('flow_backend.issue.description')} body={options.editor} />,
+        <Section
+          title={_('flow_backend.subtasks.title')}
+          description={
+            row.parentIssueId
+              ? `${_('flow_backend.subtasks.parent')}: ${String(row.parentTitle ?? row.parentIssueId)}`
+              : undefined
+          }
+          body={stack([
+            children.length
+              ? dataTable(_, {
+                  rows: children,
+                  id: (item) => String(item.id),
+                  columns: [
+                    {
+                      key: 'title',
+                      label: _('flow_backend.field.title'),
+                      priority: 'primary',
+                      cell: (item) =>
+                        linkButton({
+                          href: `/admin/flow/issues/${String(item.id)}`,
+                          label: String(item.title),
+                          variant: 'tertiary',
+                          size: 'compact',
+                        }),
+                    },
+                    {
+                      key: 'column',
+                      label: _('flow_backend.field.column'),
+                      cell: (item) => String(item.columnName ?? '\u2014'),
+                    },
+                    {
+                      key: 'assignee',
+                      label: _('flow_backend.field.assignee'),
+                      cell: (item) => String(item.assigneeName ?? '\u2014'),
+                    },
+                    {
+                      key: 'detach',
+                      label: '',
+                      align: 'end',
+                      cell: (item) => (
+                        <RecordForm
+                          action={endpoint}
+                          hidden={{
+                            action: 'detachSubtask',
+                            id: String(item.id),
+                            childVersion: String(item.version ?? 0),
+                          }}
+                          fields={[]}
+                          submit={_('flow_backend.subtasks.detach')}
+                          submitVariant="destructive"
+                          submitSize="compact"
+                          layout="inline"
+                        />
+                      ),
+                    },
+                  ],
+                })
+              : empty(_),
+            <RecordForm
+              action={endpoint}
+              hidden={{ action: 'addSubtask' }}
+              fields={[
+                {
+                  name: 'title',
+                  label: _('flow_backend.subtasks.newTitle'),
+                  required: true,
+                  span: 'full',
+                },
+              ]}
+              errors={errorsFor('addSubtask')}
+              submit={_('flow_backend.subtasks.add')}
+              submitVariant="secondary"
+            />,
+          ])}
+        />,
         <Section
           title={_('flow_backend.dependencies.title')}
           body={stack([

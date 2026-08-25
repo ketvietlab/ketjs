@@ -243,11 +243,15 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
   const row = (await ctx.db.select('flow.Issue', { id }))[0]
   if (!row) return null
   const [serialized] = await serializeIssueList(ctx, [row])
-  const [tags, outgoing, incoming, comments] = await Promise.all([
+  const [tags, outgoing, incoming, comments, children] = await Promise.all([
     ctx.db.select('flow.IssueTag', { issueId: id }),
     ctx.db.select('flow.IssueDependency', { issueId: id }),
     ctx.db.select('flow.IssueDependency', { dependsOnIssueId: id }),
     listTimeline(ctx, String(row.threadId), { limit: 100 }),
+    // Sub-tasks. `parentIssueId` has been modelled, validated for project and
+    // for cycles since the start, and until now had no screen at all — the
+    // detail page is the only place the relationship reads from either end.
+    ctx.db.select('flow.Issue', { parentIssueId: id, active: true }),
   ])
   const tagIds = tags.map((row) => row.tagId)
   const tagRows = tagIds.length
@@ -266,8 +270,13 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
     ? await ctx.db.all(from(ctx.table('flow.Issue')).where(inArray(ctx.table('flow.Issue').id, relatedIds)))
     : []
   const titleOf = new Map(relatedRows.map((row) => [String(row.id), String(row.title)]))
+  const parent = row.parentIssueId
+    ? ((await ctx.db.select('flow.Issue', { id: row.parentIssueId }))[0] ?? null)
+    : null
   return {
     ...serialized!,
+    parentTitle: parent ? String(parent.title) : null,
+    children: await serializeIssueList(ctx, children),
     tags: tagRows,
     dependencies: outgoing.map((row) => ({
       ...row,
