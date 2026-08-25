@@ -6511,6 +6511,227 @@
         "x-ket-idempotent": false
       }
     },
+    "/sales/orders/{id}": {
+      "get": {
+        "operationId": "staff.sales.orders.get",
+        "summary": "Read the canonical versioned sales order used by staff commands.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "warehouseId",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
     "/sales/orders": {
       "get": {
         "operationId": "staff.sales.orders.list",
@@ -6712,6 +6933,9 @@
                           },
                           "required": ["currency", "amount"]
                         },
+                        "warehouseId": {
+                          "type": "string"
+                        },
                         "customerReference": {
                           "type": ["string", "null"]
                         },
@@ -6769,6 +6993,36 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
                         "readOnly": {
                           "type": "boolean",
                           "const": true
@@ -6781,11 +7035,15 @@
                         "orderedAt",
                         "customer",
                         "total",
+                        "warehouseId",
                         "customerReference",
                         "notes",
                         "lines",
                         "deliveryMoveCount",
                         "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
                         "readOnly"
                       ]
                     },
@@ -6824,6 +7082,1119 @@
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false
+      }
+    },
+    "/sales/orders/create": {
+      "post": {
+        "operationId": "staff.sales.orders.create",
+        "summary": "Create or replay one canonical draft sales order and all of its lines atomically.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "partnerId": {
+                    "type": "string"
+                  },
+                  "warehouseId": {
+                    "type": "string"
+                  },
+                  "customerReference": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+                        },
+                        "uomId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["productId", "quantity", "uomId"]
+                    }
+                  }
+                },
+                "required": ["partnerId", "warehouseId", "lines"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "warehouseId",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "create"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/sales/orders/{id}/update": {
+      "put": {
+        "operationId": "staff.sales.orders.update",
+        "summary": "Replace one draft order header and line set under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "partnerId": {
+                    "type": "string"
+                  },
+                  "warehouseId": {
+                    "type": "string"
+                  },
+                  "customerReference": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+                        },
+                        "uomId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["productId", "quantity", "uomId"]
+                    }
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^sov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["partnerId", "warehouseId", "lines", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "warehouseId",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "update"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/sales/orders/{id}/confirm": {
+      "post": {
+        "operationId": "staff.sales.orders.confirm",
+        "summary": "Confirm one reviewed quotation against fresh order and availability evidence.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^sov_[0-9a-f]{64}$"
+                  },
+                  "availabilityVersion": {
+                    "type": "string",
+                    "pattern": "^sav_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion", "availabilityVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "warehouseId",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "confirm"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/sales/orders/{id}/cancel": {
+      "post": {
+        "operationId": "staff.sales.orders.cancel",
+        "summary": "Cancel one undelivered and uninvoiced sales order under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^sov_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "sent", "sale", "cancel"]
+                        },
+                        "orderedAt": {
+                          "type": "string"
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "total": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "customerReference": {
+                          "type": ["string", "null"]
+                        },
+                        "notes": {
+                          "type": ["string", "null"]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "string"
+                              },
+                              "subtotal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "name",
+                              "quantity",
+                              "uomId",
+                              "unitPrice",
+                              "discount",
+                              "subtotal"
+                            ]
+                          }
+                        },
+                        "deliveryMoveCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invoiceCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^sov_[0-9a-f]{64}$"
+                        },
+                        "availabilityVersion": {
+                          "type": "string",
+                          "pattern": "^sav_[0-9a-f]{64}$"
+                        },
+                        "availability": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "requestedQuantity": {
+                                "type": "string"
+                              },
+                              "availableQuantity": {
+                                "type": "string"
+                              },
+                              "sufficient": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["productId", "requestedQuantity", "availableQuantity", "sufficient"]
+                          }
+                        },
+                        "readOnly": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "orderedAt",
+                        "customer",
+                        "total",
+                        "warehouseId",
+                        "customerReference",
+                        "notes",
+                        "lines",
+                        "deliveryMoveCount",
+                        "invoiceCount",
+                        "version",
+                        "availabilityVersion",
+                        "availability",
+                        "readOnly"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.orders",
+          "action": "cancel"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
       }
     },
     "/sales/orders/{id}/lifecycle": {

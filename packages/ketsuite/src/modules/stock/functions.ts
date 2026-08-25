@@ -1839,7 +1839,7 @@ functions.getPickingView = defineFn({
 })
 
 functions.listProductAvailability = defineFn({
-  input: { productIds: 'json' },
+  input: { productIds: 'json', warehouseId: 'id?' },
   output: { productId: 'id', available: 'decimal' },
   effects: ['read:stock.Quant', 'read:stock.Location'],
   agent: true,
@@ -1855,7 +1855,11 @@ functions.listProductAvailability = defineFn({
       ctx.db.all(from(Q).where(eq(Q.companyId, mine), inArray(Q.productId, productIds))),
       ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.usage, ['internal', 'transit']))),
     ])
-    const inside = new Set(locations.map((row) => String(row.id)))
+    const inside = new Set(
+      locations
+        .filter((row) => !args.warehouseId || row.warehouseId === args.warehouseId)
+        .map((row) => String(row.id)),
+    )
     const available = new Map(productIds.map((id) => [id, 0]))
     for (const quant of quants) {
       if (!inside.has(String(quant.locationId))) continue
