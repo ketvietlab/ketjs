@@ -25,6 +25,7 @@ export default defineModule({
   summary: 'Màn hình danh mục sản phẩm và lối vào từ thanh điều hướng.',
   category: 'Hệ thống',
   assets: new URL('./client/', import.meta.url),
+  styles: ['product.css'],
   islands,
   routes,
   menus,
@@ -320,5 +321,5 @@ export default defineModule({
   },
 })
 
-export { productsScreen, productDetailScreen } from './screens.tsx'
-export type { TemplateRow } from './screens.tsx'
+export { productsScreen, productDetailScreen } from './screens/index.ts'
+export type { TemplateRow } from './screens/index.ts'

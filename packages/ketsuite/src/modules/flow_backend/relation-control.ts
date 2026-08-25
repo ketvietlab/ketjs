@@ -16,7 +16,7 @@ type Req = Parameters<Route>[1]
  *
  * Epic deliberately carries no `saveFunction`: the relation-select
  * client posts a picker's inline-create as flat fields straight to that
- * function (confirmed in relation-select-view.mjs's `save()` — `{...saveDefaults,
+ * function (confirmed in relation-select-view.tsx's `save()` — `{...saveDefaults,
  * id, ...formFields}`, no wrapper), which matches `flow.tag.save`'s own flat
  * shape but not `flow.epic.save`'s (built on the generic `saveEntity` helper,
  * which expects `{values, idempotencyKey}`). An epic is also a planning

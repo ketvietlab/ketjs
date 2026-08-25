@@ -506,6 +506,7 @@ test('ui contract: the stylesheet targets no hook nothing emits', () => {
     'packages/ketsuite/src/modules/user/login.ts',
     'packages/ketsuite/src/modules/backend/catalogue.ts',
     ...globSync('packages/ketsuite/src/**/client/*.mjs'),
+    ...globSync('packages/ketsuite/src/ui/client/*.tsx'),
   ]
   const emitted = new Set<string>([
     ...HOOKS,
@@ -725,7 +726,12 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
   const html = renderToString(
     pagesScreen(_, [page()], {
       menu: MENU,
-      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      viewer: {
+        name: 'Nguyễn Quản Trị',
+        company: 'acme',
+        companies: ['acme', 'globex'],
+        contextPath: '/admin/context',
+      },
       indicators: [
         { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
         { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
@@ -733,9 +739,11 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
-  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)
+  assert.match(html, /Chuyển công ty/)
+  assert.doesNotMatch(html, /data-ui="context-switcher"|data-ui="viewer-company-indicator"/)
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
 })
 
@@ -791,6 +799,24 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
     css,
     /\[data-ui="main"\]:has\(> \[data-ui="topbar"\] > \*\) \[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
   )
+})
+
+test('record workspace: breadcrumbs and actions share the global record header', () => {
+  const html = renderToString(
+    recordWorkspace({
+      kicker: 'Products',
+      title: 'Linen shirt',
+      imageFallback: icon('package'),
+      controller: button({ label: 'Save', type: 'submit', form: 'product-form', variant: 'primary' }),
+      body: surface({ body: 'Product form' }),
+    }),
+  )
+
+  assert.match(
+    html,
+    /data-ui="record-top"[\s\S]*data-ui="record-header"[\s\S]*data-ui="breadcrumbs"[\s\S]*Products[\s\S]*Linen shirt[\s\S]*data-ui="record-controller"[\s\S]*form="product-form"/,
+  )
+  assert.doesNotMatch(html, /data-ui="record-navigation"[\s\S]*data-ui="record-controller"/)
 })
 
 test('record workspace: floating form controls can extend beyond the sheet', () => {
@@ -941,12 +967,14 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('design density: desktop controls share the 28px operational height', () => {
+test('design density: fields use a 32px minimum without enlarging operational controls', () => {
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
   assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(tokens, /--admin-field-height:\s*2rem;/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
 test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
@@ -954,7 +982,7 @@ test('style safety: hidden content has no box and adjacent record controls use a
   assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
   assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
   assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
-  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
   assert.match(
     css,
     /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,
@@ -1170,13 +1198,13 @@ test('ui contract: every input disables browser autocomplete', () => {
 })
 
 test('table selection: the checkbox cell is a navigation dead zone', () => {
-  const source = readFileSync(
-    'packages/ketsuite/src/modules/backend/design/client/table-selection.mjs',
-    'utf8',
-  )
-  assert.match(
-    source,
-    /target\?\.closest\?\.\([\s\S]*?\[data-ui="select-cell"\][\s\S]*?\)\s*\)\s*return[\s\S]*?target\?\.closest\?\.\('\[data-ui="row"\]\[data-row-href\]'\)/,
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  const selectionGuard = source.indexOf('[data-ui="select-cell"]')
+  const linkedRowNavigation = source.indexOf('[data-ui="row"][data-row-href]')
+  assert.ok(selectionGuard >= 0, 'the selection-cell guard must remain declared')
+  assert.ok(linkedRowNavigation >= 0, 'linked-row navigation must remain declared')
+  assert.ok(
+    selectionGuard < linkedRowNavigation,
     'the selection-cell guard must run before linked-row navigation',
   )
 })

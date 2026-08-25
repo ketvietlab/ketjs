@@ -35,9 +35,9 @@
     display: grid;
     gap: var(--admin-gap-sm);
     padding: var(--admin-gap);
-    border: 1px solid var(--admin-line-strong);
+    border: 1px solid var(--admin-divider-subtle);
     border-radius: var(--admin-radius);
-    background: var(--admin-surface);
+    background: var(--admin-card);
     box-shadow: var(--admin-shadow-card);
   }
   [data-ui="crm-kanban-card"] h3,

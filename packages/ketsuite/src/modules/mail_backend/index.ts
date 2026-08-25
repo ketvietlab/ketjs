@@ -13,15 +13,6 @@ export default defineModule({
   styles: ['mail.css'],
   islands,
   routes,
-  menus: {
-    mail: {
-      label: 'menu.app',
-      icon: 'bell',
-      path: '/admin/inbox',
-      sequence: 15,
-      needs: 'mail.listInbox',
-    },
-  },
   fills: {
     'backend:sidebar.foot': `{% island "mail.inbox-indicator" %}`,
   },

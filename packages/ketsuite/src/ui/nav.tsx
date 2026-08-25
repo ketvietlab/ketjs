@@ -41,13 +41,16 @@ export const HOOKS = [
   'indicator',
   'indicator-icon',
   'indicator-count',
-  'viewer-company-indicator',
   'viewer',
   'viewer-trigger',
   'viewer-presence',
   'viewer-menu',
   'viewer-who',
   'viewer-name',
+  'viewer-context-switcher',
+  'viewer-context-icon',
+  'viewer-context-copy',
+  'viewer-context-label',
   'viewer-company',
   'signout',
   'signout-button',
@@ -250,17 +253,6 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
           </div>
         )}
 
-        {!!viewer?.company && (
-          <span
-            data-ui="viewer-company-indicator"
-            role="img"
-            title={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
-            aria-label={`${viewer.companyName ?? viewer.company}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
-          >
-            {icon('building-2')}
-          </span>
-        )}
-
         {!!viewer && (
           <details data-ui="viewer">
             <summary data-ui="viewer-trigger" title={viewer.name} aria-label={viewer.name}>
@@ -281,6 +273,18 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
                   </span>
                 )}
               </span>
+              {!!viewer.contextPath && (
+                <a data-ui="viewer-context-switcher" href={viewer.contextPath}>
+                  <span data-ui="viewer-context-icon">{icon('building-2')}</span>
+                  <span data-ui="viewer-context-copy">
+                    <span data-ui="viewer-context-label">{_('backend.switchCompany')}</span>
+                    <span data-ui="viewer-company">
+                      {viewer.companyName ?? viewer.company}
+                      {viewer.branchName ? ` · ${viewer.branchName}` : ''}
+                    </span>
+                  </span>
+                </a>
+              )}
               <form data-ui="signout" method="post" action="/logout">
                 <button data-ui="signout-button" type="submit">
                   {icon('log-out')}

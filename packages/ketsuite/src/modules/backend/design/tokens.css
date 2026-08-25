@@ -13,47 +13,242 @@
   :root {
     color-scheme: light dark;
 
+    /* Dark palette. Components never consume these directly: the admin roles
+       below are the semantic compatibility layer for the whole module graph. */
+    --color-black: #000000;
+    --color-white: #ffffff;
+    --color-bg-app: #15181d;
+    --color-bg-sidebar: #171b20;
+    --color-bg-main: #1b1f24;
+    --color-bg-rail: #181c21;
+    --color-surface-0: #171b20;
+    --color-surface-1: #1d2228;
+    --color-surface-2: #23282f;
+    --color-surface-3: #292f37;
+    --color-surface-4: #30363f;
+    --color-control: #20252c;
+    --color-control-hover: #292f37;
+    --color-control-active: #313844;
+    --color-control-disabled: #1d2126;
+    --color-border-subtle: rgba(255, 255, 255, 0.055);
+    --color-border-default: rgba(255, 255, 255, 0.085);
+    --color-border-strong: rgba(255, 255, 255, 0.13);
+    --color-border-emphasis: rgba(255, 255, 255, 0.18);
+    --color-border-solid: #30363d;
+    --color-text-primary: #f2f4f7;
+    --color-text-secondary: #b4bac4;
+    --color-text-tertiary: #858d99;
+    --color-text-muted: #68717d;
+    --color-text-disabled: #505862;
+    --color-text-inverse: #111318;
+    --color-primary-50: #eef2ff;
+    --color-primary-100: #e0e7ff;
+    --color-primary-200: #c7d2fe;
+    --color-primary-300: #a5b4fc;
+    --color-primary-400: #818cf8;
+    --color-primary-500: #6366f1;
+    --color-primary-600: #5563df;
+    --color-primary-700: #4753c7;
+    --color-primary-800: #3944a5;
+    --color-primary-900: #303a83;
+    --color-primary: #5968df;
+    --color-primary-hover: #6875ea;
+    --color-primary-active: #4c59c9;
+    --color-primary-subtle: rgba(89, 104, 223, 0.14);
+    --color-primary-muted: rgba(89, 104, 223, 0.22);
+    --color-primary-border: rgba(112, 126, 240, 0.32);
+    --color-nav-selected: rgba(76, 93, 190, 0.52);
+    --color-nav-selected-hover: rgba(83, 101, 204, 0.62);
+    --color-success: #40c97b;
+    --color-success-hover: #4dd487;
+    --color-success-bg: rgba(64, 201, 123, 0.13);
+    --color-success-border: rgba(64, 201, 123, 0.22);
+    --color-warning: #e5a93c;
+    --color-warning-hover: #efb74e;
+    --color-warning-bg: rgba(229, 169, 60, 0.14);
+    --color-warning-border: rgba(229, 169, 60, 0.24);
+    --color-danger: #ef665c;
+    --color-danger-hover: #f1766d;
+    --color-danger-bg: rgba(239, 102, 92, 0.13);
+    --color-danger-border: rgba(239, 102, 92, 0.28);
+    --color-info: #5794f2;
+    --color-info-bg: rgba(87, 148, 242, 0.13);
+    --color-info-border: rgba(87, 148, 242, 0.25);
+    --status-todo-text: #aab1bc;
+    --status-todo-bg: rgba(170, 177, 188, 0.1);
+    --status-progress-text: #6f9cf8;
+    --status-progress-bg: rgba(79, 126, 233, 0.14);
+    --status-done-text: #4fd184;
+    --status-done-bg: rgba(54, 190, 113, 0.14);
+    --status-paused-text: #e9ad3e;
+    --status-paused-bg: rgba(233, 173, 62, 0.14);
+    --status-overdue-text: #f0645c;
+    --status-overdue-bg: rgba(240, 100, 92, 0.14);
+    --input-bg: #20252b;
+    --input-bg-hover: #252b32;
+    --input-bg-focus: #222831;
+    --input-border: rgba(255, 255, 255, 0.1);
+    --input-border-hover: rgba(255, 255, 255, 0.17);
+    --input-border-focus: #6474e8;
+    --input-placeholder: #707985;
+    --input-text: #e9ecf1;
+    --input-ring: 0 0 0 3px rgba(89, 104, 223, 0.16);
+    --table-bg: transparent;
+    --table-header-bg: #282d34;
+    --table-header-text: #9da4af;
+    --table-row-hover: rgba(255, 255, 255, 0.027);
+    --table-row-selected: rgba(89, 104, 223, 0.09);
+    --table-border: rgba(255, 255, 255, 0.055);
+    --sidebar-width: 216px;
+    --right-rail-width: 340px;
+    --sidebar-bg: var(--color-bg-sidebar);
+    --right-rail-bg: var(--color-bg-rail);
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --right-rail-border: rgba(255, 255, 255, 0.07);
+    --font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --font-size-2xs: 10px;
+    --font-size-xs: 11px;
+    --font-size-sm: 12px;
+    --font-size-md: 13px;
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --font-size-2xl: 22px;
+    --font-size-3xl: 28px;
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.45;
+    --line-height-relaxed: 1.6;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --space-0: 0;
+    --space-0-5: 2px;
+    --space-1: 4px;
+    --space-1-5: 6px;
+    --space-2: 8px;
+    --space-2-5: 10px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 28px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --control-height-xs: 26px;
+    --control-height-sm: 30px;
+    --control-height-md: 34px;
+    --control-height-lg: 40px;
+    --sidebar-item-height: 30px;
+    --table-row-height: 52px;
+    --table-header-height: 42px;
+    --radius-xs: 3px;
+    --radius-sm: 5px;
+    --radius-md: 7px;
+    --radius-lg: 9px;
+    --radius-xl: 12px;
+    --radius-full: 9999px;
+    --radius-app-region: 0px;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.24);
+    --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.28);
+    --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.42);
+    --duration-fast: 100ms;
+    --duration-normal: 160ms;
+    --duration-slow: 240ms;
+    --ease-default: cubic-bezier(0.2, 0, 0, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --z-base: 0;
+    --z-sticky: 10;
+    --z-dropdown: 40;
+    --z-popover: 50;
+    --z-modal: 100;
+    --z-toast: 200;
+    --gap-control: 8px;
+    --gap-form-row: 14px;
+    --gap-field-group: 20px;
+    --gap-section: 28px;
+    --page-padding-x: 28px;
+    --page-padding-y: 24px;
+
+    /* Public semantic layer for application code outside the backend package. */
+    --page-bg: var(--color-bg-main);
+    --panel-bg: var(--color-surface-1);
+    --panel-bg-subtle: var(--color-surface-0);
+    --panel-border: var(--color-border-subtle);
+    --panel-divider: var(--color-border-subtle);
+    --text-main: var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-tertiary);
+    --interactive-bg: var(--color-control);
+    --interactive-hover: var(--color-control-hover);
+    --accent: var(--color-primary);
+    --accent-hover: var(--color-primary-hover);
+
     /* Core roles */
-    --admin-bg: light-dark(#f7f5f5, #24262a);
-    --admin-surface: light-dark(#ffffff, #2e3034);
-    --admin-surface-subtle: light-dark(#efedee, #44464a);
-    --admin-surface-hover: light-dark(#f7f5f5, #44464a);
-    --admin-ink: light-dark(#24262a, #f7f5f5);
-    --admin-ink-secondary: light-dark(#5a5c5e, #cccccd);
-    --admin-ink-muted: light-dark(#717373, #9a9ea2);
-    --admin-ink-disabled: light-dark(#9a9ea2, #717373);
-    --admin-line: light-dark(#dddcde, #44464a);
-    --admin-line-strong: light-dark(#cccccd, #5a5c5e);
+    --admin-bg: light-dark(#f7f5f5, var(--color-bg-main));
+    --admin-sidebar-bg: light-dark(#f7f5f5, var(--color-bg-sidebar));
+    --admin-rail-bg: light-dark(#f7f5f5, var(--color-bg-rail));
+    --admin-surface: light-dark(#ffffff, var(--color-surface-1));
+    --admin-card: light-dark(#f9f8f8, var(--color-surface-1));
+    --admin-card-raised: light-dark(#fbfafa, var(--color-surface-2));
+    --admin-card-hover: light-dark(#ffffff, var(--color-surface-3));
+    --admin-surface-subtle: light-dark(#efedee, var(--color-surface-2));
+    --admin-surface-hover: light-dark(#f7f5f5, var(--color-control-hover));
+    --admin-control-bg: light-dark(#ffffff, var(--input-bg));
+    --admin-control-hover: light-dark(#f7f5f5, var(--input-bg-hover));
+    --admin-control-focus: light-dark(#ffffff, var(--input-bg-focus));
+    --admin-control-border: light-dark(#dddcde, var(--input-border));
+    --admin-control-border-hover: light-dark(#cccccd, var(--input-border-hover));
+    --admin-placeholder: light-dark(#717373, var(--input-placeholder));
+    --admin-ink: light-dark(#24262a, var(--color-text-primary));
+    --admin-ink-secondary: light-dark(#5a5c5e, var(--color-text-secondary));
+    --admin-ink-muted: light-dark(#717373, var(--color-text-tertiary));
+    --admin-ink-disabled: light-dark(#9a9ea2, var(--color-text-disabled));
+    --admin-line: light-dark(#dddcde, var(--color-border-default));
+    --admin-line-strong: light-dark(#cccccd, var(--color-border-strong));
+    --admin-divider-subtle: light-dark(#e9e7e8, var(--color-border-subtle));
+    --admin-table-bg: light-dark(#f9f8f8, var(--table-bg));
+    --admin-table-header: light-dark(#efedee, var(--table-header-bg));
+    --admin-table-header-ink: light-dark(#5a5c5e, var(--table-header-text));
+    --admin-table-hover: light-dark(#f7f5f5, var(--table-row-hover));
+    --admin-table-selected: light-dark(#eef0fb, var(--table-row-selected));
+    --admin-table-line: light-dark(#e9e7e8, var(--table-border));
+    --admin-nav-selected: light-dark(#eef0fb, var(--color-nav-selected));
+    --admin-nav-selected-hover: light-dark(#e4e8f8, var(--color-nav-selected-hover));
 
     /* Brand roles — normal-size white text starts at brand-600 */
-    --admin-accent: #5167c4;
-    --admin-accent-hover: #45579f;
-    --admin-accent-soft: light-dark(#eef0fb, #2f3a5f);
-    --admin-accent-line: light-dark(#c3cdf0, #394879);
-    --admin-accent-text: light-dark(#45579f, #9faee4);
+    --admin-accent: light-dark(#5167c4, var(--color-primary));
+    --admin-accent-hover: light-dark(#45579f, var(--color-primary-hover));
+    --admin-accent-soft: light-dark(#eef0fb, var(--color-primary-subtle));
+    --admin-accent-line: light-dark(#c3cdf0, var(--color-primary-border));
+    --admin-accent-text: light-dark(#45579f, #96a3ff);
     --admin-accent-ink: #ffffff;
-    --admin-focus-border: light-dark(#637ad5, #7e90db);
-    --admin-focus-ring: light-dark(#dde2f7, #45579f);
+    --admin-focus-border: light-dark(#637ad5, var(--input-border-focus));
+    --admin-focus-ring: light-dark(#dde2f7, rgba(89, 104, 223, 0.16));
 
     /* Status roles. Status surfaces stay light in both colour schemes. */
-    --admin-status-fixed-ink: #24262a;
-    --admin-status-fixed-ink-secondary: #44464a;
-    --admin-neutral-soft: #efedee;
-    --admin-neutral: #5a5c5e;
-    --admin-success: #1d5d3b;
-    --admin-success-icon: #2f8a59;
-    --admin-success-soft: #ecf5ef;
-    --admin-warning: #24262a;
-    --admin-warning-icon: #d9892b;
-    --admin-warning-soft: #fbf3e6;
-    --admin-danger: #b42318;
-    --admin-danger-strong: #912018;
-    --admin-danger-soft: #fef3f2;
-    --admin-danger-line: #fecdca;
+    --admin-status-fixed-ink: light-dark(#24262a, var(--color-text-primary));
+    --admin-status-fixed-ink-secondary: light-dark(#44464a, var(--color-text-secondary));
+    --admin-neutral-soft: light-dark(#efedee, rgba(255, 255, 255, 0.07));
+    --admin-neutral: light-dark(#5a5c5e, var(--color-text-secondary));
+    --admin-success: light-dark(#1d5d3b, var(--color-success));
+    --admin-success-icon: light-dark(#2f8a59, var(--color-success));
+    --admin-success-soft: light-dark(#ecf5ef, var(--color-success-bg));
+    --admin-warning: light-dark(#24262a, var(--color-warning));
+    --admin-warning-icon: light-dark(#d9892b, var(--color-warning));
+    --admin-warning-soft: light-dark(#fbf3e6, var(--color-warning-bg));
+    --admin-danger: light-dark(#b42318, var(--color-danger));
+    --admin-danger-strong: light-dark(#912018, #f1766d);
+    --admin-danger-soft: light-dark(#fef3f2, var(--color-danger-bg));
+    --admin-danger-line: light-dark(#fecdca, var(--color-danger-border));
 
     /* Type */
-    --admin-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --admin-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --admin-font: var(--font-sans);
+    --admin-font-mono: var(--font-mono);
     --admin-size-xs: 0.6875rem;
     --admin-size-sm: 0.75rem;
     --admin-size-base: 0.875rem;
@@ -71,14 +266,14 @@
 
     /* Shape and elevation */
     --admin-radius-xs: 0.1875rem;
-    --admin-radius-sm: 0.25rem;
-    --admin-radius: 0.375rem;
-    --admin-radius-lg: 0.5rem;
-    --admin-shadow-card: light-dark(0 1px 2px rgba(24, 24, 27, 0.05), 0 1px 2px rgba(0, 0, 0, 0.18));
+    --admin-radius-sm: 0.3125rem;
+    --admin-radius: 0.4375rem;
+    --admin-radius-lg: 0.5625rem;
+    --admin-shadow-card: light-dark(0 1px 2px rgba(24, 24, 27, 0.05), var(--shadow-xs));
     --admin-shadow-float: light-dark(
       0 2px 4px rgba(24, 24, 27, 0.05),
       0 6px 16px -4px rgba(24, 24, 27, 0.1),
-      0 8px 24px rgba(0, 0, 0, 0.28)
+      var(--shadow-popover)
     );
 
     /* The breakpoint ladder, for reading.
@@ -101,21 +296,20 @@
     --admin-bp-2xl: 96rem;
 
     /* Shell and controls */
-    --admin-sidebar-width: 14rem;
+    --admin-sidebar-width: var(--sidebar-width);
     --admin-topbar-height: calc(2.75rem + 10px);
     --admin-control-height: 1.75rem;
     /*
      * The height of something a reader types into or picks from.
      *
      * Separate from --admin-control-height, which also sizes icon buttons,
-     * avatars and chips: a field grows on a touch screen because a fingertip is
-     * not a cursor, and those do not. The desktop value is the same, so a form
-     * row keeps its rhythm against the controls beside it.
+     * avatars and chips. Fields keep a 32px target at every viewport without
+     * making the surrounding application chrome taller.
      */
-    --admin-field-height: var(--admin-control-height);
+    --admin-field-height: 2rem;
     --admin-row-height: 2.25rem;
     --admin-page-max: 100rem;
-    --admin-motion-fast: 140ms ease;
+    --admin-motion-fast: var(--duration-normal) var(--ease-default);
     /* The native date/time picker glyph is a bitmap the page cannot recolour, only
        invert. 0 in light, 1 in dark. */
     --admin-picker-invert: light-dark(0, 1);
@@ -129,19 +323,5 @@
 
   :root[data-theme="dark"] {
     color-scheme: dark;
-  }
-
-  /*
-   * Fields grow on a touch screen. --admin-bp-md, written out because `@media`
-   * cannot take a custom property.
-   *
-   * Nothing else moves: this raises the field token only, so icon buttons and
-   * avatars keep the size they were drawn at, and a submit button keeps the
-   * 2.75rem target it already gets at this width.
-   */
-  @media (max-width: 47.9375rem) {
-    :root {
-      --admin-field-height: 2rem;
-    }
   }
 }

@@ -9,15 +9,6 @@ export default defineModule({
   summary: 'Theo dõi delivery, lỗi gửi và retry vận hành.',
   category: 'Năng suất',
   routes,
-  menus: {
-    outbox: {
-      label: 'menu.app',
-      icon: 'send',
-      path: '/admin/outbox',
-      sequence: 16,
-      needs: 'mail_transport.listOutbox',
-    },
-  },
   messages: {
     vi: {
       'app.title': 'Hộp thư đi',

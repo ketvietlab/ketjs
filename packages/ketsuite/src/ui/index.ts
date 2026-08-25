@@ -51,7 +51,12 @@ export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
 export { modalSheet } from './modal.tsx'
-export type { RecordSummaryItem, RecordWorkspaceSlots } from './record.tsx'
+export type {
+  RecordBreadcrumbs,
+  RecordSummaryItem,
+  RecordWorkspaceOptions,
+  RecordWorkspaceSlots,
+} from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { listChrome, topbarSearch } from './chrome.tsx'
@@ -62,6 +67,14 @@ export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'
 export { activityContractCases } from './activity.ts'
 export { calendarContractCases } from './calendar.ts'
+export {
+  PartnerDetailLayout,
+  PartnerFacts,
+  PartnerInitials,
+  PartnerListLayout,
+  PartnerPanel,
+} from './partner.tsx'
+export type { PartnerFact, PartnerStat } from './partner.tsx'
 
 /**
  * The same components, under the names JSX wants.
