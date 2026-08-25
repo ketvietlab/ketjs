@@ -70,6 +70,7 @@ export type {
 } from './modules/manufacturing/index.ts'
 export { default as pricingBackend } from './modules/pricing_backend/index.ts'
 export { default as account } from './modules/account/index.ts'
+export { default as accountStaffChannel } from './modules/account_staff_channel/index.ts'
 export { default as report } from './modules/report/index.ts'
 export { REPORT_FILTERS } from './modules/report/routes.ts'
 export { default as reportBackend } from './modules/report_backend/index.ts'

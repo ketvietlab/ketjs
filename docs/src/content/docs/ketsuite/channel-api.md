@@ -151,6 +151,13 @@ management-option catalogues are deliberately absent. Create, edit, archive, res
 commands remain outside this module until their aggregate versions and domain workflows can satisfy the mobile
 contract without inventing state.
 
+`account_staff_channel` contributes a bounded customer-invoice and credit-note list plus one read-only detail
+under the `accounting.invoices` read capability. Account owns company scope, canonical document totals, and
+open residuals; Partner supplies only the customer label. Detail carries a content-derived `aiv_` version and
+matching strong ETag, while ledger posting lines are represented only by a count and never exposed. Electronic
+invoicing remains deployment-owned. Posting, cancellation, payment collection, and their eligibility or replay
+lookups stay outside the channel until the domain supplies the complete concurrency and idempotency workflows.
+
 `crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
 mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
 functions, so a non-superuser sees or changes only records they
