@@ -37,6 +37,7 @@ import {
   inline,
   kanbanCard,
   thumbnail,
+  docTree,
   kanbanGrid,
   linkButton,
   loadingState,
@@ -333,6 +334,26 @@ const componentContract = [
   }),
   thumbnail({ src: '/files/x', alt: 'Record' }),
   thumbnail({ fallback: icon('package') }),
+  // Two levels, so the nested branch and its rail are rendered and not only
+  // the root list — the stylesheet targets both.
+  docTree<{
+    id: string
+    parent: string | null
+    title: string
+    summary: string
+    count: string | null
+  }>({
+    rows: [
+      { id: 'root', parent: null, title: 'Handbook', summary: 'How we work', count: '2 children' },
+      { id: 'child', parent: 'root', title: 'Onboarding', summary: 'First week', count: null },
+    ],
+    id: (row) => row.id,
+    parent: (row) => row.parent,
+    title: (row) => row.title,
+    href: (row) => `/docs/${row.id}`,
+    summary: (row) => row.summary,
+    count: (row) => row.count,
+  }),
   recordList({
     rows: [{ id: 'r', title: 'Record', summary: 'Summary', value: '12' }],
     id: (row) => row.id,
