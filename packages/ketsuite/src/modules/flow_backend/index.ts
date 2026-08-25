@@ -27,12 +27,16 @@ export default defineModule({
     // per screen, because a fill is placed per joint and the two screens do
     // not share a template.
     'screen.page': { props: { docId: 'text', base: 'text', lang: 'text?' } },
+    'screen.project': { props: { docId: 'text', base: 'text', lang: 'text?' } },
+    'screen.epic': { props: { docId: 'text', base: 'text', lang: 'text?' } },
     'screen.board': { props: { lang: 'text?', data: 'text?' } },
     'screen.map': { props: { lang: 'text?', data: 'text?' } },
   },
   fills: {
     'flow_backend:screen.issue': '{% island "livedoc.editor" %}',
     'flow_backend:screen.page': '{% island "livedoc.editor" %}',
+    'flow_backend:screen.project': '{% island "livedoc.editor" %}',
+    'flow_backend:screen.epic': '{% island "livedoc.editor" %}',
     'flow_backend:screen.board': '{% island "flow.board" %}',
     'flow_backend:screen.map': '{% island "flow.map" %}',
     // The screens under a project are reachable only once a project is
@@ -80,6 +84,13 @@ export default defineModule({
       path: '/admin/flow/pages',
       sequence: 25,
       needs: 'flow.page.list',
+    },
+    'flow.epics': {
+      parent: 'flow',
+      label: 'flow_backend.menu.epics',
+      path: '/admin/flow/epics',
+      sequence: 30,
+      needs: 'flow.epic.list',
     },
   },
 })

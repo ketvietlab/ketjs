@@ -25,6 +25,8 @@ import {
 import {
   boardScreen,
   epicsScreen,
+  epicDetailScreen,
+  allEpicsScreen,
   issueDetailScreen,
   issuesScreen,
   ganttScreen,
@@ -274,6 +276,27 @@ const issueDocument: DocumentOwner = {
  * is the only difference between the two owners, which is the point of the
  * seam: a second kind of document cost five lines.
  */
+/**
+ * The project brief. `description` stays the one-line summary a list row shows;
+ * this is the long form nobody wants to write into a single-line input.
+ */
+const projectDocument: DocumentOwner = {
+  kind: 'flow.Project',
+  readFn: 'flow.project.get',
+  writeFn: 'flow.project.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitProjectContent',
+}
+
+/** An epic's own document — what it is for, beside the issues under it. */
+const epicDocument: DocumentOwner = {
+  kind: 'flow.Epic',
+  readFn: 'flow.epic.get',
+  writeFn: 'flow.epic.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitEpicContent',
+}
+
 const pageDocument: DocumentOwner = {
   kind: 'flow.Page',
   readFn: 'flow.page.get',
@@ -411,6 +434,10 @@ export const routes: Record<string, RouteEntry> = {
   // five for every record that holds a document.
   ...documentRoutes(issueDocument, '/admin/flow/issues'),
   ...documentRoutes(pageDocument, '/admin/flow/pages'),
+  // A project's own five endpoints sit beside its screens rather than under a
+  // separate base — `/admin/flow/projects/{id}` is already this record's home.
+  ...documentRoutes(projectDocument, '/admin/flow/projects'),
+  ...documentRoutes(epicDocument, '/admin/flow/epics'),
 
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
@@ -1054,6 +1081,68 @@ export const routes: Record<string, RouteEntry> = {
     },
 
   /**
+   * Every epic, across projects. Reached from the menu, and the base the epic
+   * document endpoints above hang off.
+   */
+  '/admin/flow/epics': (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      // `epic.list` is scoped to a project — there is no JOIN to fold the two
+      // reads into one, so the epics come back per project and are stitched
+      // here, capped by the project list's own limit.
+      const perProject = await Promise.all(
+        projects.map(
+          (project) =>
+            ctx.call('flow.epic.list', { projectId: String(project.id) }, url, req) as Promise<AnyRow[]>,
+        ),
+      )
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const epics = perProject
+        .flat()
+        .map((epic) => ({ ...epic, projectName: named.get(String(epic.projectId)) ?? '' }))
+      return adminPage(ctx, url, req, {
+        title: 'flow_backend.epics.allTitle',
+        body: (t, frame) => allEpicsScreen(t, frame, t('flow_backend.epics.allTitle'), epics),
+      })
+    },
+
+  /**
+   * One epic: what it is for, and the issues under it.
+   *
+   * Epics had a card on a grid and a map, but nowhere to say what the epic
+   * actually means — which is the gap a Live Doc fills, and the reason this
+   * screen exists at all.
+   */
+  '/admin/flow/epics/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const epicId = String(params.id)
+      const held = (await ctx.call('flow.epic.get', { id: epicId }, url, req)) as { value: AnyRow | null }
+      const epic = held.value
+      if (!epic) return text('not found', { status: 404 })
+      const issues = (await ctx.call(
+        'flow.issue.list',
+        { listState: emptyIssueListState(), epicId, limit: 100 },
+        url,
+        req,
+      )) as AnyRow
+      const document = await ctx.joint(url, req, 'flow_backend:screen.epic', {
+        docId: epicId,
+        base: '/admin/flow/epics',
+        lang: url.searchParams.get('lang') ?? '',
+      })
+      return adminPage(ctx, url, req, {
+        title: String(epic.title ?? ''),
+        translate: false,
+        active: `/admin/flow/projects/${String(epic.projectId)}/epics`,
+        body: (t, frame) =>
+          epicDetailScreen(t, frame, epic, document, ((issues.rows as AnyRow[]) ?? [])),
+      })
+    },
+
+  /**
    * Every document, across projects — the counterpart of `/admin/flow/issues`,
    * and the base the document endpoints above hang off.
    */
@@ -1131,6 +1220,15 @@ export const routes: Record<string, RouteEntry> = {
           const result = (await ctx.call(
             'flow.page.move',
             { id: pageId, parentPageId: form.parentPageId || null },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'orderUp' || form.action === 'orderDown') {
+          const result = (await ctx.call(
+            'flow.page.reorder',
+            { id: pageId, direction: form.action === 'orderUp' ? 'up' : 'down' },
             url,
             req,
           )) as AnyRow
@@ -1556,11 +1654,17 @@ export const routes: Record<string, RouteEntry> = {
       const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
       const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
+      const brief = await ctx.joint(url, req, 'flow_backend:screen.project', {
+        docId: projectId,
+        base: '/admin/flow/projects',
+        lang: url.searchParams.get('lang') ?? '',
+      })
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
         body: (_, frame) =>
           settingsScreen(_, frame, String(project.name), endpoint, {
+            brief,
             columns,
             columnFields: [
               {

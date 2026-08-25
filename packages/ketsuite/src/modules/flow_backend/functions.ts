@@ -20,6 +20,108 @@ export const functions: Record<string, FnSpec> = {
    * capabilities, and a single generic writer would have to hold both to write
    * either. Live Doc calls whichever one the owner named.
    */
+  /**
+   * The commit for a project's brief.
+   *
+   * A fourth near-identical function rather than one that takes a model name,
+   * for the reason the second one already gave: `write:flow.Project` is its own
+   * capability, and a single generic writer would have to hold every model's
+   * write effect to write any of them. Live Doc calls whichever one the owner
+   * named, and holds none of them itself.
+   */
+  'sync.commitProjectContent': defineFn({
+    input: { id: 'id', storeKey: 'text', checksum: 'text', size: 'int', previewText: 'text?' },
+    output: { ok: 'bool', attachmentId: 'id?' },
+    effects: [
+      'read:flow.Project',
+      'write:flow.Project',
+      'read:storage.Attachment',
+      'write:storage.Attachment',
+    ],
+    idempotent: true,
+    exposure: 'internal',
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('storage.Attachment', { storeKey: args.storeKey }))[0]
+      const attachmentId = existing?.id ?? randomUUID()
+      if (!existing)
+        await ctx.db.insertIfAbsent('storage.Attachment', {
+          id: attachmentId,
+          name: `flow-project-content-${String(args.id)}`,
+          resModel: 'flow.Project',
+          resId: args.id,
+          resField: 'content',
+          kind: 'stored',
+          storeKey: args.storeKey,
+          mimetype: 'application/octet-stream',
+          size: args.size,
+          checksum: args.checksum,
+          public: false,
+          createdAt: new Date().toISOString(),
+        })
+      await ctx.db.update(
+        'flow.Project',
+        { id: args.id },
+        {
+          contentAttachmentId: attachmentId,
+          previewText: args.previewText || null,
+          contentUpdatedAt: new Date().toISOString(),
+        },
+      )
+      return { ok: true, attachmentId }
+    },
+  }),
+
+  /**
+   * The commit for an epic's document.
+   *
+   * A fourth near-identical function rather than one that takes a model name,
+   * for the reason the second one already gave: `write:flow.Epic` is its own
+   * capability, and a single generic writer would have to hold every model's
+   * write effect to write any of them. Live Doc calls whichever one the owner
+   * named, and holds none of them itself.
+   */
+  'sync.commitEpicContent': defineFn({
+    input: { id: 'id', storeKey: 'text', checksum: 'text', size: 'int', previewText: 'text?' },
+    output: { ok: 'bool', attachmentId: 'id?' },
+    effects: [
+      'read:flow.Epic',
+      'write:flow.Epic',
+      'read:storage.Attachment',
+      'write:storage.Attachment',
+    ],
+    idempotent: true,
+    exposure: 'internal',
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('storage.Attachment', { storeKey: args.storeKey }))[0]
+      const attachmentId = existing?.id ?? randomUUID()
+      if (!existing)
+        await ctx.db.insertIfAbsent('storage.Attachment', {
+          id: attachmentId,
+          name: `flow-epic-content-${String(args.id)}`,
+          resModel: 'flow.Epic',
+          resId: args.id,
+          resField: 'content',
+          kind: 'stored',
+          storeKey: args.storeKey,
+          mimetype: 'application/octet-stream',
+          size: args.size,
+          checksum: args.checksum,
+          public: false,
+          createdAt: new Date().toISOString(),
+        })
+      await ctx.db.update(
+        'flow.Epic',
+        { id: args.id },
+        {
+          contentAttachmentId: attachmentId,
+          previewText: args.previewText || null,
+          contentUpdatedAt: new Date().toISOString(),
+        },
+      )
+      return { ok: true, attachmentId }
+    },
+  }),
+
   'sync.commitPageContent': defineFn({
     input: {
       id: 'id',
