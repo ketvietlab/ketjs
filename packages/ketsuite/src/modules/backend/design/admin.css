@@ -2417,7 +2417,9 @@
   }
   [data-ui="record-sheet"] {
     min-inline-size: 0;
-    overflow: hidden;
+    /* Relation menus and other anchored controls may extend past the sheet.
+       Clipping here hides their options when a field sits near the last row. */
+    overflow: visible;
     border: 1px solid var(--admin-line);
     border-radius: var(--admin-radius);
     background: var(--admin-surface);
@@ -2590,13 +2592,18 @@
   }
   [data-ui="record-aside"] {
     position: sticky;
-    inset-block-start: calc(var(--admin-topbar-height) + var(--admin-gap));
+    /* Content is the sticky scroll container and already starts below the
+       topbar. Any extra inset here moves collaboration below the record sheet. */
+    inset-block-start: 0;
     display: grid;
     min-inline-size: 0;
-    max-block-size: calc(100dvh - var(--admin-topbar-height) - 2 * var(--admin-gap));
+    max-block-size: calc(100dvh - 2 * var(--admin-gap));
     align-content: start;
     gap: var(--admin-gap);
     overflow-y: auto;
+  }
+  [data-ui="main"]:has(> [data-ui="topbar"] > *) [data-ui="record-aside"] {
+    max-block-size: calc(100dvh - var(--admin-topbar-height) - 2 * var(--admin-gap));
   }
   [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]) {
     max-inline-size: none;
