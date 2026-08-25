@@ -966,12 +966,14 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('design density: desktop controls share the 28px operational height', () => {
+test('design density: fields use a 32px minimum without enlarging operational controls', () => {
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
   assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(tokens, /--admin-field-height:\s*2rem;/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
 test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
@@ -979,7 +981,7 @@ test('style safety: hidden content has no box and adjacent record controls use a
   assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
   assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
   assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
-  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
   assert.match(
     css,
     /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,

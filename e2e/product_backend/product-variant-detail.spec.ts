@@ -50,9 +50,8 @@ for (const viewport of [
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        // A field is 32px on a touch screen and 28px with a cursor: a fingertip
-        // needs the target, a pointer does not.
-        const fieldHeight = viewport.name === 'desktop' ? 28 : 32
+        // Fields share the same 32px rhythm across desktop and touch layouts.
+        const fieldHeight = 32
         expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
         if (tab === 'media') {
           await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)

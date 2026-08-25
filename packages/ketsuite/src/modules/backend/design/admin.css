@@ -2059,7 +2059,7 @@
   }
 
   [data-ui="field-input"] {
-    min-block-size: var(--admin-control-height);
+    min-block-size: var(--admin-field-height);
     padding-inline: 0.625rem;
     border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
