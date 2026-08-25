@@ -24,6 +24,7 @@ import {
   dataTable,
   datePicker,
   definitionList,
+  gantt,
   progressBar,
   emptyState,
   errorState,
@@ -435,6 +436,24 @@ const everything = [
   // How far along a record is. A value, because the empty case draws nothing at
   // all — which is the point of it, and would show none of the parts.
   progressBar({ value: 62, label: 'Tiến độ' }),
+  // A bar, a point and a start nobody chose, which is every shape a row takes.
+  gantt({
+    items: [
+      { id: 'g1', title: 'Bar', href: '/a', startsOn: '2026-08-01', endsOn: '2026-09-20', progress: 40 },
+      { id: 'g2', title: 'Point', href: '/b', startsOn: '2026-08-10' },
+      {
+        id: 'g3',
+        title: 'Inferred',
+        href: '/c',
+        startsOn: '2026-08-05',
+        endsOn: '2026-08-09',
+        inferredStart: true,
+      },
+    ],
+    today: '2026-08-15',
+    labels: { today: 'Hôm nay', empty: 'Trống' },
+  }),
+  gantt({ items: [], labels: { today: 'Hôm nay', empty: 'Trống' } }),
   // The token list, which no admin screen renders any more now that the design-token
   // dump has left /admin/settings. Modules still reach for it on record detail.
   definitionList({

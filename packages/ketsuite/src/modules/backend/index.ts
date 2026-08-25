@@ -118,6 +118,7 @@ export {
   hasIcon,
   definitionList,
   progressBar,
+  gantt,
   code,
   qrCode,
   inline,

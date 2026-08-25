@@ -4,6 +4,11 @@ const vi = {
   'menu.mine': 'Việc của tôi',
   'menu.projects': 'Dự án',
   'menu.board': 'Bảng',
+  'gantt.title': 'Tiến độ theo thời gian',
+  'gantt.hint':
+    'Mỗi công việc là một thanh từ ngày bắt đầu tới hạn chót. Không có hạn chót thì vẽ thành một điểm.',
+  'gantt.today': 'Hôm nay',
+  'gantt.inferred': 'Ngày bắt đầu lấy theo ngày tạo',
   'menu.issues': 'Công việc',
   'mine.title': 'Việc của tôi',
   'mine.emptyTitle': 'Không có việc nào được giao',
@@ -114,6 +119,11 @@ const en: Record<keyof typeof vi, string> = {
   'menu.mine': 'My work',
   'menu.projects': 'Projects',
   'menu.board': 'Board',
+  'gantt.title': 'Timeline',
+  'gantt.hint':
+    'Each issue is a bar from its start to its due date. Without a due date it is drawn as a point.',
+  'gantt.today': 'Today',
+  'gantt.inferred': 'Start taken from the day it was created',
   'menu.issues': 'Issues',
   'mine.title': 'My work',
   'mine.emptyTitle': 'Nothing assigned to you',
