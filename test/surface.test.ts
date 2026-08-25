@@ -20,7 +20,16 @@ const assetDir = (files: Record<string, string>): string => {
 }
 
 const base = assetDir({ 'base.css': ':root { --x: 1 }' })
-const extra = assetDir({ 'extra.css': '.x { color: red }', 'logo.svg': '<svg/>' })
+const extra = assetDir({
+  'extra.css': '.x { color: red }',
+  'logo.svg': '<svg/>',
+  // Not assets, but they lived in the published directory all the same — this
+  // is exactly what `src/ui/client` held: the TSX an island is authored in,
+  // the sourcemap that inlines it, and a note to whoever maintains it.
+  'widget-view.tsx': 'export const secret = "API_KEY_IN_SOURCE"',
+  'extra.mjs.map': '{"sourcesContent":["API_KEY_IN_SOURCE"]}',
+  'HANDOFF.md': 'internal notes',
+})
 
 const core = defineModule({ name: 'core', assets: base, styles: ['base.css'] })
 const skin = defineModule({
@@ -215,6 +224,26 @@ test('serving: a versioned asset may be kept, an unversioned one must be revalid
     const stale = await fetch(`${at}/_ket/asset/skin/vdeadbeef/extra.css`)
     assert.equal(stale.status, 200)
     assert.equal(await stale.text(), '.x { color: red }')
+  } finally {
+    await b.close()
+  }
+})
+
+test('serving: a module publishes a directory, but only the asset types in it', async () => {
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${b.port}`
+  try {
+    // Whatever else shares the directory is not an asset. Served as
+    // `application/octet-stream` these were a download rather than an error,
+    // which is a worse answer than 404 for source nobody meant to publish.
+    for (const leaked of ['widget-view.tsx', 'extra.mjs.map', 'HANDOFF.md']) {
+      const response = await fetch(`${at}/_ket/asset/skin/${leaked}`)
+      assert.equal(response.status, 404, leaked)
+      assert.doesNotMatch(await response.text(), /API_KEY_IN_SOURCE|internal notes/, leaked)
+    }
+    // The real assets in the same directory are unaffected.
+    assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 200)
+    assert.equal((await fetch(`${at}/_ket/asset/skin/logo.svg`)).status, 200)
   } finally {
     await b.close()
   }

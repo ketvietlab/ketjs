@@ -427,9 +427,17 @@ export async function createKetServer(o: ServeOpts) {
               : null
             : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
         if (file === null) break
+        // A module publishes a *directory*, not a list of files, so anything
+        // else that lives in that directory went out with the assets: the TSX an
+        // island is authored in, a sourcemap with the original text inlined, a
+        // README. They were answered as `application/octet-stream` — a download
+        // rather than an error, which is worse than useless for source nobody
+        // meant to publish. `ASSET_MIME` is already the list of things a browser
+        // loads as a page asset, so it is the list of things that get served.
+        if (ASSET_MIME[extname(rel)] === undefined) break
         try {
           const body = await readFile(file)
-          const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
+          const type = ASSET_MIME[extname(rel)] as string
           // A URL that names its own content can never go stale, so it is kept
           // rather than revalidated. Anything else keeps the old answer: safe,
           // and re-fetched every time, which is what versioning is for.
