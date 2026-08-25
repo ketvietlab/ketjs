@@ -242,6 +242,19 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   let container: HTMLElement | null = null
   let shell: HTMLElement | null = null
   let composing = false
+  /**
+   * Where a composition began, and whether a re-render is owed to it.
+   *
+   * Replacing the container's innerHTML while an IME is mid-word detaches the
+   * text node it is composing into, and the half-typed word goes with it —
+   * reproduced with two tabs: one composing `tiê`, the other typing anything,
+   * and the first reader's word was gone. Telex and VNI make this ordinary
+   * rather than rare: a Vietnamese word is several keystrokes long and the
+   * accents rewrite letters already on screen, so the window in which a
+   * collaborator can destroy one is most of the time spent typing.
+   */
+  let composedAt: Point | null = null
+  let renderOwed: Span | null | undefined
   let source: EventSource | null = null
   /**
    * Where the caret goes after the next render, set by whichever structural
@@ -1112,10 +1125,34 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     shell = (el.closest('[data-ui="flow-editor"]') as HTMLElement | null) ?? el.parentElement
     el.addEventListener('compositionstart', () => {
       composing = true
+      composedAt = selectionSpan()?.start ?? null
     })
-    el.addEventListener('compositionend', () => {
+    el.addEventListener('compositionend', (event) => {
       composing = false
-      applyLocalTextChange()
+      const owed = renderOwed
+      renderOwed = undefined
+      const composed = (event as CompositionEvent).data ?? ''
+      if (owed === undefined) {
+        // Nothing arrived while they typed, so the DOM is still the truth and
+        // the ordinary diff reads it.
+        applyLocalTextChange()
+        composedAt = null
+        return
+      }
+      // Something did arrive, and the DOM has been holding a stale copy of the
+      // document ever since. Diffing it now would read the remote edit as a
+      // deletion, so the word is taken from the event that carries it and put
+      // back where the composition began, and the document is redrawn from the
+      // model rather than the other way round.
+      const block = composedAt ? blocksOf()[composedAt.index] : undefined
+      if (block && composed) {
+        const offset = Math.min(composedAt!.offset, plainLength(block.text.toDelta() as Delta))
+        const caret = { index: composedAt!.index, offset: offset + composed.length }
+        structural(caretAt(caret), () =>
+          block.text.insert(offset, composed, attributesAt(block.text, offset)),
+        )
+      } else render(owed ?? undefined)
+      composedAt = null
     })
     el.addEventListener('beforeinput', (event) => onBeforeInput(event as InputEvent))
     el.addEventListener('input', () => {
@@ -1145,7 +1182,10 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
       if (origin !== LOCAL_TYPING) {
         const keep = pending
         pending = null
-        render(keep ?? undefined)
+        // Not while somebody is mid-word. The change is already in the
+        // document; drawing it can wait the second it takes them to finish.
+        if (composing) renderOwed = keep
+        else render(keep ?? undefined)
       }
     })
 
