@@ -13,15 +13,6 @@ export default defineModule({
   styles: ['activity.css'],
   islands,
   routes,
-  menus: {
-    activity: {
-      label: 'menu.app',
-      icon: 'check-circle',
-      path: '/admin/activities',
-      sequence: 14,
-      needs: 'activity.listMy',
-    },
-  },
   fills: {
     'backend:sidebar.foot': `{% island "activity.indicator" %}`,
   },

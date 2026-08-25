@@ -134,6 +134,7 @@ const MENU: MenuNode[] = [
 
 /** A bar with every control on, so the design team sees the crowded case. */
 const CHROME: ListChrome = {
+  section: 'Website',
   search: {
     name: 'q',
     value: 'gioi',

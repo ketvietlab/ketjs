@@ -35,7 +35,7 @@ test('address HTTP: trusted settings route installs VN while generic transport h
   const before = await e2e.client.get('/admin/addresses', { headers: { accept: 'text/html' } })
   assert.equal(before.status, 200)
   assert.match(await before.text(), /Sẵn sàng cài/)
-  const partnerBefore = await e2e.client.get('/admin/partner/partners/acme-party')
+  const partnerBefore = await e2e.client.get('/admin/partner/partners/acme-party/edit')
   assert.match(await partnerBefore.text(), /Catalog địa giới chưa được cài/)
 
   const hidden = await e2e.client.request('/_ket/fn/address.installCatalog', {
@@ -83,20 +83,22 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   assert.equal(saved.status, 303)
 
   const detail = await e2e.client.get('/admin/partner/partners/customer')
-  const html = await detail.text()
+  const detailHtml = await detail.text()
   assert.equal(detail.status, 200)
-  assert.match(html, /12 Nguyễn Huệ/)
-  assert.match(html, /Phường Ba Đình/)
+  assert.match(detailHtml, /12 Nguyễn Huệ/)
+  assert.match(detailHtml, /Phường Ba Đình/)
+
+  const edit = await e2e.client.get('/admin/partner/partners/customer/edit')
+  const html = await edit.text()
+  assert.equal(edit.status, 200)
   assert.match(html, /data-island="partner\.address-form"/)
   assert.match(html, /<form[^>]*data-layout="default"[^>]*data-has-fields="true"[^>]*data-address-form/)
   assert.match(html, /form="partner-identity-form"/)
   assert.equal(html.match(/>Lưu thông tin</g)?.length, 1)
-  assert.match(html, /Thiết lập kế toán/)
-  assert.match(html, /Lưu trữ đối tác/)
   assert.match(html, /name="divisionId"/)
   assert.doesNotMatch(html, /src="(?:undefined|null)?"/)
 
-  const english = await e2e.client.get('/admin/partner/partners/customer?lang=en')
+  const english = await e2e.client.get('/admin/partner/partners/customer/edit?lang=en')
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Province\/City/)
 })

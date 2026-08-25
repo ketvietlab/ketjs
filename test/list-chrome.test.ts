@@ -83,6 +83,22 @@ test('chrome: the title is the title — no breadcrumb repeating the sidebar', (
   assert.ok(!html.includes('data-ui="crumb"'), 'the sidebar already says which app and which entry')
 })
 
+test('chrome: catalogue layout keeps context and actions left while tools stay in one right cluster', () => {
+  const html = render({
+    layout: 'catalogue',
+    section: 'Sản phẩm',
+    create: { label: 'Tạo mới', path: '/new' },
+    search: { name: 'q', placeholder: 'Tìm sản phẩm…' },
+    pager: { from: 1, to: 30, total: 84, prev: null, next: '/p?page=2' },
+  })
+  assert.match(html, /data-ui="list-chrome" data-layout="catalogue"/)
+  assert.match(html, /data-ui="list-context">[\s\S]*Sản phẩm/)
+  assert.match(
+    html,
+    /data-ui="list-chrome-row">[\s\S]*data-ui="chrome-lead"[\s\S]*data-ui="chrome-tools"[\s\S]*data-ui="chrome-search"[\s\S]*data-ui="chrome-tail"/,
+  )
+})
+
 test('chrome: a facet shows what was filtered and where the × undoes it', () => {
   const html = render({
     ...base,

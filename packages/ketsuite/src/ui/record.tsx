@@ -7,10 +7,13 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { breadcrumbs as breadcrumbNavigation } from './navigation.tsx'
+import type { Breadcrumb } from './navigation.tsx'
 
 export const HOOKS = [
   'record-workspace',
   'record-sheet',
+  'record-top',
   'record-header',
   'record-identity',
   'record-thumbnail',
@@ -74,11 +77,22 @@ const summaryContent = (item: RecordSummaryItem): TemplateResult => (
   </>
 )
 
-type RecordWorkspaceOptions = {
+export type RecordBreadcrumbs = {
+  label: string
+  items: readonly Breadcrumb[]
+}
+
+export type RecordWorkspaceOptions = {
   /** Marks the generic page frame added by `framed`; nested record workspaces flatten it. */
   pageFrame?: boolean
   kicker?: string | null
   title: string
+  /**
+   * A record always has a trail. Screens with a richer hierarchy can provide
+   * all levels; the shared fallback keeps older records consistent by using
+   * their module kicker and current title.
+   */
+  breadcrumbs?: RecordBreadcrumbs
   subtitle?: string | null
   image?: { src: string; alt: string } | null
   imageFallback: JSXChild
@@ -92,8 +106,17 @@ type RecordWorkspaceOptions = {
   slots?: RecordWorkspaceSlots
 }
 
+const recordBreadcrumbs = (options: RecordWorkspaceOptions): RecordBreadcrumbs => {
+  if (options.breadcrumbs) return options.breadcrumbs
+  const items: Breadcrumb[] = options.kicker
+    ? [{ label: options.kicker }, { label: options.title }]
+    : [{ label: options.title }]
+  return { label: options.title, items }
+}
+
 const recordHeader = (options: RecordWorkspaceOptions): TemplateResult => (
   <>
+    {breadcrumbNavigation(recordBreadcrumbs(options))}
     <div data-ui="record-identity">
       <div data-ui="record-thumbnail" data-empty={String(!options.image)}>
         {options.image ? <img src={options.image.src} alt={options.image.alt} /> : options.imageFallback}
@@ -149,11 +172,13 @@ export const recordWorkspace = (options: RecordWorkspaceOptions): TemplateResult
       data-has-aside={String(options.aside !== undefined)}
     >
       <section data-ui="record-sheet">
-        <header data-ui="record-header" data-ket-slot={options.slots?.header}>
-          {recordHeader(options)}
-        </header>
+        <div data-ui="record-top">
+          <header data-ui="record-header" data-ket-slot={options.slots?.header}>
+            {recordHeader(options)}
+          </header>
+          {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
+        </div>
         {options.navigation !== undefined && <div data-ui="record-navigation">{options.navigation}</div>}
-        {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
         <div data-ui="record-body" data-ket-slot={options.slots?.body}>
           {options.body}
         </div>

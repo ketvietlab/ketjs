@@ -3,7 +3,7 @@ import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
-import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
+import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -55,15 +55,28 @@ const addressFormsFor = async (
   const _ = ctx.translate(ctx.localeOf(url, req))
   const installed = (await ctx.call('address.listCountries', {}, url, req)) as AnyRow[]
   const available = (await ctx.call('address.availableCatalogs', {}, url, req)) as AnyRow[]
-  const countryCodes = new Set([
-    ...installed.map((row) => String(row.code)),
-    ...available.map((row) => String(row.countryCode)),
-  ])
+  // Seed/demo records may bypass the address module's catalog validation. Never
+  // serialize those synthetic ids into every address island: besides presenting
+  // invalid choices, a large data-key can turn a small form into megabytes of
+  // hydration markup. Country codes accepted by the address domain are ISO 3166-1
+  // alpha-2 uppercase codes, so enforce the same boundary when composing the UI.
+  const countryCodeOf = (value: unknown) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase()
+  const isCountryCode = (value: string) => /^[A-Z]{2}$/.test(value)
+  const countryCodes = new Set(
+    [
+      ...installed.map((row) => countryCodeOf(row.code)),
+      ...available.map((row) => countryCodeOf(row.countryCode)),
+    ].filter(isCountryCode),
+  )
+  countryCodes.add('VN')
   const countries = [...countryCodes].sort().map((value) => ({
     value,
     label:
-      installed.find((row) => row.code === value)?.localName ||
-      installed.find((row) => row.code === value)?.name ||
+      installed.find((row) => countryCodeOf(row.code) === value)?.localName ||
+      installed.find((row) => countryCodeOf(row.code) === value)?.name ||
       (value === 'VN' ? _('partner_backend.address.country.VN') : value),
   }))
   const roots = new Map<string, AnyRow[]>()
@@ -145,7 +158,14 @@ const addressFormsFor = async (
   ])
 }
 
-const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+const renderDetail = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  errors?: string[],
+  editing = false,
+) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
   const [row, parents, terms, integration] = await Promise.all([
@@ -179,7 +199,18 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
       partnerDetailScreen(
         _,
         row as never,
-        { parents, terms: terms as never, errors, integration, addressForms, parentControl },
+        {
+          parents,
+          terms: terms as never,
+          errors,
+          integration,
+          addressForms,
+          parentControl,
+          editing,
+          activeTab: ['addresses', 'roles'].includes(url.searchParams.get('tab') ?? '')
+            ? (url.searchParams.get('tab') as 'addresses' | 'roles')
+            : 'overview',
+        },
         frame,
         url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
       ),
@@ -216,7 +247,16 @@ export const routes: Record<string, RouteEntry> = {
       const role = url.searchParams.get('role') || undefined
       const includeArchived = url.searchParams.get('archived') === '1'
       const filter = { search, role, includeArchived }
-      const [rows, total] = await Promise.all([
+      const listHref = (changes: Record<string, string | null>) => {
+        const target = new URL(url)
+        target.searchParams.delete('page')
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === null) target.searchParams.delete(key)
+          else target.searchParams.set(key, value)
+        }
+        return `${target.pathname}${target.search}`
+      }
+      const [rows, total, activeTotal, inclusiveTotal, customerTotal, supplierTotal] = await Promise.all([
         ctx.call(
           'partner.listPartners',
           { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
@@ -224,6 +264,24 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<AnyRow[]>,
         ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
+        ctx.call('partner.countPartners', { search, includeArchived: false }, url, req) as Promise<{
+          count: number
+        }>,
+        ctx.call('partner.countPartners', { search, includeArchived: true }, url, req) as Promise<{
+          count: number
+        }>,
+        ctx.call(
+          'partner.countPartners',
+          { search, role: 'customer', includeArchived: false },
+          url,
+          req,
+        ) as Promise<{ count: number }>,
+        ctx.call(
+          'partner.countPartners',
+          { search, role: 'supplier', includeArchived: false },
+          url,
+          req,
+        ) as Promise<{ count: number }>,
       ])
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
@@ -234,6 +292,12 @@ export const routes: Record<string, RouteEntry> = {
             {
               ...frame,
               chrome: {
+                layout: 'catalogue',
+                section: _('partner_backend.menu.app'),
+                create: {
+                  label: _('partner_backend.action.create'),
+                  path: inLocale(url, '/admin/partner/partners/new'),
+                },
                 search: {
                   name: 'q',
                   value: search ?? '',
@@ -246,13 +310,55 @@ export const routes: Record<string, RouteEntry> = {
                   facets: role
                     ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
                     : [],
+                  menus: [
+                    {
+                      id: 'filters',
+                      label: _('backend.chrome.filters'),
+                      items: [
+                        {
+                          id: 'customers',
+                          label: _('partner_backend.filter.customers'),
+                          path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
+                          active: role === 'customer',
+                        },
+                        {
+                          id: 'suppliers',
+                          label: _('partner_backend.filter.suppliers'),
+                          path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
+                          active: role === 'supplier',
+                        },
+                        {
+                          id: 'archived',
+                          label: _('partner_backend.filter.includeArchived'),
+                          path: withParam(url, 'archived', includeArchived ? null : '1'),
+                          active: includeArchived,
+                        },
+                      ],
+                    },
+                  ],
                 },
                 pager: pager(url, current, rows.length, total.count),
               },
             },
             {},
             url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-            includeArchived,
+            {
+              total: activeTotal.count,
+              customers: customerTotal.count,
+              suppliers: supplierTotal.count,
+              archived: Math.max(0, inclusiveTotal.count - activeTotal.count),
+              allHref: listHref({ role: null, archived: null }),
+              customersHref: listHref({ role: 'customer', archived: null }),
+              suppliersHref: listHref({ role: 'supplier', archived: null }),
+              archivedHref: listHref({ role: null, archived: '1' }),
+              active: includeArchived
+                ? 'archived'
+                : role === 'customer'
+                  ? 'customers'
+                  : role === 'supplier'
+                    ? 'suppliers'
+                    : 'all',
+            },
           ),
       })
     },
@@ -316,7 +422,15 @@ export const routes: Record<string, RouteEntry> = {
         req,
         params.id,
         translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        true,
       )
+    },
+
+  '/admin/partner/partners/{id}/edit':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      return renderDetail(ctx, url, req, params.id, undefined, true)
     },
 
   '/admin/partner/partners/{id}/roles':

@@ -93,6 +93,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     ['/admin/partner/partners?role=customer', /Khách hàng/],
     ['/admin/partner/partners/new', /Tạo đối tác/],
     ['/admin/partner/partners/customer', /12 Nguyễn Huệ/],
+    ['/admin/partner/partners/customer/edit', /partner-identity-form/],
     ['/admin/partner/partners/customer/accounting', /Phải thu khách hàng/],
   ]
   for (const [path, expected] of pages) {
@@ -102,6 +103,46 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]/, path)
   }
+
+  const partnerList = await (
+    await e2e.client.get('/admin/partner/partners', { headers: { accept: 'text/html' } })
+  ).text()
+  assert.match(partnerList, /data-ui="topbar"/)
+  assert.match(partnerList, /data-ui="chrome-create"[^>]*href="\/admin\/partner\/partners\/new"/)
+  assert.match(partnerList, /data-ui="search-menu"/)
+  assert.match(partnerList, /data-row-href="\/admin\/partner\/partners\/customer"/)
+  assert.match(partnerList, /data-ui="partner-list-layout"/)
+  assert.match(partnerList, /data-ui="partner-stat-grid"/)
+  assert.doesNotMatch(partnerList, /data-ui="row-link"/, 'the partner name cell is plain text')
+  assert.doesNotMatch(partnerList, /data-page-frame="true"/)
+  for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {
+    assert.doesNotMatch(
+      partnerList,
+      new RegExp(`data-ui="app-entry"[^>]+href="${hiddenMenu}"`),
+      `${hiddenMenu} is opened outside the sidebar app list`,
+    )
+  }
+
+  const partnerDetail = await (await e2e.client.get('/admin/partner/partners/customer?lang=vi')).text()
+  assert.match(partnerDetail, /data-ui="partner-detail-layout"/)
+  assert.match(partnerDetail, /href="\/admin\/partner\/partners\/customer\/edit\?lang=vi"/)
+  assert.doesNotMatch(partnerDetail, /id="partner-identity-form"/)
+
+  const addressTab = await (
+    await e2e.client.get('/admin/partner/partners/customer?tab=addresses&lang=vi')
+  ).text()
+  assert.match(addressTab, /data-ui="tab" data-active="true"[^>]*href="[^"]*tab=addresses/)
+  assert.match(addressTab, /id="partner-addresses"/)
+  assert.doesNotMatch(addressTab, /id="partner-roles"/)
+
+  const rolesTab = await (await e2e.client.get('/admin/partner/partners/customer?tab=roles&lang=vi')).text()
+  assert.match(rolesTab, /data-ui="tab" data-active="true"[^>]*href="[^"]*tab=roles/)
+  assert.match(rolesTab, /id="partner-roles"/)
+  assert.doesNotMatch(rolesTab, /id="partner-addresses"/)
+
+  const partnerEdit = await (await e2e.client.get('/admin/partner/partners/customer/edit?lang=vi')).text()
+  assert.match(partnerEdit, /id="partner-identity-form"/)
+  assert.match(partnerEdit, /action="\/admin\/partner\/partners\/customer\?lang=vi"/)
 
   const keptSearch = await (
     await e2e.client.get('/admin/partner/partners?role=customer&archived=1&lang=en')

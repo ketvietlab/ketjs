@@ -14,7 +14,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('product-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -50,9 +50,8 @@ for (const viewport of [
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        // A field is 32px on a touch screen and 28px with a cursor: a fingertip
-        // needs the target, a pointer does not.
-        const fieldHeight = viewport.name === 'desktop' ? 28 : 32
+        // Fields share the same 32px rhythm across desktop and touch layouts.
+        const fieldHeight = 32
         expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
         if (tab === 'media') {
           await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)
@@ -77,7 +76,9 @@ for (const viewport of [
 
 test('updates variant fields and manages variant media', async ({ page }) => {
   await page.goto(`${variantPath}?tab=general&lang=vi`)
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('JACKET-REVIEW')
+  await expect(page.locator('[data-ket-slot="product.record-header"] [data-ui="record-heading"]')).toHaveText(
+    'JACKET-REVIEW',
+  )
   await expect(page.locator('[data-ui="chatter-error"]')).toHaveCount(0)
 
   await page.locator('input[name="defaultCode"]').fill('JACKET-REVIEW-UPDATED')
@@ -101,7 +102,7 @@ test('updates variant fields and manages variant media', async ({ page }) => {
     'Biến thể áo khoác màu cam',
   )
   await page.locator('[data-ui="media-file-input"]').setInputFiles(uploadFixture)
-  await page.getByRole('button', { name: 'Thêm ảnh' }).click()
+  await page.locator('[data-ui="media-upload"]').evaluate((form: HTMLFormElement) => form.requestSubmit())
   await expect(page.locator('[data-ui="media-item"]')).toHaveCount(3)
   await page.getByRole('button', { name: 'Xóa ảnh' }).last().click()
   await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)

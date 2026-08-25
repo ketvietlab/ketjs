@@ -26,11 +26,11 @@ import {
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
-} from './screens.tsx'
+} from './screens/index.ts'
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
 import { attributeControl, attributeValuesControl, categoryControl, uomControl } from './relation-control.ts'
-import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
+import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
@@ -696,6 +696,8 @@ export const routes: Record<string, RouteEntry> = {
             {
               ...frame,
               chrome: {
+                layout: 'catalogue',
+                section: _('product_backend.menu.app'),
                 create: {
                   label: _('product_backend.action.create'),
                   path: inLocale(url, '/admin/product/templates/new'),
