@@ -15,10 +15,14 @@ import type { ServeContext } from '@ketvietlab/ketjs'
 import {
   type DocRef,
   applySnapshot,
+  forget,
   getOrCreateLive,
+  isHydrated,
+  markHydrated,
   previewTextOf,
   rollGeneration,
   snapshotBytes,
+  updateCountOf,
 } from './sync.ts'
 
 /**
@@ -98,8 +102,11 @@ export async function hydrate(
   ref: DocRef,
   attachmentId: unknown,
 ): Promise<boolean> {
-  const { isNew } = getOrCreateLive(ref)
-  if (!isNew) return true
+  getOrCreateLive(ref)
+  // Whether the snapshot has been read, not whether the registry has an entry.
+  // `getOrCreateLive` publishes the entry first, so testing for its presence
+  // meant a failed or still-running load looked finished — see `hydrated`.
+  if (isHydrated(ref)) return true
   // Unchecked, like the commit in `flatten` below and for the same reason:
   // these are `exposure: 'internal'` helpers of a route that has already run
   // its own permission check, and `ctx.call` would ask for a second grant
@@ -114,13 +121,28 @@ export async function hydrate(
     req,
   )) as { storeKey: string | null }
   // No stored snapshot is a genuine empty document, not a failure to read one.
-  if (!resolved.storeKey) return true
+  if (!resolved.storeKey) {
+    markHydrated(ref)
+    return true
+  }
   const storage = await ctx.storageOf(url, req)
   const found = await storage.get(resolved.storeKey)
-  if (!found) return false
+  // The blank document this process just created is dropped rather than kept:
+  // a caller that retries has to actually retry, and one that gives up must
+  // not leave something behind that later reads as the real document.
+  if (!found) {
+    forget(ref)
+    return false
+  }
   const chunks: Uint8Array[] = []
-  for await (const chunk of found.body) chunks.push(chunk)
+  try {
+    for await (const chunk of found.body) chunks.push(chunk)
+  } catch {
+    forget(ref)
+    return false
+  }
   applySnapshot(ref, Buffer.concat(chunks))
+  markHydrated(ref)
   return true
 }
 
@@ -141,6 +163,9 @@ export async function flatten(
   // document this process does not hold would replace the real one with a
   // blank. See sync.ts's note on snapshotBytes.
   if (!bytes) return
+  // Counted with the bytes, so an update that arrives while they are being
+  // written is still owed a flatten afterwards.
+  const flattened = updateCountOf(ref)
   const checksum = createHash('sha256').update(bytes).digest('hex')
   const storeKey = `blobs/${ref.company}/${checksum.slice(0, 2)}/${checksum}`
   const storage = await ctx.storageOf(url, req)
@@ -151,5 +176,5 @@ export async function flatten(
     url,
     req,
   )
-  await rollGeneration(ref)
+  await rollGeneration(ref, flattened)
 }
