@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { asc, bucketEq, compileListFilter, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
-import { ensureThread, listTimeline, postMessage } from '../mail/index.ts'
+import { ensureThread, followThread, listTimeline, postMessage } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
 import { emptyIssueListState, issueListSearch } from './search.ts'
 
@@ -50,6 +50,28 @@ async function assignableSprint(ctx: Ctx, sprintId: unknown): Promise<Row | null
   const sprint = (await ctx.db.select('flow.Sprint', { id: sprintId }))[0]
   if (!sprint) return undefined
   return sprint.state === 'closed' ? undefined : sprint
+}
+
+/**
+ * Subscribes a user to an issue's thread, when the platform can address them.
+ *
+ * Followers are partner-keyed the whole way down — `mail.Notification`'s
+ * `recipientPartnerId` is required — while `user.User.partnerId` is optional
+ * by design ("an internal operator needs no entry in the address book"). So a
+ * user without one cannot be subscribed and cannot be notified. Skipping is
+ * the truthful outcome: the alternative is creating address-book rows as a
+ * side effect of assigning a task, which is not a decision this module gets
+ * to make.
+ */
+async function followIssue(ctx: Ctx, threadId: unknown, userId: unknown): Promise<void> {
+  if (!threadId || !userId) return
+  const user = (await ctx.db.select('user.User', { id: userId }))[0]
+  if (!user?.partnerId) return
+  await followThread(ctx, {
+    id: `${String(threadId)}:${String(user.partnerId)}`,
+    threadId: String(threadId),
+    partnerId: String(user.partnerId),
+  })
 }
 
 /**
@@ -104,7 +126,10 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const epicIds = ids(rows.map((row) => row.epicId))
   const sprintIds = ids(rows.map((row) => row.sprintId))
   const userIds = ids(rows.map((row) => row.assigneeUserId))
-  const [columns, epics, sprints, users] = await Promise.all([
+  // The project too, for the one list that spans them: an issue read outside
+  // its own board has to say which board it came from.
+  const projectIds = ids(rows.map((row) => row.projectId))
+  const [columns, epics, sprints, users, projects] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -117,14 +142,19 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     userIds.length
       ? ctx.db.all(from(ctx.table('user.User')).where(inArray(ctx.table('user.User').id, userIds)))
       : [],
+    projectIds.length
+      ? ctx.db.all(from(ctx.table('flow.Project')).where(inArray(ctx.table('flow.Project').id, projectIds)))
+      : [],
   ])
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const columnBy = by(columns)
   const epicBy = by(epics)
   const sprintBy = by(sprints)
   const userBy = by(users)
+  const projectBy = by(projects)
   return rows.map((row) => ({
     ...row,
+    projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
     columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
     epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
     sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
@@ -162,6 +192,11 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   if (args.epicId) query = query.where(eq(I.epicId, args.epicId))
   if (args.sprintId) query = query.where(eq(I.sprintId, args.sprintId))
   if (args.assigneeUserId) query = query.where(eq(I.assigneeUserId, args.assigneeUserId))
+  // "Assigned to me" is resolved here rather than by the caller: a screen has
+  // no cheap way to learn who is signed in, and `activity.listMy` already
+  // settles the question the same way. A request with no actor matches
+  // nothing, which is the safe reading of "mine".
+  if (args.mine === true) query = query.where(eq(I.assigneeUserId, ctx.actor ?? '\u0000'))
   if (!state.includeArchived && args.includeArchived !== true) query = query.where(eq(I.active, true))
   const sorts = state.sort.length ? state.sort : emptyIssueListState().sort
   const sortable = new Map((spec.sortable ?? []).map((field) => [field.key, field.col]))
@@ -364,13 +399,16 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       version: nextVersion,
       updatedAt: timestamp,
     }
+    let threadId: string
     if (existing) {
       const expected = input.expectedVersion ?? n(existing.version)
       const changed = await tx.db.compareAndSet('flow.Issue', { id: input.id }, { version: expected }, values)
       if (!('dryRun' in changed) && !changed.matched)
         return invalid(issue('version', 'flow.error.conflict', { current: existing.version }))
+      threadId = String(existing.threadId)
     } else {
       const thread = await ensureIssueThread(tx, input.id, input.title.trim(), timestamp)
+      threadId = String(thread.id)
       await tx.db.insert('flow.Issue', {
         id: input.id,
         ...values,
@@ -384,6 +422,34 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       await tx.db.del(deleteFrom(IT).where(eq(IT.issueId, input.id)))
       for (const tagId of tagIds)
         await tx.db.insertIfAbsent('flow.IssueTag', { id: `${input.id}:${tagId}`, issueId: input.id, tagId })
+    }
+
+    // Whoever opened it, and whoever it lands on, are subscribed to its
+    // thread. Until this existed the thread had no followers at all, so
+    // `postMessage` addressed nobody and every comment notified nobody — the
+    // discussion feature was wired end to end and silently inert.
+    if (!existing) await followIssue(tx, threadId, tx.actor)
+    const assignee = values.assigneeUserId
+    if (assignee) await followIssue(tx, threadId, assignee)
+    // Only when it actually changed hands: a system entry on every title edit
+    // is noise, and the timeline is the one place that has to stay readable.
+    if (assignee && String(assignee) !== String(existing?.assigneeUserId ?? '')) {
+      await postMessage(tx, {
+        id: `${input.id}:assigned:${nextVersion}`,
+        threadId,
+        authorUserId: tx.actor ?? undefined,
+        kind: 'system',
+        // A message key, resolved by whoever renders the timeline — the same
+        // arrangement crm_backend's `entryBody` already reads.
+        body: 'flow.timeline.assigned',
+        tracking: [
+          {
+            field: 'assigneeUserId',
+            ...(existing?.assigneeUserId ? { oldValue: String(existing.assigneeUserId) } : {}),
+            newValue: String(assignee),
+          },
+        ],
+      })
     }
     return { ok: true, id: input.id, version: nextVersion }
   })
@@ -544,6 +610,10 @@ export async function addComment(
   if (!input.body.trim()) return invalid(issue('body', 'flow.error.required'))
   const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
   if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
+  // Before the message, so the author is subscribed to the replies to it.
+  // `postMessage` excludes the author from its own recipients, so this does
+  // not notify them about their own comment.
+  await followIssue(ctx, held.threadId, ctx.actor)
   const result = await postMessage(ctx, {
     id: input.id,
     threadId: String(held.threadId),

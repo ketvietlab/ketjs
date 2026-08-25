@@ -41,6 +41,20 @@ const sprintStateBadge = (_: Translator, value: unknown): TemplateResult => {
     raw,
   )
 }
+/**
+ * A timeline entry's words.
+ *
+ * A person's comment is stored as the text they typed; an entry the system
+ * wrote stores a message key instead, so it can be read in whichever language
+ * the reader chose. Rendering it raw printed `flow.timeline.assigned` on the
+ * screen — the same trap crm_backend's `entryBody` already answers.
+ */
+const entryBody = (_: Translator, row: AnyRow): string => {
+  const body = String(row.body ?? '')
+  if (body && _.resolves(body)) return _(body)
+  return body || '\u2014'
+}
+
 const when = (value: unknown): string => {
   const raw = String(value ?? '')
   if (!raw) return '—'
@@ -286,10 +300,79 @@ export const issuesScreen = (
   />
 )
 
+/**
+ * Everything assigned to the reader, across projects.
+ *
+ * The same columns the backlog shows plus the project each issue came from,
+ * and no create form: a new issue belongs to a board, and this screen is not
+ * on one.
+ */
+export const myWorkScreen = (
+  _: Translator,
+  frame: Frame,
+  rows: AnyRow[],
+  groups: TableGroup<AnyRow>[] = [],
+): TemplateResult => (
+  <Framed
+    translator={_}
+    title={_('flow_backend.mine.title')}
+    frame={frame}
+    body={
+      rows.length || groups.length
+        ? dataTable(_, {
+            rows,
+            groups,
+            id: (row) => String(row.id),
+            columns: [
+              {
+                key: 'title',
+                label: _('flow_backend.field.title'),
+                priority: 'primary',
+                cell: (row) =>
+                  linkButton({
+                    href: `/admin/flow/issues/${String(row.id)}`,
+                    label: String(row.title),
+                    variant: 'tertiary',
+                    size: 'compact',
+                  }),
+              },
+              {
+                key: 'project',
+                label: _('flow_backend.field.project'),
+                cell: (row) =>
+                  linkButton({
+                    href: `/admin/flow/projects/${String(row.projectId)}/board`,
+                    label: String(row.projectName ?? '\u2014'),
+                    variant: 'tertiary',
+                    size: 'compact',
+                  }),
+              },
+              {
+                key: 'column',
+                label: _('flow_backend.field.column'),
+                cell: (row) => String(row.columnName ?? '\u2014'),
+              },
+              {
+                key: 'priority',
+                label: _('flow_backend.field.priority'),
+                cell: (row) => priorityBadge(_, row.priority),
+              },
+              {
+                key: 'dueDate',
+                label: _('flow_backend.field.dueDate'),
+                kind: 'date',
+                cell: (row) => when(row.dueDate),
+              },
+            ],
+          })
+        : emptyState(_('flow_backend.mine.emptyTitle'), _('flow_backend.mine.emptyHint'))
+    }
+  />
+)
+
 export type IssueDetailControls = {
   assignee?: JSXChild
   epic?: JSXChild
-  sprint?: JSXChild
   tags?: JSXChild
   dependencyTarget?: JSXChild
 }
@@ -500,7 +583,7 @@ export const issueDetailScreen = (
               ? comments.map((item) => (
                   <Surface
                     padding="compact"
-                    body={stack([when(item.createdAt), String(item.body)], 'compact')}
+                    body={stack([when(item.createdAt), entryBody(_, item)], 'compact')}
                   />
                 ))
               : [empty(_)]),

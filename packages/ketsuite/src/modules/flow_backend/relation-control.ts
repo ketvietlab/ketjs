@@ -9,7 +9,12 @@ type Req = Parameters<Route>[1]
  * Flow's relational fields, as pickers rather than bare selects — direct copy
  * of crm_backend/relation-control.ts's shape against Flow's own functions.
  *
- * Epic and Sprint deliberately carry no `saveFunction`: the relation-select
+ * There is deliberately no sprint picker: a project holds a handful of
+ * sprints, and the rule this module inherits from crm_backend is that a field
+ * over a small vocabulary stays a native select — "a dialog to choose between
+ * four values is worse than the four values". The issue screen uses one.
+ *
+ * Epic deliberately carries no `saveFunction`: the relation-select
  * client posts a picker's inline-create as flat fields straight to that
  * function (confirmed in relation-select-view.mjs's `save()` — `{...saveDefaults,
  * id, ...formFields}`, no wrapper), which matches `flow.tag.save`'s own flat
@@ -57,22 +62,6 @@ export const epicControl = (
       listInput: { projectId: options.projectId },
       labelField: 'title',
     },
-  })
-
-export const sprintControl = (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  _: Translator,
-  options: { id: string; value?: string | null; projectId: string; sprints: RelationOption[] },
-): Promise<JSXChild> =>
-  relationControl(ctx, url, req, options.id, {
-    name: 'sprintId',
-    ariaLabel: _('flow_backend.field.sprint'),
-    value: options.value,
-    options: empty(options.sprints),
-    labels: relationLabels(_, _('flow_backend.relation.sprints')),
-    manager: { listFunction: 'flow.sprint.list', listInput: { projectId: options.projectId } },
   })
 
 export const tagsControl = (
