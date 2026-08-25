@@ -32,7 +32,7 @@ import { newProductScreen } from './create-screen.tsx'
 import { attributeControl, attributeValuesControl, categoryControl, uomControl } from './relation-control.ts'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import type { SearchMenu, TableGroup } from '../../ui/index.ts'
+import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
@@ -187,6 +187,7 @@ type ProductListRow = {
   type: string
   categoryId: string | null
   uomId: string | null
+  listPrice: number
   variants?: unknown[]
 }
 
@@ -196,6 +197,7 @@ const templateRow = (row: ProductListRow): TemplateRow => ({
   type: row.type,
   categoryId: row.categoryId,
   uomId: row.uomId,
+  listPrice: row.listPrice,
   variants: Array.isArray(row.variants) ? row.variants.length : 0,
 })
 
@@ -636,22 +638,28 @@ export const routes: Record<string, RouteEntry> = {
       }
       collectCategories(categoryRows)
       const unitMap = new Map(unitRows.map((row) => [String(row.id), String(row.name)]))
+      const canReadStock = Boolean((await ctx.live(req)).functions['stock.listProductConfigs'])
       /** One media call per batch of rows, whether that batch is a page or a group. */
       const decorate = async (batch: ProductListRow[]): Promise<TemplateRow[]> => {
         if (!batch.length) return []
-        const media = (await ctx.call(
-          'product_media.listPrimaryMedia',
-          { templateIds: batch.map((row) => row.id) },
-          url,
-          req,
-        )) as Array<Record<string, unknown>>
+        const templateIds = batch.map((row) => row.id)
+        const [media, stockConfigs] = (await Promise.all([
+          ctx.call('product_media.listPrimaryMedia', { templateIds }, url, req),
+          canReadStock
+            ? ctx.call('stock.listProductConfigs', { templateIds }, url, req)
+            : Promise.resolve([]),
+        ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>]
         const images = new Map(media.map((row) => [String(row.templateId), String(row.attachmentId)]))
+        const inventory = new Map(
+          stockConfigs.map((row) => [String(row.templateId), Boolean(row.isStorable)]),
+        )
         return batch.map((row) => {
           const attachmentId = images.get(String(row.id))
           return {
             ...templateRow(row),
             uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
             categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            isStorable: canReadStock ? (inventory.get(String(row.id)) ?? false) : null,
             image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
           }
         })
@@ -664,6 +672,18 @@ export const routes: Record<string, RouteEntry> = {
             decorate,
           })
         : undefined
+      const selection: TableSelection | undefined =
+        view === 'list'
+          ? {
+              formId: 'product-template-bulk',
+              action: inLocale(url, '/admin/product/templates/bulk'),
+              hidden: { returnTo: `${url.pathname}${url.search}` },
+              actions: [
+                { id: 'archive', label: _('backend.chrome.archive') },
+                { id: 'delete', label: _('backend.chrome.delete'), tone: 'danger' },
+              ],
+            }
+          : undefined
 
       return adminPage(ctx, url, req, {
         title: 'KetSuite',
@@ -680,6 +700,7 @@ export const routes: Record<string, RouteEntry> = {
                   label: _('product_backend.action.create'),
                   path: inLocale(url, '/admin/product/templates/new'),
                 },
+                selection,
                 search: {
                   name: 'q',
                   value: state.q ?? '',
@@ -698,10 +719,39 @@ export const routes: Record<string, RouteEntry> = {
                 })),
               },
             },
-            { shown: colsOf(url), colsHref: colsHref(url), groups },
+            { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
             localeQuery(url),
           ),
       })
+    },
+  '/admin/product/templates/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      const fallback = inLocale(url, '/admin/product/templates')
+      const returnTo = form.returnTo?.startsWith('/admin/product/templates') ? form.returnTo : fallback
+      if (!ids.length) return seeOther(returnTo)
+      if (form.action === 'archive') {
+        for (const id of ids) await ctx.call('product.archiveTemplate', { id, active: false }, url, req)
+        return seeOther(returnTo)
+      }
+      if (form.action === 'delete') {
+        try {
+          await ctx.call('product.deleteTemplates', { ids }, url, req)
+          return seeOther(returnTo)
+        } catch {
+          const failed = new URL(returnTo, 'http://ket.local')
+          failed.searchParams.set('bulkError', 'delete')
+          return seeOther(`${failed.pathname}${failed.search}`)
+        }
+      }
+      return text('Unknown bulk action', { status: 400 })
     },
   '/admin/product/templates/favorites/new':
     (ctx: ServeContext): Route =>

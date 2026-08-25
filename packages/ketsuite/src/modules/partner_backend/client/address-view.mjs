@@ -124,13 +124,13 @@ export function createAddressFormView(runtime, props) {
         )}
         ${field(
           labels.street,
-          html`<input data-ui="form-control" name="street1" value=${string(address.street1)} required>`,
+          html`<input data-ui="form-control" name="street1" value=${string(address.street1)} autocomplete="off" required>`,
           true,
           'full',
         )}
         ${field(
           labels.street2,
-          html`<input data-ui="form-control" name="street2" value=${string(address.street2)}>`,
+          html`<input data-ui="form-control" name="street2" value=${string(address.street2)} autocomplete="off">`,
           false,
           'full',
         )}
@@ -162,14 +162,14 @@ export function createAddressFormView(runtime, props) {
         )}
         ${field(
           labels.locality,
-          html`<input data-ui="form-control" name="locality" value=${string(address.locality)} placeholder=${labels.localityHint}>`,
+          html`<input data-ui="form-control" name="locality" value=${string(address.locality)} autocomplete="off" placeholder=${labels.localityHint}>`,
         )}
         ${field(
           labels.postalCode,
-          html`<input data-ui="form-control" name="postalCode" value=${string(address.postalCode)} inputmode="numeric">`,
+          html`<input data-ui="form-control" name="postalCode" value=${string(address.postalCode)} autocomplete="off" inputmode="numeric">`,
         )}
         <label data-ui="form-field" data-kind="checkbox">
-          <input data-ui="form-control" type="checkbox" name="isDefault" value="1" checked=${address.isDefault === true}>
+          <input data-ui="form-control" type="checkbox" name="isDefault" value="1" autocomplete="off" checked=${address.isDefault === true}>
           <span data-ui="form-label">${labels.default}</span>
         </label>
       </div>

@@ -101,19 +101,13 @@ export const loginScreen = (
         )}
         <label data-ui="field">
           <span data-ui="field-label">{_('user.login.login')}</span>
-          <input data-ui="field-input" name="login" autocomplete="username" autofocus required />
+          <input data-ui="field-input" name="login" autocomplete="off" autofocus required />
         </label>
         <label data-ui="field">
           <span data-ui="field-label">{_('user.login.password')}</span>
-          <input
-            data-ui="field-input"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
+          <input data-ui="field-input" name="password" type="password" autocomplete="off" required />
         </label>
-        {o.next !== undefined && <input type="hidden" name="next" value={o.next} />}
+        {o.next !== undefined && <input type="hidden" name="next" value={o.next} autocomplete="off" />}
         <button data-ui="login-submit" type="submit">
           {_('user.login.submit')}
         </button>

@@ -103,7 +103,9 @@ test('crm HTTP E2E: global filter/grouping, planner and configuration remain ope
   const grouped = await app.client.get('/admin/crm/cases?group=kind&lang=en')
   const groupedHtml = await grouped.text()
   assert.equal(grouped.status, 200)
-  assert.equal((groupedHtml.match(/data-ui="chrome-search"/g) ?? []).length, 1)
+  assert.equal((groupedHtml.match(/data-ui="chrome-search"/g) ?? []).length, 2)
+  assert.match(groupedHtml, /data-presentation="inline"/)
+  assert.match(groupedHtml, /data-presentation="modal"/)
   assert.match(groupedHtml, /data-ui="search-menu"/)
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')

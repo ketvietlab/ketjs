@@ -33,7 +33,10 @@ export default defineModule({
   menus,
   joints,
   islands,
-  fills: { 'backend:relation.select': `{% island "backend.relation-select" %}` },
+  fills: {
+    'backend:relation.select': `{% island "backend.relation-select" %}`,
+    'backend:topbar.end': `{% island "backend.table-selection" %}`,
+  },
   messages,
 })
 

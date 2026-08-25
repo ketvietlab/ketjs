@@ -17,7 +17,7 @@ export const islands: Record<string, IslandDefinition> = {
         <button on:click=${() => open.set((v) => !v)} aria-expanded=${open()}>${props.label ?? 'Tìm'}</button>
         ${
           open()
-            ? html`<form action="/tim-kiem"><input name="q" value=${term()} on:input=${(e: unknown) => term.set(String((e as { target: { value: string } }).target.value))} placeholder="Nhập từ khoá"></form>`
+            ? html`<form action="/tim-kiem" autocomplete="off"><input name="q" value=${term()} autocomplete="off" on:input=${(e: unknown) => term.set(String((e as { target: { value: string } }).target.value))} placeholder="Nhập từ khoá"></form>`
             : ''
         }
       </div>`

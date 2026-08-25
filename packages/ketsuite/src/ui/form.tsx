@@ -100,6 +100,7 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
         id={id}
         type="checkbox"
         name={field.name}
+        autocomplete="off"
         value="1"
         checked={field.value === true || field.value === '1'}
         disabled={field.disabled === true}
@@ -113,6 +114,7 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
       id={id}
       type={field.type === 'decimal' ? 'number' : (field.type ?? 'text')}
       name={field.name}
+      autocomplete="off"
       value={String(field.value ?? '')}
       placeholder={field.placeholder ?? null}
       required={field.required === true}
@@ -159,7 +161,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     action={o.action}
   >
     {Object.entries(o.hidden ?? {}).map(([name, value]) => (
-      <input type="hidden" name={name} value={value} />
+      <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
     {!!o.errors?.length && (
       <ul data-ui="form-errors" role="alert">
@@ -218,6 +220,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
                           data-ui="form-option-input"
                           type="radio"
                           name={field.name}
+                          autocomplete="off"
                           value={option.value}
                           checked={String(field.value ?? '') === option.value}
                           required={field.required === true}
@@ -344,7 +347,7 @@ export const recordActions = (o: {
   return (
     <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
       {Object.entries(o.hidden ?? {}).map(([name, value]) => (
-        <input type="hidden" name={name} value={value} />
+        <input type="hidden" name={name} value={value} autocomplete="off" />
       ))}
       {actionGroup({
         label: o.label,

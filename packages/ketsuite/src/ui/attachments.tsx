@@ -54,7 +54,7 @@ export const attachmentPanel = (o: {
       <form data-ui="attachment-upload" method="post" action={o.uploadAction} enctype="multipart/form-data">
         <label>
           <span>{o.chooseLabel}</span>
-          <input data-ui="attachment-input" type="file" name="file" required />
+          <input data-ui="attachment-input" type="file" name="file" autocomplete="off" required />
         </label>
         {button({ label: o.uploadLabel, type: 'submit', variant: 'secondary' })}
       </form>
