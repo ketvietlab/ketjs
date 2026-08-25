@@ -22,6 +22,7 @@ export const models: Record<string, ModelDef> = {
       amountTax: 'decimal',
       amountTotal: 'decimal',
       notes: 'text?',
+      revision: 'int?',
     },
     indexes: {
       company_name: { fields: ['companyId', 'name'], unique: true },

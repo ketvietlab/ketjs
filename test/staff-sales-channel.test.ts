@@ -452,3 +452,131 @@ test('staff product routes tolerate undeclared query parameters like their sibli
   assert.equal((await e2e.client.get('/api/staff/v1/sales/products?query=x')).status, 422)
   assert.equal((await e2e.client.get('/api/staff/v1/sales/products?limit=999')).status, 422)
 })
+
+const mutationHeaders = (csrfToken: string, key: string, version?: string) => ({
+  'content-type': 'application/json',
+  'x-csrf-token': csrfToken,
+  'idempotency-key': key,
+  ...(version ? { 'if-match': `"${version}"` } : {}),
+})
+
+test('staff sales channel completes the twelve-operation module with one versioned draft lifecycle', async (t) => {
+  const e2e = await boot(t)
+  await seedOrders(e2e)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const createBody = {
+    partnerId: 'customer-a',
+    warehouseId: 'wh',
+    customerReference: 'NATIVE-001',
+    notes: 'Giao buổi sáng',
+    lines: [{ productId: 'chair', quantity: '2', uomId: 'unit' }],
+  }
+
+  assert.equal(
+    (
+      await e2e.client.request('/api/staff/v1/sales/orders/create', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'staff-sales-create-1',
+        },
+        body: JSON.stringify(createBody),
+      })
+    ).status,
+    403,
+  )
+
+  const create = await e2e.client.request('/api/staff/v1/sales/orders/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'staff-sales-create-1'),
+    body: JSON.stringify(createBody),
+  })
+  assert.equal(create.status, 200)
+  const created = (await create.json()) as Envelope<Row>
+  assert.equal(created.data.state, 'draft')
+  assert.equal(created.data.customerReference, 'NATIVE-001')
+  assert.match(String(created.data.version), /^sov_[0-9a-f]{64}$/)
+  assert.match(String(created.data.availabilityVersion), /^sav_[0-9a-f]{64}$/)
+  assert.equal(created.data.warehouseId, 'wh')
+  assert.equal(create.headers.get('etag'), `"${String(created.data.version)}"`)
+
+  const replay = await e2e.client.request('/api/staff/v1/sales/orders/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'staff-sales-create-1'),
+    body: JSON.stringify(createBody),
+  })
+  assert.equal(replay.status, 200)
+  assert.equal(((await replay.json()) as Envelope<Row>).data.id, created.data.id)
+
+  const id = String(created.data.id)
+  const canonical = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/sales/orders/${id}`)
+  assert.equal(canonical.data.version, created.data.version)
+
+  const updateBody = {
+    ...createBody,
+    notes: 'Giao trước 10 giờ',
+    lines: [{ productId: 'chair', quantity: '3', uomId: 'unit' }],
+    expectedVersion: created.data.version,
+  }
+  const update = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'staff-sales-update-1', String(created.data.version)),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(update.status, 200)
+  const updated = (await update.json()) as Envelope<Row>
+  assert.equal(updated.data.notes, 'Giao trước 10 giờ')
+  assert.equal((updated.data.lines as Row[])[0]?.quantity, '3')
+  assert.deepEqual(updated.data.total, { currency: 'VND', amount: '9000000' })
+  assert.notEqual(updated.data.version, created.data.version)
+
+  const stale = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'staff-sales-update-stale', String(created.data.version)),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(stale.status, 409)
+  assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'sale_staff_channel.versionConflict')
+
+  const wrongAvailability = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/confirm`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'staff-sales-confirm-stale', String(updated.data.version)),
+    body: JSON.stringify({
+      expectedVersion: updated.data.version,
+      availabilityVersion: `sav_${'0'.repeat(64)}`,
+    }),
+  })
+  assert.equal(wrongAvailability.status, 409)
+  assert.equal(
+    ((await wrongAvailability.json()) as Envelope<null>).error?.code,
+    'sale_staff_channel.availabilityChanged',
+  )
+
+  const confirm = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/confirm`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'staff-sales-confirm-1', String(updated.data.version)),
+    body: JSON.stringify({
+      expectedVersion: updated.data.version,
+      availabilityVersion: updated.data.availabilityVersion,
+    }),
+  })
+  assert.equal(confirm.status, 200)
+  const confirmed = (await confirm.json()) as Envelope<Row>
+  assert.equal(confirmed.data.state, 'sale')
+  assert.notEqual(confirmed.data.version, updated.data.version)
+
+  const lifecycle = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/sales/orders/${id}/lifecycle`)
+  assert.equal((lifecycle.data.deliveries as Row[]).length, 1)
+
+  const cancel = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/cancel`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'staff-sales-cancel-1', String(confirmed.data.version)),
+    body: JSON.stringify({ expectedVersion: confirmed.data.version }),
+  })
+  assert.equal(cancel.status, 200)
+  const cancelled = (await cancel.json()) as Envelope<Row>
+  assert.equal(cancelled.data.state, 'cancel')
+  assert.notEqual(cancelled.data.version, confirmed.data.version)
+})

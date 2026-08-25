@@ -5,7 +5,7 @@
 // never invents an aggregate version or a write action.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, routesOf, sha256, stableHash } from '../channel_api/core.ts'
 // The domain owns the state machine. Copying its values into the contract by
 // hand meant the published enum could fall behind it, and now that the facade
 // refuses anything the enum omits, falling behind would turn a legitimate
@@ -57,24 +57,43 @@ const line = {
   },
   required: ['id', 'productId', 'name', 'quantity', 'uomId', 'unitPrice', 'discount', 'subtotal'],
 }
+const availabilityLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    productId: string,
+    requestedQuantity: string,
+    availableQuantity: string,
+    sufficient: { type: 'boolean' },
+  },
+  required: ['productId', 'requestedQuantity', 'availableQuantity', 'sufficient'],
+}
 const detail = {
   ...summary,
   properties: {
     ...summary.properties,
+    warehouseId: string,
     customerReference: nullableString,
     notes: nullableString,
     lines: { type: 'array', items: line },
     deliveryMoveCount: { type: 'integer', minimum: 0 },
     invoiceCount: { type: 'integer', minimum: 0 },
+    version: { type: 'string', pattern: '^sov_[0-9a-f]{64}$' },
+    availabilityVersion: { type: 'string', pattern: '^sav_[0-9a-f]{64}$' },
+    availability: { type: 'array', items: availabilityLine },
     readOnly: { type: 'boolean', const: true },
   },
   required: [
     ...summary.required,
+    'warehouseId',
     'customerReference',
     'notes',
     'lines',
     'deliveryMoveCount',
     'invoiceCount',
+    'version',
+    'availabilityVersion',
+    'availability',
     'readOnly',
   ],
 }
@@ -113,6 +132,36 @@ const page = {
 const envelope = (data: unknown) => ({
   type: 'object',
   properties: { data, error: {}, meta: { type: 'object' } },
+})
+
+const decimal = { type: 'string', pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d+)?$' }
+const draftLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { productId: string, quantity: decimal, uomId: string },
+  required: ['productId', 'quantity', 'uomId'],
+}
+const draftBody = (withVersion: boolean) => ({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    partnerId: string,
+    warehouseId: string,
+    customerReference: { type: 'string', maxLength: 200 },
+    notes: { type: 'string', maxLength: 2000 },
+    lines: { type: 'array', minItems: 1, maxItems: 100, items: draftLine },
+    ...(withVersion ? { expectedVersion: { type: 'string', pattern: '^sov_[0-9a-f]{64}$' } } : {}),
+  },
+  required: ['partnerId', 'warehouseId', 'lines', ...(withVersion ? ['expectedVersion'] : [])],
+})
+const expectedVersionBody = (availability = false) => ({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    expectedVersion: { type: 'string', pattern: '^sov_[0-9a-f]{64}$' },
+    ...(availability ? { availabilityVersion: { type: 'string', pattern: '^sav_[0-9a-f]{64}$' } } : {}),
+  },
+  required: ['expectedVersion', ...(availability ? ['availabilityVersion'] : [])],
 })
 
 const positive = (value: string | null, fallback: number, maximum: number): number => {
@@ -156,6 +205,72 @@ const projectSummary = (row: Row, names: Map<string, string>) => ({
   total: { currency: String(row.currency), amount: String(row.amountTotal) },
 })
 
+const projectedLines = (row: Row) =>
+  (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
+    .sort(
+      (left, right) =>
+        Number(left.sequence ?? 0) - Number(right.sequence ?? 0) ||
+        String(left.id).localeCompare(String(right.id)),
+    )
+    .map((item) => ({
+      id: String(item.id),
+      productId: String(item.productId),
+      name: String(item.name),
+      quantity: String(item.productUomQty),
+      uomId: String(item.productUomId),
+      unitPrice: String(item.priceUnit),
+      discount: String(item.discount),
+      subtotal: String(item.priceSubtotal),
+    }))
+
+const availabilityOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const requested = new Map<string, number>()
+  for (const item of projectedLines(row))
+    requested.set(item.productId, (requested.get(item.productId) ?? 0) + Number(item.quantity))
+  const productIds = [...requested.keys()].sort()
+  const rows = productIds.length
+    ? ((await ctx.call(
+        'stock.listProductAvailability',
+        { productIds, warehouseId: row.warehouseId },
+        url,
+        req,
+      )) as Row[])
+    : []
+  const available = new Map(rows.map((item) => [String(item.productId), String(item.available)]))
+  const availability = productIds.map((productId) => {
+    const requestedQuantity = String(requested.get(productId) ?? 0)
+    const availableQuantity = available.get(productId) ?? '0'
+    return {
+      productId,
+      requestedQuantity,
+      availableQuantity,
+      sufficient: Number(availableQuantity) >= Number(requestedQuantity),
+    }
+  })
+  return {
+    availability,
+    availabilityVersion: `sav_${stableHash({ warehouseId: row.warehouseId, availability })}`,
+  }
+}
+
+const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const base = {
+    ...projectSummary(row, await namesOf(ctx, [row], url, req)),
+    warehouseId: String(row.warehouseId),
+    customerReference: row.clientOrderRef == null ? null : String(row.clientOrderRef),
+    notes: row.notes == null ? null : String(row.notes),
+    lines: projectedLines(row),
+    deliveryMoveCount: Array.isArray(row.moves) ? row.moves.length : 0,
+    invoiceCount: Array.isArray(row.invoices) ? row.invoices.length : 0,
+  }
+  return {
+    ...base,
+    version: `sov_${stableHash(base)}`,
+    ...(await availabilityOf(ctx, row, url, req)),
+    readOnly: true,
+  }
+}
+
 const notFound = (ctx: ServeContext, url: URL, req: Req) => ({
   status: 404,
   error: channelError(ctx, url, req, 'sale_staff_channel.orderNotFound', {
@@ -163,7 +278,108 @@ const notFound = (ctx: ServeContext, url: URL, req: Req) => ({
   }),
 })
 
+const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) => {
+  const issues = Array.isArray((result as { errors?: unknown })?.errors)
+    ? ((result as { errors: Row[] }).errors ?? [])
+    : []
+  const conflict = issues.some((issue) => ['expectedRevision', 'state'].includes(String(issue.field)))
+  return {
+    status: conflict ? 409 : 422,
+    error: channelError(
+      ctx,
+      url,
+      req,
+      conflict ? 'sale_staff_channel.conflict' : 'sale_staff_channel.invalidRequest',
+      {
+        messageKey: conflict
+          ? 'sale_staff_channel.error.conflict'
+          : 'sale_staff_channel.error.invalidRequest',
+        fieldErrors: Object.fromEntries(
+          issues
+            .filter((issue) => issue.field)
+            .map((issue) => [
+              String(issue.field),
+              {
+                code: 'sale_staff_channel.invalidField',
+                messageKey: 'sale_staff_channel.error.invalidField',
+                params: {},
+              },
+            ]),
+        ),
+      },
+    ),
+  }
+}
+
+const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
+  const key = String(req.headers['idempotency-key'] ?? '').trim()
+  if (key.length >= 8 && key.length <= 200) return key
+  return {
+    status: 400,
+    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
+      messageKey: 'channel_api.error.idempotencyRequired',
+    }),
+  }
+}
+
+const requestVersion = (req: Req, body: Row): string | null => {
+  const expected = String(body.expectedVersion ?? '')
+  const header = String(req.headers['if-match'] ?? '').trim()
+  if (!header) return expected || null
+  return header === expected || header === `"${expected}"` ? expected : null
+}
+
+const versionFailure = (ctx: ServeContext, url: URL, req: Req) => ({
+  status: 409,
+  error: channelError(ctx, url, req, 'sale_staff_channel.versionConflict', {
+    messageKey: 'sale_staff_channel.error.versionConflict',
+  }),
+})
+
+const availabilityFailure = (ctx: ServeContext, url: URL, req: Req) => ({
+  status: 409,
+  error: channelError(ctx, url, req, 'sale_staff_channel.availabilityChanged', {
+    messageKey: 'sale_staff_channel.error.availabilityChanged',
+    retryable: true,
+  }),
+})
+
+const currentOrder = async (ctx: ServeContext, url: URL, req: Req, id: string) =>
+  (await ctx.call('sale.getOrder', { id }, url, req)) as Row | null
+
+const commandId = (namespace: string, key: string, suffix = '') =>
+  `staff_so_${stableHash(`${namespace}\n${key}\n${suffix}`).slice(0, 32)}`
+
+const mutationResult = async (ctx: ServeContext, url: URL, req: Req, id: string) => {
+  const row = await currentOrder(ctx, url, req, id)
+  if (!row) return notFound(ctx, url, req)
+  const data = await projectDetail(ctx, row, url, req)
+  return { data, headers: { etag: `"${data.version}"` } }
+}
+
+const idParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string },
+  required: ['id'],
+}
+
+const detailHandler = async (ctx: ServeContext, url: URL, req: Req, params: Record<string, string>) =>
+  mutationResult(ctx, url, req, params.id)
+
 export const orderRoutes = routesOf(
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'sales/orders/{id}',
+    operationId: 'staff.sales.orders.get',
+    summary: 'Read the canonical versioned sales order used by staff commands.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'read' },
+    request: { params: idParams },
+    responses: { '200': envelope(detail), '404': envelope({ type: 'null' }) },
+    handler: detailHandler,
+  }),
   defineChannelRoute({
     profile: 'staff',
     method: 'GET',
@@ -226,32 +442,177 @@ export const orderRoutes = routesOf(
       },
     },
     responses: { '200': envelope(detail), '404': envelope({ type: 'null' }) },
-    handler: async (ctx, url, req, params) => {
-      const row = (await ctx.call('sale.getOrder', { id: params.id }, url, req)) as Row | null
-      if (!row) return notFound(ctx, url, req)
-      const lines = Array.isArray(row.lines) ? (row.lines as Row[]) : []
-      const moves = Array.isArray(row.moves) ? row.moves : []
-      const invoices = Array.isArray(row.invoices) ? row.invoices : []
-      return {
-        data: {
-          ...projectSummary(row, await namesOf(ctx, [row], url, req)),
-          customerReference: row.clientOrderRef == null ? null : String(row.clientOrderRef),
-          notes: row.notes == null ? null : String(row.notes),
-          lines: lines.map((item) => ({
-            id: String(item.id),
-            productId: String(item.productId),
-            name: String(item.name),
-            quantity: String(item.productUomQty),
-            uomId: String(item.productUomId),
-            unitPrice: String(item.priceUnit),
-            discount: String(item.discount),
-            subtotal: String(item.priceSubtotal),
+    handler: detailHandler,
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'sales/orders/create',
+    operationId: 'staff.sales.orders.create',
+    summary: 'Create or replay one canonical draft sales order and all of its lines atomically.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'create' },
+    request: { body: draftBody(false) },
+    responses: {
+      '200': envelope(detail),
+      '409': envelope({ type: 'null' }),
+      '422': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.sales.orders.create', limit: 60, windowMs: 60_000 },
+    handler: async (ctx, url, req, _params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const body = request.body
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:sale.saveDraft.create`
+      const id = commandId(namespace, key)
+      const result = (await ctx.call(
+        'sale.saveDraft',
+        {
+          id,
+          partnerId: body.partnerId,
+          warehouseId: body.warehouseId,
+          clientOrderRef: body.customerReference,
+          notes: body.notes,
+          create: true,
+          lines: (body.lines as Row[]).map((item, index) => ({
+            id: `${id}:line:${index + 1}`,
+            productId: item.productId,
+            productUomQty: item.quantity,
+            productUomId: item.uomId,
           })),
-          deliveryMoveCount: moves.length,
-          invoiceCount: invoices.length,
-          readOnly: true,
         },
-      }
+        url,
+        req,
+        { idempotencyKey: key, idempotencyNamespace: namespace },
+      )) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      return mutationResult(ctx, url, req, id)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'PUT',
+    path: 'sales/orders/{id}/update',
+    operationId: 'staff.sales.orders.update',
+    summary: 'Replace one draft order header and line set under a strong version.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'update' },
+    request: { params: idParams, body: draftBody(true) },
+    responses: {
+      '200': envelope(detail),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+      '422': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.sales.orders.update', limit: 120, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const row = await currentOrder(ctx, url, req, params.id)
+      if (!row) return notFound(ctx, url, req)
+      const current = await projectDetail(ctx, row, url, req)
+      const expected = requestVersion(req, request.body)
+      if (!expected || expected !== current.version) return versionFailure(ctx, url, req)
+      const body = request.body
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:sale.saveDraft.update`
+      const result = (await ctx.call(
+        'sale.saveDraft',
+        {
+          id: params.id,
+          partnerId: body.partnerId,
+          warehouseId: body.warehouseId,
+          clientOrderRef: body.customerReference,
+          notes: body.notes,
+          expectedRevision: Number(row.revision ?? 0),
+          lines: (body.lines as Row[]).map((item, index) => ({
+            id: `${params.id}:staff:${stableHash(`${key}\n${index}`).slice(0, 24)}`,
+            productId: item.productId,
+            productUomQty: item.quantity,
+            productUomId: item.uomId,
+          })),
+        },
+        url,
+        req,
+        { idempotencyKey: key, idempotencyNamespace: namespace },
+      )) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      return mutationResult(ctx, url, req, params.id)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'sales/orders/{id}/confirm',
+    operationId: 'staff.sales.orders.confirm',
+    summary: 'Confirm one reviewed quotation against fresh order and availability evidence.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'confirm' },
+    request: { params: idParams, body: expectedVersionBody(true) },
+    responses: {
+      '200': envelope(detail),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.sales.orders.confirm', limit: 60, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const row = await currentOrder(ctx, url, req, params.id)
+      if (!row) return notFound(ctx, url, req)
+      const current = await projectDetail(ctx, row, url, req)
+      const expected = requestVersion(req, request.body)
+      if (!expected || expected !== current.version) return versionFailure(ctx, url, req)
+      if (String(request.body.availabilityVersion) !== current.availabilityVersion)
+        return availabilityFailure(ctx, url, req)
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:sale.confirmOrder`
+      const result = (await ctx.call(
+        'sale.confirmOrder',
+        { id: params.id, expectedRevision: Number(row.revision ?? 0) },
+        url,
+        req,
+        { idempotencyKey: key, idempotencyNamespace: namespace },
+      )) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      return mutationResult(ctx, url, req, params.id)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'sales/orders/{id}/cancel',
+    operationId: 'staff.sales.orders.cancel',
+    summary: 'Cancel one undelivered and uninvoiced sales order under a strong version.',
+    auth: 'required',
+    capability: { key: 'sales.orders', action: 'cancel' },
+    request: { params: idParams, body: expectedVersionBody(false) },
+    responses: {
+      '200': envelope(detail),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.sales.orders.cancel', limit: 60, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const row = await currentOrder(ctx, url, req, params.id)
+      if (!row) return notFound(ctx, url, req)
+      const current = await projectDetail(ctx, row, url, req)
+      const expected = requestVersion(req, request.body)
+      if (!expected || expected !== current.version) return versionFailure(ctx, url, req)
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:sale.cancelOrder`
+      const result = (await ctx.call(
+        'sale.cancelOrder',
+        { id: params.id, expectedRevision: Number(row.revision ?? 0) },
+        url,
+        req,
+        { idempotencyKey: key, idempotencyNamespace: namespace },
+      )) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      return mutationResult(ctx, url, req, params.id)
     },
   }),
   defineChannelRoute({
