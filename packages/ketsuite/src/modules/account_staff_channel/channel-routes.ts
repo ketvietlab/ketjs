@@ -243,19 +243,25 @@ export const channelRoutes = routesOf(
         namesOf(ctx, [row], url, req),
         residualsOf(ctx, [row], url, req),
       ])
+      // The customer name and the residual are resolved from partner and payment
+      // rows this move never mentions, so hashing the move alone answered "not
+      // modified" after a rename. Hash what was actually built.
       const base = project(row, names, residuals)
-      const version = `aiv_${sha256(JSON.stringify(row))}`
+      const content = {
+        ...base,
+        sourceReference: row.ref == null ? null : String(row.ref),
+        totals: {
+          untaxed: { currency: String(row.currency), amount: String(row.amountUntaxed) },
+          tax: { currency: String(row.currency), amount: String(row.amountTax) },
+          total: base.total,
+          amountDue: base.amountDue,
+        },
+        postingLineCount: lines.length,
+      }
+      const version = `aiv_${sha256(JSON.stringify(content))}`
       return {
         data: {
-          ...base,
-          sourceReference: row.ref == null ? null : String(row.ref),
-          totals: {
-            untaxed: { currency: String(row.currency), amount: String(row.amountUntaxed) },
-            tax: { currency: String(row.currency), amount: String(row.amountTax) },
-            total: base.total,
-            amountDue: base.amountDue,
-          },
-          postingLineCount: lines.length,
+          ...content,
           version,
           availableActions: [],
           readOnly: true,

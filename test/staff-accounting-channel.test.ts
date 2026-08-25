@@ -251,3 +251,30 @@ test('staff accounting channel returns versioned read-only invoice totals', asyn
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/bill-a')).status, 404)
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/missing')).status, 404)
 })
+
+test('staff invoice version tracks the names it resolves elsewhere', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const read = async () => {
+    const response = await e2e.client.get('/api/staff/v1/accounting/invoices/invoice-a')
+    const body = (await response.json()) as Envelope<Row>
+    return {
+      version: String(body.data.version),
+      etag: response.headers.get('etag'),
+      customer: String((body.data.customer as Row).name),
+    }
+  }
+  const before = await read()
+  // The customer name comes from partner, not from the move. Hashing the move
+  // alone answered "not modified" after a rename, and a client holding that
+  // ETag would have kept the old name.
+  await e2e.fixture.call<Row>(
+    'partner.savePartner',
+    { id: 'customer-a', kind: 'company', name: 'Minh An Đã Đổi' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const after = await read()
+  assert.equal(after.customer, 'Minh An Đã Đổi')
+  assert.notEqual(after.version, before.version)
+  assert.equal(after.etag, `"${after.version}"`)
+})
