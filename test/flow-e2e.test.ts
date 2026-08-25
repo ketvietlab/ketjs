@@ -195,3 +195,134 @@ test('flow headless E2E: project, board, sprint and dependency lifecycle', async
     await e2e.close()
   }
 })
+
+/**
+ * The three fields `issue.save` used to accept without checking.
+ *
+ * Each one had a matching check somewhere else in the module — `assignSprint`
+ * refused a cross-project sprint, `moveIssue` owned the column, `blocks`
+ * refused cycles — and `issue.save` let all three past, answering `ok: true`
+ * either way.
+ */
+test('flow: issue.save refuses the sprint, column and parent it cannot honour', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyễn Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyễn Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    for (const [id, key, name] of [
+      ['alpha', 'A', 'Alpha'],
+      ['beta', 'B', 'Beta'],
+    ])
+      await call('flow.project.save', { values: { id, key, name }, idempotencyKey: `project-${id}` })
+    await call('flow.column.save', {
+      values: { id: 'a-todo', projectId: 'alpha', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-a-todo',
+    })
+    await call('flow.column.save', {
+      values: { id: 'a-doing', projectId: 'alpha', code: 'doing', name: 'Doing', sequence: 20 },
+      idempotencyKey: 'column-a-doing',
+    })
+    await call('flow.column.save', {
+      values: { id: 'b-todo', projectId: 'beta', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-b-todo',
+    })
+    await call('flow.sprint.save', {
+      id: 'beta-sprint',
+      projectId: 'beta',
+      name: 'Beta 1',
+      idempotencyKey: 'sprint-beta-1',
+    })
+
+    const crossSprint = await call<Row>('flow.issue.save', {
+      id: 'alpha-1',
+      projectId: 'alpha',
+      columnId: 'a-todo',
+      title: 'Alpha work',
+      sprintId: 'beta-sprint',
+      idempotencyKey: 'issue-cross-sprint',
+    })
+    assert.equal(crossSprint.ok, false)
+    assert.equal(errorCode(crossSprint), 'flow.error.sprintProjectMismatch')
+
+    await call('flow.issue.save', {
+      id: 'alpha-1',
+      projectId: 'alpha',
+      columnId: 'a-todo',
+      title: 'Alpha work',
+      idempotencyKey: 'issue-alpha-1',
+    })
+    await call('flow.issue.save', {
+      id: 'beta-1',
+      projectId: 'beta',
+      columnId: 'b-todo',
+      title: 'Beta work',
+      idempotencyKey: 'issue-beta-1',
+    })
+    const version = Number((await call<Row>('flow.issue.get', { id: 'alpha-1' })).version)
+
+    // Save used to keep the stored column and still report success, so the
+    // caller was told a move had happened that never did.
+    const moved = await call<Row>('flow.issue.save', {
+      id: 'alpha-1',
+      projectId: 'alpha',
+      columnId: 'a-doing',
+      title: 'Alpha work',
+      expectedVersion: version,
+      idempotencyKey: 'issue-alpha-move',
+    })
+    assert.equal(moved.ok, false)
+    assert.equal(errorCode(moved), 'flow.error.columnNeedsMove')
+    assert.equal((await call<Row>('flow.issue.get', { id: 'alpha-1' })).columnId, 'a-todo')
+
+    const properly = await call<Row>('flow.issue.move', {
+      id: 'alpha-1',
+      columnId: 'a-doing',
+      expectedVersion: version,
+      idempotencyKey: 'issue-alpha-move-2',
+    })
+    assert.equal(properly.ok, true)
+
+    const at = async () => Number((await call<Row>('flow.issue.get', { id: 'alpha-1' })).version)
+    const saveParent = async (parentIssueId: string, key: string) =>
+      call<Row>('flow.issue.save', {
+        id: 'alpha-1',
+        projectId: 'alpha',
+        columnId: 'a-doing',
+        title: 'Alpha work',
+        parentIssueId,
+        expectedVersion: await at(),
+        idempotencyKey: key,
+      })
+
+    assert.equal(errorCode(await saveParent('beta-1', 'parent-cross')), 'flow.error.parentProjectMismatch')
+    assert.equal(errorCode(await saveParent('does-not-exist', 'parent-ghost')), 'flow.error.notFound')
+    assert.equal(errorCode(await saveParent('alpha-1', 'parent-self')), 'flow.error.selfParent')
+
+    const child = await call<Row>('flow.issue.save', {
+      id: 'alpha-2',
+      projectId: 'alpha',
+      columnId: 'a-todo',
+      title: 'A sub-task',
+      parentIssueId: 'alpha-1',
+      idempotencyKey: 'issue-alpha-2',
+    })
+    assert.equal(child.ok, true)
+    assert.equal(errorCode(await saveParent('alpha-2', 'parent-cycle')), 'flow.error.parentCycle')
+  } finally {
+    await e2e.close()
+  }
+})

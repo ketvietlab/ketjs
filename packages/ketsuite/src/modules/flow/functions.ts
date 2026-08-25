@@ -368,6 +368,22 @@ export const functions: Record<string, FnSpec> = {
     handler: (ctx, args) => issueDetail(ctx, String(args.id)),
   }),
 
+  /**
+   * The permission that guards the collaborative description.
+   *
+   * The description is a Yjs document edited over flow_backend's `/push` and
+   * `/leave` routes, not through `issue.save`, so it needs its own grantable
+   * key — those routes used to authorize with `issue.get`, which made a
+   * read-only role able to rewrite any issue's text. It answers with the
+   * issue so the caller does not read it twice.
+   */
+  'issue.editDescription': defineFn({
+    input: { id: 'id' },
+    effects: ['read:flow.Issue'],
+    agent: true,
+    handler: async (ctx, args) => (await ctx.db.select('flow.Issue', { id: args.id }))[0] ?? null,
+  }),
+
   'issue.save': defineFn({
     input: {
       id: 'id',

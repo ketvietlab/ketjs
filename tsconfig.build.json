@@ -17,11 +17,5 @@
     "tools/**/*.ts",
     "bench/**/*"
   ],
-  "exclude": [
-    ".build",
-    "packages/*/dist",
-    "node_modules",
-    "packages/*/src/**/client-src/**",
-    "packages/ketsuite/src/modules/flow_backend/client/**"
-  ]
+  "exclude": [".build", "packages/*/dist", "node_modules"]
 }

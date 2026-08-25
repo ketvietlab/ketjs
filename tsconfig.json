@@ -13,6 +13,5 @@
     "test/**/*",
     "tools/**/*",
     "bench/**/*"
-  ],
-  "exclude": ["packages/ketsuite/src/modules/flow_backend/client/**"]
+  ]
 }

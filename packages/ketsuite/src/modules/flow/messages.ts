@@ -41,6 +41,11 @@ const vi = {
   'error.invalidSprintState': 'Sprint không ở trạng thái phù hợp cho thao tác này.',
   'error.sprintAlreadyActive': 'Dự án đã có một sprint đang chạy.',
   'error.duplicateName': 'Tên này đã được dùng.',
+  'error.sprintProjectMismatch': 'Sprint không thuộc dự án của công việc này.',
+  'error.columnNeedsMove': 'Hãy dùng thao tác chuyển cột để đổi cột của công việc.',
+  'error.selfParent': 'Một công việc không thể là công việc cha của chính nó.',
+  'error.parentProjectMismatch': 'Công việc cha phải thuộc cùng một dự án.',
+  'error.parentCycle': 'Thao tác này sẽ tạo ra vòng lặp cha–con.',
 } as const
 
 const en: Record<keyof typeof vi, string> = {
@@ -86,6 +91,11 @@ const en: Record<keyof typeof vi, string> = {
   'error.invalidSprintState': 'The sprint is not in a state that allows this.',
   'error.sprintAlreadyActive': 'This project already has an active sprint.',
   'error.duplicateName': 'That name is already in use.',
+  'error.sprintProjectMismatch': 'That sprint belongs to a different project.',
+  'error.columnNeedsMove': 'Use the move action to change an issue’s column.',
+  'error.selfParent': 'An issue cannot be its own parent.',
+  'error.parentProjectMismatch': 'A parent issue must be in the same project.',
+  'error.parentCycle': 'That would create a parent cycle.',
 }
 
 export const messages = { vi, en }

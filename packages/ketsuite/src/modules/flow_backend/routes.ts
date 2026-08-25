@@ -8,6 +8,7 @@ import {
   applySnapshot,
   currentGeneration,
   getOrCreateLive,
+  isLive,
   previewTextOf,
   publishUpdate,
   rollGeneration,
@@ -36,43 +37,73 @@ const singleChunk = async function* (bytes: Uint8Array) {
   yield bytes
 }
 
-/** True once the caller has passed a real permission check for this issue. */
-async function authorized(
+const permitted = async (
   ctx: ServeContext,
+  fn: string,
   url: URL,
   req: IncomingMessage,
   issueId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<Record<string, unknown> | null> => {
   try {
-    return (await ctx.call('flow.issue.get', { id: issueId }, url, req)) as Record<string, unknown> | null
+    return (await ctx.call(fn, { id: issueId }, url, req)) as Record<string, unknown> | null
   } catch {
     return null
   }
 }
 
-/** Loads the durable snapshot into the live doc on first access; a no-op after that. */
+/** True once the caller has passed a read permission check for this issue. */
+const readable = (ctx: ServeContext, url: URL, req: IncomingMessage, issueId: string) =>
+  permitted(ctx, 'flow.issue.get', url, req, issueId)
+
+/**
+ * The same check for the routes that *change* the description.
+ *
+ * `/push` rewrites an issue's description and `/leave` persists that rewrite,
+ * so gating them on `flow.issue.get` made the description the one piece of
+ * Flow data whose write path was granted by a read permission: a role holding
+ * only `flow.issue.get` and `flow.issue.list` could POST over any issue's
+ * text. Permissions here are per-function-key (modules/user/roles.ts), so the
+ * fix is a separate key an administrator grants deliberately.
+ */
+const writable = (ctx: ServeContext, url: URL, req: IncomingMessage, issueId: string) =>
+  permitted(ctx, 'flow.issue.editDescription', url, req, issueId)
+
+/**
+ * Loads the durable snapshot into the live doc on first access.
+ *
+ * Every route that reads or writes the document calls this first. It used to
+ * hang off `/content` alone, which meant a `/push` or a `/leave` arriving at a
+ * process that had never opened the issue — after a restart, or from a plain
+ * `curl` — worked against a blank document and then persisted it.
+ *
+ * Returns false when the durable snapshot could not be read, so a caller that
+ * is about to overwrite it can decline instead.
+ */
 async function hydrate(
   ctx: ServeContext,
   url: URL,
   req: IncomingMessage,
+  companyId: string,
   issueId: string,
   contentAttachmentId: unknown,
-): Promise<void> {
-  const { isNew } = getOrCreateLive(issueId)
-  if (!isNew) return
+): Promise<boolean> {
+  const { isNew } = getOrCreateLive(companyId, issueId)
+  if (!isNew) return true
   const resolved = (await ctx.call(
     'flow_backend.sync.resolveSnapshotKey',
     { attachmentId: contentAttachmentId },
     url,
     req,
   )) as { storeKey: string | null }
-  if (!resolved.storeKey) return
+  // No stored snapshot is a genuine empty description, not a failure to read one.
+  if (!resolved.storeKey) return true
   const storage = await ctx.storageOf(url, req)
   const found = await storage.get(resolved.storeKey)
-  if (!found) return
+  if (!found) return false
   const chunks: Uint8Array[] = []
   for await (const chunk of found.body) chunks.push(chunk)
-  applySnapshot(issueId, Buffer.concat(chunks))
+  applySnapshot(companyId, issueId, Buffer.concat(chunks))
+  return true
 }
 
 /** Flattens the live doc, writes the bytes, and records the result — then rolls the topic. */
@@ -83,14 +114,18 @@ async function flatten(
   companyId: string,
   issueId: string,
 ): Promise<void> {
-  const bytes = snapshotBytes(issueId)
+  const bytes = snapshotBytes(companyId, issueId)
+  // Nothing to flatten is not the same as an empty description: persisting a
+  // document this process does not hold would replace the real one with a
+  // blank. See sync.ts's note on snapshotBytes.
+  if (!bytes) return
   const checksum = createHash('sha256').update(bytes).digest('hex')
   const storeKey = `blobs/${companyId}/${checksum.slice(0, 2)}/${checksum}`
   const storage = await ctx.storageOf(url, req)
   await storage.put(storeKey, singleChunk(bytes), { type: 'application/octet-stream', size: bytes.length })
   await ctx.callUnchecked(
     'flow_backend.sync.commitContent',
-    { issueId, storeKey, checksum, size: bytes.length, previewText: previewTextOf(issueId) },
+    { issueId, storeKey, checksum, size: bytes.length, previewText: previewTextOf(companyId, issueId) },
     url,
     req,
   )
@@ -103,14 +138,15 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const issueId = String(params.id)
-      const issue = await authorized(ctx, url, req, issueId)
+      const issue = await readable(ctx, url, req, issueId)
       if (!issue) return text('forbidden', { status: 403 })
       const scope = await ctx.scopeOf(url, req)
       if (!scope.company) return text('company scope required', { status: 400 })
-      await hydrate(ctx, url, req, issueId, issue.contentAttachmentId)
+      if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
+        return text('stored description could not be read', { status: 503 })
       return json({
-        snapshot: Buffer.from(snapshotBytes(issueId)).toString('base64'),
-        topic: topicFor(scope.company, issueId, currentGeneration(issueId)),
+        snapshot: Buffer.from(snapshotBytes(scope.company, issueId) ?? new Uint8Array()).toString('base64'),
+        topic: topicFor(scope.company, issueId, currentGeneration(scope.company, issueId)),
       })
     },
 
@@ -119,7 +155,8 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const issueId = String(params.id)
-      if (!(await authorized(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      const issue = await writable(ctx, url, req, issueId)
+      if (!issue) return text('forbidden', { status: 403 })
       const scope = await ctx.scopeOf(url, req)
       if (!scope.company) return text('company scope required', { status: 400 })
       let body: Record<string, unknown>
@@ -130,7 +167,17 @@ export const routes: Record<string, RouteEntry> = {
       }
       const update = typeof body.update === 'string' ? body.update : ''
       if (!update) return text('bad request', { status: 400 })
-      const { shouldFlatten } = await publishUpdate(scope.company, issueId, update)
+      // Before the update is merged, not after: an incremental update applied
+      // to a blank document keeps only what it carries.
+      if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
+        return text('stored description could not be read', { status: 503 })
+      let shouldFlatten: boolean
+      try {
+        ;({ shouldFlatten } = await publishUpdate(scope.company, issueId, update))
+      } catch {
+        // A malformed update is the client's problem, not a 500.
+        return text('bad request', { status: 400 })
+      }
       if (shouldFlatten) await flatten(ctx, url, req, scope.company, issueId)
       return json({ ok: true })
     },
@@ -158,7 +205,7 @@ export const routes: Record<string, RouteEntry> = {
       const issueId = String(params.id)
       const topic = url.searchParams.get('topic') ?? ''
       const from = Number(url.searchParams.get('from') ?? 0)
-      if (!(await authorized(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
       const scope = await ctx.scopeOf(url, req)
       // A topic name that doesn't actually belong to this issue's current
       // generation is refused rather than relayed — otherwise a caller
@@ -182,21 +229,27 @@ export const routes: Record<string, RouteEntry> = {
 
   /**
    * The explicit "I'm done editing" signal — the client calls this
-   * (`navigator.sendBeacon` in Phase 4, so it fires reliably on tab close)
-   * instead of relying on the SSE connection's own teardown. Flattening is
-   * idempotent, so a duplicate or slightly-late beacon just re-persists the
-   * same or a slightly newer state.
+   * (`navigator.sendBeacon`, so it fires reliably on tab close) instead of
+   * relying on the SSE connection's own teardown. Flattening is idempotent,
+   * so a duplicate or slightly-late beacon just re-persists the same or a
+   * slightly newer state.
+   *
+   * A beacon for a document this process never held is answered without
+   * writing anything: it carries no state to save, and the old behaviour —
+   * flatten whatever `live` returned — turned every post-restart tab close
+   * into a silent wipe of the stored description.
    */
   '/admin/flow/issues/{id}/leave':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const issueId = String(params.id)
-      if (!(await authorized(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      if (!(await writable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
       const scope = await ctx.scopeOf(url, req)
       if (!scope.company) return text('company scope required', { status: 400 })
+      if (!isLive(scope.company, issueId)) return json({ ok: true, flattened: false })
       await flatten(ctx, url, req, scope.company, issueId)
-      return json({ ok: true })
+      return json({ ok: true, flattened: true })
     },
 
   '/admin/flow/issues/{id}':
@@ -204,9 +257,12 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const issueId = String(params.id)
-      const issue = (await authorized(ctx, url, req, issueId)) as Row | null
+      const issue = (await readable(ctx, url, req, issueId)) as Row | null
       if (!issue) return text('not found', { status: 404 })
-      const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', { issueId })
+      const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
+        issueId,
+        lang: url.searchParams.get('lang') ?? '',
+      })
       return adminPage(ctx, url, req, {
         title: String(issue.title),
         translate: false,
