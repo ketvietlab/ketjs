@@ -158,26 +158,42 @@ export async function movePage(
   const parent = input.parentPageId ? String(input.parentPageId) : null
   const failed = await parentError(ctx, input.id, parent, String(existing.projectId))
   if (failed) return invalid(failed)
+  const before = existing.parentPageId ? String(existing.parentPageId) : null
+  // Arriving in a branch it was not in, a page joins the end of it. Keeping the
+  // sequence it held somewhere else lands it at an arbitrary point in the new
+  // branch — or tied with whatever already holds that number.
+  const sequence =
+    input.sequence != null
+      ? n(input.sequence)
+      : parent === before
+        ? n(existing.sequence)
+        : (await lastSequence(ctx, String(existing.projectId), parent)) + SEQUENCE_STEP
   await ctx.db.update(
     'flow.Page',
     { id: input.id },
-    {
-      parentPageId: parent,
-      sequence: input.sequence == null ? n(existing.sequence) : n(input.sequence),
-      updatedAt: now(),
-    },
+    { parentPageId: parent, sequence, updatedAt: now() },
   )
   return { ok: true, id: input.id }
 }
 
 /**
- * Swaps a page with the sibling above or below it.
+ * Moves a page one place up or down among its siblings.
  *
- * A swap rather than a renumber: only two rows change, so two people
- * reordering different parts of the same branch do not fight, and a sequence
- * nobody touched keeps the value it had. Reaching the end is not an error —
- * there is simply nothing to swap with, and the caller is told so rather than
- * being handed a failure for asking.
+ * Reaching the end is not an error — there is simply nothing to swap with, and
+ * the caller is told so rather than being handed a failure for asking.
+ *
+ * Two rows change in the ordinary case, so two people reordering different
+ * branches never touch the same rows. The exception is a branch whose
+ * sequences are not yet distinct: every page written before this column meant
+ * anything shares one value, and swapping two equal numbers moves nothing. The
+ * first attempt to reorder such a branch spreads it out — in the order it is
+ * already displayed in, so nothing visibly jumps — and every reorder after
+ * that is a plain swap again.
+ *
+ * Nudging a tie apart by one step was tried first and was wrong: with three
+ * pages all at 10, moving the last one up put it below every sequence in the
+ * branch rather than one place up, which is exactly the state a migrated wiki
+ * starts in.
  */
 export async function reorderPage(
   ctx: Ctx,
@@ -197,22 +213,38 @@ export async function reorderPage(
       .orderBy(asc(P.sequence), asc(P.title)),
   )
   const at = siblings.findIndex((row) => String(row.id) === input.id)
-  const neighbour = siblings[at + (input.direction === 'up' ? -1 : 1)]
-  if (at < 0 || !neighbour) return { ok: true, id: input.id, moved: false }
-  // Ties are possible — `sequence` is not unique, and rows created before this
-  // existed all share one value — so equal neighbours are pushed apart rather
-  // than swapped into the same place they started.
-  const mine = n(existing.sequence)
-  const theirs = n(neighbour.sequence)
-  const [next, other] =
-    mine === theirs
-      ? input.direction === 'up'
-        ? [mine - SEQUENCE_STEP, theirs]
-        : [mine + SEQUENCE_STEP, theirs]
-      : [theirs, mine]
+  if (at < 0) return { ok: true, id: input.id, moved: false }
+  const to = at + (input.direction === 'up' ? -1 : 1)
+  if (to < 0 || to >= siblings.length) return { ok: true, id: input.id, moved: false }
+
   const stamp = now()
-  await ctx.db.update('flow.Page', { id: input.id }, { sequence: next, updatedAt: stamp })
-  await ctx.db.update('flow.Page', { id: neighbour.id }, { sequence: other, updatedAt: stamp })
+  const distinct = new Set(siblings.map((row) => n(row.sequence))).size === siblings.length
+  if (!distinct) {
+    // Spread the branch out along the order it is already shown in, then place
+    // the page at its new index. Only this branch is touched.
+    const reordered = siblings.slice()
+    const [moved] = reordered.splice(at, 1)
+    reordered.splice(to, 0, moved as Row)
+    for (const [index, row] of reordered.entries())
+      await ctx.db.update(
+        'flow.Page',
+        { id: row.id },
+        { sequence: (index + 1) * SEQUENCE_STEP, updatedAt: stamp },
+      )
+    return { ok: true, id: input.id, moved: true }
+  }
+
+  const neighbour = siblings[to] as Row
+  await ctx.db.update(
+    'flow.Page',
+    { id: input.id },
+    { sequence: n(neighbour.sequence), updatedAt: stamp },
+  )
+  await ctx.db.update(
+    'flow.Page',
+    { id: neighbour.id },
+    { sequence: n(existing.sequence), updatedAt: stamp },
+  )
   return { ok: true, id: input.id, moved: true }
 }
 
