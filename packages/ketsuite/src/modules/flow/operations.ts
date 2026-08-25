@@ -3,6 +3,7 @@ import { asc, bucketEq, compileListFilter, deleteFrom, desc, eq, from, inArray }
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { ensureThread, followThread, listTimeline, postMessage } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
+import type { FieldKind } from './types.ts'
 import { emptyIssueListState, issueListSearch } from './search.ts'
 
 export type FlowIssue = { field: string; code: string; params?: Record<string, unknown> }
@@ -89,6 +90,64 @@ async function issueEpic(ctx: Ctx, epicId: unknown): Promise<Row | null | undefi
 }
 
 /**
+ * A type an issue may be filed as.
+ *
+ * Checked for existence and for belonging to the same project, which is what
+ * `epicId` was not and had to be taught — a reference written straight through
+ * puts a row on a board it does not belong to, and every screen downstream
+ * then agrees with it.
+ */
+async function issueType(ctx: Ctx, typeId: unknown): Promise<Row | null | undefined> {
+  if (!typeId) return null
+  return (await ctx.db.select('flow.IssueType', { id: typeId }))[0] ?? undefined
+}
+
+/** The options a `select` field offers, as codes. */
+const optionCodes = (config: unknown): string[] => {
+  const options = (config as { options?: Array<{ code?: unknown }> } | null)?.options
+  return Array.isArray(options) ? options.map((option) => String(option?.code ?? '')) : []
+}
+
+/**
+ * Whether a value is well-formed for the kind of field holding it.
+ *
+ * Empty always passes and clears the value: a field a team added last week is
+ * blank on every issue that already existed, and refusing to save those until
+ * somebody fills it in would make adding a field an act of vandalism.
+ */
+export function fieldValueError(field: Row, raw: unknown): FlowIssue | null {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+  const kind = String(field.kind) as FieldKind
+  const bad = (code: string) => issue(`field:${String(field.code)}`, code)
+  if (kind === 'number' && !Number.isFinite(Number(value))) return bad('flow.error.fieldNumber')
+  if (kind === 'date' && Number.isNaN(Date.parse(value))) return bad('flow.error.fieldDate')
+  if (kind === 'bool' && value !== 'true' && value !== 'false') return bad('flow.error.fieldBool')
+  // http/https only, the same rule the editor applies to a link it renders:
+  // this one ends up in an href on somebody else's screen too.
+  if (kind === 'url' && !/^https?:\/\//i.test(value)) return bad('flow.error.fieldUrl')
+  if (kind === 'select' && !optionCodes(field.config).includes(value)) return bad('flow.error.fieldOption')
+  return null
+}
+
+/**
+ * The custom fields of one project, by id and by code.
+ *
+ * Callers name a field either way — a screen posts ids, an agent writing
+ * `{ environment: 'production' }` names codes — and both have to land on the
+ * same definition.
+ */
+async function fieldsOfProject(ctx: Ctx, projectId: unknown): Promise<Map<string, Row>> {
+  const defs = await ctx.db.select('flow.FieldDef', { projectId, active: true })
+  const by = new Map<string, Row>()
+  for (const def of defs) {
+    by.set(String(def.id), def)
+    by.set(String(def.code), def)
+  }
+  return by
+}
+
+/**
  * A parent an issue may point at.
  *
  * Sub-tasks nest inside one project's board, so a parent from another project
@@ -120,16 +179,62 @@ async function parentIssueError(
   return null
 }
 
+/**
+ * How far along each issue is, counted from its sub-tasks.
+ *
+ * "Done" is a sub-task sitting in a column with `terminalState` — the concept
+ * models.ts introduced for exactly this kind of question, so that a team whose
+ * workflow is five columns wide gets the same answer as one running three, and
+ * neither has to be called "Done".
+ *
+ * Sub-tasks are the checklist. The description can hold one too, and does, but
+ * that one is prose: nobody can be given an item in it, nothing can be counted
+ * from outside the document, and it is not what this reads.
+ *
+ * Unlimited on purpose, unlike `dependenciesFor` below. The query is already
+ * bounded twice over — by one page of parents, and by sub-tasks being a
+ * relation a person types out by hand — and a cap on a *count* is worse than a
+ * cap on a list: a truncated list looks truncated, while 3/5 that should read
+ * 3/9 just looks wrong.
+ */
+async function progressOf(
+  ctx: Ctx,
+  issueIds: string[],
+): Promise<Map<string, { done: number; total: number }>> {
+  const tally = new Map<string, { done: number; total: number }>()
+  if (!issueIds.length) return tally
+  const I = ctx.table('flow.Issue')
+  const children = await ctx.db.all(
+    from(I).where(inArray(I.parentIssueId, issueIds)).where(eq(I.active, true)),
+  )
+  if (!children.length) return tally
+  const C = ctx.table('flow.Column')
+  const columnIds = [...new Set(children.map((child) => String(child.columnId)))]
+  const columns = await ctx.db.all(from(C).where(inArray(C.id, columnIds)))
+  const terminal = new Set(
+    columns.filter((column) => column.terminalState).map((column) => String(column.id)),
+  )
+  for (const child of children) {
+    const key = String(child.parentIssueId)
+    const at = tally.get(key) ?? { done: 0, total: 0 }
+    at.total += 1
+    if (terminal.has(String(child.columnId))) at.done += 1
+    tally.set(key, at)
+  }
+  return tally
+}
+
 export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const ids = (values: unknown[]): string[] => [...new Set(values.filter(Boolean).map(String))]
   const columnIds = ids(rows.map((row) => row.columnId))
   const epicIds = ids(rows.map((row) => row.epicId))
   const sprintIds = ids(rows.map((row) => row.sprintId))
   const userIds = ids(rows.map((row) => row.assigneeUserId))
+  const typeIds = ids(rows.map((row) => row.typeId))
   // The project too, for the one list that spans them: an issue read outside
   // its own board has to say which board it came from.
   const projectIds = ids(rows.map((row) => row.projectId))
-  const [columns, epics, sprints, users, projects] = await Promise.all([
+  const [columns, epics, sprints, users, projects, types, progress] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -145,6 +250,13 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     projectIds.length
       ? ctx.db.all(from(ctx.table('flow.Project')).where(inArray(ctx.table('flow.Project').id, projectIds)))
       : [],
+    typeIds.length
+      ? ctx.db.all(from(ctx.table('flow.IssueType')).where(inArray(ctx.table('flow.IssueType').id, typeIds)))
+      : [],
+    progressOf(
+      ctx,
+      rows.map((row) => String(row.id)),
+    ),
   ])
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const columnBy = by(columns)
@@ -152,16 +264,41 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const sprintBy = by(sprints)
   const userBy = by(users)
   const projectBy = by(projects)
-  return rows.map((row) => ({
-    ...row,
-    projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
-    columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
-    epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
-    sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
-    assigneeName: row.assigneeUserId
-      ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
-      : null,
-  }))
+  const typeBy = by(types)
+  return rows.map((row) => {
+    const counted = progress.get(String(row.id))
+    return {
+      ...row,
+      /**
+       * The day a bar starts, which is not the same fact as `startDate`.
+       *
+       * Nobody sets a start date on most issues, and a chart still has to
+       * begin somewhere; the day it was written down is the honest stand-in.
+       * Kept separate from the stored value on purpose — a form bound to this
+       * would show the fallback as an answer, and saving would then write it
+       * back as one.
+       */
+      startsOn: row.startDate ?? (row.createdAt ? String(row.createdAt).slice(0, 10) : null),
+      subtaskTotal: counted?.total ?? 0,
+      subtaskDone: counted?.done ?? 0,
+      /**
+       * Null, not zero, when an issue has no sub-tasks. "Nothing to do" and
+       * "nothing done yet" are different facts, and a column of 0% against every
+       * issue nobody had broken down would report the second while meaning the
+       * first.
+       */
+      progress: counted ? Math.round((counted.done * 100) / counted.total) : null,
+      projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
+      columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
+      epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
+      sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
+      assigneeName: row.assigneeUserId
+        ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
+        : null,
+      typeName: row.typeId ? (typeBy.get(String(row.typeId))?.name ?? row.typeId) : null,
+      typeColor: row.typeId ? (typeBy.get(String(row.typeId))?.color ?? null) : null,
+    }
+  })
 }
 
 const listStateOf = (value: unknown): ListState | null =>
@@ -270,12 +407,24 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
     ? await ctx.db.all(from(ctx.table('flow.Issue')).where(inArray(ctx.table('flow.Issue').id, relatedIds)))
     : []
   const titleOf = new Map(relatedRows.map((row) => [String(row.id), String(row.title)]))
+  // Every field this project defines, each carrying whatever this issue holds
+  // for it — the definitions, not just the answers, because a field nobody has
+  // filled in still has to appear on the form for anyone to fill it in.
+  const [defs, held] = await Promise.all([
+    ctx.db.select('flow.FieldDef', { projectId: row.projectId, active: true }),
+    ctx.db.select('flow.IssueFieldValue', { issueId: id }),
+  ])
+  const answerOf = new Map(held.map((entry) => [String(entry.fieldId), entry.value]))
+  const fields = defs
+    .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+    .map((def) => ({ ...def, value: answerOf.get(String(def.id)) ?? null }))
   const parent = row.parentIssueId
     ? ((await ctx.db.select('flow.Issue', { id: row.parentIssueId }))[0] ?? null)
     : null
   return {
     ...serialized!,
     parentTitle: parent ? String(parent.title) : null,
+    fields,
     children: await serializeIssueList(ctx, children),
     tags: tagRows,
     dependencies: outgoing.map((row) => ({
@@ -318,15 +467,19 @@ export type SaveIssueInput = {
   id: string
   projectId: string
   columnId: string
+  typeId?: string | null
   epicId?: string | null
   sprintId?: string | null
   parentIssueId?: string | null
   title: string
   assigneeUserId?: string | null
   priority?: string
+  startDate?: string | null
   dueDate?: string | null
   estimate?: unknown
   tagIds?: string[]
+  /** Custom field values, keyed by field id or by field code. */
+  fields?: Record<string, unknown>
   expectedVersion?: number
   idempotencyKey: string
 }
@@ -352,6 +505,10 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
   if (epic === undefined) return invalid(issue('epicId', 'flow.error.notFound'))
   if (epic && String(epic.projectId) !== String(input.projectId))
     return invalid(issue('epicId', 'flow.error.epicProjectMismatch'))
+  const kind = await issueType(ctx, input.typeId)
+  if (kind === undefined) return invalid(issue('typeId', 'flow.error.notFound'))
+  if (kind && String(kind.projectId) !== String(input.projectId))
+    return invalid(issue('typeId', 'flow.error.typeProjectMismatch'))
   return ctx.tx(async (tx) => {
     const existing = (await tx.db.select('flow.Issue', { id: input.id }))[0]
     if (existing && String(existing.projectId) !== String(input.projectId))
@@ -382,6 +539,24 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
         : []
       if (tags.length !== tagIds.length) return invalid(issue('tagIds', 'flow.error.notFound'))
     }
+    // Custom field values, resolved and checked here for the same reason the
+    // tags above are: `tx` rolls back on a thrown exception, not on a returned
+    // `invalid`, so anything validated after the write below leaves a
+    // half-written issue behind and still reports failure.
+    const fieldWrites: Array<{ field: Row; value: string }> = []
+    if (input.fields) {
+      const defs = await fieldsOfProject(tx, input.projectId)
+      for (const [key, raw] of Object.entries(input.fields)) {
+        const field = defs.get(String(key))
+        // A field this project does not have, rather than one that is merely
+        // empty: naming it is a mistake worth reporting, the same as an epic
+        // from another board.
+        if (!field) return invalid(issue(`field:${key}`, 'flow.error.fieldUnknown'))
+        const error = fieldValueError(field, raw)
+        if (error) return invalid(error)
+        fieldWrites.push({ field, value: String(raw ?? '').trim() })
+      }
+    }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     // A reference the caller did not mention keeps what is stored; an
@@ -396,12 +571,14 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
     const values: Row = {
       projectId: input.projectId,
       columnId: existing ? existing.columnId : input.columnId,
+      typeId: input.typeId === undefined ? (existing?.typeId ?? null) : kind ? kind.id : null,
       epicId: input.epicId === undefined ? (existing?.epicId ?? null) : epic ? epic.id : null,
       sprintId: input.sprintId === undefined ? (existing?.sprintId ?? null) : sprint ? sprint.id : null,
       parentIssueId: kept(input.parentIssueId, existing?.parentIssueId),
       title: input.title.trim(),
       assigneeUserId: kept(input.assigneeUserId, existing?.assigneeUserId),
       priority: input.priority ?? existing?.priority ?? 'normal',
+      startDate: kept(input.startDate, existing?.startDate),
       dueDate: kept(input.dueDate, existing?.dueDate),
       estimate: input.estimate == null ? (existing?.estimate ?? null) : String(input.estimate),
       active: true,
@@ -431,6 +608,28 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       await tx.db.del(deleteFrom(IT).where(eq(IT.issueId, input.id)))
       for (const tagId of tagIds)
         await tx.db.insertIfAbsent('flow.IssueTag', { id: `${input.id}:${tagId}`, issueId: input.id, tagId })
+    }
+    // One row per issue and field, so a value is replaced rather than
+    // accumulated. Emptying one deletes the row instead of storing "": a field
+    // nobody has answered and a field answered with nothing read the same on
+    // screen, and only one of them should cost a row.
+    for (const { field, value } of fieldWrites) {
+      const id = `${input.id}:${String(field.id)}`
+      if (!value) {
+        const V = tx.table('flow.IssueFieldValue')
+        await tx.db.del(deleteFrom(V).where(eq(V.id, id)))
+        continue
+      }
+      // insertIfAbsent then update, rather than branching on whether the row
+      // exists: `db.update` answers with a result object either way, so there
+      // is nothing truthy to branch on, and the pair is correct in both cases.
+      await tx.db.insertIfAbsent('flow.IssueFieldValue', {
+        id,
+        issueId: input.id,
+        fieldId: field.id,
+        value,
+      })
+      await tx.db.update('flow.IssueFieldValue', { id }, { value })
     }
 
     // Whoever opened it, and whoever it lands on, are subscribed to its

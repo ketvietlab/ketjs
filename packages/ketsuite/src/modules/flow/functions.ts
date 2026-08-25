@@ -1,4 +1,5 @@
 import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
+import { FIELD_KINDS } from './types.ts'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
@@ -24,6 +25,9 @@ import { emptyIssueListState } from './search.ts'
 const flowReadEffects = [
   'read:flow.Project',
   'read:flow.Column',
+  'read:flow.IssueType',
+  'read:flow.FieldDef',
+  'read:flow.IssueFieldValue',
   'read:flow.Epic',
   'read:flow.Sprint',
   'read:flow.Issue',
@@ -39,6 +43,7 @@ const issueWriteEffects = [
   ...flowReadEffects,
   'write:flow.Issue',
   'write:flow.IssueTag',
+  'write:flow.IssueFieldValue',
   'write:mail.Thread',
   // Saving an issue now subscribes its author and its assignee to the thread,
   // and writes a system entry when it changes hands — so it touches the same
@@ -215,6 +220,200 @@ export const functions: Record<string, FnSpec> = {
       const held = await ctx.db.select('flow.Issue', { columnId: args.id, active: true })
       if (held.length) return invalid(issue('id', 'flow.error.columnHasIssues'))
       await ctx.db.update('flow.Column', { id: args.id }, { active: false })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  'issueType.list': defineFn({
+    input: { projectId: 'id', includeArchived: 'bool?' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      code: 'text',
+      name: 'text',
+      color: 'text?',
+      sequence: 'int',
+      active: 'bool',
+    },
+    effects: ['read:flow.IssueType'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const rows = await ctx.db.select(
+        'flow.IssueType',
+        args.includeArchived === true
+          ? { projectId: args.projectId }
+          : { projectId: args.projectId, active: true },
+      )
+      return rows.sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+    },
+  }),
+
+  'issueType.save': saveEntity(
+    'flow.IssueType',
+    ['id', 'projectId', 'code', 'name', 'color', 'sequence', 'active'],
+    ['projectId', 'code', 'name'],
+    (args, existing) => ({
+      sequence: existing?.sequence ?? 10,
+      active: existing?.active ?? true,
+      ...args,
+    }),
+  ),
+
+  /**
+   * Archiving a type in use would leave those issues pointing at a row no
+   * screen lists any more, so they would read as untyped while still carrying
+   * it — the same refusal `column.archive` makes, for the same reason.
+   */
+  'issueType.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.IssueType', 'write:flow.IssueType', 'read:flow.Issue'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('flow.IssueType', { id: args.id }))[0]
+      if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+      const held = await ctx.db.select('flow.Issue', { typeId: args.id, active: true })
+      if (held.length) return invalid(issue('id', 'flow.error.typeHasIssues'))
+      await ctx.db.update('flow.IssueType', { id: args.id }, { active: false })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * The project this reader's board last showed, if any.
+   *
+   * Answers null rather than guessing a project: the board asks them to pick
+   * once, and a wrong guess would show one team's work to somebody who wanted
+   * another's.
+   */
+  'board.scope': defineFn({
+    input: {},
+    output: { projectId: 'id?' },
+    effects: ['read:flow.BoardScope'],
+    agent: true,
+    handler: async (ctx) => {
+      if (!ctx.actor) return { projectId: null }
+      const held = (await ctx.db.select('flow.BoardScope', { userId: ctx.actor }))[0]
+      return { projectId: held ? held.projectId : null }
+    },
+  }),
+
+  'board.remember': defineFn({
+    input: { projectId: 'id' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: ['read:flow.BoardScope', 'write:flow.BoardScope', 'read:flow.Project'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!ctx.actor) return invalid(issue('actor', 'flow.error.actorRequired'))
+      const project = (await ctx.db.select('flow.Project', { id: args.projectId, active: true }))[0]
+      if (!project) return invalid(issue('projectId', 'flow.error.notFound'))
+      // One row per reader, so opening a different board replaces the answer
+      // rather than adding one.
+      const id = `${String(ctx.actor)}`
+      const row = { id, userId: ctx.actor, projectId: args.projectId, updatedAt: new Date().toISOString() }
+      await ctx.db.insertIfAbsent('flow.BoardScope', row)
+      await ctx.db.update('flow.BoardScope', { id }, row)
+      return { ok: true }
+    },
+  }),
+
+  'field.list': defineFn({
+    input: { projectId: 'id', includeArchived: 'bool?' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      code: 'text',
+      name: 'text',
+      kind: 'text',
+      config: 'json?',
+      sequence: 'int',
+      active: 'bool',
+    },
+    effects: ['read:flow.FieldDef'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const rows = await ctx.db.select(
+        'flow.FieldDef',
+        args.includeArchived === true
+          ? { projectId: args.projectId }
+          : { projectId: args.projectId, active: true },
+      )
+      return rows.sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+    },
+  }),
+
+  /**
+   * `kind` is checked here rather than left to the changeset: it is what
+   * `saveIssue` branches on to decide whether a value is well-formed, so a
+   * kind nothing knows how to check would be a field that accepts anything.
+   */
+  'field.save': defineFn({
+    input: {
+      id: 'id',
+      projectId: 'id',
+      code: 'text',
+      name: 'text',
+      kind: 'text',
+      config: 'json?',
+      sequence: 'int?',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      const kind = String(args.kind)
+      if (!FIELD_KINDS.includes(kind as (typeof FIELD_KINDS)[number]))
+        return invalid(issue('kind', 'flow.error.fieldKind'))
+      // A select with no options is a control nobody can answer.
+      const options = (args.config as { options?: unknown[] } | null)?.options
+      if (kind === 'select' && (!Array.isArray(options) || options.length === 0))
+        return invalid(issue('config', 'flow.error.fieldOptionsRequired'))
+      const id = String(args.id)
+      const existing = (await ctx.db.select('flow.FieldDef', { id }))[0]
+      const row = {
+        id,
+        projectId: args.projectId,
+        code: String(args.code),
+        name: String(args.name),
+        kind,
+        config: args.config ?? null,
+        sequence: args.sequence == null ? (existing?.sequence ?? 10) : Number(args.sequence),
+        active: existing?.active ?? true,
+      }
+      if (existing) await ctx.db.update('flow.FieldDef', { id }, row)
+      else {
+        const inserted = await ctx.db.insertIfAbsent('flow.FieldDef', row)
+        if (!('inserted' in inserted) || !inserted.inserted)
+          return invalid(issue('code', 'flow.error.fieldCodeUnique'))
+      }
+      return { ok: true, id }
+    },
+  }),
+
+  /**
+   * Archiving a field keeps the values already recorded against it.
+   *
+   * Unlike a column or a type, nothing points *at* a field from a row anyone
+   * reads — the values point the other way. So the answers stay, unlisted, and
+   * come back if the field is ever restored. Deleting them would be the one
+   * irreversible thing on this screen.
+   */
+  'field.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('flow.FieldDef', { id: args.id }))[0]
+      if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+      await ctx.db.update('flow.FieldDef', { id: args.id }, { active: false })
       return { ok: true, id: args.id }
     },
   }),
@@ -438,15 +637,19 @@ export const functions: Record<string, FnSpec> = {
       id: 'id',
       projectId: 'id',
       columnId: 'id',
+      typeId: 'id?',
       epicId: 'id?',
       sprintId: 'id?',
       parentIssueId: 'id?',
       title: 'text',
       assigneeUserId: 'id?',
       priority: 'text?',
+      startDate: 'date?',
       dueDate: 'date?',
       estimate: 'decimal?',
       tagIds: 'json?',
+      /** Custom field values, keyed by field id or by field code. */
+      fields: 'json?',
       expectedVersion: 'int?',
       idempotencyKey: 'text',
     },
@@ -463,6 +666,10 @@ export const functions: Record<string, FnSpec> = {
         title: String(args.title),
         idempotencyKey: String(args.idempotencyKey),
         tagIds: Array.isArray(args.tagIds) ? args.tagIds.map(String) : undefined,
+        fields:
+          args.fields && typeof args.fields === 'object'
+            ? (args.fields as Record<string, unknown>)
+            : undefined,
       }),
   }),
 

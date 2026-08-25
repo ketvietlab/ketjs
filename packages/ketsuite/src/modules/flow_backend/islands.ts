@@ -3,7 +3,7 @@ import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
 import { createIssueEditorView } from './editor-view.ts'
 import { createFlowBoardView } from '../../ui/client/flow-board-view.mjs'
 import { createFlowMapView } from '../../ui/client/flow-map-view.mjs'
-import { projectNav } from './screens.tsx'
+import { projectNav } from './screens/index.ts'
 
 const boardRuntime = { each, html, signal }
 

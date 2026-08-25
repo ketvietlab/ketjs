@@ -240,6 +240,62 @@ test('flow collab: reading an issue does not grant rewriting its description', a
   }
 })
 
+/**
+ * The route's own permission check is the whole security policy for these
+ * `exposure: 'internal'` helpers, which is why they are reached unchecked —
+ * `ctx.call` asks for a grant on a function nobody would think to name.
+ *
+ * The snapshot lookup used to be a checked call and passed anyway, because
+ * hydrate returns before reaching it whenever some other session already
+ * loaded the document. Cold, it refused: a reader-role viewer opening an issue
+ * this process had not touched got `E_FN_NOT_PERMITTED` for
+ * `flow_backend.sync.resolveSnapshotKey`.
+ */
+test('flow collab: a reader can open a document this process has to load first', async () => {
+  const e2e = await createTestDeployment(guarded, { worker: false })
+  try {
+    await seedCompany(e2e)
+    await e2e.client.login({ login: 'author', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-save-1',
+    })
+    await call('flow.column.save', {
+      values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },
+      idempotencyKey: 'column-save-1',
+    })
+    await call('flow.issue.save', {
+      id: 'issue-cold',
+      projectId: 'proj1',
+      columnId: 'col-todo',
+      title: 'Q4 plan',
+      idempotencyKey: 'issue-save-cold',
+    })
+    await e2e.client.json('/admin/flow/issues/issue-cold/content')
+    await e2e.client.request('/admin/flow/issues/issue-cold/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ update: updateInserting('the approved plan') }),
+    })
+    await e2e.client.request('/admin/flow/issues/issue-cold/leave', { method: 'POST' })
+
+    // Nothing live left, so opening it has to read the stored snapshot back.
+    assert.ok(sweepLive(Date.now() + 60 * 60 * 1000) >= 1)
+
+    await e2e.client.login({ login: 'reader', password: 'test-password' })
+    const opened = await e2e.client.request('/admin/flow/issues/issue-cold/content')
+    assert.equal(opened.status, 200)
+    const body = (await opened.json()) as { snapshot: string; viewerId: string | null }
+    assert.ok(body.snapshot.length > 0)
+    // And it knows which presence frames are its own before it can hear any.
+    assert.equal(body.viewerId, 'reader')
+  } finally {
+    await e2e.close()
+  }
+})
+
 test('flow collab: a beacon for a document this process no longer holds saves nothing', async () => {
   const e2e = await createTestDeployment(app, { worker: false })
   try {
@@ -380,6 +436,159 @@ test('flow collab: previewText is what the user typed, not the mark markup', asy
     // A phrase spanning the mark boundary matches; the attribute name does not.
     assert.equal((await call<Row>('flow.issue.list', { listState: search('Deploy the release') })).total, 1)
     assert.equal((await call<Row>('flow.issue.list', { listState: search('bold') })).total, 0)
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * The editor writes a flat list of `block` elements, each holding one text run,
+ * rather than the single top-level run the first version of it produced. The
+ * flatten path reads whatever shape it is handed, so a heading and two list
+ * items have to come out of it as the lines somebody typed — that string is the
+ * list column and the search field.
+ */
+test('flow collab: previewText reads a document made of blocks', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-save-1',
+    })
+    await call('flow.column.save', {
+      values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },
+      idempotencyKey: 'column-save-1',
+    })
+    await call('flow.issue.save', {
+      id: 'issue-4',
+      projectId: 'proj1',
+      columnId: 'col-todo',
+      title: 'Rollout',
+      idempotencyKey: 'issue-save-4',
+    })
+
+    // Exactly what the editor builds: an element per block, each with one run.
+    const doc = new Y.Doc()
+    const fragment = doc.getXmlFragment('content')
+    const lines: Array<[string, string]> = [
+      ['h1', 'Rollout plan'],
+      ['bullet', 'Freeze the branch'],
+      ['check', 'Tell support'],
+    ]
+    lines.forEach(([type, line], index) => {
+      const element = new Y.XmlElement('block')
+      element.setAttribute('type', type)
+      fragment.insert(index, [element])
+      const run = new Y.XmlText()
+      element.insert(0, [run])
+      run.insert(0, line)
+    })
+
+    await e2e.client.json('/admin/flow/issues/issue-4/content')
+    await e2e.client.request('/admin/flow/issues/issue-4/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }),
+    })
+    await e2e.client.request('/admin/flow/issues/issue-4/leave', { method: 'POST' })
+
+    assert.equal(
+      (await call<Row>('flow.issue.get', { id: 'issue-4' })).previewText,
+      'Rollout plan Freeze the branch Tell support',
+    )
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * A presence frame goes to everyone else in the document, so the name on it is
+ * resolved from the session rather than read out of the body: a client that
+ * could name itself could sit in the room as somebody else, and every other
+ * screen would agree with it.
+ */
+test('flow collab: presence carries the name the session has, not the one the body claims', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-save-1',
+    })
+    await call('flow.column.save', {
+      values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },
+      idempotencyKey: 'column-save-1',
+    })
+    await call('flow.issue.save', {
+      id: 'issue-5',
+      projectId: 'proj1',
+      columnId: 'col-todo',
+      title: 'Rollout',
+      idempotencyKey: 'issue-save-5',
+    })
+
+    const { topic } = (await e2e.client.json('/admin/flow/issues/issue-5/content')) as {
+      topic: string
+    }
+    const controller = new AbortController()
+    const livePromise = e2e.client.get(`/admin/flow/issues/issue-5/live?topic=${encodeURIComponent(topic)}`, {
+      signal: controller.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const announced = (await e2e.client
+      .request('/admin/flow/issues/issue-5/presence', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // `id` and `name` are what a client would have to send to impersonate
+        // somebody, so they are sent here. Neither is read.
+        body: JSON.stringify({ index: 2, id: 'somebody-else', name: 'Someone Important' }),
+      })
+      .then((response) => response.json())) as { id: string }
+    assert.equal(announced.id, 'u1')
+
+    const live = await livePromise
+    const reader = live.body!.getReader()
+    const { value } = await reader.read()
+    const frame = new TextDecoder().decode(value)
+    const relayed = JSON.parse(frame.slice(frame.indexOf('data: ') + 6)) as {
+      presence: Record<string, unknown>
+    }
+    assert.deepEqual(relayed.presence, { id: 'u1', name: 'Nguyen Minh', index: 2, gone: false })
+    controller.abort()
+
+    // And nothing was written to the document by saying hello.
+    await e2e.client.request('/admin/flow/issues/issue-5/leave', { method: 'POST' })
+    assert.equal((await call<Row>('flow.issue.get', { id: 'issue-5' })).previewText, null)
   } finally {
     await e2e.close()
   }
