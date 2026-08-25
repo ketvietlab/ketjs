@@ -36,7 +36,23 @@ export async function* tailTopic(
   for await (const chunk of streams.tail(topic, from, opts)) yield { seq: chunk.seq, data: chunk.data }
 }
 
-type LiveDoc = { doc: Y.Doc; generation: number; updateCount: number; touchedAt: number }
+type LiveDoc = {
+  doc: Y.Doc
+  generation: number
+  updateCount: number
+  touchedAt: number
+  /**
+   * Whether the durable snapshot has been read into this document.
+   *
+   * Separate from "the registry has an entry", which is what hydration used to
+   * test. `getOrCreateLive` publishes the entry before the snapshot is
+   * fetched, so a storage read that failed — or one still in flight — left a
+   * blank document that every later caller treated as fully loaded. The next
+   * push then merged into nothing and flattened the result over the real
+   * document.
+   */
+  hydrated: boolean
+}
 
 const live = new Map<string, LiveDoc>()
 
@@ -73,7 +89,7 @@ const keyFor = (ref: DocRef): string => `${ref.company}:${ref.kind}:${ref.id}`
  * store, a `PRIMARY KEY (topic, seq)` violation the moment anyone swaps in
  * `dbStreamStore`. Holding the writer keeps the sequence monotonic.
  */
-const writers = new Map<string, Writer>()
+const writers = new Map<string, Promise<Writer>>()
 
 export const FLATTEN_AFTER_UPDATES = 50
 
@@ -99,13 +115,33 @@ export function getOrCreateLive(ref: DocRef): { doc: Y.Doc; isNew: boolean } {
     return { doc: existing.doc, isNew: false }
   }
   const doc = new Y.Doc()
-  live.set(key, { doc, generation: 1, updateCount: 0, touchedAt: Date.now() })
+  live.set(key, { doc, generation: 1, updateCount: 0, touchedAt: Date.now(), hydrated: false })
   return { doc, isNew: true }
 }
 
 export function applySnapshot(ref: DocRef, bytes: Uint8Array): void {
   const entry = live.get(keyFor(ref))
   if (entry) Y.applyUpdate(entry.doc, bytes)
+}
+
+/** True once the durable snapshot has been read into this process's document. */
+export const isHydrated = (ref: DocRef): boolean => live.get(keyFor(ref))?.hydrated === true
+
+/** Marks the document as carrying whatever was stored for it. */
+export const markHydrated = (ref: DocRef): void => {
+  const entry = live.get(keyFor(ref))
+  if (entry) entry.hydrated = true
+}
+
+/**
+ * Drops a document this process could not load.
+ *
+ * Leaving the blank entry behind is what turned one unreadable blob into a
+ * lost document: the failure was answered once, and every later request found
+ * an entry and read it as loaded.
+ */
+export const forget = (ref: DocRef): void => {
+  live.delete(keyFor(ref))
 }
 
 /**
@@ -150,12 +186,26 @@ export function previewTextOf(ref: DocRef): string {
   return entry ? plainTextOf(entry.doc.getXmlFragment('content')) : ''
 }
 
-const writerFor = async (topic: string): Promise<Writer> => {
+/**
+ * The pending open is what gets cached, not the opened writer.
+ *
+ * Caching the resolved writer left a gap across the `await`: two pushes for a
+ * topic with no writer yet both saw nothing, both opened one, and the second
+ * replaced the first in the map. `streams.open` reads the head once, so both
+ * started at the same sequence — survivable in the memory store, a
+ * `PRIMARY KEY (topic, seq)` violation the moment anyone swaps in
+ * `dbStreamStore`, which is exactly what holding one writer per topic was
+ * meant to prevent. A failed open is not cached, so the next caller retries.
+ */
+const writerFor = (topic: string): Promise<Writer> => {
   const held = writers.get(topic)
   if (held) return held
-  const opened = await streams.open(topic)
-  writers.set(topic, opened)
-  return opened
+  const opening = streams.open(topic).catch((failed: unknown) => {
+    writers.delete(topic)
+    throw failed
+  })
+  writers.set(topic, opening)
+  return opening
 }
 
 /** Applies a client's update and reports whether the update-count threshold was crossed. */
@@ -196,15 +246,33 @@ export async function publishPresence(ref: DocRef, presence: Record<string, unkn
   await writer.flush()
 }
 
-/** Ends the current topic and starts a fresh one — what keeps `ket_stream` bounded. */
-export async function rollGeneration(ref: DocRef): Promise<void> {
+/**
+ * How many updates the document holds right now.
+ *
+ * Read before a flatten and handed back to `rollGeneration`, so an update that
+ * arrives while the bytes are being written is not counted as flattened.
+ */
+export const updateCountOf = (ref: DocRef): number => live.get(keyFor(ref))?.updateCount ?? 0
+
+/**
+ * Ends the current topic and starts a fresh one — what keeps `ket_stream`
+ * bounded — and forgets only the updates that were actually persisted.
+ *
+ * `flattened` is subtracted rather than the counter being reset, because
+ * flattening is not instant: it captures the bytes, then awaits a blob write
+ * and a commit. An update applied during that window is not in the snapshot,
+ * and zeroing the counter told `sweepLive` the durable copy was current — so a
+ * document holding an acknowledged edit became evictable, and the edit was
+ * lost with it.
+ */
+export async function rollGeneration(ref: DocRef, flattened = Number.POSITIVE_INFINITY): Promise<void> {
   const entry = live.get(keyFor(ref))
   if (!entry) return
   const topic = topicFor(ref, entry.generation)
   await (await writerFor(topic)).end()
   writers.delete(topic)
   entry.generation += 1
-  entry.updateCount = 0
+  entry.updateCount = Math.max(0, entry.updateCount - flattened)
   entry.touchedAt = Date.now()
 }
 

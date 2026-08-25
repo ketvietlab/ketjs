@@ -104,10 +104,14 @@ export const kanbanGrid = <T,>(o: {
  * A padded string only says it to someone looking at it.
  *
  * Rows arrive flat — the query builder has no recursive read — and are grouped
- * here by their parent. A row whose parent is not in the list (archived, or
- * filtered away by a search) is shown at the root rather than dropped: it is
- * still one of the rows the caller asked for, and burying it under a parent
- * that is not on screen would make it unreachable.
+ * here by their parent. Every row is drawn exactly once, wherever it ends up:
+ * one whose parent is not in the list (archived, or filtered away by a search)
+ * is shown at the root, and so is one caught in a parent cycle. Both used to
+ * be handled by the same test — "is the parent present?" — which covers the
+ * first and not the second: two rows pointing at each other are both present,
+ * so neither reached the root and both vanished from the screen entirely.
+ * Stored data should never be shaped that way, but a view that silently drops
+ * records is the wrong way to find out that it is.
  */
 export const docTree = <T,>(o: {
   rows: readonly T[]
@@ -120,11 +124,24 @@ export const docTree = <T,>(o: {
   /** How deep the nesting may go before it stops. */
   maxDepth?: number
 }): TemplateResult => {
-  const present = new Set(o.rows.map(o.id))
+  const parentOf = new Map(o.rows.map((row) => [o.id(row), o.parent(row) ?? '']))
+  /** Whether this row can reach the root by following parents, without repeating one. */
+  const rooted = (id: string): boolean => {
+    const seen = new Set<string>()
+    let at = id
+    while (at) {
+      if (seen.has(at)) return false
+      seen.add(at)
+      const next = parentOf.get(at)
+      if (next === undefined) return true // its parent is not in the list
+      at = next
+    }
+    return true
+  }
   const byParent = new Map<string, T[]>()
   for (const row of o.rows) {
     const parent = o.parent(row) ?? ''
-    const key = parent && present.has(parent) ? parent : ''
+    const key = parent && parentOf.has(parent) && rooted(o.id(row)) ? parent : ''
     byParent.set(key, [...(byParent.get(key) ?? []), row])
   }
   const limit = o.maxDepth ?? 12

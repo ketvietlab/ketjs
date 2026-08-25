@@ -6,6 +6,7 @@ import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { address, company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import backend from '@ketvietlab/ketsuite/backend'
 import * as Y from 'yjs'
+import { sweepLive } from '../packages/ketsuite/src/modules/livedoc/sync.ts'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
 import livedoc from '../packages/ketsuite/src/modules/livedoc/index.ts'
 import flowBackend from '../packages/ketsuite/src/modules/flow_backend/index.ts'
@@ -478,6 +479,98 @@ test('flow docs: each record owns the attachment that records its document', asy
     await e2e.client.json('/admin/flow/pages/blank-a/content')
     await e2e.client.request('/admin/flow/pages/blank-a/leave', { method: 'POST' })
     assert.equal(await attachmentOf('blank-a'), a, 'and the same one on the next flatten')
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * A push that arrives before anyone asked for the document — after a restart,
+ * from a retrying editor, from any API caller — has to load what is stored
+ * before merging into it.
+ *
+ * It could not, for three of the four owners. `…editContent` declared
+ * `output: { value: 'json?' }` and returned the row un-nested, so the output
+ * projection kept nothing and handed back `{}`. That is truthy, so the write
+ * permission passed, but `attachmentOf` read `undefined` and hydration
+ * concluded the document had never been written. The push then merged into a
+ * blank document and the flatten wrote it over the real one.
+ */
+test('flow docs: a cold push loads the stored document before merging into it', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await created(call, page('cold', 'Runbook'))
+    const push = async (text: string) => {
+      const doc = new Y.Doc()
+      const run = new Y.XmlText()
+      doc.getXmlFragment('content').insert(0, [run])
+      run.insert(0, text)
+      await e2e.client.request('/admin/flow/pages/cold/push', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }),
+      })
+      await e2e.client.request('/admin/flow/pages/cold/leave', { method: 'POST' })
+    }
+    const preview = async () =>
+      String((await call<{ value: Row }>('flow.page.get', { id: 'cold' })).value.previewText ?? '')
+
+    await e2e.client.json('/admin/flow/pages/cold/content')
+    await push('nội dung đã lưu')
+    assert.equal(await preview(), 'nội dung đã lưu')
+
+    // What a restart, or the idle sweep, leaves behind: nothing in memory.
+    sweepLive(Date.now() + 60 * 60 * 1000)
+
+    await push('gõ thêm')
+    const after = await preview()
+    assert.match(after, /nội dung đã lưu/, 'the stored document survived the cold push')
+    assert.match(after, /gõ thêm/, 'and the new edit is in there too')
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * The same, for the owners that reach their attachment through a `value`
+ * wrapper and the ones that do not — the two shapes `attachmentOf` handles.
+ */
+test('flow docs: a cold push loads a project brief and an epic too', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await call('flow.epic.save', {
+      values: { id: 'epic1', projectId: 'proj1', title: 'Rollout' },
+      idempotencyKey: 'epic-save-1',
+    })
+    const push = async (base: string, id: string, text: string) => {
+      const doc = new Y.Doc()
+      const run = new Y.XmlText()
+      doc.getXmlFragment('content').insert(0, [run])
+      run.insert(0, text)
+      await e2e.client.request(`${base}/${id}/push`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }),
+      })
+      await e2e.client.request(`${base}/${id}/leave`, { method: 'POST' })
+    }
+
+    await e2e.client.json('/admin/flow/projects/proj1/content')
+    await push('/admin/flow/projects', 'proj1', 'bản gốc')
+    await e2e.client.json('/admin/flow/epics/epic1/content')
+    await push('/admin/flow/epics', 'epic1', 'bản gốc')
+
+    sweepLive(Date.now() + 60 * 60 * 1000)
+
+    await push('/admin/flow/projects', 'proj1', 'thêm vào')
+    await push('/admin/flow/epics', 'epic1', 'thêm vào')
+
+    const project = await call<Row>('flow.project.get', { id: 'proj1' })
+    assert.match(String(project.previewText), /bản gốc/)
+    const epic = (await call<{ value: Row }>('flow.epic.get', { id: 'epic1' })).value
+    assert.match(String(epic.previewText), /bản gốc/)
   } finally {
     await e2e.close()
   }

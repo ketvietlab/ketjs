@@ -190,7 +190,14 @@ export const functions: Record<string, FnSpec> = {
    */
   'project.editContent': defineFn({
     input: { id: 'id' },
-    output: { value: 'json?' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
     effects: ['read:flow.Project'],
     agent: true,
     handler: async (ctx, args) => {
@@ -499,7 +506,14 @@ export const functions: Record<string, FnSpec> = {
    */
   'epic.editContent': defineFn({
     input: { id: 'id' },
-    output: { value: 'json?' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
     effects: ['read:flow.Epic'],
     agent: true,
     handler: async (ctx, args) => {
@@ -658,7 +672,14 @@ export const functions: Record<string, FnSpec> = {
    */
   'page.editContent': defineFn({
     input: { id: 'id' },
-    output: { value: 'json?' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
     effects: ['read:flow.Page'],
     agent: true,
     handler: async (ctx, args) => {
