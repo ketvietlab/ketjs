@@ -575,3 +575,39 @@ test('flow docs: a cold push loads a project brief and an epic too', async () =>
     await e2e.close()
   }
 })
+
+/**
+ * A search has to be the query's business, not a filter over what it returned.
+ *
+ * Applied afterwards, the row limit was spent on pages that were then thrown
+ * away: across projects, ordered by `updatedAt`, anything outside the most
+ * recently touched window became unfindable and the screen showed an empty
+ * result rather than saying it had stopped looking.
+ */
+test('flow pages: search reaches past the row limit', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await created(call, page('needle', 'Runbook for the pager'))
+    // Enough later pages to push the one above out of a small window.
+    for (let i = 0; i < 12; i++) await created(call, page(`filler-${i}`, `Filler ${i}`))
+
+    const found = await call<Row[]>('flow.page.list', {
+      projectId: 'proj1',
+      search: 'pager',
+      limit: 5,
+    })
+    assert.deepEqual(
+      found.map((row) => String(row.id)),
+      ['needle'],
+      'the match is found even though it is not in the first five rows',
+    )
+
+    // And the count beside a node describes the branch, not the search.
+    await created(call, page('kid', 'Something else', 'needle'))
+    const again = await call<Row[]>('flow.page.list', { projectId: 'proj1', search: 'pager' })
+    assert.equal(Number(again[0]?.childCount), 1, 'a child the search did not match still counts')
+  } finally {
+    await e2e.close()
+  }
+})

@@ -10,9 +10,9 @@
 // routine, which updates them as plain columns outside the CAS path — see
 // `commitPageContent` in flow_backend and the note on the model.
 
-import { asc, desc, eq, from, inArray, isNull } from '@ketvietlab/ketjs'
+import { asc, desc, eq, from, ilike, inArray, isNull, or } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
-import { actorRequired, commandKey, invalid, issue, n, normalized, now } from './operations.ts'
+import { actorRequired, commandKey, invalid, issue, n, now } from './operations.ts'
 import type { FlowResult } from './operations.ts'
 
 export type SavePageInput = {
@@ -26,6 +26,9 @@ export type SavePageInput = {
 }
 
 const SEQUENCE_STEP = 10
+
+/** `%` and `_` are wildcards to LIKE, so a title containing one is escaped before it goes in. */
+const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 /** How deep a page may sit under another. */
 const MAX_DEPTH = 8
@@ -328,34 +331,52 @@ const serialize = (row: Row, childCount: number): PageRow => ({
  * Without a project the answer is deliberately flat: pages from different
  * projects have no common tree to sit in, so the caller gets a list ordered by
  * what changed most recently.
+ *
+ * A search runs in the query, not over the rows it returns. Filtering
+ * afterwards meant the limit was spent on rows that were then thrown away —
+ * across projects, ordered by `updatedAt`, that made anything outside the 300
+ * most recently touched pages unfindable, and the screen showed an empty
+ * result rather than saying it had stopped looking.
  */
 export async function listPages(
   ctx: Ctx,
   args: { projectId?: string | null; search?: string | null; includeArchived?: boolean; limit?: number },
 ): Promise<PageRow[]> {
   const P = ctx.table('flow.Page')
-  const scoped = args.projectId ? [eq(P.projectId, args.projectId)] : []
+  const where = [
+    ...(args.projectId ? [eq(P.projectId, args.projectId)] : []),
+    ...(args.includeArchived === true ? [] : [eq(P.active, true)]),
+  ]
+  const needle = String(args.search ?? '').trim()
+  const matching = needle
+    ? [or(ilike(P.title, `%${wildcard(needle)}%`, true), ilike(P.previewText, `%${wildcard(needle)}%`, true))]
+    : []
   const rows = await ctx.db.all(
     from(P)
-      .where(...scoped, ...(args.includeArchived === true ? [] : [eq(P.active, true)]))
+      .where(...where, ...matching)
       .orderBy(...(args.projectId ? [asc(P.sequence), asc(P.title)] : [desc(P.updatedAt)]))
       .limit(Math.max(1, Math.min(500, n(args.limit ?? 300)))),
   )
+  // Counted over the branch as it really is, not over the rows that matched: a
+  // page with three children has three whether or not the search kept them, and
+  // counting the matches would tell a reader a branch had emptied out.
   const children = new Map<string, number>()
-  for (const row of rows) {
-    if (!row.parentPageId) continue
-    const key = String(row.parentPageId)
-    children.set(key, (children.get(key) ?? 0) + 1)
-  }
-  const needle = normalized(args.search)
-  return rows
-    .filter(
-      (row) =>
-        !needle ||
-        normalized(row.title).includes(needle) ||
-        normalized(row.previewText).includes(needle),
+  if (rows.length) {
+    const parents = await ctx.db.all(
+      from(P).where(
+        ...where,
+        inArray(
+          P.parentPageId,
+          rows.map((row) => String(row.id)),
+        ),
+      ),
     )
-    .map((row) => serialize(row, children.get(String(row.id)) ?? 0))
+    for (const row of parents) {
+      const key = String(row.parentPageId)
+      children.set(key, (children.get(key) ?? 0) + 1)
+    }
+  }
+  return rows.map((row) => serialize(row, children.get(String(row.id)) ?? 0))
 }
 
 export type PageDetail = PageRow & {
