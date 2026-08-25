@@ -443,3 +443,42 @@ test('flow pages: a page moved into another branch lands at the end of it', asyn
     await e2e.close()
   }
 })
+
+/**
+ * An attachment belongs to the record it documents, not to the bytes.
+ *
+ * Looked up by `storeKey` — which is the content's own hash — the second record
+ * to flatten identical bytes was handed the first record's attachment row. Two
+ * documents opened and never typed into serialise to exactly the same bytes, so
+ * this was not a rare collision: both pages then pointed at one row naming only
+ * one of them, invisible to anything listing the other's attachments and
+ * orphaned if the first record's were ever cleaned up.
+ */
+test('flow docs: each record owns the attachment that records its document', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await created(call, page('blank-a', 'Blank A'))
+    await created(call, page('blank-b', 'Blank B'))
+
+    // Opened and left without typing — the case that collides.
+    for (const id of ['blank-a', 'blank-b']) {
+      await e2e.client.json(`/admin/flow/pages/${id}/content`)
+      await e2e.client.request(`/admin/flow/pages/${id}/leave`, { method: 'POST' })
+    }
+
+    const attachmentOf = async (id: string) =>
+      String((await call<{ value: Row }>('flow.page.get', { id })).value.contentAttachmentId ?? '')
+    const a = await attachmentOf('blank-a')
+    const b = await attachmentOf('blank-b')
+    assert.ok(a && b, 'both flattened')
+    assert.notEqual(a, b, 'identical bytes, but an attachment each')
+
+    // Re-flattening keeps the row it already owns rather than growing another.
+    await e2e.client.json('/admin/flow/pages/blank-a/content')
+    await e2e.client.request('/admin/flow/pages/blank-a/leave', { method: 'POST' })
+    assert.equal(await attachmentOf('blank-a'), a, 'and the same one on the next flatten')
+  } finally {
+    await e2e.close()
+  }
+})
