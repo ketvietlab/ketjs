@@ -1,9 +1,9 @@
 // Read-only staff customer-invoice projections.
 //
 // Account owns the ledger aggregate. This facade exposes document totals and
-// residuals, but never posting lines. Electronic invoicing is deployment-owned,
-// and lifecycle or payment actions stay absent until their workflows have a
-// proven capability, idempotency, and concurrency contract.
+// residuals, but never posting lines. Eligibility reads are safe to expose;
+// electronic invoicing and command execution stay absent until their workflows
+// have a proven capability, idempotency, and concurrency contract.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
@@ -81,6 +81,58 @@ const detail = {
     'readOnly',
   ],
 }
+const paymentJournal = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    name: string,
+    type: { type: 'string', enum: ['bank', 'cash'] },
+  },
+  required: ['id', 'name', 'type'],
+}
+const paymentEligibility = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    eligible: { type: 'boolean' },
+    reason: {
+      type: 'string',
+      enum: [
+        'available',
+        'unsupported_invoice_type',
+        'invoice_not_posted',
+        'nothing_due',
+        'no_payment_journal',
+      ],
+    },
+    invoiceId: string,
+    expectedVersion: string,
+    amount: money,
+    paymentDate: { type: 'string', format: 'date' },
+    journals: { type: 'array', items: paymentJournal },
+  },
+  required: ['eligible', 'reason', 'invoiceId', 'expectedVersion', 'amount', 'paymentDate', 'journals'],
+}
+const lifecycleAction = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['post', 'cancel_draft'] },
+    destructive: { type: 'boolean' },
+  },
+  required: ['action', 'destructive'],
+}
+const lifecycleEligibility = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    invoiceId: string,
+    expectedVersion: string,
+    actions: { type: 'array', items: lifecycleAction },
+  },
+  required: ['invoiceId', 'expectedVersion', 'actions'],
+}
 const page = {
   type: 'object',
   additionalProperties: false,
@@ -148,6 +200,57 @@ const project = (row: Row, names: Map<string, string>, residuals: Map<string, st
     total: { currency, amount: String(row.amountTotal) },
     amountDue: { currency, amount: residuals.get(String(row.id)) ?? '0' },
   }
+}
+
+const contentOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const lines = Array.isArray(row.lines) ? row.lines : []
+  const [names, residuals] = await Promise.all([
+    namesOf(ctx, [row], url, req),
+    residualsOf(ctx, [row], url, req),
+  ])
+  const base = project(row, names, residuals)
+  return {
+    ...base,
+    sourceReference: row.ref == null ? null : String(row.ref),
+    totals: {
+      untaxed: { currency: String(row.currency), amount: String(row.amountUntaxed) },
+      tax: { currency: String(row.currency), amount: String(row.amountTax) },
+      total: base.total,
+      amountDue: base.amountDue,
+    },
+    postingLineCount: lines.length,
+  }
+}
+const versionOf = (content: Row): string => `aiv_${sha256(JSON.stringify(content))}`
+
+/**
+ * Payment eligibility answers with more than the invoice.
+ *
+ * `expectedVersion` is the invoice's version and stays that way: it is the token
+ * a later payment command checks against, so it has to mean the invoice. The
+ * ETag is a different promise — it says this body has not changed — and this
+ * body also carries the tenant's usable journals and the date the caller asked
+ * about. Renaming a journal, or asking about a different day, changed the answer
+ * while the invoice version did not move.
+ *
+ * Lifecycle eligibility keeps the shared invoice ETag, because its actions are
+ * read from the invoice row and nowhere else.
+ */
+const eligibilityEtag = (data: Row): string => `aipe_${sha256(JSON.stringify(data))}`
+const lifecycleActionsOf = (row: Row): Array<{ action: string; destructive: boolean }> =>
+  row.state === 'draft'
+    ? [
+        { action: 'post', destructive: false },
+        { action: 'cancel_draft', destructive: true },
+      ]
+    : []
+const paymentJournals = async (ctx: ServeContext, url: URL, req: Req) => {
+  const rows = (await ctx.call('account.listJournals', {}, url, req)) as Row[]
+  return rows
+    .filter((row) => ['bank', 'cash'].includes(String(row.type)))
+    .filter((row) => row.defaultAccountId != null)
+    .map((row) => ({ id: String(row.id), name: String(row.name), type: String(row.type) }))
+    .sort((left, right) => left.id.localeCompare(right.id))
 }
 
 const notFound = (ctx: ServeContext, url: URL, req: Req) => ({
@@ -238,27 +341,11 @@ export const channelRoutes = routesOf(
     handler: async (ctx, url, req, params) => {
       const row = (await ctx.call('account.getMove', { id: params.id }, url, req)) as Row | null
       if (!row || !customerInvoice(row)) return notFound(ctx, url, req)
-      const lines = Array.isArray(row.lines) ? row.lines : []
-      const [names, residuals] = await Promise.all([
-        namesOf(ctx, [row], url, req),
-        residualsOf(ctx, [row], url, req),
-      ])
       // The customer name and the residual are resolved from partner and payment
       // rows this move never mentions, so hashing the move alone answered "not
       // modified" after a rename. Hash what was actually built.
-      const base = project(row, names, residuals)
-      const content = {
-        ...base,
-        sourceReference: row.ref == null ? null : String(row.ref),
-        totals: {
-          untaxed: { currency: String(row.currency), amount: String(row.amountUntaxed) },
-          tax: { currency: String(row.currency), amount: String(row.amountTax) },
-          total: base.total,
-          amountDue: base.amountDue,
-        },
-        postingLineCount: lines.length,
-      }
-      const version = `aiv_${sha256(JSON.stringify(content))}`
+      const content = await contentOf(ctx, row, url, req)
+      const version = versionOf(content)
       return {
         data: {
           ...content,
@@ -267,6 +354,85 @@ export const channelRoutes = routesOf(
           readOnly: true,
         },
         headers: { etag: `"${version}"` },
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'accounting/invoices/{id}/payment-eligibility',
+    operationId: 'staff.accounting.invoices.paymentEligibility',
+    summary: 'Review the canonical residual and journals for a full customer-invoice payment.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'read' },
+    request: {
+      params: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string },
+        required: ['id'],
+      },
+      query: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { today: { type: 'string', format: 'date' } },
+        required: ['today'],
+      },
+    },
+    responses: { '200': envelope(paymentEligibility), '404': envelope({ type: 'null' }) },
+    handler: async (ctx, url, req, params) => {
+      const row = (await ctx.call('account.getMove', { id: params.id }, url, req)) as Row | null
+      if (!row || !customerInvoice(row)) return notFound(ctx, url, req)
+      const content = await contentOf(ctx, row, url, req)
+      const expectedVersion = versionOf(content)
+      const amount = content.amountDue as { currency: string; amount: string }
+      let reason = 'available'
+      if (row.moveType !== 'out_invoice') reason = 'unsupported_invoice_type'
+      else if (row.state !== 'posted') reason = 'invoice_not_posted'
+      else if (Number(amount.amount) <= 1e-12) reason = 'nothing_due'
+      const journals = reason === 'available' ? await paymentJournals(ctx, url, req) : []
+      if (reason === 'available' && journals.length === 0) reason = 'no_payment_journal'
+      const eligible = reason === 'available'
+      const data = {
+        eligible,
+        reason,
+        invoiceId: String(row.id),
+        expectedVersion,
+        amount,
+        paymentDate: String(url.searchParams.get('today')),
+        journals: eligible ? journals : [],
+      }
+      return { data, headers: { etag: `"${eligibilityEtag(data)}"` } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'accounting/invoices/{id}/lifecycle-eligibility',
+    operationId: 'staff.accounting.invoices.lifecycleEligibility',
+    summary: 'Review generic workflow actions supported by the current customer-invoice state.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'read' },
+    request: {
+      params: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string },
+        required: ['id'],
+      },
+    },
+    responses: { '200': envelope(lifecycleEligibility), '404': envelope({ type: 'null' }) },
+    handler: async (ctx, url, req, params) => {
+      const row = (await ctx.call('account.getMove', { id: params.id }, url, req)) as Row | null
+      if (!row || !customerInvoice(row)) return notFound(ctx, url, req)
+      const expectedVersion = versionOf(await contentOf(ctx, row, url, req))
+      return {
+        data: {
+          invoiceId: String(row.id),
+          expectedVersion,
+          actions: lifecycleActionsOf(row),
+        },
+        headers: { etag: `"${expectedVersion}"` },
       }
     },
   }),
