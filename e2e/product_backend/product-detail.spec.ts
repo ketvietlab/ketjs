@@ -152,6 +152,26 @@ test('uses the semantic dark shell, rail and control surfaces', async ({ page })
   await page.screenshot({ path: join(artifacts, 'detail-general-vi-desktop-dark.png'), fullPage: true })
 })
 
+test('hydrates the relation selector and opens its managed-record dialog', async ({ page }) => {
+  await page.goto('/admin/product/templates/tpl-review?tab=general&lang=vi')
+  const category = page.locator('[data-ui="relation-trigger"][aria-label="Danh mục"]')
+  await category.click()
+  await expect(category).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('[data-ui="relation-menu"]')).toBeVisible()
+
+  await page.locator('[data-ui="relation-footer"] button').click()
+  const dialog = page.locator('[data-ui="modal-sheet"][aria-modal="true"]')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('[data-ui="relation-dialog-row"]').first()).toBeVisible()
+  await page.screenshot({
+    path: join(artifacts, 'relation-selector-managed-dialog.png'),
+    fullPage: true,
+  })
+
+  await dialog.locator('[data-ui="modal-close"]').click()
+  await expect(dialog).toHaveCount(0)
+})
+
 test('saves atomically and manages variants and template media', async ({ page }) => {
   await page.goto('/admin/product/templates/tpl-review?tab=general&lang=vi')
   await expect(page.getByRole('heading', { name: 'Áo khoác vận hành KETSUITE' })).toBeVisible()

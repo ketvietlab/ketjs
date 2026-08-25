@@ -58,6 +58,34 @@ test('search, pagination, columns, view switching and record navigation work', a
   await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 })
 
+test('selects table rows without navigating from the checkbox cell', async ({ page }) => {
+  await page.goto('/admin/product/templates?lang=vi&view=list')
+  const firstRow = page.locator('[data-ui="row"]').first()
+  const selectionCell = firstRow.locator('[data-ui="select-cell"]')
+  const firstCheckbox = firstRow.locator('[data-ui="row-select"]')
+  const selectAll = page.locator('[data-ui="select-all"]')
+  const listUrl = page.url()
+
+  await selectionCell.dispatchEvent('click', { button: 0 })
+  await expect(page).toHaveURL(listUrl)
+
+  await firstCheckbox.check()
+  await expect(selectAll).toHaveJSProperty('indeterminate', true)
+
+  await selectAll.check()
+  await expect(page.locator('[data-ui="row-select"]:not(:checked)')).toHaveCount(0)
+  await page.screenshot({
+    path: join(artifacts, 'table-selection-all-checked.png'),
+    fullPage: true,
+  })
+
+  await selectAll.uncheck()
+  await expect(page.locator('[data-ui="row-select"]:checked')).toHaveCount(0)
+
+  await firstRow.locator('[data-ui="cell"]').nth(1).click()
+  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
+})
+
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
