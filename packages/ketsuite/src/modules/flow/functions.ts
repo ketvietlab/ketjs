@@ -7,6 +7,7 @@ import {
   assignSprint,
   closeSprint,
   commandKey,
+  dependenciesFor,
   groupIssues,
   issue,
   invalid,
@@ -18,6 +19,7 @@ import {
   saveIssue,
   startSprint,
 } from './operations.ts'
+import { emptyIssueListState } from './search.ts'
 
 const flowReadEffects = [
   'read:flow.Project',
@@ -124,6 +126,22 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:flow.Project'],
     agent: true,
     handler: (ctx, args) => optionRows(ctx, 'flow.Project', args),
+  }),
+
+  /**
+   * One project by id, the way `issue.get` answers one issue.
+   *
+   * Every project-scoped screen needs the project behind the id in its URL.
+   * Resolving that through `project.list` means listing and filtering, and
+   * `optionRows` caps at 200 rows sorted by name — so the 201st project by
+   * name would answer "not found" on its own board.
+   */
+  'project.get': defineFn({
+    input: { id: 'id' },
+    output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
+    effects: ['read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => (await ctx.db.select('flow.Project', { id: args.id }))[0] ?? null,
   }),
 
   'project.save': saveEntity(
@@ -355,7 +373,19 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'issue.group': defineFn({
-    input: { listState: 'json', path: 'json?', timezone: 'text?', limit: 'int?', offset: 'int?' },
+    input: {
+      projectId: 'id?',
+      columnId: 'id?',
+      epicId: 'id?',
+      sprintId: 'id?',
+      assigneeUserId: 'id?',
+      includeArchived: 'bool?',
+      listState: 'json',
+      path: 'json?',
+      timezone: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: [...flowReadEffects],
     agent: true,
     handler: (ctx, args) => groupIssues(ctx, args),
@@ -492,5 +522,38 @@ export const functions: Record<string, FnSpec> = {
       await ctx.db.del(deleteFrom(D).where(eq(D.id, args.id)))
       return { ok: true, id: args.id }
     },
+  }),
+
+  /**
+   * Issues as picker rows, for the one field that points at another issue —
+   * the dependency target. `issue.list` answers a paged envelope the picker
+   * cannot read, and its search only takes a `listState`, so this wraps that
+   * the same way `crm.case.options` wraps `listCases`.
+   */
+  'issue.options': defineFn({
+    input: { search: 'text?', limit: 'int?', projectId: 'id?', excludeId: 'id?' },
+    output: { id: 'id', title: 'text', columnName: 'text?' },
+    effects: [...flowReadEffects],
+    agent: true,
+    handler: async (ctx, args) => {
+      const found = await listIssues(ctx, {
+        ...(args.projectId ? { projectId: args.projectId } : {}),
+        listState: args.search ? { ...emptyIssueListState(), q: String(args.search) } : undefined,
+        limit: Math.max(1, Math.min(100, n(args.limit ?? 40))),
+      })
+      return found.rows
+        .filter((row) => !args.excludeId || row.id !== args.excludeId)
+        .map((row) => ({ id: row.id, title: row.title, columnName: row.columnName ?? null }))
+    },
+  }),
+
+  /** Blocking edges among a node set — the map view's one batch read, see dependenciesFor. */
+  'issue.dependencies': defineFn({
+    input: { issueIds: 'json' },
+    output: { issueId: 'id', dependsOnIssueId: 'id', relation: 'text' },
+    effects: ['read:flow.IssueDependency'],
+    agent: true,
+    handler: (ctx, args) =>
+      dependenciesFor(ctx, Array.isArray(args.issueIds) ? args.issueIds.map(String) : []),
   }),
 }
