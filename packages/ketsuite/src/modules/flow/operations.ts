@@ -256,10 +256,11 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const sprintIds = ids(rows.map((row) => row.sprintId))
   const userIds = ids(rows.map((row) => row.assigneeUserId))
   const typeIds = ids(rows.map((row) => row.typeId))
+  const issueIds = rows.map((row) => String(row.id))
   // The project too, for the one list that spans them: an issue read outside
   // its own board has to say which board it came from.
   const projectIds = ids(rows.map((row) => row.projectId))
-  const [columns, epics, sprints, users, projects, types, progress] = await Promise.all([
+  const [columns, epics, sprints, users, projects, types, progress, values] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -278,10 +279,17 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     typeIds.length
       ? ctx.db.all(from(ctx.table('flow.IssueType')).where(inArray(ctx.table('flow.IssueType').id, typeIds)))
       : [],
-    progressOf(
-      ctx,
-      rows.map((row) => String(row.id)),
-    ),
+    progressOf(ctx, issueIds),
+    // Custom field values for the whole page in one query, so a list can show
+    // a column for them. Keyed by field id rather than code, because a screen
+    // holds the definitions and matches on what it was given.
+    issueIds.length
+      ? ctx.db.all(
+          from(ctx.table('flow.IssueFieldValue')).where(
+            inArray(ctx.table('flow.IssueFieldValue').issueId, issueIds),
+          ),
+        )
+      : [],
   ])
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const columnBy = by(columns)
@@ -290,6 +298,13 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const userBy = by(users)
   const projectBy = by(projects)
   const typeBy = by(types)
+  const fieldsBy = new Map<string, Record<string, unknown>>()
+  for (const entry of values) {
+    const key = String(entry.issueId)
+    const held = fieldsBy.get(key) ?? {}
+    held[String(entry.fieldId)] = entry.value
+    fieldsBy.set(key, held)
+  }
   return rows.map((row) => {
     const counted = progress.get(String(row.id))
     return {
@@ -320,6 +335,8 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
       assigneeName: row.assigneeUserId
         ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
         : null,
+      /** `{ [fieldId]: value }`, for whatever fields this row happens to hold. */
+      fieldValues: fieldsBy.get(String(row.id)) ?? {},
       typeName: row.typeId ? (typeBy.get(String(row.typeId))?.name ?? row.typeId) : null,
       typeColor: row.typeId ? (typeBy.get(String(row.typeId))?.color ?? null) : null,
     }
@@ -425,8 +442,9 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const compiled = compileListFilter(spec, state, { timezone })
   if (compiled) query = query.where(compiled)
   // No match is not "no filter": asking for a value nothing holds has to answer
-  // with nothing, and an empty `IN ()` is how that is said.
-  if (ids) query = query.where(inArray(I.id, ids.length ? ids : ['\u0000']))
+  // with nothing, which an empty list already does — `query.ts` compiles an
+  // empty `IN` to `1 = 0` rather than to no clause at all.
+  if (ids) query = query.where(inArray(I.id, ids))
   const path = Array.isArray(args.path) ? args.path : []
   for (let index = 0; index < path.length; index++) {
     const selected = state.groupBy[index]
