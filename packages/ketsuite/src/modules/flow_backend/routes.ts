@@ -474,6 +474,44 @@ export const routes: Record<string, RouteEntry> = {
             url,
             req,
           )) as AnyRow
+        } else if (action === 'addSubtask') {
+          const parent = (await readable(ctx, url, req, issueId)) as Row | null
+          if (!parent) return text('not found', { status: 404 })
+          // Born on the parent's board, in the parent's column: a sub-task in
+          // another project is what `parentIssueError` refuses, and a column
+          // is not something this form asks for.
+          result = (await ctx.call(
+            'flow.issue.save',
+            {
+              id: randomUUID(),
+              projectId: parent.projectId,
+              columnId: parent.columnId,
+              parentIssueId: issueId,
+              title: form.title ?? '',
+              idempotencyKey,
+            },
+            url,
+            req,
+          )) as AnyRow
+        } else if (action === 'detachSubtask') {
+          const child = (await readable(ctx, url, req, form.id ?? '')) as Row | null
+          if (!child) return text('not found', { status: 404 })
+          // Explicitly null, not omitted: `issue.save` keeps what it is not
+          // told about, so omitting the parent would leave it attached.
+          result = (await ctx.call(
+            'flow.issue.save',
+            {
+              id: String(child.id),
+              projectId: child.projectId,
+              columnId: child.columnId,
+              title: String(child.title),
+              parentIssueId: null,
+              expectedVersion: Number(form.childVersion ?? child.version ?? 0),
+              idempotencyKey,
+            },
+            url,
+            req,
+          )) as AnyRow
         } else if (action === 'removeDependency') {
           result = (await ctx.call('flow.issue.dependency.remove', { id: form.id ?? '' }, url, req)) as AnyRow
         } else {
