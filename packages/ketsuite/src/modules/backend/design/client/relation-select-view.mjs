@@ -203,7 +203,7 @@ export function createRelationSelectView(runtime, props) {
                     html`<option value=${entry.value} selected=${string(entry.value) === value}>${entry.label}</option>`,
                 )}
               </select>`
-            : html`<input data-ui="form-control" type=${field.type || 'text'} name=${field.name} value=${value} required=${field.required === true}>`
+            : html`<input data-ui="form-control" type=${field.type || 'text'} name=${field.name} value=${value} autocomplete="off" required=${field.required === true}>`
         }
       </label>
     `
@@ -259,7 +259,7 @@ export function createRelationSelectView(runtime, props) {
         </header>
         <div data-ui="modal-body">
           <div data-ui="relation-dialog-toolbar">
-            <input data-ui="form-control" type="search" value=${query()} placeholder=${labels.search} aria-label=${labels.search} on:input=${searchManager}>
+            <input data-ui="form-control" type="search" value=${query()} autocomplete="off" placeholder=${labels.search} aria-label=${labels.search} on:input=${searchManager}>
             ${manager?.saveFunction ? html`<button data-ui="action" data-variant="primary" type="button" on:click=${() => editor.set({ id: '', row: manager.saveDefaults ?? {} })}>${labels.create}</button>` : ''}
           </div>
           ${error() ? html`<aside data-ui="notice" data-tone="danger" role="alert"><div data-ui="notice-copy"><p data-ui="notice-title">${labels.loadError}</p><p data-ui="notice-message">${error()}</p></div><button data-ui="action" data-variant="secondary" type="button" on:click=${loadRows}>${labels.retry}</button></aside>` : ''}
@@ -347,7 +347,7 @@ export function createRelationSelectView(runtime, props) {
         ${
           open()
             ? html`<div data-ui="relation-menu" id=${`${props.id}-relation-menu`}>
-                <input data-ui="relation-search" type="search" value=${query()} placeholder=${labels.search} aria-label=${labels.search} on:input=${(event) => query.set(event.currentTarget.value)}>
+                <input data-ui="relation-search" type="search" value=${query()} autocomplete="off" placeholder=${labels.search} aria-label=${labels.search} on:input=${(event) => query.set(event.currentTarget.value)}>
                 <div data-ui="relation-options" role="listbox">
                   ${
                     filteredOptions().length

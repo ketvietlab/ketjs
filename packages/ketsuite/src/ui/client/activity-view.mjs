@@ -290,11 +290,11 @@ export function createRecordActivityView(runtime, props, seed = {}) {
         (type) => type.id,
         (type) => html`<option value=${type.id}>${type.name}</option>`,
       )}</select></label>
-      <label data-ui="activity-field">${labels.summary}<input data-ui="form-control" name="summary" required maxlength="500" disabled=${busy()}></label>
+      <label data-ui="activity-field">${labels.summary}<input data-ui="form-control" name="summary" autocomplete="off" required maxlength="500" disabled=${busy()}></label>
       <label data-ui="activity-field">${labels.note}<textarea data-ui="form-control" name="note" disabled=${busy()}></textarea></label>
-      <label data-ui="activity-field">${labels.due}<input data-ui="form-control" type="date" name="dueDate" value=${localDate()} required disabled=${busy()}></label>
+      <label data-ui="activity-field">${labels.due}<input data-ui="form-control" type="date" name="dueDate" value=${localDate()} autocomplete="off" required disabled=${busy()}></label>
       <div data-ui="activity-schedule-actions">
-        <label data-ui="activity-attachment">${labels.attachment}<input data-ui="form-control" type="file" name="attachment" disabled=${busy()}></label>
+        <label data-ui="activity-attachment">${labels.attachment}<input data-ui="form-control" type="file" name="attachment" autocomplete="off" disabled=${busy()}></label>
         <div>
           <button data-ui="activity-schedule-close" data-control="action" data-variant="tertiary" data-size="compact" type="button" on:click=${() => scheduleOpen.set(false)} disabled=${busy()}>${labels.close}</button>
           <button data-ui="activity-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy() || types().length === 0}>${busy() ? labels.scheduling : labels.schedule}</button>
@@ -336,7 +336,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
               ${
                 itemAction() === `complete:${activity.id}`
                   ? html`<form data-ui="activity-complete" data-id=${activity.id} on:submit=${complete}>
-                  <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.feedback}</span><input data-ui="form-control" name="feedback" disabled=${busy()}></label>
+                  <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.feedback}</span><input data-ui="form-control" name="feedback" autocomplete="off" disabled=${busy()}></label>
                   <button data-ui="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.completing : labels.complete}</button>
                 </form>`
                   : ''
@@ -344,7 +344,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
               ${
                 itemAction() === `reschedule:${activity.id}`
                   ? html`<form data-ui="activity-reschedule" data-id=${activity.id} on:submit=${reschedule}>
-                  <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.newDue}</span><input data-ui="form-control" type="date" name="dueDate" value=${activity.dueDate} required disabled=${busy()}></label>
+                  <label data-ui="activity-action-field"><span data-ui="activity-action-label">${labels.newDue}</span><input data-ui="form-control" type="date" name="dueDate" value=${activity.dueDate} autocomplete="off" required disabled=${busy()}></label>
                   <button data-ui="action" data-variant="secondary" data-size="compact" type="submit" disabled=${busy()}>${labels.reschedule}</button>
                 </form>`
                   : ''

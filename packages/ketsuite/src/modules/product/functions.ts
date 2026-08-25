@@ -1114,6 +1114,60 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  deleteTemplates: defineFn({
+    input: { ids: 'json' },
+    output: { deleted: 'int' },
+    effects: [
+      'read:product.Template',
+      'read:product.Product',
+      'read:product.Cost',
+      'read:product.TemplateUom',
+      'read:product.ProductUom',
+      'read:product.TemplateAttributeLine',
+      'read:product.TemplateAttributeValue',
+      'read:product.ProductValue',
+      'write:product.Template',
+      'write:product.Product',
+      'write:product.Cost',
+      'write:product.TemplateUom',
+      'write:product.ProductUom',
+      'write:product.TemplateAttributeLine',
+      'write:product.TemplateAttributeValue',
+      'write:product.ProductValue',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = [...new Set(Array.isArray(args.ids) ? args.ids.map(String).filter(Boolean) : [])]
+      if (!ids.length) return { deleted: 0 }
+      return ctx.tx(async (tx) => {
+        const Template = tx.table('product.Template')
+        const Product = tx.table('product.Product')
+        const Cost = tx.table('product.Cost')
+        const TemplateUom = tx.table('product.TemplateUom')
+        const ProductUom = tx.table('product.ProductUom')
+        const Line = tx.table('product.TemplateAttributeLine')
+        const Value = tx.table('product.TemplateAttributeValue')
+        const ProductValue = tx.table('product.ProductValue')
+        const products = await tx.db.all(from(Product).where(inArray(Product.templateId, ids)))
+        const productIds = products.map((row) => String(row.id))
+        const lines = await tx.db.all(from(Line).where(inArray(Line.templateId, ids)))
+        const lineIds = lines.map((row) => String(row.id))
+
+        if (productIds.length) {
+          await tx.db.del(deleteFrom(ProductValue).where(inArray(ProductValue.productId, productIds)))
+          await tx.db.del(deleteFrom(ProductUom).where(inArray(ProductUom.productId, productIds)))
+          await tx.db.del(deleteFrom(Cost).where(inArray(Cost.productId, productIds)))
+        }
+        if (lineIds.length) await tx.db.del(deleteFrom(Value).where(inArray(Value.lineId, lineIds)))
+        await tx.db.del(deleteFrom(Line).where(inArray(Line.templateId, ids)))
+        await tx.db.del(deleteFrom(TemplateUom).where(inArray(TemplateUom.templateId, ids)))
+        if (productIds.length) await tx.db.del(deleteFrom(Product).where(inArray(Product.id, productIds)))
+        const result = await tx.db.del(deleteFrom(Template).where(inArray(Template.id, ids)))
+        return { deleted: result.changes }
+      })
+    },
+  }),
+
   listCategories: defineFn({
     // `ids` narrows the answer to the categories a caller already named — a page
     // of products wants the labels behind its categoryIds, not the tenant's whole

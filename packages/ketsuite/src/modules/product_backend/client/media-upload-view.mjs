@@ -16,6 +16,7 @@ export function createProductMediaUploadView(runtime, props) {
           type="file"
           name="file"
           accept="image/*"
+          autocomplete="off"
           required
           aria-label=${props.label}
           on:change=${upload}

@@ -54,6 +54,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.view.kanban': 'Thẻ',
     'chrome.searchFacet': 'Tìm',
     'chrome.searchPages': 'Tìm trang…',
+    'chrome.globalFilter': 'Tìm kiếm và bộ lọc',
     'chrome.filters': 'Bộ lọc',
     'chrome.groupBy': 'Nhóm theo',
     'chrome.favorites': 'Yêu thích',
@@ -65,6 +66,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customOperator': 'Điều kiện',
     'chrome.customValue': 'Giá trị',
     'chrome.apply': 'Áp dụng',
+    'chrome.more': 'Thêm thao tác',
+    'chrome.archive': 'Lưu trữ',
+    'chrome.delete': 'Xoá',
+
+    'table.selectAll': 'Chọn tất cả dòng',
+    'table.selectRow': 'Chọn dòng',
 
     'menu.admin': 'Quản trị',
     'menu.content': 'Nội dung',
@@ -126,6 +133,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.view.kanban': 'Cards',
     'chrome.searchFacet': 'Search',
     'chrome.searchPages': 'Search pages…',
+    'chrome.globalFilter': 'Search and filters',
     'chrome.filters': 'Filters',
     'chrome.groupBy': 'Group By',
     'chrome.favorites': 'Favorites',
@@ -137,6 +145,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customOperator': 'Operator',
     'chrome.customValue': 'Value',
     'chrome.apply': 'Apply',
+    'chrome.more': 'More actions',
+    'chrome.archive': 'Archive',
+    'chrome.delete': 'Delete',
+
+    'table.selectAll': 'Select all rows',
+    'table.selectRow': 'Select row',
 
     'menu.admin': 'Administration',
     'menu.content': 'Content',

@@ -258,10 +258,10 @@ export function createChatterView(runtime, props, seed = {}) {
       ${
         composerKind()
           ? html`<form data-ui="chatter-composer" on:submit=${post}>
-        <input type="hidden" name="kind" value=${composerKind()}>
+        <input type="hidden" name="kind" value=${composerKind()} autocomplete="off">
         <textarea data-ui="chatter-body" name="body" placeholder=${labels.placeholder} required disabled=${busy()}></textarea>
         <div data-ui="chatter-compose-actions">
-          <label data-ui="chatter-attachment">${labels.attachment}<input data-ui="form-control" type="file" name="attachment" disabled=${busy()}></label>
+          <label data-ui="chatter-attachment">${labels.attachment}<input data-ui="form-control" type="file" name="attachment" autocomplete="off" disabled=${busy()}></label>
           <div>
             <button data-ui="chatter-compose-close" data-control="action" data-variant="tertiary" data-size="compact" type="button" on:click=${() => composerKind.set(null)} disabled=${busy()}>${labels.close}</button>
             <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>

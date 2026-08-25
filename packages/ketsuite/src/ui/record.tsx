@@ -57,6 +57,7 @@ export const recordToggle = (options: {
       data-ui="record-toggle-input"
       type="checkbox"
       name={options.name}
+      autocomplete="off"
       value="1"
       checked={options.checked}
       form={options.form ?? undefined}
