@@ -20,21 +20,27 @@
 // browser-served /_ket/view/index.js) — the same split mail_backend's own
 // chatter view uses.
 import * as Y from 'yjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
 // The shell's markup and the document serializer, which belong to the kit and
 // not to a module — see the header of that file, and tools/ui-audit.ts for the
 // rule it answers.
-import { documentHtml, issueEditorShell, presenceHtml } from '../../ui/client/flow-editor-view.mjs'
-import { BLOCK_TYPES, CONTINUES, LIST_TYPES } from './blocks.ts'
-import type { BlockType, Delta, MarkName } from './blocks.ts'
-import { parseMarkdown } from './markdown.ts'
-import type { MarkdownBlock } from './markdown.ts'
+import { documentHtml, liveDocShell, presenceHtml } from './live-doc-shell.tsx'
+import { BLOCK_TYPES, CONTINUES, LIST_TYPES } from './live-doc-blocks.ts'
+import type { BlockType, Delta, MarkName } from './live-doc-blocks.ts'
+import { parseMarkdown } from './live-doc-markdown.ts'
+import type { MarkdownBlock } from './live-doc-markdown.ts'
 
-export type EditorRuntime = {
-  html: (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult
+export type LiveDocProps = {
+  /** The record this document belongs to. */
+  docId: string
+  /**
+   * The collection its endpoints hang off — `/admin/flow/issues`, matching the
+   * base the owner passed `documentRoutes`. Handed in rather than built here so
+   * one editor serves an issue, a project description and a page alike.
+   */
+  base: string
+  lang?: string
 }
-
-export type IssueEditorProps = { issueId: string; lang?: string }
 
 type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: BlockType; checked: boolean }
 type Point = { index: number; offset: number }
@@ -233,11 +239,10 @@ function descend(node: Node, offset: number): { node: Node; offset: number } {
   return { node: current, offset: at }
 }
 
-export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditorProps) {
-  const { html } = runtime
-  const issueId = props.issueId
-  const base = `/admin/flow/issues/${encodeURIComponent(issueId)}`
-  const containerId = `flow-editor-${issueId}`
+export function createLiveDocView(props: LiveDocProps) {
+  const docId = props.docId
+  const base = `${props.base}/${encodeURIComponent(docId)}`
+  const containerId = `flow-editor-${docId}`
   const doc = new Y.Doc()
   let container: HTMLElement | null = null
   let shell: HTMLElement | null = null
@@ -1222,7 +1227,7 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
   }
 
   return {
-    view: () => issueEditorShell({ html }, { containerId, lang: props.lang }) as TemplateResult,
+    view: () => liveDocShell({ containerId, lang: props.lang }) as TemplateResult,
     dispose() {
       source?.close()
       if (heartbeat) clearInterval(heartbeat)
@@ -1231,4 +1236,26 @@ export function createIssueEditorView(runtime: EditorRuntime, props: IssueEditor
     mount,
     containerId,
   }
+}
+
+/**
+ * The island the shell is mounted as.
+ *
+ * A separate browser-only entry file used to hold these six lines, because the
+ * view runtime resolves to a URL rather than a package and a `.ts` file could
+ * not say so without failing the zero-dep audit. It is imported as a type-only
+ * runtime here instead, which is what `relation-select-view.tsx` next door
+ * already does — so the entry, and the `client-src` directory it lived in, are
+ * gone.
+ *
+ * `IslandController` has no "mounted" hook, so the DOM mount is queued for
+ * after the view has rendered and finds its container by id.
+ */
+export const liveDoc = (props: IslandProps): IslandController => {
+  const controller = createLiveDocView(props as unknown as LiveDocProps)
+  queueMicrotask(() => {
+    const el = document.getElementById(controller.containerId)
+    if (el) void controller.mount(el)
+  })
+  return { view: controller.view, dispose: controller.dispose }
 }

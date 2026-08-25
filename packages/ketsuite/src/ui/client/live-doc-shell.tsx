@@ -1,20 +1,26 @@
-// @ts-nocheck The Flow editor's shell and its document serializer, rendered
-// identically server-side and in the browser. Dependency-free on purpose: the
-// browser copy is bundled by tools/build-flow-client.mjs with the view runtime
-// left external, so anything imported here would be duplicated into every page
-// that shows an editor.
+// A live document's shell, and the serializer that draws its content.
 //
-// The markup lives in the kit rather than beside the CRDT binding because
-// tools/ui-audit.ts holds one rule for the whole suite — markup is written
-// under packages/ketsuite/src/ui/ and nowhere else — and an island is not an
-// exception to it. The behaviour (the Yjs<->contenteditable binding) stays in
-// flow_backend/editor-view.ts, where it is type-checked.
+// Two halves with different jobs, which is why they look different. The shell
+// is ordinary kit markup, written as JSX like every other component here.
+// `documentHtml` is not: the binding renders by replacing the container's
+// innerHTML, so what it needs is a string, and a JSX tree would only be turned
+// back into one.
 //
-// That rule is why `documentHtml` below lives here too. The binding renders by
-// replacing the container's innerHTML, so the tag chosen for a heading, a list
-// item or a checkbox is markup by any reading of the word. It was written in
-// the module while the vocabulary was two tags wide; moving it here is what
-// growing to nine costs.
+// Both live in the kit rather than beside the CRDT binding for the reason
+// tools/ui-audit.ts gives for the whole suite — markup is written under
+// packages/ketsuite/src/ui/ and nowhere else, and an island is not an
+// exception to it.
+
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Delta } from './live-doc-blocks.ts'
+
+/** One block as the serializer needs it: what kind, and the text it holds. */
+export type LiveDocBlock = { type: string; checked?: boolean; delta: Delta }
+
+/** Somebody else in the document, and which block their caret is in. */
+export type LiveDocViewer = { id: string; name: string; index: number }
+
+type Labels = (typeof LABELS)['vi']
 
 const LABELS = {
   vi: {
@@ -69,15 +75,15 @@ const LABELS = {
   },
 }
 
-export const labelsOf = (lang) => LABELS[String(lang ?? '').slice(0, 2)] ?? LABELS.vi
+export const labelsOf = (lang?: string | null): Labels =>
+  LABELS[String(lang ?? '').slice(0, 2) as keyof typeof LABELS] ?? LABELS.vi
 
 /** The block vocabulary. The first six are what the type control offers. */
-export const BLOCK_TYPES = ['p', 'h1', 'h2', 'h3', 'quote', 'code', 'bullet', 'ordered', 'check']
 
 /** Which block types are list items, and so share one wrapper across a run. */
-const LIST_WRAPPER = { bullet: 'ul', ordered: 'ol', check: 'ul' }
+const LIST_WRAPPER: Record<string, string> = { bullet: 'ul', ordered: 'ol', check: 'ul' }
 
-const BLOCK_TAG = {
+const BLOCK_TAG: Record<string, string> = {
   p: 'p',
   h1: 'h1',
   h2: 'h2',
@@ -89,9 +95,10 @@ const BLOCK_TAG = {
   check: 'li',
 }
 
-const escapeHtml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const escapeHtml = (text: unknown): string =>
+  String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-const escapeAttr = (text) => escapeHtml(text).replace(/"/g, '&quot;')
+const escapeAttr = (text: unknown): string => escapeHtml(text).replace(/"/g, '&quot;')
 
 /**
  * Only http/https/mailto survive.
@@ -102,15 +109,15 @@ const escapeAttr = (text) => escapeHtml(text).replace(/"/g, '&quot;')
  * an inert `#`, which is still visibly a link, rather than silently dropping
  * text somebody typed.
  */
-const safeHref = (href) => {
+const safeHref = (href: unknown): string => {
   const value = String(href ?? '').trim()
   return /^(https?:|mailto:)/i.test(value) ? value : '#'
 }
 
 /** A line break is a newline in the model and a <br> on screen. */
-const withBreaks = (text) => escapeHtml(text).replace(/\n/g, '<br>')
+const withBreaks = (text: string): string => escapeHtml(text).replace(/\n/g, '<br>')
 
-const plainOf = (delta) => (delta ?? []).map((op) => op.insert).join('')
+const plainOf = (delta?: Delta): string => (delta ?? []).map((op) => op.insert).join('')
 
 /**
  * A block whose text ends in a newline needs one more `<br>` than it has
@@ -123,14 +130,14 @@ const plainOf = (delta) => (delta ?? []).map((op) => op.insert).join('')
  * block and typing put the next line straight onto the end of the previous
  * one.
  */
-const trailingBreak = (text) => (text.endsWith('\n') ? '<br>' : '')
+const trailingBreak = (text: string): string => (text.endsWith('\n') ? '<br>' : '')
 
 /**
  * One delta run's marks, wrapped innermost-first so the nesting is stable
  * across renders: selection restore walks text nodes, and a run whose wrappers
  * reorder between two renders moves the caret for no reason.
  */
-const inlineHtml = (delta) =>
+const inlineHtml = (delta?: Delta): string =>
   (delta ?? [])
     .map((op) => {
       const attributes = op.attributes ?? {}
@@ -149,7 +156,7 @@ const inlineHtml = (delta) =>
  * An empty block still needs a line box, or contenteditable gives it zero
  * height and there is nowhere left to put the caret.
  */
-const blockBody = (block) => {
+const blockBody = (block: LiveDocBlock): string => {
   const inner = inlineHtml(block.delta)
   return inner ? `${inner}${trailingBreak(plainOf(block.delta))}` : '<br>'
 }
@@ -162,14 +169,14 @@ const blockBody = (block) => {
  * what lets you match the initials by the paragraph to the chip in the row
  * without reading either.
  */
-const hueOf = (key) => {
+const hueOf = (key: unknown): number => {
   let hash = 0
   for (let i = 0; i < String(key).length; i++) hash = (hash * 31 + String(key).charCodeAt(i)) % 360
   return hash
 }
 
 /** Two letters, because that is what fits and what people recognise. */
-const initialsOf = (name) => {
+const initialsOf = (name: unknown): string => {
   const words = String(name ?? '')
     .trim()
     .split(/\s+/)
@@ -181,7 +188,7 @@ const initialsOf = (name) => {
 }
 
 /** The people in a block, marked inside it so you can see whose paragraph it is. */
-const viewerMarks = (people) =>
+const viewerMarks = (people: LiveDocViewer[]): string =>
   people
     .map(
       (person) =>
@@ -195,7 +202,7 @@ const viewerMarks = (people) =>
  * Rendered into its own container rather than into the document, so a
  * heartbeat never touches the element somebody is typing into.
  */
-export function presenceHtml(people, lang) {
+export function presenceHtml(people: LiveDocViewer[] | undefined, lang?: string | null): string {
   const labels = labelsOf(lang)
   if (!people?.length) return ''
   return `<span data-ui="flow-editor-presence-label">${escapeHtml(labels.alsoHere)}</span>${people
@@ -206,10 +213,10 @@ export function presenceHtml(people, lang) {
     .join('')}`
 }
 
-const checkMark = (block, labels) =>
+const checkMark = (block: LiveDocBlock, labels: Labels): string =>
   `<span data-ui="flow-editor-check" contenteditable="false" role="checkbox" aria-checked="${block.checked ? 'true' : 'false'}" aria-label="${escapeAttr(labels.check)}" tabindex="-1"></span>`
 
-const blockHtml = (block, index, labels, people) => {
+const blockHtml = (block: LiveDocBlock, index: number, labels: Labels, people: LiveDocViewer[]): string => {
   const type = BLOCK_TAG[block.type] ? block.type : 'p'
   const tag = BLOCK_TAG[type]
   const checked = type === 'check' ? ` data-checked="${block.checked ? 'true' : 'false'}"` : ''
@@ -236,15 +243,19 @@ const blockHtml = (block, index, labels, people) => {
  * the binding finds a block again afterwards, precisely because these wrappers
  * mean a block is not always a direct child of the container.
  */
-export function documentHtml(blocks, lang, presence) {
+export function documentHtml(
+  blocks: LiveDocBlock[] | undefined,
+  lang?: string | null,
+  presence?: LiveDocViewer[],
+): string {
   const labels = labelsOf(lang)
-  const here = new Map()
+  const here = new Map<number, LiveDocViewer[]>()
   for (const person of presence ?? []) {
     const at = here.get(person.index)
     if (at) at.push(person)
     else here.set(person.index, [person])
   }
-  const parts = []
+  const parts: string[] = []
   let openList = ''
   let openKind = ''
   const closeList = () => {
@@ -274,46 +285,113 @@ export function documentHtml(blocks, lang, presence) {
  * mount on: `IslandController` has no "mounted" hook, so the binding looks the
  * node up by id once the view has rendered.
  */
-export function issueEditorShell(runtime, { containerId, lang }) {
-  const { html } = runtime
-  const labels = labelsOf(lang)
-  const mark = (key, glyph, label) =>
-    html`<button data-ui="flow-editor-mark" data-flow-editor-mark=${key} data-control="action" data-variant="secondary" data-size="compact" type="button" aria-label=${label} title=${label}>${glyph}</button>`
-  const blockOption = (value) => html`<option value=${value}>${labels[value]}</option>`
-  return html`<section data-ui="flow-editor">
-    <div data-ui="flow-editor-toolbar" role="toolbar" aria-label=${labels.toolbar}>
-      <select data-ui="form-control" data-flow-editor-block data-size="compact" aria-label=${labels.blockType} title=${labels.blockType}>
-        ${blockOption('p')}
-        ${blockOption('h1')}
-        ${blockOption('h2')}
-        ${blockOption('h3')}
-        ${blockOption('quote')}
-        ${blockOption('code')}
-      </select>
-      ${mark('bullet', '•', labels.bullet)}
-      ${mark('ordered', '1.', labels.ordered)}
-      ${mark('check', '☑', labels.check)}
-      <span data-ui="flow-editor-divider" aria-hidden="true"></span>
-      ${mark('bold', 'B', labels.bold)}
-      ${mark('italic', 'I', labels.italic)}
-      ${mark('strike', 'S', labels.strike)}
-      ${mark('code', '</>', labels.inlineCode)}
-      ${mark('link', '🔗', labels.link)}
-    </div>
-    <div data-ui="flow-editor-presence" data-flow-editor-presence role="status" aria-live="polite"></div>
-    <div data-ui="flow-editor-content" id=${containerId} contenteditable="true" role="textbox" aria-multiline="true" aria-label=${labels.editor}></div>
-    <dialog data-ui="flow-editor-link-dialog" data-flow-editor-link-dialog aria-label=${labels.linkTitle}>
-      <div data-ui="flow-editor-link-body">
-        <label data-ui="flow-editor-link-label">
-          <span>${labels.linkUrl}</span>
-          <input data-ui="form-control" data-flow-editor-link-input type="url" name="href" placeholder="https://" autocomplete="off">
-        </label>
-        <div data-ui="flow-editor-link-actions">
-          <button data-control="action" data-variant="secondary" data-size="compact" type="button" data-flow-editor-link-cancel>${labels.linkCancel}</button>
-          <button data-control="action" data-variant="destructive" data-size="compact" type="button" data-flow-editor-link-remove>${labels.linkRemove}</button>
-          <button data-control="action" data-variant="primary" data-size="compact" type="button" data-flow-editor-link-apply>${labels.linkApply}</button>
-        </div>
+
+/**
+ * `containerId` is how the client entry finds the contenteditable element to
+ * mount on: `IslandController` has no "mounted" hook, so the binding looks the
+ * node up by id once the view has rendered.
+ */
+export function liveDocShell(o: { containerId: string; lang?: string | null }): TemplateResult {
+  const labels = labelsOf(o.lang)
+  const mark = (key: string, glyph: string, label: string) => (
+    <button
+      data-ui="flow-editor-mark"
+      data-flow-editor-mark={key}
+      data-control="action"
+      data-variant="secondary"
+      data-size="compact"
+      type="button"
+      aria-label={label}
+      title={label}
+    >
+      {glyph}
+    </button>
+  )
+  const blockOption = (value: 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'code') => (
+    <option value={value}>{labels[value]}</option>
+  )
+  return (
+    <section data-ui="flow-editor">
+      <div data-ui="flow-editor-toolbar" role="toolbar" aria-label={labels.toolbar}>
+        <select
+          data-ui="form-control"
+          data-flow-editor-block
+          data-size="compact"
+          aria-label={labels.blockType}
+          title={labels.blockType}
+        >
+          {blockOption('p')}
+          {blockOption('h1')}
+          {blockOption('h2')}
+          {blockOption('h3')}
+          {blockOption('quote')}
+          {blockOption('code')}
+        </select>
+        {mark('bullet', '\u2022', labels.bullet)}
+        {mark('ordered', '1.', labels.ordered)}
+        {mark('check', '\u2611', labels.check)}
+        <span data-ui="flow-editor-divider" aria-hidden="true" />
+        {mark('bold', 'B', labels.bold)}
+        {mark('italic', 'I', labels.italic)}
+        {mark('strike', 'S', labels.strike)}
+        {mark('code', '</>', labels.inlineCode)}
+        {mark('link', '\u{1F517}', labels.link)}
       </div>
-    </dialog>
-  </section>`
+      <div data-ui="flow-editor-presence" data-flow-editor-presence role="status" aria-live="polite" />
+      {/* biome-ignore lint/a11y/useFocusableInteractive: `contenteditable` makes this natively focusable and tab-reachable, which the rule does not model; the explicit tabindex is there so it reads that way too. */}
+      <div
+        data-ui="flow-editor-content"
+        id={o.containerId}
+        contenteditable="true"
+        role="textbox"
+        tabindex="0"
+        aria-multiline="true"
+        aria-label={labels.editor}
+      />
+      <dialog data-ui="flow-editor-link-dialog" data-flow-editor-link-dialog aria-label={labels.linkTitle}>
+        <div data-ui="flow-editor-link-body">
+          <label data-ui="flow-editor-link-label">
+            <span>{labels.linkUrl}</span>
+            <input
+              data-ui="form-control"
+              data-flow-editor-link-input
+              type="url"
+              name="href"
+              placeholder="https://"
+              autocomplete="off"
+            />
+          </label>
+          <div data-ui="flow-editor-link-actions">
+            <button
+              data-control="action"
+              data-variant="secondary"
+              data-size="compact"
+              type="button"
+              data-flow-editor-link-cancel
+            >
+              {labels.linkCancel}
+            </button>
+            <button
+              data-control="action"
+              data-variant="destructive"
+              data-size="compact"
+              type="button"
+              data-flow-editor-link-remove
+            >
+              {labels.linkRemove}
+            </button>
+            <button
+              data-control="action"
+              data-variant="primary"
+              data-size="compact"
+              type="button"
+              data-flow-editor-link-apply
+            >
+              {labels.linkApply}
+            </button>
+          </div>
+        </div>
+      </dialog>
+    </section>
+  )
 }

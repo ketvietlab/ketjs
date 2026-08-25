@@ -8,12 +8,13 @@ import backend from '@ketvietlab/ketsuite/backend'
 import * as Y from 'yjs'
 import { resolveUserSession } from '@ketvietlab/ketsuite'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
+import livedoc from '../packages/ketsuite/src/modules/livedoc/index.ts'
 import flowBackend from '../packages/ketsuite/src/modules/flow_backend/index.ts'
-import { sweepLive } from '../packages/ketsuite/src/modules/flow_backend/sync.ts'
+import { sweepLive } from '../packages/ketsuite/src/modules/livedoc/sync.ts'
 
 const app = defineDeployment({
   name: 'flow_collab_headless_e2e',
-  modules: [address, partner, company, storage, user, mail, backend, flow, flowBackend],
+  modules: [address, partner, company, storage, user, mail, backend, livedoc, flow, flowBackend],
   headless: true,
   serve: {
     sessions: { anonymous: { company: 'acme' } },
@@ -67,7 +68,8 @@ test('flow collab headless E2E: content, push, live relay and an explicit leave 
     const content = await e2e.client.json<{ snapshot: string; topic: string }>(
       '/admin/flow/issues/issue-1/content',
     )
-    assert.ok(content.topic.startsWith('flow:acme:issue-1:'))
+    // company, model and record — see the DocRef note in modules/livedoc/sync.ts.
+    assert.ok(content.topic.startsWith('doc:acme:flow.Issue:issue-1:'))
     const emptyDoc = new Y.Doc()
     Y.applyUpdate(emptyDoc, Buffer.from(content.snapshot, 'base64'))
     assert.equal(emptyDoc.getXmlFragment('content').toString(), '')
@@ -130,7 +132,7 @@ test('flow collab headless E2E: content, push, live relay and an explicit leave 
  */
 const guarded = defineDeployment({
   name: 'flow_collab_permissions',
-  modules: [address, partner, company, storage, user, mail, backend, flow, flowBackend],
+  modules: [address, partner, company, storage, user, mail, backend, livedoc, flow, flowBackend],
   headless: true,
   serve: {
     sessions: { anonymous: { company: 'acme' } },
@@ -249,7 +251,7 @@ test('flow collab: reading an issue does not grant rewriting its description', a
  * hydrate returns before reaching it whenever some other session already
  * loaded the document. Cold, it refused: a reader-role viewer opening an issue
  * this process had not touched got `E_FN_NOT_PERMITTED` for
- * `flow_backend.sync.resolveSnapshotKey`.
+ * `livedoc.sync.resolveSnapshotKey`.
  */
 test('flow collab: a reader can open a document this process has to load first', async () => {
   const e2e = await createTestDeployment(guarded, { worker: false })

@@ -14,7 +14,7 @@
 //
 // Pure and DOM-free on purpose, so it can be tested without a browser — which
 // is most of why the paste path is worth trusting.
-import type { Attributes, BlockType, Delta } from './blocks.ts'
+import type { Attributes, BlockType, Delta } from './live-doc-blocks.ts'
 
 export type MarkdownBlock = { type: BlockType; checked: boolean; delta: Delta }
 

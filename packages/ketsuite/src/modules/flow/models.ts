@@ -222,7 +222,7 @@ export const models: Record<string, ModelDef> = {
        * The rich description is a Yjs (CRDT) document, not a field this row's own
        * `version`/compareAndSet guards — one row cannot honestly carry two
        * consistency models under one counter. These three columns are written
-       * only by the flatten routine in flow_backend/sync.ts, as a plain column
+       * only by Live Doc's flatten routine (modules/livedoc), as a plain column
        * update outside the CAS path, never by `issue.save`.
        */
       previewText: 'text?',
