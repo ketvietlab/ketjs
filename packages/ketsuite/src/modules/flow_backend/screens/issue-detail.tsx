@@ -17,6 +17,7 @@ import { empty, entryBody, when } from './shared.tsx'
 
 export type IssueDetailControls = {
   assignee?: JSXChild
+  mentions?: JSXChild
   epic?: JSXChild
   tags?: JSXChild
   dependencyTarget?: JSXChild
@@ -290,6 +291,22 @@ export const issueDetailScreen = (
         />,
         <Section
           title={_('flow_backend.comments.title')}
+          description={
+            row.following ? _('flow_backend.comments.followingHint') : _('flow_backend.comments.quietHint')
+          }
+          actions={
+            row.following ? (
+              <RecordForm
+                action={endpoint}
+                hidden={{ action: 'unfollow' }}
+                fields={[]}
+                submit={_('flow_backend.action.unfollow')}
+                submitVariant="secondary"
+                submitSize="compact"
+                layout="inline"
+              />
+            ) : undefined
+          }
           body={stack([
             <RecordForm
               action={endpoint}
@@ -302,6 +319,17 @@ export const issueDetailScreen = (
                   required: true,
                   span: 'full',
                 },
+                ...(controls.mentions
+                  ? [
+                      {
+                        name: 'mentionUserIds',
+                        label: _('flow_backend.field.mentions'),
+                        help: _('flow_backend.comments.mentionHint'),
+                        control: controls.mentions,
+                        span: 'full' as const,
+                      },
+                    ]
+                  : []),
               ]}
               errors={errorsFor('comment')}
               submit={_('flow_backend.action.addComment')}

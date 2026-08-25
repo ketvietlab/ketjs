@@ -678,3 +678,95 @@ test('flow: a custom field can be filtered on', async () => {
     await e2e.close()
   }
 })
+
+/**
+ * Naming somebody in a comment is the one gesture that can be attributed and
+ * fired exactly once, which is why mentions live here and not in the
+ * description: `mail.Mention` is keyed to a message, and a live CRDT document
+ * has no message to key on.
+ */
+test('flow: a mention notifies, subscribes, and can be undone', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-author', kind: 'person', name: 'Author' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-named', kind: 'person', name: 'Named' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    for (const [id, partnerId] of [
+      ['author', 'p-author'],
+      ['named', 'p-named'],
+      // No partner: the platform cannot address them, which this has to survive.
+      ['ghost', null],
+    ] as Array<[string, string | null]>)
+      await e2e.fixture.call('user.createUser', {
+        id,
+        login: id,
+        password: 'test-password',
+        name: id,
+        ...(partnerId ? { partnerId } : {}),
+        defaultCompanyId: 'acme',
+        superuser: true,
+      })
+    for (const id of ['author', 'named', 'ghost'])
+      await e2e.fixture.call('user.grantCompany', { id: `${id}:acme`, userId: id, companyId: 'acme' })
+
+    await e2e.client.login({ login: 'author', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'pm', key: 'PM', name: 'Mentioned' },
+      idempotencyKey: 'project-mention',
+    })
+    await call('flow.column.save', {
+      values: { id: 'cm', projectId: 'pm', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-mention',
+    })
+    await call('flow.issue.save', {
+      id: 'im',
+      projectId: 'pm',
+      columnId: 'cm',
+      title: 'Needs a second pair of eyes',
+      idempotencyKey: 'issue-mention',
+    })
+
+    const commented = await call<Row>('flow.issue.comment', {
+      id: 'msg-1',
+      issueId: 'im',
+      body: 'Could you look at this?',
+      // The partnerless user is named too, and has to be dropped rather than
+      // take the whole comment down with them.
+      mentionUserIds: ['named', 'ghost'],
+      idempotencyKey: 'comment-mention-1',
+    })
+    assert.equal(commented.ok, true)
+
+    // Named now follows, so the replies reach them.
+    await e2e.client.login({ login: 'named', password: 'test-password' })
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, true)
+
+    // And can stop, which is the only way out of a subscription this module
+    // otherwise only ever hands out.
+    assert.deepEqual(
+      await call<Row>('flow.issue.unfollow', { issueId: 'im', idempotencyKey: 'unfollow-first' }),
+      {
+        ok: true,
+        removed: 1,
+      },
+    )
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, false)
+    // Asking again is not an error: "I do not want these" is satisfied either way.
+    assert.deepEqual(
+      await call<Row>('flow.issue.unfollow', { issueId: 'im', idempotencyKey: 'unfollow-again' }),
+      {
+        ok: true,
+        removed: 0,
+      },
+    )
+
+    // The partnerless one was never subscribed, and nothing pretended otherwise.
+    await e2e.client.login({ login: 'ghost', password: 'test-password' })
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, false)
+  } finally {
+    await e2e.close()
+  }
+})

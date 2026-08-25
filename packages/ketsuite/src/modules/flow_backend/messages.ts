@@ -4,6 +4,11 @@ const vi = {
   'menu.mine': 'Việc của tôi',
   'menu.projects': 'Dự án',
   'menu.board': 'Bảng',
+  'field.mentions': 'Nhắc tới',
+  'comments.mentionHint': 'Người được nhắc sẽ nhận thông báo và theo dõi công việc này.',
+  'comments.followingHint': 'Bạn đang theo dõi công việc này.',
+  'comments.quietHint': 'Bạn không theo dõi công việc này.',
+  'action.unfollow': 'Bỏ theo dõi',
   'gantt.title': 'Tiến độ theo thời gian',
   'gantt.hint':
     'Mỗi công việc là một thanh từ ngày bắt đầu tới hạn chót. Không có hạn chót thì vẽ thành một điểm.',
@@ -119,6 +124,11 @@ const en: Record<keyof typeof vi, string> = {
   'menu.mine': 'My work',
   'menu.projects': 'Projects',
   'menu.board': 'Board',
+  'field.mentions': 'Notify',
+  'comments.mentionHint': 'Whoever is named gets a notification and starts following this issue.',
+  'comments.followingHint': 'You follow this issue.',
+  'comments.quietHint': 'You do not follow this issue.',
+  'action.unfollow': 'Stop following',
   'gantt.title': 'Timeline',
   'gantt.hint':
     'Each issue is a bar from its start to its due date. Without a due date it is drawn as a point.',
