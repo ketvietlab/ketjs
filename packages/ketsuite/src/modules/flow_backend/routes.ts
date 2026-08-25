@@ -30,6 +30,9 @@ import {
   ganttScreen,
   mapScreen,
   crossProjectScreen,
+  pagesScreen,
+  pageDetailScreen,
+  allPagesScreen,
   projectsScreen,
   settingsScreen,
   sprintsScreen,
@@ -264,6 +267,22 @@ const issueDocument: DocumentOwner = {
 }
 
 /**
+ * The same, for a page — where the document is not a field on the record but
+ * the record's whole reason to exist.
+ *
+ * `page.get` answers `{ value }`, so the attachment is read one level in. That
+ * is the only difference between the two owners, which is the point of the
+ * seam: a second kind of document cost five lines.
+ */
+const pageDocument: DocumentOwner = {
+  kind: 'flow.Page',
+  readFn: 'flow.page.get',
+  writeFn: 'flow.page.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitPageContent',
+}
+
+/**
  * A list of issues that is not on a board.
  *
  * `mine` is the only thing that differs between the two, so it is the only
@@ -328,11 +347,70 @@ const crossProjectIssues =
     })
   }
 
+
+/**
+ * The "new page" form: a title, and optionally somewhere to put it.
+ *
+ * The parent choices are a plain select over the pages already in the project
+ * rather than a relation picker — a wiki is small enough to read in a list,
+ * and the picker would be a second island for no gain.
+ */
+const pageFields = (_: Translator, pages: readonly AnyRow[]): FormField[] => [
+  { name: 'title', label: _('flow_backend.pages.name'), value: '', required: true },
+  {
+    name: 'parentPageId',
+    label: _('flow_backend.pages.parent'),
+    type: 'select',
+    value: '',
+    options: [
+      { value: '', label: _('flow_backend.pages.root') },
+      ...pages.map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+    ],
+  },
+]
+
+/** The move form's one control: every page except this one and its descendants. */
+const parentField = (
+  _: Translator,
+  pages: readonly AnyRow[],
+  pageId: string,
+  current: string,
+): FormField => {
+  // A page cannot move under itself or under anything below it. The server
+  // refuses that anyway (`movePage`), but offering the choice and then
+  // rejecting it is a worse screen than not offering it.
+  const banned = new Set([pageId])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const page of pages) {
+      const parent = page.parentPageId ? String(page.parentPageId) : ''
+      if (parent && banned.has(parent) && !banned.has(String(page.id))) {
+        banned.add(String(page.id))
+        grew = true
+      }
+    }
+  }
+  return {
+    name: 'parentPageId',
+    label: _('flow_backend.pages.parent'),
+    type: 'select',
+    value: current,
+    options: [
+      { value: '', label: _('flow_backend.pages.root') },
+      ...pages
+        .filter((page) => !banned.has(String(page.id)))
+        .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+    ],
+  }
+}
+
 export const routes: Record<string, RouteEntry> = {
   // The document endpoints under `/admin/flow/issues/{id}` — content, push,
   // live, presence, leave. Mounted rather than written out: they are the same
   // five for every record that holds a document.
   ...documentRoutes(issueDocument, '/admin/flow/issues'),
+  ...documentRoutes(pageDocument, '/admin/flow/pages'),
 
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
@@ -919,6 +997,191 @@ export const routes: Record<string, RouteEntry> = {
             fieldDefs,
           )
         },
+      })
+    },
+
+
+  /**
+   * A project's documents, and the form that starts a new one.
+   *
+   * The whole tree comes back in one call and nests on the screen — see
+   * `listPages` for why that is the right shape for a wiki and the wrong one
+   * for the backlog.
+   */
+  '/admin/flow/projects/{id}/pages':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = refusePost(req)
+      if (refused) return refused
+      const projectId = String(params.id)
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const endpoint = `/admin/flow/projects/${projectId}/pages`
+      let errors: string[] = []
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.action === 'save') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: form.id || randomUUID(),
+              projectId,
+              title: form.title ?? '',
+              parentPageId: form.parentPageId || null,
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
+          errors = errorsOf(result, _)
+        }
+      }
+      const project = (await ctx.call('flow.project.get', { id: projectId }, url, req)) as AnyRow | null
+      if (!project) return text('not found', { status: 404 })
+      const pages = (await ctx.call(
+        'flow.page.list',
+        { projectId, search: url.searchParams.get('q') ?? '' },
+        url,
+        req,
+      )) as AnyRow[]
+      return adminPage(ctx, url, req, {
+        title: String(project.name ?? ''),
+        translate: false,
+        active: endpoint,
+        body: (t, frame) =>
+          pagesScreen(t, frame, String(project.name ?? ''), endpoint, pages, pageFields(t, pages), errors),
+      })
+    },
+
+  /**
+   * Every document, across projects — the counterpart of `/admin/flow/issues`,
+   * and the base the document endpoints above hang off.
+   */
+  '/admin/flow/pages': (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const pages = (await ctx.call(
+        'flow.page.list',
+        { search: url.searchParams.get('q') ?? '' },
+        url,
+        req,
+      )) as AnyRow[]
+      // The project each page belongs to, batched — there is no JOIN, so the
+      // names come back in one `inArray` read rather than one call per row.
+      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const rows = pages.map((page) => ({
+        ...page,
+        projectName: named.get(String(page.projectId)) ?? '',
+      }))
+      return adminPage(ctx, url, req, {
+        title: 'flow_backend.pages.allTitle',
+        body: (t, frame) => allPagesScreen(t, frame, t('flow_backend.pages.allTitle'), rows),
+      })
+    },
+
+  /**
+   * One document: its place in the tree, its title, its Live Doc, its children.
+   */
+  '/admin/flow/pages/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = refusePost(req)
+      if (refused) return refused
+      const pageId = String(params.id)
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const endpoint = `/admin/flow/pages/${pageId}`
+      let errors: string[] = []
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
+        const current = held.value
+        if (!current) return text('not found', { status: 404 })
+        if (form.action === 'save') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: pageId,
+              projectId: String(current.projectId),
+              title: form.title ?? '',
+              expectedVersion: Number(form.expectedVersion ?? current.version ?? 0),
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'addChild') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: randomUUID(),
+              projectId: String(current.projectId),
+              title: form.title ?? '',
+              parentPageId: pageId,
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'move') {
+          const result = (await ctx.call(
+            'flow.page.move',
+            { id: pageId, parentPageId: form.parentPageId || null },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'archive') {
+          const result = (await ctx.call('flow.page.archive', { id: pageId }, url, req)) as AnyRow
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/projects/${String(current.projectId)}/pages`))
+          errors = errorsOf(result, _)
+        }
+      }
+      const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
+      const page = held.value
+      if (!page) return text('not found', { status: 404 })
+      const siblings = (await ctx.call(
+        'flow.page.list',
+        { projectId: String(page.projectId) },
+        url,
+        req,
+      )) as AnyRow[]
+      const editor = await ctx.joint(url, req, 'flow_backend:screen.page', {
+        docId: pageId,
+        base: '/admin/flow/pages',
+        lang: url.searchParams.get('lang') ?? '',
+      })
+      return adminPage(ctx, url, req, {
+        title: String(page.title ?? ''),
+        translate: false,
+        // The list this page belongs to, so the sidebar keeps marking the
+        // project rather than emptying out — same reason the issue detail does.
+        active: `/admin/flow/projects/${String(page.projectId)}/pages`,
+        body: (t, frame) =>
+          pageDetailScreen(
+            t,
+            frame,
+            page,
+            endpoint,
+            editor,
+            [
+              {
+                name: 'title',
+                label: t('flow_backend.pages.name'),
+                value: String(page.title ?? ''),
+                required: true,
+              },
+            ],
+            [{ name: 'title', label: t('flow_backend.pages.childName'), value: '', required: true }],
+            [parentField(t, siblings, pageId, page.parentPageId ? String(page.parentPageId) : '')],
+            errors,
+          ),
       })
     },
 

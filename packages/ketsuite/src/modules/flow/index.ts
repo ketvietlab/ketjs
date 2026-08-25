@@ -28,6 +28,8 @@ export {
   startSprint,
 } from './operations.ts'
 export type { FlowIssue, FlowResult, SaveIssueInput } from './operations.ts'
+export { archivePage, listPages, movePage, pageDetail, restorePage, savePage } from './pages.ts'
+export type { PageDetail, PageRow, SavePageInput } from './pages.ts'
 export { issueListSearch, emptyIssueListState } from './search.ts'
 export { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES, SPRINT_STATES } from './types.ts'
 export type { DependencyRelation, IssuePriority, SprintState } from './types.ts'

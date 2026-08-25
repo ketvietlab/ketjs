@@ -22,6 +22,7 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
+import { archivePage, listPages, movePage, pageDetail, restorePage, savePage } from './pages.ts'
 
 const flowReadEffects = [
   'read:flow.Project',
@@ -457,6 +458,131 @@ export const functions: Record<string, FnSpec> = {
       if (!existing) return invalid(issue('id', 'flow.error.notFound'))
       await ctx.db.update('flow.Epic', { id: args.id }, { active: false })
       return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * Every page in a project, flat — the screen assembles the tree.
+   *
+   * See listPages for why the whole project comes back at once rather than a
+   * level per request.
+   */
+  'page.list': defineFn({
+    input: { projectId: 'id?', search: 'text?', includeArchived: 'bool?', limit: 'int?' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      parentPageId: 'id?',
+      title: 'text',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      contentUpdatedAt: 'datetime?',
+      sequence: 'int',
+      active: 'bool',
+      version: 'int',
+      updatedAt: 'datetime',
+      childCount: 'int',
+    },
+    effects: ['read:flow.Page'],
+    agent: true,
+    handler: (ctx, args) =>
+      listPages(ctx, {
+        projectId: args.projectId == null ? null : String(args.projectId),
+        search: args.search == null ? null : String(args.search),
+        includeArchived: args.includeArchived === true,
+        limit: args.limit == null ? undefined : n(args.limit),
+      }),
+  }),
+
+  'page.get': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Page', 'read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => ({ value: await pageDetail(ctx, String(args.id)) }),
+  }),
+
+  'page.save': defineFn({
+    input: {
+      id: 'id',
+      projectId: 'id',
+      title: 'text',
+      parentPageId: 'id?',
+      sequence: 'int?',
+      expectedVersion: 'int?',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page', 'read:flow.Project'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      savePage(ctx, {
+        id: String(args.id),
+        projectId: String(args.projectId),
+        title: String(args.title),
+        parentPageId: args.parentPageId === undefined ? undefined : (args.parentPageId as string | null),
+        sequence: args.sequence == null ? null : n(args.sequence),
+        expectedVersion: args.expectedVersion == null ? undefined : n(args.expectedVersion),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  /**
+   * Re-parenting, as its own key.
+   *
+   * A hierarchy is only useful if it can be rearranged, and rearranging is a
+   * different right from writing: someone may be trusted to edit a page
+   * without being trusted to move a whole branch of the wiki.
+   */
+  'page.move': defineFn({
+    input: { id: 'id', parentPageId: 'id?', sequence: 'int?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      movePage(ctx, {
+        id: String(args.id),
+        parentPageId: (args.parentPageId as string | null) ?? null,
+        sequence: args.sequence == null ? null : n(args.sequence),
+      }),
+  }),
+
+  'page.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => archivePage(ctx, String(args.id)),
+  }),
+
+  'page.restore': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => restorePage(ctx, String(args.id)),
+  }),
+
+  /**
+   * Rewriting a page's document, as a permission key of its own.
+   *
+   * It grants nothing by itself — Live Doc calls it only to ask whether this
+   * caller may write, and hands back the row it returns (documents.ts). It is
+   * separate from `page.save` because writing prose and renaming a page are
+   * different rights: a reviewer may hold one without the other.
+   */
+  'page.editContent': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Page'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Page', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
 
