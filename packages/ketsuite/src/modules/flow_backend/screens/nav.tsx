@@ -23,6 +23,7 @@ const PROJECT_NAV = {
     group: 'Dự án',
     board: 'Bảng',
     issues: 'Danh sách',
+    gantt: 'Thời gian',
     epics: 'Epic',
     sprints: 'Sprint',
     settings: 'Cài đặt',
@@ -31,6 +32,7 @@ const PROJECT_NAV = {
     group: 'Project',
     board: 'Board',
     issues: 'Backlog',
+    gantt: 'Timeline',
     epics: 'Epics',
     sprints: 'Sprints',
     settings: 'Settings',
@@ -69,6 +71,7 @@ export const projectNav = (props: IslandProps): IslandView => {
       items={[
         at('board', words.board, `/admin/flow/projects/${projectId}/board`),
         at('issues', words.issues, `/admin/flow/projects/${projectId}/issues`),
+        at('gantt', words.gantt, `/admin/flow/projects/${projectId}/gantt`),
         at('epics', words.epics, `/admin/flow/projects/${projectId}/epics`),
         at('sprints', words.sprints, `/admin/flow/projects/${projectId}/sprints`),
         at('settings', words.settings, `/admin/flow/projects/${projectId}/settings`),

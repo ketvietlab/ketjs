@@ -6,6 +6,7 @@
 export { projectNav } from './nav.tsx'
 export { projectsScreen, TEMPLATE_OPTIONS } from './projects.tsx'
 export { boardScreen } from './board.tsx'
+export { ganttScreen } from './gantt.tsx'
 export { mapScreen } from './map.tsx'
 export { issuesScreen } from './issues.tsx'
 export { crossProjectScreen } from './my-work.tsx'

@@ -21,6 +21,7 @@ import {
   epicsScreen,
   issueDetailScreen,
   issuesScreen,
+  ganttScreen,
   mapScreen,
   crossProjectScreen,
   projectsScreen,
@@ -197,6 +198,16 @@ const issueFields = (
   // itself asks about.
   ...((row.fields as AnyRow[] | undefined) ?? []).map(customFieldControl),
 ]
+
+/**
+ * How many issues one chart draws.
+ *
+ * Every row is a line on screen, so this is a readability limit before it is a
+ * query one — past a few hundred bars nobody is reading a chart, they are
+ * scrolling past one. Ordered by start date, so what it does show is the
+ * beginning of the project rather than an arbitrary page of it.
+ */
+const GANTT_ROWS = 200
 
 const encoder = new TextEncoder()
 const MAX_BODY_BYTES = 2 * 1024 * 1024
@@ -1293,6 +1304,43 @@ export const routes: Record<string, RouteEntry> = {
         title: String(epic.title),
         translate: false,
         body: (_, frame) => mapScreen(_, frame, String(epic.title), map),
+      })
+    },
+
+  /**
+   * The project on a day axis.
+   *
+   * A flat list rather than a tree of dependencies — that is what the epic map
+   * next door draws, and drawing it twice in two shapes would be two answers
+   * to one question. This one answers when, and the map answers in what order.
+   */
+  '/admin/flow/projects/{id}/gantt':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const projectId = String(params.id)
+      const project = await projectOf(ctx, url, req, projectId)
+      if (!project) return text('not found', { status: 404 })
+      const found = (await ctx.call('flow.issue.list', { projectId, limit: GANTT_ROWS }, url, req)) as AnyRow
+      const rows = ((found.rows as AnyRow[]) ?? []).slice().sort((a, b) => {
+        const left = String(a.startsOn ?? '')
+        const right = String(b.startsOn ?? '')
+        return left.localeCompare(right) || String(a.title).localeCompare(String(b.title))
+      })
+      const locale = ctx.localeOf(url, req)
+      return adminPage(ctx, url, req, {
+        title: String(project.name),
+        translate: false,
+        active: `/admin/flow/projects/${projectId}/issues`,
+        body: (_, frame) =>
+          ganttScreen(
+            _,
+            frame,
+            String(project.name),
+            rows,
+            new Date().toISOString().slice(0, 10),
+            locale.startsWith('en') ? 'en-GB' : 'vi-VN',
+          ),
       })
     },
 
