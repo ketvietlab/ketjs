@@ -52,7 +52,11 @@ export const epicControl = (
     value: options.value,
     options: empty(options.epics),
     labels: relationLabels(_, _('flow_backend.relation.epics')),
-    manager: { listFunction: 'flow.epic.list', listInput: { projectId: options.projectId }, labelField: 'title' },
+    manager: {
+      listFunction: 'flow.epic.list',
+      listInput: { projectId: options.projectId },
+      labelField: 'title',
+    },
   })
 
 export const sprintControl = (

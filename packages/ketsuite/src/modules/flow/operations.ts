@@ -224,9 +224,7 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
 export async function dependenciesFor(ctx: Ctx, issueIds: readonly string[]): Promise<Row[]> {
   if (!issueIds.length) return []
   const D = ctx.table('flow.IssueDependency')
-  return ctx.db.all(
-    from(D).where(inArray(D.issueId, [...issueIds]), eq(D.relation, 'blocks')),
-  )
+  return ctx.db.all(from(D).where(inArray(D.issueId, [...issueIds]), eq(D.relation, 'blocks')))
 }
 
 export type SaveIssueInput = {
