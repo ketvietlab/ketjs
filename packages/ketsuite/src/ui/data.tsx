@@ -117,7 +117,7 @@ export const docTree = <T,>(o: {
   href: (row: T) => string
   summary?: (row: T) => string | null
   count?: (row: T) => string | null
-  /** How deep the nesting may go before it stops; guards a cycle in stored data. */
+  /** How deep the nesting may go before it stops. */
   maxDepth?: number
 }): TemplateResult => {
   const present = new Set(o.rows.map(o.id))
@@ -128,7 +128,16 @@ export const docTree = <T,>(o: {
     byParent.set(key, [...(byParent.get(key) ?? []), row])
   }
   const limit = o.maxDepth ?? 12
-  const branch = (parent: string, depth: number): TemplateResult => (
+  /**
+   * A row already open further up this branch is not opened again.
+   *
+   * Depth alone only bounds the damage: a row that is its own parent, or a pair
+   * that point at each other, would otherwise draw the same entries over and
+   * over down to the limit. Stored data should never be shaped that way — the
+   * writers that produce it refuse a cycle — but a view is the wrong place to
+   * find out that something else went wrong.
+   */
+  const branch = (parent: string, depth: number, open: readonly string[]): TemplateResult => (
     <ol data-ui={depth === 0 ? 'doc-tree' : 'doc-branch'}>
       {each(byParent.get(parent) ?? [], o.id, (row) => (
         <li>
@@ -137,14 +146,16 @@ export const docTree = <T,>(o: {
             {!!o.summary?.(row) && <span data-ui="doc-summary">{o.summary!(row)}</span>}
             {!!o.count?.(row) && <span data-ui="doc-count">{o.count!(row)}</span>}
           </a>
-          {depth < limit && (byParent.get(o.id(row)) ?? []).length > 0
-            ? branch(o.id(row), depth + 1)
+          {depth < limit &&
+          !open.includes(o.id(row)) &&
+          (byParent.get(o.id(row)) ?? []).length > 0
+            ? branch(o.id(row), depth + 1, [...open, o.id(row)])
             : null}
         </li>
       ))}
     </ol>
   )
-  return branch('', 0)
+  return branch('', 0, [])
 }
 
 export const recordList = <T,>(o: {

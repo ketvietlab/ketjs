@@ -384,3 +384,62 @@ test('flow docs: a project brief and an epic carry their own Live Doc', async ()
     await e2e.close()
   }
 })
+
+/**
+ * The state a wiki written before `sequence` meant anything is in: every page
+ * shares one value. Reordering used to nudge the pair apart by a step, which
+ * with three tied pages put the moved one below every sequence in the branch —
+ * the top of the list, not one place up. Two tied pages hid it, because there
+ * "one place up" and "the top" are the same position.
+ */
+test('flow pages: reordering a branch that shares one sequence moves one place, not to the top', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    // Written the way rows predating the ordering work are: all at one value.
+    for (const [id, title] of [['a', 'A'], ['b', 'B'], ['c', 'C']] as const) {
+      await created(call, { ...page(id, title), sequence: 10 })
+    }
+    const order = async () =>
+      (await call<Row[]>('flow.page.list', { projectId: 'proj1' })).map((row) => String(row.id))
+    assert.deepEqual(await order(), ['a', 'b', 'c'], 'tied rows fall back to title order')
+
+    await call('flow.page.reorder', { id: 'c', direction: 'up' })
+    assert.deepEqual(await order(), ['a', 'c', 'b'], 'one place, still below a')
+
+    // The branch is spread out now, so every later move is an ordinary swap.
+    const spread = await call<Row[]>('flow.page.list', { projectId: 'proj1' })
+    assert.equal(new Set(spread.map((row) => Number(row.sequence))).size, 3, 'no ties left')
+
+    await call('flow.page.reorder', { id: 'c', direction: 'up' })
+    assert.deepEqual(await order(), ['c', 'a', 'b'])
+    await call('flow.page.reorder', { id: 'c', direction: 'down' })
+    assert.deepEqual(await order(), ['a', 'c', 'b'], 'and down again returns it')
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * A page arriving in a branch it was not in joins the end of it. Keeping the
+ * sequence it held somewhere else drops it at an arbitrary point in the new
+ * branch, or ties it with whatever already holds that number.
+ */
+test('flow pages: a page moved into another branch lands at the end of it', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    const call = await seed(e2e)
+    await created(call, page('home', 'Home'))
+    await created(call, page('first', 'First', 'home'))
+    await created(call, page('second', 'Second', 'home'))
+    await created(call, page('stray', 'Stray'))
+
+    await call('flow.page.move', { id: 'stray', parentPageId: 'home' })
+    const under = (await call<Row[]>('flow.page.list', { projectId: 'proj1' }))
+      .filter((row) => row.parentPageId === 'home')
+      .map((row) => String(row.id))
+    assert.deepEqual(under, ['first', 'second', 'stray'], 'after the siblings it joined')
+  } finally {
+    await e2e.close()
+  }
+})
