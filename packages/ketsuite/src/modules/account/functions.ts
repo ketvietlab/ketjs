@@ -316,6 +316,8 @@ const slice = <T>(rows: T[], limit: unknown, offset: unknown): T[] => {
 
 const moveTypeList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String).filter((type) => MOVE_TYPES.includes(type as never)) : []
+const paymentStateList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String).filter((state) => PAYMENT_STATES.includes(state as never)) : []
 
 /** The ids of every posted move inside an optional date window. */
 async function postedMoves(ctx: Ctx, dateFrom: unknown, dateTo: unknown): Promise<Map<string, Row>> {
@@ -965,6 +967,7 @@ export const functions: Record<string, FnSpec> = {
       moveTypes: 'json?',
       state: 'text?',
       paymentState: 'text?',
+      paymentStates: 'json?',
       partnerId: 'id?',
       search: 'text?',
       dateFrom: 'datetime?',
@@ -982,6 +985,9 @@ export const functions: Record<string, FnSpec> = {
         ...(moveTypeList(args.moveTypes).length ? [inArray(M.moveType, moveTypeList(args.moveTypes))] : []),
         ...(args.state ? [eq(M.state, args.state)] : []),
         ...(args.paymentState ? [eq(M.paymentState, args.paymentState)] : []),
+        ...(paymentStateList(args.paymentStates).length
+          ? [inArray(M.paymentState, paymentStateList(args.paymentStates))]
+          : []),
         ...(args.partnerId ? [eq(M.partnerId, args.partnerId)] : []),
         ...(args.search
           ? [
@@ -1023,6 +1029,24 @@ export const functions: Record<string, FnSpec> = {
         ...(args.partnerId ? [eq(M.partnerId, args.partnerId)] : []),
       ]
       return { count: await ctx.db.count(where.length ? from(M).where(and(...where)) : from(M)) }
+    },
+  }),
+  listMoveResiduals: defineFn({
+    input: { moveIds: 'json' },
+    effects: ['read:account.MoveLine'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = Array.isArray(args.moveIds) ? [...new Set(args.moveIds.map(String).filter(Boolean))] : []
+      const totals = new Map(ids.map((id) => [id, 0]))
+      const L = ctx.table('account.MoveLine')
+      for (let at = 0; at < ids.length; at += 400) {
+        const chunk = ids.slice(at, at + 400)
+        for (const line of await ctx.db.all(from(L).where(inArray(L.moveId, chunk)))) {
+          const residual = n(line.amountResidual)
+          if (residual > 0) totals.set(String(line.moveId), (totals.get(String(line.moveId)) ?? 0) + residual)
+        }
+      }
+      return ids.map((moveId) => ({ moveId, amountResidual: String(totals.get(moveId) ?? 0) }))
     },
   }),
   listOpenItems: defineFn({
