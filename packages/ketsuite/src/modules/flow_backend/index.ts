@@ -55,5 +55,12 @@ export default defineModule({
       sequence: 10,
       needs: 'flow.project.list',
     },
+    'flow.issues': {
+      parent: 'flow',
+      label: 'flow_backend.menu.issues',
+      path: '/admin/flow/issues',
+      sequence: 20,
+      needs: 'flow.issue.list',
+    },
   },
 })
