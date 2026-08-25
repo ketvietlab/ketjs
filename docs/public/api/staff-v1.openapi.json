@@ -853,6 +853,222 @@
         "x-ket-idempotent": false
       }
     },
+    "/crm/leads/create": {
+      "post": {
+        "operationId": "staff.crm.leads.create",
+        "summary": "Create a lead or opportunity owned by the authenticated staff actor.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["lead", "opportunity"]
+                  },
+                  "partnerId": {
+                    "type": "string"
+                  },
+                  "expectedRevenue": {
+                    "type": "string",
+                    "pattern": "^\\d+(?:\\.\\d+)?$"
+                  }
+                },
+                "required": ["name", "type", "expectedRevenue"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "create"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
     "/crm/leads/{id}": {
       "get": {
         "operationId": "staff.crm.leads.get",
@@ -1103,7 +1319,15 @@
                       "properties": {
                         "outcome": {
                           "type": "string",
-                          "enum": ["transitioned", "assigned", "won"]
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
                         },
                         "lead": {
                           "type": "object",
@@ -1350,7 +1574,15 @@
                       "properties": {
                         "outcome": {
                           "type": "string",
-                          "enum": ["transitioned", "assigned", "won"]
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
                         },
                         "lead": {
                           "type": "object",
@@ -1594,7 +1826,15 @@
                       "properties": {
                         "outcome": {
                           "type": "string",
-                          "enum": ["transitioned", "assigned", "won"]
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
                         },
                         "lead": {
                           "type": "object",
@@ -1782,6 +2022,794 @@
         "x-ket-capability": {
           "key": "crm.pipeline",
           "action": "mark_won"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/crm/leads/{id}/lost": {
+      "post": {
+        "operationId": "staff.crm.leads.markLost",
+        "summary": "Move an actor-visible opportunity to the canonical lost stage.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "lostReason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["lostReason", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "mark_lost"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/crm/leads/{id}/activities": {
+      "post": {
+        "operationId": "staff.crm.leads.scheduleActivity",
+        "summary": "Schedule the next CRM activity against a current lead version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "activityTypeId": {
+                    "type": "string"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["activityTypeId", "dueDate", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "schedule_activity"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/crm/leads/{id}/activities/{activityId}/complete": {
+      "post": {
+        "operationId": "staff.crm.leads.completeActivity",
+        "summary": "Complete one pending activity owned by the actor-visible CRM record.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "activityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "completedDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "feedback": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["completedDate", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "complete_activity"
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": true
