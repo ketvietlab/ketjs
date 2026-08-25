@@ -109,7 +109,7 @@ export const frameOf = async (
     // menu is a link and the back button walks out of it.
     menuFilter: url.searchParams.get('menu')?.trim() || null,
     extras: {
-      'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active }),
+      'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active, lang }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
       'sidebar.foot': navigation ? undefined : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
       ...options.extras,

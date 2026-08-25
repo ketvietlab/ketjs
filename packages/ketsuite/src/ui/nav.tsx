@@ -124,6 +124,31 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
     </li>
   )
 
+/**
+ * A group of entries a module contributes through `backend:nav.items`.
+ *
+ * The shell draws the app list and the active app's menu; a module with
+ * navigation the menu tree cannot express — anything scoped to the record
+ * currently open, whose path is only known at request time — fills that joint
+ * instead. It gets the same rows the menu above it uses, because two sets of
+ * sidebar markup drift, and the hooks are where the stylesheet and the shell
+ * agree.
+ */
+export const navGroup = (o: { label: string; items: readonly MenuNode[] }): TemplateResult => (
+  <>
+    <p data-ui="sidebar-section-label" data-scope="app">
+      {o.label}
+    </p>
+    <ul data-ui="menu" aria-label={o.label}>
+      {each(
+        o.items,
+        (item) => item.id,
+        (item) => menuItem(item, 0),
+      )}
+    </ul>
+  </>
+)
+
 export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateResult => {
   const { menu, navItems } = options
   const app = menu.find((item) => item.active) ?? menu[0] ?? null
