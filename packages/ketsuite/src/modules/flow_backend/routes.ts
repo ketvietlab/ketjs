@@ -8,7 +8,13 @@ import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { assigneeControl, epicControl, issueControl, tagsControl } from './relation-control.ts'
+import {
+  assigneeControl,
+  epicControl,
+  issueControl,
+  mentionControl,
+  tagsControl,
+} from './relation-control.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -673,10 +679,19 @@ export const routes: Record<string, RouteEntry> = {
         } else if (action === 'comment') {
           result = (await ctx.call(
             'flow.issue.comment',
-            { id: randomUUID(), issueId, body: form.body ?? '', idempotencyKey },
+            {
+              id: randomUUID(),
+              issueId,
+              body: form.body ?? '',
+              mentionUserIds: form.mentionUserIds ? form.mentionUserIds.split(',').filter(Boolean) : [],
+              idempotencyKey,
+            },
             url,
             req,
           )) as AnyRow
+        } else if (action === 'unfollow') {
+          if (!(await readable(ctx, url, req, issueId))) return text('not found', { status: 404 })
+          result = (await ctx.call('flow.issue.unfollow', { issueId, idempotencyKey }, url, req)) as AnyRow
         } else if (action === 'addDependency') {
           result = (await ctx.call(
             'flow.issue.dependency.add',
@@ -761,6 +776,7 @@ export const routes: Record<string, RouteEntry> = {
               ]
             : [],
         }),
+        mentions: await mentionControl(ctx, url, req, _, { id: 'issue-mentions' }),
         epic: await epicControl(ctx, url, req, _, {
           id: 'issue-epic',
           value: issue.epicId ? String(issue.epicId) : null,

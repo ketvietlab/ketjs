@@ -44,6 +44,30 @@ export const assigneeControl = (
     manager: { listFunction: 'user.listUsers', descriptionField: 'login' },
   })
 
+/**
+ * Who a comment is addressed to.
+ *
+ * The same list the assignee picker uses, taking several at once. A mention is
+ * a deliberate act of naming somebody — the picker is the whole gesture, and it
+ * is why the notification can be attributed correctly and fired exactly once.
+ */
+export const mentionControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: { id: string },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: 'mentionUserIds',
+    ariaLabel: _('flow_backend.field.mentions'),
+    multiple: true,
+    values: [],
+    options: [],
+    labels: relationLabels(_, _('flow_backend.relation.users')),
+    manager: { listFunction: 'user.listUsers', descriptionField: 'login' },
+  })
+
 export const epicControl = (
   ctx: ServeContext,
   url: URL,

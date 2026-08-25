@@ -4,6 +4,7 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
   addComment,
+  stopFollowing,
   addDependency,
   assignSprint,
   closeSprint,
@@ -27,6 +28,7 @@ const flowReadEffects = [
   'read:flow.Column',
   'read:flow.IssueType',
   'read:flow.FieldDef',
+  'read:mail.Follower',
   'read:flow.IssueFieldValue',
   'read:flow.Epic',
   'read:flow.Sprint',
@@ -704,9 +706,17 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'issue.comment': defineFn({
-    input: { id: 'id', issueId: 'id', body: 'text', kind: 'text?', idempotencyKey: 'text' },
+    input: {
+      id: 'id',
+      issueId: 'id',
+      body: 'text',
+      kind: 'text?',
+      /** Users this comment is addressed to, beyond whoever already follows. */
+      mentionUserIds: 'json?',
+      idempotencyKey: 'text',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: [...commentEffects],
+    effects: [...commentEffects, 'read:user.User', 'write:mail.Mention'],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -715,6 +725,36 @@ export const functions: Record<string, FnSpec> = {
         issueId: String(args.issueId),
         body: String(args.body),
         kind: args.kind === 'note' ? 'note' : 'comment',
+        mentionUserIds: Array.isArray(args.mentionUserIds) ? args.mentionUserIds.map(String) : [],
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  /**
+   * Leaves an issue's thread.
+   *
+   * A separate key from commenting, because it is the opposite act: everything
+   * else in this module hands out subscriptions, and this is the only way to
+   * give one back.
+   */
+  'issue.unfollow': defineFn({
+    input: { issueId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', removed: 'int?', errors: 'json?' },
+    // `unfollowThread` clears the follower's per-subtype rows too, which the
+    // effect system refused until it was said out loud — which is the point of
+    // it: a capability nobody declared is one nobody reviewed.
+    effects: [
+      'read:flow.Issue',
+      'read:user.User',
+      'read:mail.Follower',
+      'write:mail.Follower',
+      'write:mail.FollowerSubtype',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      stopFollowing(ctx, {
+        issueId: String(args.issueId),
         idempotencyKey: String(args.idempotencyKey),
       }),
   }),
