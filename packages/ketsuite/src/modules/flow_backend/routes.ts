@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { encodeListState, json, parseListState, streamed, table, text, withHeaders } from '@ketvietlab/ketjs'
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { ISSUE_PRIORITIES } from '../flow/types.ts'
+import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -120,6 +120,28 @@ const pager = (url: URL, state: ListState, rows: number, total: number) => {
   }
 }
 
+/** A control shaped by what the field says it holds. */
+const customFieldControl = (field: AnyRow): FormField => {
+  const name = `field:${String(field.code)}`
+  const label = String(field.name)
+  const value = field.value == null ? '' : String(field.value)
+  const kind = String(field.kind)
+  if (kind === 'select') {
+    const options = ((field.config as { options?: AnyRow[] } | null)?.options ?? []).map((option) => ({
+      value: String(option.code),
+      label: String(option.label ?? option.code),
+    }))
+    // A blank first entry, because a field somebody has not answered is not the
+    // same as one answered with whatever happened to be first.
+    return { name, label, type: 'select', value, options: [{ value: '', label: '\u2014' }, ...options] }
+  }
+  if (kind === 'bool') return { name, label, type: 'checkbox', value: value === 'true' }
+  if (kind === 'number') return { name, label, type: 'number', value }
+  if (kind === 'date') return { name, label, type: 'date', value }
+  if (kind === 'url') return { name, label, type: 'text', value, placeholder: 'https://' }
+  return { name, label, value }
+}
+
 const issueFields = (
   _: Translator,
   row: AnyRow,
@@ -165,6 +187,9 @@ const issueFields = (
     type: 'decimal',
     value: row.estimate != null ? String(row.estimate) : '',
   },
+  // Whatever this project added to its own issues, after everything Flow
+  // itself asks about.
+  ...((row.fields as AnyRow[] | undefined) ?? []).map(customFieldControl),
 ]
 
 const encoder = new TextEncoder()
@@ -586,6 +611,14 @@ export const routes: Record<string, RouteEntry> = {
               assigneeUserId: form.assigneeUserId || null,
               epicId: form.epicId || null,
               typeId: form.typeId || null,
+              // The form names a custom field `field:<code>`, so the posted
+              // keys say which definition each answer belongs to without the
+              // route having to load them first.
+              fields: Object.fromEntries(
+                Object.entries(form)
+                  .filter(([key]) => key.startsWith('field:'))
+                  .map(([key, value]) => [key.slice('field:'.length), value]),
+              ),
               tagIds: form.tagIds ? form.tagIds.split(',').filter(Boolean) : [],
               dueDate: form.dueDate || null,
               estimate: form.estimate || undefined,
@@ -1302,6 +1335,7 @@ export const routes: Record<string, RouteEntry> = {
       // tag name reported above the columns form reads as a broken column.
       let columnErrors: string[] = []
       let typeErrors: string[] = []
+      let fieldErrors: string[] = []
       let tagErrors: string[] = []
       const endpoint = `/admin/flow/projects/${projectId}/settings`
       if (req.method === 'POST') {
@@ -1340,6 +1374,36 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           typeErrors = errorsOf(result, _)
+        } else if (form.action === 'archiveField') {
+          const archived = (await ctx.call('flow.field.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          if (archived.ok) return seeOther(inLocale(url, endpoint))
+          fieldErrors = errorsOf(archived, _)
+        } else if (form.action === 'saveField') {
+          // Options arrive as one line of text, the same way the project
+          // wizard takes custom column names: a list edited as a unit.
+          const labels = (form.options ?? '')
+            .split(',')
+            .map((label) => label.trim())
+            .filter(Boolean)
+          const result = (await ctx.call(
+            'flow.field.save',
+            {
+              id: form.id || randomUUID(),
+              projectId,
+              code: form.code || slugify(form.name ?? ''),
+              name: form.name ?? '',
+              kind: form.kind || 'text',
+              config: labels.length
+                ? { options: labels.map((label) => ({ code: slugify(label), label })) }
+                : null,
+              sequence: Number(form.sequence ?? 10),
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          fieldErrors = errorsOf(result, _)
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
@@ -1374,16 +1438,19 @@ export const routes: Record<string, RouteEntry> = {
           tagErrors = errorsOf(result, _)
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [columns, types, tags] = await Promise.all([
+      const [columns, types, fields, tags] = await Promise.all([
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.issueType.list', { projectId }, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.field.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.tag.list', {}, url, req) as Promise<AnyRow[]>,
       ])
       const editColumn = url.searchParams.get('editColumnId')
       const editType = url.searchParams.get('editTypeId')
+      const editField = url.searchParams.get('editFieldId')
       const editTag = url.searchParams.get('editTagId')
       const editingColumn = editColumn ? columns.find((row) => String(row.id) === editColumn) : undefined
       const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
+      const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
       return adminPage(ctx, url, req, {
         title: String(project.name),
@@ -1448,6 +1515,42 @@ export const routes: Record<string, RouteEntry> = {
               },
             ],
             typeErrors,
+            fields,
+            editingFieldId: editingField ? String(editingField.id) : undefined,
+            fieldFields: [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(editingField?.name ?? ''),
+              },
+              { name: 'code', label: _('flow_backend.field.code'), value: String(editingField?.code ?? '') },
+              {
+                name: 'kind',
+                label: _('flow_backend.field.kind'),
+                type: 'select',
+                value: String(editingField?.kind ?? 'text'),
+                options: FIELD_KINDS.map((kind) => ({
+                  value: kind,
+                  label: _(`flow_backend.kind.${kind}`),
+                })),
+              },
+              {
+                name: 'options',
+                label: _('flow_backend.field.options'),
+                help: _('flow_backend.field.optionsHint'),
+                value: (((editingField?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
+                  .map((option) => String(option.label ?? option.code))
+                  .join(', '),
+              },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: String(editingField?.sequence ?? 10),
+              },
+            ],
+            fieldErrors,
             tagErrors,
           }),
       })

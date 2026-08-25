@@ -3,6 +3,7 @@ import { asc, bucketEq, compileListFilter, deleteFrom, desc, eq, from, inArray }
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { ensureThread, followThread, listTimeline, postMessage } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
+import type { FieldKind } from './types.ts'
 import { emptyIssueListState, issueListSearch } from './search.ts'
 
 export type FlowIssue = { field: string; code: string; params?: Record<string, unknown> }
@@ -99,6 +100,51 @@ async function issueEpic(ctx: Ctx, epicId: unknown): Promise<Row | null | undefi
 async function issueType(ctx: Ctx, typeId: unknown): Promise<Row | null | undefined> {
   if (!typeId) return null
   return (await ctx.db.select('flow.IssueType', { id: typeId }))[0] ?? undefined
+}
+
+/** The options a `select` field offers, as codes. */
+const optionCodes = (config: unknown): string[] => {
+  const options = (config as { options?: Array<{ code?: unknown }> } | null)?.options
+  return Array.isArray(options) ? options.map((option) => String(option?.code ?? '')) : []
+}
+
+/**
+ * Whether a value is well-formed for the kind of field holding it.
+ *
+ * Empty always passes and clears the value: a field a team added last week is
+ * blank on every issue that already existed, and refusing to save those until
+ * somebody fills it in would make adding a field an act of vandalism.
+ */
+export function fieldValueError(field: Row, raw: unknown): FlowIssue | null {
+  const value = String(raw ?? '').trim()
+  if (!value) return null
+  const kind = String(field.kind) as FieldKind
+  const bad = (code: string) => issue(`field:${String(field.code)}`, code)
+  if (kind === 'number' && !Number.isFinite(Number(value))) return bad('flow.error.fieldNumber')
+  if (kind === 'date' && Number.isNaN(Date.parse(value))) return bad('flow.error.fieldDate')
+  if (kind === 'bool' && value !== 'true' && value !== 'false') return bad('flow.error.fieldBool')
+  // http/https only, the same rule the editor applies to a link it renders:
+  // this one ends up in an href on somebody else's screen too.
+  if (kind === 'url' && !/^https?:\/\//i.test(value)) return bad('flow.error.fieldUrl')
+  if (kind === 'select' && !optionCodes(field.config).includes(value)) return bad('flow.error.fieldOption')
+  return null
+}
+
+/**
+ * The custom fields of one project, by id and by code.
+ *
+ * Callers name a field either way — a screen posts ids, an agent writing
+ * `{ environment: 'production' }` names codes — and both have to land on the
+ * same definition.
+ */
+async function fieldsOfProject(ctx: Ctx, projectId: unknown): Promise<Map<string, Row>> {
+  const defs = await ctx.db.select('flow.FieldDef', { projectId, active: true })
+  const by = new Map<string, Row>()
+  for (const def of defs) {
+    by.set(String(def.id), def)
+    by.set(String(def.code), def)
+  }
+  return by
 }
 
 /**
@@ -351,12 +397,24 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
     ? await ctx.db.all(from(ctx.table('flow.Issue')).where(inArray(ctx.table('flow.Issue').id, relatedIds)))
     : []
   const titleOf = new Map(relatedRows.map((row) => [String(row.id), String(row.title)]))
+  // Every field this project defines, each carrying whatever this issue holds
+  // for it — the definitions, not just the answers, because a field nobody has
+  // filled in still has to appear on the form for anyone to fill it in.
+  const [defs, held] = await Promise.all([
+    ctx.db.select('flow.FieldDef', { projectId: row.projectId, active: true }),
+    ctx.db.select('flow.IssueFieldValue', { issueId: id }),
+  ])
+  const answerOf = new Map(held.map((entry) => [String(entry.fieldId), entry.value]))
+  const fields = defs
+    .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+    .map((def) => ({ ...def, value: answerOf.get(String(def.id)) ?? null }))
   const parent = row.parentIssueId
     ? ((await ctx.db.select('flow.Issue', { id: row.parentIssueId }))[0] ?? null)
     : null
   return {
     ...serialized!,
     parentTitle: parent ? String(parent.title) : null,
+    fields,
     children: await serializeIssueList(ctx, children),
     tags: tagRows,
     dependencies: outgoing.map((row) => ({
@@ -409,6 +467,8 @@ export type SaveIssueInput = {
   dueDate?: string | null
   estimate?: unknown
   tagIds?: string[]
+  /** Custom field values, keyed by field id or by field code. */
+  fields?: Record<string, unknown>
   expectedVersion?: number
   idempotencyKey: string
 }
@@ -468,6 +528,24 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
         : []
       if (tags.length !== tagIds.length) return invalid(issue('tagIds', 'flow.error.notFound'))
     }
+    // Custom field values, resolved and checked here for the same reason the
+    // tags above are: `tx` rolls back on a thrown exception, not on a returned
+    // `invalid`, so anything validated after the write below leaves a
+    // half-written issue behind and still reports failure.
+    const fieldWrites: Array<{ field: Row; value: string }> = []
+    if (input.fields) {
+      const defs = await fieldsOfProject(tx, input.projectId)
+      for (const [key, raw] of Object.entries(input.fields)) {
+        const field = defs.get(String(key))
+        // A field this project does not have, rather than one that is merely
+        // empty: naming it is a mistake worth reporting, the same as an epic
+        // from another board.
+        if (!field) return invalid(issue(`field:${key}`, 'flow.error.fieldUnknown'))
+        const error = fieldValueError(field, raw)
+        if (error) return invalid(error)
+        fieldWrites.push({ field, value: String(raw ?? '').trim() })
+      }
+    }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     // A reference the caller did not mention keeps what is stored; an
@@ -518,6 +596,28 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
       await tx.db.del(deleteFrom(IT).where(eq(IT.issueId, input.id)))
       for (const tagId of tagIds)
         await tx.db.insertIfAbsent('flow.IssueTag', { id: `${input.id}:${tagId}`, issueId: input.id, tagId })
+    }
+    // One row per issue and field, so a value is replaced rather than
+    // accumulated. Emptying one deletes the row instead of storing "": a field
+    // nobody has answered and a field answered with nothing read the same on
+    // screen, and only one of them should cost a row.
+    for (const { field, value } of fieldWrites) {
+      const id = `${input.id}:${String(field.id)}`
+      if (!value) {
+        const V = tx.table('flow.IssueFieldValue')
+        await tx.db.del(deleteFrom(V).where(eq(V.id, id)))
+        continue
+      }
+      // insertIfAbsent then update, rather than branching on whether the row
+      // exists: `db.update` answers with a result object either way, so there
+      // is nothing truthy to branch on, and the pair is correct in both cases.
+      await tx.db.insertIfAbsent('flow.IssueFieldValue', {
+        id,
+        issueId: input.id,
+        fieldId: field.id,
+        value,
+      })
+      await tx.db.update('flow.IssueFieldValue', { id }, { value })
     }
 
     // Whoever opened it, and whoever it lands on, are subscribed to its

@@ -70,6 +70,64 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * A field a project adds to its own issues: Environment, Version, Component.
+   *
+   * One mechanism instead of three hardcoded taxonomies. Each of those would
+   * have been a model, a settings screen and a column on Issue, and the fourth
+   * request would have needed a fourth. What a team wants to record about its
+   * work is not something this module can finish guessing.
+   *
+   * `config` holds what only some kinds need — the options of a `select`. It
+   * is json because those options are edited as a unit and nothing joins to
+   * them; a separate table would buy referential integrity over a list whose
+   * whole purpose is to be rewritten.
+   */
+  FieldDef: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'ref:flow.Project',
+      code: 'text',
+      name: 'text',
+      /** One of FIELD_KINDS. Says how `IssueFieldValue.value` is to be read. */
+      kind: 'text',
+      config: 'json?',
+      sequence: 'int',
+      active: 'bool',
+    },
+    indexes: {
+      code: { fields: ['companyId', 'projectId', 'code'], unique: true },
+      project: { fields: ['companyId', 'projectId', 'active', 'sequence'] },
+    },
+  },
+
+  /**
+   * What one issue holds for one of those fields.
+   *
+   * Always text, whatever the kind says, because the alternative is a column
+   * per type and a reader that has to know which one to look in — it would
+   * know that from `kind` either way, so the extra columns buy nothing.
+   *
+   * The `lookup` index is the filter path. The query builder has no JOIN, so
+   * "every issue whose Environment is Production" is answered the way this
+   * codebase answers every cross-table question: select the matching values
+   * here, then `inArray` those issue ids on the issue query.
+   */
+  IssueFieldValue: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      issueId: 'ref:flow.Issue',
+      fieldId: 'ref:flow.FieldDef',
+      value: 'text?',
+    },
+    indexes: {
+      identity: { fields: ['companyId', 'issueId', 'fieldId'], unique: true },
+      lookup: { fields: ['companyId', 'fieldId', 'value'] },
+    },
+  },
+
   Epic: {
     scope: 'company',
     fields: {

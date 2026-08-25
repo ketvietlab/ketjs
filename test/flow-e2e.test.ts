@@ -366,3 +366,141 @@ test('flow: issue.save refuses the sprint, column and parent it cannot honour', 
     await e2e.close()
   }
 })
+
+/**
+ * One mechanism instead of a model per taxonomy. Environment, Version and
+ * Component were three requests; the fourth would have been a fourth model, a
+ * fourth settings screen and a fourth column on Issue.
+ */
+test('flow: a project defines its own fields, and an issue answers them', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'p1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-fields',
+    })
+    await call('flow.column.save', {
+      values: { id: 'c1', projectId: 'p1', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-fields',
+    })
+
+    // A select needs options, and a kind has to be one nothing has to guess at:
+    // `saveIssue` branches on kind to check a value, so an unchecked kind would
+    // be a field that accepts anything.
+    const noOptions = await call<Row>('flow.field.save', {
+      id: 'f-bad',
+      projectId: 'p1',
+      code: 'env',
+      name: 'Environment',
+      kind: 'select',
+      idempotencyKey: 'field-no-options',
+    })
+    assert.equal(errorCode(noOptions), 'flow.error.fieldOptionsRequired')
+    const badKind = await call<Row>('flow.field.save', {
+      id: 'f-bad2',
+      projectId: 'p1',
+      code: 'stars',
+      name: 'Stars',
+      kind: 'rating',
+      idempotencyKey: 'field-bad-kind',
+    })
+    assert.equal(errorCode(badKind), 'flow.error.fieldKind')
+
+    await call('flow.field.save', {
+      id: 'f-env',
+      projectId: 'p1',
+      code: 'environment',
+      name: 'Environment',
+      kind: 'select',
+      config: { options: [{ code: 'production', label: 'Production' }] },
+      sequence: 10,
+      idempotencyKey: 'field-env',
+    })
+    await call('flow.field.save', {
+      id: 'f-count',
+      projectId: 'p1',
+      code: 'affected',
+      name: 'Affected users',
+      kind: 'number',
+      sequence: 20,
+      idempotencyKey: 'field-count',
+    })
+
+    const write = (id: string, fields: Record<string, unknown>, key: string) =>
+      call<Row>('flow.issue.save', {
+        id,
+        projectId: 'p1',
+        columnId: 'c1',
+        title: 'Broken on deploy',
+        fields,
+        idempotencyKey: key,
+      })
+
+    assert.equal((await write('i1', { environment: 'production', affected: '42' }, 'field-write-1')).ok, true)
+    const held = await call<Row>('flow.issue.get', { id: 'i1' })
+    assert.deepEqual(
+      (held.fields as Row[]).map((field) => [field.code, field.value]),
+      [
+        ['environment', 'production'],
+        ['affected', '42'],
+      ],
+    )
+
+    // A value outside the options, a value that is not a number, and a field
+    // this project does not have are each refused — and none of them leaves an
+    // issue behind, because they are checked before anything is written.
+    assert.equal(
+      errorCode(await write('i2', { environment: 'moon' }, 'field-write-2')),
+      'flow.error.fieldOption',
+    )
+    assert.equal(
+      errorCode(await write('i3', { affected: 'lots' }, 'field-write-3')),
+      'flow.error.fieldNumber',
+    )
+    assert.equal(errorCode(await write('i4', { nosuch: 'x' }, 'field-write-4')), 'flow.error.fieldUnknown')
+    for (const id of ['i2', 'i3', 'i4'])
+      assert.equal(await call<Row>('flow.issue.get', { id }), null, `${id} was never written`)
+
+    // Emptying a field removes the answer rather than storing one that is blank.
+    await call('flow.issue.save', {
+      id: 'i1',
+      projectId: 'p1',
+      columnId: 'c1',
+      title: 'Broken on deploy',
+      fields: { affected: '' },
+      expectedVersion: Number((await call<Row>('flow.issue.get', { id: 'i1' })).version),
+      idempotencyKey: 'field-write-5',
+    })
+    const cleared = await call<Row>('flow.issue.get', { id: 'i1' })
+    assert.deepEqual(
+      (cleared.fields as Row[]).map((field) => [field.code, field.value]),
+      [
+        ['environment', 'production'],
+        ['affected', null],
+      ],
+    )
+
+    // Archiving a field keeps what was already recorded: the values point at
+    // the definition, nothing points back, so deleting them would be the one
+    // irreversible thing on that screen.
+    assert.equal((await call<Row>('flow.field.archive', { id: 'f-env' })).ok, true)
+    assert.equal((await call<Row>('flow.field.list', { projectId: 'p1' })).length, 1)
+  } finally {
+    await e2e.close()
+  }
+})

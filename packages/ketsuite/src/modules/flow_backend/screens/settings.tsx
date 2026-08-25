@@ -17,6 +17,9 @@ export const settingsScreen = (
     types: AnyRow[]
     typeFields: FormField[]
     editingTypeId?: string
+    fields: AnyRow[]
+    fieldFields: FormField[]
+    editingFieldId?: string
     tags: AnyRow[]
     tagFields: FormField[]
     editingTagId?: string
@@ -24,6 +27,7 @@ export const settingsScreen = (
      * columns form reads as a broken column. */
     columnErrors?: string[]
     typeErrors?: string[]
+    fieldErrors?: string[]
     tagErrors?: string[]
   },
 ): TemplateResult => (
@@ -168,6 +172,86 @@ export const settingsScreen = (
             hidden={{ action: 'saveType', id: options.editingTypeId ?? '' }}
             fields={options.typeFields}
             errors={options.typeErrors}
+            submit={_('flow_backend.action.save')}
+            submitVariant="secondary"
+          />,
+        ])}
+      />,
+      <Section
+        title={_('flow_backend.settings.fields')}
+        description={_('flow_backend.settings.fieldsHint')}
+        body={stack([
+          options.fields.length
+            ? dataTable(_, {
+                rows: options.fields,
+                id: (row) => String(row.id),
+                columns: [
+                  {
+                    key: 'sequence',
+                    label: _('flow_backend.field.sequence'),
+                    cell: (row) => String(row.sequence),
+                  },
+                  {
+                    key: 'name',
+                    label: _('flow_backend.field.name'),
+                    priority: 'primary',
+                    cell: (row) => String(row.name),
+                  },
+                  {
+                    key: 'code',
+                    label: _('flow_backend.field.code'),
+                    kind: 'identifier',
+                    cell: (row) => String(row.code),
+                  },
+                  {
+                    key: 'kind',
+                    label: _('flow_backend.field.kind'),
+                    cell: (row) => _(`flow_backend.kind.${String(row.kind)}`),
+                  },
+                  {
+                    key: 'options',
+                    label: _('flow_backend.field.options'),
+                    cell: (row) =>
+                      (((row.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
+                        .map((option) => String(option.label ?? option.code))
+                        .join(', ') || '\u2014',
+                  },
+                  {
+                    key: 'edit',
+                    label: '',
+                    align: 'end',
+                    cell: (row) =>
+                      linkButton({
+                        href: `?editFieldId=${String(row.id)}`,
+                        label: _('flow_backend.action.edit'),
+                        variant: 'tertiary',
+                        size: 'compact',
+                      }),
+                  },
+                  {
+                    key: 'archive',
+                    label: '',
+                    align: 'end',
+                    cell: (row) => (
+                      <RecordForm
+                        action={endpoint}
+                        hidden={{ action: 'archiveField', id: String(row.id) }}
+                        fields={[]}
+                        submit={_('flow_backend.action.archive')}
+                        submitVariant="destructive"
+                        submitSize="compact"
+                        layout="inline"
+                      />
+                    ),
+                  },
+                ],
+              })
+            : empty(_),
+          <RecordForm
+            action={endpoint}
+            hidden={{ action: 'saveField', id: options.editingFieldId ?? '' }}
+            fields={options.fieldFields}
+            errors={options.fieldErrors}
             submit={_('flow_backend.action.save')}
             submitVariant="secondary"
           />,

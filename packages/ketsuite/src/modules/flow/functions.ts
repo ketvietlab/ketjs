@@ -1,4 +1,5 @@
 import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
+import { FIELD_KINDS } from './types.ts'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
@@ -25,6 +26,8 @@ const flowReadEffects = [
   'read:flow.Project',
   'read:flow.Column',
   'read:flow.IssueType',
+  'read:flow.FieldDef',
+  'read:flow.IssueFieldValue',
   'read:flow.Epic',
   'read:flow.Sprint',
   'read:flow.Issue',
@@ -40,6 +43,7 @@ const issueWriteEffects = [
   ...flowReadEffects,
   'write:flow.Issue',
   'write:flow.IssueTag',
+  'write:flow.IssueFieldValue',
   'write:mail.Thread',
   // Saving an issue now subscribes its author and its assignee to the thread,
   // and writes a system entry when it changes hands — so it touches the same
@@ -276,6 +280,105 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  'field.list': defineFn({
+    input: { projectId: 'id', includeArchived: 'bool?' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      code: 'text',
+      name: 'text',
+      kind: 'text',
+      config: 'json?',
+      sequence: 'int',
+      active: 'bool',
+    },
+    effects: ['read:flow.FieldDef'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const rows = await ctx.db.select(
+        'flow.FieldDef',
+        args.includeArchived === true
+          ? { projectId: args.projectId }
+          : { projectId: args.projectId, active: true },
+      )
+      return rows.sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+    },
+  }),
+
+  /**
+   * `kind` is checked here rather than left to the changeset: it is what
+   * `saveIssue` branches on to decide whether a value is well-formed, so a
+   * kind nothing knows how to check would be a field that accepts anything.
+   */
+  'field.save': defineFn({
+    input: {
+      id: 'id',
+      projectId: 'id',
+      code: 'text',
+      name: 'text',
+      kind: 'text',
+      config: 'json?',
+      sequence: 'int?',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      const kind = String(args.kind)
+      if (!FIELD_KINDS.includes(kind as (typeof FIELD_KINDS)[number]))
+        return invalid(issue('kind', 'flow.error.fieldKind'))
+      // A select with no options is a control nobody can answer.
+      const options = (args.config as { options?: unknown[] } | null)?.options
+      if (kind === 'select' && (!Array.isArray(options) || options.length === 0))
+        return invalid(issue('config', 'flow.error.fieldOptionsRequired'))
+      const id = String(args.id)
+      const existing = (await ctx.db.select('flow.FieldDef', { id }))[0]
+      const row = {
+        id,
+        projectId: args.projectId,
+        code: String(args.code),
+        name: String(args.name),
+        kind,
+        config: args.config ?? null,
+        sequence: args.sequence == null ? (existing?.sequence ?? 10) : Number(args.sequence),
+        active: existing?.active ?? true,
+      }
+      if (existing) await ctx.db.update('flow.FieldDef', { id }, row)
+      else {
+        const inserted = await ctx.db.insertIfAbsent('flow.FieldDef', row)
+        if (!('inserted' in inserted) || !inserted.inserted)
+          return invalid(issue('code', 'flow.error.fieldCodeUnique'))
+      }
+      return { ok: true, id }
+    },
+  }),
+
+  /**
+   * Archiving a field keeps the values already recorded against it.
+   *
+   * Unlike a column or a type, nothing points *at* a field from a row anyone
+   * reads — the values point the other way. So the answers stay, unlisted, and
+   * come back if the field is ever restored. Deleting them would be the one
+   * irreversible thing on this screen.
+   */
+  'field.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('flow.FieldDef', { id: args.id }))[0]
+      if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+      await ctx.db.update('flow.FieldDef', { id: args.id }, { active: false })
+      return { ok: true, id: args.id }
+    },
+  }),
+
   'epic.list': defineFn({
     input: { projectId: 'id', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
     output: { id: 'id', projectId: 'id', title: 'text', color: 'text?', active: 'bool' },
@@ -505,6 +608,8 @@ export const functions: Record<string, FnSpec> = {
       dueDate: 'date?',
       estimate: 'decimal?',
       tagIds: 'json?',
+      /** Custom field values, keyed by field id or by field code. */
+      fields: 'json?',
       expectedVersion: 'int?',
       idempotencyKey: 'text',
     },
@@ -521,6 +626,10 @@ export const functions: Record<string, FnSpec> = {
         title: String(args.title),
         idempotencyKey: String(args.idempotencyKey),
         tagIds: Array.isArray(args.tagIds) ? args.tagIds.map(String) : undefined,
+        fields:
+          args.fields && typeof args.fields === 'object'
+            ? (args.fields as Record<string, unknown>)
+            : undefined,
       }),
   }),
 
