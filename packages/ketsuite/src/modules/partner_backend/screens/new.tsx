@@ -1,9 +1,8 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { RecordForm, RecordWorkspace, shell, Surface } from '../../../ui/index.ts'
+import { PartnerInitials, RecordForm, RecordWorkspace, shell, Surface } from '../../../ui/index.ts'
 import type { FormOption, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
-import { PartnerInitials } from '../partner-view.tsx'
 
 export const newPartnerScreen = (
   _: Translator,

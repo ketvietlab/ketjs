@@ -13,6 +13,12 @@ packages/*/dist/
 # _backend module's client/ directory.
 packages/ketsuite/src/ui/client/flow-editor.mjs
 packages/ketsuite/src/ui/client/flow-editor.mjs.map
+# Typed backend islands are authored under src/ui/client and emitted into the
+# backend asset root by tools/build-backend-client.mjs.
+packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
+packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
+packages/ketsuite/src/modules/backend/design/client/table-selection.mjs
+packages/ketsuite/src/modules/backend/design/client/table-selection.mjs.map
 coverage/
 .release/
 *.tsbuildinfo

@@ -1,9 +1,8 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { badge, code, dataTable, emptyState, shell } from '../../../ui/index.ts'
+import { badge, code, dataTable, emptyState, PartnerListLayout, shell } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
-import { PartnerListLayout } from '../partner-view.tsx'
 import type { PartnerListRow, PartnerListSummary } from './types.ts'
 
 const tableFor = (

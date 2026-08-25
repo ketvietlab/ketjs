@@ -506,6 +506,7 @@ test('ui contract: the stylesheet targets no hook nothing emits', () => {
     'packages/ketsuite/src/modules/user/login.ts',
     'packages/ketsuite/src/modules/backend/catalogue.ts',
     ...globSync('packages/ketsuite/src/**/client/*.mjs'),
+    ...globSync('packages/ketsuite/src/ui/client/*.tsx'),
   ]
   const emitted = new Set<string>([
     ...HOOKS,
