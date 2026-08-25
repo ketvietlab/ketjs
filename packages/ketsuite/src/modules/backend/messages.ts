@@ -20,6 +20,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
     'nav.pages': 'Trang',
     brand: 'KetSuite',
+    switchCompany: 'Chuyển công ty',
     'context.rootBranch': 'Chi nhánh gốc',
 
     'table.columns': 'Chọn cột',
@@ -99,6 +100,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.noMatch': 'No module or menu matches.',
     'nav.pages': 'Pages',
     brand: 'KetSuite',
+    switchCompany: 'Switch company',
     'context.rootBranch': 'Root branch',
 
     'table.columns': 'Columns',

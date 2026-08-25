@@ -12,7 +12,7 @@ const login = async (page: Page, lang: 'vi' | 'en' = 'vi') => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('product-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -53,6 +53,27 @@ test('search, pagination, columns, view switching and record navigation work', a
   await page.locator('[data-ui="kanban-title"] a').first().click()
   await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
 })
+
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const) {
+  test(`keeps the company switcher in the user menu on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/admin/product/templates?lang=vi&view=list')
+    await expect(page.locator('[data-ui="topbar"] [data-ui="context-switcher"]')).toHaveCount(0)
+    await expect(page.locator('[data-ui="viewer-company-indicator"]')).toHaveCount(0)
+    await page.locator('[data-ui="viewer-trigger"]').click()
+    const switcher = page.locator('[data-ui="viewer-context-switcher"]')
+    await expect(switcher).toBeVisible()
+    await expect(switcher).toHaveAttribute('href', /^\/admin\/context(?:\?|$)/)
+    await expect(switcher).toContainText('Chuyển công ty')
+    await page.screenshot({
+      path: join(artifacts, `company-switcher-${viewport.name}.png`),
+      fullPage: true,
+    })
+  })
+}
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
