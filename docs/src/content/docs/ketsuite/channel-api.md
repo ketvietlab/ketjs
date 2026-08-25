@@ -158,6 +158,14 @@ matching strong ETag, while ledger posting lines are represented only by a count
 invoicing remains deployment-owned. Posting, cancellation, payment collection, and their eligibility or replay
 lookups stay outside the channel until the domain supplies the complete concurrency and idempotency workflows.
 
+`mail_staff_channel` contributes the signed-in staff member's notification list, unread count, and read markers
+under the `mail.notifications` read capability. Mail owns recipient isolation: neither query nor mutation accepts
+a user, tenant, or company hint. The list includes read and unread entries by default, supports bounded page
+numbers, and can filter to unread entries. Navigation is derived on the server from an allowlist of public thread
+targets; unknown and deployment-private targets remain readable without becoming arbitrary client routes. Read
+markers require the bootstrap CSRF token, preserve an existing read timestamp on retry, and never affect another
+actor's inbox.
+
 `crm_staff_channel` contributes the pipeline list, record detail, and explicit transition, assignment, and
 mark-won commands under the mobile capability `crm.pipeline`. Every route calls CRM's audience-scoped
 functions, so a non-superuser sees or changes only records they
