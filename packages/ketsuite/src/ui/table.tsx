@@ -23,10 +23,20 @@ export type Column<R> = {
   optional?: boolean
 }
 
+export type TableSelection = {
+  formId: string
+  action: string
+  field?: string
+  hidden?: Record<string, string>
+  actions: Array<{ id: string; label: string; tone?: 'default' | 'danger' }>
+}
+
 export type DataTable<R> = {
   columns: ReadonlyArray<Column<R>>
   rows: readonly R[]
   id: (row: R) => string
+  gutter?: 'compact'
+  selection?: TableSelection
   rowHref?: (row: R) => string
   caption?: string | null
   shown?: readonly string[]
@@ -53,6 +63,10 @@ export type TableGroup<R> = {
 export const HOOKS = [
   'table-scroll',
   'table',
+  'select-col',
+  'select-cell',
+  'select-all',
+  'row-select',
   'col',
   'row',
   'row-link',
@@ -114,11 +128,21 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
   const columns = visibleColumns(table)
   const configurable = !!table.colsHref && table.columns.some((column) => column.optional)
   return (
-    <div data-ui="table-scroll">
+    <div data-ui="table-scroll" data-gutter={table.gutter ?? null}>
       <table data-ui="table">
         {!!table.caption && <caption data-ui="table-caption">{table.caption}</caption>}
         <thead>
           <tr>
+            {!!table.selection && (
+              <th data-ui="select-col">
+                <input
+                  data-ui="select-all"
+                  type="checkbox"
+                  autocomplete="off"
+                  aria-label={_('backend.table.selectAll')}
+                />
+              </th>
+            )}
             {each(
               columns,
               (column) => column.key,
@@ -156,8 +180,8 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
         </thead>
         <tbody>
           {table.groups?.length
-            ? groupRows(table, columns, configurable)
-            : rowViews(table.rows, table, columns, configurable)}
+            ? groupRows(_, table, columns, configurable)
+            : rowViews(_, table.rows, table, columns, configurable)}
         </tbody>
       </table>
     </div>
@@ -165,6 +189,7 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
 }
 
 const rowViews = <R,>(
+  _: Translator,
   rows: readonly R[],
   table: DataTable<R>,
   columns: ReadonlyArray<Column<R>>,
@@ -172,7 +197,20 @@ const rowViews = <R,>(
 ): TemplateResult => (
   <>
     {each(rows, table.id, (row) => (
-      <tr data-ui="row" data-row={table.id(row)}>
+      <tr data-ui="row" data-row={table.id(row)} data-row-href={table.rowHref ? table.rowHref(row) : null}>
+        {!!table.selection && (
+          <td data-ui="select-cell">
+            <input
+              data-ui="row-select"
+              type="checkbox"
+              name={`${table.selection.field ?? 'selected'}.${table.id(row)}`}
+              autocomplete="off"
+              value="1"
+              form={table.selection.formId}
+              aria-label={`${_('backend.table.selectRow')}: ${table.id(row)}`}
+            />
+          </td>
+        )}
         {each(
           columns,
           (column) => column.key,
@@ -201,6 +239,7 @@ const rowViews = <R,>(
 )
 
 const groupRows = <R,>(
+  _: Translator,
   table: DataTable<R>,
   columns: ReadonlyArray<Column<R>>,
   configurable: boolean,
@@ -213,7 +252,7 @@ const groupRows = <R,>(
         (group) => (
           <>
             <tr data-ui="group-row" data-depth={String(group.depth)}>
-              <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+              <td colspan={String(columns.length + (configurable ? 1 : 0) + (table.selection ? 1 : 0))}>
                 <a data-ui="group-link" href={group.href} aria-expanded={String(group.open)}>
                   <span data-ui="group-indent" style={`--group-depth:${group.depth}`} />
                   {icon(group.open ? 'chevron-down' : 'chevron-right')}
@@ -223,10 +262,10 @@ const groupRows = <R,>(
               </td>
             </tr>
             {group.open && !!group.children?.length && visit(group.children)}
-            {group.open && !!group.rows?.length && rowViews(group.rows, table, columns, configurable)}
+            {group.open && !!group.rows?.length && rowViews(_, group.rows, table, columns, configurable)}
             {group.open && group.pager && (
               <tr data-ui="group-pager">
-                <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+                <td colspan={String(columns.length + (configurable ? 1 : 0) + (table.selection ? 1 : 0))}>
                   <span>{group.pager.label}</span>
                   {group.pager.prev ? (
                     <a href={group.pager.prev} aria-label="Previous page">

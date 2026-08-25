@@ -5,15 +5,28 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import { icon } from './icons.ts'
+import type { TableSelection } from './table.tsx'
 
 export const HOOKS = [
   'chrome-lead',
   'chrome-tail',
   'chrome-create',
+  'bulk-form',
+  'bulk-actions',
+  'bulk-actions-open',
+  'bulk-actions-menu',
+  'bulk-action',
   'title',
   'chrome-search',
+  'chrome-search-query',
+  'chrome-search-menus',
   'chrome-search-icon',
   'chrome-search-input',
+  'chrome-search-toggle',
+  'chrome-search-modal',
+  'chrome-search-panel',
+  'chrome-search-actions',
+  'chrome-search-apply',
   'facet',
   'facet-label',
   'facet-remove',
@@ -63,6 +76,7 @@ export type SearchMenu = {
 
 export type ListChrome = {
   create?: { label: string; path: string } | null
+  selection?: TableSelection | null
   search?: {
     name: string
     value?: string
@@ -78,10 +92,22 @@ export type ListChrome = {
 const pagerLabel = (pager: Pager): string =>
   pager.total === 0 ? '0' : `${pager.from}-${pager.to} / ${pager.total}`
 
-export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult => {
-  const search = chrome.search!
-  return (
-    <form data-ui="chrome-search" method="get" role="search">
+const GLOBAL_FILTER_ID = 'backend-global-filter'
+type SearchConfig = NonNullable<ListChrome['search']>
+
+const searchForm = (
+  _: Translator,
+  search: SearchConfig,
+  presentation: 'inline' | 'modal',
+): TemplateResult => (
+  <form
+    data-ui="chrome-search"
+    data-presentation={presentation}
+    method="get"
+    role="search"
+    autocomplete="off"
+  >
+    <div data-ui="chrome-search-query">
       <span data-ui="chrome-search-icon">{icon('search')}</span>
       {each(
         Object.entries(search.keep ?? {}),
@@ -92,7 +118,7 @@ export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult 
               Array.isArray(value) ? value : [value],
               (item, index) => `${key}:${index}:${item}`,
               (item) => (
-                <input type="hidden" name={key} value={item} />
+                <input type="hidden" name={key} value={item} autocomplete="off" />
               ),
             )}
           </>
@@ -117,13 +143,56 @@ export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult 
         value={search.value ?? ''}
         placeholder={search.placeholder}
         aria-label={search.placeholder}
+        autocomplete="off"
       />
+    </div>
+    <div data-ui="chrome-search-menus">
       {each(
         search.menus ?? [],
         (menu) => menu.id,
         (menu) => searchMenu(menu),
       )}
-    </form>
+    </div>
+    {presentation === 'modal' && (
+      <div data-ui="chrome-search-actions">
+        <button data-ui="chrome-search-apply" type="submit">
+          {_('backend.chrome.apply')}
+        </button>
+      </div>
+    )}
+  </form>
+)
+
+export const topbarSearch = (_: Translator, chrome: ListChrome): TemplateResult => {
+  const search = chrome.search!
+  return (
+    <>
+      {searchForm(_, search, 'inline')}
+      <button
+        data-ui="chrome-search-toggle"
+        type="button"
+        aria-label={_('backend.chrome.globalFilter')}
+        aria-controls={GLOBAL_FILTER_ID}
+        aria-expanded="false"
+        title={_('backend.chrome.globalFilter')}
+      >
+        {icon('sliders-horizontal')}
+      </button>
+      <dialog
+        data-ui="chrome-search-modal"
+        id={GLOBAL_FILTER_ID}
+        aria-labelledby={`${GLOBAL_FILTER_ID}-title`}
+      >
+        <section data-ui="chrome-search-panel">
+          <header data-ui="modal-head">
+            <h2 data-ui="modal-title" id={`${GLOBAL_FILTER_ID}-title`}>
+              {_('backend.chrome.globalFilter')}
+            </h2>
+          </header>
+          {searchForm(_, search, 'modal')}
+        </section>
+      </dialog>
+    </>
   )
 }
 
@@ -176,7 +245,7 @@ const searchMenu = (menu: SearchMenu): TemplateResult => (
               ),
             )}
           </select>
-          <input name="filterValue" aria-label={menu.customFilter.valueLabel} />
+          <input name="filterValue" autocomplete="off" aria-label={menu.customFilter.valueLabel} />
           <button type="submit" name="applyFilter" value="1">
             {menu.customFilter.applyLabel}
           </button>
@@ -199,21 +268,53 @@ export const listChrome = (
   titled = true,
 ): TemplateResult => (
   <>
-    {chromeLead(title, chrome, titled)}
+    {chromeLead(_, title, chrome, titled)}
     {!!chrome.search && topbarSearch(_, chrome)}
     {chromeTail(_, chrome)}
   </>
 )
 
-const chromeLead = (title: string, chrome: ListChrome, titled: boolean): TemplateResult => (
+const chromeLead = (_: Translator, title: string, chrome: ListChrome, titled: boolean): TemplateResult => (
   <div data-ui="chrome-lead">
+    {titled && <h1 data-ui="title">{title}</h1>}
     {!!chrome.create && (
       <a data-ui="chrome-create" href={chrome.create.path}>
-        {icon('plus')}
         {chrome.create.label}
       </a>
     )}
-    {titled && <h1 data-ui="title">{title}</h1>}
+    {!!chrome.selection && (
+      <form data-ui="bulk-form" id={chrome.selection.formId} method="post" action={chrome.selection.action}>
+        {each(
+          Object.entries(chrome.selection.hidden ?? {}),
+          ([key]) => key,
+          ([key, value]) => (
+            <input type="hidden" name={key} value={value} autocomplete="off" />
+          ),
+        )}
+        <details data-ui="bulk-actions">
+          <summary data-ui="bulk-actions-open" aria-label={_('backend.chrome.more')}>
+            …
+          </summary>
+          <div data-ui="bulk-actions-menu">
+            {each(
+              chrome.selection.actions,
+              (action) => action.id,
+              (action) => (
+                <button
+                  data-ui="bulk-action"
+                  data-tone={action.tone ?? 'default'}
+                  type="submit"
+                  name="action"
+                  value={action.id}
+                >
+                  {action.label}
+                </button>
+              ),
+            )}
+          </div>
+        </details>
+      </form>
+    )}
   </div>
 )
 

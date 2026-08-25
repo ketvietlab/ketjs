@@ -332,6 +332,7 @@
   [data-ui="sidebar-search-icon"] > [data-ui="icon"],
   [data-ui="menu-section-chevron"] > [data-ui="icon"],
   [data-ui="chrome-search-icon"] > [data-ui="icon"],
+  [data-ui="chrome-search-toggle"] > [data-ui="icon"],
   [data-ui="indicator-icon"] > [data-ui="icon"],
   [data-ui="pager-step"] > [data-ui="icon"],
   [data-ui="view-kind"] > [data-ui="icon"],
@@ -343,7 +344,8 @@
 
   [data-ui="pager-step"] > [data-ui="icon"],
   [data-ui="view-kind"] > [data-ui="icon"],
-  [data-ui="col-config-open"] > [data-ui="icon"] {
+  [data-ui="col-config-open"] > [data-ui="icon"],
+  [data-ui="chrome-search-toggle"] > [data-ui="icon"] {
     inline-size: 0.875rem;
     block-size: 0.875rem;
   }
@@ -355,12 +357,6 @@
     flex-shrink: 0;
     place-items: center;
     color: var(--admin-ink-muted);
-  }
-
-  [data-ui="chrome-create"] > [data-ui="icon"] {
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
-    margin-inline-end: 0.25rem;
   }
 
   [data-ui="indicator-icon"] {
@@ -484,12 +480,80 @@
     text-decoration: none;
   }
 
+  [data-ui="bulk-form"] {
+    display: block;
+  }
+
+  [data-ui="bulk-actions"] {
+    position: relative;
+    display: none;
+  }
+
+  [data-ui="shell"]:has([data-ui="row-select"]:checked) [data-ui="bulk-actions"] {
+    display: block;
+  }
+
+  [data-ui="bulk-actions-open"] {
+    display: grid;
+    inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
+    place-items: center;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  [data-ui="bulk-actions-open"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="bulk-actions-menu"] {
+    position: absolute;
+    z-index: 40;
+    inset-block-start: calc(100% + var(--admin-gap-xs));
+    inset-inline-end: 0;
+    display: grid;
+    min-inline-size: 9rem;
+    padding: var(--admin-gap-xs);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="bulk-action"] {
+    inline-size: 100%;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  [data-ui="bulk-action"]:hover,
+  [data-ui="bulk-action"]:focus-visible {
+    background: var(--admin-surface-hover);
+  }
+
+  [data-ui="bulk-action"][data-tone="danger"] {
+    color: var(--admin-danger);
+  }
+
   [data-ui="chrome-search"] {
     display: flex;
-    inline-size: min(100%, 32rem);
+    inline-size: min(100%, 40rem);
     margin-inline: auto;
     min-inline-size: 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: var(--admin-gap-xs);
     min-block-size: var(--admin-control-height);
@@ -499,13 +563,36 @@
     background: var(--admin-surface);
   }
 
+  [data-ui="chrome-search-query"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  [data-ui="chrome-search-query"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-ui="chrome-search-menus"] {
+    display: flex;
+    min-inline-size: max-content;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
   [data-ui="chrome-search"]:focus-within {
     border-color: var(--admin-focus-border);
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
   }
 
   [data-ui="chrome-search-input"] {
-    flex: 1 1 8rem;
+    flex: 1 0 8rem;
     min-inline-size: 6rem;
     border: 0;
     background: none;
@@ -519,6 +606,7 @@
      a filter you cannot see is a list that is lying about how much it has. */
   [data-ui="facet"] {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: var(--admin-gap-xs);
     padding: 0.125rem 0.25rem 0.125rem 0.5rem;
@@ -527,6 +615,35 @@
     color: var(--admin-accent-text);
     font-size: 0.75rem;
     font-weight: 600;
+  }
+
+  [data-ui="chrome-search-toggle"],
+  [data-ui="chrome-search-modal"] {
+    display: none;
+  }
+
+  [data-ui="chrome-search-panel"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="chrome-search-actions"] {
+    display: flex;
+    justify-content: flex-end;
+    padding-block-start: var(--admin-gap);
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="chrome-search-apply"] {
+    min-block-size: var(--admin-control-height);
+    padding-inline: var(--admin-gap-md);
+    border: 1px solid transparent;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    font: inherit;
+    font-size: var(--admin-size-sm);
+    font-weight: 700;
+    cursor: pointer;
   }
 
   [data-ui="facet-remove"] {
@@ -767,6 +884,7 @@
     min-block-size: var(--admin-topbar-height);
     align-items: center;
     gap: var(--admin-gap);
+    padding-block: 5px;
     padding-inline: var(--admin-gap);
     background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
     border-block-end: 1px solid var(--admin-line);
@@ -864,7 +982,7 @@
   }
 
   [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"]))
-    [data-ui="table-scroll"] {
+    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
     border-radius: 0;
     border-block-start: 0;
     border-inline: 0;
@@ -897,6 +1015,11 @@
     border-radius: var(--admin-radius);
     background: var(--admin-surface);
     box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="table-scroll"][data-gutter="compact"] {
+    margin: 10px;
+    border-radius: 4px;
   }
 
   [data-ui="table"] {
@@ -983,6 +1106,26 @@
     text-align: start;
     vertical-align: middle;
     transition: background-color var(--admin-motion-fast);
+  }
+
+  [data-ui="row"][data-row-href] {
+    cursor: pointer;
+  }
+
+  [data-ui="select-col"],
+  [data-ui="row"] [data-ui="select-cell"] {
+    inline-size: 2.25rem;
+    padding-inline: var(--admin-gap-sm);
+    text-align: center;
+  }
+
+  [data-ui="select-all"],
+  [data-ui="row-select"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin: 0;
+    accent-color: var(--admin-accent);
+    cursor: pointer;
   }
 
   /* The first column is what you are looking for; everything else qualifies it. */
@@ -1439,6 +1582,117 @@
 
   /* ── Responsive composition ───────────────────────────────────────────── */
 
+  @media (max-width: 74.9375rem) {
+    body:has([data-ui="chrome-search-modal"][open]) {
+      overflow: hidden;
+    }
+
+    [data-ui="chrome-search"][data-presentation="inline"] {
+      display: none;
+    }
+
+    [data-ui="chrome-tail"] {
+      order: 2;
+      margin-inline-start: auto;
+    }
+
+    [data-ui="chrome-search-toggle"] {
+      display: grid;
+      inline-size: var(--admin-control-height);
+      block-size: var(--admin-control-height);
+      order: 3;
+      flex: 0 0 auto;
+      place-items: center;
+      padding: 0;
+      border: 1px solid var(--admin-line-strong);
+      border-radius: var(--admin-radius-sm);
+      background: var(--admin-surface);
+      color: var(--admin-ink);
+      cursor: pointer;
+    }
+
+    [data-ui="chrome-search-toggle"][aria-expanded="true"],
+    [data-ui="chrome-search-toggle"]:focus-visible {
+      border-color: var(--admin-focus-border);
+      box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    }
+
+    [data-ui="chrome-search-modal"] {
+      inline-size: 100%;
+      max-inline-size: none;
+      block-size: 100%;
+      max-block-size: none;
+      margin: 0;
+      padding: clamp(3rem, 10dvh, 7rem) var(--admin-gap-md) var(--admin-gap-md);
+      overflow: auto;
+      border: 0;
+      background: transparent;
+      color: var(--admin-ink);
+    }
+
+    [data-ui="chrome-search-modal"][open] {
+      display: grid;
+      align-items: start;
+      justify-items: center;
+    }
+
+    [data-ui="chrome-search-modal"]::backdrop {
+      background: color-mix(in srgb, #000 48%, transparent);
+      backdrop-filter: blur(3px);
+    }
+
+    [data-ui="chrome-search-panel"] {
+      display: grid;
+      inline-size: min(48rem, 100%);
+      grid-template-rows: auto minmax(0, 1fr);
+      border: 1px solid var(--admin-line-strong);
+      border-radius: var(--admin-radius-lg);
+      background: var(--admin-surface);
+      box-shadow: var(--admin-shadow-float);
+    }
+
+    [data-ui="chrome-search-modal"] [data-ui="modal-head"] {
+      padding: var(--admin-gap-sm) var(--admin-gap-md);
+    }
+
+    [data-ui="chrome-search"][data-presentation="modal"] {
+      display: grid;
+      inline-size: 100%;
+      min-block-size: 0;
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--admin-gap);
+      margin: 0;
+      padding: var(--admin-gap-md);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    [data-ui="chrome-search"][data-presentation="modal"]:focus-within {
+      border-color: transparent;
+      box-shadow: none;
+    }
+
+    [data-ui="chrome-search"][data-presentation="modal"] [data-ui="chrome-search-query"] {
+      min-block-size: 2.75rem;
+      padding-inline: var(--admin-gap-sm);
+      border: 1px solid var(--admin-line-strong);
+      border-radius: var(--admin-radius-sm);
+      background: var(--admin-bg);
+    }
+
+    [data-ui="chrome-search"][data-presentation="modal"] [data-ui="chrome-search-query"]:focus-within {
+      border-color: var(--admin-focus-border);
+      box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    }
+
+    [data-ui="chrome-search"][data-presentation="modal"] [data-ui="chrome-search-menus"] {
+      min-inline-size: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+  }
+
   @media (max-width: 63.9375rem) {
     [data-ui="content"] {
       padding-inline: var(--admin-gap-md);
@@ -1455,7 +1709,7 @@
 
   @media (max-width: 47.9375rem) {
     :root {
-      --admin-topbar-height: 3.25rem;
+      --admin-topbar-height: calc(3.25rem + 10px);
     }
 
     [data-ui="shell"] {
@@ -1534,7 +1788,7 @@
       position: static;
       flex-wrap: wrap;
       min-block-size: var(--admin-topbar-height);
-      padding: var(--admin-gap-sm) var(--admin-gap);
+      padding: calc(var(--admin-gap-sm) + 5px) var(--admin-gap);
     }
 
     [data-ui="chrome-lead"] {

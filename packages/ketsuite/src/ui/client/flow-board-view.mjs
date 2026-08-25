@@ -125,9 +125,9 @@ export function createFlowBoardView(runtime, props, seed = {}) {
             ${entry.dueDate ? html`<small>${entry.dueDate}</small>` : ''}
           </p>
           <form data-ui="flow-board-move" method="post" action=${`/admin/flow/projects/${entry.projectId}/board/move`}>
-            <input type="hidden" name="id" value=${entry.id}>
-            <input type="hidden" name="expectedVersion" value=${String(entry.version)}>
-            <input type="hidden" name="idempotencyKey" value=${`board:${entry.id}:${entry.version}`}>
+            <input type="hidden" name="id" value=${entry.id} autocomplete="off">
+            <input type="hidden" name="expectedVersion" value=${String(entry.version)} autocomplete="off">
+            <input type="hidden" name="idempotencyKey" value=${`board:${entry.id}:${entry.version}`} autocomplete="off">
             <select data-ui="form-control" name="columnId" aria-label=${labels.move} on:change=${(event) => move(entry, event.target.value)} disabled=${busy() === entry.id}>
               ${each(
                 initial.columns,

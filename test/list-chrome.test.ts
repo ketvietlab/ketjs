@@ -110,7 +110,7 @@ test('chrome: an empty list says nothing rather than "1-0 / 0"', () => {
   assert.match(html, /data-ui="pager-range">[\s\S]*>0</)
 })
 
-test('chrome: every control is a link or a form, so the back button needs no help', () => {
+test('chrome: navigation stays URL-driven while compact search uses an accessible modal', () => {
   const html = render({
     create: { label: 'Mới', path: '/new' },
     search: { name: 'q', value: '', placeholder: 'Tìm' },
@@ -120,9 +120,18 @@ test('chrome: every control is a link or a form, so the back button needs no hel
       { id: 'kanban', label: 'K', icon: '▦', path: '?view=kanban', active: false },
     ],
   })
-  assert.ok(!html.includes('<button'), 'no button means no handler means no client state')
   assert.ok(!html.includes('onclick'))
-  assert.match(html, /<form data-ui="chrome-search" method="get"/)
+  assert.equal((html.match(/<form data-ui="chrome-search"/g) ?? []).length, 2)
+  assert.match(html, /data-presentation="inline" method="get" role="search" autocomplete="off"/)
+  assert.match(html, /data-presentation="modal" method="get" role="search" autocomplete="off"/)
+  assert.equal((html.match(/type="search"[^>]*autocomplete="off"/g) ?? []).length, 2)
+  assert.match(
+    html,
+    /<button data-ui="chrome-search-toggle" type="button"[^>]*aria-controls="backend-global-filter"/,
+  )
+  assert.match(html, /<dialog data-ui="chrome-search-modal" id="backend-global-filter"/)
+  assert.ok(!html.includes('data-ui="chrome-search-close"'))
+  assert.match(html, /<button data-ui="chrome-search-apply" type="submit">[\s\S]*Áp dụng/)
 })
 
 test('chrome: searching keeps the rest of the URL, because a GET form replaces all of it', () => {
@@ -132,7 +141,7 @@ test('chrome: searching keeps the rest of the URL, because a GET form replaces a
   })
   assert.match(
     html,
-    /<input type="hidden" name="view" value="kanban">/,
+    /<input type="hidden" name="view" value="kanban" autocomplete="off">/,
     'without this, searching while looking at the cards throws you back to the list',
   )
 })
