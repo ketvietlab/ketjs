@@ -30,13 +30,20 @@ export default defineModule({
     'flow_backend:screen.issue': '{% island "flow.issue-editor" %}',
     'flow_backend:screen.board': '{% island "flow.board" %}',
     'flow_backend:screen.map': '{% island "flow.map" %}',
+    // The screens under a project are reachable only once a project is
+    // chosen, so they cannot be menu entries — see the island's own note.
+    'backend:nav.items': '{% island "flow.project-nav" %}',
   },
   menus: {
-    flow: {
-      label: 'flow_backend.menu.app',
-      icon: 'list',
-      path: '/admin/flow',
-      sequence: 45,
+    // A heading rather than a link, the shape every other app root uses: the
+    // entry below carries the path, and the sidebar draws it as this app's
+    // menu once the reader is inside Flow.
+    flow: { label: 'flow_backend.menu.app', icon: 'list', sequence: 45 },
+    'flow.projects': {
+      parent: 'flow',
+      label: 'flow_backend.menu.projects',
+      path: '/admin/flow/projects',
+      sequence: 10,
       needs: 'flow.project.list',
     },
   },

@@ -20,8 +20,12 @@ export const joints: Record<string, JointDef> = {
    * prop rather than something the fill works out, because working it out would
    * mean reading the URL, and a fill that reads the request is a fill that can be
    * surprised by one.
+   *
+   * `lang` for the same reason `sidebar.foot` takes one: an island is handed
+   * props and nothing else — no context, no translator — so a fill with words
+   * in it has no other way to know which language to say them in.
    */
-  'nav.items': { props: { active: 'text' }, multiple: true },
+  'nav.items': { props: { active: 'text', lang: 'text?' }, multiple: true },
   /** The far end of the topbar, before the identity strip. */
   'topbar.end': { multiple: true },
   // The foot of the sidebar: a module with a queue of anything can put its count
