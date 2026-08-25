@@ -26,7 +26,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 // rule it answers.
 import { documentHtml, issueEditorShell, presenceHtml } from '../../ui/client/flow-editor-view.mjs'
 import { BLOCK_TYPES, CONTINUES, LIST_TYPES } from './blocks.ts'
-import type { Attributes, BlockType, Delta, MarkName } from './blocks.ts'
+import type { BlockType, Delta, MarkName } from './blocks.ts'
 import { parseMarkdown } from './markdown.ts'
 import type { MarkdownBlock } from './markdown.ts'
 

@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { dataTable, Framed, linkButton, RecordForm, stack, Surface } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
-import { empty, when } from './shared.tsx'
+import { empty } from './shared.tsx'
 
 /** Column-template presets offered when creating a project — see routes.ts's COLUMN_TEMPLATES. */
 export const TEMPLATE_OPTIONS = (_: Translator) => [
