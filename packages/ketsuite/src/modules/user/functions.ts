@@ -217,7 +217,11 @@ export const functions: Record<string, FnSpec> = {
     // `search` and `limit` are what a relational picker sends on every
     // keystroke; without them the field could only ever be a plain select over
     // every user in the tenant.
-    input: { includeArchived: 'bool?', search: 'text?', limit: 'int?' },
+    // `ids` is for the caller that already knows who it needs. A page of tasks
+    // wants the names behind its handful of assigneeIds, and the search-and-limit
+    // shape a picker sends cannot answer that: it caps at five hundred, so the
+    // five hundred and first user comes back as a raw id where a name belongs.
+    input: { includeArchived: 'bool?', search: 'text?', ids: 'json?', limit: 'int?' },
     output: {
       id: 'id',
       login: 'text',
@@ -238,7 +242,10 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
+      const wanted = Array.isArray(a.ids) ? [...new Set(a.ids.map(String))] : null
+      if (wanted && !wanted.length) return []
       let q = from(U).orderBy(asc(U.login))
+      if (wanted) q = q.where(inArray(U.id, wanted))
       if (a.includeArchived !== true) q = q.where(eq(U.active, true))
       if (a.search) {
         const needle = `%${String(a.search).trim()}%`
