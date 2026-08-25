@@ -1,4 +1,4 @@
-import { defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
@@ -30,6 +30,28 @@ export const PICKING_STATES = ['draft', 'waiting', 'confirmed', 'assigned', 'don
 export const TRACKING = ['none', 'lot', 'serial'] as const
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+const n = (value: unknown): number => Number(value ?? 0)
+const companyKey = (ctx: Ctx, ...parts: unknown[]): string => [company(ctx), ...parts.map(String)].join(':')
+
+class InventoryRefused extends Error {
+  result: Row
+  constructor(result: Row) {
+    super('inventory operation refused')
+    this.result = result
+  }
+}
+
+const claimInventoryRevision = async (ctx: Ctx, template: Row, expected: unknown): Promise<boolean> => {
+  const revision = n(template.inventoryRevision)
+  if (revision !== n(expected)) return false
+  const changed = await ctx.db.compareAndSet(
+    'product.Template',
+    { id: template.id },
+    { inventoryRevision: template.inventoryRevision ?? null },
+    { inventoryRevision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
+}
 const lotKey = (lotId: unknown): string => (lotId == null ? '' : String(lotId))
 const quantId = (ctx: Ctx, productId: unknown, locationId: unknown, lotId: unknown): string =>
   `${company(ctx)}:${String(productId)}:${String(locationId)}:${lotKey(lotId) || '_'}`
@@ -196,6 +218,7 @@ export const functions: Record<string, FnSpec> = {
             templateId: args.templateId,
             isStorable: Boolean(template.isStorable),
             tracking: String(template.tracking ?? 'none'),
+            inventoryRevision: n(template.inventoryRevision),
           }
         : null
     },
@@ -216,6 +239,7 @@ export const functions: Record<string, FnSpec> = {
         templateId: String(template.id),
         isStorable: Boolean(template.isStorable),
         tracking: String(template.tracking ?? 'none'),
+        inventoryRevision: n(template.inventoryRevision),
       }))
     },
   }),
@@ -238,6 +262,261 @@ export const functions: Record<string, FnSpec> = {
         { isStorable: args.isStorable, tracking },
       )
       return { ok: true, id: args.templateId }
+    },
+  }),
+  saveInventoryProduct: defineFn({
+    input: {
+      id: 'id',
+      templateId: 'id',
+      create: 'bool?',
+      expectedRevision: 'int?',
+      name: 'text',
+      kind: 'text',
+      uomId: 'id',
+      categoryId: 'id?',
+      salePrice: 'decimal',
+      cost: 'decimal',
+      saleOk: 'bool',
+      purchaseOk: 'bool',
+      pointOfSale: 'bool',
+      tracking: 'text',
+      sku: 'text?',
+      barcode: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', templateId: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Cost',
+      'write:product.Cost',
+      'read:product.Category',
+      'read:uom.Unit',
+      'write:uom.Unit',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const name = String(args.name ?? '').trim()
+      const sku = args.sku == null || String(args.sku).trim() === '' ? null : String(args.sku).trim()
+      const barcode =
+        args.barcode == null || String(args.barcode).trim() === '' ? null : String(args.barcode).trim()
+      const kind = String(args.kind)
+      const tracking = String(args.tracking)
+      if (!name || name.length > 200) return invalid('name', 'name needs 1 to 200 characters')
+      if (sku && sku.length > 100) return invalid('sku', 'SKU cannot exceed 100 characters')
+      if (barcode && barcode.length > 100) return invalid('barcode', 'barcode cannot exceed 100 characters')
+      if (!['storable', 'consumable'].includes(kind))
+        return invalid('kind', 'kind must be storable or consumable')
+      if (!TRACKING.includes(tracking as never))
+        return invalid('tracking', `tracking must be: ${TRACKING.join(', ')}`)
+      if (kind !== 'storable' && tracking !== 'none')
+        return invalid('tracking', 'a consumable product must use tracking none')
+      if (args.pointOfSale !== args.saleOk)
+        return invalid('pointOfSale', 'point of sale currently follows sales eligibility')
+      if (n(args.salePrice) < 0 || n(args.cost) < 0)
+        return invalid('salePrice', 'sale price and cost cannot be negative')
+      if (!(await ctx.db.select('uom.Unit', { id: args.uomId }))[0])
+        return invalid('uomId', 'unit of measure does not exist')
+      if (args.categoryId && !(await ctx.db.select('product.Category', { id: args.categoryId }))[0])
+        return invalid('categoryId', 'product category does not exist')
+      if (barcode) {
+        const collision = (await ctx.db.select('product.Product', { barcode }))[0]
+        if (collision && collision.id !== args.id)
+          return invalid('barcode', 'barcode is already assigned to another product')
+      }
+
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product
+            ? (await tx.db.select('product.Template', { id: product.templateId }))[0]
+            : (await tx.db.select('product.Template', { id: args.templateId }))[0]
+          if (args.create && product && template) return
+          if (args.create) {
+            if (product || template)
+              throw new InventoryRefused(invalid('id', 'product identity is already in use'))
+            await tx.db.insert('product.Template', {
+              id: args.templateId,
+              name,
+              type: 'goods',
+              categoryId: args.categoryId ?? null,
+              uomId: args.uomId,
+              description: null,
+              listPrice: args.salePrice,
+              saleOk: args.saleOk,
+              purchaseOk: args.purchaseOk,
+              active: true,
+              isStorable: kind === 'storable',
+              tracking,
+              inventoryRevision: 0,
+            })
+            await tx.db.insert('product.Product', {
+              id: args.id,
+              templateId: args.templateId,
+              defaultCode: sku,
+              barcode,
+              weight: '0',
+              volume: '0',
+              combinationKey: `manual:${String(args.id)}`,
+              active: true,
+            })
+          } else {
+            if (!product || !template)
+              throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+            if (args.expectedRevision === undefined)
+              throw new InventoryRefused(invalid('expectedRevision', 'product version is required'))
+            if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+              throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+            await tx.db.update(
+              'product.Template',
+              { id: template.id },
+              {
+                name,
+                categoryId: args.categoryId ?? null,
+                uomId: args.uomId,
+                listPrice: args.salePrice,
+                saleOk: args.saleOk,
+                purchaseOk: args.purchaseOk,
+                isStorable: kind === 'storable',
+                tracking,
+              },
+            )
+            await tx.db.update('product.Product', { id: product.id }, { defaultCode: sku, barcode })
+          }
+          const costId = companyKey(tx, args.id)
+          const existingCost = (await tx.db.select('product.Cost', { id: costId }))[0]
+          if (existingCost) await tx.db.update('product.Cost', { id: costId }, { standardPrice: args.cost })
+          else
+            await tx.db.insert('product.Cost', {
+              id: costId,
+              productId: args.id,
+              standardPrice: args.cost,
+            })
+          await tx.db.update('uom.Unit', { id: args.uomId }, { locked: true })
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      const product = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+      return {
+        ok: true,
+        id: args.id,
+        templateId: template?.id ?? args.templateId,
+        revision: n(template?.inventoryRevision),
+      }
+    },
+  }),
+  setInventoryProductActive: defineFn({
+    input: { id: 'id', active: 'bool', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product && (await tx.db.select('product.Template', { id: product.templateId }))[0]
+          if (!product || !template)
+            throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+          if (Boolean(product.active) === args.active && Boolean(template.active) === args.active)
+            throw new InventoryRefused(invalid('active', 'inventory product is already in that state'))
+          if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+            throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+          await tx.db.update('product.Template', { id: template.id }, { active: args.active })
+          for (const variant of await tx.db.select('product.Product', { templateId: template.id }))
+            await tx.db.update('product.Product', { id: variant.id }, { active: args.active })
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      const product = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+      return { ok: true, id: args.id, revision: n(template?.inventoryRevision) }
+    },
+  }),
+  deleteInventoryProduct: defineFn({
+    input: { id: 'id', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', deleted: 'bool?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Cost',
+      'write:product.Cost',
+      'read:product.TemplateUom',
+      'write:product.TemplateUom',
+      'read:product.ProductUom',
+      'write:product.ProductUom',
+      'read:product.TemplateAttributeLine',
+      'write:product.TemplateAttributeLine',
+      'read:product.TemplateAttributeValue',
+      'write:product.TemplateAttributeValue',
+      'read:product.ProductValue',
+      'write:product.ProductValue',
+      'read:stock.Quant',
+      'read:stock.Move',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product && (await tx.db.select('product.Template', { id: product.templateId }))[0]
+          if (!product || !template)
+            throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+          if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+            throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+          const variants = await tx.db.select('product.Product', { templateId: template.id })
+          for (const variant of variants) {
+            if ((await ours(tx, 'stock.Quant', { productId: variant.id })).length)
+              throw new InventoryRefused(invalid('id', 'a product with stock history cannot be deleted'))
+            if ((await ours(tx, 'stock.Move', { productId: variant.id })).length)
+              throw new InventoryRefused(invalid('id', 'a product with movement history cannot be deleted'))
+          }
+          const ProductValue = tx.table('product.ProductValue')
+          const ProductUom = tx.table('product.ProductUom')
+          const Cost = tx.table('product.Cost')
+          const Line = tx.table('product.TemplateAttributeLine')
+          const Value = tx.table('product.TemplateAttributeValue')
+          const TemplateUom = tx.table('product.TemplateUom')
+          const Product = tx.table('product.Product')
+          const Template = tx.table('product.Template')
+          const productIds = variants.map((variant) => String(variant.id))
+          const lines = await tx.db.select('product.TemplateAttributeLine', {
+            templateId: template.id,
+          })
+          const lineIds = lines.map((line) => String(line.id))
+          if (productIds.length) {
+            await tx.db.del(deleteFrom(ProductValue).where(inArray(ProductValue.productId, productIds)))
+            await tx.db.del(deleteFrom(ProductUom).where(inArray(ProductUom.productId, productIds)))
+            await tx.db.del(deleteFrom(Cost).where(inArray(Cost.productId, productIds)))
+          }
+          if (lineIds.length) await tx.db.del(deleteFrom(Value).where(inArray(Value.lineId, lineIds)))
+          await tx.db.del(deleteFrom(Line).where(eq(Line.templateId, String(template.id))))
+          await tx.db.del(deleteFrom(TemplateUom).where(eq(TemplateUom.templateId, String(template.id))))
+          if (productIds.length) await tx.db.del(deleteFrom(Product).where(inArray(Product.id, productIds)))
+          const deleted = await tx.db.del(deleteFrom(Template).where(eq(Template.id, String(template.id))))
+          if (deleted.changes !== 1)
+            throw new InventoryRefused(invalid('id', 'inventory product could not be deleted'))
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      return { ok: true, id: args.id, deleted: true }
     },
   }),
   listWarehouses: defineFn({
@@ -1230,6 +1509,8 @@ export const functions: Record<string, FnSpec> = {
       countedQuantity: 'decimal',
       lotId: 'id?',
       productUomId: 'id',
+      expectedQuantRevision: 'int?',
+      reason: 'text?',
     },
     output: { ok: 'bool', pickingId: 'id?', moveId: 'id?', difference: 'decimal?', errors: 'json?' },
     effects: [
@@ -1281,6 +1562,9 @@ export const functions: Record<string, FnSpec> = {
           lotKey: lotKey(args.lotId),
         })
       )[0]
+      const currentRevision = current ? n(current.version) : -1
+      if (args.expectedQuantRevision !== undefined && currentRevision !== n(args.expectedQuantRevision))
+        return invalid('expectedQuantRevision', 'stock position changed')
       const difference = counted.quantity - Number(current?.quantity ?? 0)
       if (Math.abs(difference) < 1e-12) return { ok: true, moveId: args.id, difference: '0' }
       // Counting below what is reserved is a real thing to want to say — the shelf
@@ -1299,73 +1583,114 @@ export const functions: Record<string, FnSpec> = {
       const destination = incoming ? args.locationId : args.inventoryLocationId
       const pickingTypeId = `${String(args.inventoryLocationId)}:adjustment`
       const pickingId = `${String(args.id)}:picking`
-      await ctx.tx(async (tx) => {
-        await mutateQuant(tx, {
-          productId: args.productId,
-          locationId: source,
-          lotId: args.lotId,
-          quantity: -Math.abs(difference),
-          reserved: 0,
+      try {
+        await ctx.tx(async (tx) => {
+          if (args.expectedQuantRevision !== undefined) {
+            const live = (
+              await ours(tx, 'stock.Quant', {
+                productId: args.productId,
+                locationId: args.locationId,
+                lotKey: lotKey(args.lotId),
+              })
+            )[0]
+            if (currentRevision === -1) {
+              if (live) throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+              const inserted = await tx.db.insertIfAbsent('stock.Quant', {
+                id: quantId(tx, args.productId, args.locationId, args.lotId),
+                productId: args.productId,
+                locationId: args.locationId,
+                lotId: args.lotId ?? null,
+                lotKey: lotKey(args.lotId),
+                quantity: '0',
+                reservedQuantity: '0',
+                inDate: new Date().toISOString(),
+                version: 0,
+              })
+              if (!('dryRun' in inserted) && !inserted.inserted)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+            } else {
+              if (!live)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+              const claimed = await tx.db.compareAndSet(
+                'stock.Quant',
+                { id: live.id },
+                { version: currentRevision },
+                { version: currentRevision + 1 },
+              )
+              if (!('dryRun' in claimed) && !claimed.matched)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+            }
+          }
+          await mutateQuant(tx, {
+            productId: args.productId,
+            locationId: source,
+            lotId: args.lotId,
+            quantity: -Math.abs(difference),
+            reserved: 0,
+          })
+          await mutateQuant(tx, {
+            productId: args.productId,
+            locationId: destination,
+            lotId: args.lotId,
+            quantity: Math.abs(difference),
+            reserved: 0,
+          })
+          await tx.db.insertIfAbsent('stock.PickingType', {
+            id: pickingTypeId,
+            name: 'Inventory Adjustments',
+            code: 'internal',
+            warehouseId: null,
+            defaultLocationSrcId: args.inventoryLocationId,
+            defaultLocationDestId: args.locationId,
+            createBackorder: 'never',
+            active: true,
+          })
+          await tx.db.insertIfAbsent('stock.Picking', {
+            id: pickingId,
+            name: `Inventory ${String(args.id)}`,
+            pickingTypeId,
+            locationId: source,
+            locationDestId: destination,
+            moveType: 'direct',
+            state: 'done',
+            backorderId: null,
+            scheduledDate: new Date().toISOString(),
+            dateDone: new Date().toISOString(),
+          })
+          await tx.db.insertIfAbsent('stock.Move', {
+            id: args.id,
+            name: String(args.reason ?? 'Inventory adjustment'),
+            pickingId,
+            productId: args.productId,
+            productUomId: counted.uomId,
+            productUomQty: String(Math.abs(difference)),
+            quantity: String(Math.abs(difference)),
+            locationId: source,
+            locationDestId: destination,
+            state: 'done',
+            picked: true,
+            procureMethod: 'make_to_stock',
+            ruleId: null,
+            origin: 'inventory',
+          })
+          await tx.db.insertIfAbsent('stock.MoveLine', {
+            id: `${args.id}:line`,
+            moveId: args.id,
+            pickingId,
+            productId: args.productId,
+            productUomId: counted.uomId,
+            quantity: String(Math.abs(difference)),
+            quantityProductUom: String(Math.abs(difference)),
+            locationId: source,
+            locationDestId: destination,
+            lotId: args.lotId ?? null,
+            picked: true,
+          })
         })
-        await mutateQuant(tx, {
-          productId: args.productId,
-          locationId: destination,
-          lotId: args.lotId,
-          quantity: Math.abs(difference),
-          reserved: 0,
-        })
-        await tx.db.insertIfAbsent('stock.PickingType', {
-          id: pickingTypeId,
-          name: 'Inventory Adjustments',
-          code: 'internal',
-          warehouseId: null,
-          defaultLocationSrcId: args.inventoryLocationId,
-          defaultLocationDestId: args.locationId,
-          createBackorder: 'never',
-          active: true,
-        })
-        await tx.db.insertIfAbsent('stock.Picking', {
-          id: pickingId,
-          name: `Inventory ${String(args.id)}`,
-          pickingTypeId,
-          locationId: source,
-          locationDestId: destination,
-          moveType: 'direct',
-          state: 'done',
-          backorderId: null,
-          scheduledDate: new Date().toISOString(),
-          dateDone: new Date().toISOString(),
-        })
-        await tx.db.insertIfAbsent('stock.Move', {
-          id: args.id,
-          name: 'Inventory adjustment',
-          pickingId,
-          productId: args.productId,
-          productUomId: counted.uomId,
-          productUomQty: String(Math.abs(difference)),
-          quantity: String(Math.abs(difference)),
-          locationId: source,
-          locationDestId: destination,
-          state: 'done',
-          picked: true,
-          procureMethod: 'make_to_stock',
-          ruleId: null,
-          origin: 'inventory',
-        })
-        await tx.db.insertIfAbsent('stock.MoveLine', {
-          id: `${args.id}:line`,
-          moveId: args.id,
-          pickingId,
-          productId: args.productId,
-          productUomId: counted.uomId,
-          quantity: String(Math.abs(difference)),
-          quantityProductUom: String(Math.abs(difference)),
-          locationId: source,
-          locationDestId: destination,
-          lotId: args.lotId ?? null,
-          picked: true,
-        })
-      })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
       return { ok: true, pickingId, moveId: args.id, difference: String(difference) }
     },
   }),
