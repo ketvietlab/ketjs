@@ -39,6 +39,15 @@ export default defineModule({
     // entry below carries the path, and the sidebar draws it as this app's
     // menu once the reader is inside Flow.
     flow: { label: 'flow_backend.menu.app', icon: 'list', sequence: 45 },
+    // First, because it is the screen someone opens to find out what to do
+    // today; the project list is where you go to organise, not to work.
+    'flow.mine': {
+      parent: 'flow',
+      label: 'flow_backend.menu.mine',
+      path: '/admin/flow/mine',
+      sequence: 5,
+      needs: 'flow.issue.list',
+    },
     'flow.projects': {
       parent: 'flow',
       label: 'flow_backend.menu.projects',
