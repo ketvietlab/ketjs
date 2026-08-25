@@ -204,7 +204,18 @@ const pickingState = (value: unknown): string => {
   if (value === 'assigned') return 'ready'
   return 'waiting'
 }
-const aggregateVersion = (row: Row): string => `pkv_${sha256(JSON.stringify(row))}`
+/**
+ * The published contract calls this "an opaque strong version derived from the
+ * canonical picking aggregate", so it has to be derived from all of it. Hashing
+ * the stock row alone left out everything the projection resolves elsewhere —
+ * the product and unit names, the company — and renaming a unit of measure
+ * changed the answer while leaving the version untouched, which is the one
+ * direction a validator must never be wrong in.
+ *
+ * Hashing the built representation also pins the key order to this file rather
+ * than to whatever order a driver hands its columns back in.
+ */
+const aggregateVersion = (content: Row): string => `pkv_${sha256(JSON.stringify(content))}`
 
 type References = {
   company: Row
@@ -282,12 +293,11 @@ const lineOf = (move: Row, refs: References) => {
 const project = (row: Row, refs: References, includeLines: boolean): Row => {
   const moves = Array.isArray(row.moves) ? (row.moves as Row[]) : []
   const lines = moves.map((move) => lineOf(move, refs))
-  const version = aggregateVersion(row)
   const pickingType = (row.pickingType ?? {}) as Row
   const code = PICKING_TYPE_CODES.includes(pickingType.code as never) ? String(pickingType.code) : 'internal'
   const origins = [...new Set(moves.map((move) => String(move.origin ?? '').trim()).filter(Boolean))]
   const tracked = lines.filter((entry) => entry.tracking !== 'none')
-  const base: Row = {
+  const content: Row = {
     id: String(row.id),
     title: String(row.name),
     state: pickingState(row.state),
@@ -314,6 +324,16 @@ const project = (row: Row, refs: References, includeLines: boolean): Row => {
       supported: false,
       reason: 'MOBILE_WAREHOUSE_READ_ONLY',
     },
+    ...(row.scheduledDate ? { scheduledAt: String(row.scheduledDate) } : {}),
+    // Lines carry the resolved labels, so they belong to the hashed content even
+    // on the list, where they are not returned: a picking must not report two
+    // different versions depending on which screen asked for it.
+    lines,
+  }
+  const version = aggregateVersion(content)
+  const { lines: _hashedLines, ...withoutLines } = content
+  const base: Row = {
+    ...withoutLines,
     sourceReference: {
       type: 'stock_picking',
       id: String(row.id),
@@ -321,7 +341,6 @@ const project = (row: Row, refs: References, includeLines: boolean): Row => {
       version,
     },
     version,
-    ...(row.scheduledDate ? { scheduledAt: String(row.scheduledDate) } : {}),
   }
   return includeLines ? { ...base, lines } : base
 }

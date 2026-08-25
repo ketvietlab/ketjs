@@ -167,3 +167,44 @@ test('staff warehouse channel returns canonical transfer lines and a strong ETag
   assert.equal(missing.status, 404)
   assert.equal(((await missing.json()) as Envelope<null>).error?.code, 'stock_staff_channel.pickingNotFound')
 })
+
+test('staff warehouse version tracks every label the projection resolves', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const detailOf = async () => {
+    const response = await e2e.client.get('/api/staff/v1/warehouse/pickings/pick-a')
+    const body = (await response.json()) as Envelope<Row>
+    const line = (body.data.lines as Row[])[0] as Row
+    return {
+      version: String(body.data.version),
+      etag: response.headers.get('etag'),
+      uom: String((line.uom as Row).name),
+    }
+  }
+  const listedVersion = async () => {
+    const listed = (
+      await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/warehouse/pickings?limit=50')
+    ).data
+    return String(listed.items.find((item) => String(item.id) === 'pick-a')?.version)
+  }
+
+  const before = await detailOf()
+  // A picking is one thing. The screen it was read from must not change its
+  // version, or a client comparing a list entry against a detail sees a
+  // conflict that never happened.
+  assert.equal(await listedVersion(), before.version)
+
+  // The unit name is resolved from uom, not from the picking row. Before this
+  // was hashed, renaming it changed the answer and left the version alone —
+  // a caller holding the old ETag would never have seen the new name.
+  await e2e.fixture.call<Row>(
+    'uom.saveUnit',
+    { id: 'unit', name: 'Thùng carton', relativeFactor: '1' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const after = await detailOf()
+  assert.equal(after.uom, 'Thùng carton')
+  assert.notEqual(after.version, before.version)
+  assert.equal(after.etag, `"${after.version}"`)
+  assert.equal(await listedVersion(), after.version)
+})
