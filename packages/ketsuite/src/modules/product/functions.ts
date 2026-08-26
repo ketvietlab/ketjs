@@ -793,6 +793,16 @@ export const functions: Record<string, FnSpec> = {
           await tx.db.del(deleteFrom(Product).where(eq(Product.id, implicitDefault.id)))
         }
         await tx.db.commit(changes, existing ? { id: args.id } : undefined)
+        // The empty-combination row only represents a template that has no
+        // real variants. Creating the first manual or generated variant must
+        // retire it immediately; otherwise catalogue consumers see both the
+        // business variant and its implementation-only default until the
+        // template happens to be saved again.
+        if (String(values.combinationKey) !== '') {
+          for (const product of await tx.db.select('product.Product', { templateId: args.templateId }))
+            if (String(product.combinationKey) === '' && product.active !== false)
+              await tx.db.update('product.Product', { id: product.id }, { active: false })
+        }
       })
       return { ok: true, id: args.id }
     },

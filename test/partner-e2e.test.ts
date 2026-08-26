@@ -92,8 +92,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     ['/admin/partner/partners', /Công ty Minh An/],
     ['/admin/partner/partners?role=customer', /Khách hàng/],
     ['/admin/partner/partners/new', /Tạo đối tác/],
-    ['/admin/partner/partners/customer', /12 Nguyễn Huệ/],
-    ['/admin/partner/partners/customer/edit', /partner-identity-form/],
+    ['/admin/partner/partners/customer', /partner-identity-form/],
     ['/admin/partner/partners/customer/accounting', /Phải thu khách hàng/],
   ]
   for (const [path, expected] of pages) {
@@ -123,26 +122,19 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     )
   }
 
-  const partnerDetail = await (await e2e.client.get('/admin/partner/partners/customer?lang=vi')).text()
-  assert.match(partnerDetail, /data-ui="partner-detail-layout"/)
-  assert.match(partnerDetail, /href="\/admin\/partner\/partners\/customer\/edit\?lang=vi"/)
-  assert.doesNotMatch(partnerDetail, /id="partner-identity-form"/)
+  const partnerForm = await (await e2e.client.get('/admin/partner/partners/customer?lang=vi')).text()
+  assert.match(partnerForm, /id="partner-identity-form"/)
+  assert.match(partnerForm, /action="\/admin\/partner\/partners\/customer\?lang=vi"/)
+  assert.match(partnerForm, /12 Nguyễn Huệ/)
+  assert.doesNotMatch(partnerForm, /data-ui="partner-detail-layout"/)
+  assert.doesNotMatch(partnerForm, /href="[^"]*\/edit/)
+  assert.doesNotMatch(partnerForm, /href="[^"]*tab=(?:addresses|roles)/)
 
-  const addressTab = await (
-    await e2e.client.get('/admin/partner/partners/customer?tab=addresses&lang=vi')
-  ).text()
-  assert.match(addressTab, /data-ui="tab" data-active="true"[^>]*href="[^"]*tab=addresses/)
-  assert.match(addressTab, /id="partner-addresses"/)
-  assert.doesNotMatch(addressTab, /id="partner-roles"/)
-
-  const rolesTab = await (await e2e.client.get('/admin/partner/partners/customer?tab=roles&lang=vi')).text()
-  assert.match(rolesTab, /data-ui="tab" data-active="true"[^>]*href="[^"]*tab=roles/)
-  assert.match(rolesTab, /id="partner-roles"/)
-  assert.doesNotMatch(rolesTab, /id="partner-addresses"/)
-
-  const partnerEdit = await (await e2e.client.get('/admin/partner/partners/customer/edit?lang=vi')).text()
-  assert.match(partnerEdit, /id="partner-identity-form"/)
-  assert.match(partnerEdit, /action="\/admin\/partner\/partners\/customer\?lang=vi"/)
+  const legacyEdit = await e2e.client.get('/admin/partner/partners/customer/edit?lang=vi', {
+    redirect: 'manual',
+  })
+  assert.equal(legacyEdit.status, 303)
+  assert.equal(legacyEdit.headers.get('location'), '/admin/partner/partners/customer?lang=vi')
 
   const keptSearch = await (
     await e2e.client.get('/admin/partner/partners?role=customer&archived=1&lang=en')

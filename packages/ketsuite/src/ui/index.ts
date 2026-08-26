@@ -91,7 +91,6 @@ export { mailContractCases } from './mail.ts'
 export { activityContractCases } from './activity.ts'
 export { calendarContractCases } from './calendar.ts'
 export {
-  PartnerDetailLayout,
   PartnerFacts,
   PartnerInitials,
   PartnerListLayout,
