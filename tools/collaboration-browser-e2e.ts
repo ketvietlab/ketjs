@@ -205,6 +205,7 @@ const productListEvidenceDir = resolve('docs/public/assets/product-list')
 const partnerListEvidenceDir = resolve('docs/public/assets/partner-list')
 const partnerFormEvidenceDir = resolve('docs/public/assets/partner-form')
 const lotEvidenceDir = resolve('docs/public/assets/inventory-lot-list')
+const transferEvidenceDir = resolve('docs/public/assets/inventory-transfer-list')
 const routeEvidenceDir = resolve('docs/public/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/public/assets/inventory-route-detail')
 const replenishmentEvidenceDir = resolve('docs/public/assets/inventory-replenishment')
@@ -235,6 +236,7 @@ try {
   await mkdir(partnerListEvidenceDir, { recursive: true })
   await mkdir(partnerFormEvidenceDir, { recursive: true })
   await mkdir(lotEvidenceDir, { recursive: true })
+  await mkdir(transferEvidenceDir, { recursive: true })
   await mkdir(routeEvidenceDir, { recursive: true })
   await mkdir(routeDetailEvidenceDir, { recursive: true })
   await mkdir(replenishmentEvidenceDir, { recursive: true })
@@ -326,7 +328,12 @@ try {
     {
       name: 'transfer-list',
       path: '/admin/stock/transfers?lang=vi',
-      ready: `document.querySelector('#transfer-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'transfer-create',
+      path: '/admin/stock/transfers/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#transfer-create-form')`,
     },
     {
       name: 'warehouse-list',
@@ -499,7 +506,7 @@ try {
       ready: `document.querySelectorAll('[data-ui="content-card"]').length >= 4 && document.body.textContent.includes('Đã xử lý') && document.body.textContent.includes('Không định tuyến được') && document.body.textContent.includes('Đã bỏ qua')`,
     },
   ].filter((screen) => !onlyScreen || screen.name === onlyScreen)) {
-    if (screen.name === 'lot-detail-chatter')
+    if (['lot-detail-chatter', 'transfer-chatter'].includes(screen.name))
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1920,
         height: 1100,
@@ -1504,25 +1511,105 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             source: document.querySelector('[data-ui="table"]')?.textContent.includes('Tồn kho'),
             destination: document.querySelector('[data-ui="table"]')?.textContent.includes('Khách hàng'),
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#transfer-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            createLink: Boolean(document.querySelector('[data-ui="list-page-actions"] a[href*="/admin/stock/transfers/new"]')),
+            inlineCreate: Boolean(document.querySelector('#transfer-create-form')),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          listPage: true,
           rowsAtLeastOne: true,
           source: true,
           destination: true,
-          formRowsAtLeast28: true,
+          createLink: true,
+          inlineCreate: false,
           chatter: false,
           horizontalOverflow: false,
         },
       )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-list-vi-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/transfers?lang=vi`)
+      await waitFor(cdp, `document.querySelector('[data-ui="list-page"]')`)
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-list-vi-mobile.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+    if (screen.name === 'transfer-create') {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1280,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/transfers/new?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#transfer-create-form')`)
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const fields = [...document.querySelectorAll('#transfer-create-form [data-ui="form-field"]')]
+            return {
+              formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+              fields: fields.length,
+              controlsWiderThanLabels: fields.every((field) => {
+                const label = field.querySelector(':scope > [data-ui="form-label"]')
+                const control = field.querySelector(':scope > [data-ui="form-control"]')
+                return !label || !control || control.getBoundingClientRect().width > label.getBoundingClientRect().width
+              }),
+              chatter: Boolean(document.querySelector('[data-ui="chatter"]')),
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+            }
+          })()`,
+        ),
+        {
+          formPage: true,
+          fields: 3,
+          controlsWiderThanLabels: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-create-vi-desktop.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/transfers/new?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#transfer-create-form')`)
+      assert.equal(
+        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+        false,
+      )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-create-vi-mobile.png'))
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/transfers/new?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#transfer-create-form')`)
       await evaluate(
         cdp,
         `(() => {
@@ -3724,23 +3811,30 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
-            aside: Boolean(document.querySelector('[data-ui="record-aside"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            aside: Boolean(document.querySelector('[data-ui="form-page-aside"]')),
             editorIdle: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === true,
             formRowsAtLeast28: Array.from(document.querySelectorAll('form[data-scope="stock-transfer"] [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            collaborationNarrower: document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect().width,
+            collaborationAboutThird: (() => {
+              const aside = document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width
+              const layout = document.querySelector('[data-ui="form-page-layout"]').getBoundingClientRect().width
+              return Math.abs(aside / layout - 1 / 3) <= 0.01
+            })(),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          formPage: true,
           aside: true,
           editorIdle: true,
           formRowsAtLeast28: true,
           collaborationNarrower: true,
+          collaborationAboutThird: true,
           horizontalOverflow: false,
         },
       )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-detail-vi-desktop.png'))
       await evaluate(
         cdp,
         `(() => {
@@ -3755,7 +3849,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]') && document.querySelector('[data-ui="record-header"]')?.textContent.includes('Đã xác nhận')`,
+        `document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="positive"]') && document.querySelector('[data-ui="form-page-header"]')?.textContent.includes('Đã xác nhận')`,
       )
       assert.deepEqual(
         await evaluate(
@@ -3788,6 +3882,33 @@ try {
           `document.querySelectorAll('[data-ui="chatter-message"][data-kind="note"]').length`,
         ),
       )
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/transfers/pick-collab?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="form-page-aside"] [data-ui="chatter"][data-state="ready"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const body = document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect()
+            const aside = document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect()
+            return {
+              stacked: aside.top >= body.bottom - 1,
+              chatterTopPadding: Number.parseFloat(getComputedStyle(document.querySelector('[data-ui="form-page-aside"]')).paddingTop) > 0,
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+            }
+          })()`,
+        ),
+        { stacked: true, chatterTopPadding: true, horizontalOverflow: false },
+      )
+      if (!noArtifacts) await capture(cdp, join(transferEvidenceDir, 'transfer-detail-vi-mobile.png'))
     }
     if (screen.name === 'calendar-agenda') {
       const dateLayout = await evaluate<{
@@ -3830,7 +3951,7 @@ try {
       await waitFor(cdp, `document.body.textContent.includes('Sự kiện từ Browser E2E')`)
     }
     if (!noArtifacts && !onlyScreen) await capture(cdp, join(artifactDir, `${screen.name}.png`))
-    if (screen.name === 'lot-detail-chatter')
+    if (['lot-detail-chatter', 'transfer-chatter'].includes(screen.name))
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
         height: 1100,

@@ -574,16 +574,28 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const transfersHtml = await transfersPage.text()
-  assert.match(transfersHtml, /data-ui="record-workspace"/)
-  assert.match(transfersHtml, /id="transfer-create-form"/)
-  assert.match(transfersHtml, /data-scope="transfer-create"/)
+  assert.match(transfersHtml, /data-ui="list-page"/)
+  assert.match(transfersHtml, /href="\/admin\/stock\/transfers\/new\?lang=vi"/)
   assert.match(transfersHtml, /Phiếu chuyển kho/)
   assert.match(transfersHtml, />Từ</)
   assert.match(transfersHtml, />Đến</)
   assert.match(transfersHtml, /Loại hoạt động/)
   assert.match(transfersHtml, /Tồn kho/)
+  assert.doesNotMatch(transfersHtml, /id="transfer-create-form"|data-scope="transfer-create"/)
   assert.doesNotMatch(transfersHtml, /data-island="mail\.chatter"/)
-  await e2e.client.form<string>('/admin/stock/transfers?lang=vi', {
+
+  const transferCreatePage = await e2e.client.get('/admin/stock/transfers/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const transferCreateHtml = await transferCreatePage.text()
+  assert.equal(transferCreatePage.status, 200)
+  assert.match(transferCreateHtml, /data-ui="form-page"/)
+  assert.match(transferCreateHtml, /id="transfer-create-form"/)
+  assert.match(transferCreateHtml, /data-scope="transfer-create"/)
+  assert.match(transferCreateHtml, /name="pickingTypeId"/)
+  assert.match(transferCreateHtml, /value="wh:internal"/)
+  assert.doesNotMatch(transferCreateHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/stock/transfers/new?lang=vi', {
     name: 'WH/INT/FORM',
     pickingTypeId: 'wh:internal',
     scheduledDate: '2026-08-22T09:00',
@@ -616,8 +628,8 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const uiHtml = await uiPage.text()
-  assert.match(uiHtml, /data-ui="record-workspace"/)
-  assert.match(uiHtml, /data-ui="record-aside"/)
+  assert.match(uiHtml, /data-ui="form-page"/)
+  assert.match(uiHtml, /data-ui="form-page-aside"/)
   assert.match(uiHtml, /data-island="stock\.editor"/)
   assert.match(uiHtml, /data-scope="stock-transfer"/)
   assert.match(uiHtml, /<select[^>]*name="productId"/)

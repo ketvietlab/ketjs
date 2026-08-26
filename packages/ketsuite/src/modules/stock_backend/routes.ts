@@ -7,13 +7,18 @@ import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { forecastScreen } from './forecast-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
-import { lotCreateScreen, lotDetailScreen, lotsListScreen } from './screens/index.ts'
+import {
+  lotCreateScreen,
+  lotDetailScreen,
+  lotsListScreen,
+  transferCreateScreen,
+  transferDetailScreen,
+  transfersListScreen,
+} from './screens/index.ts'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { replenishmentScreen } from './replenishment-screen.tsx'
 import { stockRouteDetailScreen } from './stock-route-screen.tsx'
 import { stockRoutesScreen } from './stock-routes-screen.tsx'
-import { transferDetailScreen } from './transfer-screen.tsx'
-import { transfersScreen } from './transfers-screen.tsx'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -286,7 +291,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.transfers',
         body: (_, frame) =>
-          transfersScreen(
+          transfersListScreen(
             _,
             {
               rows: pickings.map((row) => ({
@@ -299,8 +304,49 @@ export const routes: Record<string, RouteEntry> = {
                 state: String(row.state),
                 href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
               })),
+              createHref: inLocale(url, '/admin/stock/transfers/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/transfers/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const here = inLocale(url, '/admin/stock/transfers/new')
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const id = randomUUID()
+        const result = await ctx.call(
+          'stock.createPicking',
+          {
+            id,
+            name: form.name || id,
+            pickingTypeId: form.pickingTypeId ?? '',
+            ...(form.scheduledDate ? { scheduledDate: form.scheduledDate } : {}),
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, `/admin/stock/transfers/${id}`))
+          : seeOther(`${here}${here.includes('?') ? '&' : '?'}invalid=1`)
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const data = await common(ctx, url, req)
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.transfer.create.title',
+        body: (_, frame) =>
+          transferCreateScreen(
+            _,
+            {
               pickingTypes: options(data.pickingTypes),
-              action: inLocale(url, '/admin/stock/transfers'),
+              action: here,
+              cancelHref: inLocale(url, '/admin/stock/transfers'),
               errors: invalid(url, _),
             },
             frame,
@@ -438,41 +484,45 @@ export const routes: Record<string, RouteEntry> = {
           detail: `${String(line.quantity)} ${String(line.productUomId)}`,
         })),
       ])
+      const screenOptions = {
+        transfer: {
+          id: String(current.id),
+          name: String(current.name),
+          state,
+          scheduledDate: dateTimeLabel(current.scheduledDate, lang),
+          pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
+        },
+        rows: moveRows,
+        products,
+        units: options(data.units),
+        lots: options(data.lots),
+        operationOptions,
+        backorderPolicy,
+        printActions: printGroup(_, printable, String(current.id), url.search),
+        action: here,
+        collaboration: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+              resModel: 'stock.Picking',
+              resId: String(current.id),
+              lang,
+            }),
+        editor: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'stock_backend:picking.editor', {
+              identity: `picking:${String(current.id)}`,
+              pickingId: String(current.id),
+              lang,
+            }),
+        errors: invalid(url, _),
+      }
+      if (savedPartial) {
+        const body = transferDetailScreen(_, screenOptions, {}, true)
+        return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
+      }
       return adminPage(ctx, url, req, {
         title: 'stock_backend.transferDetail',
-        body: async (_, frame) =>
-          transferDetailScreen(
-            _,
-            {
-              transfer: {
-                id: String(current.id),
-                name: String(current.name),
-                state,
-                scheduledDate: dateTimeLabel(current.scheduledDate, lang),
-                pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
-              },
-              rows: moveRows,
-              products,
-              units: options(data.units),
-              lots: options(data.lots),
-              operationOptions,
-              backorderPolicy,
-              printActions: printGroup(_, printable, String(current.id), url.search),
-              action: here,
-              collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
-                resModel: 'stock.Picking',
-                resId: String(current.id),
-                lang,
-              }),
-              editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
-                identity: `picking:${String(current.id)}`,
-                pickingId: String(current.id),
-                lang,
-              }),
-              errors: invalid(url, _),
-            },
-            frame,
-          ),
+        body: (_, frame) => transferDetailScreen(_, screenOptions, frame),
       })
     },
 

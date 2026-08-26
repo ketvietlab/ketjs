@@ -1,8 +1,8 @@
 import type { Translator } from '@ketvietlab/ketjs'
-import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, code, dataTable, emptyState, Framed, linkButton, stack } from '../../ui/index.ts'
-import type { Column, Frame } from '../../ui/index.ts'
-import { selectionLabel as resolveSelection } from '../backend/screen.ts'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import { badge, code, dataTable, linkButton } from '../../../ui/index.ts'
+import type { Column } from '../../../ui/index.ts'
+import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
 
 export type StockRow = {
   id: string
@@ -49,26 +49,3 @@ const columns = (_: Translator): Array<Column<StockRow>> => [
 
 export const stockRowsTable = (_: Translator, rows: StockRow[]): TemplateResult =>
   dataTable(_, { columns: columns(_), rows, id: (row) => row.id })
-
-export const stockScreen = (
-  _: Translator,
-  title: string,
-  rows: StockRow[],
-  frame: Frame,
-  additions: readonly JSXChild[] = [],
-  showEmpty = true,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={title}
-    frame={frame}
-    body={stack([
-      ...additions,
-      rows.length
-        ? stockRowsTable(_, rows)
-        : showEmpty
-          ? emptyState(_('stock_backend.empty'), _('stock_backend.emptyHint'))
-          : '',
-    ])}
-  />
-)

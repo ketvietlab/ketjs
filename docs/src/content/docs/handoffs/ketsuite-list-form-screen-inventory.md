@@ -111,8 +111,8 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
 | STOCK-01 | ready | Inventory adjustment and balances | `/admin/stock/inventory` | `inventoryScreen` | Specialized | no | — |
-| STOCK-02 | ready | Transfers | `/admin/stock/transfers` | `transfersScreen` | Split | list/new: no | — |
-| STOCK-03 | ready | Transfer detail | `/admin/stock/transfers/{id}` | `transferDetailScreen` | FormPage | `stock_mail_backend` | — |
+| STOCK-02 | done | Transfers | `/admin/stock/transfers`, `/admin/stock/transfers/new` | `screens/transfers-list.tsx`, `screens/transfer-create.tsx` | Split | list/new: no | Huygens + Kant |
+| STOCK-03 | done | Transfer detail | `/admin/stock/transfers/{id}` | `screens/transfer-detail.tsx` | FormPage | `stock_mail_backend` | Curie |
 | STOCK-04 | ready | Warehouses | `/admin/stock/warehouses` | `warehousesScreen` | Split | no | — |
 | STOCK-05 | ready | Locations | `/admin/stock/locations` | `locationsScreen` | Split | no | — |
 | STOCK-06 | ready | Operation types | `/admin/stock/picking-types` | `pickingTypesScreen` | Split | no | — |
@@ -419,9 +419,10 @@ These entries were inspected and intentionally do not receive a screen agent:
 - Archive, restore, delete, bulk, media movement, line mutation, Chatter, attachment, Live Doc transport,
   RSVP JSON, mail inbound, upload, download, CSV export and other POST/action endpoints belong to their
   parent screen owner.
-- `sale_backend/screens.tsx::{ordersScreen, policyScreen, orderDetail}` and
-  `stock_backend/screens.tsx::stockScreen` are unrouted legacy exports; remove them during their lane's
-  structural cleanup after tests prove no consumer remains.
+- `sale_backend/screens.tsx::{ordersScreen, policyScreen, orderDetail}` are unrouted legacy exports; remove
+  them during their lane's structural cleanup after tests prove no consumer remains.
+- `stock_backend/screens/stock.tsx::stockScreen` is an unrouted compatibility surface retained only by the
+  i18n catalogue; the old root `stock_backend/screens.tsx` has been removed.
 - `CONFIGURATION_TABS`, `extensionLink`, `labelOf`, `missingSetup`, `moveTitle`, `optionsOf`, `pageColumns`,
   and `stockRowsTable` are helpers or constants rather than route-level screens. They move to the owning
   lane's `screens/shared.tsx` only when more than one extracted renderer still consumes them.
@@ -480,3 +481,23 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 1 lot detail evidence](/assets/inventory-lot-list/lot-detail-browser-skill.png)
 
 ![Wave 1 lot detail mobile evidence](/assets/inventory-lot-list/lot-detail-mobile-browser-skill.png)
+
+### Wave 2 — STOCK-02 and STOCK-03
+
+- List: dedicated `ListPage`; create action routes to `/admin/stock/transfers/new`; no inline create form or
+  Chatter.
+- Create: dedicated `FormPage`; at 1280 px each control measures 264 px against a 120 px label.
+- Detail: dedicated `FormPage`; all operational forms and print actions remain intact. Chatter measures one
+  third of the 1920 px content layout, stacks below the body at 390 px, and retains 20 px top padding.
+- Partial actions return only `stock.transfer-header` and `stock.transfer-body`, preserving editor, Chatter,
+  Activity and sidebar DOM identity.
+- Structural cleanup: `stock_backend/screens.tsx`, `transfers-screen.tsx`, and `transfer-screen.tsx` were
+  replaced by leaf files plus `screens/shared.tsx` and the barrel.
+
+![Wave 2 transfer list evidence](/assets/inventory-transfer-list/transfer-list-browser-skill.png)
+
+![Wave 2 transfer create evidence](/assets/inventory-transfer-list/transfer-create-browser-skill.png)
+
+![Wave 2 transfer detail evidence](/assets/inventory-transfer-list/transfer-detail-browser-skill.png)
+
+![Wave 2 transfer detail mobile evidence](/assets/inventory-transfer-list/transfer-detail-mobile-browser-skill.png)

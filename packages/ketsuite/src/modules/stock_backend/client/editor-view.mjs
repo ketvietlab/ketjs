@@ -47,30 +47,18 @@ const errorText = async (response, fallback) => {
 
 const replaceRecordParts = (markup, props) => {
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
-  if (props.lotId) {
-    const envelope = parsed.querySelector('ket-fragments')
-    const nextHeader = parsed.querySelector('template[data-ket-slot="stock.lot-header"]')
-    const nextBody = parsed.querySelector('template[data-ket-slot="stock.lot-body"]')
-    const currentHeader = document.querySelector('[data-ket-slot="stock.lot-header"]')
-    const currentBody = document.querySelector('[data-ket-slot="stock.lot-body"]')
-    if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-      throw new Error('The refreshed lot fragment is incomplete.')
-
-    currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
-    currentBody.replaceChildren(document.importNode(nextBody.content, true))
-    if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
-    return
-  }
-  const nextHeader = parsed.querySelector('[data-ui="record-header"]')
-  const nextBody = parsed.querySelector('[data-ui="record-body"]')
-  const currentHeader = document.querySelector('[data-ui="record-header"]')
-  const currentBody = document.querySelector('[data-ui="record-body"]')
+  const prefix = props.lotId ? 'stock.lot' : 'stock.transfer'
+  const envelope = parsed.querySelector('ket-fragments')
+  const nextHeader = parsed.querySelector(`template[data-ket-slot="${prefix}-header"]`)
+  const nextBody = parsed.querySelector(`template[data-ket-slot="${prefix}-body"]`)
+  const currentHeader = document.querySelector(`[data-ket-slot="${prefix}-header"]`)
+  const currentBody = document.querySelector(`[data-ket-slot="${prefix}-body"]`)
   if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-    throw new Error('The refreshed record fragment is incomplete.')
+    throw new Error('The refreshed stock fragment is incomplete.')
 
-  currentHeader.replaceWith(document.importNode(nextHeader, true))
-  currentBody.replaceWith(document.importNode(nextBody, true))
-  if (parsed.title) document.title = parsed.title
+  currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
+  currentBody.replaceChildren(document.importNode(nextBody.content, true))
+  if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
 }
 
 const editorHostFor = (props) => {
