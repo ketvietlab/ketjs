@@ -277,6 +277,12 @@
     --admin-size-md: 1rem;
     --admin-size-lg: 1.125rem;
     --admin-size-xl: 1.5rem;
+    /* A headline amount. Between lg and xl because a total in đồng is ten digits,
+       three separators and a symbol: at the display size it does not fit a card
+       narrow enough for five of them to share a row, and it is one string that
+       must never be broken across two lines — a number continued on the next row
+       is read as a different number. */
+    --admin-size-amount: 1.375rem;
 
     /* A 4px rhythm, compressed for operational screens */
     --admin-gap-xs: 0.25rem;

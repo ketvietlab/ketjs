@@ -66,7 +66,22 @@
     background: var(--admin-card);
   }
   [data-ui="card-grid"]:has(> [data-ui="metric"]) {
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  }
+  /* A money card needs the width of the longest amount it can hold. Thirteen
+     digits and a symbol at the display size do not fit a ten-rem track, and a
+     clipped total reads as a different number.
+
+     13.5rem is the widest floor that still fits five cards across the content
+     column at 1440 — wider and the fifth drops to a row of its own, which reads
+     as a sixth category rather than as a wrap. Below that width they wrap, which
+     is the point: the floor is a minimum, not a count. */
+  [data-ui="card-grid"]:has(> [data-ui="metric"][data-tone="money"]) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
+  }
+  [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
+    font-size: var(--admin-size-amount);
+    white-space: nowrap;
   }
   [data-ui="metric-label"],
   [data-ui="metric-value"],
@@ -94,6 +109,11 @@
     [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
       font-size: var(--admin-size-lg);
       overflow-wrap: anywhere;
+    }
+    /* At the smaller size the amount fits a narrower track, so a phone keeps two
+       cards to a row instead of dropping to a column five cards long. */
+    [data-ui="card-grid"]:has(> [data-ui="metric"][data-tone="money"]) {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
     }
   }
   [data-ui="metric-detail"] {
