@@ -8,6 +8,7 @@ import {
   Button,
   DataTable,
   Field,
+  FormPage,
   HOOKS,
   ListPage,
   NavList,
@@ -105,6 +106,23 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
   assert.match(listPage, /data-ui="list-page-controls"[^>]*>[\s\S]*?Search and filters/)
   assert.match(listPage, /data-ui="list-page-status"[^>]*>[\s\S]*?24 products/)
 
+  const formPage = renderToString(
+    <FormPage
+      title="ACME Distribution"
+      description="Supplier · SUP-001"
+      status={<Badge label="Active" tone="positive" />}
+      actions={<Button label="Save" variant="primary" />}
+      body="Partner fields"
+      aside="Record facts"
+      asideLabel="Partner context"
+    />,
+  )
+  assert.match(formPage, /<section data-ui="form-page" data-has-aside="true">/)
+  assert.match(formPage, /data-ui="form-page-title-row"[\s\S]*?data-ui="form-page-actions"/)
+  assert.match(formPage, /data-ui="form-page-layout"[\s\S]*?data-ui="form-page-aside"/)
+  assert.match(formPage, /aria-label="Partner context"/)
+  assert.doesNotMatch(formPage, /data-ui="(?:form-page-back|breadcrumbs)"/)
+
   const table = renderToString(
     <DataTable
       rows={[{ id: 'one', state: 'Ready' }]}
@@ -167,6 +185,7 @@ test('design system: catalogue renders every registered specimen', () => {
   assert.match(catalogue, /Operational UI, kept honest/)
   assert.match(catalogue, /id="data-table"/)
   assert.match(catalogue, /id="list-page"/)
+  assert.match(catalogue, /id="form-page"/)
   assert.match(catalogue, /id="record-form"/)
   assert.match(catalogue, /id="modal-sheet"/)
   assert.match(catalogue, /id="app-shell"/)

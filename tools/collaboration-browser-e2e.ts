@@ -203,6 +203,7 @@ let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/public/assets/collaboration')
 const productListEvidenceDir = resolve('docs/public/assets/product-list')
 const partnerListEvidenceDir = resolve('docs/public/assets/partner-list')
+const partnerFormEvidenceDir = resolve('docs/public/assets/partner-form')
 const lotEvidenceDir = resolve('docs/public/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/public/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/public/assets/inventory-route-detail')
@@ -232,6 +233,7 @@ try {
   await mkdir(artifactDir, { recursive: true })
   await mkdir(productListEvidenceDir, { recursive: true })
   await mkdir(partnerListEvidenceDir, { recursive: true })
+  await mkdir(partnerFormEvidenceDir, { recursive: true })
   await mkdir(lotEvidenceDir, { recursive: true })
   await mkdir(routeEvidenceDir, { recursive: true })
   await mkdir(routeDetailEvidenceDir, { recursive: true })
@@ -285,6 +287,11 @@ try {
       name: 'partner-list',
       path: '/admin/partner/partners?lang=vi',
       ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 6`,
+    },
+    {
+      name: 'partner-form',
+      path: '/admin/partner/partners/directory-partner-01?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#partner-identity-form')`,
     },
     {
       name: 'product-chatter',
@@ -844,6 +851,179 @@ try {
                   join(
                     partnerListEvidenceDir,
                     `partner-list-${state.id}-${lang}-${theme}-${viewport.id}.png`,
+                  ),
+                )
+            }
+          }
+        }
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
+
+    if (screen.name === 'partner-form') {
+      const states = [
+        {
+          id: 'edit',
+          path: '/admin/partner/partners/directory-partner-01',
+          form: '#partner-identity-form',
+          aside: true,
+        },
+        {
+          id: 'create',
+          path: '/admin/partner/partners/new',
+          form: '#partner-create-form',
+          aside: false,
+        },
+      ]
+      const viewports = [
+        { id: 'wide', width: 3110, height: 900, mobile: false },
+        { id: 'desktop', width: 1440, height: 1000, mobile: false },
+        { id: 'compact-desktop', width: 1280, height: 900, mobile: false },
+        { id: 'tablet', width: 720, height: 1000, mobile: false },
+        { id: 'mobile', width: 390, height: 844, mobile: true },
+      ]
+      for (const viewport of viewports) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: viewport.width,
+          height: viewport.height,
+          deviceScaleFactor: 1,
+          mobile: viewport.mobile,
+        })
+        for (const theme of ['light', 'dark']) {
+          for (const lang of ['vi', 'en']) {
+            for (const state of states) {
+              await navigate(cdp, `${e2e.baseUrl}${state.path}?lang=${lang}`)
+              await waitFor(
+                cdp,
+                `document.querySelector('[data-ui="form-page"]') && document.querySelector(${JSON.stringify(state.form)})${state.aside ? ` && document.querySelector('[data-ui="form-page-aside"] [data-ui="chatter"][data-state="ready"]')` : ''}`,
+              )
+              await evaluate(cdp, `document.documentElement.dataset.theme = ${JSON.stringify(theme)}`)
+              const layout = await evaluate<{
+                pageContained: boolean
+                noPageOverflow: boolean
+                compactHeader: boolean
+                compactTitle: boolean
+                noHeavyIdentity: boolean
+                noBreadcrumb: boolean
+                actionVisible: boolean
+                actionInHeader: boolean
+                inlineFields: boolean
+                compactControlsWideEnough: boolean
+                asideCorrect: boolean
+                chatterReady: boolean
+                railOneThird: boolean
+                railPosition: boolean
+                rolesMergedAtTop: boolean
+                themeApplied: boolean
+              }>(
+                cdp,
+                `(() => {
+                  const page = document.querySelector('[data-ui="form-page"]')
+                  const header = page.querySelector('[data-ui="form-page-header"]')
+                  const title = page.querySelector('[data-ui="form-page-title"]')
+                  const titleRow = page.querySelector('[data-ui="form-page-title-row"]')
+                  const action = page.querySelector('[data-ui="form-page-actions"] [data-ui="action"][data-variant="primary"]')
+                  const form = document.querySelector(${JSON.stringify(state.form)})
+                  const fields = [...form.querySelectorAll('[data-ui="form-field"]:not([data-kind="checkbox"])')]
+                  const inline = fields.every((field) => {
+                    const label = field.querySelector(':scope > [data-ui="form-label"]')
+                    const control = field.querySelector(
+                      ':scope > [data-ui="form-control"], :scope > [data-ui="form-options"], :scope > ket-island'
+                    )
+                    if (!label || !control) return false
+                    const labelBox = label.getBoundingClientRect()
+                    const controlBox = control.getBoundingClientRect()
+                    return labelBox.right <= controlBox.left + 1 &&
+                      label.scrollWidth <= label.clientWidth + 1 &&
+                      controlBox.width > 80
+                  })
+                  const pageBox = page.getBoundingClientRect()
+                  const headerBox = header.getBoundingClientRect()
+                  const titleBox = title.getBoundingClientRect()
+                  const titleRowBox = titleRow.getBoundingClientRect()
+                  const actionBox = action.getBoundingClientRect()
+                  const pageLayout = page.querySelector('[data-ui="form-page-layout"]')
+                  const pageBody = page.querySelector('[data-ui="form-page-body"]')
+                  const aside = page.querySelector('[data-ui="form-page-aside"]')
+                  const layoutBox = pageLayout.getBoundingClientRect()
+                  const bodyBox = pageBody.getBoundingClientRect()
+                  const asideBox = aside?.getBoundingClientRect()
+                  const stacked = innerWidth <= 1023
+                  return {
+                    pageContained: pageBox.left >= -1 && pageBox.right <= innerWidth + 1,
+                    noPageOverflow: document.documentElement.scrollWidth <= innerWidth,
+                    compactHeader: headerBox.height <= (${String(viewport.mobile)} ? 170 : 120),
+                    compactTitle: Number.parseFloat(getComputedStyle(title).fontSize) <= 24,
+                    noHeavyIdentity: !page.querySelector(
+                      '[data-ui="record-thumbnail"], [data-ui="record-kicker"], [data-ui="form-page-leading"], [data-ui="form-page-eyebrow"], [data-ui="breadcrumbs"]'
+                    ),
+                    noBreadcrumb: !page.querySelector('[data-ui="form-page-back"], [data-ui="breadcrumbs"]'),
+                    actionVisible: actionBox.width > 0 && actionBox.height >= 30,
+                    actionInHeader: actionBox.top >= titleRowBox.top - 1 && actionBox.bottom <= titleRowBox.bottom + 1,
+                    inlineFields: inline,
+                    compactControlsWideEnough: ${JSON.stringify(viewport.id)} !== 'compact-desktop' || fields.every((field) => {
+                      const control = field.querySelector(
+                        ':scope > [data-ui="form-control"], :scope > [data-ui="form-options"], :scope > ket-island'
+                      )
+                      return control && control.getBoundingClientRect().width >= 175
+                    }),
+                    asideCorrect: ${String(state.aside)} === Boolean(aside),
+                    chatterReady: ${String(!state.aside)} || Boolean(
+                      aside?.querySelector('[data-ui="chatter"][data-state="ready"]')
+                    ),
+                    railOneThird: ${String(!state.aside)} || stacked ||
+                      Math.abs(asideBox.width / layoutBox.width - 1 / 3) <= 0.01,
+                    railPosition: ${String(!state.aside)} || (stacked
+                      ? asideBox.top >= bodyBox.bottom - 1 && Math.abs(asideBox.width - layoutBox.width) <= 1
+                      : asideBox.left >= bodyBox.right - 1),
+                    rolesMergedAtTop: (() => {
+                      const fields = [...form.querySelectorAll('[data-ui="form-field"]')]
+                      const roleGroup = fields[0]
+                      const roleNames = [...roleGroup.querySelectorAll('input[type="checkbox"]')]
+                        .map((input) => input.getAttribute('name'))
+                      const nameField = fields[1]?.querySelector('input, select, textarea')?.getAttribute('name')
+                      return roleGroup.getAttribute('data-kind') === 'checkbox-group' &&
+                        JSON.stringify(roleNames) === JSON.stringify(['customer', 'supplier', 'employee']) &&
+                        nameField === 'name' &&
+                        !page.querySelector('form[action*="/roles"]')
+                    })(),
+                    themeApplied: getComputedStyle(document.documentElement).colorScheme === ${JSON.stringify(theme)}
+                  }
+                })()`,
+              )
+              assert.deepEqual(
+                layout,
+                {
+                  pageContained: true,
+                  noPageOverflow: true,
+                  compactHeader: true,
+                  compactTitle: true,
+                  noHeavyIdentity: true,
+                  noBreadcrumb: true,
+                  actionVisible: true,
+                  actionInHeader: true,
+                  inlineFields: true,
+                  compactControlsWideEnough: true,
+                  asideCorrect: true,
+                  chatterReady: true,
+                  railOneThird: true,
+                  railPosition: true,
+                  rolesMergedAtTop: true,
+                  themeApplied: true,
+                },
+                `${viewport.id}/${theme}/${lang}/${state.id}`,
+              )
+              if (!noArtifacts)
+                await capture(
+                  cdp,
+                  join(
+                    partnerFormEvidenceDir,
+                    `partner-form-${state.id}-${lang}-${theme}-${viewport.id}.png`,
                   ),
                 )
             }

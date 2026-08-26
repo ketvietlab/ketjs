@@ -1,6 +1,6 @@
-// Builds the backend module's typed TSX islands into browser-native ESM.
-// KetJS serves its view runtime separately, so the generated assets import that
-// shared copy instead of bundling another renderer into every island.
+// Builds shared admin island entries into browser-native ESM. KetJS serves its
+// view runtime separately, so generated assets import that shared copy while
+// bundling their local view dependencies into the immutable entry itself.
 
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -8,11 +8,21 @@ import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SOURCE_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
-const OUTPUT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
+const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
+const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
 const entries = [
-  ['relation-select-view.tsx', 'relation-select.mjs'],
-  ['table-selection-view.tsx', 'table-selection.mjs'],
+  {
+    source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
+  },
+  {
+    source: join(UI_CLIENT_DIR, 'table-selection-view.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'table-selection.mjs'),
+  },
+  {
+    source: join(UI_CLIENT_DIR, 'mail-entry.mjs'),
+    output: join(UI_CLIENT_DIR, 'mail-bundle.mjs'),
+  },
 ]
 
 /** @type {import('esbuild').Plugin} */
@@ -31,12 +41,12 @@ const ketViewRuntime = {
 }
 
 export async function buildBackendClients() {
-  const available = entries.filter(([source]) => existsSync(join(SOURCE_DIR, source)))
+  const available = entries.filter(({ source }) => existsSync(source))
   await Promise.all(
-    available.map(([source, output]) =>
+    available.map(({ source, output }) =>
       esbuild.build({
-        entryPoints: [join(SOURCE_DIR, source)],
-        outfile: join(OUTPUT_DIR, output),
+        entryPoints: [source],
+        outfile: output,
         bundle: true,
         format: 'esm',
         platform: 'browser',

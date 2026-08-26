@@ -179,7 +179,7 @@ const addressFormsFor = async (
 const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration] = await Promise.all([
+  const [row, parents, terms, integration, collaboration] = await Promise.all([
     ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
     partnerOptions(ctx, url, req, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
@@ -188,6 +188,11 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
       locale: url.searchParams.get('lang')
         ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
         : '',
+    }),
+    ctx.joint(url, req, 'partner_backend:record.collaboration', {
+      resModel: 'partner.Partner',
+      resId: id,
+      lang,
     }),
   ])
   if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
@@ -215,6 +220,7 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
           terms: terms as never,
           errors,
           integration,
+          collaboration,
           addressForms,
           parentControl,
         },
@@ -224,8 +230,31 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
   })
 }
 
-const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Record<string, string>) =>
-  ctx.call(
+const syncPartnerRoles = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  partnerId: string,
+  form: Record<string, string>,
+) => {
+  for (const role of ['customer', 'supplier', 'employee']) {
+    const result =
+      form[role] === '1'
+        ? await ctx.call('partner.grantRole', { id: randomUUID(), partnerId, role }, url, req)
+        : await ctx.call('partner.revokeRole', { partnerId, role }, url, req)
+    if ((result as { ok?: boolean }).ok === false) return result
+  }
+  return { ok: true }
+}
+
+const savePartner = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  form: Record<string, string>,
+) => {
+  const result = await ctx.call(
     'partner.savePartner',
     {
       id,
@@ -241,6 +270,10 @@ const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
     url,
     req,
   )
+  if ((result as { ok?: boolean }).ok === false) return result
+  const roles = await syncPartnerRoles(ctx, url, req, id, form)
+  return (roles as { ok?: boolean }).ok === false ? roles : result
+}
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/partner/partners':
@@ -471,7 +504,7 @@ export const routes: Record<string, RouteEntry> = {
     },
 
   '/admin/partner/partners/{id}/edit':
-    (ctx: ServeContext): Route =>
+    (_ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
@@ -482,11 +515,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
-      for (const role of ['customer', 'supplier', 'employee']) {
-        if (form[role] === '1')
-          await ctx.call('partner.grantRole', { id: randomUUID(), partnerId: params.id, role }, url, req)
-        else await ctx.call('partner.revokeRole', { partnerId: params.id, role }, url, req)
-      }
+      await syncPartnerRoles(ctx, url, req, params.id, form)
       return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 

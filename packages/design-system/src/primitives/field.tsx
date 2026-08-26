@@ -17,7 +17,17 @@ export type FieldProps = {
   id: string
   name: string
   label: string
-  type?: 'text' | 'email' | 'number' | 'password' | 'date' | 'select' | 'textarea' | 'checkbox' | 'radio'
+  type?:
+    | 'text'
+    | 'email'
+    | 'tel'
+    | 'number'
+    | 'password'
+    | 'date'
+    | 'select'
+    | 'textarea'
+    | 'checkbox'
+    | 'radio'
   value?: string | number | boolean | null
   placeholder?: string | null
   required?: boolean

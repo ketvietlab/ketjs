@@ -7,7 +7,7 @@ KetSuite routes, translators, models, functions, sessions, or deployments.
 
 ```ts
 // File: src/ui/orders.tsx
-import { AppShell, Button, DataTable, ListPage, Page, Section, Surface } from '@ketvietlab/design-system'
+import { AppShell, Button, DataTable, FormPage, ListPage, Page, Section, Surface } from '@ketvietlab/design-system'
 ```
 
 Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on the
@@ -36,9 +36,13 @@ The contract is intentionally strict:
 
 The public entry exports actions, status and feedback objects, fields, navigation,
 tabs, progress, layout primitives, the three-region app shell, page/record layouts,
-the canonical list-page composition, data tables, forms, and modal sheets. Use
+the canonical list-page and form-page compositions, data tables, forms, and modal sheets. Use
 `ListPage` for operational collections: applications provide translated identity,
 URL-driven controls and result content while the pattern keeps header, controls,
 status, body and footer in one stable order. The primary action stays beside the
-title, while result status and controls share one command bar. Every supported state appears in the
-catalogue.
+title, while result status and controls share one command bar. Use `FormPage` for
+create and edit screens: the primary decision stays beside record identity, the
+business form keeps one reading column, and durable facts may occupy the optional
+context rail. Form fields keep labels on the left and controls on the right at
+every viewport; responsive layouts tighten those columns instead of changing the
+reading direction. Every supported state appears in the catalogue.
