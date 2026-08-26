@@ -158,13 +158,7 @@ const addressFormsFor = async (
   ])
 }
 
-const renderPartnerForm = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  id: string,
-  errors?: string[],
-) => {
+const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
   const [row, parents, terms, integration] = await Promise.all([
