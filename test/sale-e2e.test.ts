@@ -163,9 +163,12 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
     if (path === '/admin/sales/orders') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /Đơn bán đã xác nhận/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /data-ui="table"/)
+      assert.match(html, /Theo dõi đơn đã xác nhận, trạng thái lập hoá đơn và tổng giá trị\./)
       assert.match(html, /Khách hàng Minh Anh/)
+      assert.match(html, /href="\/admin\/sales\/orders\/so-1"/)
+      assert.doesNotMatch(html, /data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/sales/invoicing-policies') {
@@ -256,7 +259,8 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     headers: { accept: 'text/html' },
   })
   const englishOrdersHtml = await englishOrders.text()
-  assert.match(englishOrdersHtml, /Confirmed sales orders/)
+  assert.match(englishOrdersHtml, /data-ui="list-page"/)
+  assert.match(englishOrdersHtml, /Track confirmed orders, invoicing status and total value\./)
   assert.match(englishOrdersHtml, /href="\/admin\/sales\/orders\/so-1\?lang=en"/)
   assert.doesNotMatch(englishOrdersHtml, /data-island="mail\.chatter"/)
   const englishPolicies = await e2e.client.get('/admin/sales/invoicing-policies?lang=en', {

@@ -186,6 +186,9 @@ test('crm backend: the case workspace exposes assign, merge and a lost reason', 
   assert.match(html, /name="action" value="assign"/)
   assert.match(html, /name="action" value="merge"/)
   assert.match(html, /name="lostReason"/)
+  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=timeline&amp;lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/cases\/workspace\?lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/cases\/workspace\/attachments\?lang=en"/)
   // Duplicate detection has always run here; now it renders what it found.
   assert.match(html, /Possible duplicates/)
   assert.match(html, /Workspace twin/)

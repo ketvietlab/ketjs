@@ -1,6 +1,24 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { linkButton, Notice } from '../../../ui/index.ts'
+import { selectionLabel } from '../../backend/screen.ts'
+
+export type PurchaseOrderReference = {
+  id?: unknown
+  state?: unknown
+}
+
+/** A stable purchase code in the reader's language; the code itself survives as data. */
+export const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'purchase_backend', group, value)
+
+/** RFQs and confirmed orders live in distinct lists but share one detail renderer. */
+export const purchaseOrderPath = (order: PurchaseOrderReference): string =>
+  `${
+    ['draft', 'sent', 'to approve'].includes(String(order.state))
+      ? '/admin/purchase/rfqs'
+      : '/admin/purchase/orders'
+  }/${String(order.id)}`
 
 /** A rejected purchase action must remain visible after its redirect. */
 export const rejection = (_: Translator, invalid?: string | null): TemplateResult | null =>

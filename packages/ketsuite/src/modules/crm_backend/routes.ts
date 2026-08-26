@@ -20,17 +20,16 @@ import {
   tagsControl,
   teamControl,
 } from './relation-control.ts'
+import { CONFIGURATION_TABS, configurationScreen, leaderboardScreen, plannerScreen } from './screens.tsx'
+import type { ConfigurationTab } from './screens.tsx'
 import {
-  CONFIGURATION_TABS,
+  caseCreateScreen,
   caseDetailScreen,
-  configurationScreen,
-  leaderboardScreen,
+  casesListScreen,
   permissionScreen,
-  plannerScreen,
-} from './screens.tsx'
-import type { CaseDetailControls, ConfigurationTab } from './screens.tsx'
-import { caseCreateScreen, casesListScreen, pipelineScreen } from './screens/index.ts'
-import type { PipelineFigure } from './screens/index.ts'
+  pipelineScreen,
+} from './screens/index.ts'
+import type { CaseDetailControls, PipelineFigure } from './screens/index.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -995,6 +994,7 @@ export const routes: Record<string, RouteEntry> = {
             quotations,
             controls,
             errors,
+            locale: localeQuery(url),
             tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
               ? String(url.searchParams.get('tab'))
               : 'overview',

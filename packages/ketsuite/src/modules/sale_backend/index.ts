@@ -10,8 +10,12 @@ import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
-import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { overviewScreen, quotationCreateScreen, quotationsListScreen } from './screens/index.ts'
+import {
+  overviewScreen,
+  quotationCreateScreen,
+  quotationsListScreen,
+  salesOrdersListScreen,
+} from './screens/index.ts'
 import type { SaleCounts } from './screens/index.ts'
 import { labelOf } from './screens.tsx'
 import {
@@ -913,14 +917,17 @@ export default defineModule({
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
           body: async (_, shell) =>
-            salesOrdersScreen(_, {
-              frame: shell,
-              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
-                (report) => report.id === 'sale.salesOrder',
-              ),
-              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-              detailSuffix,
-            }),
+            salesOrdersListScreen(
+              _,
+              {
+                printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                  (report) => report.id === 'sale.salesOrder',
+                ),
+                rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                detailSuffix,
+              },
+              shell,
+            ),
         })
       },
     '/admin/sales/quotations/{id}': detail,

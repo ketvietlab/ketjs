@@ -2,37 +2,37 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  bulkActions,
   dataTable,
   emptyState,
   formatMoney,
-  Framed,
   icon,
+  inline,
+  ListPage,
   linkButton,
-  RecordWorkspace,
-  Section,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
-import type { Column, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.tsx'
+  listChrome,
+  shell,
+} from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
+import { labelOf } from '../screens.tsx'
 
-type SalesOrderRow = Record<string, unknown>
+export type SalesOrderRow = Record<string, unknown>
 
-export type SalesOrdersScreenOptions = {
+export type SalesOrdersListScreenOptions = {
   rows: SalesOrderRow[]
-  frame: Frame
   detailSuffix: string
   /** The sales-order document, when it is installed and published. */
   printReport?: { id: string; title: string } | undefined
+  total?: number
+  table?: Partial<DataTable<SalesOrderRow>>
 }
 
 const invoiceTone = (status: unknown) =>
   status === 'to invoice' ? 'warning' : status === 'invoiced' ? 'positive' : 'neutral'
 
 /**
- * What a sales order is worth reading at a glance. Exported because the overview
- * shows the last few of them and a second, nearly-identical column set is how the
- * two screens start disagreeing about what a sales order is.
+ * What a sales order is worth reading at a glance. The specialized overview
+ * reuses this contract for its recent-orders table.
  */
 export const salesOrderColumns = (
   _: Translator,
@@ -43,6 +43,7 @@ export const salesOrderColumns = (
     key: 'name',
     label: _('sale_backend.field.name'),
     priority: 'primary',
+    width: 'wide',
     cell: (row) =>
       linkButton({
         label: String(row.name),
@@ -60,6 +61,7 @@ export const salesOrderColumns = (
     key: 'date',
     label: _('sale_backend.field.dateOrder'),
     cell: (row) => String(row.dateOrder).slice(0, 10),
+    kind: 'date',
   },
   {
     key: 'invoice',
@@ -70,6 +72,7 @@ export const salesOrderColumns = (
         invoiceTone(row.invoiceStatus),
         String(row.invoiceStatus),
       ),
+    kind: 'status',
   },
   {
     key: 'locked',
@@ -79,6 +82,7 @@ export const salesOrderColumns = (
         row.locked ? _('sale_backend.order.locked') : _('sale_backend.order.unlocked'),
         row.locked ? 'warning' : 'neutral',
       ),
+    kind: 'status',
   },
   {
     key: 'total',
@@ -87,7 +91,6 @@ export const salesOrderColumns = (
     align: 'end',
     kind: 'currency',
   },
-  // Printing meant opening the record first, one at a time.
   ...(printReport
     ? [
         {
@@ -105,54 +108,64 @@ export const salesOrderColumns = (
     : []),
 ]
 
-export const salesOrdersScreen = (_: Translator, options: SalesOrdersScreenOptions): TemplateResult => {
+export const salesOrdersListScreen = (
+  _: Translator,
+  options: SalesOrdersListScreenOptions,
+  frame: Frame = {},
+): TemplateResult => {
+  const total = options.total ?? options.rows.length
   const toInvoice = options.rows.filter((row) => row.invoiceStatus === 'to invoice').length
   const invoiced = options.rows.filter((row) => row.invoiceStatus === 'invoiced').length
   const locked = options.rows.filter((row) => row.locked).length
-  const table = options.rows.length ? (
-    dataTable(_, {
-      columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
-      rows: options.rows,
-      id: (row) => String(row.id),
-    })
-  ) : (
-    <Surface
-      padding="compact"
-      body={emptyState(_('sale_backend.orderList.empty'), _('sale_backend.orderList.emptyHint'), {
-        icon: icon('shopping-bag'),
-      })}
-    />
-  )
+  const selection = options.table?.selection ?? frame.chrome?.selection
+  const summary = [
+    `${_('sale_backend.orderList.summary.total')}: ${String(total)}`,
+    `${_('sale_backend.orderList.summary.toInvoice')}: ${String(toInvoice)}`,
+    `${_('sale_backend.orderList.summary.invoiced')}: ${String(invoiced)}`,
+    `${_('sale_backend.orderList.summary.locked')}: ${String(locked)}`,
+  ].join(' · ')
 
-  return (
-    <Framed
-      translator={_}
-      title={_('sale_backend.orders.title')}
-      frame={options.frame}
-      body={
-        <RecordWorkspace
-          kicker={_('sale_backend.orderList.kicker')}
-          title={_('sale_backend.orderList.title')}
-          subtitle={_('sale_backend.orderList.subtitle')}
-          imageFallback={icon('shopping-bag')}
-          summary={[
-            { id: 'total', label: _('sale_backend.orderList.summary.total'), value: options.rows.length },
-            { id: 'to-invoice', label: _('sale_backend.orderList.summary.toInvoice'), value: toInvoice },
-            { id: 'invoiced', label: _('sale_backend.orderList.summary.invoiced'), value: invoiced },
-            { id: 'locked', label: _('sale_backend.orderList.summary.locked'), value: locked },
-          ]}
-          body={stack(
-            [
-              <Section
-                title={_('sale_backend.orderList.records.title')}
-                description={_('sale_backend.orderList.records.hint')}
-                body={table}
-              />,
-            ],
-            'loose',
-          )}
-        />
+  return shell(
+    _,
+    _('sale_backend.orders.title'),
+    <ListPage
+      title={_('sale_backend.orderList.title')}
+      description={_('sale_backend.orderList.subtitle')}
+      actions={
+        selection || frame.extras?.['topbar.end'] !== undefined
+          ? inline([selection ? bulkActions(_, selection) : '', frame.extras?.['topbar.end'] ?? ''])
+          : undefined
       }
-    />
+      controls={
+        frame.chrome
+          ? listChrome(
+              _,
+              _('sale_backend.orderList.title'),
+              {
+                ...frame.chrome,
+                layout: 'command',
+                section: undefined,
+                create: null,
+                selection: null,
+              },
+              false,
+            )
+          : undefined
+      }
+      status={summary}
+      body={
+        options.rows.length || options.table?.groups?.length
+          ? dataTable(_, {
+              columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
+              rows: options.rows,
+              id: (row) => String(row.id),
+              ...options.table,
+            })
+          : emptyState(_('sale_backend.orderList.empty'), _('sale_backend.orderList.emptyHint'), {
+              icon: icon('shopping-bag'),
+            })
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }

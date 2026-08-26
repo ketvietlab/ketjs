@@ -17,7 +17,7 @@ import {
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from '../../backend/screen.ts'
-import { salesOrderColumns } from '../sales-orders-screen.tsx'
+import { salesOrderColumns } from './sales-orders-list.tsx'
 
 /**
  * What the dashboard is counted from.

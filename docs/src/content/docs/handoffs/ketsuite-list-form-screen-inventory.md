@@ -89,7 +89,7 @@ unrouted legacy exports from the old `screens.tsx` only after confirming the rou
 |---|---|---|---|---|---|---|---|
 | SALE-01 | keep | Sales overview | `/admin/sales` | `screens/overview.tsx::overviewScreen` | Specialized | no | Kant |
 | SALE-02 | done | Quotations | `/admin/sales/quotations`, `/admin/sales/quotations/new` | `screens/quotations-list.tsx`, `screens/quotation-create.tsx` | Split | list/new: no | Kant |
-| SALE-03 | ready | Sales orders | `/admin/sales/orders` | `salesOrdersScreen` | ListPage | no | — |
+| SALE-03 | done | Sales orders | `/admin/sales/orders` | `screens/sales-orders-list.tsx::salesOrdersListScreen` | ListPage | no | Kant |
 | SALE-04 | ready | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `orderDetailScreen` | FormPage | `sale_mail_backend` | — |
 | SALE-05 | ready | Invoicing policies | `/admin/sales/invoicing-policies` | `invoicingPoliciesScreen` | Split | no | — |
 
@@ -103,7 +103,7 @@ Structure debt: `purchase_backend/screens.tsx` is monolithic. Each row moves its
 | PUR-01 | keep | Purchase overview | `/admin/purchase` | `screens/overview.tsx::purchaseOverviewScreen` | Specialized | no | Curie |
 | PUR-02 | ready | Requests for quotation | `/admin/purchase/rfqs` | `ordersScreen` (RFQ variant) | Split | no | — |
 | PUR-03 | ready | Purchase orders | `/admin/purchase/orders` | `ordersScreen` (order variant) | ListPage | no | — |
-| PUR-04 | ready | RFQ/purchase-order detail | `/admin/purchase/rfqs/{id}`, `/admin/purchase/orders/{id}` | `orderDetail` | FormPage | bridge missing | — |
+| PUR-04 | done | RFQ/purchase-order detail | `/admin/purchase/rfqs/{id}`, `/admin/purchase/orders/{id}` | `screens/order-detail.tsx::purchaseOrderDetailScreen` | FormPage | bridge missing | Curie |
 | PUR-05 | done | Vendor pricelists | `/admin/purchase/vendor-pricelists`, `/admin/purchase/vendor-pricelists/new` | `screens/vendor-pricelists-list.tsx`, `screens/vendor-pricelist-create.tsx` | Split | no | Curie |
 
 ### Stock lane
@@ -159,7 +159,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 |---|---|---|---|---|---|---|
 | CRM-01 | keep | Pipeline | `/admin/crm/pipeline` | `screens/pipeline.tsx::pipelineScreen` | Specialized | Huygens |
 | CRM-02 | done | Cases list/create | `/admin/crm/cases`, `/admin/crm/cases/new` | `screens/cases-list.tsx`, `screens/case-create.tsx` | Split | Huygens |
-| CRM-03 | ready | Case detail | `/admin/crm/cases/{id}` | `caseDetailScreen`, `permissionScreen` | FormPage/Specialized | — |
+| CRM-03 | keep | Case detail | `/admin/crm/cases/{id}` | `screens/case-detail.tsx::caseDetailScreen`, `permissionScreen` | Specialized | Huygens |
 | CRM-04 | ready | Activity planner | `/admin/crm/activities` | `plannerScreen` | Specialized | — |
 | CRM-05 | ready | Leaderboard | `/admin/crm/leaderboard` | `leaderboardScreen` | ListPage | — |
 | CRM-06 | ready | CRM configuration | `/admin/crm/configuration` | `configurationScreen` | Specialized | — |
@@ -673,3 +673,37 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 8 Purchase overview evidence](/assets/purchase-overview/purchase-overview-browser-skill.png)
 
 ![Wave 8 Purchase overview mobile evidence](/assets/purchase-overview/purchase-overview-mobile-browser-skill.png)
+
+### Wave 9 — CRM-03, SALE-03 and PUR-04
+
+- CRM Case Detail moved out of the legacy monolith into `screens/case-detail.tsx`. It intentionally remains
+  Specialized: identity, facts, four business tabs, stage/assignment/merge actions, activities, timeline,
+  attachments and internal messages form one record workspace. Locale is now retained by tab, POST, upload,
+  quotation and duplicate-record links.
+- Sales Orders is now a dedicated `ListPage` in `screens/sales-orders-list.tsx`. It preserves the confirmed
+  order constraint, customer hydration, invoice/lock status, totals, optional print report, localized detail
+  links and the no-create/no-Chatter contract. Sales Overview reuses its columns from the leaf without a
+  route/barrel cycle; the obsolete root renderer was removed.
+- Purchase RFQ/PO Detail is now a `FormPage` in `screens/order-detail.tsx`. Its compact header contains state,
+  vendor, planned date, invoice/total facts, operational actions and print; line editing, billing, receipts and
+  vendor bills remain in the body. No Chatter was invented because the purchase mail bridge is still missing.
+- Browser QA used real UI flows to create a CRM case and an RFQ, then verified the three migrated surfaces at
+  desktop and 390 px. All layouts keep their content inside the viewport; the CRM aside follows the form with
+  spacing when wrapped.
+- Validation scope: 32 focused CRM/Purchase/Sales renderer and HTTP tests, Biome on changed files,
+  build/typecheck, targeted browser checks for the three surfaces, and Astro docs validation. No unrelated CI
+  test group was run locally because this wave changes module-owned renderers rather than shared framework UI.
+
+![Wave 9 Sales orders evidence](/assets/sales-order-list/sales-orders-list-browser-skill.png)
+
+![Wave 9 Sales orders mobile evidence](/assets/sales-order-list/sales-orders-list-mobile-browser-skill.png)
+
+![Wave 9 CRM case detail evidence](/assets/crm-case-detail/crm-case-detail-browser-skill.png)
+
+![Wave 9 CRM case detail mobile evidence](/assets/crm-case-detail/crm-case-detail-mobile-browser-skill.png)
+
+![Wave 9 CRM wrapped aside evidence](/assets/crm-case-detail/crm-case-detail-mobile-aside-browser-skill.png)
+
+![Wave 9 Purchase RFQ detail evidence](/assets/purchase-order-detail/purchase-rfq-detail-browser-skill.png)
+
+![Wave 9 Purchase RFQ detail mobile evidence](/assets/purchase-order-detail/purchase-rfq-detail-mobile-browser-skill.png)

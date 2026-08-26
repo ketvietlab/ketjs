@@ -1,4 +1,9 @@
-export { missingSetup, rejection } from './shared.tsx'
+export { labelOf, missingSetup, purchaseOrderPath, rejection } from './shared.tsx'
+export {
+  type PurchaseOrderDetail,
+  purchaseOrderDetailScreen,
+  type PurchaseOrderDetailScreenOptions,
+} from './order-detail.tsx'
 export {
   type PurchaseOverviewOrder,
   type PurchaseOverviewSetup,

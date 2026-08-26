@@ -7,8 +7,10 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { labelOf, orderDetail, ordersScreen } from './screens.tsx'
+import { ordersScreen } from './screens.tsx'
 import {
+  labelOf,
+  purchaseOrderDetailScreen,
   purchaseOverviewScreen,
   vendorPricelistCreateScreen,
   vendorPricelistsListScreen,
@@ -351,7 +353,7 @@ const detailHandler =
     return adminPage(ctx, url, req, {
       title: 'purchase_backend.detail.title',
       body: (_, shell) =>
-        orderDetail(_, {
+        purchaseOrderDetailScreen(_, {
           frame: shell,
           order: { ...order, partnerName: vendor?.name },
           actionPath: path,
