@@ -27,6 +27,7 @@ import {
   normalized,
   now,
   refreshCaseScore,
+  pipelineSummary,
   saveCase,
   scheduleCaseActivity,
   serializeCaseList,
@@ -253,6 +254,8 @@ export const functions: Record<string, FnSpec> = {
       stageId: 'id?',
       teamId: 'id?',
       assigneeUserId: 'id?',
+      /** Only the cases assigned to the caller. Resolved from the session, not the URL. */
+      mine: 'bool?',
       terminalState: 'text?',
       search: 'text?',
       includeArchived: 'bool?',
@@ -266,6 +269,27 @@ export const functions: Record<string, FnSpec> = {
     effects: [...caseReadEffects],
     agent: true,
     handler: (ctx, args) => listCases(ctx, args),
+  }),
+
+  'pipeline.summary': defineFn({
+    input: {
+      kind: 'text?',
+      teamId: 'id?',
+      mine: 'bool?',
+      search: 'text?',
+      timezone: 'text?',
+    },
+    output: {
+      stages: 'json',
+      openCount: 'int',
+      expectedRevenue: 'decimal',
+      weightedRevenue: 'decimal',
+      overdueActivityCount: 'int',
+      partial: 'bool',
+    },
+    effects: [...caseReadEffects],
+    agent: true,
+    handler: (ctx, args) => pipelineSummary(ctx, args),
   }),
 
   overview: defineFn({

@@ -68,6 +68,36 @@
   [data-ui="card-grid"]:has(> [data-ui="metric"]) {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   }
+  /* With a glyph the card becomes two columns: a tile that spans every row, and
+     the figure. The tile is decorative — the label still names the number — so it
+     never takes width away from an amount that has to stay on one line. */
+  [data-ui="metric"]:has(> [data-ui="metric-icon"]) {
+    grid-template-columns: auto 1fr;
+    column-gap: var(--admin-gap-sm);
+  }
+  /* Auto-placement would drop the value into the tile's own column the moment a
+     card carried a third line, which reads as a label folded into five words and
+     an amount squeezed under the glyph. The figures are pinned to the text
+     column instead, so a card is the same shape whatever it happens to carry. */
+  [data-ui="metric"]:has(> [data-ui="metric-icon"]) > :not([data-ui="metric-icon"]) {
+    grid-column: 2;
+  }
+  [data-ui="metric-icon"] {
+    display: grid;
+    grid-row: 1 / 3;
+    grid-column: 1;
+    align-self: center;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--admin-radius);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="metric-icon"] svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
   /* A money card needs the width of the longest amount it can hold. Thirteen
      digits and a symbol at the display size do not fit a ten-rem track, and a
      clipped total reads as a different number.
@@ -82,6 +112,12 @@
   [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
     font-size: var(--admin-size-amount);
     white-space: nowrap;
+  }
+  /* A tile costs a fixed 2.75rem of the track, so a row of glyph cards needs a
+     wider minimum than a row of plain ones — but not the money minimum, which
+     was sized for the amount alone and drops a four-card header to three. */
+  [data-ui="card-grid"]:has(> [data-ui="metric"] > [data-ui="metric-icon"]) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
   }
   [data-ui="metric-label"],
   [data-ui="metric-value"],
@@ -114,6 +150,17 @@
        cards to a row instead of dropping to a column five cards long. */
     [data-ui="card-grid"]:has(> [data-ui="metric"][data-tone="money"]) {
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+    }
+    /* And the tile goes, for the same reason the amount shrank: it repeats the
+       label, and the 2.75rem it costs on a nine-rem card is the difference
+       between a total that fits and one that is clipped into a different number. */
+    [data-ui="metric-icon"] {
+      display: none;
+    }
+    [data-ui="metric"]:has(> [data-ui="metric-icon"]),
+    [data-ui="metric"]:has(> [data-ui="metric-icon"]) > :not([data-ui="metric-icon"]) {
+      grid-column: auto;
+      grid-template-columns: 1fr;
     }
   }
   [data-ui="metric-detail"] {

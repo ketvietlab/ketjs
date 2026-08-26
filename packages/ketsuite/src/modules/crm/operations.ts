@@ -10,6 +10,7 @@ import {
   inArray,
   isNull,
   like,
+  lt,
   ne,
   not,
   or,
@@ -425,6 +426,36 @@ export async function saveCase(
   return options.inTransaction ? run(ctx) : ctx.tx(run)
 }
 
+/**
+ * The soonest activity still owed on each case, and whether it is late.
+ *
+ * A pipeline card is read to decide what to do next, and "next" is a date: the
+ * board used to show a name, an amount and an owner, none of which say whether
+ * anyone has touched the case this month. Batched over the whole page — the
+ * per-card version of this was the read that made the old planner screen slow.
+ */
+const nextActivityByCase = async (ctx: Ctx, caseIds: string[]): Promise<Map<string, Row>> => {
+  if (!caseIds.length) return new Map()
+  const L = ctx.table('crm.ActivityLink')
+  const links = await ctx.db.all(from(L).where(inArray(L.caseId, caseIds)))
+  const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
+  if (!activityIds.length) return new Map()
+  const A = ctx.table('activity.Activity')
+  const activities = await ctx.db.all(
+    from(A).where(inArray(A.id, activityIds), eq(A.active, true), isNull(A.doneAt), isNull(A.canceledAt)),
+  )
+  const activityBy = new Map(activities.map((row) => [String(row.id), row]))
+  const soonest = new Map<string, Row>()
+  for (const link of links) {
+    const activity = activityBy.get(String(link.activityId))
+    if (!activity) continue
+    const caseId = String(link.caseId)
+    const held = soonest.get(caseId)
+    if (!held || String(activity.dueDate ?? '') < String(held.dueDate ?? '')) soonest.set(caseId, activity)
+  }
+  return soonest
+}
+
 export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const ids = (values: unknown[]): string[] => [...new Set(values.filter(Boolean).map(String))]
   const stageIds = ids(rows.map((row) => row.stageId))
@@ -453,6 +484,26 @@ export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
         from(ctx.table('crm.SalesDetail')).where(inArray(ctx.table('crm.SalesDetail').caseId, caseIds)),
       )
     : []
+  // Tags and the next activity are what a card is scanned for, so they are read
+  // with the page rather than one query per card on the screen that wants them.
+  const links = caseIds.length
+    ? await ctx.db.all(
+        from(ctx.table('crm.CaseTag')).where(inArray(ctx.table('crm.CaseTag').caseId, caseIds)),
+      )
+    : []
+  const tagIds = ids(links.map((link) => link.tagId))
+  const tags = tagIds.length
+    ? await ctx.db.all(from(ctx.table('crm.Tag')).where(inArray(ctx.table('crm.Tag').id, tagIds)))
+    : []
+  const tagBy = new Map(tags.map((tag) => [String(tag.id), tag]))
+  const tagsByCase = new Map<string, Row[]>()
+  for (const link of links) {
+    const tag = tagBy.get(String(link.tagId))
+    if (!tag || tag.active === false) continue
+    tagsByCase.set(String(link.caseId), [...(tagsByCase.get(String(link.caseId)) ?? []), tag])
+  }
+  const activityByCase = await nextActivityByCase(ctx, caseIds)
+  const today = now().slice(0, 10)
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const stageBy = by(stages)
   const teamBy = by(teams)
@@ -461,6 +512,7 @@ export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
   const detailBy = new Map(details.map((row) => [String(row.caseId), row]))
   return rows.map((row) => {
     const detail = detailBy.get(String(row.id))
+    const activity = activityByCase.get(String(row.id))
     return {
       ...row,
       stageCode: stageBy.get(String(row.stageId))?.code ?? null,
@@ -473,6 +525,19 @@ export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
       expectedRevenue: detail?.expectedRevenue ?? '0',
       probability: detail?.probability ?? '0',
       expectedClosing: detail?.expectedClosing ?? null,
+      tags: (tagsByCase.get(String(row.id)) ?? []).map((tag) => ({
+        id: String(tag.id),
+        name: String(tag.name),
+        color: tag.color == null ? null : String(tag.color),
+      })),
+      nextActivity: activity
+        ? {
+            id: String(activity.id),
+            summary: String(activity.summary ?? ''),
+            dueDate: activity.dueDate == null ? null : String(activity.dueDate),
+            overdue: activity.dueDate != null && String(activity.dueDate) < today,
+          }
+        : null,
     }
   })
 }
@@ -558,6 +623,10 @@ const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   if (args.stageId) query = query.where(eq(C.stageId, args.stageId))
   if (args.teamId) query = query.where(eq(C.teamId, args.teamId))
   if (args.assigneeUserId) query = query.where(eq(C.assigneeUserId, args.assigneeUserId))
+  // "Mine" is answered from the session rather than from a user id in the URL:
+  // a link carrying somebody else's id would otherwise read as their board while
+  // silently returning only the rows the audience filter already allowed.
+  if (args.mine === true) query = query.where(eq(C.assigneeUserId, ctx.actor ?? ''))
   if (args.terminalState) query = query.where(eq(C.terminalState, args.terminalState))
   if (!state.includeArchived && args.includeArchived !== true) query = query.where(eq(C.active, true))
   if (args.search) query = query.where(like(C.name, `%${String(args.search).trim()}%`))
@@ -594,6 +663,105 @@ export async function listCases(
     rows: await serializeCaseList(ctx, page),
     total,
     nextCursor: offset + limit < total ? String(offset + limit) : null,
+  }
+}
+
+/**
+ * What the pipeline header states, counted over the whole board rather than the page.
+ *
+ * The columns show forty cards each, so totals taken from what is on screen are
+ * the totals of a page — which is a different number from the one an operator is
+ * being asked to trust. This runs the same filter the columns run, without the
+ * page window, and aggregates once.
+ *
+ * `partial` is the honest answer to a board larger than the cap: the counts stay
+ * exact because they come from SQL, and the amounts are withheld rather than
+ * reported short.
+ */
+const SUMMARY_CAP = 5000
+
+export async function pipelineSummary(
+  ctx: Ctx,
+  args: Record<string, unknown>,
+): Promise<{
+  stages: Array<{ id: string; count: number; expectedRevenue: string; weightedRevenue: string }>
+  openCount: number
+  expectedRevenue: string
+  weightedRevenue: string
+  overdueActivityCount: number
+  partial: boolean
+}> {
+  const { query } = await caseQuery(ctx, args)
+  const C = ctx.table('crm.Case')
+  const grouped = await ctx.db.group(query.groupBy({ col: C.stageId }))
+  const counts = new Map(grouped.map((row) => [String(row.key[0] ?? ''), Number(row.count)]))
+  const rows = await ctx.db.all(query.limit(SUMMARY_CAP + 1))
+  const partial = rows.length > SUMMARY_CAP
+  const page = partial ? [] : rows
+  /*
+   * The board shows Won and Lost, and the header does not.
+   *
+   * Every column keeps its own count and its own money, because that is what the
+   * column head states. The four figures above the board are about work still in
+   * hand — "open records", "total value" — so a closed case must not be in them.
+   * Counting every column into them made the total climb every time a deal was
+   * won, which is the opposite of what a pipeline total is for.
+   */
+  const S = ctx.table('crm.Stage')
+  const stageIds = [...counts.keys()].filter(Boolean)
+  const stages = stageIds.length ? await ctx.db.all(from(S).where(inArray(S.id, stageIds))) : []
+  const open = new Set(
+    stages.filter((stage) => stage.terminalState === 'open').map((stage) => String(stage.id)),
+  )
+  const openCount = [...counts.entries()]
+    .filter(([id]) => open.has(id))
+    .reduce((total, [, count]) => total + count, 0)
+  const caseIds = [...new Set(page.map((row) => String(row.id)))]
+  const openCaseIds = page.filter((row) => open.has(String(row.stageId ?? ''))).map((row) => String(row.id))
+  const D = ctx.table('crm.SalesDetail')
+  const details = caseIds.length ? await ctx.db.all(from(D).where(inArray(D.caseId, caseIds))) : []
+  const detailBy = new Map(details.map((row) => [String(row.caseId), row]))
+  const money = new Map<string, { expected: number; weighted: number }>()
+  for (const row of page) {
+    const detail = detailBy.get(String(row.id))
+    const expected = n(detail?.expectedRevenue)
+    // A probability is stored as a percentage, so the weighted amount is the one
+    // a forecast adds up — not the amount times a number between zero and a hundred.
+    const weighted = (expected * Math.max(0, Math.min(100, n(detail?.probability)))) / 100
+    const stage = String(row.stageId ?? '')
+    const held = money.get(stage) ?? { expected: 0, weighted: 0 }
+    money.set(stage, { expected: held.expected + expected, weighted: held.weighted + weighted })
+  }
+  const A = ctx.table('activity.Activity')
+  const L = ctx.table('crm.ActivityLink')
+  const links = openCaseIds.length ? await ctx.db.all(from(L).where(inArray(L.caseId, openCaseIds))) : []
+  const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
+  const today = now().slice(0, 10)
+  const overdue = activityIds.length
+    ? await ctx.db.all(
+        from(A).where(
+          inArray(A.id, activityIds),
+          eq(A.active, true),
+          isNull(A.doneAt),
+          isNull(A.canceledAt),
+          lt(A.dueDate, today),
+        ),
+      )
+    : []
+  const total = (pick: (value: { expected: number; weighted: number }) => number): number =>
+    [...money.entries()].filter(([id]) => open.has(id)).reduce((sum, [, value]) => sum + pick(value), 0)
+  return {
+    stages: [...counts.entries()].map(([id, count]) => ({
+      id,
+      count,
+      expectedRevenue: String(money.get(id)?.expected ?? 0),
+      weightedRevenue: String(money.get(id)?.weighted ?? 0),
+    })),
+    openCount,
+    expectedRevenue: String(total((value) => value.expected)),
+    weightedRevenue: String(total((value) => value.weighted)),
+    overdueActivityCount: overdue.length,
+    partial,
   }
 }
 
