@@ -57,10 +57,7 @@ export const stack = (
  * Positional, like `stack`, and for the same reason: it takes a list, which is
  * not what JSX hands a component.
  */
-export const columns = (
-  items: readonly JSXChild[],
-  gap: 'default' | 'loose' = 'default',
-): TemplateResult => (
+export const columns = (items: readonly JSXChild[], gap: 'default' | 'loose' = 'default'): TemplateResult => (
   <div data-ui="columns" data-gap={gap}>
     {each(
       items,
