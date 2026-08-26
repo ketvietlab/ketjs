@@ -493,3 +493,38 @@ test('staff payment eligibility ETag tracks the journals and the day it was aske
   // The invoice did not change, so the token a payment would check has not.
   assert.equal(renamed.body.expectedVersion, dayOne.body.expectedVersion)
 })
+
+test('staff payment reconciliation ETag tracks the journal it hands back', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const invoice = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/invoice-a')
+  const key = 'account-payment-etag-1'
+  const paid = await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, key, String(invoice.data.version)),
+    body: JSON.stringify({ journalId: 'cash-journal', expectedVersion: invoice.data.version }),
+  })
+  assert.equal(paid.status, 200)
+
+  // The reconciliation read is a GET, so a caller can and will act on its ETag.
+  // The journal in that body comes from the tenant, not the invoice.
+  const reconcile = `/api/staff/v1/accounting/invoices/invoice-a/payment-commands/${key}?journalId=cash-journal&expectedVersion=${encodeURIComponent(String(invoice.data.version))}`
+  const read = async () => {
+    const response = await e2e.client.get(reconcile)
+    const body = (await response.json()) as Envelope<{ journal: Row; invoice: Row }>
+    return { etag: response.headers.get('etag'), journal: String(body.data.journal.name) }
+  }
+  const before = await read()
+  assert.equal(before.journal, 'Tiền mặt')
+  await e2e.fixture.call<Row>(
+    'account.saveJournal',
+    { id: 'cash-journal', name: 'Quỹ tiền mặt', code: 'CSH', type: 'cash', defaultAccountId: 'cash' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const after = await read()
+  assert.equal(after.journal, 'Quỹ tiền mặt')
+  assert.notEqual(after.etag, before.etag)
+  assert.match(String(after.etag), /^"aipr_[0-9a-f]{64}"$/)
+})

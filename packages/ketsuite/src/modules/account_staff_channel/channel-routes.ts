@@ -295,7 +295,8 @@ const detailOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
  * Lifecycle eligibility keeps the shared invoice ETag, because its actions are
  * read from the invoice row and nowhere else.
  */
-const eligibilityEtag = (data: Row): string => `aipe_${sha256(JSON.stringify(data))}`
+const bodyEtag = (prefix: string, data: Row): string => `${prefix}_${sha256(JSON.stringify(data))}`
+const eligibilityEtag = (data: Row): string => bodyEtag('aipe', data)
 const lifecycleActionsOf = (row: Row): Array<{ action: string; destructive: boolean }> =>
   row.state === 'draft'
     ? [
@@ -488,10 +489,12 @@ const paymentResponse = async (
   if (!row) return notFound(ctx, url, req)
   if (!journal) return domainFailure(ctx, url, req, { errors: [{ field: 'journalId' }] })
   const invoice = await detailOf(ctx, row, url, req)
-  return {
-    data: { outcome: 'payment_registered', invoice, journal },
-    headers: { etag: `"${invoice.version}"` },
-  }
+  // The journal is read from the tenant, not from the invoice, so an ETag that
+  // only tracks the invoice answers "not modified" after a journal is renamed —
+  // and this body is served from a GET, where a caller acts on that answer.
+  // `invoice.version` stays inside it, so the invoice changing still moves it.
+  const data = { outcome: 'payment_registered', invoice, journal }
+  return { data, headers: { etag: `"${bodyEtag('aipr', data)}"` } }
 }
 
 const lifecycleResponse = async (
