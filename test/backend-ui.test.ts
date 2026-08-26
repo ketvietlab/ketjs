@@ -1112,7 +1112,7 @@ test('design density: controls and fields follow the canonical component dimensi
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const css = ADMIN_CSS
   assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
-  assert.match(tokens, /--admin-field-height:\s*2rem;/)
+  assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
   assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
   assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
