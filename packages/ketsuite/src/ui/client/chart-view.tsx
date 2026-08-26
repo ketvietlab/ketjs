@@ -77,8 +77,25 @@ type ChartIslandProps = IslandProps & { id: string; config: ChartSpec }
 
 const PALETTE_SLOTS = 6
 
-const readToken = (name: string): string =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+/**
+ * A token's *resolved* colour.
+ *
+ * `getPropertyValue` hands back the custom property's declared text, and every
+ * colour role here is declared as `light-dark(...)` — a function the browser
+ * resolves when it paints, not when it stores. Chart.js was handed that string
+ * verbatim, could not parse it, and drew every series in its own default black
+ * while the legend beside it — coloured by CSS, which does resolve it — showed
+ * the right hues. Painting the token onto a probe and reading the computed
+ * colour back is what makes the browser do the resolving.
+ */
+const readToken = (name: string): string => {
+  const probe = document.createElement('span')
+  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;color:var(${name})`
+  document.documentElement.appendChild(probe)
+  const resolved = getComputedStyle(probe).color
+  probe.remove()
+  return resolved
+}
 
 const seriesColour = (slot: number): string =>
   readToken(`--admin-chart-${((Math.max(1, Math.trunc(slot)) - 1) % PALETTE_SLOTS) + 1}`)

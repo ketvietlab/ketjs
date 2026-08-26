@@ -262,3 +262,10 @@ the change in the cash balance, and no aggregate moves for a draft.
 the corrective path — and refusal of unsupported countries. `test/accounting-e2e.test.ts`
 drives the real HTTP backend through the invoice, payment and report workflow, through
 correcting and archiving a chart entry, and through reversing a posted document.
+
+`e2e/account_backend` drives the overview in a browser, at desktop and phone widths in
+both colour schemes and in both locales. Three of its assertions exist because nothing
+on the server can make them: that Chart.js mounted onto the canvases at all, that it
+drew them in the palette rather than in its own default black, and that a canvas — which
+has no intrinsic size — did not push the page sideways on a phone. Evidence lands under
+`artifacts/` and is not committed.

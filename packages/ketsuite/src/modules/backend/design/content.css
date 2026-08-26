@@ -87,7 +87,11 @@
     line-height: 1.25;
   }
   @media (max-width: 29.9375rem) {
-    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"] {
+    /* An amount in đồng is thirteen digits and a symbol. At two cards to a phone
+       screen the display size clipped it, and a clipped total is worse than a
+       small one — it reads as a different number. */
+    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"],
+    [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
       font-size: var(--admin-size-lg);
       overflow-wrap: anywhere;
     }

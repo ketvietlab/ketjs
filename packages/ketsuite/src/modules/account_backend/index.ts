@@ -714,7 +714,13 @@ export default defineModule({
             })
             return accountingOverviewScreen(_, {
               frame,
-              action: `/admin/accounting${localeQuery(url)}`,
+              action: '/admin/accounting',
+              // The language rides as a hidden field: a GET form discards the
+              // query string its action carried, which silently sent a reader
+              // filtering in Vietnamese back to the negotiated locale.
+              hidden: url.searchParams.get('lang')
+                ? { lang: String(url.searchParams.get('lang')) }
+                : undefined,
               fields: [
                 { name: 'dateFrom', label: _('account_backend.field.dateFrom'), value: period.fromDay },
                 { name: 'dateTo', label: _('account_backend.field.dateTo'), value: period.toDay },

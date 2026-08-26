@@ -45,6 +45,14 @@ export type AccountingOverviewOptions = {
   frame: Frame
   /** The date filter posts back to the screen's own path. */
   action: string
+  /**
+   * What the filter has to carry across a submit.
+   *
+   * A GET form replaces the whole query string with its own fields, so anything
+   * in `action` after the `?` is discarded by the browser — the chosen language
+   * included. It travels as a hidden input or it does not travel.
+   */
+  hidden?: Readonly<Record<string, string>>
   fields: readonly [DatePickerField, DatePickerField]
   /** `account.performance` over the window, and over the window before it. */
   current: Row
@@ -143,6 +151,7 @@ const kpis = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
           label={card.label}
           value={formatMoney(_, card.value, o.currency)}
           trend={trend(_, card.value, card.was, card.better)}
+          tone="money"
         />
       )}
     />
@@ -259,6 +268,7 @@ export const accountingOverviewScreen = (
                     body={
                       <DatePicker
                         action={options.action}
+                        hidden={options.hidden}
                         label={_('account_backend.overview.period')}
                         fields={options.fields}
                         submit={_('account_backend.action.calculate')}
