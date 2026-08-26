@@ -1,5 +1,19 @@
-import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
+import {
+  and,
+  asc,
+  defineFn,
+  deleteFrom,
+  eq,
+  from,
+  gt,
+  gte,
+  ilike,
+  isNull,
+  lt,
+  lte,
+  or,
+} from '@ketvietlab/ketjs'
+import type { Ctx, Expr, FnSpec } from '@ketvietlab/ketjs'
 import {
   invalid,
   issue,
@@ -47,18 +61,50 @@ const programDefaults = (type: string) => {
 const programEffects = ['read:loyalty.Program', 'write:loyalty.Program', 'read:company.Company'] as const
 
 export const adminFunctions: Record<string, FnSpec> = {
+  /**
+   * Programs, in the order they were told to appear in.
+   *
+   * `state` answers where a program stands in its own calendar rather than
+   * whether a flag is on: one that starts next month and one that finished last
+   * week are both not running today, and a list that lumps them together makes
+   * the operator open each to find out which is which.
+   */
   'program.list': defineFn({
-    input: { programType: 'text?', includeArchived: 'bool?' },
+    input: {
+      programType: 'text?',
+      includeArchived: 'bool?',
+      state: 'text?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:loyalty.Program'],
     agent: true,
-    handler: async (ctx, args) =>
-      (await ctx.db.select('loyalty.Program'))
-        .filter(
-          (row) =>
-            (args.includeArchived || row.active) &&
-            (!args.programType || row.programType === args.programType),
+    handler: async (ctx, args) => {
+      const P = ctx.table('loyalty.Program')
+      const at = now()
+      const parts: Expr[] = []
+      if (args.programType) parts.push(eq(P.programType, args.programType))
+      if (args.search) parts.push(ilike(P.name, `%${String(args.search)}%`))
+      if (args.state === 'running')
+        parts.push(
+          and(
+            eq(P.active, true),
+            or(lte(P.dateFrom, at), isNull(P.dateFrom)),
+            or(gte(P.dateTo, at), isNull(P.dateTo)),
+          ),
         )
-        .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id))),
+      else if (args.state === 'upcoming') parts.push(and(eq(P.active, true), gt(P.dateFrom, at)))
+      else if (args.state === 'ended') parts.push(and(eq(P.active, true), lt(P.dateTo, at)))
+      else if (args.state === 'paused') parts.push(eq(P.active, false))
+      else if (!args.includeArchived) parts.push(eq(P.active, true))
+
+      let query = from(P).orderBy(asc(P.sequence), asc(P.id))
+      if (parts.length) query = query.where(and(...parts))
+      const size = Math.min(1000, Math.max(1, n(args.limit ?? 100)))
+      const skip = Math.max(0, n(args.offset ?? 0))
+      return ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))
+    },
   }),
 
   'program.get': defineFn({

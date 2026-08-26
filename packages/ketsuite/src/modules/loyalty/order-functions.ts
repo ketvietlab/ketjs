@@ -1,6 +1,20 @@
 import { createHash } from 'node:crypto'
-import { defineFn } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import {
+  and,
+  asc,
+  defineFn,
+  desc,
+  eq,
+  from,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lte,
+  or,
+} from '@ketvietlab/ketjs'
+import type { Ctx, Expr, FnSpec, Query, Row } from '@ketvietlab/ketjs'
 import { decimal, evaluate, invalid, issue, n, normalizeCode, now, snapshotOf } from './engine.ts'
 import {
   finalizeReservation,
@@ -12,6 +26,18 @@ import {
   walletSummary,
 } from './ledger.ts'
 import { refreshMembershipRow } from './membership-functions.ts'
+
+/**
+ * A page of a list, bounded whether or not the caller asked for one.
+ *
+ * The cap is the point: a screen asks for twenty, an export asks for a thousand,
+ * and nothing gets to ask for the whole table by leaving the argument out.
+ */
+const paged = (query: Query, args: { limit?: unknown; offset?: unknown }): Query => {
+  const size = Math.min(1000, Math.max(1, n(args.limit ?? 100)))
+  const skip = Math.max(0, n(args.offset ?? 0))
+  return skip ? query.limit(size).offset(skip) : query.limit(size)
+}
 
 const codeFor = (seed: string): string =>
   `KET-${createHash('sha256').update(seed).digest('hex').slice(0, 12).toUpperCase()}`
@@ -152,19 +178,46 @@ const concurrentError = (error: unknown) => {
 }
 
 export const orderFunctions: Record<string, FnSpec> = {
+  /**
+   * Wallets, filtered and paged by the store rather than in memory.
+   *
+   * A tenant of any size has more wallets than a screen shows, and reading all
+   * of them to display twenty is the kind of thing that works until it does not.
+   * `state` is separate from `includeArchived` because expiry and locking are
+   * different endings: `active` is live, `locked` was switched off by somebody,
+   * `expired` simply ran out of time.
+   */
   'wallet.list': defineFn({
-    input: { programId: 'id?', partnerId: 'id?', includeArchived: 'bool?' },
+    input: {
+      programId: 'id?',
+      partnerId: 'id?',
+      includeArchived: 'bool?',
+      state: 'text?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:loyalty.Wallet'],
     agent: true,
-    handler: async (ctx, args) =>
-      (await ctx.db.select('loyalty.Wallet'))
-        .filter(
-          (wallet) =>
-            (args.includeArchived || wallet.active) &&
-            (!args.programId || wallet.programId === args.programId) &&
-            (!args.partnerId || wallet.partnerId === args.partnerId),
-        )
-        .map(walletSummary),
+    handler: async (ctx, args) => {
+      const W = ctx.table('loyalty.Wallet')
+      const at = now()
+      const parts: Expr[] = []
+      if (args.programId) parts.push(eq(W.programId, args.programId))
+      if (args.partnerId) parts.push(eq(W.partnerId, args.partnerId))
+      if (args.state === 'active')
+        parts.push(and(eq(W.active, true), or(gt(W.expiresAt, at), isNull(W.expiresAt))))
+      else if (args.state === 'locked') parts.push(eq(W.active, false))
+      else if (args.state === 'expired') parts.push(and(eq(W.active, true), lte(W.expiresAt, at)))
+      else if (!args.includeArchived) parts.push(eq(W.active, true))
+      // The code is what an operator has in front of them — on a card, in an
+      // email — so it is what the search box looks at.
+      if (args.search) parts.push(ilike(W.normalizedCode, `%${normalizeCode(String(args.search))}%`))
+
+      let query = from(W).orderBy(desc(W.createdAt), asc(W.id))
+      if (parts.length) query = query.where(and(...parts))
+      return (await ctx.db.all(paged(query, args))).map(walletSummary)
+    },
   }),
 
   'wallet.get': defineFn({
@@ -194,19 +247,48 @@ export const orderFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The ledger over a period, newest first.
+   *
+   * A statement is read by date, so the window is a first-class filter rather
+   * than something the caller trims off the end. Filtering by program resolves
+   * that program's wallets first: the entry carries a wallet, not a program, and
+   * this query layer does not join.
+   */
   'ledger.list': defineFn({
-    input: { walletId: 'id?', operation: 'text?', limit: 'int?' },
-    effects: ['read:loyalty.LedgerEntry'],
+    input: {
+      walletId: 'id?',
+      programId: 'id?',
+      operation: 'text?',
+      from: 'datetime?',
+      to: 'datetime?',
+      limit: 'int?',
+      offset: 'int?',
+    },
+    effects: ['read:loyalty.LedgerEntry', 'read:loyalty.Wallet'],
     agent: true,
-    handler: async (ctx, args) =>
-      (await ctx.db.select('loyalty.LedgerEntry'))
-        .filter(
-          (entry) =>
-            (!args.walletId || entry.walletId === args.walletId) &&
-            (!args.operation || entry.operation === args.operation),
+    handler: async (ctx, args) => {
+      const L = ctx.table('loyalty.LedgerEntry')
+      const parts: Expr[] = []
+      if (args.walletId) parts.push(eq(L.walletId, args.walletId))
+      if (args.programId) {
+        const W = ctx.table('loyalty.Wallet')
+        const wallets = (await ctx.db.all(from(W).where(eq(W.programId, args.programId)))).map(
+          (row) => row.id,
         )
-        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-        .slice(0, Math.min(1000, Math.max(1, n(args.limit ?? 100)))),
+        // No wallets means no entries. An empty `IN ()` is not a filter, so
+        // saying so here is what keeps it from reading as "no filter at all".
+        if (!wallets.length) return []
+        parts.push(inArray(L.walletId, wallets))
+      }
+      if (args.operation) parts.push(eq(L.operation, args.operation))
+      if (args.from) parts.push(gte(L.createdAt, args.from))
+      if (args.to) parts.push(lte(L.createdAt, args.to))
+
+      let query = from(L).orderBy(desc(L.createdAt), desc(L.id))
+      if (parts.length) query = query.where(and(...parts))
+      return ctx.db.all(paged(query, args))
+    },
   }),
 
   'wallet.create': defineFn({
