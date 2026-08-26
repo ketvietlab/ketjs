@@ -379,8 +379,7 @@ const crossProjectIssues =
     // long ago the date was.
     const marked = ((result.rows as AnyRow[]) ?? []).map((row) => ({
       ...row,
-      overdue:
-        row.terminal !== true && !!row.dueDate && String(row.dueDate) < today,
+      overdue: row.terminal !== true && !!row.dueDate && String(row.dueDate) < today,
     }))
     return adminPage(ctx, url, req, {
       title: options.title,

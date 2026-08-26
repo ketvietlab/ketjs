@@ -967,10 +967,7 @@ test('flow issues: the overview buckets are disjoint, add up, and agree with the
       limit: 50,
     })
     assert.equal(Number(late.total), Number(buckets.overdue))
-    assert.deepEqual(
-      ((late.rows as Row[]) ?? []).map((row) => String(row.id)).sort(),
-      ['late-1', 'late-2'],
-    )
+    assert.deepEqual(((late.rows as Row[]) ?? []).map((row) => String(row.id)).sort(), ['late-1', 'late-2'])
 
     // And a row says whether its own column is a finished one, so a screen can
     // mark a late date without re-reading the columns it was just handed.

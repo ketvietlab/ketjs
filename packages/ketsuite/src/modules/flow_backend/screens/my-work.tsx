@@ -32,8 +32,7 @@ export type IssueOverview = {
   tabs: Array<{ id: string; label: string; href: string; count: number }>
 }
 
-const share = (part: number, whole: number): string =>
-  whole ? `${Math.round((part * 100) / whole)}%` : '—'
+const share = (part: number, whole: number): string => (whole ? `${Math.round((part * 100) / whole)}%` : '—')
 
 /**
  * The counts, as a definition list rather than four cards.
@@ -115,31 +114,28 @@ export const crossProjectScreen = (
     frame={frame}
     asideLabel={overview ? _('flow_backend.overview.title') : null}
     aside={
-      overview ? (
-        stack([
-          overviewPanel(_, overview),
-          <Section
-            title={_('flow_backend.overview.lateTitle')}
-            body={
-              overview.late.length ? (
-                <RecordList
-                  rows={overview.late}
-                  id={(row) => String(row.id)}
-                  title={(row) => String(row.title ?? '')}
-                  href={(row) => `/admin/flow/issues/${String(row.id)}`}
-                  summary={(row) => String(row.projectName ?? '')}
-                  value={(row) => when(row.dueDate)}
-                />
-              ) : (
-                emptyState(
-                  _('flow_backend.overview.lateNone'),
-                  _('flow_backend.overview.lateNoneHint'),
+      overview
+        ? stack([
+            overviewPanel(_, overview),
+            <Section
+              title={_('flow_backend.overview.lateTitle')}
+              body={
+                overview.late.length ? (
+                  <RecordList
+                    rows={overview.late}
+                    id={(row) => String(row.id)}
+                    title={(row) => String(row.title ?? '')}
+                    href={(row) => `/admin/flow/issues/${String(row.id)}`}
+                    summary={(row) => String(row.projectName ?? '')}
+                    value={(row) => when(row.dueDate)}
+                  />
+                ) : (
+                  emptyState(_('flow_backend.overview.lateNone'), _('flow_backend.overview.lateNoneHint'))
                 )
-              )
-            }
-          />,
-        ])
-      ) : undefined
+              }
+            />,
+          ])
+        : undefined
     }
     body={stack([
       ...(overview
