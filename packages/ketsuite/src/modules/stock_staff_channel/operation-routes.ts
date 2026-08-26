@@ -553,6 +553,26 @@ const countCommandSchema = {
   },
   required: ['schemaVersion', 'sessionPublicId', 'sessionVersion', 'attemptPublicId', 'attemptVersion'],
 }
+/**
+ * Two different promises, so two different tokens.
+ *
+ * `version` is what a later command is checked against, so it has to mean the
+ * count's own state: which lines are counted, at what quantity, at which row
+ * revision. It used to be the row counter with a prefix on it — `ics_1` — and
+ * recording a line advances the line and the attempt while leaving the session
+ * row alone, so a session's progress went from nothing counted to one counted
+ * under an unchanged token, and a conditional GET answered 304 with the old
+ * progress.
+ *
+ * The ETag is the weaker, wider promise: this body has not changed. It covers
+ * the labels too — warehouse, location, product, lot, unit — which the version
+ * deliberately does not, because those belong to other people. An administrator
+ * renaming a location must not reach into a counter's handheld and refuse the
+ * next quantity they type.
+ */
+const countToken = (prefix: 'ics' | 'ica' | 'icl', row: Row, state: unknown): string =>
+  `${prefix}_${sha256(JSON.stringify({ state, revision: Number(row.version) }))}`
+const countEtag = (data: Row): string => `icb_${sha256(JSON.stringify(data))}`
 const countProjection = (context: Row): Row => {
   const session = context.session as Row
   const attempt = context.attempt as Row | null
@@ -566,9 +586,8 @@ const countProjection = (context: Row): Row => {
   const projectedLines = lines.map((line) => {
     const unit = units.get(String(line.productUomId)) ?? {}
     const lot = line.lotId ? lots.get(String(line.lotId)) : null
-    return {
+    const content = {
       publicId: String(line.id),
-      version: `icl_${Number(line.version)}`,
       product: {
         id: String(product.id),
         name: String(template.name ?? product.defaultCode ?? product.id),
@@ -581,11 +600,19 @@ const countProjection = (context: Row): Row => {
       ...(line.isCounted ? { countedQuantity: String(line.countedQuantity) } : {}),
       ...(session.mode === 'guided' ? { systemQuantity: String(line.systemQuantity) } : {}),
     }
+    return {
+      ...content,
+      version: countToken('icl', line, {
+        publicId: content.publicId,
+        isCounted: content.isCounted,
+        countedQuantity: line.isCounted ? String(line.countedQuantity) : null,
+        systemQuantity: String(line.systemQuantity),
+      }),
+    }
   })
-  const projectedAttempt = attempt
+  const attemptContent = attempt
     ? {
         publicId: String(attempt.id),
-        version: `ica_${Number(attempt.version)}`,
         state: String(attempt.state),
         ...(attempt.leaseExpiresAt ? { leaseExpiresAt: String(attempt.leaseExpiresAt) } : {}),
         lineCount: projectedLines.length,
@@ -593,9 +620,21 @@ const countProjection = (context: Row): Row => {
         lines: projectedLines,
       }
     : null
-  return {
+  const projectedAttempt =
+    attempt && attemptContent
+      ? {
+          ...attemptContent,
+          version: countToken('ica', attempt, {
+            publicId: attemptContent.publicId,
+            state: attemptContent.state,
+            lineCount: attemptContent.lineCount,
+            countedLineCount: attemptContent.countedLineCount,
+            lines: projectedLines.map((line) => line.version),
+          }),
+        }
+      : null
+  const sessionContent = {
     publicId: String(session.id),
-    version: `ics_${Number(session.version)}`,
     state: String(session.state),
     mode: String(session.mode),
     expiresAt: String(session.expiresAt),
@@ -612,6 +651,17 @@ const countProjection = (context: Row): Row => {
     claimable: !attempt && ['ready', 'in_progress'].includes(String(session.state)),
     ...(attempt ? { attemptPublicId: String(attempt.id), attempt: projectedAttempt } : {}),
   }
+  return {
+    ...sessionContent,
+    version: countToken('ics', session, {
+      publicId: sessionContent.publicId,
+      state: sessionContent.state,
+      mode: sessionContent.mode,
+      lineCount: sessionContent.lineCount,
+      countedLineCount: sessionContent.countedLineCount,
+      attempt: projectedAttempt?.version ?? null,
+    }),
+  }
 }
 const loadCount = async (
   ctx: ServeContext,
@@ -622,35 +672,42 @@ const loadCount = async (
   const context = (await ctx.call('stock_staff_channel.getCountContext', input, url, req)) as Row | null
   return context ? { context, data: countProjection(context) } : null
 }
-const countCommand = (context: Row, schemaVersion: string, line?: Row): Row => {
+/**
+ * The command echo reads its tokens off the projection rather than rebuilding them.
+ *
+ * Two places computing the same token is how they come to disagree, and a
+ * mutation response whose `attemptVersion` does not match what the next GET
+ * hands out sends the caller straight into a 409 it cannot clear.
+ */
+const countCommand = (context: Row, projection: Row, schemaVersion: string, lineId?: string): Row => {
   const session = context.session as Row
   const attempt = context.attempt as Row
   const lines = context.lines as Row[]
+  const projectedAttempt = (projection.attempt ?? {}) as Row
+  const projectedLine = ((projectedAttempt.lines ?? []) as Row[]).find(
+    (held) => String(held.publicId) === String(lineId),
+  )
   return {
     schemaVersion,
     sessionPublicId: String(session.id),
-    sessionVersion: `ics_${Number(session.version)}`,
+    sessionVersion: String(projection.version),
     attemptPublicId: String(attempt.id),
-    attemptVersion: `ica_${Number(attempt.version)}`,
+    attemptVersion: String(projectedAttempt.version),
     attemptState: String(attempt.state),
     ...(attempt.leaseExpiresAt ? { leaseExpiresAt: String(attempt.leaseExpiresAt) } : {}),
     lineCount: lines.length,
     countedLineCount: lines.filter((held) => held.isCounted === true).length,
-    ...(line
+    ...(projectedLine
       ? {
-          linePublicId: String(line.id),
-          lineVersion: `icl_${Number(line.version)}`,
-          countedQuantity: String(line.countedQuantity),
+          linePublicId: String(projectedLine.publicId),
+          lineVersion: String(projectedLine.version),
+          countedQuantity: String(projectedLine.countedQuantity),
         }
       : {}),
     requiredAttemptCount: Number(session.requiredAttemptCount),
     completedAttemptCount: Number(session.completedAttemptCount),
     sessionState: String(session.state),
   }
-}
-const numericVersion = (token: unknown, prefix: 'ics' | 'ica' | 'icl'): number | null => {
-  const match = new RegExp(`^${prefix}_(\\d+)$`).exec(String(token ?? ''))
-  return match ? Number(match[1]) : null
 }
 
 const mutationResponses = {
@@ -675,15 +732,30 @@ export const operationRoutes = routesOf(
     responses: { ...mutationResponses, '200': envelope(claimResult) },
     idempotent: true,
     rateLimit: { action: 'staff.warehouse.pickings.claim', limit: 120, windowMs: 60_000 },
+    /**
+     * The retry has to reach the command, so it is answered before the precondition.
+     *
+     * Claiming moves the aggregate version, because the version covers the claim.
+     * That put two correct-looking rules against each other: a replay of one POST
+     * carries the `expectedVersion` it was written with, which is by then stale,
+     * so the honest retry was refused 409 — the caller told it had been beaten to
+     * its own claim. A command already executed under this key is not a stale
+     * write, it is the same write; recognising it first is what makes the
+     * `Idempotency-Key` mean anything here.
+     */
     handler: async (ctx, url, req, routeParams, request) => {
       const key = idempotencyKey(ctx, url, req)
       if (typeof key !== 'string') return key
       const before = await loadPicking(ctx, url, req, routeParams.id, request.identity!)
       if (!before) return missing(ctx, url, req)
-      if (!expected(req, request.body, String(before.data.version))) return versionConflict(ctx, url, req)
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:warehouse.claim:${routeParams.id}`
+      const claimId = commandId('staff_wclaim', namespace, key)
+      const replayed = String((before.data.claim as Row | undefined)?.id ?? '') === claimId
+      if (!replayed && !expected(req, request.body, String(before.data.version)))
+        return versionConflict(ctx, url, req)
       const result = (await ctx.call(
         'stock_staff_channel.claimPicking',
-        { pickingId: routeParams.id, reason: request.body.reason },
+        { id: claimId, pickingId: routeParams.id, reason: request.body.reason },
         url,
         req,
         callOptions(request, 'stock_staff_channel.claimPicking', key),
@@ -1124,7 +1196,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, routeParams) => {
       const held = await loadCount(ctx, url, req, { sessionId: routeParams.publicId })
       return held
-        ? { data: held.data, headers: { etag: `"${String(held.data.version)}"` } }
+        ? { data: held.data, headers: { etag: `"${countEtag(held.data)}"` } }
         : missing(ctx, url, req, 'countSession')
     },
   }),
@@ -1146,8 +1218,7 @@ export const operationRoutes = routesOf(
       const before = await loadCount(ctx, url, req, { sessionId: routeParams.publicId })
       if (!before) return missing(ctx, url, req, 'countSession')
       if (!expected(req, request.body, String(before.data.version))) return versionConflict(ctx, url, req)
-      const version = numericVersion(request.body.expectedVersion, 'ics')
-      if (!version) return versionConflict(ctx, url, req)
+      const version = Number((before.context.session as Row).version)
       const attemptId = commandId(
         'staff_wcount_attempt',
         `${request.identity!.userId}:${routeParams.publicId}`,
@@ -1163,8 +1234,8 @@ export const operationRoutes = routesOf(
       if (result.ok !== true) return domainFailure(ctx, url, req, result)
       const after = await loadCount(ctx, url, req, { sessionId: routeParams.publicId })
       if (!after) return missing(ctx, url, req, 'countSession')
-      const data = countCommand(after.context, 'vidoo.inventory.count.claim/1')
-      return { data, headers: { etag: `"${String(data.sessionVersion)}"` } }
+      const data = countCommand(after.context, after.data, 'vidoo.inventory.count.claim/1')
+      return { data, headers: { etag: `"${countEtag(after.data)}"` } }
     },
   }),
   defineChannelRoute({
@@ -1185,9 +1256,9 @@ export const operationRoutes = routesOf(
       const before = await loadCount(ctx, url, req, { attemptId: routeParams.publicId })
       if (!before?.context.attempt) return missing(ctx, url, req, 'countAttempt')
       const attempt = before.context.attempt as Row
-      if (!expected(req, request.body, `ica_${Number(attempt.version)}`))
+      if (!expected(req, request.body, String(((before.data.attempt ?? {}) as Row).version)))
         return versionConflict(ctx, url, req)
-      const version = numericVersion(request.body.expectedVersion, 'ica')
+      const version = Number(attempt.version)
       const result = (await ctx.call(
         'stock_staff_channel.resumeCountAttempt',
         { attemptId: routeParams.publicId, expectedVersion: version },
@@ -1198,8 +1269,8 @@ export const operationRoutes = routesOf(
       if (result.ok !== true) return domainFailure(ctx, url, req, result)
       const after = await loadCount(ctx, url, req, { attemptId: routeParams.publicId })
       if (!after) return missing(ctx, url, req, 'countAttempt')
-      const data = countCommand(after.context, 'vidoo.inventory.count.resume/1')
-      return { data, headers: { etag: `"${String(data.attemptVersion)}"` } }
+      const data = countCommand(after.context, after.data, 'vidoo.inventory.count.resume/1')
+      return { data, headers: { etag: `"${countEtag(after.data)}"` } }
     },
   }),
   defineChannelRoute({
@@ -1220,8 +1291,11 @@ export const operationRoutes = routesOf(
       const before = await loadCount(ctx, url, req, { lineId: routeParams.publicId })
       const line = before?.context.line as Row | null
       if (!before || !line) return missing(ctx, url, req, 'countLine')
-      if (!expected(req, request.body, `icl_${Number(line.version)}`)) return versionConflict(ctx, url, req)
-      const version = numericVersion(request.body.expectedVersion, 'icl')
+      const lineToken = (((before.data.attempt ?? {}) as Row).lines as Row[] | undefined)?.find(
+        (held) => String(held.publicId) === routeParams.publicId,
+      )?.version
+      if (!expected(req, request.body, String(lineToken))) return versionConflict(ctx, url, req)
+      const version = Number(line.version)
       const result = (await ctx.call(
         'stock_staff_channel.recordCountLine',
         { lineId: routeParams.publicId, expectedVersion: version, quantity: request.body.quantity },
@@ -1233,8 +1307,13 @@ export const operationRoutes = routesOf(
       const after = await loadCount(ctx, url, req, { lineId: routeParams.publicId })
       const afterLine = after?.context.line as Row | null
       if (!after || !afterLine) return missing(ctx, url, req, 'countLine')
-      const data = countCommand(after.context, 'vidoo.inventory.count.entry/1', afterLine)
-      return { data, headers: { etag: `"${String(data.lineVersion)}"` } }
+      const data = countCommand(
+        after.context,
+        after.data,
+        'vidoo.inventory.count.entry/1',
+        routeParams.publicId,
+      )
+      return { data, headers: { etag: `"${countEtag(after.data)}"` } }
     },
   }),
   defineChannelRoute({
@@ -1255,9 +1334,9 @@ export const operationRoutes = routesOf(
       const before = await loadCount(ctx, url, req, { attemptId: routeParams.publicId })
       const attempt = before?.context.attempt as Row | null
       if (!before || !attempt) return missing(ctx, url, req, 'countAttempt')
-      if (!expected(req, request.body, `ica_${Number(attempt.version)}`))
+      if (!expected(req, request.body, String(((before.data.attempt ?? {}) as Row).version)))
         return versionConflict(ctx, url, req)
-      const version = numericVersion(request.body.expectedVersion, 'ica')
+      const version = Number(attempt.version)
       const result = (await ctx.call(
         'stock_staff_channel.submitCountAttempt',
         { attemptId: routeParams.publicId, expectedVersion: version },
@@ -1268,8 +1347,8 @@ export const operationRoutes = routesOf(
       if (result.ok !== true) return domainFailure(ctx, url, req, result)
       const after = await loadCount(ctx, url, req, { attemptId: routeParams.publicId })
       if (!after) return missing(ctx, url, req, 'countAttempt')
-      const data = countCommand(after.context, 'vidoo.inventory.count.submit/1')
-      return { data, headers: { etag: `"${String(data.attemptVersion)}"` } }
+      const data = countCommand(after.context, after.data, 'vidoo.inventory.count.submit/1')
+      return { data, headers: { etag: `"${countEtag(after.data)}"` } }
     },
   }),
 )
