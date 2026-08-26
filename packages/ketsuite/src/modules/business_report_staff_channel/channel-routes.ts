@@ -244,14 +244,25 @@ const businessOverviewSchema = {
   ],
 }
 
+/**
+ * Pages until the source runs out — so what it is asked for has to be bounded.
+ *
+ * The loop stops at a hundred thousand rows and says nothing, which for a
+ * revenue figure is the worst way to be wrong: the number simply comes back
+ * smaller, with no marker that anything was dropped. The defence is not a larger
+ * ceiling, it is asking only for the window being reported on; `sale.listOrders`
+ * carries a comment about a tenant with an imported history handing the whole
+ * table to every caller, and paging it out row by row is the same read wearing a
+ * loop.
+ */
 const pages = async (ctx: ServeContext, url: URL, req: Req, name: string, input: Row, pageSize = 2_000) => {
   const rows: Row[] = []
   for (let offset = 0; offset < 100_000; offset += pageSize) {
     const page = (await ctx.call(name, { ...input, limit: pageSize, offset }, url, req)) as Row[]
     rows.push(...page)
-    if (page.length < pageSize) break
+    if (page.length < pageSize) return rows
   }
-  return rows
+  throw new Error(`${name} exceeded the report's row ceiling; the totals would be silently short`)
 }
 
 const bucketStart = (date: Date, bucket: 'hour' | 'day') =>
@@ -283,11 +294,17 @@ export const channelRoutes = routesOf(
       const companyId = String(request.identity!.companyId)
       const [company, orders, invoices, openItems, pickings] = (await Promise.all([
         ctx.call('company.getCompany', { id: companyId }, url, req),
-        pages(ctx, url, req, 'sale.listOrders', {}),
+        // Both windows the answer compares, and nothing in front of them.
+        pages(ctx, url, req, 'sale.listOrders', {
+          dateFrom: period.comparisonStart.toISOString(),
+          dateTo: period.end.toISOString(),
+        }),
         pages(ctx, url, req, 'account.listMoves', {
           moveTypes: ['out_invoice', 'out_refund'],
           state: 'posted',
           order: 'desc',
+          dateFrom: period.comparisonStart.toISOString().slice(0, 10),
+          dateTo: period.end.toISOString().slice(0, 10),
         }),
         pages(ctx, url, req, 'account.listOpenItems', {}, 500),
         ctx.call('stock.listPickingViews', { limit: 101, offset: 0 }, url, req),

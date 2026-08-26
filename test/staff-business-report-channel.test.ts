@@ -79,3 +79,63 @@ test('staff business report returns a complete zero-safe cross-domain snapshot',
     422,
   )
 })
+
+/**
+ * The overview reads a window, not a history.
+ *
+ * It used to page `sale.listOrders` until the table ran out and keep the two
+ * windows it wanted out of the result, so the cost of one dashboard grew with
+ * every order the company had ever taken — and the loop's own ceiling meant a
+ * large enough tenant got a quietly short revenue figure. What the fetch may not
+ * do is change the answer, which is what this pins: orders far outside the
+ * window are neither counted nor compared against.
+ */
+test('staff business report ignores orders outside the reported window', async (t) => {
+  const e2e = await boot(t)
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  await fixture('partner.savePartner', { id: 'buyer', kind: 'company', name: 'Buyer' })
+  await fixture('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' })
+  await fixture('product.saveTemplate', {
+    id: 'tpl',
+    name: 'Item',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '100',
+    saleOk: true,
+    purchaseOk: true,
+  })
+  await fixture('product.saveVariant', { id: 'prod', templateId: 'tpl', combinationKey: '' })
+  await fixture('stock.saveWarehouse', { id: 'wh', code: 'WH', name: 'Main' })
+  for (let index = 0; index < 3; index++) {
+    const id = `historic-order-${index}`
+    await fixture('sale.createOrder', {
+      id,
+      partnerId: 'buyer',
+      warehouseId: 'wh',
+      dateOrder: '2019-03-04T00:00:00.000Z',
+    })
+    await fixture('sale.addLine', {
+      id: `${id}:line`,
+      orderId: id,
+      productId: 'prod',
+      productUomQty: '1',
+      priceUnit: '100',
+      productUomId: 'unit',
+    })
+    await fixture('sale.confirmOrder', { id })
+  }
+
+  await e2e.client.login({ login: 'report-user', password: 'correct horse battery' })
+  const body = await e2e.client.json<Envelope<Row>>('/api/staff/v1/reports/business-overview?period=today')
+  const kpis = body.data.kpis as Row
+  const orderCount = kpis.orderCount as Row
+  const orderValue = kpis.confirmedOrderValue as Row
+  assert.equal(orderCount.current, 0)
+  assert.equal(orderCount.previous, 0)
+  assert.equal((orderValue.current as Row).amount, '0')
+  assert.equal((orderValue.previous as Row).amount, '0')
+  assert.deepEqual(body.data.topCustomers, [])
+  assert.deepEqual(body.data.recentOrders, [])
+})

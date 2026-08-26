@@ -174,4 +174,55 @@ test('staff quality channel preserves canonical photo evidence through submissio
   const canonical = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/quality/checks/${requirementId}`)
   assert.equal(canonical.data.state, 'passed')
   assert.equal((canonical.data.attempts as Row[]).length, 1)
+
+  // Two different keys racing is a conflict; the same key arriving twice is one
+  // command. Submitting moves the check version and the route derives the
+  // revision it sends from live state, so a replay both fails the precondition
+  // and hashes differently under its own key — it used to be answered
+  // `idempotencyConflict`, telling a caller its own successful submission had
+  // been taken by somebody else's.
+  const retried = await e2e.client.request(`/api/staff/v1/quality/checks/${requirementId}/submit`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': bootstrap.data.csrfToken,
+      'idempotency-key': 'quality-submit-1',
+      'if-match': `"${String(uploaded.data.expectedCheckVersion)}"`,
+    },
+    body: submitBody,
+  })
+  assert.equal(retried.status, 200, await retried.clone().text())
+  const replayed = (await retried.json()) as Envelope<Row>
+  assert.equal((replayed.data.attempt as Row).publicId, (completed.data.attempt as Row).publicId)
+  assert.equal(replayed.data.state, 'passed')
+  assert.equal(
+    (
+      (await e2e.client.json<Envelope<Row>>(`/api/staff/v1/quality/checks/${requirementId}`)).data
+        .attempts as Row[]
+    ).length,
+    1,
+  )
+
+  // The photo upload is the same story: its id is the content's own identity, and
+  // the domain function already answers a replay — the route never let it.
+  const photoRetry = await e2e.client.request(`/api/staff/v1/quality/checks/${requirementId}/photos`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': bootstrap.data.csrfToken,
+      'idempotency-key': 'quality-photo-1',
+      'if-match': `"${String(initial.data.expectedCheckVersion)}"`,
+    },
+    body: JSON.stringify({
+      warehouseId: 'wh',
+      stepPublicId: photoStepId,
+      expectedVersion: initial.data.expectedCheckVersion,
+      mimeType: 'image/jpeg',
+      contentBase64: bytes.toString('base64'),
+      checksum,
+      altText: 'Received fruit lot',
+    }),
+  })
+  assert.equal(photoRetry.status, 200, await photoRetry.clone().text())
+  assert.equal(((await photoRetry.json()) as Envelope<Row>).data.uploadPublicId, uploaded.data.uploadPublicId)
 })

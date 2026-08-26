@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
@@ -274,8 +274,18 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, upload, revision: Number(args.expectedRevision) + 1 }
     },
   }),
+  /**
+   * An attempt, and the same attempt arriving twice.
+   *
+   * The id was a `randomUUID()`, so a replay could only ever be a second,
+   * different attempt — and the revision it was written against had already
+   * moved, so it was refused instead. The caller supplies the id now, derived
+   * from the command it is retrying, and an attempt already carrying that id is
+   * that command's answer coming back rather than a new submission.
+   */
   submit: defineFn({
     input: {
+      id: 'id',
       requirementId: 'id',
       warehouseId: 'id',
       expectedRevision: 'int',
@@ -298,6 +308,14 @@ export const functions: Record<string, FnSpec> = {
       const current = await check(ctx, args.requirementId)
       if (!current || current.requirement.warehouseId !== args.warehouseId)
         return invalid('requirementId', 'quality requirement does not exist')
+      const replay = current.attempts.find((entry) => String(entry.id) === String(args.id))
+      if (replay)
+        return {
+          ok: true,
+          attempt: replay,
+          state: String(replay.outcome),
+          revision: Number(current.requirement.revision),
+        }
       if (current.requirement.state !== 'pending') return invalid('requirementId', 'quality check is closed')
       if (Number(current.requirement.revision) !== Number(args.expectedRevision))
         return invalid('expectedRevision', 'quality check changed')
@@ -336,7 +354,7 @@ export const functions: Record<string, FnSpec> = {
       const sequence = current.attempts.length + 1
       const submittedAt = now()
       const attempt = {
-        id: randomUUID(),
+        id: args.id,
         requirementId: args.requirementId,
         sequence,
         outcome: passed ? 'passed' : 'failed',
